@@ -348,10 +348,10 @@ func TestPermissionFlowOrderSkipsGranted(t *testing.T) {
 		t.Fatalf("the screen step did not reach the relaunch stage: %v", a.perm.stage)
 	}
 	view.Frame()
-	if got := permissionRowCaption(t, view); got != "还差最后一步：重新打开 ShelfU 才生效" {
+	if got := permissionRowCaption(t, view); got != "还差最后一步：重新打开 Rakko 才生效" {
 		t.Fatalf("relaunch caption = %q", got)
 	}
-	if !view.HasText("重新打开 ShelfU") {
+	if !view.HasText("重新打开 Rakko") {
 		t.Fatalf("the relaunch button is missing; texts=%v", view.Texts())
 	}
 	if view.HasText("停止") {
@@ -369,7 +369,7 @@ func TestPermissionFlowFullDiskCaption(t *testing.T) {
 		t.Fatal(err)
 	}
 	view.Frame()
-	want := "第 1 项，共 1 项：完整磁盘访问 · 在「系统设置」里打开 ShelfU，这里会自动往下走（列表里没有就点 +，或把访达里选中的 ShelfU 拖进去）"
+	want := "第 1 项，共 1 项：完整磁盘访问 · 在「系统设置」里打开 Rakko，这里会自动往下走（列表里没有就点 +，或把访达里选中的 Rakko 拖进去）"
 	if got := permissionRowCaption(t, view); got != want {
 		t.Fatalf("Full Disk Access caption = %q, want %q", got, want)
 	}
@@ -377,7 +377,7 @@ func TestPermissionFlowFullDiskCaption(t *testing.T) {
 	st.fda = true
 	clk.fireLast(t)
 	view.Frame()
-	if !view.HasText("还差最后一步：重新打开 ShelfU 才生效") {
+	if !view.HasText("还差最后一步：重新打开 Rakko 才生效") {
 		t.Fatalf("a Full Disk Access grant must end on the relaunch stage; texts=%v", view.Texts())
 	}
 	if strings.Contains(permissionRowCaption(t, view), "访达") {
@@ -416,7 +416,7 @@ func TestPermissionFlowFullDiskGrantReachesRelaunch(t *testing.T) {
 		t.Fatalf("the walk ended at %v, want the relaunch stage", a.perm.stage)
 	}
 	view.Frame()
-	if !view.HasText("还差最后一步：重新打开 ShelfU 才生效") {
+	if !view.HasText("还差最后一步：重新打开 Rakko 才生效") {
 		t.Fatalf("the relaunch stage is not shown; texts=%v", view.Texts())
 	}
 }
@@ -436,7 +436,7 @@ func TestPermissionFlowFullDiskOnlyEndsOnRelaunch(t *testing.T) {
 		t.Fatalf("a lone Full Disk Access grant ended at %v, want the relaunch stage", a.perm.stage)
 	}
 	view.Frame()
-	if !view.HasText("重新打开 ShelfU") {
+	if !view.HasText("重新打开 Rakko") {
 		t.Fatalf("the relaunch button is missing; texts=%v", view.Texts())
 	}
 }

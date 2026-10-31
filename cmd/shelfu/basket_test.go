@@ -19,7 +19,7 @@ import (
 // TestMain keeps go test hermetic by default; with SHELF_BASKET_SMOKE=1 it
 // runs the real app loop so the basket's native window can be inspected
 // (CGWindowListCopyWindowInfo) and screenshotted. The test instance uses a
-// temporary data dir and never touches ~/Library/Application Support/ShelfU.
+// temporary data dir and never touches ~/Library/Application Support/Rakko.
 func TestMain(m *testing.M) {
 	if os.Getenv("SHELF_BASKET_SMOKE") != "1" {
 		os.Exit(m.Run())
@@ -165,7 +165,7 @@ func TestBasketViewStates(t *testing.T) {
 		t.Fatal("drop on the basket did not reach the store")
 	}
 	view.Frame()
-	if !view.HasText("已放入 ShelfU") {
+	if !view.HasText("已放入 Rakko") {
 		t.Fatal("basket card does not show the confirmation")
 	}
 	if a.basket.hideAt.IsZero() {
@@ -174,7 +174,7 @@ func TestBasketViewStates(t *testing.T) {
 }
 
 // TestBasketViewFailedIntake: a drop the store rejects (here a malformed
-// PNG) must surface as a failure in the card, never as "已放入 ShelfU".
+// PNG) must surface as a failure in the card, never as "已放入 Rakko".
 func TestBasketViewFailedIntake(t *testing.T) {
 	s, err := store.Open(t.TempDir())
 	if err != nil {
@@ -193,7 +193,7 @@ func TestBasketViewFailedIntake(t *testing.T) {
 		t.Fatal("failed intake did not arm the display timer")
 	}
 	view := ui.NewTester(a.basketView, basketWidth, basketHeight)
-	if view.HasText("已放入 ShelfU") {
+	if view.HasText("已放入 Rakko") {
 		t.Fatal("failed intake still shows the success confirmation")
 	}
 	if !view.HasText("放入失败") {

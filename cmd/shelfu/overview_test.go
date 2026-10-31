@@ -268,14 +268,14 @@ func TestWelcomeShowsOnceAndOnlyForAFreshInstall(t *testing.T) {
 	view := ui.NewTester(a.view, sheetW, sheetH)
 	a.openedAt = time.Now().Add(-2 * time.Second)
 	view.Frame()
-	if !view.HasText("你好，我是 ShelfU") {
+	if !view.HasText("你好，我是 Rakko") {
 		t.Fatalf("the welcome card is missing; texts %v", view.Texts())
 	}
 	if err := view.Click("跳过"); err != nil {
 		t.Fatalf("the skip button is missing: %v", err)
 	}
 	view.Frame()
-	if view.HasText("你好，我是 ShelfU") {
+	if view.HasText("你好，我是 Rakko") {
 		t.Fatal("the welcome card stayed after 跳过")
 	}
 	if st, _ := loadUIState(dir); !st.Welcome {

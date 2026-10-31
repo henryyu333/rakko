@@ -246,7 +246,7 @@ func StartDragGuard(region DragGuardRegion) (func(), error) {
 		return nil, err
 	}
 	if !axIsProcessTrusted() {
-		return nil, errors.New("ShelfU has no Accessibility permission yet")
+		return nil, errors.New("Rakko has no Accessibility permission yet")
 	}
 	if dragGuardArmed.Load() != nil {
 		return nil, errors.New("mac: a drag guard is already active")

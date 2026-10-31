@@ -137,7 +137,7 @@ func (a *shelf) checkedUpdate(user bool, up *mygo.Update, err error) {
 		if errors.Is(err, mygo.ErrUpdatesDisabled) {
 			a.updateLastResult = updateResultDisabled
 		}
-		log.Printf("ShelfU: 检查更新失败：%v", err)
+		log.Printf("Rakko: 检查更新失败：%v", err)
 		if user {
 			l := a.appLoc()
 			if errors.Is(err, mygo.ErrUpdatesDisabled) {
@@ -165,7 +165,7 @@ func (a *shelf) checkedUpdate(user bool, up *mygo.Update, err error) {
 		return
 	}
 	a.update, a.updateInstalled, a.updateProgress = up, false, 0
-	log.Printf("ShelfU: 发现新版本 v%s", up.Version)
+	log.Printf("Rakko: 发现新版本 v%s", up.Version)
 	if a.win != nil {
 		a.win.Invalidate()
 	}
@@ -220,11 +220,11 @@ func (a *shelf) installUpdate() {
 func (a *shelf) installedUpdate(up *mygo.Update, err error) {
 	a.updateInstalling, a.updateProgress = false, 0
 	if err != nil {
-		log.Printf("ShelfU: 安装更新失败：%v", err)
+		log.Printf("Rakko: 安装更新失败：%v", err)
 		a.toastStatus(a.appLoc().UpdateInstallFailed(err.Error()), time.Now().Add(8*time.Second), statusErr)
 	} else {
 		a.updateInstalled = true
-		log.Printf("ShelfU: 更新 v%s 已安装，重启后生效", up.Version)
+		log.Printf("Rakko: 更新 v%s 已安装，重启后生效", up.Version)
 		a.toastStatus(a.appLoc().UpdateInstalled(up.Version), time.Now().Add(8*time.Second), statusOK)
 		if os.Getenv("SHELF_UPDATE_SELFTEST") == "1" {
 			// End-to-end test hook: click 重新启动 ShelfU 完成更新 for the

@@ -545,7 +545,7 @@ func (a *shelf) settingsAboutPage(c *ui.Context) {
 
 // sourceURL is the project's public repository, the one the 关于 page links
 // to.
-const sourceURL = "https://github.com/henryyu333/shelfu"
+const sourceURL = "https://github.com/henryyu333/rakko"
 
 // updateCaption is the 检查更新 row's second line: the last check's time and
 // outcome, or what is happening now.

@@ -35,61 +35,61 @@ type Messages struct{ locale string }
 // source language.
 func In(locale string) Messages { return Messages{locale} }
 
-// AppTrayTooltip says "ShelfU · 刘海工具"
+// AppTrayTooltip says "Rakko · 刘海工具"
 // in the language the app shows.
 func AppTrayTooltip() string { return In(i18n.Locale()).AppTrayTooltip() }
 
-// AppTrayTooltip says "ShelfU · 刘海工具"
+// AppTrayTooltip says "Rakko · 刘海工具"
 // in the language of msgs.
 func (msgs Messages) AppTrayTooltip() string {
 	return Catalog.Format(msgs.locale, "appTrayTooltip", nil)
 }
 
-// WindowSettings says "ShelfU 设置"
+// WindowSettings says "Rakko 设置"
 // in the language the app shows.
 func WindowSettings() string { return In(i18n.Locale()).WindowSettings() }
 
-// WindowSettings says "ShelfU 设置"
+// WindowSettings says "Rakko 设置"
 // in the language of msgs.
 func (msgs Messages) WindowSettings() string {
 	return Catalog.Format(msgs.locale, "windowSettings", nil)
 }
 
-// WindowPins says "ShelfU 固定项"
+// WindowPins says "Rakko 固定项"
 // in the language the app shows.
 func WindowPins() string { return In(i18n.Locale()).WindowPins() }
 
-// WindowPins says "ShelfU 固定项"
+// WindowPins says "Rakko 固定项"
 // in the language of msgs.
 func (msgs Messages) WindowPins() string {
 	return Catalog.Format(msgs.locale, "windowPins", nil)
 }
 
-// WindowSnap says "ShelfU 排列预览"
+// WindowSnap says "Rakko 排列预览"
 // in the language the app shows.
 func WindowSnap() string { return In(i18n.Locale()).WindowSnap() }
 
-// WindowSnap says "ShelfU 排列预览"
+// WindowSnap says "Rakko 排列预览"
 // in the language of msgs.
 func (msgs Messages) WindowSnap() string {
 	return Catalog.Format(msgs.locale, "windowSnap", nil)
 }
 
-// WindowBasket says "ShelfU 篮子"
+// WindowBasket says "Rakko 篮子"
 // in the language the app shows.
 func WindowBasket() string { return In(i18n.Locale()).WindowBasket() }
 
-// WindowBasket says "ShelfU 篮子"
+// WindowBasket says "Rakko 篮子"
 // in the language of msgs.
 func (msgs Messages) WindowBasket() string {
 	return Catalog.Format(msgs.locale, "windowBasket", nil)
 }
 
-// WindowIsland says "ShelfU 灵动岛"
+// WindowIsland says "Rakko 灵动岛"
 // in the language the app shows.
 func WindowIsland() string { return In(i18n.Locale()).WindowIsland() }
 
-// WindowIsland says "ShelfU 灵动岛"
+// WindowIsland says "Rakko 灵动岛"
 // in the language of msgs.
 func (msgs Messages) WindowIsland() string {
 	return Catalog.Format(msgs.locale, "windowIsland", nil)
@@ -865,21 +865,21 @@ func (msgs Messages) PermStepFullDisk(step int, total int, short string) string 
 	return Catalog.Format(msgs.locale, "permStepFullDisk", map[string]any{"step": step, "total": total, "short": short})
 }
 
-// PermRelaunchStep says "还差最后一步：重新打开 ShelfU 才生效"
+// PermRelaunchStep says "还差最后一步：重新打开 Rakko 才生效"
 // in the language the app shows.
 func PermRelaunchStep() string { return In(i18n.Locale()).PermRelaunchStep() }
 
-// PermRelaunchStep says "还差最后一步：重新打开 ShelfU 才生效"
+// PermRelaunchStep says "还差最后一步：重新打开 Rakko 才生效"
 // in the language of msgs.
 func (msgs Messages) PermRelaunchStep() string {
 	return Catalog.Format(msgs.locale, "permRelaunchStep", nil)
 }
 
-// PermRelaunchButton says "重新打开 ShelfU"
+// PermRelaunchButton says "重新打开 Rakko"
 // in the language the app shows.
 func PermRelaunchButton() string { return In(i18n.Locale()).PermRelaunchButton() }
 
-// PermRelaunchButton says "重新打开 ShelfU"
+// PermRelaunchButton says "重新打开 Rakko"
 // in the language of msgs.
 func (msgs Messages) PermRelaunchButton() string {
 	return Catalog.Format(msgs.locale, "permRelaunchButton", nil)
@@ -915,23 +915,23 @@ func (msgs Messages) PermMenuMissing(count int) string {
 	return Catalog.Format(msgs.locale, "permMenuMissing", map[string]any{"count": count})
 }
 
-// StartupLegacyRunningTitle says "旧版 Shelf 仍在运行"
+// StartupLegacyRunningTitle says "旧版本仍在运行"
 // in the language the app shows.
 func StartupLegacyRunningTitle() string { return In(i18n.Locale()).StartupLegacyRunningTitle() }
 
-// StartupLegacyRunningTitle says "旧版 Shelf 仍在运行"
+// StartupLegacyRunningTitle says "旧版本仍在运行"
 // in the language of msgs.
 func (msgs Messages) StartupLegacyRunningTitle() string {
 	return Catalog.Format(msgs.locale, "startupLegacyRunningTitle", nil)
 }
 
-// StartupLegacyRunningDetail says "旧版 Shelf 正在使用它的数据目录，本次没有迁移任何内容，也没有创建新的数据目录。\n\n…"
+// StartupLegacyRunningDetail says "旧版本正在使用它的数据目录，本次没有迁移任何内容，也没有创建新的数据目录。\n\n…"
 // in the language the app shows.
 func StartupLegacyRunningDetail(app string, oldRoot string, newRoot string) string {
 	return In(i18n.Locale()).StartupLegacyRunningDetail(app, oldRoot, newRoot)
 }
 
-// StartupLegacyRunningDetail says "旧版 Shelf 正在使用它的数据目录，本次没有迁移任何内容，也没有创建新的数据目录。\n\n…"
+// StartupLegacyRunningDetail says "旧版本正在使用它的数据目录，本次没有迁移任何内容，也没有创建新的数据目录。\n\n…"
 // in the language of msgs.
 func (msgs Messages) StartupLegacyRunningDetail(app string, oldRoot string, newRoot string) string {
 	return Catalog.Format(msgs.locale, "startupLegacyRunningDetail", map[string]any{"app": app, "oldRoot": oldRoot, "newRoot": newRoot})
@@ -1059,11 +1059,11 @@ func (msgs Messages) StartupBackupFailed(err string) string {
 	return Catalog.Format(msgs.locale, "startupBackupFailed", map[string]any{"err": err})
 }
 
-// TrayShowShelf says "显示 / 收起 ShelfU"
+// TrayShowShelf says "显示 / 收起 Rakko"
 // in the language the app shows.
 func TrayShowShelf() string { return In(i18n.Locale()).TrayShowShelf() }
 
-// TrayShowShelf says "显示 / 收起 ShelfU"
+// TrayShowShelf says "显示 / 收起 Rakko"
 // in the language of msgs.
 func (msgs Messages) TrayShowShelf() string {
 	return Catalog.Format(msgs.locale, "trayShowShelf", nil)
@@ -1109,11 +1109,11 @@ func (msgs Messages) TraySettings() string {
 	return Catalog.Format(msgs.locale, "traySettings", nil)
 }
 
-// TrayQuit says "退出 ShelfU"
+// TrayQuit says "退出 Rakko"
 // in the language the app shows.
 func TrayQuit() string { return In(i18n.Locale()).TrayQuit() }
 
-// TrayQuit says "退出 ShelfU"
+// TrayQuit says "退出 Rakko"
 // in the language of msgs.
 func (msgs Messages) TrayQuit() string {
 	return Catalog.Format(msgs.locale, "trayQuit", nil)
@@ -1633,21 +1633,21 @@ func (msgs Messages) UpdateInstallFailed(err string) string {
 	return Catalog.Format(msgs.locale, "updateInstallFailed", map[string]any{"err": err})
 }
 
-// UpdateInstalled says "v{version} 已安装 · 重新启动 ShelfU 后生效"
+// UpdateInstalled says "v{version} 已安装 · 重新启动 Rakko 后生效"
 // in the language the app shows.
 func UpdateInstalled(version string) string { return In(i18n.Locale()).UpdateInstalled(version) }
 
-// UpdateInstalled says "v{version} 已安装 · 重新启动 ShelfU 后生效"
+// UpdateInstalled says "v{version} 已安装 · 重新启动 Rakko 后生效"
 // in the language of msgs.
 func (msgs Messages) UpdateInstalled(version string) string {
 	return Catalog.Format(msgs.locale, "updateInstalled", map[string]any{"version": version})
 }
 
-// UpdateRestartToFinish says "重新启动 ShelfU 完成更新"
+// UpdateRestartToFinish says "重新启动 Rakko 完成更新"
 // in the language the app shows.
 func UpdateRestartToFinish() string { return In(i18n.Locale()).UpdateRestartToFinish() }
 
-// UpdateRestartToFinish says "重新启动 ShelfU 完成更新"
+// UpdateRestartToFinish says "重新启动 Rakko 完成更新"
 // in the language of msgs.
 func (msgs Messages) UpdateRestartToFinish() string {
 	return Catalog.Format(msgs.locale, "updateRestartToFinish", nil)
@@ -4553,11 +4553,11 @@ func (msgs Messages) BasketDropHere() string {
 	return Catalog.Format(msgs.locale, "basketDropHere", nil)
 }
 
-// BasketSaved says "已放入 ShelfU"
+// BasketSaved says "已放入 Rakko"
 // in the language the app shows.
 func BasketSaved() string { return In(i18n.Locale()).BasketSaved() }
 
-// BasketSaved says "已放入 ShelfU"
+// BasketSaved says "已放入 Rakko"
 // in the language of msgs.
 func (msgs Messages) BasketSaved() string {
 	return Catalog.Format(msgs.locale, "basketSaved", nil)
@@ -4573,11 +4573,11 @@ func (msgs Messages) BasketFailed() string {
 	return Catalog.Format(msgs.locale, "basketFailed", nil)
 }
 
-// BasketReleaseHint says "松开即放入 ShelfU"
+// BasketReleaseHint says "松开即放入 Rakko"
 // in the language the app shows.
 func BasketReleaseHint() string { return In(i18n.Locale()).BasketReleaseHint() }
 
-// BasketReleaseHint says "松开即放入 ShelfU"
+// BasketReleaseHint says "松开即放入 Rakko"
 // in the language of msgs.
 func (msgs Messages) BasketReleaseHint() string {
 	return Catalog.Format(msgs.locale, "basketReleaseHint", nil)
@@ -4713,11 +4713,11 @@ func (msgs Messages) OcrPermissionPrivacy() string {
 	return Catalog.Format(msgs.locale, "ocrPermissionPrivacy", nil)
 }
 
-// OcrPermissionRelaunch says "在「系统设置」里打开 ShelfU 的开关后，需要退出并重新打开 ShelfU …"
+// OcrPermissionRelaunch says "在「系统设置」里打开 Rakko 的开关后，需要退出并重新打开 Rakko …"
 // in the language the app shows.
 func OcrPermissionRelaunch() string { return In(i18n.Locale()).OcrPermissionRelaunch() }
 
-// OcrPermissionRelaunch says "在「系统设置」里打开 ShelfU 的开关后，需要退出并重新打开 ShelfU …"
+// OcrPermissionRelaunch says "在「系统设置」里打开 Rakko 的开关后，需要退出并重新打开 Rakko …"
 // in the language of msgs.
 func (msgs Messages) OcrPermissionRelaunch() string {
 	return Catalog.Format(msgs.locale, "ocrPermissionRelaunch", nil)
@@ -5113,21 +5113,21 @@ func (msgs Messages) PanelCollapse() string {
 	return Catalog.Format(msgs.locale, "panelCollapse", nil)
 }
 
-// PanelExpand says "展开 ShelfU"
+// PanelExpand says "展开 Rakko"
 // in the language the app shows.
 func PanelExpand() string { return In(i18n.Locale()).PanelExpand() }
 
-// PanelExpand says "展开 ShelfU"
+// PanelExpand says "展开 Rakko"
 // in the language of msgs.
 func (msgs Messages) PanelExpand() string {
 	return Catalog.Format(msgs.locale, "panelExpand", nil)
 }
 
-// PanelExpandText says "展开 ShelfU · {text}"
+// PanelExpandText says "展开 Rakko · {text}"
 // in the language the app shows.
 func PanelExpandText(text string) string { return In(i18n.Locale()).PanelExpandText(text) }
 
-// PanelExpandText says "展开 ShelfU · {text}"
+// PanelExpandText says "展开 Rakko · {text}"
 // in the language of msgs.
 func (msgs Messages) PanelExpandText(text string) string {
 	return Catalog.Format(msgs.locale, "panelExpandText", map[string]any{"text": text})
@@ -5163,11 +5163,11 @@ func (msgs Messages) PanelRestart() string {
 	return Catalog.Format(msgs.locale, "panelRestart", nil)
 }
 
-// PanelRestartLabel says "重新启动 ShelfU 完成更新"
+// PanelRestartLabel says "重新启动 Rakko 完成更新"
 // in the language the app shows.
 func PanelRestartLabel() string { return In(i18n.Locale()).PanelRestartLabel() }
 
-// PanelRestartLabel says "重新启动 ShelfU 完成更新"
+// PanelRestartLabel says "重新启动 Rakko 完成更新"
 // in the language of msgs.
 func (msgs Messages) PanelRestartLabel() string {
 	return Catalog.Format(msgs.locale, "panelRestartLabel", nil)
@@ -5293,11 +5293,11 @@ func (msgs Messages) StatusEscBusy(detail string) string {
 	return Catalog.Format(msgs.locale, "statusEscBusy", map[string]any{"detail": detail})
 }
 
-// IslandLabel says "ShelfU 灵动岛"
+// IslandLabel says "Rakko 灵动岛"
 // in the language the app shows.
 func IslandLabel() string { return In(i18n.Locale()).IslandLabel() }
 
-// IslandLabel says "ShelfU 灵动岛"
+// IslandLabel says "Rakko 灵动岛"
 // in the language of msgs.
 func (msgs Messages) IslandLabel() string {
 	return Catalog.Format(msgs.locale, "islandLabel", nil)
@@ -5497,11 +5497,11 @@ func (msgs Messages) NpPlaying(title string) string {
 	return Catalog.Format(msgs.locale, "npPlaying", map[string]any{"title": title})
 }
 
-// NpPlayingExpand says "正在播放：{title} · 展开 ShelfU"
+// NpPlayingExpand says "正在播放：{title} · 展开 Rakko"
 // in the language the app shows.
 func NpPlayingExpand(title string) string { return In(i18n.Locale()).NpPlayingExpand(title) }
 
-// NpPlayingExpand says "正在播放：{title} · 展开 ShelfU"
+// NpPlayingExpand says "正在播放：{title} · 展开 Rakko"
 // in the language of msgs.
 func (msgs Messages) NpPlayingExpand(title string) string {
 	return Catalog.Format(msgs.locale, "npPlayingExpand", map[string]any{"title": title})
@@ -5771,11 +5771,11 @@ func (msgs Messages) OverviewOpen() string {
 	return Catalog.Format(msgs.locale, "overviewOpen", nil)
 }
 
-// WelcomeTitle says "你好，我是 ShelfU"
+// WelcomeTitle says "你好，我是 Rakko"
 // in the language the app shows.
 func WelcomeTitle() string { return In(i18n.Locale()).WelcomeTitle() }
 
-// WelcomeTitle says "你好，我是 ShelfU"
+// WelcomeTitle says "你好，我是 Rakko"
 // in the language of msgs.
 func (msgs Messages) WelcomeTitle() string {
 	return Catalog.Format(msgs.locale, "welcomeTitle", nil)
@@ -5821,11 +5821,11 @@ func (msgs Messages) WelcomeDone() string {
 	return Catalog.Format(msgs.locale, "welcomeDone", nil)
 }
 
-// WhatsNewTitle says "ShelfU {version} 的新变化"
+// WhatsNewTitle says "Rakko {version} 的新变化"
 // in the language the app shows.
 func WhatsNewTitle(version string) string { return In(i18n.Locale()).WhatsNewTitle(version) }
 
-// WhatsNewTitle says "ShelfU {version} 的新变化"
+// WhatsNewTitle says "Rakko {version} 的新变化"
 // in the language of msgs.
 func (msgs Messages) WhatsNewTitle(version string) string {
 	return Catalog.Format(msgs.locale, "whatsNewTitle", map[string]any{"version": version})
@@ -6107,11 +6107,11 @@ func (msgs Messages) SettingsNotchPage() string {
 	return Catalog.Format(msgs.locale, "settingsNotchPage", nil)
 }
 
-// SettingsNotchHero says "ShelfU 长什么样，以及收起时刘海会告诉你什么。"
+// SettingsNotchHero says "Rakko 长什么样，以及收起时刘海会告诉你什么。"
 // in the language the app shows.
 func SettingsNotchHero() string { return In(i18n.Locale()).SettingsNotchHero() }
 
-// SettingsNotchHero says "ShelfU 长什么样，以及收起时刘海会告诉你什么。"
+// SettingsNotchHero says "Rakko 长什么样，以及收起时刘海会告诉你什么。"
 // in the language of msgs.
 func (msgs Messages) SettingsNotchHero() string {
 	return Catalog.Format(msgs.locale, "settingsNotchHero", nil)
@@ -6417,11 +6417,11 @@ func (msgs Messages) SettingsAboutPage() string {
 	return Catalog.Format(msgs.locale, "settingsAboutPage", nil)
 }
 
-// SettingsAboutHero says "关于 ShelfU"
+// SettingsAboutHero says "关于 Rakko"
 // in the language the app shows.
 func SettingsAboutHero() string { return In(i18n.Locale()).SettingsAboutHero() }
 
-// SettingsAboutHero says "关于 ShelfU"
+// SettingsAboutHero says "关于 Rakko"
 // in the language of msgs.
 func (msgs Messages) SettingsAboutHero() string {
 	return Catalog.Format(msgs.locale, "settingsAboutHero", nil)
@@ -6509,11 +6509,11 @@ func (msgs Messages) SettingsAboutSource() string {
 	return Catalog.Format(msgs.locale, "settingsAboutSource", nil)
 }
 
-// SettingsAboutSourceCaption says "github.com/henryyu333/shelfu · 代码 MIT 许可；名称和图标不在 MIT 范围内"
+// SettingsAboutSourceCaption says "github.com/henryyu333/rakko · 代码 MIT 许可；名称和图标不在 MIT 范围内"
 // in the language the app shows.
 func SettingsAboutSourceCaption() string { return In(i18n.Locale()).SettingsAboutSourceCaption() }
 
-// SettingsAboutSourceCaption says "github.com/henryyu333/shelfu · 代码 MIT 许可；名称和图标不在 MIT 范围内"
+// SettingsAboutSourceCaption says "github.com/henryyu333/rakko · 代码 MIT 许可；名称和图标不在 MIT 范围内"
 // in the language of msgs.
 func (msgs Messages) SettingsAboutSourceCaption() string {
 	return Catalog.Format(msgs.locale, "settingsAboutSourceCaption", nil)

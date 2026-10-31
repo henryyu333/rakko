@@ -80,7 +80,7 @@ func TestAddToShelfEmptyPayload(t *testing.T) {
 	if errStr == 0 {
 		t.Fatal("empty payload must store an error message")
 	}
-	if got := goString(errStr); got != "Nothing to add to ShelfU" {
+	if got := goString(errStr); got != "Nothing to add to Rakko" {
 		t.Fatalf("error message = %q", got)
 	}
 }

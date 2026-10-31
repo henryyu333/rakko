@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	appName = "ShelfU"
+	appName = "Rakko"
 	// searchLabel 是搜索框在测试里定位用的标签；界面上的占位文字与无障碍名
 	// 称来自词条 panelSearch（随窗口语言变化）。
 	searchLabel = "搜索剪贴板"

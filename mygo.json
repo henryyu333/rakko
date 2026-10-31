@@ -1,11 +1,11 @@
 {
-  "name": "ShelfU",
-  "slug": "shelfu",
-  "identifier": "local.y3.shelfu",
+  "name": "Rakko",
+  "slug": "rakko",
+  "identifier": "local.y3.rakko",
   "version": "1.12.1",
   "updates": {
     "publicKey": "U392UXk3CKWS5zmlwlygGPnVbOppcJHEMJEeKXXBbAo=",
-    "github": "henryyu333/shelfu"
+    "github": "henryyu333/rakko"
   },
   "i18n": { "dir": "locales", "source": "zh-Hans" },
   "main": "./cmd/shelfu",
@@ -19,9 +19,9 @@
       "NSHighResolutionCapable": true,
       "NSServices": [
         {
-          "NSMenuItem": { "default": "添加到 ShelfU" },
+          "NSMenuItem": { "default": "添加到 Rakko" },
           "NSMessage": "addToShelf",
-          "NSPortName": "ShelfU",
+          "NSPortName": "Rakko",
           "NSRequiredContext": {},
           "NSSendTypes": ["NSStringPboardType", "public.utf8-plain-text"],
           "NSSendFileTypes": ["public.file-url", "public.item"]

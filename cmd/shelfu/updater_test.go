@@ -306,7 +306,7 @@ func TestInstallUpdateFlow(t *testing.T) {
 	if p.runCount() != 1 {
 		t.Fatalf("install ran %d times", p.runCount())
 	}
-	if item := a.updateMenu(); item.Label != "重新启动 ShelfU 完成更新" {
+	if item := a.updateMenu(); item.Label != "重新启动 Rakko 完成更新" {
 		t.Fatalf("post-install menu = %q", item.Label)
 	}
 	if !strings.Contains(a.status, "已安装") {

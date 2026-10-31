@@ -258,14 +258,14 @@ const settingsXML = `<w:settings xmlns:w="http://schemas.openxmlformats.org/word
 func corePropsXML(now time.Time) string {
 	ts := now.Format("2006-01-02T15:04:05Z")
 	return `<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">` +
-		`<dc:creator>ShelfU</dc:creator><cp:lastModifiedBy>ShelfU</cp:lastModifiedBy>` +
+		`<dc:creator>Rakko</dc:creator><cp:lastModifiedBy>Rakko</cp:lastModifiedBy>` +
 		fmt.Sprintf(`<dcterms:created xsi:type="dcterms:W3CDTF">%s</dcterms:created>`, ts) +
 		fmt.Sprintf(`<dcterms:modified xsi:type="dcterms:W3CDTF">%s</dcterms:modified>`, ts) +
 		`</cp:coreProperties>`
 }
 
 const appPropsXML = `<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">` +
-	`<Application>ShelfU</Application>` +
+	`<Application>Rakko</Application>` +
 	`</Properties>`
 
 // documentOpen and documentClose wrap every generated document part;

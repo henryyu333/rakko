@@ -312,7 +312,7 @@ func TestSettingsLabelReportsCutText(t *testing.T) {
 func TestEnglishMenusHaveNoChinese(t *testing.T) {
 	a, view := englishShelf(t)
 	labels := menuLabels(a.trayMenu())
-	for _, want := range []string{"Show / Hide ShelfU", "Settings…", "Quit ShelfU"} {
+	for _, want := range []string{"Show / Hide Rakko", "Settings…", "Quit Rakko"} {
 		if !slices.Contains(labels, want) {
 			t.Fatalf("the tray menu lacks %q; labels %v", want, labels)
 		}
@@ -603,7 +603,7 @@ func TestEnglishBasketHasNoChinese(t *testing.T) {
 	a.basketReceive(transfer.TextData("hello"))
 	view.Frame()
 	assertNoHan(t, "basket saved", view.Texts())
-	if !view.HasText("Added to ShelfU") {
+	if !view.HasText("Added to Rakko") {
 		t.Fatalf("basket confirmation is missing; texts %v", view.Texts())
 	}
 }
@@ -664,11 +664,11 @@ func TestLanguageSwitchAppliesWithoutRestart(t *testing.T) {
 
 	// Native surfaces read the shelf's language, which OnLocaleChanged sets.
 	a.locale = ""
-	if labels := menuLabels(a.trayMenu()); !slices.Contains(labels, "显示 / 收起 ShelfU") {
+	if labels := menuLabels(a.trayMenu()); !slices.Contains(labels, "显示 / 收起 Rakko") {
 		t.Fatalf("the tray menu is not in the source language: %v", labels)
 	}
 	a.localeChanged("en")
-	if labels := menuLabels(a.trayMenu()); !slices.Contains(labels, "Show / Hide ShelfU") {
+	if labels := menuLabels(a.trayMenu()); !slices.Contains(labels, "Show / Hide Rakko") {
 		t.Fatalf("the tray menu did not follow the language: %v", labels)
 	}
 	assertNoHan(t, "tray menu after switch", menuLabels(a.trayMenu()))

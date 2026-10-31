@@ -101,7 +101,7 @@ func addToShelf(_ id, _ objc.SEL, pboard id, _ id, errOut *id) {
 	paths, text = serviceContent(paths, text)
 	if len(paths) == 0 && text == "" {
 		if svcErrMessage == 0 {
-			svcErrMessage = retainedString("Nothing to add to ShelfU")
+			svcErrMessage = retainedString("Nothing to add to Rakko")
 		}
 		if errOut != nil {
 			*errOut = svcErrMessage
@@ -142,7 +142,7 @@ func InstallServiceProvider(fn func(paths []string, text string)) error {
 		send(send(class("NSApplication"), "sharedApplication"), "setServicesProvider:", uintptr(servicesProvider))
 		var registerProvider func(provider id, portName id)
 		purego.RegisterLibFunc(&registerProvider, libAppKit, "NSRegisterServicesProvider")
-		registerProvider(servicesProvider, nsString("ShelfU"))
+		registerProvider(servicesProvider, nsString("Rakko"))
 		var updateServices func()
 		purego.RegisterLibFunc(&updateServices, libAppKit, "NSUpdateDynamicServices")
 		updateServices()

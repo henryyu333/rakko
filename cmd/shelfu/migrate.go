@@ -2,10 +2,11 @@
 
 package main
 
-// The app used to keep its data in Library/Application Support/Shelf. The
-// renamed app reads Library/Application Support/ShelfU, so the first launch
-// copies the old directory over once and leaves the old one as a backup:
-// the user's history, managed images and converted files arrive intact.
+// The app used to keep its data in Library/Application Support/Shelf, then in
+// Library/Application Support/ShelfU. The current app reads
+// Library/Application Support/Rakko, so the first launch copies the newest
+// old directory over once and leaves the old one as a backup: the user's
+// history, managed images and converted files arrive intact.
 
 import (
 	"bytes"

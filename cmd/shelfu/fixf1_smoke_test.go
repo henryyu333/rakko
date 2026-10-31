@@ -83,7 +83,7 @@ func TestFixFWingsOpenTheOverview(t *testing.T) {
 	var level int
 	onMain(func() {
 		view := ui.NewTester(a.view, sheetW, sheetH)
-		if err := view.Click("正在播放：Fashion Killa · 展开 ShelfU"); err != nil {
+		if err := view.Click("正在播放：Fashion Killa · 展开 Rakko"); err != nil {
 			t.Errorf("pressing the wings: %v", err)
 			return
 		}

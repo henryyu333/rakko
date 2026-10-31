@@ -478,13 +478,13 @@ func TestNotchPeekClickExpandsShelf(t *testing.T) {
 	defer s.Close()
 	a := &shelf{store: s, peeking: true, peekProgress: 1, notchW: 182, notchH: 32, topInset: 32}
 	view := ui.NewTester(a.view, sheetW, sheetH)
-	if _, ok := view.Find("展开 ShelfU"); !ok {
+	if _, ok := view.Find("展开 Rakko"); !ok {
 		t.Fatal("peek pill missing its expand affordance (chevron)")
 	}
 	if view.HasText("收起") {
 		t.Fatal("peek state should not render the expanded header")
 	}
-	if err := view.Click("展开 ShelfU"); err != nil {
+	if err := view.Click("展开 Rakko"); err != nil {
 		t.Fatalf("peek pill not clickable: %v", err)
 	}
 	if !a.visible {
@@ -623,7 +623,7 @@ func TestHoverKeepsWindowAnchored(t *testing.T) {
 		t.Fatalf("collapsed surface must stay at the top, far above the Dock: %+v", idle)
 	}
 	// An incoming drag deliberately shrinks the surface to the notch's
-	// menu-bar band (task D): ShelfU holds no sub-band real estate during a
+	// menu-bar band (task D): Rakko holds no sub-band real estate during a
 	// drag, so apps under the old strip get their windows back.
 	a.dragging = true
 	drag := a.desiredFrame()

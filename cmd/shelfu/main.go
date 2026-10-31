@@ -33,10 +33,11 @@ func main() {
 		}
 		return
 	}
-	// A bundle an in-app update left at Shelf.app moves to ShelfU.app and
-	// reopens from there before anything reads the data directory.
+	// A bundle an in-app update left at ShelfU.app or Shelf.app moves to
+	// Rakko.app and reopens from there before anything reads the data
+	// directory.
 	selfRenameBundle()
-	dataDir := flag.String("data-dir", "", "本地数据目录（默认 Library/Application Support/ShelfU）")
+	dataDir := flag.String("data-dir", "", "本地数据目录（默认 Library/Application Support/Rakko）")
 	show := flag.Bool("show", false, "启动时显示托盘")
 	flag.Parse()
 	if *dataDir == "" {
@@ -44,25 +45,30 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		// The default directory is the renamed app's; the old one is copied
-		// over once. A --data-dir the user gave is never migrated into.
-		if oldRoot, lerr := store.LegacyRoot(); lerr == nil {
-			migrated, merr := migrateDataRoot(oldRoot, root)
-			switch {
-			case errors.Is(merr, errLegacyRootLocked):
-				log.Printf("%s: %v", appName, merr)
-				lm := startupLoc(root, oldRoot)
-				exitWithDialog(lm.StartupLegacyRunningTitle(),
-					lm.StartupLegacyRunningDetail(appName, oldRoot, root))
-				return
-			case merr != nil:
-				log.Printf("%s: 数据迁移失败：%v", appName, merr)
-				lm := startupLoc(root, oldRoot)
-				exitWithDialog(lm.StartupMigrateFailedTitle(),
-					lm.StartupMigrateFailedDetail(oldRoot, root, merr.Error()))
-				return
-			case migrated:
-				log.Printf("%s: 数据已从 %s 迁移到 %s，旧目录保留为备份", appName, oldRoot, root)
+		// The default directory is this app's; the previous ones are copied
+		// over once, newest name first (ShelfU, then Shelf). A --data-dir the
+		// user gave is never migrated into.
+		if oldRoots, lerr := store.LegacyRoots(); lerr == nil {
+			for _, oldRoot := range oldRoots {
+				migrated, merr := migrateDataRoot(oldRoot, root)
+				switch {
+				case errors.Is(merr, errLegacyRootLocked):
+					log.Printf("%s: %v", appName, merr)
+					lm := startupLoc(root, oldRoot)
+					exitWithDialog(lm.StartupLegacyRunningTitle(),
+						lm.StartupLegacyRunningDetail(appName, oldRoot, root))
+					return
+				case merr != nil:
+					log.Printf("%s: 数据迁移失败：%v", appName, merr)
+					lm := startupLoc(root, oldRoot)
+					exitWithDialog(lm.StartupMigrateFailedTitle(),
+						lm.StartupMigrateFailedDetail(oldRoot, root, merr.Error()))
+					return
+				}
+				if migrated {
+					log.Printf("%s: 数据已从 %s 迁移到 %s，旧目录保留为备份", appName, oldRoot, root)
+					break
+				}
 			}
 		}
 		*dataDir = root
@@ -84,7 +90,7 @@ func main() {
 	if s != nil {
 		if merr := s.MigrationError(); merr != nil {
 			// 备份失败时存储已停止写入；这里只做启动日志，界面状态在 ready 中显示。
-			log.Printf("ShelfU: 迁移前备份失败，已停止写入以免覆盖可恢复原件：%v", merr)
+			log.Printf("Rakko: 迁移前备份失败，已停止写入以免覆盖可恢复原件：%v", merr)
 		}
 	}
 	prefs, perr := settings.Load(*dataDir)
@@ -325,7 +331,7 @@ func (a *shelf) ready(show bool) {
 	a.installServices()
 	a.pinRestore()
 	a.startMonitoring()
-	log.Print("ShelfU ready")
+	log.Print("Rakko ready")
 }
 
 // newNotchWindow creates the persistent notch window: one transparent,

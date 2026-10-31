@@ -19,19 +19,20 @@ func TestSelfRenameTarget(t *testing.T) {
 		next    string
 		wantHit bool
 	}{
-		// An in-app update of the old app leaves the new bundle at Shelf.app.
-		{"/Applications/Shelf.app/Contents/MacOS/ShelfU", "/Applications/Shelf.app", "/Applications/ShelfU.app", true},
-		// The old app's own binary in the same place.
-		{"/Applications/Shelf.app/Contents/MacOS/Shelf", "/Applications/Shelf.app", "/Applications/ShelfU.app", true},
-		{"/Users/me/Applications/Shelf.app/Contents/MacOS/ShelfU", "/Users/me/Applications/Shelf.app", "/Users/me/Applications/ShelfU.app", true},
+		// An in-app update of an earlier name leaves the new bundle at ShelfU.app.
+		{"/Applications/ShelfU.app/Contents/MacOS/ShelfU", "/Applications/ShelfU.app", "/Applications/Rakko.app", true},
+		// An update that ran while the app was still called Shelf.
+		{"/Applications/Shelf.app/Contents/MacOS/Shelf", "/Applications/Shelf.app", "/Applications/Rakko.app", true},
+		{"/Applications/Shelf.app/Contents/MacOS/ShelfU", "/Applications/Shelf.app", "/Applications/Rakko.app", true},
+		{"/Users/me/Applications/ShelfU.app/Contents/MacOS/ShelfU", "/Users/me/Applications/ShelfU.app", "/Users/me/Applications/Rakko.app", true},
 		// Already renamed: nothing to do.
-		{"/Applications/ShelfU.app/Contents/MacOS/ShelfU", "", "", false},
+		{"/Applications/Rakko.app/Contents/MacOS/ShelfU", "", "", false},
 		// go run and go test build into a temporary directory.
 		{"/var/folders/xy/T/go-build123/b001/exe/shelf", "", "", false},
 		// A bare executable, and a directory that only looks like a bundle.
 		{"/tmp/Shelf", "", "", false},
-		{"/tmp/Shelf.app/Contents/ShelfU", "", "", false},
-		{"/tmp/Shelf.app/MacOS/ShelfU", "", "", false},
+		{"/tmp/Rakko.app/Contents/ShelfU", "", "", false},
+		{"/tmp/Rakko.app/MacOS/ShelfU", "", "", false},
 	}
 	for _, tc := range cases {
 		old, next, ok := selfRenameTarget(tc.exe)
@@ -46,15 +47,15 @@ func TestSelfRenameTarget(t *testing.T) {
 // relies on: the new bundle is created in the same directory, so the rename
 // stays on one volume.
 func TestSelfRenameTargetIsSiblingOfTheOldBundle(t *testing.T) {
-	old, next, ok := selfRenameTarget("/Applications/Shelf.app/Contents/MacOS/ShelfU")
+	old, next, ok := selfRenameTarget("/Applications/ShelfU.app/Contents/MacOS/ShelfU")
 	if !ok {
-		t.Fatal("an exe inside Shelf.app was not recognised")
+		t.Fatal("an exe inside ShelfU.app was not recognised")
 	}
 	if filepath.Dir(old) != filepath.Dir(next) {
 		t.Errorf("the new bundle %q is not next to %q", next, old)
 	}
-	if filepath.Base(next) != newBundleName || filepath.Base(old) != oldBundleName {
-		t.Errorf("bundle names = %q, %q; want %q, %q", oldBundleName, newBundleName, filepath.Base(old), filepath.Base(next))
+	if filepath.Base(next) != newBundleName || !isOldBundleName(filepath.Base(old)) {
+		t.Errorf("bundle names = %q, %q; want one of %q, %q", filepath.Base(old), filepath.Base(next), oldBundleNames, newBundleName)
 	}
 }
 
@@ -67,7 +68,7 @@ func TestSelfRenameBundleIgnoresNonBundles(t *testing.T) {
 		t.Skip("no executable path:", err)
 	}
 	if _, _, ok := selfRenameTarget(exe); ok {
-		t.Skipf("the test binary runs from %s, inside Shelf.app", exe)
+		t.Skipf("the test binary runs from %s, inside an old bundle", exe)
 	}
 	selfRenameBundle() // must return without exiting
 }

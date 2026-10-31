@@ -100,7 +100,7 @@ func (a *shelf) awakeMenu() []*mygo.MenuItem {
 // awakeAssertionName is the name powerd records for the hold (AssertName).
 // ASCII only: `pmset -g assertions` prints an empty `named:` for any
 // non-ASCII name, so this keeps the hold visible in that listing.
-const awakeAssertionName = "ShelfU Stay Awake"
+const awakeAssertionName = "Rakko Stay Awake"
 
 func (m *awakeModule) active() bool { return m != nil && m.id != 0 }
 

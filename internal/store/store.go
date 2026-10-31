@@ -162,16 +162,25 @@ type stateFile struct {
 var idCounter atomic.Uint64
 
 // DefaultRoot returns the default support directory
-// (os.UserConfigDir()/ShelfU).
+// (os.UserConfigDir()/Rakko).
 func DefaultRoot() (string, error) {
-	return configRoot("ShelfU")
+	return configRoot("Rakko")
 }
 
-// LegacyRoot returns the support directory the app used before it was
-// renamed (os.UserConfigDir()/Shelf). Startup migrates it to DefaultRoot
-// once and then leaves it as a backup.
-func LegacyRoot() (string, error) {
-	return configRoot("Shelf")
+// LegacyRoots returns the support directories earlier names of the app used,
+// newest first: the ShelfU releases, then the original Shelf app. Startup
+// migrates the first one that exists to DefaultRoot once, and then leaves it
+// as a backup.
+func LegacyRoots() ([]string, error) {
+	newer, err := configRoot("ShelfU")
+	if err != nil {
+		return nil, err
+	}
+	older, err := configRoot("Shelf")
+	if err != nil {
+		return nil, err
+	}
+	return []string{newer, older}, nil
 }
 
 // configRoot returns os.UserConfigDir()/name.

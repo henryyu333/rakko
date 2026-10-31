@@ -158,7 +158,7 @@ func TestCapsuleOnlyWhileThePanelIsClosed(t *testing.T) {
 	}
 	a.ownDrag = true
 	if !a.capsuleUp(now) {
-		t.Fatal("ShelfU's own drag-out does not ask for the drop pill: the capsule stays")
+		t.Fatal("Rakko's own drag-out does not ask for the drop pill: the capsule stays")
 	}
 	a.ownDrag, a.dragging = false, false
 	a.fb.arm(now)
@@ -587,7 +587,7 @@ func TestWingsFadeOutWithTheShell(t *testing.T) {
 		a.peekView(c, 284, 36, 0, 0.6, 0, false, false)
 	}, sheetW, sheetH)
 	view.Frame()
-	if _, ok := view.Find("正在播放：Fashion Killa · 展开 ShelfU"); !ok {
+	if _, ok := view.Find("正在播放：Fashion Killa · 展开 Rakko"); !ok {
 		t.Fatal("the wings vanished mid-retract instead of fading with the shell")
 	}
 }

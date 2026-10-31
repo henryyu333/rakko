@@ -1,4 +1,4 @@
-ShelfU — Third-party notices
+Rakko — Third-party notices
 
 Dependency source versions are pinned in go.mod. Upstream license texts follow.
 
@@ -13,7 +13,7 @@ only, to identify the service a card reports on:
 - The Claude "Spark" logo is a trademark of Anthropic (source:
   https://anthropic.com/press-kit — Claude Spark - Clay.svg).
 
-ShelfU is not affiliated with, sponsored, or endorsed by OpenAI or
+Rakko is not affiliated with, sponsored, or endorsed by OpenAI or
 Anthropic; the marks are used only to identify the corresponding service.
 
 

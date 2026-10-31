@@ -156,7 +156,7 @@ func TestTrayMenuOffersSettings(t *testing.T) {
 	for _, it := range a.trayMenu().Items() {
 		labels = append(labels, it.Label)
 	}
-	for _, want := range []string{"显示 / 收起 ShelfU", "自动清理", "剪贴板记录", "正在播放", "设置…", "退出 ShelfU"} {
+	for _, want := range []string{"显示 / 收起 Rakko", "自动清理", "剪贴板记录", "正在播放", "设置…", "退出 Rakko"} {
 		if !slices.Contains(labels, want) {
 			t.Fatalf("tray menu lacks %q; labels=%v", want, labels)
 		}
