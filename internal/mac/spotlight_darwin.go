@@ -106,17 +106,26 @@ func spotHome() string { return spotHomeDir() }
 // WarmSpotlight primes MDQuery's connection to the index, so the first
 // search of a session answers as fast as the ones after it. The query
 // matches nothing and its results are discarded; it is safe to call more
-// than once.
+// than once. A warmup that outlives its budget is cancelled: the index can
+// be slow to start, and the user's first real query must not queue behind
+// it.
 func WarmSpotlight() {
 	go func() {
 		done := make(chan struct{})
-		StartSpotlight("zzz-rakko-warmup-zzz", 1, func([]SpotlightHit) {}, func() { close(done) })
+		run := spotWarmStart("zzz-rakko-warmup-zzz", 1, func([]SpotlightHit) {}, func() { close(done) })
 		select {
 		case <-done:
-		case <-time.After(2 * time.Second):
+		case <-time.After(spotWarmTimeout):
+			run.Cancel()
 		}
 	}()
 }
+
+// spotWarmStart and spotWarmTimeout are seams for the warmup's test.
+var (
+	spotWarmStart   = StartSpotlight
+	spotWarmTimeout = 2 * time.Second
+)
 
 // SpotlightRun is the queries one term runs. Cancel stops them; the
 // batches they would still deliver are dropped.

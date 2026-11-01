@@ -113,3 +113,21 @@ func TestSpotlightCancelIsSafe(t *testing.T) {
 		t.Fatal("a query after the cancels never finished")
 	}
 }
+
+// TestWarmSpotlightCancelsWhenTheIndexIsSlow: a warmup still gathering at
+// its deadline gives the queue back instead of holding the user's query.
+func TestWarmSpotlightCancelsWhenTheIndexIsSlow(t *testing.T) {
+	oldStart, oldTimeout := spotWarmStart, spotWarmTimeout
+	t.Cleanup(func() { spotWarmStart, spotWarmTimeout = oldStart, oldTimeout })
+	run := &SpotlightRun{}
+	spotWarmStart = func(string, int, func([]SpotlightHit), func()) *SpotlightRun { return run }
+	spotWarmTimeout = time.Millisecond
+	WarmSpotlight()
+	deadline := time.Now().Add(2 * time.Second)
+	for !run.stopped.Load() {
+		if time.Now().After(deadline) {
+			t.Fatal("the slow warmup was never cancelled")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
