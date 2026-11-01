@@ -147,7 +147,9 @@ func TestMonitorDragBandTransitions(t *testing.T) {
 // A drag that leaves the panel auto-hides and suppresses itself; the same
 // drag coming back to the band clears the suppression and opens the panel
 // again. While suppressed the corridor pushes nothing, so the pointer (and
-// the icon it carries) follows the user.
+// the icon it carries) follows the user. A panel the user folds with Esc
+// while the drag stays in the band stays folded: only a fresh entry into
+// the band reopens it.
 func TestDragReturningToTheBandReopensThePanel(t *testing.T) {
 	var parks []bool
 	oldPark := parkNotchFilter
@@ -174,7 +176,20 @@ func TestDragReturningToTheBandReopensThePanel(t *testing.T) {
 	if !parkedNow() {
 		t.Fatal("the suppressed drag still had its corridor push the cursor")
 	}
-	// The same drag comes back to the band: the panel opens again.
+	// Esc folds the panel while the drag is still inside the band: the next
+	// tick must not take that as an entry and reopen it.
+	driveMonitor(t, a, enter, true, 1, []string{"public.file-url"})
+	if !a.visible {
+		t.Fatalf("re-entering the band did not open the panel: %+v", a)
+	}
+	a.animationStart = time.Time{}
+	a.hide(hideExplicit)
+	driveMonitor(t, a, enter, true, 1, []string{"public.file-url"})
+	if a.visible || !a.suppressed {
+		t.Fatalf("an Esc inside the band did not stay folded: visible=%v suppressed=%v", a.visible, a.suppressed)
+	}
+	// Leaving the band and entering again reopens it.
+	driveMonitor(t, a, away, true, 1, []string{"public.file-url"})
 	driveMonitor(t, a, enter, true, 1, []string{"public.file-url"})
 	if a.suppressed || !a.dropHot || !a.visible || !a.inBand {
 		t.Fatalf("returning to the band: suppressed=%v dropHot=%v visible=%v inBand=%v",

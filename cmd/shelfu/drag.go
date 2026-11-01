@@ -70,14 +70,17 @@ func (a *shelf) dropBand(p mygo.Point) bool {
 // down to the guard's landing row. Callers reset a.inBand on a new drag
 // serial before calling. Pure beyond the field writes.
 func (a *shelf) updateDragBand(p mygo.Point, active bool) {
-	if a.inBand {
+	wasInBand := a.inBand
+	if wasInBand {
 		a.inBand = active && !a.ownDrag && a.dropBandX(p)
 	} else {
 		a.inBand = active && !a.ownDrag && a.dropBand(p)
 	}
-	if a.inBand && a.suppressed {
-		// The panel auto-hid when the same drag left it; coming back to
-		// the band is the drag asking for the panel again.
+	if !wasInBand && a.inBand && a.suppressed {
+		// The panel auto-hid when the same drag left it; entering the band
+		// again is the drag asking for the panel. A drag already inside
+		// stays suppressed: an Esc that folded the panel is not undone by
+		// the next tick.
 		a.suppressed = false
 	}
 	a.dropHot = a.inBand && !a.suppressed
