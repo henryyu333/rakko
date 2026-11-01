@@ -469,46 +469,6 @@ func (msgs Messages) SettingsAISection() string {
 	return Catalog.Format(msgs.locale, "settingsAISection", nil)
 }
 
-// SettingsAIQuotaColumn says "套餐额度"
-// in the language the app shows.
-func SettingsAIQuotaColumn() string { return In(i18n.Locale()).SettingsAIQuotaColumn() }
-
-// SettingsAIQuotaColumn says "套餐额度"
-// in the language of msgs.
-func (msgs Messages) SettingsAIQuotaColumn() string {
-	return Catalog.Format(msgs.locale, "settingsAIQuotaColumn", nil)
-}
-
-// SettingsAILocalColumn says "本机用量"
-// in the language the app shows.
-func SettingsAILocalColumn() string { return In(i18n.Locale()).SettingsAILocalColumn() }
-
-// SettingsAILocalColumn says "本机用量"
-// in the language of msgs.
-func (msgs Messages) SettingsAILocalColumn() string {
-	return Catalog.Format(msgs.locale, "settingsAILocalColumn", nil)
-}
-
-// SettingsAIQuotaCheck says "套餐额度 {name}"
-// in the language the app shows.
-func SettingsAIQuotaCheck(name string) string { return In(i18n.Locale()).SettingsAIQuotaCheck(name) }
-
-// SettingsAIQuotaCheck says "套餐额度 {name}"
-// in the language of msgs.
-func (msgs Messages) SettingsAIQuotaCheck(name string) string {
-	return Catalog.Format(msgs.locale, "settingsAIQuotaCheck", map[string]any{"name": name})
-}
-
-// SettingsAILocalCheck says "本机用量 {name}"
-// in the language the app shows.
-func SettingsAILocalCheck(name string) string { return In(i18n.Locale()).SettingsAILocalCheck(name) }
-
-// SettingsAILocalCheck says "本机用量 {name}"
-// in the language of msgs.
-func (msgs Messages) SettingsAILocalCheck(name string) string {
-	return Catalog.Format(msgs.locale, "settingsAILocalCheck", map[string]any{"name": name})
-}
-
 // SettingsAIEnableRow says "在刘海里显示 AI 用量"
 // in the language the app shows.
 func SettingsAIEnableRow() string { return In(i18n.Locale()).SettingsAIEnableRow() }
@@ -549,14 +509,144 @@ func (msgs Messages) SettingsAIQuotaLeft() string {
 	return Catalog.Format(msgs.locale, "settingsAIQuotaLeft", nil)
 }
 
-// SettingsAIFoot says "会读取本机这些工具已保存的登录信息，并让 Claude Code …"
+// SettingsAIQuotaGroup says "套餐额度"
 // in the language the app shows.
-func SettingsAIFoot() string { return In(i18n.Locale()).SettingsAIFoot() }
+func SettingsAIQuotaGroup() string { return In(i18n.Locale()).SettingsAIQuotaGroup() }
 
-// SettingsAIFoot says "会读取本机这些工具已保存的登录信息，并让 Claude Code …"
+// SettingsAIQuotaGroup says "套餐额度"
 // in the language of msgs.
-func (msgs Messages) SettingsAIFoot() string {
-	return Catalog.Format(msgs.locale, "settingsAIFoot", nil)
+func (msgs Messages) SettingsAIQuotaGroup() string {
+	return Catalog.Format(msgs.locale, "settingsAIQuotaGroup", nil)
+}
+
+// SettingsAILocalGroup says "本机用量 · 自动识别"
+// in the language the app shows.
+func SettingsAILocalGroup() string { return In(i18n.Locale()).SettingsAILocalGroup() }
+
+// SettingsAILocalGroup says "本机用量 · 自动识别"
+// in the language of msgs.
+func (msgs Messages) SettingsAILocalGroup() string {
+	return Catalog.Format(msgs.locale, "settingsAILocalGroup", nil)
+}
+
+// SettingsAIQuotaSignedIn says "已登录"
+// in the language the app shows.
+func SettingsAIQuotaSignedIn() string { return In(i18n.Locale()).SettingsAIQuotaSignedIn() }
+
+// SettingsAIQuotaSignedIn says "已登录"
+// in the language of msgs.
+func (msgs Messages) SettingsAIQuotaSignedIn() string {
+	return Catalog.Format(msgs.locale, "settingsAIQuotaSignedIn", nil)
+}
+
+// SettingsAIQuotaSignedOut says "未登录"
+// in the language the app shows.
+func SettingsAIQuotaSignedOut() string { return In(i18n.Locale()).SettingsAIQuotaSignedOut() }
+
+// SettingsAIQuotaSignedOut says "未登录"
+// in the language of msgs.
+func (msgs Messages) SettingsAIQuotaSignedOut() string {
+	return Catalog.Format(msgs.locale, "settingsAIQuotaSignedOut", nil)
+}
+
+// SettingsAIQuotaExpired says "登录已过期"
+// in the language the app shows.
+func SettingsAIQuotaExpired() string { return In(i18n.Locale()).SettingsAIQuotaExpired() }
+
+// SettingsAIQuotaExpired says "登录已过期"
+// in the language of msgs.
+func (msgs Messages) SettingsAIQuotaExpired() string {
+	return Catalog.Format(msgs.locale, "settingsAIQuotaExpired", nil)
+}
+
+// SettingsAIQuotaNoCLI says "未安装"
+// in the language the app shows.
+func SettingsAIQuotaNoCLI() string { return In(i18n.Locale()).SettingsAIQuotaNoCLI() }
+
+// SettingsAIQuotaNoCLI says "未安装"
+// in the language of msgs.
+func (msgs Messages) SettingsAIQuotaNoCLI() string {
+	return Catalog.Format(msgs.locale, "settingsAIQuotaNoCLI", nil)
+}
+
+// SettingsAIQuotaLimit says "额度已用完"
+// in the language the app shows.
+func SettingsAIQuotaLimit() string { return In(i18n.Locale()).SettingsAIQuotaLimit() }
+
+// SettingsAIQuotaLimit says "额度已用完"
+// in the language of msgs.
+func (msgs Messages) SettingsAIQuotaLimit() string {
+	return Catalog.Format(msgs.locale, "settingsAIQuotaLimit", nil)
+}
+
+// SettingsAIQuotaUnavailable says "暂时查不到"
+// in the language the app shows.
+func SettingsAIQuotaUnavailable() string { return In(i18n.Locale()).SettingsAIQuotaUnavailable() }
+
+// SettingsAIQuotaUnavailable says "暂时查不到"
+// in the language of msgs.
+func (msgs Messages) SettingsAIQuotaUnavailable() string {
+	return Catalog.Format(msgs.locale, "settingsAIQuotaUnavailable", nil)
+}
+
+// SettingsAIStatusFound says "已识别"
+// in the language the app shows.
+func SettingsAIStatusFound() string { return In(i18n.Locale()).SettingsAIStatusFound() }
+
+// SettingsAIStatusFound says "已识别"
+// in the language of msgs.
+func (msgs Messages) SettingsAIStatusFound() string {
+	return Catalog.Format(msgs.locale, "settingsAIStatusFound", nil)
+}
+
+// SettingsAIStatusFailed says "读取失败"
+// in the language the app shows.
+func SettingsAIStatusFailed() string { return In(i18n.Locale()).SettingsAIStatusFailed() }
+
+// SettingsAIStatusFailed says "读取失败"
+// in the language of msgs.
+func (msgs Messages) SettingsAIStatusFailed() string {
+	return Catalog.Format(msgs.locale, "settingsAIStatusFailed", nil)
+}
+
+// SettingsAIStatusNotFound says "未发现"
+// in the language the app shows.
+func SettingsAIStatusNotFound() string { return In(i18n.Locale()).SettingsAIStatusNotFound() }
+
+// SettingsAIStatusNotFound says "未发现"
+// in the language of msgs.
+func (msgs Messages) SettingsAIStatusNotFound() string {
+	return Catalog.Format(msgs.locale, "settingsAIStatusNotFound", nil)
+}
+
+// SettingsAIStatusUnsupported says "不支持"
+// in the language the app shows.
+func SettingsAIStatusUnsupported() string { return In(i18n.Locale()).SettingsAIStatusUnsupported() }
+
+// SettingsAIStatusUnsupported says "不支持"
+// in the language of msgs.
+func (msgs Messages) SettingsAIStatusUnsupported() string {
+	return Catalog.Format(msgs.locale, "settingsAIStatusUnsupported", nil)
+}
+
+// SettingsAICloud says "云端"
+// in the language the app shows.
+func SettingsAICloud() string { return In(i18n.Locale()).SettingsAICloud() }
+
+// SettingsAICloud says "云端"
+// in the language of msgs.
+func (msgs Messages) SettingsAICloud() string {
+	return Catalog.Format(msgs.locale, "settingsAICloud", nil)
+}
+
+// SettingsAILocalFoot says "只读本机日志，不联网、不上传；新装的 Agent 下次扫描自动出现。"
+// in the language the app shows.
+func SettingsAILocalFoot() string { return In(i18n.Locale()).SettingsAILocalFoot() }
+
+// SettingsAILocalFoot says "只读本机日志，不联网、不上传；新装的 Agent 下次扫描自动出现。"
+// in the language of msgs.
+func (msgs Messages) SettingsAILocalFoot() string {
+	return Catalog.Format(msgs.locale, "settingsAILocalFoot", nil)
 }
 
 // SettingsTraySection says "托盘"
@@ -1747,11 +1837,11 @@ func (msgs Messages) UsageEmptyTitle() string {
 	return Catalog.Format(msgs.locale, "usageEmptyTitle", nil)
 }
 
-// UsageEmptyDetail says "在设置 → AI 用量里打开套餐额度或本机用量"
+// UsageEmptyDetail says "在设置 → AI 用量里打开套餐额度"
 // in the language the app shows.
 func UsageEmptyDetail() string { return In(i18n.Locale()).UsageEmptyDetail() }
 
-// UsageEmptyDetail says "在设置 → AI 用量里打开套餐额度或本机用量"
+// UsageEmptyDetail says "在设置 → AI 用量里打开套餐额度"
 // in the language of msgs.
 func (msgs Messages) UsageEmptyDetail() string {
 	return Catalog.Format(msgs.locale, "usageEmptyDetail", nil)
@@ -2101,34 +2191,14 @@ func (msgs Messages) UsageScanFailed() string {
 	return Catalog.Format(msgs.locale, "usageScanFailed", nil)
 }
 
-// UsageNoLocalSources says "没有选中的本机来源"
+// UsageReadOnlyAll says "只读本机日志"
 // in the language the app shows.
-func UsageNoLocalSources() string { return In(i18n.Locale()).UsageNoLocalSources() }
+func UsageReadOnlyAll() string { return In(i18n.Locale()).UsageReadOnlyAll() }
 
-// UsageNoLocalSources says "没有选中的本机来源"
+// UsageReadOnlyAll says "只读本机日志"
 // in the language of msgs.
-func (msgs Messages) UsageNoLocalSources() string {
-	return Catalog.Format(msgs.locale, "usageNoLocalSources", nil)
-}
-
-// UsageReadOnly says "只读 {sources}"
-// in the language the app shows.
-func UsageReadOnly(sources string) string { return In(i18n.Locale()).UsageReadOnly(sources) }
-
-// UsageReadOnly says "只读 {sources}"
-// in the language of msgs.
-func (msgs Messages) UsageReadOnly(sources string) string {
-	return Catalog.Format(msgs.locale, "usageReadOnly", map[string]any{"sources": sources})
-}
-
-// UsageListSeparator says "、"
-// in the language the app shows.
-func UsageListSeparator() string { return In(i18n.Locale()).UsageListSeparator() }
-
-// UsageListSeparator says "、"
-// in the language of msgs.
-func (msgs Messages) UsageListSeparator() string {
-	return Catalog.Format(msgs.locale, "usageListSeparator", nil)
+func (msgs Messages) UsageReadOnlyAll() string {
+	return Catalog.Format(msgs.locale, "usageReadOnlyAll", nil)
 }
 
 // UsageKpiRequests says "请求"
@@ -6267,11 +6337,11 @@ func (msgs Messages) SettingsClipFoot() string {
 	return Catalog.Format(msgs.locale, "settingsClipFoot", nil)
 }
 
-// SettingsAIHero says "在刘海里看 Claude Code、Codex 的套餐额度和本机用量。"
+// SettingsAIHero says "在刘海里看 Claude Code、Codex 的套餐额度和本机所有 Agent 的用量。"
 // in the language the app shows.
 func SettingsAIHero() string { return In(i18n.Locale()).SettingsAIHero() }
 
-// SettingsAIHero says "在刘海里看 Claude Code、Codex 的套餐额度和本机用量。"
+// SettingsAIHero says "在刘海里看 Claude Code、Codex 的套餐额度和本机所有 Agent 的用量。"
 // in the language of msgs.
 func (msgs Messages) SettingsAIHero() string {
 	return Catalog.Format(msgs.locale, "settingsAIHero", nil)
@@ -6285,16 +6355,6 @@ func SettingsAIEnableGroup() string { return In(i18n.Locale()).SettingsAIEnableG
 // in the language of msgs.
 func (msgs Messages) SettingsAIEnableGroup() string {
 	return Catalog.Format(msgs.locale, "settingsAIEnableGroup", nil)
-}
-
-// SettingsAISourcesGroup says "数据来源"
-// in the language the app shows.
-func SettingsAISourcesGroup() string { return In(i18n.Locale()).SettingsAISourcesGroup() }
-
-// SettingsAISourcesGroup says "数据来源"
-// in the language of msgs.
-func (msgs Messages) SettingsAISourcesGroup() string {
-	return Catalog.Format(msgs.locale, "settingsAISourcesGroup", nil)
 }
 
 // SettingsKeysHero says "点一下快捷键，再按新的组合键。按 Delete 清空。"

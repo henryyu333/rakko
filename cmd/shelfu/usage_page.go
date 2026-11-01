@@ -99,19 +99,6 @@ func toolColor(t aiusage.Tool) ui.Color {
 	}
 }
 
-// localSourceOn reports whether the local-usage chip for tool is on.
-func (f *usageFeature) localSourceOn(t aiusage.Tool) bool {
-	cfg := f.cfg()
-	switch t {
-	case aiusage.ToolClaude:
-		return cfg.LocalClaude
-	case aiusage.ToolCodex:
-		return cfg.LocalCodex
-	default:
-		return cfg.LocalOmp
-	}
-}
-
 // --- panelPage ----------------------------------------------------------
 
 func (f *usageFeature) id() pageID    { return pageUsage }
@@ -787,54 +774,11 @@ func (f *usageFeature) localPanel(c *ui.Context) {
 			f.scanCard(c)
 			return
 		}
-		s := f.shownSummary()
+		s := f.summary
 		f.kpiGrid(c, s)
 		f.usageChart(c, s)
 		f.usageLegend(c, s)
 	})
-}
-
-// shownSummary is the summary as it must draw right now: KPI totals, the
-// chart and the legend all follow the live aiUsage.local* chips, so a chip
-// flip repaints the numbers at once instead of waiting for the next scan.
-// With every source on (the default) it returns the published summary
-// unchanged; otherwise it rebuilds Total from the kept per-tool totals
-// and drops the dropped tools' tokens from each bucket.
-func (f *usageFeature) shownSummary() aiusage.Summary {
-	s := f.summary
-	var kept []aiusage.Tool
-	for _, t := range localTools() {
-		if f.localSourceOn(t) {
-			kept = append(kept, t)
-		}
-	}
-	if len(kept) == len(localTools()) {
-		return s
-	}
-	s.ByTool = make(map[aiusage.Tool]aiusage.Totals, len(kept))
-	s.Total = aiusage.Totals{}
-	for _, t := range kept {
-		bt := f.summary.ByTool[t]
-		s.ByTool[t] = bt
-		s.Total.Input += bt.Input
-		s.Total.Output += bt.Output
-		s.Total.CacheRead += bt.CacheRead
-		s.Total.CacheWrite += bt.CacheWrite
-		s.Total.Requests += bt.Requests
-		s.Total.Unpriced += bt.Unpriced
-		s.Total.Cost += bt.Cost
-	}
-	s.Buckets = make([]aiusage.Bucket, len(f.summary.Buckets))
-	for i, b := range f.summary.Buckets {
-		tokens := make(map[aiusage.Tool]int64, len(kept))
-		for _, t := range kept {
-			if v := b.Tokens[t]; v > 0 {
-				tokens[t] = v
-			}
-		}
-		s.Buckets[i] = aiusage.Bucket{Start: b.Start, Tokens: tokens}
-	}
-	return s
 }
 
 // usageSeg is the 今天/7 天/30 天/全部 picker: a fill1 track of small
@@ -899,19 +843,10 @@ func (f *usageFeature) scanCard(c *ui.Context) {
 	})
 }
 
-// scanSources names the enabled local sources in the scan card's caption.
+// scanSources names what the scan card reads: every supported reader, so
+// the caption does not have to list six names in a 197pt column.
 func (f *usageFeature) scanSources(c *ui.Context) string {
-	l := tloc(c)
-	var names []string
-	for _, t := range localTools() {
-		if f.localSourceOn(t) {
-			names = append(names, toolName(t))
-		}
-	}
-	if len(names) == 0 {
-		return l.UsageNoLocalSources()
-	}
-	return l.UsageReadOnly(strings.Join(names, l.UsageListSeparator()))
+	return tloc(c).UsageReadOnlyAll()
 }
 
 // kpiGrid is the 2 × 2 metric block: Token, requests, cost and cache-hit
@@ -1070,13 +1005,10 @@ func (f *usageFeature) xLabels(l locales.Messages, buckets []aiusage.Bucket) []s
 	return labels
 }
 
-// usageLegend is the chart's footnote: one chip per enabled local source.
+// usageLegend is the chart's footnote: one chip per local reader with data.
 func (f *usageFeature) usageLegend(c *ui.Context, s aiusage.Summary) {
 	ui.Row(c.Key("legend")).Gap(10).Children(func() {
-		for _, t := range []aiusage.Tool{aiusage.ToolOmp, aiusage.ToolClaude, aiusage.ToolCodex} {
-			if !f.localSourceOn(t) {
-				continue
-			}
+		for _, t := range localTools() {
 			ui.Row(c.Key("lg-" + string(t))).AlignItems(ui.Center).Children(func() {
 				ui.Box(c).Size(6, 6).Radius(2).Background(toolColor(t)).Margin(0, 4, 0, 0)
 				panelLabel(c, nil, toolName(t), 9.5, 0).TextColor(ink2)

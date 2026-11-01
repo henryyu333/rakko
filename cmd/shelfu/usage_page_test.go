@@ -536,8 +536,8 @@ func TestUsageTokensFormat(t *testing.T) {
 	}
 }
 
-// Per-source settings hide their card or the whole local section.
-func TestUsagePerSourceSettings(t *testing.T) {
+// Quota switches hide their card; local usage has no switch and stays.
+func TestUsageQuotaCardSettings(t *testing.T) {
 	fx := newUsageFixture(t, true)
 	fx.codex.q = okQuota(aiusage.ToolCodex, "Plus", *fx.now)
 	fx.claude.q = okQuota(aiusage.ToolClaude, "Pro", *fx.now)
@@ -554,28 +554,26 @@ func TestUsagePerSourceSettings(t *testing.T) {
 	if !fx.view.HasText("Claude Code") {
 		t.Fatal("enabled card missing")
 	}
-	// With every local source off the 本机用量 section leaves.
-	fx.a.settings.AIUsage.LocalOmp = false
-	fx.a.settings.AIUsage.LocalClaude = false
-	fx.a.settings.AIUsage.LocalCodex = false
-	fx.view.Frame()
-	if fx.view.HasText("本机用量") {
-		t.Fatal("local section must hide when every source is off")
+	if !fx.view.HasText("本机用量") {
+		t.Fatal("local usage must stay visible; it has no switch")
 	}
 }
 
-// The settings group writes through applySettings: the running copy and
-// settings.json change together. The layout is design/usage-fix-v2.png's
-// table: one-line master switch, a header row naming the two columns,
-// one row per tool with a checkbox per column (omp's quota cell is a
-// plain 「—」), and the privacy note under the card.
+// The settings page writes through applySettings: the running copy and
+// settings.json change together. It has three groups: 显示, 套餐额度 and the
+// read-only 本机用量 list; the old two-column checkbox table is gone.
 func TestUsageSettingsSection(t *testing.T) {
 	stubSettingsSeams(t, false, nil, nil)
 	a, view := newSettingsShelf(t)
 	openSettingsPage(t, view, "AI 用量")
-	for _, want := range []string{"AI 用量", "在刘海里显示 AI 用量", "套餐额度", "本机用量", "Codex", "Claude Code", "omp", "—", "额度显示", "已用", "剩余", "不发给其他任何地方"} {
+	for _, want := range []string{
+		"AI 用量", "在刘海里显示 AI 用量", "套餐额度", "本机用量 · 自动识别",
+		"Claude Code", "Codex", "omp", "pi", "opencode", "Grok CLI", "Cursor",
+		"未发现", "不支持", "额度显示", "已用", "剩余",
+		"只读本机日志，不联网、不上传",
+	} {
 		if !view.HasText(want) {
-			t.Fatalf("AI 用量 group missing %q; texts=%v", want, view.Texts())
+			t.Fatalf("AI 用量 page missing %q; texts=%v", want, view.Texts())
 		}
 	}
 	clickVisible(t, view, "在刘海里显示 AI 用量")
@@ -586,13 +584,9 @@ func TestUsageSettingsSection(t *testing.T) {
 	if err != nil || !loaded.AIUsage.Enabled {
 		t.Fatalf("settings.json lacks the change: %v %+v", err, loaded.AIUsage)
 	}
-	clickVisible(t, view, "套餐额度 Claude Code")
+	clickVisible(t, view, "Claude Code")
 	if a.settings.AIUsage.QuotaClaude {
-		t.Fatal("the Claude quota checkbox did not turn off")
-	}
-	clickVisible(t, view, "本机用量 omp")
-	if a.settings.AIUsage.LocalOmp {
-		t.Fatal("the omp local checkbox did not turn off")
+		t.Fatal("the Claude quota switch did not turn off")
 	}
 	// The display mode is a saved preference: used by default, left after
 	// one click.
@@ -606,35 +600,57 @@ func TestUsageSettingsSection(t *testing.T) {
 	if saved, err := settings.Load(a.dataDir); err != nil || !saved.AIUsage.QuotaLeft {
 		t.Fatalf("settings.json lacks quotaLeft: %v %+v", err, saved.AIUsage)
 	}
+	// The removed local switches never come back to settings.json.
+	data, err := os.ReadFile(filepath.Join(a.dataDir, settings.FileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"localOmp", "localClaude", "localCodex"} {
+		if strings.Contains(string(data), key) {
+			t.Fatalf("settings.json still has %s: %s", key, data)
+		}
+	}
 }
 
-// With the master off the source table is locked: clicks reach the boxes
-// but flip nothing, while the saved checkbox states stay as they were —
-// the mock's dimmed, non-interactive state.
-func TestUsageSettingsTableLockedWhileOff(t *testing.T) {
+// With the master off the quota switches are locked: clicks flip nothing.
+// The local list is read-only and stays visible, so the user can still see
+// what was detected.
+func TestUsageSettingsQuotaLockedWhileOff(t *testing.T) {
 	stubSettingsSeams(t, false, nil, nil)
 	a, view := newSettingsShelf(t) // AIUsage.Enabled defaults to false
 	openSettingsPage(t, view, "AI 用量")
 	before := a.settings.AIUsage
-	clickVisible(t, view, "套餐额度 Codex")
-	clickVisible(t, view, "本机用量 Claude Code")
+	clickVisible(t, view, "Codex")
 	if a.settings.AIUsage != before {
-		t.Fatalf("locked table answered clicks: %+v", a.settings.AIUsage)
+		t.Fatalf("locked quota switches answered clicks: %+v", a.settings.AIUsage)
 	}
-	// The master still flips while the table is locked.
+	if !view.HasText("未发现") {
+		t.Fatal("the read-only local list must stay visible")
+	}
 	clickVisible(t, view, "在刘海里显示 AI 用量")
 	if !a.settings.AIUsage.Enabled {
-		t.Fatal("master switch must work while the table is locked")
+		t.Fatal("master switch must work while the quota switches are locked")
 	}
-	// With the table unlocked the checkboxes apply again: omp's local
-	// checkbox flips to off and the change is saved.
-	clickVisible(t, view, "本机用量 omp")
-	if a.settings.AIUsage.LocalOmp {
-		t.Fatal("unlocked table must answer checkbox clicks")
+	clickVisible(t, view, "Codex")
+	if a.settings.AIUsage.QuotaCodex {
+		t.Fatal("unlocked quota switch must answer clicks")
 	}
 	saved, err := settings.Load(a.dataDir)
-	if err != nil || !saved.AIUsage.Enabled || saved.AIUsage.LocalOmp {
+	if err != nil || !saved.AIUsage.Enabled || saved.AIUsage.QuotaCodex {
 		t.Fatalf("saved state wrong: %v %+v", err, saved.AIUsage)
+	}
+}
+
+// The quota row's caption is the plan name when the last answer had one.
+func TestUsageSettingsQuotaCaption(t *testing.T) {
+	stubSettingsSeams(t, false, nil, nil)
+	a, view := newSettingsShelf(t)
+	now := time.Date(2026, 10, 19, 12, 0, 0, 0, time.Local)
+	a.usage = newUsageFeature(a, usageDeps{now: func() time.Time { return now }})
+	a.usage.quota[quotaIndex(aiusage.ToolCodex)].latest = okQuota(aiusage.ToolCodex, "Plus", now)
+	openSettingsPage(t, view, "AI 用量")
+	if !view.HasText("Plus") {
+		t.Fatalf("plan caption missing; texts=%v", view.Texts())
 	}
 }
 

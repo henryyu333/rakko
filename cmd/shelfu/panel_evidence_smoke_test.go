@@ -73,8 +73,7 @@ func TestSmokePanelEvidence(t *testing.T) {
 			},
 			now: func() time.Time { return now },
 		})
-		a.settings.AIUsage = settings.AIUsageSettings{Enabled: true, QuotaCodex: true, QuotaClaude: true,
-			LocalOmp: true, LocalClaude: true, LocalCodex: true}
+		a.settings.AIUsage = settings.AIUsageSettings{Enabled: true, QuotaCodex: true, QuotaClaude: true}
 		a.registerPage(f)
 		a.setTab(pageTray)
 	})
@@ -245,7 +244,7 @@ func renderEvidence(t *testing.T, now time.Time) {
 		now:        func() time.Time { return now },
 	})
 	a.registerPage(f)
-	a.settings.AIUsage = settings.AIUsageSettings{Enabled: true, QuotaCodex: true, QuotaClaude: true, LocalOmp: true, LocalClaude: true, LocalCodex: true}
+	a.settings.AIUsage = settings.AIUsageSettings{Enabled: true, QuotaCodex: true, QuotaClaude: true}
 	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame()
 	savePNG(t, view.Image(), "render-island")
