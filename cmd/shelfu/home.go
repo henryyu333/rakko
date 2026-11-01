@@ -35,7 +35,6 @@ const (
 	resultsSecH   = 21 // a group's caption row
 	resultsActH   = 40 // the 打开 ↩ hint row at the bottom
 	resultsMaxH   = 330
-	resultsMax    = 6 // rows shown at most
 
 	navGap    = 10 // panel → page capsule
 	navH      = 36
@@ -50,18 +49,31 @@ const (
 var paneRim = ui.RGBA(255, 255, 255, 0.14)
 
 // homeHit is one search result: a row of a group, and what ⏎ does with it.
+// A Spotlight row names its file instead of carrying a drawn icon; the
+// Finder icon is resolved when the row is painted (see spotIcon).
 type homeHit struct {
-	group string
-	icon  *ui.SVG
-	title string
-	sub   string
-	run   func()
+	group  string
+	icon   *ui.SVG
+	path   string
+	title  string
+	sub    string
+	run    func()
+	reveal func()
 }
 
-// homeHits is what the query finds, grouped tray → clipboard → actions,
-// resultsMax rows at most. Tray rows open the file, clipboard rows copy the
-// text, action rows run the tool; each closes the panel like the page's
-// own ⏎ does.
+// bitmap is the row's Finder icon, or nil for rows that draw a glyph.
+func (h homeHit) bitmap(a *shelf) *ui.Bitmap {
+	if h.path == "" {
+		return nil
+	}
+	return a.spotIcon(h.path)
+}
+
+// homeHits is what the query finds, grouped tray → clipboard → 应用 →
+// 文件夹 → 文件 → actions, three rows per group and no more than the
+// sheet's 330 pt holds. Tray rows open the file, clipboard rows copy the
+// text, Spotlight rows open the file and action rows run the tool; each
+// closes the panel like the page's own ⏎ does.
 func (a *shelf) homeHits() []homeHit {
 	q := strings.ToLower(strings.TrimSpace(a.homeQuery))
 	if q == "" {
@@ -70,6 +82,7 @@ func (a *shelf) homeHits() []homeHit {
 	l := a.appLoc()
 	now := time.Now()
 	var tray, clip, acts []homeHit
+	var trayPaths []string
 	if a.store != nil {
 		for _, it := range a.store.Items {
 			title := itemTitleIn(l, it)
@@ -87,6 +100,7 @@ func (a *shelf) homeHits() []homeHit {
 						}
 					}})
 			case it.Kind != store.KindText && !it.OffTray && !it.Missing:
+				trayPaths = append(trayPaths, it.Path)
 				tray = append(tray, homeHit{group: l.HomeGroupTray(), icon: fileSymbol, title: title,
 					sub: relativeTime(l, it.CreatedAt, now), run: func() {
 						if err := mygo.Shell.OpenPath(it.Path); err != nil {
@@ -96,6 +110,28 @@ func (a *shelf) homeHits() []homeHit {
 						a.hide(hideExplicit)
 					}})
 			}
+		}
+	}
+	// The index repeats what the tray already shows: those rows stay in
+	// the tray group only.
+	shown := make(map[string]bool, len(tray))
+	for i, path := range trayPaths {
+		if i == homeGroupMax {
+			break
+		}
+		shown[path] = true
+	}
+	var apps, folders, files []homeHit
+	if items := a.homeSpotItems(); len(items) > 0 {
+		ag, fg, fh := spotGroupHits(q, items, shown)
+		for _, hit := range ag {
+			apps = append(apps, a.spotHitRow(l.HomeGroupApps(), hit))
+		}
+		for _, hit := range fg {
+			folders = append(folders, a.spotHitRow(l.HomeGroupFolders(), hit))
+		}
+		for _, hit := range fh {
+			files = append(files, a.spotHitRow(l.HomeGroupFiles(), hit))
 		}
 	}
 	for _, act := range []struct {
@@ -111,13 +147,18 @@ func (a *shelf) homeHits() []homeHit {
 		}
 	}
 	var out []homeHit
-	for _, g := range [][]homeHit{tray, clip, acts} {
-		for _, h := range g {
-			if len(out) == resultsMax {
-				return out
+	for _, g := range [][]homeHit{tray, clip, apps, folders, files, acts} {
+		for i, h := range g {
+			if i == homeGroupMax {
+				break
 			}
 			out = append(out, h)
 		}
+	}
+	// The sheet clips at 330 pt; drop whole rows from the end (the least
+	// important group) until the rest fits.
+	for len(out) > 0 && resultsRawHeight(out) > resultsMaxH {
+		out = out[:len(out)-1]
 	}
 	return out
 }
@@ -125,6 +166,12 @@ func (a *shelf) homeHits() []homeHit {
 // resultsHeight is the sheet's height for hits: its padding, a caption per
 // group, a row per hit and the hint row; one row's height for "nothing".
 func resultsHeight(hits []homeHit) float32 {
+	return min(resultsRawHeight(hits), resultsMaxH)
+}
+
+// resultsRawHeight is the sheet's height before the 330 pt cap: trimming
+// and the drawn height both read it.
+func resultsRawHeight(hits []homeHit) float32 {
 	if len(hits) == 0 {
 		return 2*resultsPad + resultsRowH
 	}
@@ -137,7 +184,7 @@ func resultsHeight(hits []homeHit) float32 {
 		}
 		h += resultsRowH
 	}
-	return min(h, resultsMaxH)
+	return h
 }
 
 // homeBoxW is the bar's target width: wider while a query is typed.
@@ -154,7 +201,14 @@ func (a *shelf) resultsTargetH() float32 {
 	if !a.visible || a.currentLevel() != 1 || strings.TrimSpace(a.homeQuery) == "" || a.snap.panel || a.snap.drawn {
 		return 0
 	}
-	return resultsHeight(a.homeHits())
+	hits := a.homeHits()
+	// Nothing found is only known once the index says so: while the query
+	// is still gathering the sheet stays shut instead of flashing
+	// 「没有找到」 between batches.
+	if len(hits) == 0 && a.homeSearching() {
+		return 0
+	}
+	return resultsHeight(hits)
 }
 
 // navW is the page capsule's width for its buttons.
@@ -225,7 +279,8 @@ func (a *shelf) homeBar(c *ui.Context, w float32) {
 		row.Children(func() {
 			ui.Icon(c, searchSymbol).Size(17, 17).TextColor(ink3)
 			in := ui.TextInputBase(c.Key("home-query"), &a.homeQuery).Grow(1).MinWidth(0).
-				Placeholder(l.HomeSearch()).Label(l.HomeSearch()).FontSize(15).TextColor(ink)
+				Placeholder(l.HomeSearch()).Label(l.HomeSearch()).FontSize(15).TextColor(ink).
+				OnChange(func() { a.homeQueryChanged() })
 			if a.visible && a.focusMode && a.currentLevel() == 1 {
 				in.Focus()
 			}
@@ -236,7 +291,11 @@ func (a *shelf) homeBar(c *ui.Context, w float32) {
 				case ui.KeyDown:
 					a.homeSel++
 				case ui.KeyEnter:
-					a.runHomeHit()
+					if k.Mods&ui.Cmd != 0 {
+						a.revealHomeHit()
+					} else {
+						a.runHomeHit()
+					}
 				case ui.KeyEscape:
 					a.escape()
 				default:
@@ -252,7 +311,7 @@ func (a *shelf) homeBar(c *ui.Context, w float32) {
 					Background(ui.RGBA(255, 255, 255, 0.22)).Label(l.HomeClear())
 				clr.Children(func() { ui.Icon(c, closeSymbol).Size(9, 9).TextColor(surface) })
 				if clr.Clicked() {
-					a.homeQuery, a.homeSel = "", 0
+					a.resetHomeSearch()
 				}
 			}
 		})
@@ -268,11 +327,27 @@ func (a *shelf) runHomeHit() {
 	hits[min(a.homeSel, len(hits)-1)].run()
 }
 
+// revealHomeHit is ⌘⏎: the selected result shows in Finder, and rows that
+// live outside the file system act as plain ⏎.
+func (a *shelf) revealHomeHit() {
+	hits := a.homeHits()
+	if len(hits) == 0 {
+		return
+	}
+	hit := hits[min(a.homeSel, len(hits)-1)]
+	if hit.reveal != nil {
+		hit.reveal()
+		return
+	}
+	hit.run()
+}
+
 // resultsView draws the hits inside the sheet's box r (window-local).
 func (a *shelf) resultsView(c *ui.Context, r ui.Rect, opacity float32) {
 	l := loc(c)
 	hits := a.homeHits()
 	a.homeSel = min(a.homeSel, max(len(hits)-1, 0))
+	a.noteHomePainted(hits)
 	radius := min(resultsRadius, r.H/2)
 	glassBase(c, "results-base", r, radius, opacity)
 	box := ui.Column(c.Key("results")).Absolute().Left(r.X).Top(r.Y).Width(r.W).Height(r.H).
@@ -280,6 +355,11 @@ func (a *shelf) resultsView(c *ui.Context, r ui.Rect, opacity float32) {
 		Radius(radius).Material(glass.Glass{}).Border(0.5, paneRim)
 	box.Children(func() {
 		if len(hits) == 0 {
+			// Still gathering: the sheet has no row to show yet, and
+			// 「没有找到」 would be a claim the index has not made.
+			if a.homeSearching() {
+				return
+			}
 			ui.Row(c.Key("results-none")).Height(resultsRowH).Padding(0, 10, 0, 10).AlignItems(ui.Center).Children(func() {
 				panelLabel(c, nil, l.HomeNoMatch(), 13, 500).TextColor(ink3)
 			})
@@ -302,7 +382,15 @@ func (a *shelf) resultsView(c *ui.Context, r ui.Rect, opacity float32) {
 			}
 			row.Children(func() {
 				ui.Box(c.Key(rowKey{"hit-ic", i})).Size(28, 28).Radius(7).Background(fill2).Center().Children(func() {
-					ui.Icon(c, hit.icon).Size(15, 15).TextColor(ink2)
+					bmp := hit.bitmap(a)
+					switch {
+					case bmp != nil:
+						ui.Image(c.Key(rowKey{"hit-img", i}), bmp).Size(19, 19)
+					case hit.icon != nil:
+						ui.Icon(c, hit.icon).Size(15, 15).TextColor(ink2)
+					default:
+						ui.Icon(c, fileSymbol).Size(15, 15).TextColor(ink2)
+					}
 				})
 				ui.Text(c, hit.title).SingleLine().Grow(1).MinWidth(0).FontSize(13).FontWeight(600).TextColor(ink)
 				if hit.sub != "" {
@@ -341,12 +429,12 @@ func (a *shelf) navView(c *ui.Context, r ui.Rect, opacity float32) {
 	glassBase(c, "nav-base", r, navH/2, opacity)
 	row := ui.Row(c.Key("nav")).Absolute().Left(r.X).Top(r.Y).Width(r.W).Height(r.H).
 		Padding(0, navPadX, 0, navPadX).Gap(navBtnGap).AlignItems(ui.Center).Opacity(opacity).
-		Radius(navH / 2).Material(glass.Glass{}).Border(0.5, paneRim)
+		Radius(navH/2).Material(glass.Glass{}).Border(0.5, paneRim)
 	if opacity < 0.5 {
 		row.PassThrough()
 	}
 	button := func(key string, label string, on bool, icon func()) ui.Element {
-		b := ui.ButtonBase(c.Key("nav-" + key)).Size(navBtnW, navBtnH).Radius(navBtnH / 2).Center().
+		b := ui.ButtonBase(c.Key("nav-"+key)).Size(navBtnW, navBtnH).Radius(navBtnH / 2).Center().
 			Label(label).Tooltip(label)
 		switch {
 		case on:

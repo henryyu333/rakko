@@ -77,6 +77,9 @@ type shelf struct {
 	search                                                      string                // clipboard page's search text
 	homeQuery                                                   string                // the home search bar's text
 	homeSel                                                     int                   // the selected result row
+	homeSpot                                                    homeSpotState         // the bar's Spotlight query and hits
+	spotIcons                                                   map[string]*ui.Bitmap // result path → Finder icon, cached for the sheet
+	spotPending                                                 map[string]bool       // result icons being rendered in the background
 	titleWidths                                                 map[string]float32    // back-row page name → measured width at the title font (see backTitleWidth)
 	reveal                                                      string                // row to keep in view after a keyboard move
 	focusMode                                                   bool                  // the window took the keyboard for clipboard search
