@@ -220,7 +220,7 @@ func TestLevelSwitchUnderStillPointerKeepsTheMouse(t *testing.T) {
 func TestIslandOpeningFramesStayOnTheIslandBox(t *testing.T) {
 	a := motionWindow()
 	a.level = 1
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame() // the idle frame the spring starts from
 	a.visible = true
 	iw, ih := islandFrame()
@@ -249,7 +249,7 @@ func TestIslandOpeningFramesStayOnTheIslandBox(t *testing.T) {
 func TestReopenAfterASheetCloseStartsOnTheIsland(t *testing.T) {
 	a := motionWindow()
 	a.level, a.visible = 2, true
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	settleFrames(view, 80)
 	if a.fx.levelK < 0.999 {
 		t.Fatalf("the sheet never settled: levelK %.2f", a.fx.levelK)

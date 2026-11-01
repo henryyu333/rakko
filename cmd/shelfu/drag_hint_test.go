@@ -20,12 +20,12 @@ func TestDropHintHiddenDuringOwnDrag(t *testing.T) {
 		settings: settings.Default(), visible: true,
 		dragging: true, ownDrag: true, notchW: 180, notchH: 32,
 	}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	if _, ok := view.Find("松开放入"); ok {
 		t.Fatal("the panel showed the drop hint during ShelfU's own drag-out")
 	}
 	a.ownDrag = false
-	view = ui.NewTester(a.view, sheetW, sheetH)
+	view = ui.NewTester(a.view, sheetW, panelTestH)
 	if _, ok := view.Find("松开放入"); !ok {
 		t.Fatal("an incoming drag lost the panel's drop hint")
 	}
@@ -40,7 +40,7 @@ func TestPeekDropHintHiddenDuringOwnDrag(t *testing.T) {
 	if w, h := a.peekSize(); w == 180+dropPillExtraW || h == 32+dropPillBody {
 		t.Fatalf("own drag-out kept the drop pill shape %.0fx%.0f", w, h)
 	}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	if _, ok := view.Find("松开放入"); ok {
 		t.Fatal("the notch showed 松开放入 during ShelfU's own drag-out")
 	}
@@ -50,7 +50,7 @@ func TestPeekDropHintHiddenDuringOwnDrag(t *testing.T) {
 	if w, h := a.peekSize(); w != 180+dropHintExtraW || h != 32 {
 		t.Fatalf("an incoming drag outside the band got peek %.0fx%.0f, want the band hint", w, h)
 	}
-	view = ui.NewTester(a.view, sheetW, sheetH)
+	view = ui.NewTester(a.view, sheetW, panelTestH)
 	if _, ok := view.Find("松开放入"); ok {
 		t.Fatal("the drag hint outside the band showed the release words")
 	}
@@ -59,7 +59,7 @@ func TestPeekDropHintHiddenDuringOwnDrag(t *testing.T) {
 	if w, h := a.peekSize(); w != 180+dropPillExtraW || h != 32+dropPillBody {
 		t.Fatalf("a drag inside the band got peek %.0fx%.0f, want the drop pill", w, h)
 	}
-	view = ui.NewTester(a.view, sheetW, sheetH)
+	view = ui.NewTester(a.view, sheetW, panelTestH)
 	if _, ok := view.Find("松开放入"); !ok {
 		t.Fatal("an incoming drag inside the band lost 松开放入")
 	}
@@ -76,7 +76,7 @@ func TestDragStartNeverCarriesFoldRemnant(t *testing.T) {
 	a.settings.IslandNowPlaying = true
 	fakeTrack(a, true)
 	a.dispBounds = mygo.Rectangle{X: 0, Y: 0, Width: 1470, Height: 956}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	// Hover the notch: the shell morphs toward the 284×36 wings.
 	a.peeking, a.peekProgress, a.peekFrom = true, 1, 1
 	view.Frame()

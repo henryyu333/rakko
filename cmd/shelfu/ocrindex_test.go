@@ -247,7 +247,7 @@ func TestRecognizeCopyMenuItem(t *testing.T) {
 	if err := a.store.SetOCR(it.ID, "已识别的文字"); err != nil {
 		t.Fatal(err)
 	}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	a.setTab(pageClipboard)
 	view.Frame()
 	if err := view.RightClick(itemTitle(it)); err != nil {
@@ -325,7 +325,7 @@ func TestRecognizeCopyMenuOnlyForImages(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.setTab(pageClipboard)
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	if err := view.RightClick("只是文字"); err != nil {
 		t.Fatal(err)
 	}

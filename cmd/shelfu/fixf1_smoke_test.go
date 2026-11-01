@@ -82,7 +82,7 @@ func TestFixFWingsOpenTheOverview(t *testing.T) {
 	var tab pageID
 	var level int
 	onMain(func() {
-		view := ui.NewTester(a.view, sheetW, sheetH)
+		view := ui.NewTester(a.view, sheetW, panelTestH)
 		if err := view.Click("正在播放：Fashion Killa · 展开 Rakko"); err != nil {
 			t.Errorf("pressing the wings: %v", err)
 			return
@@ -195,7 +195,7 @@ func TestFixFToolsMusicCardShots(t *testing.T) {
 	// out in the window's content box.
 	var rail ui.Rect
 	onMain(func() {
-		view := ui.NewTester(a.view, sheetW, sheetH)
+		view := ui.NewTester(a.view, sheetW, panelTestH)
 		if r, ok := view.Find("播放进度"); ok {
 			rail = r
 		}

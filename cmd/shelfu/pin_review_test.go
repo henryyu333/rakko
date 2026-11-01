@@ -67,7 +67,7 @@ func TestPinReturnPillBeatsOtherContent(t *testing.T) {
 			if w != float32(max(180, a.notchW))+dropPillExtraW || h != float32(max(32, a.notchH))+dropPillBody {
 				t.Fatalf("wrong return shape: %.1fx%.1f", w, h)
 			}
-			view := ui.NewTester(a.view, sheetW, sheetH)
+			view := ui.NewTester(a.view, sheetW, panelTestH)
 			view.Frame()
 			if !view.HasText("松开放回") || view.HasText("Review Track") || view.HasText("已复制") || a.fx.peekKind != peekReturn {
 				t.Fatalf("return invitation obscured: kind=%v texts=%v", a.fx.peekKind, view.Texts())

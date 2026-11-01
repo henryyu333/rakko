@@ -17,6 +17,7 @@ package main
 import (
 	"time"
 
+	"github.com/egoist/mygo/plugins/glass"
 	"github.com/egoist/mygo/ui"
 
 	"shelf/internal/mac"
@@ -48,47 +49,37 @@ func (a *shelf) refreshAppearance(now time.Time) {
 	}
 }
 
-// glassNow reports whether the expanded panel should draw as frosted glass
-// instead of pure black. Only the open panel: the hover shapes, the drop
-// hint, the completion capsule and the live activities hang off the notch
-// and stay pure black, and a fold turns black on its first frame so the
-// shrinking shell never shows the desktop through the peek form. The
-// setting picks follow-the-system (black in Dark Mode, glass in Light
-// Mode), always black, or always glass; the island style and Reduce
-// Transparency are black whatever it says.
-func (a *shelf) glassNow() bool {
-	if a.win == nil || a.island || a.reduceTrans || !a.visible {
-		return false
-	}
-	switch a.settings.PanelAppearance.Normalized() {
-	case settings.PanelAppearanceBlack:
-		return false
-	case settings.PanelAppearanceGlass:
-		return true
-	}
-	return !a.systemDark
-}
+// glassNow reports whether the native backdrop material is shown. It never
+// is: the open panel draws mygo's own glass (panelFill), which frosts what
+// the window painted and needs no native view to follow the shell.
+func (a *shelf) glassNow() bool { return false }
 
-// panelFill is the shell's own paint: solid black, or the light
-// appearance's black band fading into translucent dark glass.
-func (a *shelf) panelFill(p *ui.Painter, path *ui.Path, shellH float32) {
-	if !a.glassNow() || shellH <= 0 {
+// panelFill is the shell's own paint. Hover shapes, the drop hint, the
+// completion capsule and the live activities stay pure black: they hang
+// off the notch and must read as hardware. The open panel (glassy) is
+// mygo's glass under a black band that joins the hardware notch for the
+// menu bar's 32pt and melts into the glass over the next 24pt
+// (design/explore/notch-v3.html). body is the shell's box without its top
+// ears, botR its bottom corners.
+func (a *shelf) panelFill(p *ui.Painter, path *ui.Path, body ui.Rect, botR float32, glassy bool) {
+	if !glassy || a.reduceTrans || body.H <= 0 {
 		p.FillPath(path, surface)
 		return
 	}
-	// The prototype's stops: solid black for the first 30pt (the band the
-	// notch occupies), then rgba(20,20,26,.68) by 58pt and .72 at the
-	// bottom.
-	glass := ui.RGBA(20, 20, 26, 0.70)
-	p.FillPathGradient(path, ui.LinearGradient{
+	// The glass frosts what this frame painted under it: the whole shell,
+	// ears included, is painted black first, so that is a defined black
+	// and never the transparent window.
+	p.FillPath(path, surface)
+	glass.Glass{}.PaintMaterial(p, body, [4]float32{0, 0, botR, botR})
+	band := min(float32(bandH+24), body.H)
+	p.FillGradient(ui.Rect{X: body.X, Y: body.Y, W: body.W, H: band}, ui.LinearGradient{
 		Angle: 180,
 		Stops: []ui.GradientStop{
 			{Color: surface, At: 0},
-			{Color: surface, At: min(30/shellH, 0.5)},
-			{Color: glass.Alpha(0.68), At: min(58/shellH, 0.8)},
-			{Color: glass, At: 1},
+			{Color: surface, At: min(float32(bandH)/band, 1)},
+			{Color: surface.Alpha(0), At: 1},
 		},
-	})
+	}, 0)
 }
 
 // panelAppearanceIndex maps a saved appearance to the segmented control's

@@ -388,7 +388,7 @@ func TestPinReturnPeekDrawsBulge(t *testing.T) {
 	a := motionWindow()
 	a.pinReturning, a.peeking = true, true
 	a.peekProgress, a.peekFrom = 1, 1
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame()
 	if _, ok := view.Find("松开放回"); !ok {
 		t.Fatal("the return pill is not up while a pin drag holds the notch")

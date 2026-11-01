@@ -146,7 +146,7 @@ func convertShelf(t *testing.T, names ...string) (*shelf, *ui.Tester, []string) 
 	a := &shelf{store: s, thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{}}
 	a.conv = &converter{host: a}
 	a.modules = []module{a.conv}
-	return a, ui.NewTester(a.view, sheetW, sheetH), paths
+	return a, ui.NewTester(a.view, sheetW, panelTestH), paths
 }
 
 func selectAll(a *shelf) {

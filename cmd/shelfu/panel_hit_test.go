@@ -57,7 +57,7 @@ func hitShelf(t *testing.T) (*shelf, *ui.Tester, *[]string, *fakeVolume) {
 	})
 	a.setTab(pageTray)
 	a.tabAt = time.Time{} // the sheet rests: no page switch is under way
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	return a, view, &copied, vol
 }
 

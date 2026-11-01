@@ -99,6 +99,9 @@ func (a *shelf) desiredFrame() mygo.Rectangle {
 			}
 			y := a.frameTop()
 			h := int(a.fx.h+0.5) + top + 2
+			// The results sheet and the page capsule fade out under the
+			// folding shell: the frame keeps them until they are gone.
+			h = max(h, top+int(math.Ceil(float64(a.fx.h+a.belowExtent(a.fx.h, a.fx.resultsH)))))
 			if a.shellUp() {
 				// frameTop already reaches up for a capsule fold taller
 				// than the drawn shell; the frame ends under the island,
@@ -143,6 +146,16 @@ func (a *shelf) desiredFrame() mygo.Rectangle {
 			h = a.upShellFloor() - y
 		} else if a.fx.openMoving {
 			h = max(h, roomH)
+		}
+		// Under the shell hang the results sheet and the page capsule: the
+		// frame holds them at the drawn and the settled size, and the
+		// level's overshoot room below them while a spring is in flight.
+		if !a.shellUp() {
+			below := max(th+a.belowExtent(th, a.resultsTargetH()), a.fx.h+a.belowExtent(a.fx.h, a.fx.resultsH))
+			h = max(h, top+int(math.Ceil(float64(below))))
+			if a.fx.openMoving {
+				h = max(h, roomH+int(math.Ceil(float64(below-th))))
+			}
 		}
 		return mygo.Rectangle{X: a.stripCenter() - w/2, Y: y, Width: w, Height: h}
 	}
@@ -422,7 +435,13 @@ func (a *shelf) wingsSize() (w, h float32) {
 // tests.
 func (a *shelf) shellSize(openK, levelK, peekK, peekW, peekH float32) (w, h float32) {
 	baseW, baseH := a.anchorSize()
-	lvlW := float32(overviewW) + (sheetW-overviewW)*levelK
+	// The search bar widens while a query is typed; the shell takes the
+	// width view() drew, or the target before the first frame.
+	barW := a.fx.homeW
+	if barW <= 0 {
+		barW = a.homeBoxW()
+	}
+	lvlW := barW + (sheetW-barW)*levelK
 	lvlH := float32(overviewH) + (sheetH-overviewH)*levelK
 	if a.snap.panel || a.snap.drawn {
 		// The arrangement panel is its own box; it never morphs through
@@ -641,7 +660,7 @@ func (a *shelf) overlayAcceptsMouse() bool {
 		// real, visible target and takes presses on its own shape.
 		return a.island && a.overShell(p)
 	}
-	if a.overShell(p) {
+	if a.overShell(p) || a.overBelow(p) {
 		return true
 	}
 	// The drawn shell is not the only shape a press can belong to. An
@@ -898,7 +917,7 @@ func (a *shelf) panelBox() (w, h float32) {
 	if a.currentLevel() == 2 {
 		return sheetW, sheetH
 	}
-	return overviewW, overviewH
+	return a.homeBoxW(), overviewH
 }
 
 // panelContentH is the height of the content block the panel draws at level
@@ -966,6 +985,12 @@ func (a *shelf) show(edge bool) {
 		if a.frame == prevFrame {
 			a.win.Invalidate()
 		}
+	}
+	// The search bar takes the keyboard as it grows: typing starts at
+	// once. The arrangement panel is not a search and keeps it away.
+	if level == 1 && !a.snap.panel {
+		a.homeQuery, a.homeSel = "", 0
+		a.takeKeyboard()
 	}
 }
 
@@ -1115,14 +1140,17 @@ func (a *shelf) escape() {
 			return
 		}
 	}
-	// Any page backs out to the overview first, the clipboard search's
-	// keyboard mode included: leaving it hands the search back to the
-	// normal panel and the overview to the screen; the next Esc closes.
+	// Any page backs out to the search bar first, which takes the
+	// keyboard; a query there is cleared before the next Esc closes.
 	if a.currentLevel() == 2 {
-		if a.focusMode {
-			a.leaveFocusMode()
+		a.goHome()
+		return
+	}
+	if a.homeQuery != "" {
+		a.homeQuery, a.homeSel = "", 0
+		if a.win != nil {
+			a.win.Invalidate()
 		}
-		a.setLevel(1)
 		return
 	}
 	a.hide(hideExplicit)
@@ -1215,6 +1243,7 @@ func (a *shelf) hide(exit hideExit) {
 func (a *shelf) finishClose() {
 	a.closeAt = time.Time{}
 	a.focusMode, a.tab, a.tabFrom, a.search, a.reveal = false, pageTray, pageTray, "", ""
+	a.homeQuery, a.homeSel = "", 0
 	a.tabAt = time.Time{}
 	a.tabOutK, a.tabOutShift = 1, 0
 	a.warming = ""

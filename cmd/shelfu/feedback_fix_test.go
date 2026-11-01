@@ -42,7 +42,7 @@ func TestCapsuleOutranksThePlayer(t *testing.T) {
 		Playing: true, Title: "Song Title", Artist: "Artist", Duration: 200, Elapsed: 30,
 		Received: time.Now(),
 	}}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	a.toastStatus("已转换 3 项", time.Now().Add(3*time.Second), statusOK)
 	grownCapsule(a, view)
 	if !view.HasText("已转换 3 项") {
@@ -66,7 +66,7 @@ func TestCapsuleOutranksThePlayer(t *testing.T) {
 // capsule with its words — retracting must not stick.
 func TestToastDuringFoldBackDrawsAgain(t *testing.T) {
 	a := motionWindow()
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	a.toastStatus("第一条", time.Now().Add(3*time.Second), statusOK)
 	grownCapsule(a, view)
 	if !view.HasText("第一条") {
@@ -93,7 +93,7 @@ func TestToastDuringFoldBackDrawsAgain(t *testing.T) {
 func TestJobStartDuringFoldBackDraws(t *testing.T) {
 	a := motionWindow()
 	a.conv = &converter{host: a}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	a.toastStatus("旧消息", time.Now().Add(3*time.Second), statusOK)
 	grownCapsule(a, view)
 	a.fb.until = view.Now().Add(-time.Second)
@@ -115,7 +115,7 @@ func TestJobStartDuringFoldBackDraws(t *testing.T) {
 // spring, not just its first frame.
 func TestCapsuleFoldsBackOnTheRetractSpring(t *testing.T) {
 	a := motionWindow()
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	a.toastStatus("已转换 3 项", time.Now().Add(3*time.Second), statusOK)
 	grownCapsule(a, view)
 	a.fb.until = view.Now().Add(-time.Second)
@@ -144,7 +144,7 @@ func TestCapsuleFoldsBackOnTheRetractSpring(t *testing.T) {
 // take it over and show it for its remaining time.
 func TestHideHandsTheFreshToastToTheCapsule(t *testing.T) {
 	a := motionWindow()
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	a.visible, a.progress = true, 1
 	a.toastStatus("已复制 · 在其他应用按 ⌘V 粘贴", time.Now().Add(3*time.Second), statusOK)
 	view.Frame() // the pill paints once
@@ -168,7 +168,7 @@ func TestHideHandsTheFreshToastToTheCapsule(t *testing.T) {
 // second capsule when the panel closes.
 func TestToastReadInThePanelDoesNotReplay(t *testing.T) {
 	a := motionWindow()
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	a.toastStatus("已转换 3 项", time.Now().Add(8*time.Second), statusOK)
 	grownCapsule(a, view)
 	a.visible, a.progress = true, 1
@@ -190,7 +190,7 @@ func TestToastReadInThePanelDoesNotReplay(t *testing.T) {
 // only its remaining time afterwards — no fresh hold.
 func TestCapsuleToastKeepsItsClockAcrossAPanelVisit(t *testing.T) {
 	a := motionWindow()
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	a.toastStatus("已转换 3 项", time.Now().Add(8*time.Second), statusOK)
 	grownCapsule(a, view)
 	if !a.fb.armed {
@@ -233,7 +233,7 @@ func TestCapsuleToastKeepsItsClockAcrossAPanelVisit(t *testing.T) {
 // with its remaining time when the pointer leaves.
 func TestHoverPausesTheCapsuleClock(t *testing.T) {
 	a := motionWindow()
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	a.toastStatus("已转换 3 项", time.Now().Add(3*time.Second), statusOK)
 	grownCapsule(a, view)
 	until := a.fb.until
@@ -255,7 +255,7 @@ func TestHoverPausesTheCapsuleClock(t *testing.T) {
 // #5 the drag twin: an incoming file drag pauses the capsule the same way.
 func TestDragPausesTheCapsuleClock(t *testing.T) {
 	a := motionWindow()
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	a.toastStatus("已压缩 2 张", time.Now().Add(3*time.Second), statusOK)
 	grownCapsule(a, view)
 	a.dragging = true // an incoming file drag claims the peek shape
@@ -275,7 +275,7 @@ func TestDragPausesTheCapsuleClock(t *testing.T) {
 func TestNewJobNeverStompsAVerdictToast(t *testing.T) {
 	a := motionWindow()
 	a.conv = &converter{host: a}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	a.toastStatus("1 项成功，2 项失败", time.Now().Add(4*time.Second), statusErr)
 	grownCapsule(a, view)
 	if !view.HasText("1 项成功，2 项失败") || a.fb.color() != fbRed {
@@ -408,7 +408,7 @@ func TestQuietToastNeverCapsules(t *testing.T) {
 // actually drawn, not the dead capsule's final size.
 func TestClickBoxFollowsTheFoldingCapsule(t *testing.T) {
 	a := motionWindow()
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	a.toastStatus("已转换 1 项", time.Now().Add(3*time.Second), statusOK)
 	grownCapsule(a, view)
 	full := a.peekPillRect().Width
@@ -431,7 +431,7 @@ func TestClickBoxFollowsTheFoldingCapsule(t *testing.T) {
 func TestUnseenCapsuleKeepsItsRequestedVisibleTime(t *testing.T) {
 	a := motionWindow()
 	a.peeking = true
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	a.toastStatus("检查更新失败：offline", time.Now().Add(8*time.Second), statusErr)
 	view.Frame()
 	view.Advance(10 * time.Second)
@@ -446,7 +446,7 @@ func TestUnseenCapsuleKeepsItsRequestedVisibleTime(t *testing.T) {
 
 func TestPausedVerdictKeepsPriorityOverANewJob(t *testing.T) {
 	a := motionWindow()
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	a.toastStatus("已转换 3 项", time.Now().Add(3*time.Second), statusOK)
 	grownCapsule(a, view)
 	a.peeking = true
@@ -604,7 +604,7 @@ func TestShakeMovesTheCapsuleHitBox(t *testing.T) {
 // un-pause.
 func TestPausedCapsuleDefersTheSharedDeadline(t *testing.T) {
 	a := motionWindow()
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame()
 	a.toastStatus("已复制", time.Now().Add(1200*time.Millisecond), statusOK)
 	view.Frame()
@@ -638,7 +638,7 @@ func TestPausedCapsuleDefersTheSharedDeadline(t *testing.T) {
 // done — a short open/close must not post it again.
 func TestPlayedOutCapsuleNeverReplays(t *testing.T) {
 	a := motionWindow()
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame()
 	a.toastStatus("已复制", time.Now().Add(800*time.Millisecond), statusOK)
 	view.Frame()

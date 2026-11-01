@@ -124,7 +124,7 @@ func twoImageShelf(t *testing.T) (*shelf, *ui.Tester, *recordClip, []store.Item,
 	same := time.Now().Local()
 	s.Items[0].CreatedAt = same
 	s.Items[1].CreatedAt = same
-	return a, ui.NewTester(a.view, sheetW, sheetH), rec, s.Items, pngs
+	return a, ui.NewTester(a.view, sheetW, panelTestH), rec, s.Items, pngs
 }
 
 // bluePNG is a second, distinct fixture so AddImage does not dedupe it.

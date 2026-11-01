@@ -150,7 +150,7 @@ func TestNowPlayingChipDrawsTrackAndToggle(t *testing.T) {
 	s.feed(t, `{"ok":true,"isPlaying":true,"appState":1,"title":"夜曲","artist":"周杰伦","duration":100,"elapsed":5}`)
 	a := &shelf{settings: settings.Settings{IslandNowPlaying: true}}
 	a.modules = []module{s.mod, &retentionModule{host: a}}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	// The chip is a 22pt capsule: cover, bars and play/pause, named by the
 	// track (the words themselves live in the tooltip).
 	if _, ok := view.Find("夜曲"); !ok {
@@ -158,7 +158,7 @@ func TestNowPlayingChipDrawsTrackAndToggle(t *testing.T) {
 	}
 	// The chip sits in the band above every page, not only the tray.
 	a.tab = pageClipboard
-	if _, ok := ui.NewTester(a.view, sheetW, sheetH).Find("夜曲"); !ok {
+	if _, ok := ui.NewTester(a.view, sheetW, panelTestH).Find("夜曲"); !ok {
 		t.Fatal("the clipboard page must keep the activity chip")
 	}
 	a.tab = pageTray
@@ -173,7 +173,7 @@ func TestNowPlayingChipDrawsTrackAndToggle(t *testing.T) {
 	if s.mod.last.Playing {
 		t.Fatal("the press must optimistically pause the shown state")
 	}
-	next := ui.NewTester(a.view, sheetW, sheetH)
+	next := ui.NewTester(a.view, sheetW, panelTestH)
 	if err := next.Click("播放"); err != nil {
 		t.Fatalf("the button must now offer play: %v", err)
 	}
@@ -291,7 +291,7 @@ func TestPeekWingsShowCoverAndBarsOnly(t *testing.T) {
 	s.mod.host = a
 	a.np = s.mod
 	a.modules = []module{s.mod}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	// The wings carry no title, artist, clock or transport: the only
 	// label is the accessibility one, which opens the shelf.
 	for _, txt := range []string{"夜曲", "周杰伦", "暂停", "上一首", "下一首"} {
@@ -358,7 +358,7 @@ func TestExpandingWithMusicNeverOpensThePlayer(t *testing.T) {
 	s.mod.host = a
 	a.np = s.mod
 	a.modules = []module{s.mod}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	if err := view.Click("正在播放：夜曲 · 展开 Rakko"); err != nil {
 		t.Fatalf("the wings: %v", err)
 	}
@@ -403,7 +403,7 @@ func TestPeekWingsLabelWithoutATitle(t *testing.T) {
 		peekProgress: 1,
 	}
 	a.np = &nowPlayingModule{host: a, have: true, last: mac.NowPlayingState{Playing: true}}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	if _, ok := view.Find("展开 Rakko"); !ok {
 		t.Fatalf("the untitled wings must still be labeled; texts %v", view.Texts())
 	}
@@ -426,7 +426,7 @@ func TestPeekPressExpandsAndSendsNoCommand(t *testing.T) {
 	s.mod.host = a
 	a.np = s.mod
 	a.modules = []module{s.mod}
-	_ = ui.NewTester(a.view, sheetW, sheetH) // draws the pill
+	_ = ui.NewTester(a.view, sheetW, panelTestH) // draws the pill
 	origReg, origUnreg := registerKey, unregisterKey
 	registerKey = func(string, func()) error { return nil }
 	unregisterKey = func(string) {}

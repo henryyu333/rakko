@@ -34,7 +34,7 @@ func TestLongTextPreviewKeepsFullPayload(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := &shelf{store: s}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	if !view.HasText("开头 😀") {
 		t.Fatal("text preview lost its readable beginning")
 	}
@@ -86,7 +86,7 @@ func TestClearAllButtonAndPerItemRemove(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := &shelf{store: s, thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{}}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	if !view.HasText("清空") {
 		t.Fatal("clear-all button missing with items present")
 	}
@@ -195,7 +195,7 @@ func TestClearOnlyEmptiesItsOwnPage(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := &shelf{store: s, thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{}}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 
 	// 托盘页的清空：拖入的文件真删（原文件不动），剪贴板收录只移出托盘。
 	if err := view.Click("清空"); err != nil {
@@ -271,7 +271,7 @@ func TestClipboardClearHidesCaptureFromClipboardPageOnly(t *testing.T) {
 	clip := s.Items[0]
 	managed := clip.Path
 	a := &shelf{store: s, thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{}}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 
 	a.setTab(pageClipboard)
 	view.Frame()
@@ -359,7 +359,7 @@ func TestBandFlanksTheNotch(t *testing.T) {
 	}
 	const notchW, notchH = 180, 32
 	a := &shelf{store: s, level: 2, topInset: notchH, notchW: notchW, notchH: notchH, thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{}}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	housingL := float32(sheetW-notchW) / 2
 	housingR := housingL + notchW
 	for _, label := range []string{"设置", "总览", "托盘", "剪贴板", "工具"} {
@@ -397,7 +397,7 @@ func TestActivityChipsShowUpToTwoLiveModules(t *testing.T) {
 	third := &fakeActivity{label: "第三个活动", isLive: true}
 	a := &shelf{tab: pageTray, level: 2}
 	a.modules = []module{idle, first, second, third}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	if view.HasText("空闲") || view.HasText("第三个活动") {
 		t.Fatalf("an idle activity and a third live one must not show")
 	}
@@ -405,7 +405,7 @@ func TestActivityChipsShowUpToTwoLiveModules(t *testing.T) {
 		t.Fatalf("the first two live activities must show")
 	}
 	a.level = 1
-	view = ui.NewTester(a.view, sheetW, sheetH)
+	view = ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame()
 	if view.HasText("第一个活动") || view.HasText("第二个活动") {
 		t.Fatal("the overview shows the band chips; its context line carries the job")
@@ -434,7 +434,7 @@ func (f *fakeActivity) chip(c *ui.Context) ui.Element {
 // transparent background left the text invisible on a blank white chip).
 func TestEarIconTooltipIsReadable(t *testing.T) {
 	a := &shelf{topInset: 32, notchW: 180, notchH: 32}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	r, ok := view.Find("剪贴板")
 	if !ok {
 		t.Fatal("clipboard ear icon missing")
@@ -477,7 +477,7 @@ func TestNotchPeekClickExpandsShelf(t *testing.T) {
 	}
 	defer s.Close()
 	a := &shelf{store: s, peeking: true, peekProgress: 1, notchW: 182, notchH: 32, topInset: 32}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	if _, ok := view.Find("展开 Rakko"); !ok {
 		t.Fatal("peek pill missing its expand affordance (chevron)")
 	}
@@ -676,7 +676,7 @@ func TestDragGuardLandsInsideCollapsedStrip(t *testing.T) {
 // 测试环境没有真实窗口，tester 尺寸即窗口帧。
 func TestPeekShellFlushWithWindowTop(t *testing.T) {
 	a := &shelf{peeking: true, peekProgress: 1, notchW: 180, notchH: 32}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	img := view.Image()
 	b := img.Bounds()
 	first, last := -1, -1
@@ -749,7 +749,7 @@ func TestPinBadgesStayInsideTheirTiles(t *testing.T) {
 		}
 	}
 	a := &shelf{store: s, thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{}}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	tile, ok := view.Find("pinned two") // 最新置顶项排第一格
 	if !ok {
 		t.Fatal("pinned tile missing")
@@ -904,7 +904,7 @@ func TestRegisteredPageJoinsTheOrderAtFixedSize(t *testing.T) {
 	if got := a.desiredFrame(); got != before {
 		t.Fatalf("a registered page resized the sheet: %+v -> %+v", before, got)
 	}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	if !view.HasText("假页面内容") {
 		t.Fatal("the fake page's content is missing")
 	}
@@ -916,7 +916,7 @@ func TestDisabledCurrentPageFallsBackToTray(t *testing.T) {
 	a := &shelf{visible: true, thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{}}
 	fake := &fakePage{on: true}
 	a.registerPage(fake)
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	a.setTab("fake")
 	view.Frame()
 	if !view.HasText("假页面内容") {
@@ -998,7 +998,7 @@ func TestTrayClearHidesClipboardCaptureInsteadOfDeleting(t *testing.T) {
 	}
 	managed := clip.Path
 	a := &shelf{store: s, thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{}}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 
 	if err := view.Click("清空"); err != nil {
 		t.Fatalf("tray clear: %v", err)
@@ -1061,7 +1061,7 @@ func TestTrayMenuRemoveHidesClipboardCapture(t *testing.T) {
 	clip := s.Items[0]
 	managed := clip.Path
 	a := &shelf{store: s, thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{}}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 
 	if err := view.RightClick(itemTitle(clip)); err != nil {
 		t.Fatalf("right-click clip: %v", err)

@@ -16,6 +16,10 @@ import (
 	"shelf/internal/store"
 )
 
+// panelTestH is a headless panel surface's height: the sheet and the page
+// capsule hung under it, so a test can click the capsule's page buttons.
+const panelTestH = sheetH + navGap + navH + 2
+
 // fakeVolume is the replaceable volume seam: tests never touch the
 // machine's real output volume.
 type fakeVolume struct {
@@ -54,7 +58,7 @@ func musicShelf(t *testing.T) (*shelf, *ui.Tester) {
 		},
 	}
 	a.setTab(pagePlaying)
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	return a, view
 }
 

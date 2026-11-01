@@ -35,7 +35,7 @@ func shelfWithFiles(t *testing.T, names ...string) (*shelf, *ui.Tester, map[stri
 		paths[name] = p
 	}
 	a := &shelf{store: s, thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{}}
-	return a, ui.NewTester(a.view, sheetW, sheetH), paths
+	return a, ui.NewTester(a.view, sheetW, panelTestH), paths
 }
 
 func storedNames(s *store.Store) []string {

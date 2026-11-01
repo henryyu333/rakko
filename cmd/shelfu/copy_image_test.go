@@ -53,7 +53,7 @@ func copyImageShelf(t *testing.T, file bool) (*shelf, *ui.Tester, *recordClip, s
 		thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{},
 		appNames: map[string]string{}, write: rec,
 	}
-	return a, ui.NewTester(a.view, sheetW, sheetH), rec, a.visibleItems()[0], pngBytes
+	return a, ui.NewTester(a.view, sheetW, panelTestH), rec, a.visibleItems()[0], pngBytes
 }
 
 // imageFileShelf returns a shelf whose tray holds the named PNG files.
@@ -79,7 +79,7 @@ func imageFileShelf(t *testing.T, names ...string) (*shelf, *ui.Tester) {
 		thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{},
 		appNames: map[string]string{}, write: &recordClip{},
 	}
-	return a, ui.NewTester(a.view, sheetW, sheetH)
+	return a, ui.NewTester(a.view, sheetW, panelTestH)
 }
 
 // The item menu offers 「复制图片」 for both screenshots and picture files,
@@ -145,7 +145,7 @@ func TestTrayCmdCCopiesSelectedPicture(t *testing.T) {
 		thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{},
 		appNames: map[string]string{}, write: rec2,
 	}
-	bview := ui.NewTester(b.view, sheetW, sheetH)
+	bview := ui.NewTester(b.view, sheetW, panelTestH)
 	if err := bview.Click("notes.txt"); err != nil {
 		t.Fatal(err)
 	}

@@ -336,7 +336,7 @@ func dropViewShelf(t *testing.T, paths []string) (*shelf, *ui.Tester) {
 	old := dragFiles
 	dragFiles = func(*shelf) []string { return paths }
 	t.Cleanup(func() { dragFiles = old })
-	return a, ui.NewTester(a.view, sheetW, sheetH)
+	return a, ui.NewTester(a.view, sheetW, panelTestH)
 }
 
 func TestDropZoneShowsForImageDrag(t *testing.T) {
@@ -359,7 +359,7 @@ func TestDropZoneHiddenForOwnDragAndNonFiles(t *testing.T) {
 	img := writeFile(t, dir, "1.png", testPNGBytes(t))
 	a, view := dropViewShelf(t, []string{img})
 	a.ownDrag = true
-	view = ui.NewTester(a.view, sheetW, sheetH)
+	view = ui.NewTester(a.view, sheetW, panelTestH)
 	if view.HasText("投放") || view.HasText("放入托盘") {
 		t.Fatal("own drag-out showed the drop zone")
 	}
@@ -367,7 +367,7 @@ func TestDropZoneHiddenForOwnDragAndNonFiles(t *testing.T) {
 	a.ownDrag = false
 	a.dragging = false
 	a.drop.until = time.Now().Add(-time.Minute)
-	view = ui.NewTester(a.view, sheetW, sheetH)
+	view = ui.NewTester(a.view, sheetW, panelTestH)
 	if view.HasText("投放") {
 		t.Fatal("an ended drag still showed the drop zone")
 	}
@@ -476,7 +476,7 @@ func TestDropZoneSurvivesReleaseFrame(t *testing.T) {
 		t.Fatal("no zone while dragging")
 	}
 	a.dragging = false // the release's mouse-up, before the drop lands
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	if !view.HasText("投放") || !view.HasText("压缩到 1 MB") {
 		t.Fatalf("release frame lost the drop zone; texts %v", view.Texts())
 	}
@@ -486,7 +486,7 @@ func TestDropZoneSurvivesReleaseFrame(t *testing.T) {
 		t.Fatalf("the released action never ran: formats %v", f.formats)
 	}
 	// Consumed: the zone closes, panel back to the tray page.
-	view = ui.NewTester(a.view, sheetW, sheetH)
+	view = ui.NewTester(a.view, sheetW, panelTestH)
 	if view.HasText("投放") {
 		t.Fatal("consumed drop kept the zone")
 	}
@@ -572,7 +572,7 @@ func TestDropZoneHidesReleasePill(t *testing.T) {
 	// Without the zone the capsule still shows.
 	a2, view2 := dropViewShelf(t, nil)
 	a2.drop.on = false
-	view2 = ui.NewTester(a2.view, sheetW, sheetH)
+	view2 = ui.NewTester(a2.view, sheetW, panelTestH)
 	if !view2.HasText("松开放入") {
 		t.Fatalf("idle drag lost the capsule; texts %v", view2.Texts())
 	}

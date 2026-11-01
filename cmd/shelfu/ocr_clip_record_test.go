@@ -45,7 +45,7 @@ func ocrRow(t *testing.T, a *shelf, want string) store.Item {
 func ocrRowShown(t *testing.T, a *shelf, want string) {
 	t.Helper()
 	a.setTab(pageClipboard)
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame()
 	if !view.HasText("框选文字") {
 		t.Fatalf("clipboard page does not name the source 框选文字; texts=%v", view.Texts())

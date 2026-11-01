@@ -243,7 +243,7 @@ func musicCardShelf(t *testing.T) (*shelf, *ui.Tester, *fakeVolume, *stubNowPlay
 	a.vol = vol
 	s.mod.host = a
 	a.np = s.mod
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame()
 	view.Frame()
 	return a, view, vol, s
@@ -513,7 +513,7 @@ func TestDropSnapshotClearsWhenPanelCloses(t *testing.T) {
 	a.drop.files = []string{"/tmp/a.pdf"}
 	a.drop.class = classPDFs
 	a.drop.loaded = true
-	_ = ui.NewTester(a.view, sheetW, sheetH)
+	_ = ui.NewTester(a.view, sheetW, panelTestH)
 	if len(a.drop.files) != 0 {
 		t.Fatalf("a closed panel kept %v", a.drop.files)
 	}

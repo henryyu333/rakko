@@ -15,7 +15,7 @@ func TestUnarmedToastReadInPanelDoesNotReplay(t *testing.T) {
 		t.Run(map[bool]string{false: "fresh", true: "hovered"}[hover], func(t *testing.T) {
 			a := motionWindow()
 			a.peeking = hover
-			view := ui.NewTester(a.view, sheetW, sheetH)
+			view := ui.NewTester(a.view, sheetW, panelTestH)
 			a.toastStatus("已转换 3 项", time.Now().Add(8*time.Second), statusOK)
 			if hover {
 				view.Frame()

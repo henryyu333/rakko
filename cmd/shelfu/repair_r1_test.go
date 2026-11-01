@@ -34,7 +34,7 @@ func toolsFixture(t *testing.T) (*shelf, *ui.Tester) {
 	}
 	t.Cleanup(func() { s.Close() })
 	a := &shelf{store: s, dataDir: t.TempDir(), tab: pageTools, level: 2, visible: true}
-	return a, ui.NewTester(a.view, sheetW, sheetH)
+	return a, ui.NewTester(a.view, sheetW, panelTestH)
 }
 
 // TestWidgetCardTapRunsItsAction: a whole-card tap on a widget does what
@@ -103,7 +103,7 @@ func TestToolsDropBelowTheViewportPins(t *testing.T) {
 	a.frame = mygo.Rectangle{X: a.x, Y: a.y, Width: sheetW, Height: sheetH}
 	p := a.toolsPage()
 	p.editing = true
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame()
 	view.Frame()
 	if p.viewport.H <= 0 || p.scroll.MaxY <= 0 {
@@ -535,7 +535,7 @@ func TestReduceMotionHoverShapeNeverSprings(t *testing.T) {
 			a.settings.IslandNowPlaying = false
 			a.np = nil
 			a.visible, a.level = false, 1
-			view := ui.NewTester(a.view, sheetW, sheetH)
+			view := ui.NewTester(a.view, sheetW, panelTestH)
 			if reduce {
 				view.SetPreferences(ui.Preferences{ReduceMotion: true})
 			}
@@ -584,7 +584,7 @@ func TestOverviewDeadlinesNeverWakeAClosedPanel(t *testing.T) {
 	view := ui.NewTester(func(c *ui.Context) {
 		draws++
 		a.view(c)
-	}, sheetW, sheetH)
+	}, sheetW, panelTestH)
 	view.Frame()
 	if a.overviewDue.IsZero() {
 		t.Fatal("the overview did not work out a deadline")
@@ -643,7 +643,7 @@ func TestOverviewDeadlinesNeverWakeAClosedPanel(t *testing.T) {
 func TestReduceMotionJumpsTheShell(t *testing.T) {
 	a := motionWindow()
 	a.level, a.visible, a.jumpLevel = 1, true, true
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.SetPreferences(ui.Preferences{ReduceMotion: true})
 	for range 40 {
 		view.Frame()

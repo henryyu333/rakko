@@ -44,7 +44,7 @@ func levelShelf(t *testing.T) (*shelf, *ui.Tester) {
 		store: s, dataDir: t.TempDir(), level: 1, settings: settings.Default(),
 		thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{}, appNames: map[string]string{},
 	}
-	return a, ui.NewTester(a.view, sheetW, sheetH)
+	return a, ui.NewTester(a.view, sheetW, panelTestH)
 }
 
 // TestOverviewOpensFirstAndPageIconOpensThePage: one click on the notch is
@@ -425,7 +425,7 @@ func TestActivityChipActionsStillWork(t *testing.T) {
 		a := &shelf{level: 2}
 		a.conv = &converter{host: a, job: j}
 		a.modules = []module{a.conv}
-		view := ui.NewTester(a.view, sheetW, sheetH)
+		view := ui.NewTester(a.view, sheetW, panelTestH)
 		view.Frame()
 		if !view.HasText("正在转成 JPEG · 2/3") {
 			t.Fatalf("the converter chip lost its progress tooltip; texts %v", view.Texts())
@@ -447,7 +447,7 @@ func TestActivityChipActionsStillWork(t *testing.T) {
 		m.start(time.Now(), 30*time.Minute)
 		a := &shelf{level: 2}
 		a.modules = []module{m}
-		view := ui.NewTester(a.view, sheetW, sheetH)
+		view := ui.NewTester(a.view, sheetW, panelTestH)
 		view.Frame()
 		if !view.HasText("保持唤醒") {
 			t.Fatalf("the awake chip is missing; texts %v", view.Texts())
@@ -466,7 +466,7 @@ func TestOverviewHoldsFivePageIconsAndCounts(t *testing.T) {
 	a := fx.a
 	a.level, a.visible = 1, true
 	a.registerPage(&fakePage{on: true}) // a sixth page: the band keeps five
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame()
 	for _, label := range []string{"总览", "托盘", "剪贴板", "工具", "AI 用量"} {
 		r, ok := view.Find(label)
@@ -492,7 +492,7 @@ func TestTwoActivityChipsFitTheRightEar(t *testing.T) {
 	awake := newAwakeStub(p)
 	awake.start(time.Now(), 30*time.Minute)
 	a.modules = []module{a.np, awake}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame()
 	music, ok := view.Find("夜曲")
 	if !ok {
@@ -521,7 +521,7 @@ func TestMusicAndCancelChipsFitTheRightEar(t *testing.T) {
 	a.np = &nowPlayingModule{host: a, have: true, last: mac.NowPlayingState{Playing: true, Title: "夜曲"}}
 	a.conv = &converter{host: a, job: j, cancelOpen: true}
 	a.modules = []module{a.np, a.conv}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame()
 	music, ok := view.Find("夜曲")
 	if !ok {
@@ -544,7 +544,7 @@ func TestMusicAndCancelChipsFitTheRightEar(t *testing.T) {
 func TestLevelSpringsBetweenTheTwoSizes(t *testing.T) {
 	a := motionWindow()
 	a.level, a.visible, a.jumpLevel = 1, true, true
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	for range 60 {
 		view.Frame()
 		view.Advance(16 * time.Millisecond)

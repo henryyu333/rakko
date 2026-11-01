@@ -145,7 +145,7 @@ func newUsageFixtureWith(t *testing.T, on bool, tweak func(*usageDeps)) *usageFi
 	}
 	fx.f = newUsageFeature(a, deps)
 	a.registerPage(fx.f)
-	fx.view = ui.NewTester(a.view, sheetW, sheetH)
+	fx.view = ui.NewTester(a.view, sheetW, panelTestH)
 	return fx
 }
 
@@ -1436,7 +1436,7 @@ func TestUsagePageScreenshot(t *testing.T) {
 	s.claude.q = okQuota(aiusage.ToolClaude, "Pro", now)
 	s.claude.q = windowUsed(s.claude.q, 0, 53)
 	s.f.tick(now)
-	write("usage-main", ui.NewTester(s.a.view, sheetW, sheetH))
+	write("usage-main", ui.NewTester(s.a.view, sheetW, panelTestH))
 	s2 := newUsageShot(now)
 	good := okQuota(aiusage.ToolCodex, "Plus", now)
 	good.FetchedAt = now.Add(-12 * time.Minute)
@@ -1449,7 +1449,7 @@ func TestUsagePageScreenshot(t *testing.T) {
 	}
 	s2.f.tick(now)
 	s2.f.localAt = now.Add(-12 * time.Minute) // the mock's stale stamp
-	write("usage-states", ui.NewTester(s2.a.view, sheetW, sheetH))
+	write("usage-states", ui.NewTester(s2.a.view, sheetW, panelTestH))
 
 	// The first-scan progress card (mock frame 3's bottom) with the two
 	// other card states: 未登录 and 快用完了.
@@ -1465,7 +1465,7 @@ func TestUsagePageScreenshot(t *testing.T) {
 	s3.f.scanned = false
 	s3.f.scanDone.Store(37)
 	s3.f.scanTotal.Store(100)
-	write("usage-scan", ui.NewTester(s3.a.view, sheetW, sheetH))
+	write("usage-scan", ui.NewTester(s3.a.view, sheetW, panelTestH))
 }
 
 // The Token and 费用 cells hold one number each because the 2 × 2 grid has

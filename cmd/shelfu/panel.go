@@ -188,16 +188,12 @@ func panelLines(c *ui.Context, text string, size float32, weight int) ui.Element
 	return t
 }
 
-// 面板只有两种尺寸，与页面内容无关（原型 index.html?variant=B）：
-// 一级岛 340 × 104，二级面板 420 × 250。二级面板的 250 由 32 菜单栏行、
-// 26 返回行、6 间距、396 × 174 内容区和 12 底边拼成；一级岛的 104 由
-// 32 菜单栏行、56 播放器行和 16 底边拼成。页面内容永远画在 396 × 174 里。
-// 展开面板有两种尺寸：总览 440 × 156（点刘海就到），页面 440 × 250（点顶部
-// 页面图标，同一个外壳向下长）。总览的 156 由 32 顶栏、6 间距、416 × 106、
-// 12 底边拼成；页面 250 由 32 顶栏、6 间距、200 页面区、12 底边拼成，页面区
-// 自己再分 22 动作行 + 4 间距 + 416 × 174 内容。宽度不变。
+// 展开面板有两种尺寸（design/explore/notch-v3.html）：点刘海长出 520 × 76
+// 的搜索条（32 菜单栏行 + 44 输入行，有查询时加宽到 560，结果面板另画在
+// 它下方），点下方页面胶囊进页面 440 × 250（32 顶栏、6 间距、200 页面区、
+// 12 底边；页面区自己再分 22 动作行 + 4 间距 + 416 × 174 内容）。
 const (
-	overviewW, overviewH = 440, 156
+	overviewW, overviewH = homeW, bandH + homeBarH
 	sheetW, sheetH       = 440, 250
 	contentW, contentH   = 416, 174
 	overviewBodyH        = 106
@@ -207,7 +203,7 @@ const (
 	sheetPadX      = padX
 	sheetPadBottom = padBottom
 	contentGap     = bodyGap
-	overviewRadius = rOverview
+	overviewRadius = homeRadius
 	sheetRadius    = rPage
 	tileRadius     = rTile
 
@@ -334,9 +330,10 @@ func (a *shelf) currentLevel() int {
 }
 
 // sheetTop is where the drawn shell starts inside the window: flush with
-// the menu bar normally; while the clipboard search holds the keyboard the
-// window sits below the menu bar's level, so the shell drops below it by
-// the menu bar's height and keeps the sheet's 250 pt below that.
+// the screen's top edge, the search bar included — it grows out of the
+// notch even while it holds the keyboard (the window then sits below the
+// menu bar's level, which draws over the empty black band). An island
+// holding the keyboard drops below the menu bar instead.
 func (a *shelf) sheetTop() int {
 	// The island floats below the screen's top edge; the hardware notch
 	// path starts at it. A panel that grows upward moves the window's top
@@ -345,7 +342,7 @@ func (a *shelf) sheetTop() int {
 	if a.island {
 		top += a.y - a.frameTop()
 	}
-	if a.focusMode {
+	if a.focusMode && a.island {
 		focusTop := max(a.topInset, menuBarMinH) + headerTopGap
 		if a.island {
 			// The search drop is measured from the screen's top edge.
@@ -691,7 +688,35 @@ func (a *shelf) view(c *ui.Context) {
 	}
 	a.fx.peekW, a.fx.peekH = peekW, peekH
 	a.fx.sizeMoving = a.win != nil && (!zone.Settled("peek-w") || !zone.Settled("peek-h"))
-	// 刘海壳尺寸在三态间插值：硬件刘海 ←→ 探头胶囊 ←→ 一级岛 ←→ 二级面板
+	// The search bar's width, the results sheet under it and the page
+	// capsule spring on their own channels; the shell reads the bar's
+	// drawn width (shellSize), the frame and the hit test the sheet's.
+	homeTarget, resultsTarget, navTarget := a.homeBoxW(), a.resultsTargetH(), float32(0)
+	if a.visible && !(a.snap.panel || a.snap.drawn) {
+		navTarget = 1
+	}
+	homeWd, resultsH, navK := homeTarget, resultsTarget, navTarget
+	if a.win != nil {
+		if reduceMotion(c) || !expanded || a.fx.homeW == 0 {
+			homeWd = zone.Jump("home-w", homeTarget)
+		} else {
+			homeWd = zone.AnimateTo("home-w", homeTarget, levelSpring)
+		}
+		if reduceMotion(c) {
+			resultsH = zone.Jump("results-h", resultsTarget)
+			navK = zone.Jump("nav", navTarget)
+		} else {
+			resultsH = zone.AnimateTo("results-h", resultsTarget, levelSpring)
+			navK = zone.AnimateTo("nav", navTarget, contentSpring)
+		}
+		resultsH, navK = max(resultsH, 0), min(max(navK, 0), 1)
+		if !a.visible {
+			// A closing panel takes its hung shapes in with its content.
+			navK = min(navK, closeK)
+		}
+	}
+	a.fx.homeW, a.fx.resultsH, a.fx.navK = homeWd, resultsH, navK
+	// 刘海壳尺寸在三态间插值：硬件刘海 ←→ 探头胶囊 ←→ 搜索条 ←→ 页面
 	// （shellSize 是几何的唯一来源）。
 	shellW, shellH := a.shellSize(openK, levelK, peekK, peekW, peekH)
 	shellW, shellH = max(shellW, 0), max(shellH, 0)
@@ -700,7 +725,8 @@ func (a *shelf) view(c *ui.Context) {
 	// than the shape it heads for.
 	a.fx.w, a.fx.h = shellW, shellH
 	a.fx.openK, a.fx.peekK = openK, peekK
-	a.fx.openMoving = a.win != nil && (!zone.Settled("open") || !zone.Settled("level"))
+	a.fx.openMoving = a.win != nil && (!zone.Settled("open") || !zone.Settled("level") ||
+		!zone.Settled("home-w") || !zone.Settled("results-h") || !zone.Settled("nav"))
 	a.fx.peek = !expanded && peeked && !closing
 	// A panel drag released on the other side of the island slides there on
 	// the panel's own spring; the box, its frame and its hit shape all read
@@ -752,7 +778,7 @@ func (a *shelf) view(c *ui.Context) {
 		path.LineTo(x1+shake, y0+earR)
 		path.QuadTo(x1+shake, y0, x1+ear+shake, y0)
 		path.Close()
-		a.panelFill(p, &path, shellH)
+		a.panelFill(p, &path, ui.Rect{X: x0 + shake, Y: y0, W: shellW, H: shellH}, botR, expanded || openK > 0.3)
 	})
 	zone.Children(func() {
 		if !expanded {
@@ -808,13 +834,29 @@ func (a *shelf) view(c *ui.Context) {
 				outer = outer.Top(0)
 			}
 			outer.Children(func() {
-				inner := ui.Column(c.Key("panel")).Width(sheetW).Height(sheetH)
-				innerH := float32(sheetH)
 				if a.snap.panel || a.snap.drawn {
 					// The arrangement panel is its own box inside the same
 					// shell; it never draws the page frame.
-					inner = inner.Width(snapW).Height(snapH)
-					innerH = snapH
+					ui.Column(c.Key("panel")).Width(snapW).Height(snapH).Children(func() { a.snapView(c) })
+					return
+				}
+				// The search bar and a page share the shell: each fades
+				// with the level's progress while the shell's size springs
+				// between them, and only the one in front takes the pointer.
+				if homeOp := 1 - levelK; homeOp > 0.001 {
+					home := ui.Column(c.Key("home-wrap")).Absolute().Top(0).Left(0).Right(0).
+						AlignItems(ui.Center).Opacity(homeOp)
+					if homeOp < 0.5 {
+						home.PassThrough()
+					}
+					home.Children(func() { a.homeBar(c, homeWd) })
+				}
+				if levelK <= 0.001 {
+					return
+				}
+				inner := ui.Column(c.Key("panel")).Width(sheetW).Height(sheetH).Opacity(levelK)
+				if levelK < 0.5 {
+					inner.PassThrough()
 				}
 				if up {
 					// The block keeps its own fixed layout inside the
@@ -827,18 +869,30 @@ func (a *shelf) view(c *ui.Context) {
 					if up {
 						// Unfold from the island edge: the block's bottom
 						// edge, contentH into the fixed layout.
-						originY = contentH / innerH
+						originY = contentH / float32(sheetH)
 					}
 					inner.TransformOrigin(0.5, originY).Scale(scale, scale)
 				}
 				inner.Children(func() {
-					if a.snap.panel || a.snap.drawn {
-						a.snapView(c)
-						return
-					}
 					a.bandRow(c)
 					a.tabBody(c, over)
 				})
+			})
+		})
+		// The results sheet and the page capsule hang under the shell on
+		// its axis; their boxes follow the drawn shell in the same frame.
+		results, nav := a.belowBoxes(shellW, shellH, resultsH)
+		hang := ui.Column(c.Key("hang")).Absolute().Top(top).Left(0).Right(0).AlignItems(ui.Center).PassThrough()
+		hang.Children(func() {
+			box := ui.Box(c.Key("hang-box")).Width(shellW).Height(nav.Y + nav.H).PassThrough()
+			box.Translate(shift, 0)
+			box.Children(func() {
+				if results.H > 0.5 {
+					a.resultsView(c, results, reveal)
+				}
+				if navK > 0.01 {
+					a.navView(c, nav, navK)
+				}
 			})
 		})
 	})
@@ -864,99 +918,28 @@ func (a *shelf) view(c *ui.Context) {
 	}
 }
 
-// tabMetrics is the page icons' size and gap inside the band's left ear.
-// The camera housing may not hold pixels, so the five icons have to fit
-// beside it; a wide notch shrinks them a little rather than letting one
-// slide under the hardware.
-func (a *shelf) tabMetrics() (size, gap float32) {
-	size, gap = bandIcon, bandIconGap
-	if a.notchW <= 0 || a.island || a.focusMode {
-		return
-	}
-	avail := (float32(sheetW)-float32(a.notchW+2*6))/2 - 8
-	for size > 16 && float32(tabMaxPages)*size+float32(tabMaxPages-1)*gap > avail {
-		size -= 0.5
-		if size <= 20 {
-			gap = 1
-		}
-	}
-	return
-}
-
-// bandRow is the 32pt row at the top of both sizes: the page icons in the
-// left ear with a fill2 capsule under the current one, activity chips and
-// the settings button in the right ear, split around the camera housing
-// while the shell sits under the notch. There is no collapse button: the
-// HIG popover rule — a click outside or Esc closes — is the way out.
-// While the clipboard search holds the keyboard the window sits below the
-// menu bar, so no housing gap is cut.
+// bandRow is the 32pt black row at the top of a page, flush with the menu
+// bar: the page buttons live in the capsule under the panel (navView), so
+// the band carries only the running jobs' chips in its right ear, beside
+// the camera housing.
 func (a *shelf) bandRow(c *ui.Context) {
-	size, gap := a.tabMetrics()
 	row := ui.Row(c.Key("band")).Height(bandH).FillWidth().
 		Padding(0, sheetPadX, 0, sheetPadX).AlignItems(ui.Center)
-	var tabs map[pageID]ui.Element
 	// The band's blank stretches drag the panel; its controls keep their
 	// own presses. Their boxes are kept from this frame for the next one.
 	a.bandBegin(row.Bounds())
 	row.Children(func() {
-		ui.Row(c.Key("band-left")).Grow(1).MinWidth(0).Gap(gap).AlignItems(ui.Center).Children(func() {
-			tabs = map[pageID]ui.Element{}
-			for _, p := range a.tabPages() {
-				b := a.tabIcon(c, p, size, size*0.64, p.id() == a.currentPage().id())
-				tabs[p.id()] = b
-				a.bandAdd(b)
-				if b.Clicked() && p.id() != a.tab {
-					a.openPage(p.id())
-				}
-			}
-		})
-		if a.notchW > 0 && !a.focusMode && !a.island {
+		ui.Box(c.Key("band-left")).Grow(1).MinWidth(0)
+		if a.notchW > 0 && !a.island {
 			// The camera housing splits the band only when the shell is the
 			// notch shape; the island floats below it with no gap to cut.
 			ui.Box(c.Key("band-housing")).Width(float32(a.notchW + 2*6)).Shrink(0)
 		}
 		ui.Row(c.Key("band-right")).Grow(1).MinWidth(0).Gap(1).AlignItems(ui.Center).Justify(ui.End).Children(func() {
-			if a.currentLevel() == 2 {
-				// The overview's own context line already names the
-				// running job (with its cancel); the band keeps only the
-				// settings button there, as the design draws it.
-				for _, act := range a.liveActivities() {
-					a.bandAdd(act.chip(c))
-				}
-			}
-			l := loc(c)
-			settings := a.iconButton(c, "settings", gearSymbol, l.PanelSettings())
-			a.bandAdd(settings)
-			if settings.Clicked() {
-				a.openSettings()
+			for _, act := range a.liveActivities() {
+				a.bandAdd(act.chip(c))
 			}
 		})
-	})
-	// The active icon's capsule glides to the icon on a switch and stays
-	// glued to it on every other move.
-	cur, ok := tabs[a.currentPage().id()]
-	if !ok {
-		return
-	}
-	r := cur.LayoutBounds()
-	if r.W <= 0 {
-		cur.Background(fill2)
-		return
-	}
-	t := a.tabPhase(c.Now())
-	x := r.X
-	if t < 1 {
-		x = row.AnimateTo("tab-x", r.X, ui.Animation{Duration: tabAnimation, Ease: ui.EaseInOut})
-	} else {
-		x = row.Jump("tab-x", r.X)
-	}
-	prev := row.LayoutBounds()
-	row.Draw(func(p *ui.Painter, box ui.Rect) {
-		dx, dy := float32(0), float32(0)
-		if prev.W > 0 {
-			dx, dy = box.X-prev.X, box.Y-prev.Y
-		}
-		p.Fill(ui.Rect{X: x + dx, Y: r.Y + dy, W: r.W, H: r.H}, fill2, r.H/2)
 	})
 }
 

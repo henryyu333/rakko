@@ -48,7 +48,7 @@ func motionWindow() *shelf {
 // bottom corners are never cut — then settle back to the panel's size.
 func TestOpeningIsElasticAndTheFrameNeverClips(t *testing.T) {
 	a := motionWindow()
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame() // the idle frame the spring starts from
 	a.visible = true
 	target := float32(a.panelH())
@@ -89,7 +89,7 @@ func TestOpeningIsElasticAndTheFrameNeverClips(t *testing.T) {
 // notch band without dipping below it.
 func TestClosingFoldsCrisp(t *testing.T) {
 	a := motionWindow()
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame()
 	a.visible = true
 	for range 120 {
@@ -213,7 +213,7 @@ func TestLiveJobDrivesTheCapsuleAndHandsOverToItsVerdict(t *testing.T) {
 	j.total.Store(3)
 	j.done.Store(1)
 	a.conv = &converter{host: a, job: j}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame()
 	if a.fb.text != "正在转成 JPEG · 2/3" || !a.fb.live {
 		t.Fatalf("capsule = %q live=%v, want the job's progress", a.fb.text, a.fb.live)
@@ -360,7 +360,7 @@ func TestLiveCapsuleRearmsAfterAToastExpires(t *testing.T) {
 	j.total.Store(3)
 	j.done.Store(1)
 	a.conv = &converter{host: a, job: j}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame()
 	if !a.fb.live {
 		t.Fatal("the job's capsule is not up")
@@ -393,7 +393,7 @@ func TestLiveCapsuleRearmsAfterAToastExpires(t *testing.T) {
 // holds for its full span from the first drawn frame.
 func TestToastPostedWhileClosingStillShows(t *testing.T) {
 	a := motionWindow()
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame()
 	a.visible = true
 	for range 40 {
@@ -452,7 +452,7 @@ func TestCollapsedToastKeepsItsClockInThePill(t *testing.T) {
 // its drawn edge — nothing may paint over the menu bar.
 func TestCapsuleGrowNeverPaintsPastTheShell(t *testing.T) {
 	a := motionWindow()
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame() // the idle frame the grow starts from
 	a.toastStatus("已压缩 3 张 · 4.6 MB → 1.8 MB", time.Now().Add(3*time.Second), statusOK)
 	view.Frame()
@@ -585,7 +585,7 @@ func TestWingsFadeOutWithTheShell(t *testing.T) {
 	// show, drawn at their fading opacity.
 	view := ui.NewTester(func(c *ui.Context) {
 		a.peekView(c, 284, 36, 0, 0.6, 0, false, false)
-	}, sheetW, sheetH)
+	}, sheetW, panelTestH)
 	view.Frame()
 	if _, ok := view.Find("正在播放：Fashion Killa · 展开 Rakko"); !ok {
 		t.Fatal("the wings vanished mid-retract instead of fading with the shell")

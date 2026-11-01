@@ -76,7 +76,7 @@ func englishShelf(t *testing.T) (*shelf, *ui.Tester) {
 		store: s, dataDir: t.TempDir(), level: 1, settings: settings.Default(), locale: "en",
 		thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{}, appNames: map[string]string{},
 	}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.SetLocale("en")
 	return a, view
 }
@@ -643,7 +643,7 @@ func TestLanguageSwitchAppliesWithoutRestart(t *testing.T) {
 		store: s, dataDir: t.TempDir(), visible: true, level: 1, settings: settings.Default(),
 		thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{}, appNames: map[string]string{},
 	}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame()
 	view.Frame()
 	if !view.HasText("托盘 1 项") {

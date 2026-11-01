@@ -5113,6 +5113,66 @@ func (msgs Messages) PanelCollapse() string {
 	return Catalog.Format(msgs.locale, "panelCollapse", nil)
 }
 
+// HomeSearch says "搜索"
+// in the language the app shows.
+func HomeSearch() string { return In(i18n.Locale()).HomeSearch() }
+
+// HomeSearch says "搜索"
+// in the language of msgs.
+func (msgs Messages) HomeSearch() string {
+	return Catalog.Format(msgs.locale, "homeSearch", nil)
+}
+
+// HomeClear says "清除搜索"
+// in the language the app shows.
+func HomeClear() string { return In(i18n.Locale()).HomeClear() }
+
+// HomeClear says "清除搜索"
+// in the language of msgs.
+func (msgs Messages) HomeClear() string {
+	return Catalog.Format(msgs.locale, "homeClear", nil)
+}
+
+// HomeNoMatch says "没有找到"
+// in the language the app shows.
+func HomeNoMatch() string { return In(i18n.Locale()).HomeNoMatch() }
+
+// HomeNoMatch says "没有找到"
+// in the language of msgs.
+func (msgs Messages) HomeNoMatch() string {
+	return Catalog.Format(msgs.locale, "homeNoMatch", nil)
+}
+
+// HomeGroupTray says "托盘"
+// in the language the app shows.
+func HomeGroupTray() string { return In(i18n.Locale()).HomeGroupTray() }
+
+// HomeGroupTray says "托盘"
+// in the language of msgs.
+func (msgs Messages) HomeGroupTray() string {
+	return Catalog.Format(msgs.locale, "homeGroupTray", nil)
+}
+
+// HomeGroupClipboard says "剪贴板"
+// in the language the app shows.
+func HomeGroupClipboard() string { return In(i18n.Locale()).HomeGroupClipboard() }
+
+// HomeGroupClipboard says "剪贴板"
+// in the language of msgs.
+func (msgs Messages) HomeGroupClipboard() string {
+	return Catalog.Format(msgs.locale, "homeGroupClipboard", nil)
+}
+
+// HomeGroupActions says "动作"
+// in the language the app shows.
+func HomeGroupActions() string { return In(i18n.Locale()).HomeGroupActions() }
+
+// HomeGroupActions says "动作"
+// in the language of msgs.
+func (msgs Messages) HomeGroupActions() string {
+	return Catalog.Format(msgs.locale, "homeGroupActions", nil)
+}
+
 // PanelExpand says "展开 Rakko"
 // in the language the app shows.
 func PanelExpand() string { return In(i18n.Locale()).PanelExpand() }

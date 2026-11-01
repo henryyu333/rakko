@@ -67,7 +67,7 @@ func foldFrames(t *testing.T, a *shelf, view *ui.Tester, keepText string) {
 // not appear.
 func TestPeekFoldKeepsShownShape(t *testing.T) {
 	a := dragPeekShelf()
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame()
 	if _, ok := view.Find("松开放入"); !ok {
 		t.Fatal("the drop pill is not up before the fold")
@@ -84,7 +84,7 @@ func TestPeekFoldKeepsShownShape(t *testing.T) {
 // velocity and grew the shell one more step).
 func TestPeekFoldMidMorphOnlyShrinks(t *testing.T) {
 	a := dragPeekShelf()
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	// Drag ends over the notch: the shell starts morphing toward the wings.
 	a.dragging = false
 	for range 2 {
@@ -112,7 +112,7 @@ func TestPeekFoldMidMorphOnlyShrinks(t *testing.T) {
 func TestPeekFoldWithoutTrackAlsoPlain(t *testing.T) {
 	a := dragPeekShelf()
 	a.np = nil
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame()
 	a.dragging = false
 	a.peeking = false
@@ -124,7 +124,7 @@ func TestPeekFoldWithoutTrackAlsoPlain(t *testing.T) {
 // freeze only applies while the peek is going away.
 func TestPeekFoldHoverStillGetsTheWings(t *testing.T) {
 	a := dragPeekShelf()
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame()
 	// Drag ends while hovering the notch: peeking stays true.
 	a.dragging = false
@@ -149,7 +149,7 @@ func TestPeekFoldHoverStillGetsTheWings(t *testing.T) {
 // wings flash.
 func TestPeekFoldInterruptedByNewDrag(t *testing.T) {
 	a := dragPeekShelf()
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame()
 	a.dragging, a.dropHot = false, false
 	a.peeking = false

@@ -47,7 +47,7 @@ func panelDragShelf(t *testing.T, level int, tab pageID, spot settings.IslandPos
 	registerKey = func(string, func()) error { return nil }
 	unregisterKey = func(string) {}
 	t.Cleanup(func() { registerKey, unregisterKey = origReg, origUnreg })
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame()
 	view.Frame()
 	return a, view
@@ -326,7 +326,7 @@ func TestPanelDragDoesNotExistOnTheNotchShell(t *testing.T) {
 	registerKey = func(string, func()) error { return nil }
 	unregisterKey = func(string) {}
 	t.Cleanup(func() { registerKey, unregisterKey = origReg, origUnreg })
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame()
 	view.Frame()
 	requireBandDrawn(t, a)

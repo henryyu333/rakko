@@ -246,7 +246,7 @@ func renderEvidence(t *testing.T, now time.Time) {
 	})
 	a.registerPage(f)
 	a.settings.AIUsage = settings.AIUsageSettings{Enabled: true, QuotaCodex: true, QuotaClaude: true, LocalOmp: true, LocalClaude: true, LocalCodex: true}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame()
 	savePNG(t, view.Image(), "render-island")
 

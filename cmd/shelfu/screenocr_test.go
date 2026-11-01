@@ -60,7 +60,7 @@ func TestScreenOCRWithoutPermissionShowsSheet(t *testing.T) {
 	if called {
 		t.Fatal("capture ran without permission")
 	}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	for _, want := range []string{"屏幕录制", "打开系统设置", "取消"} {
 		if !view.HasText(want) {
 			t.Fatalf("sheet missing %q", want)
@@ -74,7 +74,7 @@ func TestScreenOCRSheetCancel(t *testing.T) {
 	ocrPreflight = func() bool { return false }
 	a := &shelf{}
 	a.startScreenOCR()
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	if err := view.Click("取消"); err != nil {
 		t.Fatalf("cancel click: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestScreenOCRSheetGrantButton(t *testing.T) {
 	ocrGrant = func() bool { asked = true; return false }
 	a := &shelf{}
 	a.startScreenOCR()
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	if err := view.Click("打开系统设置"); err != nil {
 		t.Fatalf("grant click: %v", err)
 	}

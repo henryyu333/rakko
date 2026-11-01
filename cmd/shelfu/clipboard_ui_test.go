@@ -58,7 +58,7 @@ func clipShelf(t *testing.T, texts ...string) (*shelf, *ui.Tester, *recordClip) 
 		thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{},
 		appNames: map[string]string{}, write: rec,
 	}
-	return a, ui.NewTester(a.view, sheetW, sheetH), rec
+	return a, ui.NewTester(a.view, sheetW, panelTestH), rec
 }
 
 func clipTexts(a *shelf) []string {

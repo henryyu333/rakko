@@ -43,7 +43,7 @@ func TestCompressToTier(t *testing.T) {
 	a, _ := sizedShelf(t, map[string]int64{"a.jpg": 2_100_000, "logo.png": 3_500_000}, "a.jpg", "logo.png")
 	selectAll(a)
 	a.win = nil
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame()
 	if err := view.RightClick("a.jpg"); err != nil {
 		t.Fatal(err)
@@ -80,7 +80,7 @@ func TestCompressSkipsAlreadySmall(t *testing.T) {
 	a, _ := sizedShelf(t, map[string]int64{"small.jpg": 300_000, "big.jpg": 2_000_000}, "small.jpg", "big.jpg")
 	selectAll(a)
 	a.win = nil
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame()
 	if err := view.RightClick("small.jpg"); err != nil {
 		t.Fatal(err)
@@ -115,7 +115,7 @@ func TestCompressStillOverLimit(t *testing.T) {
 	a, _ := sizedShelf(t, map[string]int64{"a.jpg": 2_000_000}, "a.jpg")
 	selectAll(a)
 	a.win = nil
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame()
 	if err := view.RightClick("a.jpg"); err != nil {
 		t.Fatal(err)

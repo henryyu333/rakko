@@ -74,7 +74,7 @@ func selectAllTray(t *testing.T, a *shelf) {
 // every target is a real file still on disk; ShelfU's own items grey it.
 func TestRenameMenuItem(t *testing.T) {
 	a, _, _ := renameShelf(t, "a.txt", "b.txt")
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	a.ensurePages()
 	view.Frame()
 	if err := view.RightClick("a.txt"); err != nil {
@@ -473,7 +473,7 @@ func TestRenameUndoPillOutlivesWindow(t *testing.T) {
 	if r.undoUntil.Before(time.Now().Add(9 * time.Second)) {
 		t.Fatalf("closing must restart the pill's clock: %v", r.undoUntil)
 	}
-	panel := ui.NewTester(a.view, sheetW, sheetH)
+	panel := ui.NewTester(a.view, sheetW, panelTestH)
 	panel.Frame()
 	if !panel.HasText("已重新命名 1 项") || !panel.HasText("撤销重新命名") {
 		t.Fatalf("panel lacks the undo pill: %v", panel.Texts())

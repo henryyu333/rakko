@@ -24,7 +24,7 @@ import (
 // window must hold the ears on every frame of the open flight and at rest.
 func TestFrameAlwaysHoldsTheEars(t *testing.T) {
 	a := motionWindow()
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame()
 	a.visible = true
 	for i := range 120 {
@@ -51,7 +51,7 @@ func TestFrameAlwaysHoldsTheEars(t *testing.T) {
 // spring's outward velocity does not carry into the fold.
 func TestMidOpenCloseNeverGrowsOutward(t *testing.T) {
 	a := motionWindow()
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame()
 	a.visible = true
 	// Open partway: long enough to be fast-moving, not settled.
@@ -80,7 +80,7 @@ func TestMidOpenCloseNeverGrowsOutward(t *testing.T) {
 // old spring's inward velocity wears off.
 func TestMidCloseReopenIsContinuous(t *testing.T) {
 	a := motionWindow()
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame()
 	a.visible = true
 	for range 40 {
@@ -117,7 +117,7 @@ func TestMidCloseReopenIsContinuous(t *testing.T) {
 // eased progress still says "open".
 func TestFoldedShellRestoresClicksAndTheStrip(t *testing.T) {
 	a := motionWindow()
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame()
 	a.visible = true
 	for range 40 {
@@ -146,7 +146,7 @@ func TestFoldedShellRestoresClicksAndTheStrip(t *testing.T) {
 // notch band is sub-point, not a visible snap.
 func TestCloseTailHasNoVisibleSnap(t *testing.T) {
 	a := motionWindow()
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame()
 	a.visible = true
 	for range 40 {
@@ -198,7 +198,7 @@ func TestClosingFreezeFollowsTheDrawnShell(t *testing.T) {
 	a := motionWindow()
 	a.registerPage(&tallPage{host: a})
 	a.tab, a.level, a.visible = "tall", 2, true
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	for range 40 {
 		view.Frame()
 		view.Advance(16 * time.Millisecond)
@@ -283,7 +283,7 @@ func TestHeadlessThumbnailNeverTouchesTheWindow(t *testing.T) {
 func TestDropZoneKeepsTheSheetSize(t *testing.T) {
 	a := motionWindow()
 	a.visible = true
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	for range 40 {
 		view.Frame()
 		view.Advance(16 * time.Millisecond)
@@ -324,7 +324,7 @@ func TestOpeningFrameStaysAlignedAndFreezesPeekMorph(t *testing.T) {
 	dir := t.TempDir()
 	img := writeFile(t, dir, "1.png", testPNGBytes(t))
 	t.Setenv("SHELF_DEBUG_DROP_FILES", img)
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	// Start a peek morph partway (as a drag or hover wings does), then open.
 	a.dragging, a.peeking = true, true
 	view.Frame()
@@ -380,7 +380,7 @@ func TestClosingFollowsCurrentPeekAfterOpeningStateChanges(t *testing.T) {
 				a.np = &nowPlayingModule{host: a, have: true, last: mac.NowPlayingState{Title: "Track"}}
 				a.modules = []module{a.np}
 				a.dragging = name == "drag ends"
-				v := ui.NewTester(a.view, sheetW, sheetH)
+				v := ui.NewTester(a.view, sheetW, panelTestH)
 				v.Frame()
 				a.peeking = true
 				for range 24 {

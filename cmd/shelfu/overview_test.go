@@ -31,7 +31,7 @@ func overviewShelf(t *testing.T) (*shelf, *ui.Tester) {
 	if err := a.store.AddClipText("刚复制的一段文字", "com.example.App"); err != nil {
 		t.Fatal(err)
 	}
-	return a, ui.NewTester(a.view, sheetW, sheetH)
+	return a, ui.NewTester(a.view, sheetW, panelTestH)
 }
 
 // TestOverviewFitsItsBox draws the overview with every kind of content and
@@ -265,7 +265,7 @@ func TestWelcomeShowsOnceAndOnlyForAFreshInstall(t *testing.T) {
 		t.Fatal("a fresh install has no welcome card")
 	}
 	a.visible, a.level = true, 1
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	a.openedAt = time.Now().Add(-2 * time.Second)
 	view.Frame()
 	if !view.HasText("你好，我是 Rakko") {
@@ -312,7 +312,7 @@ func TestWhatsNewOnVersionChange(t *testing.T) {
 		t.Fatal("a version change did not queue the new-version card")
 	}
 	a.visible, a.level = true, 1
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	a.openedAt = time.Now().Add(-time.Second)
 	view.Frame()
 	if !view.HasText(appLocTitle("whatsNew", a)) {

@@ -27,7 +27,7 @@ func TestToolsPageRenders(t *testing.T) {
 	}
 	defer s.Close()
 	a := &shelf{store: s, tab: pageTools, visible: true}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	if !view.HasText("工具") {
 		t.Fatal("the back row did not show 工具")
 	}
@@ -99,7 +99,7 @@ func TestToolsPageEditMode(t *testing.T) {
 	}
 	defer s.Close()
 	a := &shelf{store: s, tab: pageTools, visible: true, dataDir: t.TempDir()}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	if err := view.Click("编辑"); err != nil {
 		t.Fatalf("pencil button missing: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestToolsPagePicker(t *testing.T) {
 		t.Fatal("tools page missing")
 	}
 	p.editing, p.picking = true, true
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	if !view.HasText("卡片目录") {
 		t.Fatal("picker title missing")
 	}
@@ -297,7 +297,7 @@ func TestToolsStillLongPressEntersEdit(t *testing.T) {
 	}
 	defer s.Close()
 	a := &shelf{store: s, tab: pageTools, visible: true}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	r, ok := view.Find("框选文字")
 	if !ok {
 		t.Fatal("ocr card missing")
@@ -349,7 +349,7 @@ func TestToolsSettleEndsWhenFlightNeverMoves(t *testing.T) {
 		{ID: "ocr"}, {ID: "fit1m"}, {ID: "topdf"}, {ID: "zip"},
 		{ID: "tojpeg"}, {ID: "toword"}, {ID: "extract"}, {ID: "resize"},
 	}}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.SetPreferences(ui.Preferences{ReduceMotion: true})
 	r, ok := view.Find("打成 zip")
 	if !ok {
@@ -407,7 +407,7 @@ func TestToolsGridScrollsPastThreeRows(t *testing.T) {
 	a := &shelf{store: s, tab: pageTools, visible: true}
 	l := toolsOverflowLayout()
 	a.toolsLay = &l
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	p := a.toolsPage()
 	first, ok := view.Find("打成 zip")
 	if !ok {
@@ -449,7 +449,7 @@ func TestToolsDropInVisibleGridCommits(t *testing.T) {
 	a := &shelf{store: s, tab: pageTools, visible: true}
 	l := toolsOverflowLayout()
 	a.toolsLay = &l
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	p := a.toolsPage()
 	p.editing = true
 	view.Frame()
@@ -553,7 +553,7 @@ func TestToolsExactFitGridDoesNotScroll(t *testing.T) {
 		{ID: "ocr"}, {ID: "fit1m"}, {ID: "topdf"}, {ID: "zip"},
 		{ID: "tojpeg"}, {ID: "toword"}, {ID: "extract"}, {ID: "resize"},
 	}}
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	p := a.toolsPage()
 	view.Frame()
 	if p.scroll.MaxY != 0 {
@@ -565,7 +565,7 @@ func TestToolsEditBadgeIsVisibleAndClickableAtGridEdges(t *testing.T) {
 	for _, edge := range []string{"top", "left"} {
 		t.Run(edge, func(t *testing.T) {
 			a := &shelf{tab: pageTools, visible: true, store: mustStore(t)}
-			view := ui.NewTester(a.view, sheetW, sheetH)
+			view := ui.NewTester(a.view, sheetW, panelTestH)
 			view.SetPreferences(ui.Preferences{ReduceMotion: true})
 			p := a.toolsPage()
 			p.editing = true
@@ -619,7 +619,7 @@ func TestToolsGridDrawsNoEdgeBlur(t *testing.T) {
 			l.AddCardSize(def.id, def.span, max(1, def.rows))
 		}
 	})
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame()
 	view.Frame()
 	p := a.toolsPage()

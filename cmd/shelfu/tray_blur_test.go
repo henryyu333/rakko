@@ -43,7 +43,7 @@ func blurShelf(t *testing.T) (*shelf, *ui.Tester) {
 		store: s, dataDir: t.TempDir(), level: 2, visible: true, settings: settings.Default(),
 		thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{}, appNames: map[string]string{},
 	}
-	return a, ui.NewTester(a.view, sheetW, sheetH)
+	return a, ui.NewTester(a.view, sheetW, panelTestH)
 }
 
 // TestTrayGridNeverBlursARow: the tray grid is the page's content, not rows

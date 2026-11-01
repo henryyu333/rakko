@@ -487,7 +487,7 @@ func TestLiveViewsDrawTheirWords(t *testing.T) {
 	a := liveShelf()
 	a.peeking = true
 	a.peekProgress, a.peekFrom = 1, 1
-	view := ui.NewTester(a.view, sheetW, sheetH)
+	view := ui.NewTester(a.view, sheetW, panelTestH)
 	now := time.Now()
 	a.pushLive(liveEvent{kind: liveCharging, label: "正在充电", pct: 80}, liveHoldCharge, now)
 	view.Frame()
@@ -498,7 +498,7 @@ func TestLiveViewsDrawTheirWords(t *testing.T) {
 	a.clearLive()
 	a.fx.peekKind = peekChevron
 	a.pushLive(liveEvent{kind: liveHeadset, label: "AirPods Pro", levels: []string{"左 80%", "右 78%", "盒 50%"}}, liveHoldHeadset, now.Add(time.Second))
-	view2 := ui.NewTester(a.view, sheetW, sheetH)
+	view2 := ui.NewTester(a.view, sheetW, panelTestH)
 	view2.Frame()
 	for _, want := range []string{"AirPods Pro", "左 80%", "右 78%", "盒 50%"} {
 		if !view2.HasText(want) {
@@ -510,7 +510,7 @@ func TestLiveViewsDrawTheirWords(t *testing.T) {
 	a.fx.peekKind = peekChevron
 	a.dl = &downloadsModule{host: a, items: []downloadFile{{name: "movie.mp4", done: 420, total: 1000}}}
 	a.settings.LiveActivities.Downloads = true
-	view3 := ui.NewTester(a.view, sheetW, sheetH)
+	view3 := ui.NewTester(a.view, sheetW, panelTestH)
 	view3.Frame()
 	if !view3.HasText("42%") {
 		t.Fatalf("download wings lost the percentage: %v", view3.Texts())
