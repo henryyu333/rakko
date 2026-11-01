@@ -1190,7 +1190,7 @@ func (a *shelf) animate(now time.Time) {
 			finished = true
 		}
 	}
-	if a.win == nil {
+	if !a.liveSurface() {
 		return
 	}
 	// 动画途中由 zone.AnimateTo 以显示器帧率自驱动重绘；结束时补一次穿透状态同步。
@@ -1198,7 +1198,7 @@ func (a *shelf) animate(now time.Time) {
 		if finished {
 			a.syncMousePassThrough()
 		}
-		if !a.fx.openMoving && !a.fx.sizeMoving {
+		if !a.fx.openMoving && !a.fx.sizeMoving && a.win != nil {
 			a.win.Invalidate()
 		}
 	}

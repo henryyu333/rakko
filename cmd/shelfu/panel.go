@@ -277,7 +277,7 @@ func (a *shelf) pageMotion(now time.Time) (t, dir float32) {
 	switch {
 	case pageSwitchPhase != nil:
 		t = pageSwitchPhase(a, now)
-	case a.win != nil:
+	case a.liveSurface():
 		t = a.tabPhase(now)
 	}
 	dir = 1
@@ -320,7 +320,7 @@ func (a *shelf) currentLevel() int {
 	if a.level >= 2 {
 		return 2
 	}
-	if a.level == 0 && a.win == nil {
+	if a.level == 0 && !a.liveSurface() {
 		return 2
 	}
 	return 1
@@ -435,11 +435,11 @@ func (a *shelf) view(c *ui.Context) {
 	// Draw springs at display cadence. Their last drawn values also drive
 	// native frame size and mouse pass-through.
 	openK, peekK, contentK := a.progress, a.peekProgress, float32(1)
-	if a.win == nil && !a.peeking {
+	if !a.liveSurface() && !a.peeking {
 		openK = 1
 	}
 	sizeAnim := peekSpring
-	if a.win != nil {
+	if a.liveSurface() {
 		openAnim := panelOpenSpring
 		peekAnim := peekSpring
 		if openTarget == 0 {
@@ -526,7 +526,7 @@ func (a *shelf) view(c *ui.Context) {
 	// 真实窗口的彻底空闲态：刘海样式什么都不画，常驻窗口完全不可见；
 	// 灵动岛空闲时一直画那颗 120 × 30 的胶囊，让用户知道往哪儿移鼠标。
 	// 阈值与上面的静止吸附一致（亚点级），收起最后一段平滑落位、看不出跳变。
-	idle := a.win != nil && !a.visible && a.progress <= 0.01 && openK <= 0.002 && !a.peeking && peekK <= 0.002
+	idle := a.liveSurface() && !a.visible && a.progress <= 0.01 && openK <= 0.002 && !a.peeking && peekK <= 0.002
 	// ShelfU's own drag-out never lands back on the shelf: the drop would
 	// add a second item pointing at the same file. Without a target the
 	// drag ends as if cancelled — nothing is added, the panel stays open
@@ -566,7 +566,7 @@ func (a *shelf) view(c *ui.Context) {
 	// views always draw the expanded state.
 	closeK := float32(0)
 	switch {
-	case a.win == nil:
+	case !a.liveSurface():
 		// Headless test surfaces draw the content unless a peek is being
 		// inspected.
 		if a.visible || !a.peeking {
@@ -606,7 +606,7 @@ func (a *shelf) view(c *ui.Context) {
 		levelTarget = 1
 	}
 	levelK := levelTarget
-	if a.win != nil {
+	if a.liveSurface() {
 		freshOpen := a.fx.openK == 0 && a.fx.levelK == 0 && levelTarget == 1
 		if a.jumpLevel || freshOpen {
 			levelK = zone.Jump("level", levelTarget)
@@ -628,7 +628,7 @@ func (a *shelf) view(c *ui.Context) {
 	// peekSize() answer would grow the folding shell toward a track's
 	// wings before it could shrink.
 	peekW, peekH := a.peekSize()
-	if a.win != nil {
+	if a.liveSurface() {
 		if expanded {
 			// Opening uses one fixed peek shape so its morph cannot fight
 			// openK. Closing instead follows the current track/drag state.
@@ -674,7 +674,7 @@ func (a *shelf) view(c *ui.Context) {
 		}
 	}
 	a.fx.peekW, a.fx.peekH = peekW, peekH
-	a.fx.sizeMoving = a.win != nil && (!zone.Settled("peek-w") || !zone.Settled("peek-h"))
+	a.fx.sizeMoving = a.liveSurface() && (!zone.Settled("peek-w") || !zone.Settled("peek-h"))
 	// The search bar's width, the results sheet under it and the page
 	// capsule spring on their own channels; the shell reads the bar's
 	// drawn width (shellSize), the frame and the hit test the sheet's.
@@ -683,7 +683,7 @@ func (a *shelf) view(c *ui.Context) {
 		navTarget = 1
 	}
 	homeWd, resultsH, navK := homeTarget, resultsTarget, navTarget
-	if a.win != nil {
+	if a.liveSurface() {
 		if reduceMotion(c) || !expanded || a.fx.homeW == 0 {
 			homeWd = zone.Jump("home-w", homeTarget)
 		} else {
@@ -712,7 +712,7 @@ func (a *shelf) view(c *ui.Context) {
 	// than the shape it heads for.
 	a.fx.w, a.fx.h = shellW, shellH
 	a.fx.openK, a.fx.peekK = openK, peekK
-	a.fx.openMoving = a.win != nil && (!zone.Settled("open") || !zone.Settled("level") ||
+	a.fx.openMoving = a.liveSurface() && (!zone.Settled("open") || !zone.Settled("level") ||
 		!zone.Settled("home-w") || !zone.Settled("results-h") || !zone.Settled("nav"))
 	a.fx.peek = !expanded && peeked && !closing
 	// A panel drag released on the other side of the island slides there on

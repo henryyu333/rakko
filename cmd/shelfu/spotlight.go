@@ -283,14 +283,14 @@ func (a *shelf) spotHitRow(group string, hit mac.SpotlightHit) homeHit {
 		title: hit.Name,
 		sub:   shortDir(path),
 		run: func() {
-			if err := mygo.Shell.OpenPath(path); err != nil {
+			if err := openPath(path); err != nil {
 				a.report(err)
 				return
 			}
 			a.hide(hideExplicit)
 		},
 		reveal: func() {
-			mac.RevealInFinder(path)
+			revealInFinder(path)
 			a.hide(hideExplicit)
 		},
 	}
@@ -309,6 +309,10 @@ func shortDir(path string) string {
 	}
 	return dir
 }
+
+// revealInFinder is the Finder reveal seam: the preview server stubs it so
+// an annotation session never opens Finder windows.
+var revealInFinder = mac.RevealInFinder
 
 var userHome = sync.OnceValue(func() string {
 	home, _ := os.UserHomeDir()
