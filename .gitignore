@@ -5,7 +5,7 @@
 dist/
 dist.noindex/
 .scratch/
-resources/darwin-arm64/ShelfUNowPlaying.bundle
+resources/darwin-arm64/*.bundle
 
 # Local development material is not part of the public source distribution.
 /SPEC.md
