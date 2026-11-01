@@ -299,7 +299,21 @@ func TestSnapSmokeIslandPanel(t *testing.T) {
 	}
 	snapShot(t, a.win, "snap-panel-island")
 	snapPostDrag(t, cx-114, tileY, up)
-	time.Sleep(600 * time.Millisecond)
+	// The shelf verifies the arrangement for a moment after the release
+	// (the window server may re-apply its own drag-time tile first): wait
+	// for that verification to finish, not a fixed while.
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		var pending bool
+		onMain(func() { pending = a.snap.confirm != nil })
+		if !pending {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the arrangement is still being verified")
+		}
+		time.Sleep(30 * time.Millisecond)
+	}
 	if got, want := snapWindowFrame(t, w), snapSlotRect(work, 0); absInt(got.X-want.X) > 4 ||
 		absInt(got.Width-want.Width) > 4 || absInt(got.Height-want.Height) > 4 {
 		t.Fatalf("island drag did not arrange the window: %+v, want %+v", got, want)

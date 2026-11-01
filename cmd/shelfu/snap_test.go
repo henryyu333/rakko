@@ -305,10 +305,7 @@ func TestSnapSessionArrangesAndCloses(t *testing.T) {
 	if a.snap.confirm == nil || f.released {
 		t.Fatalf("after release: confirm=%v released=%v, want a pending check", a.snap.confirm, f.released)
 	}
-	a.snapTick(time.Now().Add(300*time.Millisecond), mygo.Point{X: 576, Y: 63}, false)
-	if a.snap.confirm != nil || !f.released {
-		t.Fatalf("verification did not finish: confirm=%v released=%v", a.snap.confirm, f.released)
-	}
+	snapAwaitVerification(t, a, f)
 }
 
 func TestSnapOnlyMovesUnresizableWindow(t *testing.T) {
@@ -337,10 +334,7 @@ func TestSnapOnlyMovesUnresizableWindow(t *testing.T) {
 	if a.status != "这个窗口不能调整大小" {
 		t.Fatalf("status = %q, want the resize notice", a.status)
 	}
-	a.snapTick(time.Now().Add(300*time.Millisecond), mygo.Point{X: 576, Y: 63}, false)
-	if a.snap.confirm != nil || !f.released {
-		t.Fatalf("verification did not finish: confirm=%v released=%v", a.snap.confirm, f.released)
-	}
+	snapAwaitVerification(t, a, f)
 }
 
 // A release beside the notch must not land on the hidden panel's tiles:
@@ -506,18 +500,40 @@ func TestSnapReappliesAFrameTheWindowServerChanged(t *testing.T) {
 	if a.snap.confirm == nil {
 		t.Fatal("no verification was kept")
 	}
-	// The verification is due after the drag settles.
+	// The verification is due after the drag settles. It sees the server's
+	// frame first, then puts the target back once the server is still.
 	a.snapTick(time.Now().Add(200*time.Millisecond), mygo.Point{X: 576, Y: 63}, false)
+	a.snapTick(time.Now().Add(400*time.Millisecond), mygo.Point{X: 576, Y: 63}, false)
 	if len(f.moves) != 2 || f.moves[1] != (mac.AXRect{X: 0, Y: 25, Width: 735, Height: 750}) {
 		t.Fatalf("verification moves = %+v, want a second move to the left half", f.moves)
 	}
 	if f.rect.Width != 735 {
 		t.Fatalf("the target did not win: %+v", f.rect)
 	}
-	a.snapTick(time.Now().Add(600*time.Millisecond), mygo.Point{X: 576, Y: 63}, false)
-	if a.snap.confirm != nil || !f.released {
-		t.Fatalf("the verification did not finish: confirm=%v released=%v", a.snap.confirm, f.released)
+	snapAwaitVerificationAt(t, a, f, time.Now().Add(time.Second))
+}
+
+// snapAwaitVerification ticks the monitor until the arrangement's check is
+// over, failing when it runs past its life.
+func snapAwaitVerification(t *testing.T, a *shelf, f *fakeSnapWindow) {
+	t.Helper()
+	snapAwaitVerificationAt(t, a, f, time.Now())
+}
+
+func snapAwaitVerificationAt(t *testing.T, a *shelf, f *fakeSnapWindow, from time.Time) {
+	t.Helper()
+	now := from
+	for range int(snapConfirmLife/snapConfirmGap) + 2 {
+		now = now.Add(snapConfirmGap)
+		a.snapTick(now, mygo.Point{X: 576, Y: 63}, false)
+		if a.snap.confirm == nil {
+			if !f.released {
+				t.Fatal("the verification finished without releasing the window")
+			}
+			return
+		}
 	}
+	t.Fatalf("the verification did not finish: confirm=%v", a.snap.confirm)
 }
 
 // snapPendingConfirm arranges a window whose frame the server immediately

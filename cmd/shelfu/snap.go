@@ -39,8 +39,14 @@ const (
 	snapGhostOmega = 18  // 预览框弹簧角速度（rad/s，临界阻尼）
 	snapConfirmAt  = 120 * time.Millisecond
 	snapConfirmGap = 180 * time.Millisecond
-	snapConfirmMax = 2
-	snapConfirmTol = 2.0
+	// snapConfirmLife bounds how long the shelf keeps an arrangement alive
+	// after the drag. The window server can re-apply its own drag-time tile
+	// for up to about a second after the release (measured on macOS 27: a
+	// move at the release and several repairs were each overwritten within
+	// ~20 ms while its tiling settled), so the check waits for the target
+	// to hold across two checks instead of giving up after a count.
+	snapConfirmLife = 2 * time.Second
+	snapConfirmTol  = 2.0
 )
 
 // snapTarget is one arrangement: the horizontal span of the window it
@@ -94,11 +100,14 @@ type snapGhost struct {
 // tiling after the AX frame is set; a second look and one re-apply makes
 // ShelfU's target stick.
 type snapConfirm struct {
-	win    snapWindow
-	target mac.AXRect
-	resize bool
-	at     time.Time
-	tries  int
+	win      snapWindow
+	target   mac.AXRect
+	resize   bool
+	at       time.Time
+	until    time.Time
+	last     mac.AXRect
+	haveLast bool
+	nearAt   time.Time
 }
 
 // snapWindow is the Accessible window a session follows. The production
@@ -445,7 +454,7 @@ func (a *shelf) snapRelease(p mygo.Point) {
 		// after this call and overwrite the frame. Keep the reference and
 		// look again; a mismatch is re-applied once or twice.
 		s.confirm = &snapConfirm{win: s.win, target: want, resize: resize,
-			at: time.Now().Add(snapConfirmAt)}
+			at: time.Now().Add(snapConfirmAt), until: time.Now().Add(snapConfirmLife)}
 		s.win = nil
 	}
 	keepForPermission := hadPanel && !s.trusted
@@ -463,26 +472,45 @@ func (a *shelf) snapRelease(p mygo.Point) {
 	}
 }
 
-// snapConfirmTick checks the arrangement after the drag has settled. A
-// frame the window server (or the app) changed is set once more; after
-// snapConfirmMax re-applies the shelf accepts the window's own frame.
+// snapConfirmTick checks the arrangement after the drag has settled. The
+// window server may still be re-applying its own drag-time tile for a while
+// after the release, so a frame it overwrites is arranged again once it has
+// stopped moving; the shelf accepts the window's own frame only when the
+// whole check runs out of time.
 func (a *shelf) snapConfirmTick(now time.Time) {
 	c := a.snap.confirm
 	if c == nil || now.Before(c.at) {
 		return
 	}
+	done := func() {
+		c.win.Release()
+		a.snap.confirm = nil
+	}
 	f, ok := c.win.Frame()
-	if ok && snapFrameNear(f, c.target) {
-		c.win.Release()
-		a.snap.confirm = nil
+	if !ok || now.After(c.until) {
+		done()
 		return
 	}
-	if c.tries >= snapConfirmMax {
-		c.win.Release()
-		a.snap.confirm = nil
+	if snapFrameNear(f, c.target) {
+		// The frame has to hold for one gap: the server can still apply
+		// its tile a moment after accepting ours.
+		if c.nearAt.IsZero() {
+			c.nearAt = now
+		} else if now.Sub(c.nearAt) >= snapConfirmGap {
+			done()
+			return
+		}
+		c.at = now.Add(snapConfirmGap)
 		return
 	}
-	c.tries++
+	c.nearAt = time.Time{}
+	if c.haveLast && f != c.last {
+		// The server is still moving it: wait for it to settle.
+		c.last = f
+		c.at = now.Add(snapConfirmGap)
+		return
+	}
+	c.last, c.haveLast = f, true
 	c.at = now.Add(snapConfirmGap)
 	c.win.MoveResize(c.target, c.resize)
 }
