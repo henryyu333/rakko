@@ -90,6 +90,14 @@ func (a *shelf) settingsGeneralPage(c *ui.Context) {
 				busy := a.updateChecking || a.updateInstalling
 				settingsButton(c, "check-now", l.SettingsUpdateCheckNow(), false, func() { a.checkUpdates(true) }).Disabled(busy)
 			})
+			if a.updateInstalled && a.update != nil {
+				// The ready update lives here, not under the search bar:
+				// the restart is one click from where updates are managed.
+				settingsSep(c, "ready")
+				settingsRow(c, "ready", l.UpdateReady(), "", func() {
+					settingsButton(c, "restart", l.PanelRestart(), true, relaunchApp).Label(l.PanelRestartLabel())
+				})
+			}
 		})
 	})
 	settingsFootnote(c, "update-foot", l.SettingsUpdateFoot())

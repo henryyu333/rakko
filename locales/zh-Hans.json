@@ -156,6 +156,7 @@
   "updateDownloadingPercent": "正在下载更新 v{version} · {percent, number, ::group-off}%",
   "updateInstallFailed": "安装更新失败：{err}",
   "updateInstalled": "v{version} 已安装 · 重新启动 Rakko 后生效",
+  "updateReady": "新版本已就绪",
   "updateRestartToFinish": "重新启动 Rakko 完成更新",
   "updateInstalling": "正在安装更新（v{version}）…",
   "updateInstallingPercent": "正在安装更新（v{version} · {percent, number, ::group-off}%）",

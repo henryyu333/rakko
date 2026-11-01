@@ -1623,6 +1623,16 @@ func (msgs Messages) UpdateInstalled(version string) string {
 	return Catalog.Format(msgs.locale, "updateInstalled", map[string]any{"version": version})
 }
 
+// UpdateReady says "新版本已就绪"
+// in the language the app shows.
+func UpdateReady() string { return In(i18n.Locale()).UpdateReady() }
+
+// UpdateReady says "新版本已就绪"
+// in the language of msgs.
+func (msgs Messages) UpdateReady() string {
+	return Catalog.Format(msgs.locale, "updateReady", nil)
+}
+
 // UpdateRestartToFinish says "重新启动 Rakko 完成更新"
 // in the language the app shows.
 func UpdateRestartToFinish() string { return In(i18n.Locale()).UpdateRestartToFinish() }

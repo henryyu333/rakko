@@ -156,6 +156,7 @@
   "updateDownloadingPercent": "Downloading v{version} · {percent, number, ::group-off}%",
   "updateInstallFailed": "Could not install the update: {err}",
   "updateInstalled": "v{version} is installed · It takes effect when Rakko restarts",
+  "updateReady": "New Version Ready",
   "updateRestartToFinish": "Restart Rakko to Finish Updating",
   "updateInstalling": "Installing v{version}…",
   "updateInstallingPercent": "Installing v{version} · {percent, number, ::group-off}%",

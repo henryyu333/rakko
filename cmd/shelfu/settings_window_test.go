@@ -17,6 +17,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -25,6 +26,7 @@ import (
 
 	"shelf/internal/mac"
 	"shelf/internal/settings"
+	"shelf/locales"
 )
 
 // stubSettingsSeams replaces the app-level seams (login item, Shell.OpenPath,
@@ -664,5 +666,40 @@ func TestSettingsViewLiveTogglesSave(t *testing.T) {
 	}
 	if saved.LiveActivities.Charging || saved.LiveActivities.Headphones || saved.LiveActivities.Downloads {
 		t.Fatalf("the switches did not reach settings.json: %+v", saved.LiveActivities)
+	}
+}
+
+// The ready update shows in 通用 → 更新 with its restart button, and it does
+// not appear under the search bar.
+func TestUpdateReadinessLivesInSettings(t *testing.T) {
+	stubSettingsSeams(t, false, nil, nil)
+	relaunched := 0
+	old := relaunchApp
+	relaunchApp = func() { relaunched++ }
+	t.Cleanup(func() { relaunchApp = old })
+
+	a, view := newSettingsShelf(t)
+	a.update = &mygo.Update{Version: "9.9.9"}
+	a.updateInstalled = true
+	openSettingsPage(t, view, "通用")
+	if !view.HasText(locales.In("zh-Hans").UpdateReady()) {
+		t.Fatalf("the update readiness row is missing; texts %v", view.Texts())
+	}
+	clickVisible(t, view, locales.In("zh-Hans").PanelRestart())
+	if relaunched != 1 {
+		t.Fatalf("the restart button ran %d relaunches, want 1", relaunched)
+	}
+
+	// The search bar stays free of it.
+	bar, barView := levelShelf(t)
+	bar.visible = true
+	bar.update, bar.updateInstalled = &mygo.Update{Version: "9.9.9"}, true
+	barView.Frame()
+	barView.Frame()
+	for _, text := range barView.Texts() {
+		if strings.Contains(text, "9.9.9") || text == locales.In("zh-Hans").UpdateReady() ||
+			text == locales.In("zh-Hans").PanelRestart() {
+			t.Fatalf("the search bar shows the update prompt %q", text)
+		}
 	}
 }
