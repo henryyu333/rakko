@@ -2,17 +2,11 @@
 
 package main
 
-// The expanded panel follows the system appearance: dark shows pure black,
-// light shows dark frosted glass (a pure black band joins the hardware
-// notch, then a translucent dark material with the desktop blurred behind
-// it). Reduce Transparency always means pure black. Hover shapes, the drop
-// hint, the completion capsule and the live activities stay pure black at
-// all times: they hang off the notch and must read as hardware.
-//
-// Only the panel's own tiling is affected. The material itself is a system
-// NSVisualEffectView behind the window, framed to the shell every time the
-// window frame is applied (internal/mac), so the blur follows the shape
-// without a per-frame mask.
+// The expanded panel follows the system appearance: the glass frosts what
+// the window painted under it (a defined black), so the panel reads dark on
+// any desktop. Reduce Transparency always means pure black. Hover shapes,
+// the drop hint, the completion capsule and the live activities stay pure
+// black at all times: they hang off the notch and must read as hardware.
 
 import (
 	"time"
@@ -21,38 +15,25 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"shelf/internal/mac"
-	"shelf/internal/settings"
 )
 
 const appearancePoll = 250 * time.Millisecond
 
-// refreshAppearance re-reads the system appearance and Reduce Transparency
-// on a slow tick: the panel can change while it runs.
+// refreshAppearance re-reads Reduce Transparency on a slow tick: the panel
+// can change while it runs.
 func (a *shelf) refreshAppearance(now time.Time) {
 	if !a.appearanceAt.IsZero() && now.Sub(a.appearanceAt) < appearancePoll {
 		return
 	}
-	if a.appearanceAt.IsZero() {
-		// First read also seeds the frame's material decision.
-		a.appearanceAt = now
-	}
 	a.appearanceAt = now
-	dark, reduce := macSystemDark(), macReduceTransparency()
-	if dark != a.systemDark || reduce != a.reduceTrans {
-		a.systemDark, a.reduceTrans = dark, reduce
-		// The change reaches the open panel at once: the material is
-		// created, hidden or re-placed here, not on the next size change.
-		a.syncMaterial()
+	reduce := macReduceTransparency()
+	if reduce != a.reduceTrans {
+		a.reduceTrans = reduce
 		if a.win != nil {
 			a.win.Invalidate()
 		}
 	}
 }
-
-// glassNow reports whether the native backdrop material is shown. It never
-// is: the open panel draws mygo's own glass (panelFill), which frosts what
-// the window painted and needs no native view to follow the shell.
-func (a *shelf) glassNow() bool { return false }
 
 // panelFill is the shell's own paint. Hover shapes, the drop hint, the
 // completion capsule and the live activities stay pure black: they hang
@@ -82,53 +63,5 @@ func (a *shelf) panelFill(p *ui.Painter, path *ui.Path, body ui.Rect, botR float
 	}, 0)
 }
 
-// panelAppearanceIndex maps a saved appearance to the segmented control's
-// segment: 0 follows the system, 1 is black, 2 is glass.
-func panelAppearanceIndex(p settings.PanelAppearance) int {
-	switch p.Normalized() {
-	case settings.PanelAppearanceBlack:
-		return 1
-	case settings.PanelAppearanceGlass:
-		return 2
-	}
-	return 0
-}
-
-// panelAppearanceAt maps the segmented control's segment to a saved
-// appearance.
-func panelAppearanceAt(idx int) settings.PanelAppearance {
-	switch idx {
-	case 1:
-		return settings.PanelAppearanceBlack
-	case 2:
-		return settings.PanelAppearanceGlass
-	}
-	return settings.PanelAppearanceFollow
-}
-
-// setPanelAppearance saves the expanded panel's look and repaints an open
-// panel at once: the fill reads the setting on the next build, and the
-// material view is placed, hidden or shown here rather than on the next
-// size change.
-func (a *shelf) setPanelAppearance(p settings.PanelAppearance) {
-	p = p.Normalized()
-	if p == a.settings.PanelAppearance.Normalized() {
-		return
-	}
-	next := a.settings
-	next.PanelAppearance = p
-	if !a.applySettings(next) {
-		return
-	}
-	a.syncMaterial()
-	if a.win != nil {
-		a.win.Invalidate()
-	}
-}
-
-// macSystemDark and macReduceTransparency are seams so headless tests never
-// touch AppKit.
-var (
-	macSystemDark         = func() bool { return mac.SystemDark() }
-	macReduceTransparency = func() bool { return mac.ReduceTransparency() }
-)
+// macReduceTransparency is a seam so headless tests never touch AppKit.
+var macReduceTransparency = func() bool { return mac.ReduceTransparency() }

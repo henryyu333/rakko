@@ -195,56 +195,6 @@ func (msgs Messages) ShellStyleIsland() string {
 	return Catalog.Format(msgs.locale, "shellStyleIsland", nil)
 }
 
-// PanelAppearanceRow says "展开外观"
-// in the language the app shows.
-func PanelAppearanceRow() string { return In(i18n.Locale()).PanelAppearanceRow() }
-
-// PanelAppearanceRow says "展开外观"
-// in the language of msgs.
-func (msgs Messages) PanelAppearanceRow() string {
-	return Catalog.Format(msgs.locale, "panelAppearanceRow", nil)
-}
-
-// PanelAppearanceCaption says "跟随系统时深色纯黑、浅色半透明"
-// in the language the app shows.
-func PanelAppearanceCaption() string { return In(i18n.Locale()).PanelAppearanceCaption() }
-
-// PanelAppearanceCaption says "跟随系统时深色纯黑、浅色半透明"
-// in the language of msgs.
-func (msgs Messages) PanelAppearanceCaption() string {
-	return Catalog.Format(msgs.locale, "panelAppearanceCaption", nil)
-}
-
-// PanelAppearanceFollow says "跟随系统"
-// in the language the app shows.
-func PanelAppearanceFollow() string { return In(i18n.Locale()).PanelAppearanceFollow() }
-
-// PanelAppearanceFollow says "跟随系统"
-// in the language of msgs.
-func (msgs Messages) PanelAppearanceFollow() string {
-	return Catalog.Format(msgs.locale, "panelAppearanceFollow", nil)
-}
-
-// PanelAppearanceBlack says "纯黑"
-// in the language the app shows.
-func PanelAppearanceBlack() string { return In(i18n.Locale()).PanelAppearanceBlack() }
-
-// PanelAppearanceBlack says "纯黑"
-// in the language of msgs.
-func (msgs Messages) PanelAppearanceBlack() string {
-	return Catalog.Format(msgs.locale, "panelAppearanceBlack", nil)
-}
-
-// PanelAppearanceGlass says "半透明"
-// in the language the app shows.
-func PanelAppearanceGlass() string { return In(i18n.Locale()).PanelAppearanceGlass() }
-
-// PanelAppearanceGlass says "半透明"
-// in the language of msgs.
-func (msgs Messages) PanelAppearanceGlass() string {
-	return Catalog.Format(msgs.locale, "panelAppearanceGlass", nil)
-}
-
 // SettingsBrokenTitle says "settings.json 无法读取"
 // in the language the app shows.
 func SettingsBrokenTitle() string { return In(i18n.Locale()).SettingsBrokenTitle() }
@@ -5977,11 +5927,11 @@ func (msgs Messages) SettingsShapeGroup() string {
 	return Catalog.Format(msgs.locale, "settingsShapeGroup", nil)
 }
 
-// SettingsNotchFoot says "减少透明度时半透明也画成纯黑；灵动岛样式始终纯黑。"
+// SettingsNotchFoot says "减少透明度时面板画成纯黑；灵动岛样式始终纯黑。"
 // in the language the app shows.
 func SettingsNotchFoot() string { return In(i18n.Locale()).SettingsNotchFoot() }
 
-// SettingsNotchFoot says "减少透明度时半透明也画成纯黑；灵动岛样式始终纯黑。"
+// SettingsNotchFoot says "减少透明度时面板画成纯黑；灵动岛样式始终纯黑。"
 // in the language of msgs.
 func (msgs Messages) SettingsNotchFoot() string {
 	return Catalog.Format(msgs.locale, "settingsNotchFoot", nil)

@@ -321,7 +321,6 @@ func (a *shelf) ready(show bool) {
 // test builds the same window, so the ⌃⌥V focus behaviour is checked
 // against what production shows.
 func (a *shelf) newNotchWindow() {
-	a.material, a.materialWin = nil, 0
 	a.win = mygo.NewWindow(mygo.WindowOptions{
 		Title: appName, Width: sheetW, Height: sheetH,
 		Hidden: true, Frameless: true, Transparent: true, DisableShadow: true,

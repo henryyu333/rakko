@@ -129,11 +129,8 @@ type shelf struct {
 	music                                                       musicControls // the player's seek / volume rails (music_controls.go)
 	fx                                                          shellMotion   // the shell drawn last, for the window frame
 	ignoringMouse                                               bool
-	watchingPointer                                             bool               // registered with the process-wide pointer gate
-	material                                                    *mac.ShellMaterial // light appearance's backdrop material
-	materialWin                                                 uintptr            // the window that material belongs to
-	materialAt                                                  materialKey        // the material's last applied box
-	systemDark, reduceTrans                                     bool               // cached system appearance (refreshed on a slow tick)
+	watchingPointer                                             bool // registered with the process-wide pointer gate
+	reduceTrans                                                 bool // cached Reduce Transparency (refreshed on a slow tick)
 	appearanceAt                                                time.Time
 	thumbnails                                                  map[string]*ui.Bitmap
 	shake                                                       shakeDetector // 摇晃召唤：拖拽中左右晃动检测

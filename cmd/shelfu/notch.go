@@ -222,100 +222,6 @@ func (a *shelf) desiredFrame() mygo.Rectangle {
 	return mygo.Rectangle{X: a.stripCenter() - w/2, Y: a.y, Width: w, Height: h}
 }
 
-// Use a single native setFrame plus a top-left pin so AppKit cannot leave
-// the overlay a menu-bar-height below the hardware notch.
-// materialCorner is the shell's bottom radius for the backdrop material:
-// the same one the shell path draws — the overview's 22 through a page's
-// 24 by the level progress, capped at half the height when the shell is the
-// peek capsule.
-func materialCorner(shellH, levelK float32) float64 {
-	corner := float64(homeRadius) + (float64(sheetRadius)-float64(homeRadius))*float64(levelK)
-	return math.Min(float64(shellH)/2, corner)
-}
-
-// materialKey is the box and visibility last applied to the backdrop
-// material: an unchanged key skips the native calls while nothing moves.
-type materialKey struct {
-	win           uintptr
-	x, y, w, h, r float64
-	on            bool
-}
-
-// syncMaterial places the light appearance's backdrop material on the
-// shell the window now holds: the frame was just applied, so the view
-// lands exactly under the drawn shell in the same frame.
-// onSyncMaterial runs at the top of every syncMaterial call; tests count
-// the calls without a window server. onMaterialFrame reports each applied
-// box with the shell and window it was computed for: evidence for the
-// frames where the shell moves and the window does not.
-var (
-	onSyncMaterial  func()
-	onMaterialFrame func(k materialKey, shellW, shellH float32, winW, winH int)
-)
-
-func (a *shelf) syncMaterial() {
-	if onSyncMaterial != nil {
-		onSyncMaterial()
-	}
-	if a.winH == 0 {
-		return
-	}
-	// A window that was destroyed and rebuilt (a test's second surface)
-	// left the material view dangling: it belongs to the old content view.
-	if a.material != nil && a.materialWin != a.winH {
-		a.material = nil
-	}
-	if !a.glassNow() {
-		if a.material != nil {
-			a.material.SetVisible(false)
-		}
-		a.materialAt = materialKey{}
-		return
-	}
-	if a.material == nil {
-		// The window's own vibrancy call installs the effect view (mygo
-		// knows how); the material then gets the shell's frame below.
-		a.win.SetVibrancy(mygo.VibrancyUnderWindow)
-		a.material = mac.NewShellMaterial(a.winH)
-		a.materialWin = a.winH
-		if a.material == nil {
-			// No material view: fall back to solid black rather than
-			// pretending a translucent fill is a blur.
-			a.win.SetVibrancy(mygo.VibrancyNone)
-			a.reduceTrans = true
-			return
-		}
-		a.material.SetVisible(false)
-	}
-	// The frame the window is about to have: view() calls this before the
-	// native resize lands, so the material is placed for the same box.
-	r := a.desiredFrame()
-	fw, fh := float64(r.Width), float64(r.Height)
-	sw, sh := float64(a.fx.w), float64(a.fx.h)
-	if sw <= 0 || sh <= 0 {
-		a.material.SetVisible(false)
-		return
-	}
-	top := float64(a.sheetTop())
-	if a.shellUp() {
-		top = float64(a.shellTopLocal(a.fx.h, a.fx.openK))
-	}
-	// The frame is symmetric about the strip, so an upward panel clamped
-	// away from the island's axis shifts the material by the same delta.
-	dx := float64(a.shellCentreX(a.fx.openK) - a.stripCenter())
-	radius := materialCorner(a.fx.h, a.fx.levelK)
-	key := materialKey{win: a.winH, x: (fw-sw)/2 + dx, y: fh - top - sh, w: sw, h: sh, r: radius, on: true}
-	if key == a.materialAt {
-		return
-	}
-	a.materialAt = key
-	a.material.SetFrame(key.x, key.y, key.w, key.h, key.r)
-	a.material.SetVisible(true)
-	if onMaterialFrame != nil {
-		onMaterialFrame(key, a.fx.w, a.fx.h, r.Width, r.Height)
-	}
-}
-
 func (a *shelf) syncWindowFrame() {
 	if a.win == nil || a.settingFrame {
 		return
@@ -344,7 +250,6 @@ func (a *shelf) syncWindowFrame() {
 	defer func() { a.settingFrame = false }()
 	mac.SetWindowFrame(a.winH, r.X, r.Y, r.Width, r.Height)
 	a.frame = r
-	a.syncMaterial()
 	// The shell moved with the window, so the pointer may now be on it (a
 	// display change recentres the overlay under a still pointer) or off
 	// it. Re-ask before the frame that will draw the new position.

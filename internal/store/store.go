@@ -100,10 +100,6 @@ type Store struct {
 	Root  string `json:"-"`
 	lock  *os.File
 
-	// fresh marks a data directory that had no history when it was opened:
-	// the first run, and only it, shows the welcome card.
-	fresh bool
-
 	// migrationBlocked stops Save when no reliable pre-migration backup
 	// could be kept. migrateBackup/migrateBytes describe the recovery
 	// copy that must still be intact before the first post-migration
@@ -120,32 +116,6 @@ type Store struct {
 // MigrationError returns why writes were disabled after a failed
 // pre-migration backup, or nil when saving is available. Fixing the
 // condition and reopening the store clears it.
-// Fresh reports whether this data directory had no history when it was
-// opened.
-func (s *Store) Fresh() bool { return s.fresh }
-
-// hasUserData reports whether the data directory holds anything of the
-// user's besides the named entry: a first run creates nothing before the
-// store opens, so any other entry means an earlier use. A directory that
-// does not exist yet is a first run — startup never creates it. Only an
-// error that could hide existing files (permissions, I/O) is read as "an
-// existing user", the conservative answer.
-func hasUserData(root, except string) bool {
-	entries, err := os.ReadDir(root)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false
-		}
-		return true
-	}
-	for _, e := range entries {
-		if e.Name() != except {
-			return true
-		}
-	}
-	return false
-}
-
 func (s *Store) MigrationError() error {
 	if s == nil {
 		return nil
@@ -223,10 +193,6 @@ func Open(root string) (*Store, error) {
 	if resolved, rerr := filepath.EvalSymlinks(root); rerr == nil {
 		root = resolved
 	}
-	// Freshness is decided before this call creates anything: a first run
-	// leaves nothing of the user's behind, so an empty folder (or no
-	// folder at all) is a new user and any existing entry is an old one.
-	firstRun := !hasUserData(root, "")
 	if err := os.MkdirAll(filepath.Join(root, imagesDirName), 0o700); err != nil {
 		return nil, fmt.Errorf("store: creating data directories: %w", err)
 	}
@@ -260,11 +226,6 @@ func Open(root string) (*Store, error) {
 	if err != nil {
 		if os.IsNotExist(err) {
 			ok = true
-			// Fresh only when the folder held nothing at all before this
-			// open: settings.json, layout.json, ui.json, images/ or a quota
-			// cache all belong to someone who used ShelfU before, even if
-			// the history itself is empty or was lost.
-			s.fresh = firstRun
 			s.cleanOrphanedConverted()
 			return s, nil
 		}

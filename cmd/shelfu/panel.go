@@ -547,7 +547,6 @@ func (a *shelf) view(c *ui.Context) {
 		a.fx.peek, a.fx.openMoving, a.fx.sizeMoving, a.fb.drawn = false, false, false, false
 		a.fx.openK, a.fx.peekK = 0, 0
 		a.snap.drawn = false // the fold out of the snap box is over
-		a.syncMaterial()     // nothing is drawn: the material hides with it
 		a.fb.clearExpired(now, true)
 		if a.island {
 			zone.Label(loc(c).PanelExpand())
@@ -885,11 +884,6 @@ func (a *shelf) view(c *ui.Context) {
 			})
 		})
 	})
-	// The light appearance's backdrop material follows the shell's box on
-	// every drawn frame: during a spring the window may not change size at
-	// all while the shell does, and an appearance switch must reach it
-	// while the panel is open.
-	a.syncMaterial()
 	// What this frame drew decides the next one's retraction spring and
 	// whether the capsule's pill takes clicks. Once the folded-back shell
 	// has fully retracted, the expired text is dropped for good.

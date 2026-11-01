@@ -143,7 +143,7 @@ func TestAIUsageLoad(t *testing.T) {
 func TestSaveRoundTrips(t *testing.T) {
 	dir := t.TempDir()
 	want := Settings{RetentionDays: 7, ClipboardLimit: 12, ExcludedApps: []string{"com.example.one", "com.example.two"},
-		ShellStyle: ShellStyleIsland, PanelAppearance: PanelAppearanceGlass}
+		ShellStyle: ShellStyleIsland}
 	if err := Save(dir, want); err != nil {
 		t.Fatal(err)
 	}
@@ -282,5 +282,22 @@ func TestShortcutSettingsLoad(t *testing.T) {
 	loaded, err = Load(dir)
 	if err != nil || loaded.Shortcuts != Default().Shortcuts {
 		t.Fatalf("missing shortcuts did not default: %+v, %v", loaded.Shortcuts, err)
+	}
+}
+
+// A settings.json from a build that still saved panelAppearance loads as
+// usual: the retired key is ignored, never an error.
+func TestRetiredPanelAppearanceIsIgnored(t *testing.T) {
+	dir := t.TempDir()
+	body := `{"panelAppearance": "glass", "shellStyle": "island", "clipboardLimit": 12}`
+	if err := os.WriteFile(filepath.Join(dir, FileName), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if s.ShellStyle != ShellStyleIsland || s.ClipboardLimit != 12 {
+		t.Fatalf("the saved keys around it were lost: %+v", s)
 	}
 }
