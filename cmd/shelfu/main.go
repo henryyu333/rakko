@@ -205,6 +205,9 @@ func startupLoc(dirs ...string) locales.Messages {
 func (a *shelf) ready(show bool) {
 	a.locale = mygo.App.Locale()
 	a.newNotchWindow()
+	// Pay the index's per-process setup now, so the first search of the
+	// session is as fast as the ones after it.
+	a.warmSpotlight()
 	a.stopMouseObservation = mac.ObserveMouseDown(a.win.NativeHandle(), func(inside bool, button int) {
 		a.mouseDown(inside, button, mygo.Screen.CursorScreenPoint())
 	})

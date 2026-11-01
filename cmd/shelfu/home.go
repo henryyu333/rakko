@@ -394,7 +394,9 @@ func (a *shelf) resultsView(c *ui.Context, r ui.Rect, opacity float32) {
 				})
 				ui.Text(c, hit.title).SingleLine().Grow(1).MinWidth(0).FontSize(13).FontWeight(600).TextColor(ink)
 				if hit.sub != "" {
-					ui.Text(c, hit.sub).SingleLine().FontSize(11.5).TextColor(ink3)
+					// A hit's folder can be deep; it takes at most 45% of
+					// the row and ellipsizes, so the name keeps the rest.
+					ui.Text(c, hit.sub).SingleLine().FontSize(11.5).TextColor(ink3).MaxWidthPercent(45)
 				}
 			})
 			if row.Clicked() {

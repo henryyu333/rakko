@@ -105,7 +105,16 @@ func (a *shelf) homeQueryChanged() {
 // UI thread and redraw, so the sheet grows while the index is still
 // gathering.
 func (a *shelf) startHomeSpot(q string, seq int) {
+	started := time.Now()
+	if spotDebug {
+		log.Printf("spotlight %q: query started %v after the last keystroke",
+			q, time.Since(a.homeSpot.typedAt).Round(time.Millisecond))
+	}
 	a.homeSpot.cancel = spotlightStart(q, 0, func(batch []mac.SpotlightHit) {
+		if spotDebug {
+			log.Printf("spotlight %q: %d hits arrived %v after the query started",
+				q, len(batch), time.Since(started).Round(time.Millisecond))
+		}
 		a.onUI(func() {
 			if a.homeSpot.seq != seq {
 				return
