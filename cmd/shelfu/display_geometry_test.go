@@ -63,8 +63,10 @@ func TestSecondaryDisplayKeepsStripAtItsOwnTop(t *testing.T) {
 			a.visible = true
 			panel := a.desiredFrame()
 			sw, _ := a.frameRoom(sheetW, float32(sheetH+a.sheetTop()))
-			if panel.Y != a.dispBounds.Y || panel.Width != sw || panel.Height != sheetH+a.sheetTop() {
-				t.Fatalf("expanded panel %+v lost the display-top anchor, want %dx%d", panel, sw, sheetH+a.sheetTop())
+			// The page capsule hangs under the sheet.
+			wantH := sheetH + a.sheetTop() + navGap + navH + 2
+			if panel.Y != a.dispBounds.Y || panel.Width != sw || panel.Height != wantH {
+				t.Fatalf("expanded panel %+v lost the display-top anchor, want %dx%d", panel, sw, wantH)
 			}
 			if panel.X+panel.Width/2 != cx {
 				t.Fatalf("expanded panel %+v not centred on notch %d", panel, cx)

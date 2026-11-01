@@ -150,8 +150,12 @@ func (a *shelf) desiredFrame() mygo.Rectangle {
 		// Under the shell hang the results sheet and the page capsule: the
 		// frame holds them at the drawn and the settled size, and the
 		// level's overshoot room below them while a spring is in flight.
-		if !a.shellUp() {
-			below := max(th+a.belowExtent(th, a.resultsTargetH()), a.fx.h+a.belowExtent(a.fx.h, a.fx.resultsH))
+		// An upward panel hangs them under the island's row, where its
+		// shell's bottom edge is.
+		below := max(th+a.belowExtent(th, a.resultsTargetH()), a.fx.h+a.belowExtent(a.fx.h, a.fx.resultsH))
+		if a.shellUp() {
+			h = max(h, a.upShellFloor()-y+int(math.Ceil(float64(below-th))))
+		} else {
 			h = max(h, top+int(math.Ceil(float64(below))))
 			if a.fx.openMoving {
 				h = max(h, roomH+int(math.Ceil(float64(below-th))))
@@ -1047,31 +1051,6 @@ func (a *shelf) escape() {
 	a.hide(hideExplicit)
 }
 
-// leaveFocusMode gives up the keyboard the clipboard search took: the
-// window drops back to the menu-bar level, the field stops being focused
-// and the panel holds Esc/Space again like any other open page. The
-// keyboard goes back to the app the user came from at the same moment —
-// the panel stays open, so a later close has nothing left to hand back and
-// must not lose the remembered app on the way out.
-func (a *shelf) leaveFocusMode() {
-	if !a.focusMode {
-		return
-	}
-	a.focusMode = false
-	prev := a.prevAppPID
-	a.prevAppPID = 0
-	a.syncWindowFrame()
-	if a.win != nil {
-		// Headless surfaces (tests) have no app to register keys with.
-		a.holdKeys()
-		a.win.Invalidate()
-	}
-	// The panel stays open, so the hand-back must not hide this app: the
-	// close path's fallback (resignSelf) would take the notch window with it
-	// when the remembered app is gone. Only the close may resign.
-	a.handBackApp(prev)
-}
-
 // hide collapses the shelf. exit decides whether the remembered app gets
 // the keyboard back (see shouldRestoreApp); the remembered pid is always
 // cleared so a later explicit hide cannot reactivate it a second time.
@@ -1115,6 +1094,9 @@ func (a *shelf) hide(exit hideExit) {
 	a.animationFrom, a.animationStart = a.progress, time.Now()
 	a.peekFrom, a.peekAnimStart = a.peekProgress, time.Now()
 	a.prevAppPID = 0
+	// The keyboard went back with the close: a reopen before the fade ends
+	// must open the search bar, not the clipboard search it was left on.
+	a.focusMode = false
 	a.releaseKeys()
 	// 当前拖拽不再次触发；松开鼠标或出现新会话后解除。
 	a.suppressed = true

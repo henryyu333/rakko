@@ -643,19 +643,19 @@ func TestLanguageSwitchAppliesWithoutRestart(t *testing.T) {
 	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame()
 	view.Frame()
-	if !view.HasText("托盘 1 项") {
-		t.Fatalf("the source language does not say the counts; texts %v", view.Texts())
+	if !view.HasText(locales.In("zh-Hans").HomeSearch()) {
+		t.Fatalf("the source language does not say the search placeholder; texts %v", view.Texts())
 	}
 	view.SetLocale("en")
 	view.Frame()
 	view.Frame()
-	if view.HasText("托盘 1 项") || !view.HasText(locales.In("en").PageTray()) {
+	if view.HasText(locales.In("zh-Hans").HomeSearch()) || !view.HasText(locales.In("en").PageTray()) {
 		t.Fatalf("the view did not switch to English; texts %v", view.Texts())
 	}
 	view.SetLocale("zh-Hans")
 	view.Frame()
 	view.Frame()
-	if !view.HasText("托盘 1 项") {
+	if !view.HasText(locales.In("zh-Hans").HomeSearch()) {
 		t.Fatalf("the view did not switch back; texts %v", view.Texts())
 	}
 

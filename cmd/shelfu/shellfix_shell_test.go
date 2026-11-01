@@ -197,6 +197,10 @@ func TestLevelSwitchUnderStillPointerKeepsTheMouse(t *testing.T) {
 		t.Fatal("the overview's transparent margin takes the mouse before the switch")
 	}
 	a.setLevel(2)
+	// The gate answers for the shell the last frame drew; put the settled
+	// sheet there without waiting for the spring.
+	a.fx.w, a.fx.h, a.fx.levelK = sheetW, sheetH, 1
+	a.syncMousePassThrough()
 	if a.ignoringMouse {
 		t.Fatal("the sheet ignores a press under a still pointer it now covers")
 	}
@@ -206,11 +210,12 @@ func TestLevelSwitchUnderStillPointerKeepsTheMouse(t *testing.T) {
 	if !a.ignoringMouse {
 		t.Fatal("the transparent margin beside the sheet takes the mouse")
 	}
-	// Below the sheet's bottom edge it stays click-through too.
-	cursorPoint = func() mygo.Point { return mygo.Point{X: a.stripCenter(), Y: a.y + sheetH + 2} }
+	// Below the sheet's bottom edge, beside the page capsule, it stays
+	// click-through too.
+	cursorPoint = func() mygo.Point { return mygo.Point{X: a.stripCenter() + 150, Y: a.y + sheetH + 2} }
 	a.syncPointerGate()
 	if !a.ignoringMouse {
-		t.Fatal("a press below the sheet is swallowed by the overlay")
+		t.Fatal("a press beside the capsule is swallowed by the overlay")
 	}
 }
 
@@ -224,9 +229,14 @@ func TestIslandOpeningFramesStayOnTheIslandBox(t *testing.T) {
 	view.Frame() // the idle frame the spring starts from
 	a.visible = true
 	iw, ih := islandFrame()
+	ih = max(ih, panelFrameH(homeShellH)) // the page capsule hangs under the shell
+	_, roomH := islandFrame()
+	ih = max(ih, roomH+navGap+navH+2) // the opening spring's room below
 	for i := range 120 {
-		if f := a.desiredFrame(); f.Width > iw || f.Height > ih {
-			t.Fatalf("frame %d: window %d×%d exceeds the island's %d×%d", i, f.Width, f.Height, iw, ih)
+		// Two points of tolerance: the open spring overshoots the settled
+		// shell by a fraction before it comes to rest.
+		if f := a.desiredFrame(); f.Width > iw || f.Height > ih+2 {
+			t.Fatalf("frame %d: window %d×%d exceeds the island's %d×%d", i, f.Width, f.Height, iw, ih+2)
 		}
 		if f := a.desiredFrame(); f.Width < int(a.fx.w+0.5)+2*earR || f.Height < int(a.fx.h+0.5) {
 			t.Fatalf("frame %d: window %d×%d clips the shell %.1f×%.1f", i, f.Width, f.Height, a.fx.w, a.fx.h)
@@ -237,8 +247,8 @@ func TestIslandOpeningFramesStayOnTheIslandBox(t *testing.T) {
 	if a.fx.openMoving {
 		t.Fatal("the opening spring never came to rest")
 	}
-	if f := a.desiredFrame(); f.Width != iw || f.Height != homeShellH {
-		t.Fatalf("settled island frame = %d×%d, want %d×%d", f.Width, f.Height, iw, homeShellH)
+	if f := a.desiredFrame(); f.Width != iw || f.Height != panelFrameH(homeShellH) {
+		t.Fatalf("settled island frame = %d×%d, want %d×%d", f.Width, f.Height, iw, panelFrameH(homeShellH))
 	}
 }
 

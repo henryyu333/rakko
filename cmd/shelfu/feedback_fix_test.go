@@ -208,6 +208,11 @@ func TestCapsuleToastKeepsItsClockAcrossAPanelVisit(t *testing.T) {
 	// the visit was brief: seen time resets to now
 	a.statusSeen, a.statusSeenAt = 0, time.Now()
 	a.hide(hideExplicit)
+	// hide() stamps the close on the wall clock; the tester's clock only
+	// moves on Advance, and under -race the frames take longer than the
+	// advance does. Retire the fade on the tester's clock explicitly, or
+	// the panel reads as still closing and the capsule never draws.
+	a.closeAt = view.Now().Add(-2 * closeFade)
 	a.progress = 0
 	view.Frame()
 	view.Advance(700 * time.Millisecond)
@@ -549,12 +554,13 @@ func TestOpeningFrameUsesThePanelSpring(t *testing.T) {
 	f := a.desiredFrame()
 	// The panel's own spring overshoot (≤1.5%) is what the frame keeps,
 	// not the capsule's 4.5% — the extra click-catching strip stays tiny.
-	want := int(math.Ceil(float64(sheetH)*(1+panelOpenOvershoot))) + 2
+	// The page capsule hangs under the sheet in every state.
+	want := int(math.Ceil(float64(sheetH)*(1+panelOpenOvershoot))) + 2 + navGap + navH + 2
 	if f.Height != want {
 		t.Fatalf("in-flight window height %d, want %d", f.Height, want)
 	}
 	// A capsule-scale overshoot would have asked for noticeably more.
-	old := int(math.Ceil(float64(sheetH)*(1+openOvershoot))) + 2
+	old := int(math.Ceil(float64(sheetH)*(1+openOvershoot))) + 2 + navGap + navH + 2
 	if f.Height >= old {
 		t.Fatalf("in-flight window still keeps the capsule's margin: %d >= %d", f.Height, old)
 	}

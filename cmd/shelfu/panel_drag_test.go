@@ -60,15 +60,12 @@ func bandPoint(a *shelf, x, y int) mygo.Point {
 	return mygo.Point{X: place.X + x, Y: place.Y + y}
 }
 
-// requireBandDrawn fails unless the tester has drawn the band and its
-// controls, which is what a press classifies against.
+// requireBandDrawn fails unless the tester has drawn the band, which is
+// what a press classifies against.
 func requireBandDrawn(t *testing.T, a *shelf) {
 	t.Helper()
 	if a.bandBox.Width != sheetW || a.bandBox.Height != bandH {
 		t.Fatalf("band box = %+v, want %d×%d", a.bandBox, sheetW, bandH)
-	}
-	if len(a.bandHits) == 0 {
-		t.Fatal("the band recorded no controls")
 	}
 	if !a.bandBlank(bandPoint(a, sheetW/2, bandH/2)) {
 		t.Fatal("the band's middle is not blank")
@@ -125,22 +122,24 @@ func TestPanelDragMovesTheIslandAndSaves(t *testing.T) {
 	}
 }
 
-// A press on a page icon, the settings button or the page below the band
+// A press on the band's running-job chip or on the page below the band
 // never starts a move: the island keeps its place however far the pointer
 // travels.
 func TestPanelDragIgnoresTheBandControlsAndThePage(t *testing.T) {
 	a, _ := panelDragShelf(t, 2, pageTray, settings.IslandPos{})
+	a.modules = []module{&fakeActivity{label: "进行中", isLive: true}}
+	view := ui.NewTester(a.view, sheetW, panelTestH)
+	view.Frame()
+	view.Frame()
 	requireBandDrawn(t, a)
 	place := a.panelPlacement()
 	before := a.islandSpotNow()
 	start := bandPoint(a, 0, 0)
-	first, last := a.bandHits[0], a.bandHits[len(a.bandHits)-1]
 	cases := []struct {
 		name string
 		r    mygo.Rectangle
 	}{
-		{"page icon", first},
-		{"settings button", last},
+		{"running job chip", a.bandHits[0]},
 	}
 	for _, tc := range cases {
 		p := mygo.Point{X: start.X + tc.r.X + tc.r.Width/2, Y: start.Y + tc.r.Y + tc.r.Height/2}
@@ -319,7 +318,7 @@ func TestPanelDragDoesNotExistOnTheNotchShell(t *testing.T) {
 	if a.island {
 		t.Fatal("the notched screen on the notch style drew the island")
 	}
-	a.visible, a.level, a.progress = true, 1, 1
+	a.visible, a.level, a.progress = true, 2, 1
 	a.fx.w, a.fx.h = a.panelBox()
 	a.fx.openK = 1
 	origReg, origUnreg := registerKey, unregisterKey

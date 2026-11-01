@@ -348,45 +348,6 @@ func TestClipboardClearHidesCaptureFromClipboardPageOnly(t *testing.T) {
 // housing — never over it — and the page content starts below the notch.
 // While the clipboard search holds the keyboard the window drops under the
 // menu bar, so the bar moves below it.
-func TestBandFlanksTheNotch(t *testing.T) {
-	s, err := store.Open(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	if err := s.AddText("有内容"); err != nil {
-		t.Fatal(err)
-	}
-	const notchW, notchH = 180, 32
-	a := &shelf{store: s, level: 2, topInset: notchH, notchW: notchW, notchH: notchH, thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{}}
-	view := ui.NewTester(a.view, sheetW, panelTestH)
-	housingL := float32(sheetW-notchW) / 2
-	housingR := housingL + notchW
-	for _, label := range []string{"设置", "总览", "托盘", "剪贴板", "工具"} {
-		r, ok := view.Find(label)
-		if !ok {
-			t.Fatalf("band entry %q missing", label)
-		}
-		if r.Y+r.H > notchH {
-			t.Fatalf("band entry %q at %+v leaves the notch band", label, r)
-		}
-		if r.X+r.W > housingL && r.X < housingR {
-			t.Fatalf("band entry %q at %+v sits under the camera housing [%v, %v]", label, r, housingL, housingR)
-		}
-	}
-	if r, ok := view.Find("清空"); !ok || r.Y < notchH {
-		t.Fatalf("the page's 清空 must sit below the notch: %+v %v", r, ok)
-	}
-	// The page icons live in the band, beside the housing.
-	if err := view.Click("剪贴板"); err != nil || a.tab != pageClipboard {
-		t.Fatalf("the band's page icon must switch pages: %v tab=%s", err, a.tab)
-	}
-	a.focusMode = true
-	view.Frame()
-	if r, ok := view.Find("设置"); !ok || r.Y < notchH+headerTopGap {
-		t.Fatalf("with the keyboard taken, 设置 must move below the menu bar: %+v %v", r, ok)
-	}
-}
 
 // The sheet's left ear holds the first chipMax live modules; the island
 // has no activity chips at all (its mini player carries the track).
@@ -429,15 +390,16 @@ func (f *fakeActivity) chip(c *ui.Context) ui.Element {
 	return box
 }
 
-// Resting on an ear icon shows its name in a tip the user can read: text
-// that stands out from the tip's own fill (regression: the panel theme's
-// transparent background left the text invisible on a blank white chip).
-func TestEarIconTooltipIsReadable(t *testing.T) {
-	a := &shelf{topInset: 32, notchW: 180, notchH: 32}
+// Resting on a capsule button shows its name in a tip the user can read:
+// text that stands out from the tip's own fill (regression: the panel
+// theme's transparent background left the text invisible on a blank white
+// chip).
+func TestCapsuleTooltipIsReadable(t *testing.T) {
+	a := &shelf{visible: true, level: 1, topInset: 32, notchW: 180, notchH: 32}
 	view := ui.NewTester(a.view, sheetW, panelTestH)
 	r, ok := view.Find("剪贴板")
 	if !ok {
-		t.Fatal("clipboard ear icon missing")
+		t.Fatalf("clipboard capsule button missing; texts %v", view.Texts())
 	}
 	before := view.Image()
 	view.Move(r.X+r.W/2, r.Y+r.H/2)
@@ -492,11 +454,11 @@ func TestNotchPeekClickExpandsShelf(t *testing.T) {
 	}
 	a.progress = 1 // 展开动画在无窗口测试里不推进，直接到位。
 	view.Frame()
-	if _, ok := view.Find("收起"); ok {
-		t.Fatal("the expanded shelf still draws a collapse button")
+	if _, ok := view.Find("收起"); !ok {
+		t.Fatalf("the expanded shelf has no collapse button in its capsule: %v", view.Texts())
 	}
-	if !view.HasText("最近放入") {
-		t.Fatalf("the expanded shelf is not the overview: %v", view.Texts())
+	if !view.HasText("搜索") {
+		t.Fatalf("the expanded shelf is not the search bar: %v", view.Texts())
 	}
 }
 
@@ -773,6 +735,10 @@ func TestPinBadgesStayInsideTheirTiles(t *testing.T) {
 func islandFrame() (int, int) { return openFrameRoom(homeShellW, homeShellH) }
 func sheetFrame() (int, int)  { return openFrameRoom(sheetW, sheetH) }
 
+// panelFrameH is the window height for a shell h tall: the shell plus the
+// page capsule hung under it (gap, capsule, two points of room).
+func panelFrameH(h int) int { return h + navGap + navH + 2 }
+
 // The shell has exactly two sizes, whatever the pages hold: the overview's
 // 440 × 156 and a page's 440 × 250. Rows and live activities change the
 // content inside the fixed box, never the frame.
@@ -795,8 +761,8 @@ func TestPanelSizeIsFixedPerLevel(t *testing.T) {
 	}
 	short := a.desiredFrame()
 	iw, _ := islandFrame()
-	if short.Width != iw || short.Height != homeShellH {
-		t.Fatalf("empty overview frame = %d×%d, want %d×%d", short.Width, short.Height, iw, homeShellH)
+	if short.Width != iw || short.Height != panelFrameH(homeShellH) {
+		t.Fatalf("empty search bar frame = %d×%d, want %d×%d", short.Width, short.Height, iw, panelFrameH(homeShellH))
 	}
 	add(gridCols * 4)
 	if got := a.desiredFrame(); got != short {
@@ -805,8 +771,8 @@ func TestPanelSizeIsFixedPerLevel(t *testing.T) {
 	a.setLevel(2)
 	sheet := a.desiredFrame()
 	sw, _ := sheetFrame()
-	if sheet.Width != sw || sheet.Height != sheetH {
-		t.Fatalf("sheet frame = %d×%d, want %d×%d", sheet.Width, sheet.Height, sw, sheetH)
+	if sheet.Width != sw || sheet.Height != panelFrameH(sheetH) {
+		t.Fatalf("sheet frame = %d×%d, want %d×%d", sheet.Width, sheet.Height, sw, panelFrameH(sheetH))
 	}
 	add(gridCols)
 	a.settings.IslandNowPlaying = true
@@ -826,8 +792,8 @@ func TestPanelSizeIsFixedPerLevel(t *testing.T) {
 	// be a transparent strip over the menu-bar icons.
 	a.fx.openMoving = true
 	iw, ih := islandFrame()
-	if got := a.desiredFrame(); got.Width != iw || got.Height != ih {
-		t.Fatalf("opening overview frame = %+v, want the overview's in-flight %d×%d", got, iw, ih)
+	if got := a.desiredFrame(); got.Width != iw || got.Height < ih {
+		t.Fatalf("opening search bar frame = %+v, want at least the in-flight %d×%d", got, iw, ih)
 	}
 	a.fx.openMoving = false
 }
@@ -949,8 +915,8 @@ func TestPanelFrameFollowsTheLevel(t *testing.T) {
 	a := &shelf{visible: true, level: 1}
 	a.x, a.y = 475, 0
 	iw, _ := islandFrame()
-	if f := a.desiredFrame(); f.Width != iw || f.Height != homeShellH {
-		t.Fatalf("open island frame = %d×%d, want the island's %d×%d", f.Width, f.Height, iw, homeShellH)
+	if f := a.desiredFrame(); f.Width != iw || f.Height != panelFrameH(homeShellH) {
+		t.Fatalf("open island frame = %d×%d, want the island's %d×%d", f.Width, f.Height, iw, panelFrameH(homeShellH))
 	}
 	// Mid-way back from the sheet the drawn shell is still wide.
 	a.fx.w = homeShellW + (sheetW-homeShellW)*0.5
@@ -960,8 +926,8 @@ func TestPanelFrameFollowsTheLevel(t *testing.T) {
 	a.fx.w = 0
 	a.setLevel(2)
 	sw, _ := sheetFrame()
-	if f := a.desiredFrame(); f.Width != sw || f.Height != sheetH {
-		t.Fatalf("sheet frame = %d×%d, want the sheet's %d×%d", f.Width, f.Height, sw, sheetH)
+	if f := a.desiredFrame(); f.Width != sw || f.Height != panelFrameH(sheetH) {
+		t.Fatalf("sheet frame = %d×%d, want the sheet's %d×%d", f.Width, f.Height, sw, panelFrameH(sheetH))
 	}
 }
 

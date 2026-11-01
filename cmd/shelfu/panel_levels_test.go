@@ -47,37 +47,41 @@ func levelShelf(t *testing.T) (*shelf, *ui.Tester) {
 	return a, ui.NewTester(a.view, sheetW, panelTestH)
 }
 
-// TestOverviewOpensFirstAndPageIconOpensThePage: one click on the notch is
-// the overview; a page icon grows the same shell to the page's size.
-func TestOverviewOpensFirstAndPageIconOpensThePage(t *testing.T) {
+// TestSearchBarOpensFirstAndCapsuleOpensThePage: one click on the notch is
+// the search bar; a capsule page button grows the same shell to the page's
+// size, and its own button on the page goes back to the bar.
+func TestSearchBarOpensFirstAndCapsuleOpensThePage(t *testing.T) {
 	a, view := levelShelf(t)
 	a.visible = true
 	view.Frame()
 	if a.currentLevel() != 1 {
-		t.Fatalf("level = %d, want the overview", a.currentLevel())
+		t.Fatalf("level = %d, want the search bar", a.currentLevel())
 	}
-	if !view.HasText("托盘 1 项") || !view.HasText("剪贴板 12 条") {
-		t.Fatalf("the overview lost its counts; texts %v", view.Texts())
+	if !view.HasText("搜索") {
+		t.Fatalf("the search bar lost its field; texts %v", view.Texts())
 	}
 	if err := view.Click("托盘"); err != nil {
-		t.Fatalf("page icon: %v", err)
+		t.Fatalf("page button: %v", err)
 	}
 	if a.currentLevel() != 2 || a.tab != pageTray {
-		t.Fatalf("page icon: level=%d tab=%s, want the page on the tray", a.currentLevel(), a.tab)
+		t.Fatalf("page button: level=%d tab=%s, want the page on the tray", a.currentLevel(), a.tab)
 	}
 	view.Frame()
 	if !view.HasText("托盘里一条") {
 		t.Fatalf("the tray page did not draw its item; texts %v", view.Texts())
 	}
-	// Esc steps back to the overview; the overview's Esc closes.
-	view.Key(0, ui.KeyEscape)
+	// The current page's capsule button goes back to the search bar; the
+	// search bar's Esc closes.
+	if err := view.Click("托盘"); err != nil {
+		t.Fatalf("the current page's button: %v", err)
+	}
 	if a.currentLevel() != 1 || !a.visible {
-		t.Fatalf("Esc left level %d visible=%v, want the overview", a.currentLevel(), a.visible)
+		t.Fatalf("the current page's button left level %d visible=%v, want the search bar", a.currentLevel(), a.visible)
 	}
 	view.Frame()
 	view.Key(0, ui.KeyEscape)
 	if a.visible {
-		t.Fatal("the overview's Esc did not close the panel")
+		t.Fatal("the search bar's Esc did not close the panel")
 	}
 }
 
@@ -174,6 +178,9 @@ func pageRows(top int) []ui.Rect {
 		{X: 0, Y: float32(top), W: sheetW, H: bandH},
 		{X: x, Y: float32(top + bandH), W: contentW, H: pageActionH},
 		{X: x, Y: float32(top + bandH + pageActionH + actionsGap), W: contentW, H: contentH},
+		// The page capsule hangs under the sheet: its buttons are labels of
+		// this frame too, on their own glass row.
+		{X: 0, Y: float32(top + sheetH + navGap), W: sheetW, H: navH},
 	}
 }
 
@@ -461,26 +468,29 @@ func TestActivityChipActionsStillWork(t *testing.T) {
 	})
 }
 
-func TestOverviewHoldsFivePageIconsAndCounts(t *testing.T) {
+// The page capsule under the search bar carries every page, then settings
+// and collapse: one button each, side by side on the capsule's row.
+func TestCapsuleHoldsEveryPageAndTheCommands(t *testing.T) {
 	fx := newUsageFixture(t, true)
 	a := fx.a
 	a.level, a.visible = 1, true
-	a.registerPage(&fakePage{on: true}) // a sixth page: the band keeps five
+	a.registerPage(&fakePage{on: true}) // a sixth page: the capsule keeps six
 	view := ui.NewTester(a.view, sheetW, panelTestH)
 	view.Frame()
-	for _, label := range []string{"总览", "托盘", "剪贴板", "工具", "AI 用量"} {
+	navTop := float32(a.sheetTop() + homeShellH + navGap)
+	prev := ui.Rect{}
+	for _, label := range []string{"托盘", "剪贴板", "工具", "AI 用量", "假页面", "设置", "收起"} {
 		r, ok := view.Find(label)
 		if !ok {
-			t.Fatalf("the band lost the %q icon; texts %v", label, view.Texts())
+			t.Fatalf("the capsule lost the %q button; texts %v", label, view.Texts())
 		}
-		if r.Y+r.H > bandH {
-			t.Fatalf("the %q icon left the band: %+v", label, r)
+		if r.Y < navTop-0.5 || r.Y+r.H > navTop+navH+0.5 {
+			t.Fatalf("the %q button left the capsule: %+v", label, r)
 		}
-	}
-	for _, line := range []string{"托盘 0 项", "剪贴板 0 条"} {
-		if _, ok := view.Find(line); !ok {
-			t.Fatalf("the overview lost %q; texts %v", line, view.Texts())
+		if prev.W > 0 && r.X < prev.X+prev.W-0.5 {
+			t.Fatalf("the %q button overlaps the one before it: %+v then %+v", label, prev, r)
 		}
+		prev = r
 	}
 }
 
@@ -502,13 +512,14 @@ func TestTwoActivityChipsFitTheRightEar(t *testing.T) {
 	if !ok {
 		t.Fatalf("the awake chip is missing; texts %v", view.Texts())
 	}
+	// The band's right ear ends at the panel's right padding; the housing
+	// splits it on the left.
 	housingRight := float32(sheetW-sheetPadX) - (float32(sheetW)-float32(180+12))/2
-	settings, ok := view.Find("设置")
-	if !ok {
-		t.Fatal("the settings button is missing")
+	if music.X < housingRight-0.5 || hold.X+hold.W > sheetW-sheetPadX+0.5 {
+		t.Fatalf("chips %+v and %+v do not fit the right ear", music, hold)
 	}
-	if music.X < housingRight-0.5 || hold.X+hold.W > settings.X-1 {
-		t.Fatalf("chips %+v and %+v do not fit the right ear between the housing and settings %+v", music, hold, settings)
+	if music.Y+music.H > bandH+0.5 || hold.Y+hold.H > bandH+0.5 {
+		t.Fatalf("chips %+v and %+v left the band", music, hold)
 	}
 }
 
@@ -532,12 +543,8 @@ func TestMusicAndCancelChipsFitTheRightEar(t *testing.T) {
 		t.Fatalf("the cancel state is missing; texts %v", view.Texts())
 	}
 	housingRight := float32(sheetW-sheetPadX) - (float32(sheetW)-float32(180+12))/2
-	settings, ok := view.Find("设置")
-	if !ok {
-		t.Fatal("the settings button is missing")
-	}
-	if music.X < housingRight-0.5 || cancel.X+cancel.W > settings.X-1 {
-		t.Fatalf("chips %+v and %+v do not fit the right ear between the housing and settings %+v", music, cancel, settings)
+	if music.X < housingRight-0.5 || cancel.X+cancel.W > sheetW-sheetPadX+0.5 {
+		t.Fatalf("chips %+v and %+v do not fit the right ear", music, cancel)
 	}
 }
 

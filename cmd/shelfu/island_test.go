@@ -154,8 +154,10 @@ func TestIslandPanelFrameHasNoEars(t *testing.T) {
 	if f.Width != wantW {
 		t.Fatalf("island panel frame %d wide, want %d (no ear margins)", f.Width, wantW)
 	}
-	if f.Y != 0 || f.Height != wantH {
-		t.Fatalf("island panel frame %+v, want top 0 and height %d", f, wantH)
+	// The page capsule hangs under the shell; the frame carries both.
+	wantH = max(wantH, islandTopGap+panelFrameH(homeShellH))
+	if f.Y != 0 || f.Height < wantH {
+		t.Fatalf("island panel frame %+v, want top 0 and height at least %d", f, wantH)
 	}
 	// The notch style keeps its ears.
 	n := islandShelf(true, settings.ShellStyleNotch)

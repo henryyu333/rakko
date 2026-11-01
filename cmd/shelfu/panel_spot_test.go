@@ -194,16 +194,17 @@ func TestDefaultUpwardFlagKeepsTheOldFrame(t *testing.T) {
 		t.Fatalf("default placement = %+v, want the anchored downward box", p)
 	}
 	f := a.desiredFrame()
-	if f.Y != a.y || f.Height != a.islandTop+sheetH {
-		t.Fatalf("default frame = %+v, want Y=%d height %d", f, a.y, a.islandTop+sheetH)
+	wantH := a.islandTop + sheetH + navGap + navH + 2 // the page capsule hangs under the sheet
+	if f.Y != a.y || f.Height != wantH {
+		t.Fatalf("default frame = %+v, want Y=%d height %d", f, a.y, wantH)
 	}
 }
 
-// TestUpwardPanelBandTakesClicksAtTheClampedAxis: the band sits at the
-// panel's top, which an upward panel at a side edge moves off the island's
-// axis. The shifted content must take clicks where it is drawn, not at the
-// island's centre.
-func TestUpwardPanelBandTakesClicksAtTheClampedAxis(t *testing.T) {
+// TestUpwardPanelCapsuleTakesClicksAtTheClampedAxis: an upward panel at a
+// side edge moves off the island's axis, and the page capsule hangs under
+// it on the shifted axis. The frame must hold the capsule and a click must
+// land where it is drawn, not at the island's centre.
+func TestUpwardPanelCapsuleTakesClicksAtTheClampedAxis(t *testing.T) {
 	a, _ := levelShelf(t)
 	a.dispBounds = mygo.Rectangle{X: 0, Y: 0, Width: 1470, Height: 956}
 	a.dispWork = mygo.Rectangle{X: 0, Y: 25, Width: 1470, Height: 931}
@@ -222,21 +223,20 @@ func TestUpwardPanelBandTakesClicksAtTheClampedAxis(t *testing.T) {
 	f := a.desiredFrame()
 	view := ui.NewTester(a.view, f.Width, f.Height)
 	view.Frame()
-	r, ok := view.Find("剪贴板")
-	if !ok {
-		t.Fatalf("the band is missing; texts %v", view.Texts())
-	}
-	// The band's own box starts at the panel's left edge in the canvas,
-	// which is the frame's centre plus the clamped shift.
-	wantLeft := float32(f.Width)/2 + float32(place.X+place.W/2-a.stripCenter()) - sheetW/2
-	if r.X < wantLeft || r.X > wantLeft+120 {
-		t.Fatalf("the band icon at %+v is not at the panel's left edge %.1f", r, wantLeft)
+	for _, label := range []string{"托盘", "剪贴板", "工具", "设置", "收起"} {
+		r, ok := view.Find(label)
+		if !ok || r.W <= 0 || r.H <= 0 {
+			t.Fatalf("the capsule lost the %q button; texts %v", label, view.Texts())
+		}
+		if r.X < 0 || r.X+r.W > float32(f.Width) || r.Y+r.H > float32(f.Height) {
+			t.Fatalf("the %q button at %+v is outside the frame %+v", label, r, f)
+		}
 	}
 	if err := view.Click("剪贴板"); err != nil {
 		t.Fatal(err)
 	}
 	if a.tab != pageClipboard {
-		t.Fatalf("a click on the shifted band did not switch pages: tab=%s", a.tab)
+		t.Fatalf("a click on the shifted capsule did not switch pages: tab=%s", a.tab)
 	}
 }
 
@@ -391,11 +391,10 @@ func TestOpeningPanelTakesTheMouseAtItsSettledAxis(t *testing.T) {
 
 // TestUpwardContentUnfoldsFromTheIslandEdge: an upward panel keeps its
 // content block's bottom edge on the island's and only as tall as the
-// level's own box. While the shell grows, only the rows at the island are
-// uncovered, so the overview's words arrive before its band and the band is
-// not drawn until the shell reaches the overview's 156. At rest the band and
-// the overview are both on the shell, the band takes clicks, and a page's
-// 250 block is shown whole with its band still clickable.
+// level's own box. While the shell grows, its top uncovers the block from
+// the island upward, so no row is drawn above the shell's top. At rest the
+// search field is on the shell and the page capsule hangs under it, on
+// screen, still clickable.
 func TestUpwardContentUnfoldsFromTheIslandEdge(t *testing.T) {
 	stubKeyboard(t) // layout clicks must never register real global shortcuts
 	a, _ := levelShelf(t)
@@ -409,41 +408,32 @@ func TestUpwardContentUnfoldsFromTheIslandEdge(t *testing.T) {
 	a.visible, a.level = false, 1
 	// The canvas holds the tallest frame either level needs.
 	a.fx = shellMotion{w: sheetW, h: sheetH, openK: 1, levelK: 1}
+	a.visible = true
 	big := a.desiredFrame()
+	a.visible = false
 	view := ui.NewTester(a.view, big.Width, big.Height)
 	view.Frame() // the closed strip the spring starts from
 	a.visible = true
-	// Mid-flight: the shell is still short of the overview's 156.
+	// Mid-flight: the shell is still short of the search bar's 76.
 	h := a.fx.h
-	for i := 0; i < 40 && h < 78; i++ {
+	for i := 0; i < 40 && h < 48; i++ {
 		view.Frame()
 		view.Advance(16 * time.Millisecond)
 		h = a.fx.h
 	}
 	// The frame Advance just drew is the one Find reads.
-	if h < 78 || h > 124 {
+	if h < 48 || h > homeShellH-2 {
 		t.Fatalf("the shell is at %.1f tall, want a mid-flight height", h)
 	}
 	clipTop := a.upShellBottom(a.fx.openK) - int(math.Ceil(float64(h))) - a.desiredFrame().Y
-	band, ok := view.Find("剪贴板")
+	field, ok := view.Find("搜索")
 	if !ok {
-		t.Fatalf("the band icon is missing; texts %v", view.Texts())
+		t.Fatalf("the search field is missing; texts %v", view.Texts())
 	}
-	if band.W > 0 && band.H > 0 {
-		t.Fatalf("the shell at %.1f tall already draws the band at %+v, above its top %d", h, band, clipTop)
+	if field.Y < float32(clipTop)-0.5 {
+		t.Fatalf("the search row at %+v is drawn above the shell top %d", field, clipTop)
 	}
-	low, ok := view.Find("托盘里一条")
-	if !ok {
-		t.Fatalf("the overview's last row is missing; texts %v", view.Texts())
-	}
-	if low.W <= 0 || low.H <= 0 {
-		t.Fatalf("nothing of the overview is uncovered at the island edge (shell top %d)", clipTop)
-	}
-	if low.Y < float32(clipTop)-0.5 || float32(clipTop)+float32(h) < low.Y {
-		t.Fatalf("the uncovered overview row at %+v is not at the island edge of the shell %d..%d",
-			low, clipTop, clipTop+int(h))
-	}
-	// Open: the shell reaches the overview's own 156.
+	// Open: the shell reaches the search bar's own 76.
 	for i := 0; i < 60 && a.fx.h < homeShellH-0.5; i++ {
 		view.Frame()
 		view.Advance(16 * time.Millisecond)
@@ -451,49 +441,47 @@ func TestUpwardContentUnfoldsFromTheIslandEdge(t *testing.T) {
 	view.Advance(2 * time.Second) // include the spring's overshoot and settling
 	view.Frame()
 	if got := a.fx.h; got < homeShellH-0.5 || got > homeShellH+0.5 {
-		t.Fatalf("the shell settled at %.1f tall, want the overview's %d", got, homeShellH)
+		t.Fatalf("the shell settled at %.1f tall, want the search bar's %d", got, homeShellH)
 	}
 	clipTop = a.upShellBottom(a.fx.openK) - int(math.Ceil(float64(a.fx.h))) - a.desiredFrame().Y
-	band, ok = view.Find("剪贴板")
+	field, ok = view.Find("搜索")
 	if !ok {
-		t.Fatalf("the band is missing at rest; texts %v", view.Texts())
+		t.Fatalf("the search field is missing at rest; texts %v", view.Texts())
 	}
-	low, ok = view.Find("托盘里一条")
+	if field.Y < float32(clipTop)-0.5 || field.Y+field.H > float32(clipTop+homeShellH)+0.5 {
+		t.Errorf("the settled search row at %+v is not inside the shell %d..%d",
+			field, clipTop, clipTop+homeShellH)
+	}
+	caps, ok := view.Find("剪贴板")
 	if !ok {
-		t.Fatalf("the overview is missing at rest; texts %v", view.Texts())
+		t.Fatalf("the capsule is missing at rest; texts %v", view.Texts())
 	}
-	for _, r := range []struct {
-		name string
-		box  ui.Rect
-	}{{"band", band}, {"overview row", low}} {
-		if r.box.Y < float32(clipTop)-0.5 || r.box.Y+r.box.H > float32(clipTop+homeShellH)+0.5 {
-			t.Errorf("the settled overview's %s at %+v is not inside the shell %d..%d",
-				r.name, r.box, clipTop, clipTop+homeShellH)
-		}
+	if caps.Y < float32(clipTop+homeShellH)-0.5 {
+		t.Fatalf("the capsule at %+v is inside the shell %d..%d", caps, clipTop, clipTop+homeShellH)
+	}
+	if caps.Y+caps.H > float32(big.Height)+0.5 {
+		t.Fatalf("the capsule at %+v is outside the window %d tall", caps, big.Height)
 	}
 	if err := view.Click("托盘"); err != nil {
-		t.Fatalf("the settled overview's band is not clickable: %v", err)
+		t.Fatalf("the settled capsule is not clickable: %v", err)
 	}
 	if a.level != 2 || a.tab != pageTray {
-		t.Fatalf("a band click on the upward overview left level=%d tab=%s", a.level, a.tab)
+		t.Fatalf("a capsule click on the upward bar left level=%d tab=%s", a.level, a.tab)
 	}
 	// The level's shelf grows upward and carries the block with it: at no
-	// frame is the band cut off above the shell.
+	// frame is the page's top row cut off above the shell.
 	for i := 0; i < 60 && a.fx.h < sheetH-0.5; i++ {
 		view.Frame()
 		view.Advance(16 * time.Millisecond)
 		if got := a.fx.h; got > 200 && got < sheetH-2 {
 			shellTop := a.upShellBottom(a.fx.openK) - int(math.Ceil(float64(got))) - a.desiredFrame().Y
-			band, ok := view.Find("剪贴板")
+			low, ok := view.Find("托盘里一条")
 			if !ok {
-				t.Fatalf("the band is missing at %.1f tall; texts %v", got, view.Texts())
+				t.Fatalf("the page row is missing at %.1f tall; texts %v", got, view.Texts())
 			}
-			if band.H <= 0 || band.W <= 0 {
-				t.Fatalf("the band at %+v is clipped at %.1f tall (shell top %d)", band, got, shellTop)
-			}
-			if band.Y < float32(shellTop)-0.5 || band.Y+band.H > float32(shellTop+sheetH) {
-				t.Fatalf("the band at %+v left the shell %d..%d at %.1f tall",
-					band, shellTop, shellTop+int(math.Ceil(float64(got))), got)
+			if low.Y < float32(shellTop)-0.5 || low.Y+low.H > float32(shellTop+int(math.Ceil(float64(got))))+0.5 {
+				t.Fatalf("the page row at %+v left the shell %d..%d at %.1f tall",
+					low, shellTop, shellTop+int(math.Ceil(float64(got))), got)
 			}
 		}
 	}
@@ -503,28 +491,25 @@ func TestUpwardContentUnfoldsFromTheIslandEdge(t *testing.T) {
 		t.Fatalf("the page settled at %.1f tall, want the sheet's %d", got, sheetH)
 	}
 	clipTop = a.upShellBottom(a.fx.openK) - int(math.Ceil(float64(a.fx.h))) - a.desiredFrame().Y
-	band, ok = view.Find("剪贴板")
-	if !ok {
-		t.Fatalf("the band is missing on the page; texts %v", view.Texts())
-	}
-	low, ok = view.Find("托盘里一条")
+	low, ok := view.Find("托盘里一条")
 	if !ok {
 		t.Fatalf("the page lost its rows; texts %v", view.Texts())
 	}
-	for _, r := range []struct {
-		name string
-		box  ui.Rect
-	}{{"band", band}, {"page row", low}} {
-		if r.box.Y < float32(clipTop)-0.5 || r.box.Y+r.box.H > float32(clipTop+sheetH)+0.5 {
-			t.Errorf("the settled page's %s at %+v is not inside the shell %d..%d",
-				r.name, r.box, clipTop, clipTop+sheetH)
-		}
+	if low.Y < float32(clipTop)-0.5 || low.Y+low.H > float32(clipTop+sheetH)+0.5 {
+		t.Errorf("the settled page's row at %+v is not inside the shell %d..%d", low, clipTop, clipTop+sheetH)
+	}
+	caps, ok = view.Find("剪贴板")
+	if !ok {
+		t.Fatalf("the capsule is missing on the page; texts %v", view.Texts())
+	}
+	if caps.Y < float32(clipTop+sheetH)-0.5 {
+		t.Fatalf("the capsule at %+v is inside the page shell %d..%d", caps, clipTop, clipTop+sheetH)
 	}
 	if err := view.Click("剪贴板"); err != nil {
-		t.Fatalf("the settled page's band is not clickable: %v", err)
+		t.Fatalf("the settled page's capsule is not clickable: %v", err)
 	}
 	if a.level != 2 || a.tab != pageClipboard {
-		t.Fatalf("a band click on the upward page left level=%d tab=%s", a.level, a.tab)
+		t.Fatalf("a capsule click on the upward page left level=%d tab=%s", a.level, a.tab)
 	}
 }
 

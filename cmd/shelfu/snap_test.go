@@ -467,10 +467,15 @@ func TestSnapFailureNoticeShowsOnIsland(t *testing.T) {
 	if !a.visible || a.level != 1 || a.snap.drawn {
 		t.Fatalf("island not restored: visible=%v level=%d drawn=%v", a.visible, a.level, a.snap.drawn)
 	}
-	view := ui.NewTester(a.view, homeShellW, homeShellH)
+	win := a.desiredFrame()
+	view := ui.NewTester(a.view, win.Width, win.Height)
 	view.Frame()
-	if !view.HasText("这个窗口不能调整大小") {
-		t.Fatalf("the island did not draw the notice; texts %v", view.Texts())
+	notice, ok := view.Find("这个窗口不能调整大小")
+	if !ok {
+		t.Fatalf("the search bar did not draw the notice; texts %v", view.Texts())
+	}
+	if notice.Y < homeShellH-0.5 || notice.Y+notice.H > float32(win.Height)+0.5 {
+		t.Fatalf("the notice at %+v is not under the bar, inside the window %+v", notice, win)
 	}
 }
 

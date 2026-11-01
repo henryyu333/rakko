@@ -351,11 +351,11 @@ func TestEscapeClearsSearchBeforeHiding(t *testing.T) {
 	if !view.Focused(searchLabel) {
 		t.Fatal("clearing the search lost the field's focus")
 	}
-	// The second Esc leaves the search's keyboard mode and backs out to the
-	// overview, like every other page; the third one closes.
+	// The second Esc backs out to the search bar, which takes the keyboard
+	// for its own field; the third one closes.
 	view.Key(0, ui.KeyEscape)
-	if !a.visible || a.currentLevel() != 1 || a.focusMode {
-		t.Fatalf("second Esc: visible=%v level=%d focus=%v, want the overview", a.visible, a.currentLevel(), a.focusMode)
+	if !a.visible || a.currentLevel() != 1 || !a.focusMode {
+		t.Fatalf("second Esc: visible=%v level=%d focus=%v, want the search bar", a.visible, a.currentLevel(), a.focusMode)
 	}
 	view.Key(0, ui.KeyEscape)
 	if a.visible {

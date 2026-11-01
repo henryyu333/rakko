@@ -184,7 +184,12 @@ func (a *shelf) panelPlacement() panelPlacement {
 		// with room below must not flip under the pointer mid-gesture.
 		return panelSpotSide(centre, top, islandIdleH, work, int(w), int(h), a.islandPress.up)
 	}
-	return panelSpot(centre, top, islandIdleH, work, int(w), int(h))
+	// The side is decided by the tallest box the panel takes — a page's
+	// 250 — not by the level drawn now: the search bar and a page must
+	// never sit on different sides; a level change would jump the shell
+	// across the island.
+	up := top+sheetH > work.Y+work.Height
+	return panelSpotSide(centre, top, islandIdleH, work, int(w), int(h), up)
 }
 
 // panelUp reports whether this island leaves no room below for its panel.
