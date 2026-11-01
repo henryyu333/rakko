@@ -1127,6 +1127,8 @@ func (a *shelf) hide(exit hideExit) {
 	// content fade and finishClose retires them.
 	a.cancelHomeSpot()
 	a.releaseKeys()
+	// The note window outlives the panel; what it holds is landed now.
+	a.noteFlush()
 	// 当前拖拽不再次触发；松开鼠标或出现新会话后解除。
 	a.suppressed = true
 	a.dropHot = false

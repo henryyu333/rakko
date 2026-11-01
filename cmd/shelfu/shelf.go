@@ -143,6 +143,9 @@ type shelf struct {
 	thumbActive                                                 int
 	pins                                                        []*pinItem // desktop-pinned cards (pin.go)
 	pinReturning                                                bool       // a pin drag holds the notch's 松开放回 bulge
+	// note 是便利贴卡片背后的那个 Markdown 文件，以及打开时的窗口
+	// （note.go）；首次画到卡片或点开时才建立文件与监听。
+	note *noteUI
 
 	// 框选文字：同一时间只有一轮（ocrScan，capture+识别全程）；ocrBusyAt
 	// 记这轮开始时刻给进行中胶囊的 250ms 延迟计时；ocrSheet 为真时展开

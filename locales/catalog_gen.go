@@ -4343,6 +4343,56 @@ func (msgs Messages) CardAirDrop() string {
 	return Catalog.Format(msgs.locale, "cardAirDrop", nil)
 }
 
+// CardNote says "便利贴"
+// in the language the app shows.
+func CardNote() string { return In(i18n.Locale()).CardNote() }
+
+// CardNote says "便利贴"
+// in the language of msgs.
+func (msgs Messages) CardNote() string {
+	return Catalog.Format(msgs.locale, "cardNote", nil)
+}
+
+// NoteReveal says "在访达中显示"
+// in the language the app shows.
+func NoteReveal() string { return In(i18n.Locale()).NoteReveal() }
+
+// NoteReveal says "在访达中显示"
+// in the language of msgs.
+func (msgs Messages) NoteReveal() string {
+	return Catalog.Format(msgs.locale, "noteReveal", nil)
+}
+
+// NoteKeepOnTop says "置顶"
+// in the language the app shows.
+func NoteKeepOnTop() string { return In(i18n.Locale()).NoteKeepOnTop() }
+
+// NoteKeepOnTop says "置顶"
+// in the language of msgs.
+func (msgs Messages) NoteKeepOnTop() string {
+	return Catalog.Format(msgs.locale, "noteKeepOnTop", nil)
+}
+
+// NoteClose says "关闭"
+// in the language the app shows.
+func NoteClose() string { return In(i18n.Locale()).NoteClose() }
+
+// NoteClose says "关闭"
+// in the language of msgs.
+func (msgs Messages) NoteClose() string {
+	return Catalog.Format(msgs.locale, "noteClose", nil)
+}
+
+// NoteUnreadable says "无法读取便利贴文件"
+// in the language the app shows.
+func NoteUnreadable() string { return In(i18n.Locale()).NoteUnreadable() }
+
+// NoteUnreadable says "无法读取便利贴文件"
+// in the language of msgs.
+func (msgs Messages) NoteUnreadable() string {
+	return Catalog.Format(msgs.locale, "noteUnreadable", nil)
+}
+
 // ToolsAwakeRemain says "剩 {text}"
 // in the language the app shows.
 func ToolsAwakeRemain(text string) string { return In(i18n.Locale()).ToolsAwakeRemain(text) }
