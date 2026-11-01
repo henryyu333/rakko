@@ -122,8 +122,9 @@ func TestSmokePanelHeightFitsMusicAndUsage(t *testing.T) {
 	if h != sheetH || w != sheetW {
 		t.Errorf("panel %d×%d, want the fixed sheet %d×%d", w, h, sheetW, sheetH)
 	}
-	if frameH != sheetH+a.sheetTop() {
-		t.Errorf("native frame %d does not follow the sheet %d", frameH, sheetH+a.sheetTop())
+	// The window carries the page capsule hung under the sheet.
+	if want := sheetH + a.sheetTop() + navGap + navH + 2; frameH != want {
+		t.Errorf("native frame %d does not follow the sheet and its capsule %d", frameH, want)
 	}
 	shotPanelHeight(t, a, "music-usage")
 

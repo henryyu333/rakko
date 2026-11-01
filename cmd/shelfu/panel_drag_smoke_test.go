@@ -8,7 +8,7 @@ package main
 // then to the bottom-right corner. Every press is a real HID event proved to
 // land on a window of this process inside a test-owned backdrop over the
 // whole screen; no event is posted over another app. After each release the
-// panel is whole inside the visible frame, its band icons still click, and a
+// panel is whole inside the visible frame, its capsule still clicks, and a
 // point 2pt outside its box reaches the backdrop instead of the shelf.
 // Screenshots land in /tmp/shelf-task-isldrag/. Run with
 // SHELF_BASKET_SMOKE=1.
@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
 
 	"shelf/internal/mac"
 	"shelf/internal/settings"
@@ -159,15 +160,25 @@ func TestIslandPanelDragSmoke(t *testing.T) {
 	t.Cleanup(func() { onMain(stopObs) })
 	time.Sleep(300 * time.Millisecond)
 
-	// The panel opens from a tap on the resting capsule: the overview.
+	// The panel opens from a tap on the resting capsule: the search bar.
+	// A page is opened next — its band is the drag handle (the bar's top
+	// row is not).
 	var capsule mygo.Rectangle
 	onMain(func() { capsule = a.islandRect() })
 	tapShelfSmoke(t, a, mygo.Point{X: capsule.X + capsule.Width/2, Y: capsule.Y + capsule.Height/2})
 	var visible bool
 	var place panelPlacement
-	onMain(func() { visible, place = a.visible, a.panelPlacement() })
+	onMain(func() {
+		visible = a.visible
+		a.setLevel(2)
+	})
 	if !visible {
 		t.Fatal("the tap did not open the panel")
+	}
+	time.Sleep(500 * time.Millisecond) // the level spring settles
+	onMain(func() { place = a.panelPlacement() })
+	if place.H != sheetH {
+		t.Fatalf("the page did not open: %+v", place)
 	}
 	t.Logf("panel opened at %+v", place)
 
@@ -194,30 +205,39 @@ func TestIslandPanelDragSmoke(t *testing.T) {
 		t.Fatalf("the second drag did not move the panel: %+v", second)
 	}
 
-	// The band's page icon still clicks after the move: the second seat
-	// switches to the tray as a page.
+	// The page capsule still takes clicks after the move: its second page
+	// button switches the panel, drawn where the moved window puts it.
 	var icon mygo.Point
 	var wantTab pageID
-	var hits int
+	var findErr string
 	onMain(func() {
-		hits = len(a.bandHits)
-		if hits >= 2 {
-			r := a.bandHits[1]
-			icon = mygo.Point{X: a.panelPlacement().X + r.X + r.Width/2, Y: a.panelPlacement().Y + r.Y + r.Height/2}
-			wantTab = a.tabPages()[1].id()
+		f := a.win.Bounds()
+		view := ui.NewTester(a.view, f.Width, f.Height)
+		view.Frame()
+		pages := a.navPages()
+		if len(pages) < 2 {
+			findErr = fmt.Sprintf("the capsule has %d pages", len(pages))
+			return
 		}
+		wantTab = pages[1].id()
+		r, ok := view.Find(pages[1].label())
+		if !ok {
+			findErr = fmt.Sprintf("the capsule's %s button is missing; texts %v", wantTab, view.Texts())
+			return
+		}
+		icon = mygo.Point{X: f.X + int(r.X+r.W/2), Y: f.Y + int(r.Y+r.H/2)}
 	})
-	if hits < 2 {
-		t.Fatalf("the band recorded %d controls, want at least 2", hits)
+	if findErr != "" {
+		t.Fatal(findErr)
 	}
 	tapShelfSmoke(t, a, icon)
 	var tab pageID
 	var level int
 	onMain(func() { tab, level = a.tab, a.currentLevel() })
 	if tab != wantTab || level != 2 {
-		t.Fatalf("the band icon opened tab %s at level %d, want %s at level 2", tab, level, wantTab)
+		t.Fatalf("the capsule opened tab %s at level %d, want %s at level 2", tab, level, wantTab)
 	}
-	panelDragShot(t, b, "panel-drag-3-icon-page")
+	panelDragShot(t, b, "panel-drag-3-capsule-page")
 
 	// Two points outside the panel's box reach the backdrop: the shell's
 	// transparent margin and the window around it take no clicks. The gate

@@ -1709,6 +1709,12 @@ func (a *shelf) setLevelPage(level int, id pageID) {
 	}
 	a.level = level
 	a.startPageSwitch(from, next)
+	// A page is not a search: the keyboard goes back unless the page is
+	// the clipboard search that asked for it. The window then sits above
+	// the menu bar again, so the page's band takes presses.
+	if a.focusMode && level == 2 && next != pageClipboard {
+		a.leaveFocusMode()
+	}
 	a.reveal = ""
 	a.selection.keepExisting(a.visibleItems())
 	a.syncWindowFrame()
@@ -1821,6 +1827,11 @@ func (a *shelf) setTab(id pageID) {
 		return
 	}
 	a.startPageSwitch(cur, id)
+	// A page is not a search: leaving the clipboard page for another one
+	// gives the keyboard back, so the new page's band takes presses.
+	if a.focusMode && id != pageClipboard {
+		a.leaveFocusMode()
+	}
 	// The tab and the shell size stay one state: every page is the tall
 	// shell. A caller that names a page without switching levels (a test
 	// seam, a shortcut) gets the size that page draws in; the arrangement

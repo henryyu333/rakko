@@ -1051,6 +1051,34 @@ func (a *shelf) escape() {
 	a.hide(hideExplicit)
 }
 
+// leaveFocusMode gives up the keyboard the search took: the window drops
+// back to the shell's level, the field stops being focused and the panel
+// holds Esc/Space again like any other page. The keyboard goes back to the
+// app the user came from at the same moment — the panel stays open, so a
+// later close has nothing left to hand back and must not lose the
+// remembered app on the way out.
+func (a *shelf) leaveFocusMode() {
+	if !a.focusMode {
+		return
+	}
+	a.focusMode = false
+	prev := a.prevAppPID
+	a.prevAppPID = 0
+	a.syncWindowFrame()
+	if a.win != nil {
+		// Headless surfaces (tests) have no app to register keys with.
+		a.holdKeys()
+		a.win.Invalidate()
+	}
+	// The window level follows the mode: without the keyboard the shell
+	// goes back above the menu bar, so its top band takes presses again.
+	a.syncMousePassThrough()
+	// The panel stays open, so the hand-back must not hide this app: the
+	// close path's fallback (resignSelf) would take the notch window with
+	// it when the remembered app is gone. Only the close may resign.
+	a.handBackApp(prev)
+}
+
 // hide collapses the shelf. exit decides whether the remembered app gets
 // the keyboard back (see shouldRestoreApp); the remembered pid is always
 // cleared so a later explicit hide cannot reactivate it a second time.

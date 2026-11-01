@@ -339,7 +339,7 @@ func TestSmokeSettledPanelBottomMarginPassesThrough(t *testing.T) {
 			var receiver *mygo.Window
 			var point mygo.Point
 			var frame mygo.Rectangle
-			var shelfNum, receiverNum, insideHit, outsideHit, targetH int
+			var shelfNum, receiverNum, insideHit, outsideHit, targetH, wantH, shellBottom int
 			var moving bool
 			onMain(func() {
 				if a.winH == 0 {
@@ -347,7 +347,12 @@ func TestSmokeSettledPanelBottomMarginPassesThrough(t *testing.T) {
 					return
 				}
 				frame, targetH, moving = a.win.Bounds(), a.panelH(), a.fx.openMoving
-				point = mygo.Point{X: a.stripCenter(), Y: a.y + targetH + 2}
+				wantH = a.desiredFrame().Height
+				shellBottom = a.y + a.sheetTop() + targetH
+				// The page capsule hangs under the shell, so the margin that
+				// must pass clicks through is below the whole window, not
+				// two points under the sheet.
+				point = mygo.Point{X: a.stripCenter(), Y: frame.Y + frame.Height + 2}
 				receiver = mygo.NewWindow(mygo.WindowOptions{
 					Title: "ShelfU bottom-edge click receiver", Width: 40, Height: 40,
 					Hidden: true, Frameless: true, DisableShadow: true, Panel: true, SkipTaskbar: true,
@@ -373,22 +378,22 @@ func TestSmokeSettledPanelBottomMarginPassesThrough(t *testing.T) {
 			oldCursor := cursorPoint
 			t.Cleanup(func() { onMain(func() { cursorPoint = oldCursor }) })
 			onMain(func() {
-				p := mygo.Point{X: point.X, Y: a.y + targetH - 4}
+				p := mygo.Point{X: point.X, Y: shellBottom - 4}
 				cursorPoint = func() mygo.Point { return p }
 				a.syncMousePassThrough()
 			})
 			time.Sleep(150 * time.Millisecond) // let WindowServer apply the flag
 			onMain(func() {
 				screenH := float64(a.dispBounds.Y + a.dispBounds.Height)
-				insideHit = mac.WindowAtPoint(float64(point.X), float64(a.y+targetH-4), screenH)
+				insideHit = mac.WindowAtPoint(float64(point.X), float64(shellBottom-4), screenH)
 				outsideHit = mac.WindowAtPoint(float64(point.X), float64(point.Y), screenH)
 			})
-			if moving || frame.Height != targetH {
-				t.Errorf("settled native frame %+v retains overshoot room: panelH=%d moving=%v", frame, targetH, moving)
+			if moving || frame.Height != wantH {
+				t.Errorf("settled native frame %+v does not match the settled sizes: want %d moving=%v", frame, wantH, moving)
 			}
 			if insideHit != shelfNum || outsideHit != receiverNum {
 				t.Errorf("bottom edge at y=%d: inside target=%d want ShelfU=%d; y=%d target=%d want receiver=%d",
-					frame.Y+targetH, insideHit, shelfNum, point.Y, outsideHit, receiverNum)
+					shellBottom, insideHit, shelfNum, point.Y, outsideHit, receiverNum)
 			}
 			t.Logf("native frame=%+v panelH=%d point=(%d,%d) ShelfU=%d receiver=%d inside_hit=%d outside_hit=%d",
 				frame, targetH, point.X, point.Y, shelfNum, receiverNum, insideHit, outsideHit)
@@ -438,8 +443,9 @@ func TestSmokeEdgeOpenedDropZoneFollowsPointer(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 	onMain(func() {
 		withoutZone = a.win.Bounds().Height
-		if withoutZone != withZone || withZone != a.panelH() {
-			t.Errorf("the drop zone changed the native panel: with=%d outside=%d panelH=%d", withZone, withoutZone, a.panelH())
+		settled := a.desiredFrame().Height
+		if withoutZone != withZone || withZone != settled {
+			t.Errorf("the drop zone changed the native panel: with=%d outside=%d settled=%d", withZone, withoutZone, settled)
 		}
 		point = mygo.Point{X: a.stripCenter(), Y: a.y + a.notchH + 8}
 		a.win.Invalidate()

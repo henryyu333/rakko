@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -299,6 +300,19 @@ func TestSmokeTrayCmdCCopiesThroughTheRealKey(t *testing.T) {
 	expandShelf(t, a)
 	time.Sleep(500 * time.Millisecond) // selection frame -> ⌘C held
 	onMain(func() { keyIsKey = mac.IsKeyWindow(a.win.NativeHandle()) })
+	if keyIsKey {
+		// The search bar takes the keyboard when it opens, and a page
+		// gives it up but cannot resign key on its own when this app is
+		// still frontmost. Hand the focus to the Finder — the app a real
+		// user would have been in — so the global ⌘C is what runs.
+		if out, err := exec.Command("pgrep", "-x", "Finder").Output(); err == nil {
+			if pid, perr := strconv.Atoi(strings.TrimSpace(string(out))); perr == nil && pid > 0 {
+				onMain(func() { mac.ActivateApp(pid) })
+				time.Sleep(300 * time.Millisecond)
+				onMain(func() { keyIsKey = mac.IsKeyWindow(a.win.NativeHandle()) })
+			}
+		}
+	}
 	if keyIsKey {
 		t.Fatal("the overlay became the key window; the global-key fix is not what is being tested")
 	}
