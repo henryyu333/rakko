@@ -533,8 +533,7 @@ func (p *toolsPage) toolCardTapped(id string) {
 	}
 	if def := toolCardDefFor(id); def != nil && def.kind == cardWidget && def.id == "playing" {
 		// The transport and the rails own their own presses; a tap on the
-		// card itself opens the full player, the page's second entrance
-		// beside the overview's track row.
+		// card itself opens the full player.
 		a.openPlaying()
 		return
 	}

@@ -124,9 +124,9 @@ func (p *playingPage) body(c *ui.Context, _ bool, _ bool) ui.Element {
 	return ui.Box(c).Size(0, 0)
 }
 
-// openPlaying opens the now-playing page: from the overview's track row
-// and from the tools page's music card (a tap on the card itself). The
-// notch's expand gestures never land here — they open the overview.
+// openPlaying opens the now-playing page from the tools page's music
+// card (a tap on the card itself). The notch's expand gestures never land
+// here — they open the search bar.
 func (a *shelf) openPlaying() {
 	p := a.page(pagePlaying)
 	if p == nil {

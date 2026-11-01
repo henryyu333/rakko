@@ -40,7 +40,7 @@ type shelf struct {
 	buildingView, frameQueued                                   bool // defer native resize until the current UI frame has painted
 	animationStart                                              time.Time
 	animationFrom, progress                                     float32
-	level                                                       int       // drawn level: 1 overview (156), 2 page (250)
+	level                                                       int       // drawn level: 1 search bar (76), 2 page (250)
 	jumpLevel                                                   bool      // the next frame snaps the level spring (fresh open)
 	closeAt                                                     time.Time // when hide started the content fade; zero = none
 	settings                                                    settings.Settings

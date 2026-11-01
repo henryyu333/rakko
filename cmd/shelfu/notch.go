@@ -140,7 +140,7 @@ func (a *shelf) desiredFrame() mygo.Rectangle {
 		if a.shellUp() {
 			// The island's bottom is the shell's floor: frameTop already
 			// reaches up for a shell that overshoots its level or still
-			// shows the page while the overview folds back, and the frame
+			// shows the page while the bar folds back, and the frame
 			// ends two points under the island, which stays on screen even
 			// when the Dock lifted the panel's own bottom off it.
 			h = a.upShellFloor() - y
@@ -337,8 +337,8 @@ func (a *shelf) wingsSize() (w, h float32) {
 }
 
 // shellSize is the one interpolation the shell Path and the content layout
-// share: hardware notch → peek shape peekW×peekH (peekK) → overview →
-// page (levelK, then openK). The width is 440 at both levels, so a page
+// share: hardware notch → peek shape peekW×peekH (peekK) → search bar →
+// page (levelK, then openK). The bar is 520 wide and a page 440, so a page
 // only ever grows taller. The caller passes the drawn values: view()
 // animates them per display frame and substitutes final ones in headless
 // tests.
@@ -830,7 +830,7 @@ func (a *shelf) panelBox() (w, h float32) {
 }
 
 // panelContentH is the height of the content block the panel draws at level
-// progress levelK: the overview's 156 at rest, the sheet's 250 at level 2,
+// progress levelK: the search bar's 76 at rest, the sheet's 250 at level 2,
 // the arrangement panel's fixed 150. The shell interpolates its own height
 // with the same levelK, so an upward block and its shell keep one top edge
 // through a level change and only the shell's bottom edge moves.

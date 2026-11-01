@@ -240,8 +240,7 @@ const (
 // the switch while the arriving page starts its fade-in at tabInShare,
 // drifting tabShift points in from its icon's side, all in tabAnimation
 // (240ms). The two phases overlap, so no frame of a switch shows neither
-// page (the old 35% + 65% split hit zero on both sides at 84ms). The
-// overview runs the same timeline as any page.
+// page (the old 35% + 65% split hit zero on both sides at 84ms).
 const (
 	tabShift    = 8
 	tabOutShare = 0.5
@@ -780,13 +779,13 @@ func (a *shelf) view(c *ui.Context) {
 		// The panel is laid out once, at its final size, and uncovered by
 		// the growing shell: the band and the page switch sit in one
 		// frame, so a level change never reflows them and the band is
-		// never drawn twice. levelK only sizes the shell; the content of
-		// the overview and of a page share one transition timeline (see
-		// pageBody), clipped by the shell as it grows or shrinks.
+		// never drawn twice. levelK only sizes the shell; the search bar
+		// and a page share one transition timeline (see pageBody), clipped
+		// by the shell as it grows or shrinks.
 		// An upward panel is pinned to the shell's bottom edge instead: its
 		// content block is bottom-aligned there and as tall as the level's
-		// own box (the overview's 156, the sheet's 250), so the settled
-		// overview keeps its band under the shell's top edge instead of
+		// own box (the bar's 76, the sheet's 250), so the settled bar
+		// keeps its row under the shell's top edge instead of
 		// leaving it above the island, and the growing shell uncovers the
 		// block from the bottom edge upward. That edge is the island's
 		// while the panel has room below it, and the panel's clamped bottom
@@ -1016,10 +1015,9 @@ func (a *shelf) tabBody(c *ui.Context, over bool) {
 
 // pageBody is the page switch under the band: one block per page, the page
 // being left fading out while the arriving one fades in and settles from
-// its icon's side (see pageMotion and switchOpacities). The overview is one
-// of those pages, so both directions of a level change — and page to page —
-// run the same timeline, and a page is never drawn by two layouts at once.
-// The band's icons stay put, so a switch never reflows them.
+// its icon's side (see pageMotion and switchOpacities). Page to page, a
+// switch runs one timeline, and a page is never drawn by two layouts at
+// once. The band stays put, so a switch never reflows it.
 func (a *shelf) pageBody(c *ui.Context, over bool) {
 	if onPageSwitch != nil {
 		onPageSwitch(a)
@@ -1121,8 +1119,7 @@ func (a *shelf) pageActions(c *ui.Context, p panelPage) {
 // warmPage draws the page queued for warming (see shelf.warmPage) at an
 // opacity nobody can see: building it here, while the panel rests, pays
 // its first text layout, thumbnail texture and glyph atlas upload before
-// the user switches to it. It lives inside the page switch, so the
-// overview draws it too.
+// the user switches to it. It lives inside the page switch.
 func (a *shelf) warmPage(c *ui.Context) {
 	id := a.warming
 	if id == "" || a.tabPhase(c.Now()) < 1 {

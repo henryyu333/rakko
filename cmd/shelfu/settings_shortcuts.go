@@ -101,7 +101,7 @@ func (a *shelf) heldShortcut(k shortcutKind, acc string) {
 }
 
 // openTray shows the panel on the 托盘 page: it opens the shelf when it is
-// closed, grows it from the overview, and switches it when another page is
+// closed, grows it from the search bar, and switches it when another page is
 // showing.
 func (a *shelf) openTray() {
 	if !a.visible {

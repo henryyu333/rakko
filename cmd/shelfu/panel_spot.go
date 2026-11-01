@@ -217,7 +217,7 @@ func (a *shelf) frameTop() int {
 // island: the highest of the settled panel's top, the shell actually drawn
 // and the completion capsule's body, measured from the island's bottom
 // edge. An open spring that overshoots its level, or a page folding back to
-// the shorter overview, draws the shell above the panel's own top, and the
+// the shorter bar, draws the shell above the panel's own top, and the
 // frame has to reach up with it or the shell is clipped.
 func (a *shelf) upFrameTop() int {
 	top := a.panelPlacement().Y

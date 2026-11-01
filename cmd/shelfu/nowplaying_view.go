@@ -65,7 +65,7 @@ func (m *nowPlayingModule) showsPlayer() bool {
 // the left wing, the equalizer in the right, both centered in the band the
 // hardware notch occupies. The middle stays empty — the camera housing
 // hides it. There are no controls: a press anywhere on the shell opens the
-// overview, and the sheet's left-ear chip keeps the transport. The
+// search bar, and the page's left-ear chip keeps the transport. The
 // caller clips the layout to the growing shell and passes the peek
 // progress as k, so nothing squeezes while the notch opens. It reports
 // whether it drew anything.
