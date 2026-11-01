@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -31,23 +32,25 @@ type SpotlightHit struct {
 	LastUsed time.Time
 }
 
-// SpotlightQuery builds the MDQuery expression for term: the file name
-// contains it (case- and diacritic-insensitive), or the document's text
-// does. Quotes, backslashes and wildcards are escaped so the term is
-// literal. Spotlight's text matcher does not honour those escapes — an
-// escaped wildcard there matches everything — so a term carrying one
-// searches names only. An empty term has no query.
-func SpotlightQuery(term string) string {
+// SpotlightQueries builds the MDQuery expressions for term: one asks the
+// name index (case- and diacritic-insensitive), the other the text
+// content index. They run side by side because the text index answers
+// much later — a name hit paints the sheet while the content hits are
+// still being gathered. Quotes, backslashes and wildcards are escaped so
+// the term is literal; Spotlight's text matcher does not honour those
+// escapes (an escaped wildcard there matches everything), so a term
+// carrying one searches names only. An empty term has no query.
+func SpotlightQueries(term string) []string {
 	term = strings.TrimSpace(term)
 	if term == "" {
-		return ""
+		return nil
 	}
 	e := spotlightEscape(term)
 	name := `(kMDItemFSName == "*` + e + `*"cd) || (kMDItemDisplayName == "*` + e + `*"cd)`
 	if strings.ContainsAny(term, `"\\*?`) {
-		return name
+		return []string{name}
 	}
-	return name + ` || (kMDItemTextContent == "*` + e + `*"cd)`
+	return []string{name, `(kMDItemTextContent == "*` + e + `*"cd)`}
 }
 
 // spotlightEscape makes term a literal inside an MDQuery string: a
@@ -114,70 +117,75 @@ func WarmSpotlight() {
 	}()
 }
 
-// SpotlightRun is one query in flight. Cancel stops it; the batches it
-// would still deliver are dropped.
+// SpotlightRun is the queries one term runs. Cancel stops them; the
+// batches they would still deliver are dropped.
 type SpotlightRun struct {
 	mu      sync.Mutex
-	q       uintptr
+	qs      []uintptr
+	emitMu  sync.Mutex
 	stopped atomic.Bool
 }
 
-// Cancel stops the query. Safe from any goroutine and more than once.
+// Cancel stops every query of the run. Safe from any goroutine and more
+// than once.
 func (r *SpotlightRun) Cancel() {
 	if r == nil {
 		return
 	}
 	r.stopped.Store(true)
 	r.mu.Lock()
-	if r.q != 0 {
-		spotQueryStop(r.q)
+	for _, q := range r.qs {
+		spotQueryStop(q)
 	}
 	r.mu.Unlock()
 }
 
-// StartSpotlight runs term against the Spotlight index. emit receives each
-// batch of new hits on the query's own goroutine, in arrival order; done
-// runs once the index has finished gathering (or immediately for an empty
-// term). limit caps how many hits the query collects. The returned run is
-// never nil, so a caller can always cancel it.
+// StartSpotlight runs term against the Spotlight index. The name and the
+// text queries run side by side; emit receives each batch of new hits on
+// the query goroutines (never two at once), and done runs once both have
+// finished gathering (or immediately for an empty term). limit caps how
+// many hits each query collects. The returned run is never nil, so a
+// caller can always cancel it.
 func StartSpotlight(term string, limit int, emit func([]SpotlightHit), done func()) *SpotlightRun {
 	run := &SpotlightRun{}
-	if strings.TrimSpace(term) == "" {
+	exprs := SpotlightQueries(term)
+	if len(exprs) == 0 {
 		if done != nil {
 			done()
 		}
 		return run
 	}
-	go run.loop(term, limit, emit, done)
+	if limit <= 0 {
+		limit = spotLimit
+	}
+	var wg sync.WaitGroup
+	wg.Add(len(exprs))
+	for _, expr := range exprs {
+		expr := expr
+		go func() {
+			defer wg.Done()
+			run.query(expr, limit, emit)
+		}()
+	}
+	go func() {
+		wg.Wait()
+		if done != nil && !run.stopped.Load() {
+			done()
+		}
+	}()
 	return run
 }
 
-func (r *SpotlightRun) loop(term string, limit int, emit func([]SpotlightHit), done func()) {
+// query runs one expression to completion, emitting its batches as they
+// arrive. The run's emit lock keeps the two queries' batches apart.
+func (r *SpotlightRun) query(expr string, limit int, emit func([]SpotlightHit)) {
 	// MDQuery is a CoreFoundation object with a run-loop ancestry: keep the
 	// goroutine on one thread for the query's whole life, even though the
 	// dispatch queue, not a run loop, delivers its results.
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
-	defer func() {
-		r.mu.Lock()
-		if r.q != 0 {
-			spotRelease(r.q)
-			r.q = 0
-		}
-		r.mu.Unlock()
-		if done != nil && !r.stopped.Load() {
-			done()
-		}
-	}()
 	if err := spotLoad(); err != nil {
 		return
-	}
-	expr := SpotlightQuery(term)
-	if expr == "" {
-		return
-	}
-	if limit <= 0 {
-		limit = spotLimit
 	}
 	q := spotQueryCreate(0, spotString(expr), 0, 0)
 	if q == 0 {
@@ -186,8 +194,19 @@ func (r *SpotlightRun) loop(term string, limit int, emit func([]SpotlightHit), d
 	spotQuerySetMax(q, int64(limit))
 	spotQuerySetQueue(q, spotQueue())
 	r.mu.Lock()
-	r.q = q
+	if r.stopped.Load() {
+		r.mu.Unlock()
+		spotRelease(q)
+		return
+	}
+	r.qs = append(r.qs, q)
 	r.mu.Unlock()
+	defer func() {
+		r.mu.Lock()
+		r.qs = slices.DeleteFunc(r.qs, func(v uintptr) bool { return v == q })
+		r.mu.Unlock()
+		spotRelease(q)
+	}()
 	if !spotQueryExecute(q, 0) {
 		return
 	}
@@ -203,7 +222,9 @@ func (r *SpotlightRun) loop(term string, limit int, emit func([]SpotlightHit), d
 			pending = nil
 			return false
 		}
+		r.emitMu.Lock()
 		emit(pending)
+		r.emitMu.Unlock()
 		pending = nil
 		last = time.Now()
 		first = false
@@ -214,10 +235,6 @@ func (r *SpotlightRun) loop(term string, limit int, emit func([]SpotlightHit), d
 			return
 		}
 		r.mu.Lock()
-		if r.q == 0 {
-			r.mu.Unlock()
-			return
-		}
 		n := spotQueryCount(q)
 		complete := spotQueryComplete(q)
 		for seen < n && len(pending) < spotBatchMax {
@@ -250,12 +267,10 @@ func (r *SpotlightRun) loop(term string, limit int, emit func([]SpotlightHit), d
 	}
 	// The index is done: read whatever arrived since the last pass.
 	r.mu.Lock()
-	if r.q != 0 {
-		for n := spotQueryCount(q); seen < n; seen++ {
-			if item := spotQueryResult(q, seen); item != 0 {
-				if hit, ok := spotHit(item); ok {
-					pending = append(pending, hit)
-				}
+	for n := spotQueryCount(q); seen < n; seen++ {
+		if item := spotQueryResult(q, seen); item != 0 {
+			if hit, ok := spotHit(item); ok {
+				pending = append(pending, hit)
 			}
 		}
 	}

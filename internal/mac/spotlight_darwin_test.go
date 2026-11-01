@@ -8,21 +8,26 @@ import (
 	"testing"
 )
 
-// TestSpotlightQuerySearchesNamesAndText: a plain term asks for the name
-// and the document text, case- and diacritic-insensitive.
-func TestSpotlightQuerySearchesNamesAndText(t *testing.T) {
-	q := SpotlightQuery("  Rakko ")
+// TestSpotlightQueriesSearchesNamesAndText: a plain term asks the name
+// index and the text index, case- and diacritic-insensitive.
+func TestSpotlightQueriesSearchesNamesAndText(t *testing.T) {
+	queries := SpotlightQueries("  Rakko ")
+	if len(queries) != 2 {
+		t.Fatalf("queries = %q, want a name and a text query", queries)
+	}
 	for _, want := range []string{
 		`kMDItemFSName == "*Rakko*"cd`,
 		`kMDItemDisplayName == "*Rakko*"cd`,
-		`kMDItemTextContent == "*Rakko*"cd`,
 	} {
-		if !strings.Contains(q, want) {
-			t.Fatalf("query %q lacks %q", q, want)
+		if !strings.Contains(queries[0], want) {
+			t.Fatalf("name query %q lacks %q", queries[0], want)
 		}
 	}
-	if SpotlightQuery("   ") != "" {
-		t.Fatal("a blank term must not run a query")
+	if !strings.Contains(queries[1], `kMDItemTextContent == "*Rakko*"cd`) {
+		t.Fatalf("text query = %q", queries[1])
+	}
+	if got := SpotlightQueries("   "); len(got) != 0 {
+		t.Fatalf("a blank term ran %q", got)
 	}
 }
 
@@ -37,12 +42,12 @@ func TestSpotlightQueryEscapesLiterals(t *testing.T) {
 		{"a?b", `a\?b`},
 	}
 	for _, c := range cases {
-		q := SpotlightQuery(c.term)
-		if !strings.Contains(q, `"*`+c.escaped+`*"cd`) {
-			t.Errorf("term %q produced %q, want the literal %q", c.term, q, c.escaped)
+		queries := SpotlightQueries(c.term)
+		if len(queries) != 1 {
+			t.Fatalf("term %q ran %q, want names only", c.term, queries)
 		}
-		if strings.Contains(q, "kMDItemTextContent") {
-			t.Errorf("term %q kept a text clause: %q", c.term, q)
+		if !strings.Contains(queries[0], `"*`+c.escaped+`*"cd`) {
+			t.Errorf("term %q produced %q, want the literal %q", c.term, queries[0], c.escaped)
 		}
 	}
 }
