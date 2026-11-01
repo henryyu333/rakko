@@ -144,47 +144,49 @@ func TestMonitorDragBandTransitions(t *testing.T) {
 	}
 }
 
-// A suppressed drag that is already in-band keeps its window tall
-// enough for the guard's landing row — the clamped cursor can never
-// escape onto the bar — and the corridor reaches that landing row.
-func TestDragGuardLandsBelowMenuBarInsideTheWindow(t *testing.T) {
+// A drag that leaves the panel auto-hides and suppresses itself; the same
+// drag coming back to the band clears the suppression and opens the panel
+// again. While suppressed the corridor pushes nothing, so the pointer (and
+// the icon it carries) follows the user.
+func TestDragReturningToTheBandReopensThePanel(t *testing.T) {
+	var parks []bool
+	oldPark := parkNotchFilter
+	parkNotchFilter = func(parked bool) { parks = append(parks, parked) }
+	t.Cleanup(func() { parkNotchFilter = oldPark })
+	parkedNow := func() bool { return len(parks) > 0 && parks[len(parks)-1] }
+
 	a := dragShelf()
 	a.dragging = false
 	cx := a.stripCenter()
-	// Enter the band while suppressed: no pill, no panel, tall window.
-	// dragSerial matches the stub so the monitor keeps the flag.
-	a.dragSerial, a.suppressed = 1, true
-	driveMonitor(t, a, mygo.Point{X: cx, Y: a.notchY + a.notchH - 1}, true, 1, []string{"public.file-url"})
-	if !a.inBand || a.dropHot || a.visible {
-		t.Fatalf("suppressed entry: inBand=%v dropHot=%v visible=%v", a.inBand, a.dropHot, a.visible)
+	enter := mygo.Point{X: cx, Y: a.notchY + a.notchH - 1}
+	away := mygo.Point{X: 100, Y: 800}
+	driveMonitor(t, a, enter, true, 1, []string{"public.file-url"})
+	if !a.visible || !a.inBand {
+		t.Fatalf("the drag did not open the panel: visible=%v inBand=%v", a.visible, a.inBand)
 	}
+	a.animationStart = time.Time{} // the open animation is done
+	// Leaving both band and panel collapses it after the delay.
+	driveMonitor(t, a, away, true, 1, []string{"public.file-url"})
+	driveMonitorAt(t, a, time.Now().Add(edgeLeaveDelay+time.Millisecond), away, true, 1, []string{"public.file-url"})
+	if a.visible || !a.suppressed {
+		t.Fatalf("leaving did not suppress: visible=%v suppressed=%v", a.visible, a.suppressed)
+	}
+	if !parkedNow() {
+		t.Fatal("the suppressed drag still had its corridor push the cursor")
+	}
+	// The same drag comes back to the band: the panel opens again.
+	driveMonitor(t, a, enter, true, 1, []string{"public.file-url"})
+	if a.suppressed || !a.dropHot || !a.visible || !a.inBand {
+		t.Fatalf("returning to the band: suppressed=%v dropHot=%v visible=%v inBand=%v",
+			a.suppressed, a.dropHot, a.visible, a.inBand)
+	}
+	if parkedNow() {
+		t.Fatal("the corridor stayed parked after the drag re-entered the band")
+	}
+	// The landing row the guard clamps to stays inside the window.
 	g := a.dragGuardRegion()
-	landing := g.Y + g.Height
-	if landing <= menuBandH(a.notchH) {
-		t.Fatalf("in-band landing %d is inside the %dpt menu bar", landing, menuBandH(a.notchH))
-	}
-	f := a.desiredFrame()
-	if f.Height < dropBandH(a.notchH) {
-		t.Fatalf("suppressed in-band frame %+v does not reach dropBandH", f)
-	}
-	if landing >= f.Height {
-		t.Fatalf("landing %d outside frame %+v", landing, f)
-	}
-	// Unsuppressed in-band: same tall frame, landing inside.
-	a.suppressed, a.dropHot = false, true
-	f = a.desiredFrame()
-	if landing >= f.Height {
-		t.Fatalf("dropHot: landing %d outside frame %+v", landing, f)
-	}
-	// Before any entry the corridor is menu-bar high and so is the
-	// frame — the push lands on the bar's last row, already covered.
-	a.suppressed, a.inBand, a.dropHot = false, false, false
-	g = a.dragGuardRegion()
-	if g.Height != menuBandH(a.notchH)-1 {
-		t.Fatalf("unentered corridor %d high, want %d", g.Height, menuBandH(a.notchH)-1)
-	}
-	if f := a.desiredFrame(); f.Height > menuBandH(a.notchH) {
-		t.Fatalf("unentered frame %dpt tall exceeds the menu bar", f.Height)
+	if landing := g.Y + g.Height; landing >= a.desiredFrame().Height {
+		t.Fatalf("landing %d outside frame %+v", landing, a.desiredFrame())
 	}
 }
 

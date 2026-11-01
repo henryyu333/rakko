@@ -1120,6 +1120,8 @@ func (a *shelf) hide(exit hideExit) {
 	a.suppressed = true
 	a.dropHot = false
 	a.syncMousePassThrough()
+	// A suppressed drag is not pushed: the corridor parks with it.
+	a.syncDragGuard()
 	if restore {
 		a.activatePreviousApp(prev)
 	}

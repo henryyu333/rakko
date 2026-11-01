@@ -68,12 +68,17 @@ func (a *shelf) dropBand(p mygo.Point) bool {
 // updateDragBand applies the enter/hold state machine to a.inBand:
 // entered only from the menu-bar rows, held anywhere in the band's width
 // down to the guard's landing row. Callers reset a.inBand on a new drag
-// serial before calling. Pure beyond the field write.
+// serial before calling. Pure beyond the field writes.
 func (a *shelf) updateDragBand(p mygo.Point, active bool) {
 	if a.inBand {
 		a.inBand = active && !a.ownDrag && a.dropBandX(p)
 	} else {
 		a.inBand = active && !a.ownDrag && a.dropBand(p)
+	}
+	if a.inBand && a.suppressed {
+		// The panel auto-hid when the same drag left it; coming back to
+		// the band is the drag asking for the panel again.
+		a.suppressed = false
 	}
 	a.dropHot = a.inBand && !a.suppressed
 }
@@ -158,7 +163,10 @@ func (a *shelf) syncDragGuard() {
 	// The filter is parked for the whole gesture instead — no teardown, no
 	// re-arm — and normal file-drag protection comes back with the release
 	// or as soon as the press becomes a drag of our own.
-	parkNotchFilter((a.islandPress.active || a.ownPress) && !a.dragging && !a.ownDrag)
+	// A drag the panel auto-hid is suppressed: the user is carrying the
+	// file away or bringing it back, and the corridor's push would fight
+	// the pointer (the icon jumps). The push returns with the band.
+	parkNotchFilter((a.islandPress.active || a.ownPress) && !a.dragging && !a.ownDrag || a.suppressed)
 	// The guard exists to keep the Spaces edge gesture from firing at the
 	// screen's top edge, under the notch. An island the user moved away from
 	// that row is not there, so the corridor — which also pushes the cursor
@@ -168,7 +176,7 @@ func (a *shelf) syncDragGuard() {
 		return
 	}
 	region := a.dragGuardRegion()
-	mac.SetDragPin(region, a.dragging && !a.quitting)
+	mac.SetDragPin(region, a.dragging && !a.suppressed && !a.quitting)
 	if a.guard.stop != nil {
 		if a.guard.region != region {
 			mac.SetDragGuardRegion(region)
