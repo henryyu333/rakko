@@ -119,6 +119,7 @@ func main() {
 			a.note.watch.Close()
 			a.note.watch = nil
 		}
+		a.closePet()
 		close(a.stop)
 		a.stopDragGuard()
 		a.endSnapSession(true)
@@ -305,6 +306,8 @@ func (a *shelf) ready(show bool) {
 		a.place(mygo.Screen.CursorScreenPoint())
 		// 拔掉显示器的固定项回主显示器同一边。
 		a.pinDisplaysChanged()
+		// 桌宠所在的显示器拔掉了就回主显示器。
+		a.petDisplaysChanged()
 	})
 	if a.store != nil {
 		if merr := a.store.MigrationError(); merr != nil {
@@ -322,6 +325,9 @@ func (a *shelf) ready(show bool) {
 	}
 	a.installServices()
 	a.pinRestore()
+	// The desktop otter comes out after the pins: it stands among them on
+	// the same floating level, outside the dock's and the panel's zones.
+	a.petStart()
 	a.startMonitoring()
 	log.Print("Rakko ready")
 }
@@ -355,7 +361,7 @@ func (a *shelf) newNotchWindow() {
 // the current settings.
 func (a *shelf) trayMenu() *mygo.Menu {
 	l := a.appLoc()
-	return mygo.NewMenu([]*mygo.MenuItem{
+	items := []*mygo.MenuItem{
 		{Label: l.TrayShowShelf(), Click: func(*mygo.MenuItem, *mygo.Window) { a.toggle() }},
 		a.permissionMenuItem(),
 		{Label: l.TrayRetention(), Type: mygo.MenuItemSubmenu, Submenu: a.retentionMenu()},
@@ -364,14 +370,32 @@ func (a *shelf) trayMenu() *mygo.Menu {
 			Click: func(*mygo.MenuItem, *mygo.Window) {
 				a.setNowPlaying(func(s *settings.Settings) { s.IslandNowPlaying = !s.IslandNowPlaying })
 			}},
-		{Label: l.AwakeTitle(), Type: mygo.MenuItemSubmenu, Submenu: a.awakeMenu()},
-		{Label: l.ItemCaptureText(), Click: func(*mygo.MenuItem, *mygo.Window) { a.startScreenOCR() }},
+	}
+	if it := a.petMenuItem(); it != nil {
+		items = append(items, it)
+	}
+	items = append(items,
+		&mygo.MenuItem{Label: l.AwakeTitle(), Type: mygo.MenuItemSubmenu, Submenu: a.awakeMenu()},
+		&mygo.MenuItem{Label: l.ItemCaptureText(), Click: func(*mygo.MenuItem, *mygo.Window) { a.startScreenOCR() }},
 		mygo.Separator(),
-		{Label: l.TraySettings(), Click: func(*mygo.MenuItem, *mygo.Window) { a.openSettings() }},
+		&mygo.MenuItem{Label: l.TraySettings(), Click: func(*mygo.MenuItem, *mygo.Window) { a.openSettings() }},
 		a.updateMenu(),
 		mygo.Separator(),
-		{Label: l.TrayQuit(), Click: func(*mygo.MenuItem, *mygo.Window) { mygo.App.Quit() }},
-	})
+		&mygo.MenuItem{Label: l.TrayQuit(), Click: func(*mygo.MenuItem, *mygo.Window) { mygo.App.Quit() }},
+	)
+	return mygo.NewMenu(items)
+}
+
+// petMenuItem offers 放出海獭 while the otter is stowed — the way back when
+// it was sent into the notch and the Settings window is not open. It is
+// absent from a build without the artwork, which shows no otter at all.
+func (a *shelf) petMenuItem() *mygo.MenuItem {
+	l := a.appLoc()
+	if petArt() == nil || a.settings.Pet.Shown {
+		return nil
+	}
+	return &mygo.MenuItem{Label: l.TrayShowPet(), Disabled: a.settingsBroken,
+		Click: func(*mygo.MenuItem, *mygo.Window) { a.setPetShown(true) }}
 }
 
 // retentionMenu offers the retention periods. It is disabled while

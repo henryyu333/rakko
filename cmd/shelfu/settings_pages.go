@@ -96,7 +96,8 @@ func (a *shelf) settingsGeneralPage(c *ui.Context) {
 }
 
 // settingsNotchPage: the shelf's mantle (shape, island position), the
-// now-playing wings, the three live activities, and window snapping.
+// now-playing wings, the desktop otter, the three live activities, and
+// window snapping.
 func (a *shelf) settingsNotchPage(c *ui.Context) {
 	l := loc(c)
 	settingsHero(c, "notch", l.SettingsNotchPage(), l.SettingsNotchHero(), "curious",
@@ -135,6 +136,25 @@ func (a *shelf) settingsNotchPage(c *ui.Context) {
 			})
 		})
 	})
+
+	// 桌宠: the desktop otter's own two switches. A build without the
+	// artwork draws no otter, so the group is not there either — an empty
+	// promise is worse than no row.
+	if petArt() != nil {
+		settingsGroup(c, "pet", l.SettingsPetGroup(), "", func() {
+			ui.Column(c.Key("pet-rows")).FillWidth().Disabled(a.settingsBroken).Children(func() {
+				settingsToggleRow(c, "pet-show", l.SettingsPetShowRow(), "", a.settings.Pet.Shown, a.setPetShown)
+				settingsSep(c, "pet-show")
+				settingsRow(c, "pet-size", l.PetSizeRow(), "", func() {
+					index := petSizeIndex(a.settings.Pet.Size)
+					if sg := settingsSegmented(c, "pet-size", l.PetSizeRow(), &index,
+						l.PetSizeSmall(), l.PetSizeMedium(), l.PetSizeLarge()); sg.Changed() {
+						a.setPetSize(petSizeAt(index))
+					}
+				})
+			})
+		})
+	}
 
 	settingsGroup(c, "live", l.SettingsLiveSection(), "", func() {
 		ui.Column(c.Key("live-rows")).FillWidth().Disabled(a.settingsBroken).Children(func() {

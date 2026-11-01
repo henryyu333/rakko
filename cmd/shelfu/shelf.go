@@ -143,6 +143,14 @@ type shelf struct {
 	thumbActive                                                 int
 	pins                                                        []*pinItem // desktop-pinned cards (pin.go)
 	pinReturning                                                bool       // a pin drag holds the notch's 松开放回 bulge
+	// pet 是桌面海獭的窗口与按下会话（pet.go）；nil 表示桌面上没有它。
+	// lastAct 是最近一次使用（打开面板、提起海獭、接住投放），十分钟
+	// 没有它海獭就睡觉；happyUntil 是接到好消息后的开心表情截止时刻。
+	pet          *petWindow
+	petReturning bool // a carried otter holds the notch's 松开收进刘海 pill
+	lastAct      time.Time
+	happyUntil   time.Time
+
 	// note 是便利贴卡片背后的那个 Markdown 文件，以及打开时的窗口
 	// （note.go）；首次画到卡片或点开时才建立文件与监听。
 	note *noteUI

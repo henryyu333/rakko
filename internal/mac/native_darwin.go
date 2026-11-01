@@ -113,6 +113,9 @@ var (
 	// CGEventSourceButtonState reports hardware button state; reading it
 	// requires no Input Monitoring permission (only *posting* events does).
 	cgEventSourceButtonState func(state int32, button uint32) bool
+	// cgDisplayIsAsleep answers whether a display is asleep: the desktop
+	// otter stops its motion while the screen is dark.
+	cgDisplayIsAsleep func(display uint32) uint32
 
 	loadOnce sync.Once
 	loadErr  error
@@ -210,6 +213,7 @@ func load() {
 		purego.RegisterFunc(&msgSetRect, msgSendAddr)
 		purego.RegisterFunc(&msgSetFloat, msgSendAddr)
 		purego.RegisterLibFunc(&cgEventSourceButtonState, libCG, "CGEventSourceButtonState")
+		purego.RegisterLibFunc(&cgDisplayIsAsleep, libCG, "CGDisplayIsAsleep")
 		purego.RegisterLibFunc(&classReplaceMethod, libObjC, "class_replaceMethod")
 		purego.RegisterLibFunc(&classGetMethodImplementation, libObjC, "class_getMethodImplementation")
 		purego.RegisterLibFunc(&classGetName, libObjC, "class_getName")
@@ -697,6 +701,30 @@ func ConfigureOverlayWindow(window uintptr) {
 // keyboard focus away from the app the user was typing in. Main thread
 // only.
 func ConfigurePinWindow(window uintptr) {
+	configureFloatingPanel(window, notchCollectionBehavior, 1)
+}
+
+// petCollectionBehavior is the desktop otter's: on every Space and still,
+// out of the ⌘` cycle, but without collectionFullScreenAuxiliary — a
+// full-screen app hides the otter instead of leaving it on the picture.
+const petCollectionBehavior = collectionCanJoinAllSpaces | collectionStationary | collectionIgnoresCycle
+
+// ConfigurePetWindow turns a window into the desktop otter's: the same
+// non-activating floating panel as a pin, on every Space, but with no
+// window shadow (the artwork's own soft edge is the shape) and no
+// full-screen company. It refuses key status exactly like a pin, so a
+// click on the otter never takes the keyboard from the app being typed in,
+// and it registers the same drop types, so files land on the otter.
+// Main thread only.
+func ConfigurePetWindow(window uintptr) {
+	configureFloatingPanel(window, petCollectionBehavior, 0)
+}
+
+// configureFloatingPanel applies the policy pinned cards and the otter
+// share: a borderless non-activating panel at the floating level (above
+// ordinary windows, below the menu bar and the notch), mouse-aware, taking
+// drops, and never key. Main thread only.
+func configureFloatingPanel(window uintptr, behavior uintptr, shadow int) {
 	if window == 0 {
 		return
 	}
@@ -708,16 +736,16 @@ func ConfigurePinWindow(window uintptr) {
 		send(w, "setStyleMask:", nsWindowStyleMaskNonactivatingPanel)
 		send(w, "setLevel:", uintptr(3))    // NSFloatingWindowLevel
 		send(w, "setAnimationBehavior:", 0) // NSWindowAnimationBehaviorDefault
-		send(w, "setHasShadow:", 1)         // the card's drop shadow, hugging its opaque pixels
+		send(w, "setHasShadow:", uintptr(shadow))
 		send(w, "setHidesOnDeactivate:", 0)
 		send(w, "setMovable:", 0)
 		send(w, "setOpaque:", 0)
 		send(w, "setBackgroundColor:", uintptr(send(class("NSColor"), "clearColor")))
-		send(w, "setCollectionBehavior:", notchCollectionBehavior)
+		send(w, "setCollectionBehavior:", behavior)
 		if send(w, "respondsToSelector:", uintptr(sel("setFloatingPanel:"))) != 0 {
 			send(w, "setFloatingPanel:", 1)
 		}
-		// The card never takes the keyboard. canBecomeKeyWindow is what
+		// The window never takes the keyboard. canBecomeKeyWindow is what
 		// AppKit actually consults: mygo's shared panel class answers YES,
 		// and setBecomesKeyOnlyIfNeeded: does not stop a click from making
 		// the window key, so gate the selector on the assocNoKey mark and
@@ -999,4 +1027,38 @@ func iconPNG(size int, iconOf func(ws id) id) []byte {
 		out = goBytes(png)
 	})
 	return out
+}
+
+// DisplayAsleep reports whether the display with this CGDirectDisplayID is
+// asleep — screensaver, display sleep, or a closed lid with no mirror. The
+// desktop otter skips its own motion while it is: nothing is on screen to
+// see, and waking a window to animate it would spend power for nothing.
+// An unknown display counts as awake. Main thread only.
+func DisplayAsleep(display uint32) bool {
+	if err := Init(); err != nil {
+		return false
+	}
+	var asleep bool
+	withPool(func() { asleep = cgDisplayIsAsleep(display) != 0 })
+	return asleep
+}
+
+// WindowOccluded reports whether AppKit considers window fully covered by
+// other windows — another app's full-screen window, the lock screen's
+// shield, a Space the user is not on. An occluded window draws nothing, so
+// the otter holds its pose instead of animating behind a curtain. Main
+// thread only.
+func WindowOccluded(window uintptr) bool {
+	if window == 0 {
+		return false
+	}
+	if err := Init(); err != nil {
+		return false
+	}
+	// NSWindowOcclusionStateVisible is 1<<1; AppKit computes it lazily, so
+	// reading it costs one message and no IPC until the window shows.
+	const visible = 1 << 1
+	var occluded bool
+	withPool(func() { occluded = sendInt(id(window), "occlusionState")&visible == 0 })
+	return occluded
 }

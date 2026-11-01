@@ -25,6 +25,7 @@ import (
 
 	"shelf/internal/mac"
 	"shelf/internal/settings"
+	"shelf/locales"
 )
 
 // stubSettingsSeams replaces the app-level seams (login item, Shell.OpenPath,
@@ -664,5 +665,42 @@ func TestSettingsViewLiveTogglesSave(t *testing.T) {
 	}
 	if saved.LiveActivities.Charging || saved.LiveActivities.Headphones || saved.LiveActivities.Downloads {
 		t.Fatalf("the switches did not reach settings.json: %+v", saved.LiveActivities)
+	}
+}
+
+// TestSettingsPetGroupFollowsTheArtwork: the 桌宠 group is there when this
+// build has the otter's pictures and absent when it does not — a switch
+// that promises an otter nobody can see is worse than no row.
+func TestSettingsPetGroupFollowsTheArtwork(t *testing.T) {
+	l := locales.In("")
+	oldDir := otterDir
+	t.Cleanup(func() { otterDir = oldDir; resetOtters() })
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "rakko-otter_pet_catch_wait_v001.png"), testPNGBytes(t), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	otterDir = func() string { return dir }
+	resetOtters()
+
+	a, view := newSettingsShelf(t)
+	a.settingsPage = settingsPageNotch
+	view.Frame()
+	if _, ok := view.Find(l.SettingsPetGroup()); !ok {
+		t.Fatalf("the 桌宠 group is missing with the artwork in place; texts %v", view.Texts())
+	}
+	if _, ok := view.Find(l.SettingsPetShowRow()); !ok {
+		t.Fatal("the 显示海獭 row is missing")
+	}
+	if _, ok := view.Find(l.PetSizeRow()); !ok {
+		t.Fatal("the 大小 row is missing")
+	}
+
+	otterDir = func() string { return "" }
+	resetOtters()
+	a2, view2 := newSettingsShelf(t)
+	a2.settingsPage = settingsPageNotch
+	view2.Frame()
+	if _, ok := view2.Find(l.SettingsPetGroup()); ok {
+		t.Fatal("a build without the artwork still offers the otter")
 	}
 }

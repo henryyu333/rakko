@@ -1482,10 +1482,13 @@ func (a *shelf) peekView(c *ui.Context, shellW, shellH, openK, peekK, shake floa
 			liveEv, liveOK = ev, true
 		}
 		switch {
+		case a.petReturning:
+			// The otter held over the notch: the same pill, stowing it.
+			kind = peekPetStow
 		case a.pinReturning:
-			// A pinned card held over the notch wins over the capsule
-			// and the wings: the release reads this same zone, so the
-			// affordance must always be the pill it acts on
+			// A pinned card or the carried otter held over the notch wins
+			// over the capsule and the wings: the release reads this same
+			// zone, so the affordance must always be the pill it acts on
 			// (design §4 松开放回).
 			kind = peekReturn
 		case a.capsuleUp(now):
@@ -1596,6 +1599,9 @@ func (a *shelf) peekView(c *ui.Context, shellW, shellH, openK, peekK, shake floa
 				} else if kind == peekReturn {
 					ui.Icon(c, shelfSymbol).Size(14, 14).TextColor(ink)
 					panelLabel(c, nil, l.DropReturn(), 12, 600).TextColor(ink)
+				} else if kind == peekPetStow {
+					ui.Icon(c, shelfSymbol).Size(14, 14).TextColor(ink)
+					panelLabel(c, nil, l.DropStowPet(), 12, 600).TextColor(ink)
 				} else {
 					ui.Icon(c, chevronDownSym).Size(12, 12).TextColor(ink2)
 				}
