@@ -147,3 +147,36 @@ func TestDefaultLayoutFitsTwoRows(t *testing.T) {
 		}
 	}
 }
+
+// TestToolsGridHoldsTallWidgets: the music card is 2 × 2 in the grid and
+// the page scrolls past the two visible rows.
+func TestToolsGridHoldsTallWidgets(t *testing.T) {
+	l := mustLayout(t)
+	withNil := func(string) bool { return false }
+	cells := packToolCards(l.Cards, withNil, false)
+	var playing, awake toolCell
+	for _, c := range cells {
+		switch c.id {
+		case "playing":
+			playing = c
+		case "awake":
+			awake = c
+		}
+	}
+	if playing.h != toolRowH(2) || playing.w != toolColW(2) {
+		t.Fatalf("playing cell = %+v, want 2x2", playing)
+	}
+	if awake.x != 2*(toolColW(1)+toolCellGap) || awake.y != 0 {
+		t.Fatalf("awake cell = %+v, want column 2 of row 0", awake)
+	}
+	if playing.y+playing.h <= 0 {
+		t.Fatal("the playing cell has no height")
+	}
+}
+
+// mustLayout is the default layout of a shelf with no data directory.
+func mustLayout(t *testing.T) layout.Layout {
+	t.Helper()
+	a := &shelf{dataDir: t.TempDir()}
+	return a.toolsLayout()
+}

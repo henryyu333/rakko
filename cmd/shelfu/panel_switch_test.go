@@ -2,18 +2,15 @@
 
 package main
 
-// The panel's page switch: every move between the overview and a page, or
-// between two pages, is one timeline — the page being left fades out while
-// the arriving one fades in from its icon's side. These tests hold the
-// user-visible results: the overview arrives once, in its resting spot; a
-// switch never shows neither page; both pages' action rows travel with
-// their content; and the overview rests by warming the pages.
+// The panel's page switch: every move between two pages is one timeline —
+// the page being left fades out while the arriving one fades in from its
+// icon's side. These tests hold the user-visible results: a switch never
+// shows neither page, and both pages' action rows travel with their
+// content.
 
 import (
 	"testing"
 	"time"
-
-	"github.com/egoist/mygo"
 )
 
 // pageDraws counts the page blocks each frame drew, by page id: one group
@@ -48,48 +45,6 @@ func oncePerFrame(t *testing.T, frames []map[pageID]int, id pageID) {
 		if got := draws[id]; got != 1 {
 			t.Fatalf("frame %d drew %s %d times, want 1 (all: %v)", i, id, got, draws)
 		}
-	}
-}
-
-// TestPageToOverviewDrawsOneOverview: leaving a page for the overview draws
-// the page being left (fading) and the overview exactly once, and the
-// overview sits where it rests — the otter and the status text do not slide
-// from a second layout's offset.
-func TestPageToOverviewDrawsOneOverview(t *testing.T) {
-	a, view := levelShelf(t)
-	a.visible = true
-	view.Frame()
-	rest, ok := view.Find("托盘 1 项")
-	if !ok {
-		t.Fatalf("the overview's status line is missing; texts %v", view.Texts())
-	}
-
-	old := pageSwitchPhase
-	t.Cleanup(func() { pageSwitchPhase = old })
-	pageSwitchPhase = func(*shelf, time.Time) float32 { return 1 }
-	a.setTab(pageTray) // settle on a page, no fade
-	a.tabAt = time.Time{}
-	view.Frame()
-	pageSwitchPhase = old
-
-	a.setLevel(1) // the Esc move back to the overview
-	if a.tab != pageOverview || a.tabFrom != pageTray {
-		t.Fatalf("tab=%s from=%s, want the tray fading out", a.tab, a.tabFrom)
-	}
-	frames := pageDraws(t, func() {
-		pageSwitchPhase = func(*shelf, time.Time) float32 { return 0.42 }
-		view.Frame()
-		pageSwitchPhase = old
-	})
-	oncePerFrame(t, frames, pageOverview)
-	oncePerFrame(t, frames, pageTray)
-	// The overview's own text is still there, on its resting spot.
-	mid, ok := view.Find("托盘 1 项")
-	if !ok {
-		t.Fatalf("the arriving overview has no status line; texts %v", view.Texts())
-	}
-	if mid != rest {
-		t.Fatalf("the overview arrived at %+v, its resting spot is %+v", mid, rest)
 	}
 }
 
@@ -140,47 +95,6 @@ func TestSameSizeSwitchNeverBlank(t *testing.T) {
 	}
 	if !view.HasText("⌘ / ⇧ 多选") {
 		t.Fatalf("the leaving page's action row vanished before its content; texts %v", view.Texts())
-	}
-}
-
-// TestOverviewPrewarmsPages: resting on the overview queues and draws the
-// pages nobody has seen, so the first switch to any page is as cheap as the
-// ones after it.
-func TestOverviewPrewarmsPages(t *testing.T) {
-	a, view := levelShelf(t)
-	a.visible = true
-	view.Frame()
-	if a.currentLevel() != 1 {
-		t.Fatalf("level = %d, want the resting overview", a.currentLevel())
-	}
-	// nextWarmPage needs a native surface to ask for the frame; the tests'
-	// shelf has none, so it is lent one for that call only.
-	a.win, a.winH = &mygo.Window{}, 0
-	a.nextWarmPage(time.Now())
-	a.win = nil
-	if a.warming == "" {
-		t.Fatal("resting on the overview queued no page to warm")
-	}
-	id := a.warming
-	view.Frame()
-	if !a.warmed[id] {
-		t.Fatalf("the overview never drew the %s warm layer", id)
-	}
-	// Warming continues one page per tick until every page has been seen
-	// once; the page on screen counts as warm by being drawn.
-	for range len(a.enabledPages()) + 1 {
-		a.win = &mygo.Window{}
-		a.nextWarmPage(time.Now())
-		a.win = nil
-		if a.warming == "" {
-			break
-		}
-		view.Frame()
-	}
-	for _, p := range a.enabledPages() {
-		if !a.warmed[p.id()] {
-			t.Fatalf("%s was never warmed", p.id())
-		}
 	}
 }
 

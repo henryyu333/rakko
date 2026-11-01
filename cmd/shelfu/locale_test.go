@@ -81,7 +81,7 @@ func englishShelf(t *testing.T) (*shelf, *ui.Tester) {
 	return a, view
 }
 
-// TestEnglishPanelPagesHaveNoChineseAndFit draws the overview and every
+// TestEnglishPanelPagesHaveNoChineseAndFit draws the search bar and every
 // page in English: no label may say Chinese, and the 416 × 174 audit must
 // find nothing cut or wrapped.
 func TestEnglishPanelPagesHaveNoChineseAndFit(t *testing.T) {
@@ -91,12 +91,9 @@ func TestEnglishPanelPagesHaveNoChineseAndFit(t *testing.T) {
 	a.visible = true
 	view.Frame()
 	view.Frame()
-	assertNoHan(t, "overview", view.Texts())
-	if !view.HasText(a.appLoc().OverviewTrayCount(1)) {
-		t.Fatalf("the overview does not say its tray count in English; texts %v", view.Texts())
-	}
-	if notes := drain(); len(notes) > 0 {
-		t.Errorf("overview: %v", notes)
+	assertNoHan(t, "home", view.Texts())
+	if !view.HasText(a.appLoc().HomeSearch()) {
+		t.Fatalf("the search bar does not say its placeholder in English; texts %v", view.Texts())
 	}
 
 	a.level = 2
@@ -150,7 +147,7 @@ func TestEnglishSettingsWindowHasNoChinese(t *testing.T) {
 	joined := strings.Join(view.Texts(), "\n")
 	for _, want := range []string{
 		l.SettingsAboutPage(), l.SettingsAboutVersion(appVersion(), runtime.GOARCH),
-		l.SettingsAboutWhatsNew(), l.SettingsOpenDataFolder(),
+		l.SettingsOpenDataFolder(),
 	} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("settings: %q missing from the English About page", want)

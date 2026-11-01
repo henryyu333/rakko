@@ -164,11 +164,11 @@ func (a *shelf) navW() float32 {
 }
 
 // navPages are the pages the capsule offers, in the registry's order: the
-// overview and the now-playing detail page have no seat.
+// now-playing detail page has no seat.
 func (a *shelf) navPages() []panelPage {
 	var out []panelPage
 	for _, p := range a.enabledPages() {
-		if p.id() == pageOverview || p.id() == pagePlaying {
+		if p.id() == pagePlaying {
 			continue
 		}
 		out = append(out, p)
@@ -341,12 +341,12 @@ func (a *shelf) navView(c *ui.Context, r ui.Rect, opacity float32) {
 	glassBase(c, "nav-base", r, navH/2, opacity)
 	row := ui.Row(c.Key("nav")).Absolute().Left(r.X).Top(r.Y).Width(r.W).Height(r.H).
 		Padding(0, navPadX, 0, navPadX).Gap(navBtnGap).AlignItems(ui.Center).Opacity(opacity).
-		Radius(navH / 2).Material(glass.Glass{}).Border(0.5, paneRim)
+		Radius(navH/2).Material(glass.Glass{}).Border(0.5, paneRim)
 	if opacity < 0.5 {
 		row.PassThrough()
 	}
 	button := func(key string, label string, on bool, icon func()) ui.Element {
-		b := ui.ButtonBase(c.Key("nav-" + key)).Size(navBtnW, navBtnH).Radius(navBtnH / 2).Center().
+		b := ui.ButtonBase(c.Key("nav-"+key)).Size(navBtnW, navBtnH).Radius(navBtnH / 2).Center().
 			Label(label).Tooltip(label)
 		switch {
 		case on:
@@ -399,8 +399,13 @@ func (a *shelf) navView(c *ui.Context, r ui.Rect, opacity float32) {
 	})
 }
 
-// goHome brings the panel back to the search bar, the keyboard with it.
+// goHome brings the panel back to the search bar, the keyboard with it; a
+// closed panel opens straight on the bar.
 func (a *shelf) goHome() {
+	if !a.visible {
+		a.show(false)
+		return
+	}
 	a.setLevel(1)
 	a.takeKeyboard()
 }

@@ -191,7 +191,7 @@ func TestSettingsViewShowsSections(t *testing.T) {
 		{"AI 用量", []string{"在刘海里显示 AI 用量", "额度显示", "数据来源", "套餐额度", "本机用量"}},
 		{"快捷键", []string{"显示 / 收起", "剪贴板搜索", "框选文字", "打开托盘", "在刘海里"}},
 		{"系统权限", []string{"完整磁盘访问", "辅助功能", "屏幕录制"}},
-		{"关于", []string{"打开数据文件夹", "新功能介绍", "源代码", "隐私"}},
+		{"关于", []string{"打开数据文件夹", "源代码", "隐私"}},
 	}
 	for _, p := range pages {
 		openSettingsPage(t, view, p.nav)
@@ -487,8 +487,7 @@ func TestSettingsViewOpenDataFolder(t *testing.T) {
 	}
 }
 
-// 关于's source row opens the public repository, and its 新功能介绍 button
-// replays the panel's new-feature card.
+// 关于's source row opens the public repository.
 func TestSettingsViewAboutActions(t *testing.T) {
 	var opened []string
 	stubSettingsSeams(t, false, nil, nil)
@@ -499,15 +498,11 @@ func TestSettingsViewAboutActions(t *testing.T) {
 	}
 	t.Cleanup(func() { openExternal = origExternal })
 
-	a, view := newSettingsShelf(t)
+	_, view := newSettingsShelf(t)
 	openSettingsPage(t, view, "关于")
 	clickVisible(t, view, "打开")
 	if len(opened) != 1 || opened[0] != sourceURL {
 		t.Fatalf("source link opened %v, want %q", opened, sourceURL)
-	}
-	clickVisible(t, view, "新功能介绍")
-	if !a.whatsNewUp || a.tab != pageOverview {
-		t.Fatalf("新功能介绍 did not show the card: up=%v tab=%v", a.whatsNewUp, a.tab)
 	}
 }
 

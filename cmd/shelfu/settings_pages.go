@@ -520,7 +520,6 @@ func (a *shelf) settingsAboutPage(c *ui.Context) {
 			ui.Row(c.Key("about-actions")).AlignItems(ui.Center).Gap(8).Padding(14, 0, 0, 0).Children(func() {
 				settingsButton(c, "update", l.SettingsUpdateCheckNow(), false, func() { a.checkUpdates(true) }).
 					Disabled(a.updateChecking || a.updateInstalling)
-				settingsButton(c, "whatsnew", l.SettingsAboutWhatsNew(), false, func() { a.ShowWhatsNew() })
 				settingsButton(c, "data", l.SettingsOpenDataFolder(), false, func() {
 					if err := openPath(a.dataDir); err != nil {
 						a.report(err)

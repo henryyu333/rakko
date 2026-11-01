@@ -4,7 +4,6 @@ package main
 
 import (
 	"strings"
-	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -19,7 +18,6 @@ import (
 type pageID string
 
 const (
-	pageOverview  pageID = "overview"  // 总览：点刘海直接到的一页
 	pageTray      pageID = "tray"      // 托盘：全部内容
 	pageClipboard pageID = "clipboard" // 剪贴板：只显示剪贴板收录的文字与图片
 	pagePlaying   pageID = "playing"   // 正在播放：音乐小组件的整页版
@@ -64,7 +62,7 @@ func (a *shelf) ensurePages() {
 	}
 	a.pagesReady = true
 	extra := a.pages
-	a.pages = []panelPage{&overviewPage{host: a}, &trayPage{host: a}, &clipboardPage{host: a}, &toolsPage{host: a}, &playingPage{host: a}}
+	a.pages = []panelPage{&trayPage{host: a}, &clipboardPage{host: a}, &toolsPage{host: a}, &playingPage{host: a}}
 	for _, p := range extra {
 		a.registerPage(p)
 	}
@@ -123,16 +121,10 @@ func (a *shelf) pageIndex(id pageID) int {
 	return -1
 }
 
-// currentPage is the page the panel shows now: the overview while the shell
-// is at its short size, otherwise a.tab's page when it is registered and
-// enabled, falling back to the tray — a page that gets switched off (e.g.
-// AI 用量's setting) never stays current.
+// currentPage is the page the panel shows now: a.tab's page when it is
+// registered and enabled, falling back to the tray — a page that gets
+// switched off (e.g. AI 用量's setting) never stays current.
 func (a *shelf) currentPage() panelPage {
-	if a.currentLevel() == 1 && !a.snap.panel && !a.snap.drawn {
-		if p := a.page(pageOverview); p != nil && p.enabled() {
-			return p
-		}
-	}
 	if p := a.page(a.tab); p != nil && p.enabled() {
 		return p
 	}
@@ -143,26 +135,9 @@ func (a *shelf) currentPage() panelPage {
 }
 
 // normalizeTab folds a stale a.tab (unset, or the id of a page that is now
-// disabled or unregistered) back to the tray, and a.tab to the overview
-// while the shell is at its short size. The switch is silent: no fade, no
-// outgoing page.
+// disabled or unregistered) back to the tray. The switch is silent: no
+// fade, no outgoing page.
 func (a *shelf) normalizeTab() {
-	// The arrangement panel borrows the short box but keeps the page
-	// underneath: it never switches pages.
-	if a.currentLevel() == 1 && !a.snap.panel && !a.snap.drawn {
-		if p := a.page(pageOverview); p != nil && p.enabled() {
-			if a.tab != pageOverview {
-				// A stale tab (a fresh load, a page switched off): the
-				// overview is the level's page, and nothing is fading.
-				a.tab, a.tabFrom = pageOverview, pageOverview
-				a.tabAt = time.Time{}
-				a.tabOutK, a.tabOutShift = 1, 0
-			}
-			// A switch out of a page keeps its outgoing page here: the
-			// fade-out draws it while the overview arrives.
-			return
-		}
-	}
 	if p := a.page(a.tab); p != nil && p.enabled() {
 		return
 	}

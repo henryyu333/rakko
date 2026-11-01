@@ -193,17 +193,15 @@ func panelLines(c *ui.Context, text string, size float32, weight int) ui.Element
 // 它下方），点下方页面胶囊进页面 440 × 250（32 顶栏、6 间距、200 页面区、
 // 12 底边；页面区自己再分 22 动作行 + 4 间距 + 416 × 174 内容）。
 const (
-	overviewW, overviewH = homeW, bandH + homeBarH
-	sheetW, sheetH       = 440, 250
-	contentW, contentH   = 416, 174
-	overviewBodyH        = 106
-	pageBodyH            = 200
+	homeShellW, homeShellH = homeW, bandH + homeBarH
+	sheetW, sheetH         = 440, 250
+	contentW, contentH     = 416, 174
+	pageBodyH              = 200
 
 	bandH          = 32 // 顶栏那一行
 	sheetPadX      = padX
 	sheetPadBottom = padBottom
 	contentGap     = bodyGap
-	overviewRadius = homeRadius
 	sheetRadius    = rPage
 	tileRadius     = rTile
 
@@ -391,15 +389,6 @@ func (a *shelf) view(c *ui.Context) {
 	c.Root().Background(ui.Transparent)
 	opts := transfer.DropOptions{Formats: []transfer.Format{transfer.FileList, transfer.URIList, transfer.PNG, transfer.Text}, Operations: transfer.Copy}
 	now := c.Now()
-	// The welcome and new-version cards wait a moment after the opening:
-	// ask for the frame that shows them.
-	if a.visible {
-		if a.welcomePending && !a.welcomeUp && !a.openedAt.IsZero() {
-			c.After(max(time.Second-now.Sub(a.openedAt), 0) + 10*time.Millisecond)
-		} else if a.whatsNewPending && !a.whatsNewUp && !a.openedAt.IsZero() {
-			c.After(max(400*time.Millisecond-now.Sub(a.openedAt), 0) + 10*time.Millisecond)
-		}
-	}
 	// What a closed panel has to say grows out of the notch (feedback.go);
 	// the text is measured before the shell is sized around it.
 	// 悬停或外来拖拽占用探头形状期间，胶囊根本没画出来：计时随让位整体
@@ -749,7 +738,7 @@ func (a *shelf) view(c *ui.Context) {
 	// own onto the panel's placed one while the shell springs open, so the
 	// drawn box starts at the island and rises onto the panel's box.
 	top := a.shellTopLocal(shellH, openK)
-	corner := float32(overviewRadius) + float32(sheetRadius-overviewRadius)*levelK
+	corner := float32(homeRadius) + float32(sheetRadius-homeRadius)*levelK
 	if a.snap.panel || a.snap.drawn {
 		corner = snapGhostR * 2 // 24: the design's snap panel corners
 	}
@@ -1081,12 +1070,6 @@ func (a *shelf) pageBody(c *ui.Context, over bool) {
 		}
 		cur := a.currentPage()
 		shift := tabShift * dir * (1 - inK)
-		if cur.id() == pageOverview {
-			// The overview arrives in its final spot: it never slides. Its
-			// otter and status text are what the user watches for, and the
-			// shell's own height change is the motion of this move.
-			shift = 0
-		}
 		frame := ui.Column(c.Key("frame")).Absolute().Top(0).Left(shift).
 			Width(contentW).Height(pageBodyH).Opacity(op)
 		frame.Children(func() { a.pageBlock(c, cur, over, true, op, shift) })
@@ -1105,21 +1088,11 @@ func (a *shelf) pageBody(c *ui.Context, over bool) {
 }
 
 // pageBlock draws one page at its own natural height inside the shared
-// switch region: the overview's 416 × 106 body under the band's 6pt gap, or
-// a page's 22pt action row, 4pt gap and 416 × 174 content box. Each block
-// is laid out at its final size; the shell's height clips it.
+// switch region: its 22pt action row, 4pt gap and 416 × 174 content box.
+// Each block is laid out at its final size; the shell's height clips it.
 func (a *shelf) pageBlock(c *ui.Context, p panelPage, over, live bool, opacity, left float32) {
 	if onPageBlock != nil {
 		onPageBlock(a, p.id(), live, opacity, left)
-	}
-	if p.id() == pageOverview {
-		ui.Column(c.Key("ov-block")).Width(contentW).Height(overviewBodyH + contentGap).Children(func() {
-			ui.Box(c.Key("ov-gap")).Height(contentGap)
-			ui.Column(c.Key("ov-body")).Width(contentW).Height(overviewBodyH).Children(func() {
-				a.overviewBody(c, over)
-			})
-		})
-		return
 	}
 	ui.Column(c.Key("block")).Width(contentW).Height(pageBodyH).Children(func() {
 		a.pageActions(c, p)
@@ -1195,11 +1168,11 @@ func (a *shelf) warmDone() {
 }
 
 // nextWarmPage queues one page that was never drawn, for the next frame's
-// warmPage. It runs from the monitor tick while the panel rests — the
-// overview included, since a level change is now a page switch — so the
-// first switch to every page is as cheap as the ones after it.
+// warmPage. It runs from the monitor tick while a page is on screen, so the
+// first switch to every other page is as cheap as the ones after it. The
+// search bar draws no page block, so nothing warms there.
 func (a *shelf) nextWarmPage(now time.Time) {
-	if a.win == nil || a.warming != "" || !a.visible || a.tabPhase(now) < 1 {
+	if a.win == nil || a.warming != "" || !a.visible || a.currentLevel() != 2 || a.tabPhase(now) < 1 {
 		return
 	}
 	// Never warm while the shell itself is moving: the hidden page's first
@@ -1699,55 +1672,42 @@ func (a *shelf) capsuleView(c *ui.Context, shellW, shellH, _ /* openK */, peekK,
 }
 
 // openPage is a page icon's click (or a card's 全部): the panel shows that
-// page. The overview is the short size; every other page grows the same
-// shell to 440 × 250. Both directions run the same page switch; the shell's
-// height springs on its own, while the content clips inside it.
+// page at the tall size. Both directions run the same page switch; the
+// shell's height springs on its own, while the content clips inside it.
 func (a *shelf) openPage(id pageID) {
 	p := a.page(id)
 	if p == nil || !p.enabled() {
 		return
 	}
-	want := 2
-	if id == pageOverview {
-		want = 1
-	}
-	if a.currentLevel() == want {
+	if a.currentLevel() == 2 {
 		if a.tab != id {
 			a.setTab(id)
 		}
 		return
 	}
-	a.setLevelPage(want, id)
+	a.setLevelPage(2, id)
 }
 
-// setLevel moves between the overview (1) and the pages (2), landing on
-// the page already current — the overview at level 1, the tray out of the
-// overview at level 2. The content runs the page switch; the shell's height
-// springs to the new size.
+// setLevel moves between the search bar (1) and the pages (2), landing on
+// the page already current. The content runs the page switch; the shell's
+// height springs to the new size.
 func (a *shelf) setLevel(level int) {
 	a.setLevelPage(level, "")
 }
 
-// setLevelPage is setLevel landing on id when the level allows it (a page
-// for level 2; the overview is the only level-1 page).
+// setLevelPage is setLevel landing on id when the level allows it (level 1
+// has no page of its own; level 2 lands on id or keeps the current page).
 func (a *shelf) setLevelPage(level int, id pageID) {
 	level = min(max(level, 1), 2)
 	next := id
 	switch {
 	case level == 1:
-		next = pageOverview
-	case next == "" || next == pageOverview:
-		if a.tab == pageOverview || a.tab == "" {
-			next = pageTray
-		} else {
-			next = a.tab
-		}
+		next = a.tab
+	case next == "":
+		next = a.tab
 	}
 	if p := a.page(next); p == nil || !p.enabled() {
 		next = pageTray
-		if level == 1 {
-			next = pageOverview
-		}
 	}
 	from := a.currentPage().id()
 	if a.level == level && from == next {
@@ -1867,20 +1827,13 @@ func (a *shelf) setTab(id pageID) {
 		return
 	}
 	a.startPageSwitch(cur, id)
-	// The tab and the shell size stay one state: a page is the tall shell,
-	// the overview the short one. A caller that names a page without
-	// switching levels (a test seam, a shortcut) gets the size that page
-	// draws in; the arrangement panel borrows the short box and is left
-	// alone.
-	if !a.snap.panel && !a.snap.drawn {
-		want := 2
-		if id == pageOverview {
-			want = 1
-		}
-		if a.level != want {
-			a.level = want
-			a.jumpLevel = a.win == nil || !a.visible
-		}
+	// The tab and the shell size stay one state: every page is the tall
+	// shell. A caller that names a page without switching levels (a test
+	// seam, a shortcut) gets the size that page draws in; the arrangement
+	// panel borrows the short box and is left alone.
+	if !a.snap.panel && !a.snap.drawn && a.level != 2 {
+		a.level = 2
+		a.jumpLevel = a.win == nil || !a.visible
 	}
 	if cur == pageUsage && a.usage != nil { // 离开用量页即取消其后台工作
 		a.usage.stopWork()

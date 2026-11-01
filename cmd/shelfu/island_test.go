@@ -134,8 +134,8 @@ func TestIslandShellShapes(t *testing.T) {
 	if w, h := a.capsuleSize(); w != 247 || h != islandCapsuleH {
 		t.Fatalf("capsule = %.0fx%.0f, want 247x36", w, h)
 	}
-	if w, h := a.shellSize(1, 0, 0, 0, 0); w != overviewW || h != overviewH {
-		t.Fatalf("level 1 = %.0fx%.0f, want %dx%d", w, h, overviewW, overviewH)
+	if w, h := a.shellSize(1, 0, 0, 0, 0); w != homeShellW || h != homeShellH {
+		t.Fatalf("level 1 = %.0fx%.0f, want %dx%d", w, h, homeShellW, homeShellH)
 	}
 	if w, h := a.shellSize(1, 1, 0, 0, 0); w != sheetW || h != sheetH {
 		t.Fatalf("level 2 = %.0fx%.0f, want %dx%d", w, h, sheetW, sheetH)
@@ -148,9 +148,9 @@ func TestIslandShellShapes(t *testing.T) {
 func TestIslandPanelFrameHasNoEars(t *testing.T) {
 	a := islandShelf(false, settings.ShellStyleNotch)
 	a.visible, a.level = true, 1
-	a.fx.w, a.fx.h, a.fx.openMoving = overviewW, overviewH, true
+	a.fx.w, a.fx.h, a.fx.openMoving = homeShellW, homeShellH, true
 	f := a.desiredFrame()
-	wantW, wantH := a.frameRoom(overviewW, overviewH+islandTopGap)
+	wantW, wantH := a.frameRoom(homeShellW, homeShellH+islandTopGap)
 	if f.Width != wantW {
 		t.Fatalf("island panel frame %d wide, want %d (no ear margins)", f.Width, wantW)
 	}
@@ -160,7 +160,7 @@ func TestIslandPanelFrameHasNoEars(t *testing.T) {
 	// The notch style keeps its ears.
 	n := islandShelf(true, settings.ShellStyleNotch)
 	n.visible, n.level = true, 1
-	n.fx.w, n.fx.h, n.fx.openMoving = overviewW, overviewH, true
+	n.fx.w, n.fx.h, n.fx.openMoving = homeShellW, homeShellH, true
 	if w := n.desiredFrame().Width; w != wantW+2*earR {
 		t.Fatalf("notch panel frame %d wide, want %d", w, wantW+2*earR)
 	}
@@ -188,21 +188,21 @@ func TestIslandHitShapeIsARoundedRect(t *testing.T) {
 	// A panel's top corners are round: at 5pt below the top edge the
 	// island path is about 8pt in (radius 22).
 	panel := islandShelf(false, settings.ShellStyleNotch)
-	left := float32(panel.stripCenter()) - overviewW/2
+	left := float32(panel.stripCenter()) - homeShellW/2
 	p := mygo.Point{X: int(left) + 2, Y: panelTop(panel) + 5}
-	if panel.overShellShape(p, overviewW, overviewH, 0, 0) {
+	if panel.overShellShape(p, homeShellW, homeShellH, 0, 0) {
 		t.Fatalf("point %+v is outside the island's round top-left corner", p)
 	}
-	if !panel.overShellShape(mygo.Point{X: int(left) + 10, Y: p.Y}, overviewW, overviewH, 0, 0) {
+	if !panel.overShellShape(mygo.Point{X: int(left) + 10, Y: p.Y}, homeShellW, homeShellH, 0, 0) {
 		t.Fatal("the island panel must take a point inside its corner")
 	}
 	// The notch path's ear reaches past the flank at the same height.
 	notch := islandShelf(true, settings.ShellStyleNotch)
 	ear := mygo.Point{X: int(left) - 2, Y: panelTop(notch) + 2}
-	if !notch.overShellShape(ear, overviewW, overviewH, 0, 0) {
+	if !notch.overShellShape(ear, homeShellW, homeShellH, 0, 0) {
 		t.Fatalf("the notch path's ear must take %+v", ear)
 	}
-	if panel.overShellShape(ear, overviewW, overviewH, 0, 0) {
+	if panel.overShellShape(ear, homeShellW, homeShellH, 0, 0) {
 		t.Fatalf("the island path must not take %+v (no ears)", ear)
 	}
 	// The sheet's radius is 24, not the island's 22.

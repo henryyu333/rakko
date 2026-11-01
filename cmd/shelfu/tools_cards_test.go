@@ -519,9 +519,8 @@ func TestDropSnapshotClearsWhenPanelCloses(t *testing.T) {
 	}
 }
 
-// TestPageIconsDiffer: the overview and the tools page sit next to each
-// other in the top bar, so their glyphs must read differently — the same
-// four-square grid for both (v1.12.0) was the bug the user reported.
+// TestPageIconsDiffer: the page icons sit next to each other in the capsule,
+// so no two of them may draw the same glyph.
 func TestPageIconsDiffer(t *testing.T) {
 	render := func(icon *ui.SVG) []byte {
 		return ui.NewTester(func(c *ui.Context) {
@@ -530,20 +529,29 @@ func TestPageIconsDiffer(t *testing.T) {
 			})
 		}, 20, 20).Image().Pix
 	}
-	overview, tools := render(overviewNavSymbol), render(toolsNavSymbol)
-	inked := func(pix []byte) bool {
+	icons := map[string]*ui.SVG{
+		"tray":      trayNavSymbol,
+		"clipboard": clipNavSymbol,
+		"tools":     toolsNavSymbol,
+		"playing":   musicSymbol,
+	}
+	seen := map[string]string{}
+	for name, icon := range icons {
+		pix := render(icon)
+		inked := false
 		for i := 3; i < len(pix); i += 4 {
 			if pix[i] != 0 {
-				return true
+				inked = true
+				break
 			}
 		}
-		return false
-	}
-	if !inked(overview) || !inked(tools) {
-		t.Fatal("an icon drew nothing: the comparison would be empty")
-	}
-	if bytes.Equal(overview, tools) {
-		t.Fatal("the overview and tools icons draw the same glyph")
+		if !inked {
+			t.Fatalf("the %s icon drew nothing", name)
+		}
+		if other, ok := seen[string(pix)]; ok {
+			t.Fatalf("the %s and %s icons draw the same glyph", name, other)
+		}
+		seen[string(pix)] = name
 	}
 }
 

@@ -60,7 +60,7 @@ func TestPanelSpotGridKeepsTheSheetOnScreen(t *testing.T) {
 					w, h int
 				}{
 					{"sheet", sheetW, sheetH},
-					{"overview", overviewW, overviewH},
+					{"overview", homeShellW, homeShellH},
 				} {
 					p := panelSpot(centre, top, islandIdleH, work, size.w, size.h)
 					where := fmt.Sprintf("%s %s at %d,%d", d.name, size.name, centre, top)
@@ -372,7 +372,7 @@ func TestOpeningPanelTakesTheMouseAtItsSettledAxis(t *testing.T) {
 	if a.overShell(p) {
 		t.Fatalf("the drawn shell already reaches %+v", p)
 	}
-	if a.overShellShapeAt(p, overviewW, overviewH, 0, 0, a.fx.openK) {
+	if a.overShellShapeAt(p, homeShellW, homeShellH, 0, 0, a.fx.openK) {
 		t.Fatal("the settled shape was tested on the opening axis")
 	}
 	old := cursorPoint
@@ -444,14 +444,14 @@ func TestUpwardContentUnfoldsFromTheIslandEdge(t *testing.T) {
 			low, clipTop, clipTop+int(h))
 	}
 	// Open: the shell reaches the overview's own 156.
-	for i := 0; i < 60 && a.fx.h < overviewH-0.5; i++ {
+	for i := 0; i < 60 && a.fx.h < homeShellH-0.5; i++ {
 		view.Frame()
 		view.Advance(16 * time.Millisecond)
 	}
 	view.Advance(2 * time.Second) // include the spring's overshoot and settling
 	view.Frame()
-	if got := a.fx.h; got < overviewH-0.5 || got > overviewH+0.5 {
-		t.Fatalf("the shell settled at %.1f tall, want the overview's %d", got, overviewH)
+	if got := a.fx.h; got < homeShellH-0.5 || got > homeShellH+0.5 {
+		t.Fatalf("the shell settled at %.1f tall, want the overview's %d", got, homeShellH)
 	}
 	clipTop = a.upShellBottom(a.fx.openK) - int(math.Ceil(float64(a.fx.h))) - a.desiredFrame().Y
 	band, ok = view.Find("剪贴板")
@@ -466,9 +466,9 @@ func TestUpwardContentUnfoldsFromTheIslandEdge(t *testing.T) {
 		name string
 		box  ui.Rect
 	}{{"band", band}, {"overview row", low}} {
-		if r.box.Y < float32(clipTop)-0.5 || r.box.Y+r.box.H > float32(clipTop+overviewH)+0.5 {
+		if r.box.Y < float32(clipTop)-0.5 || r.box.Y+r.box.H > float32(clipTop+homeShellH)+0.5 {
 			t.Errorf("the settled overview's %s at %+v is not inside the shell %d..%d",
-				r.name, r.box, clipTop, clipTop+overviewH)
+				r.name, r.box, clipTop, clipTop+homeShellH)
 		}
 	}
 	if err := view.Click("托盘"); err != nil {

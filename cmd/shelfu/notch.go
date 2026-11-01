@@ -229,7 +229,7 @@ func (a *shelf) desiredFrame() mygo.Rectangle {
 // 24 by the level progress, capped at half the height when the shell is the
 // peek capsule.
 func materialCorner(shellH, levelK float32) float64 {
-	corner := float64(overviewRadius) + (float64(sheetRadius)-float64(overviewRadius))*float64(levelK)
+	corner := float64(homeRadius) + (float64(sheetRadius)-float64(homeRadius))*float64(levelK)
 	return math.Min(float64(shellH)/2, corner)
 }
 
@@ -442,7 +442,7 @@ func (a *shelf) shellSize(openK, levelK, peekK, peekW, peekH float32) (w, h floa
 		barW = a.homeBoxW()
 	}
 	lvlW := barW + (sheetW-barW)*levelK
-	lvlH := float32(overviewH) + (sheetH-overviewH)*levelK
+	lvlH := float32(homeShellH) + (sheetH-homeShellH)*levelK
 	if a.snap.panel || a.snap.drawn {
 		// The arrangement panel is its own box; it never morphs through
 		// the sheet's size.
@@ -840,7 +840,7 @@ func (a *shelf) overShellShapeAt(p mygo.Point, w, h, levelK, shakeX, openK float
 	}
 	cx := float64(a.shellCentreX(openK)) + float64(shakeX)
 	x0, x1 := cx-float64(w)/2, cx+float64(w)/2
-	corner := float64(overviewRadius) + float64(sheetRadius-overviewRadius)*float64(levelK)
+	corner := float64(homeRadius) + float64(sheetRadius-homeRadius)*float64(levelK)
 	if a.island {
 		// Four round corners, no top ears: the island's path is a rounded
 		// rectangle (islandPath's circular arcs) whose radius shrinks to
@@ -917,7 +917,7 @@ func (a *shelf) panelBox() (w, h float32) {
 	if a.currentLevel() == 2 {
 		return sheetW, sheetH
 	}
-	return a.homeBoxW(), overviewH
+	return a.homeBoxW(), homeShellH
 }
 
 // panelContentH is the height of the content block the panel draws at level
@@ -929,7 +929,7 @@ func (a *shelf) panelContentH(levelK float32) float32 {
 	if a.snap.panel || a.snap.drawn {
 		return snapH
 	}
-	return float32(overviewH) + float32(sheetH-overviewH)*levelK
+	return float32(homeShellH) + float32(sheetH-homeShellH)*levelK
 }
 
 func (a *shelf) show(edge bool) {
@@ -952,7 +952,7 @@ func (a *shelf) show(edge bool) {
 	// clobbered a frame later.
 	a.closeAt = time.Time{}
 	// A drag or the clipboard hotkey opens straight on the page it needs; a
-	// plain click on the notch opens the overview.
+	// plain click on the notch opens the search bar on the tray.
 	level := 1
 	a.tabAt = time.Time{}
 	switch {
@@ -963,11 +963,9 @@ func (a *shelf) show(edge bool) {
 	case edge || (a.dragging && !a.ownDrag) || a.drop.on:
 		level, a.tabFrom, a.tab = 2, pageTray, pageTray
 	default:
-		a.tabFrom, a.tab = pageOverview, pageOverview
+		a.tabFrom, a.tab = pageTray, pageTray
 	}
 	a.level = level
-	a.openedAt = time.Now()
-	a.lastAct = time.Now()
 	a.jumpLevel = true
 	a.snap.drawn = a.snap.panel
 	a.visible, a.edgeOpened, a.received = true, edge, false
@@ -992,18 +990,6 @@ func (a *shelf) show(edge bool) {
 		a.homeQuery, a.homeSel = "", 0
 		a.takeKeyboard()
 	}
-}
-
-// openOverview expands the panel on the overview. Every expand gesture
-// lands here: the notch band, the hover pill, the island, the shortcut
-// and the now-playing wings. A page is reached from the overview (its
-// track row opens the player) or from its tab.
-func (a *shelf) openOverview() {
-	if !a.visible {
-		a.show(false)
-		return
-	}
-	a.setLevel(1)
 }
 
 // Global hotkey seams: holdKeys/releaseKeys register and unregister the
@@ -1208,7 +1194,6 @@ func (a *shelf) hide(exit hideExit) {
 	restore := a.shouldRestoreApp(exit)
 	prev := a.prevAppPID
 	a.visible, a.edgeOpened, a.peeking = false, false, false
-	a.overviewDue = time.Time{} // a closed panel keeps no deadline
 	// Any hide ends the arrangement panel's claim on the shell; its box
 	// stays drawn (snap.drawn) until the fold completes.
 	a.snap.panel = false
@@ -1251,8 +1236,7 @@ func (a *shelf) finishClose() {
 	// thumbnails, so the next opening warms the pages again.
 	a.warmed = nil
 	a.level = 1
-	a.tab = pageOverview
-	a.overviewDue = time.Time{} // the retired view keeps no deadline
+	a.tab = pageTray
 	// 收起即放弃权限说明卡：面板再开时它要么还在等授权（重新触发再出），
 	// 要么授权已完成（预检通过直接框选），都不该回到一张旧卡。
 	a.ocrSheet = false

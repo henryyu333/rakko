@@ -161,60 +161,6 @@ func TestSwitchFirstPhaseTakesNoPointer(t *testing.T) {
 	}
 }
 
-// TestLevelChangeRunsThePageSwitch: Esc back to the overview is a page
-// switch like any other — the page being left is recorded for its fade-out
-// and the panel draws it while the overview arrives — instead of the two
-// levels crossfading as whole layers. A caller that names both pages (the
-// drop-on-island path) keeps the switch it asked for.
-func TestLevelChangeRunsThePageSwitch(t *testing.T) {
-	a, view, _, _ := hitShelf(t)
-	view.Frame()
-	a.setTab(pageClipboard)
-	if a.tabAt.IsZero() {
-		t.Fatal("the visible switch left no clock")
-	}
-	a.tabAt = time.Time{} // let that switch settle before Esc
-	old := pageSwitchPhase
-	t.Cleanup(func() { pageSwitchPhase = old })
-	pageSwitchPhase = func(*shelf, time.Time) float32 { return 0 }
-	a.setLevel(1)
-	if a.tab != pageOverview || a.tabFrom != pageClipboard {
-		t.Fatalf("back to the overview: tab=%s from=%s, want the page fading out", a.tab, a.tabFrom)
-	}
-	if a.tabAt.IsZero() {
-		t.Fatal("going back to the overview left no page clock: the level crossfade is gone")
-	}
-	view.Frame()
-	if !view.HasText("剪贴板条目 5 · 一段用于命中的文字") {
-		t.Fatalf("the page being left is not drawn fading out; texts %v", view.Texts())
-	}
-	// Once the switch ends only the overview's block is drawn.
-	pageSwitchPhase = func(*shelf, time.Time) float32 { return 1 }
-	view.Frame()
-	if view.HasText("剪贴板条目 5 · 一段用于命中的文字") {
-		t.Fatal("the switch's end still draws the page it left")
-	}
-	if !view.HasText("最近放入") {
-		t.Fatalf("the overview is missing at the switch's end; texts %v", view.Texts())
-	}
-
-	// The drop-on-island path names both pages itself: it still opens on
-	// the tray, and the switch it starts is from the overview.
-	pageSwitchPhase = old
-	a.tabFrom, a.tab = pageTray, pageTray
-	a.setLevel(2)
-	if a.tab != pageTray {
-		t.Fatalf("the sheet opened on %s, want the tray", a.tab)
-	}
-	if a.tabFrom != pageOverview || a.tabAt.IsZero() {
-		t.Fatalf("reopening drew from %s with clock %v, want a fresh switch off the overview",
-			a.tabFrom, a.tabAt)
-	}
-	if phase := a.tabPhase(time.Now()); phase > 0.5 {
-		t.Fatalf("reopening resumed a stale page switch at t=%.2f", phase)
-	}
-}
-
 // TestRapidSwitchCarriesTheSettlingOffset: a switch that interrupts a
 // fade-out continues from the offset the picture has reached, so the page
 // does not jump back to x=0.

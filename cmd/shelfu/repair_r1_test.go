@@ -18,8 +18,6 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"github.com/egoist/mygo/transfer"
-
 	"shelf/internal/layout"
 	"shelf/internal/mac"
 	"shelf/internal/store"
@@ -299,8 +297,8 @@ func TestMaterialTracksTheShellAndTheAppearance(t *testing.T) {
 	onSyncMaterial = func() { calls++ }
 	t.Cleanup(func() { onSyncMaterial = old })
 
-	if got := materialCorner(156, 0); got != overviewRadius {
-		t.Fatalf("overview corner = %.0f, want %d", got, overviewRadius)
+	if got := materialCorner(156, 0); got != homeRadius {
+		t.Fatalf("overview corner = %.0f, want %d", got, homeRadius)
 	}
 	if got := materialCorner(250, 1); got != sheetRadius {
 		t.Fatalf("page corner = %.0f, want %d", got, sheetRadius)
@@ -362,7 +360,8 @@ func TestLeaveFocusModeHandsTheKeyboardBack(t *testing.T) {
 	resignSelf = func() { resigned++ }
 	t.Cleanup(func() { appIsActive, activateApp, resignSelf = oldActive, oldActivate, oldResign })
 
-	a, view := overviewShelf(t)
+	a, view := levelShelf(t)
+	a.visible = true
 	// The ⌃⌥V state: the clipboard page, its search focused, the app the
 	// user came from remembered.
 	a.tab, a.tabFrom, a.level = pageClipboard, pageClipboard, 2
@@ -410,7 +409,8 @@ func TestLeaveFocusModeKeepsTheOpenPanel(t *testing.T) {
 	resignSelf = func() { resigned++ }
 	t.Cleanup(func() { appIsActive, activateApp, resignSelf = oldActive, oldActivate, oldResign })
 
-	a, view := overviewShelf(t)
+	a, view := levelShelf(t)
+	a.visible = true
 	searching := func() {
 		// The ⌃⌥V state with the search empty, so one Esc leaves the mode
 		// instead of first clearing the query.
@@ -442,79 +442,6 @@ func TestLeaveFocusModeKeepsTheOpenPanel(t *testing.T) {
 	}
 	if resigned != 0 || !a.visible {
 		t.Fatalf("the panel did not survive the hand-back: resigned=%d visible=%v", resigned, a.visible)
-	}
-}
-
-// TestWelcomeFinishesTheVersionToo: finishing the welcome card records the
-// version as read, so the same build's new-version card never follows it.
-func TestWelcomeFinishesTheVersionToo(t *testing.T) {
-	oldProbe := appVersionProbe
-	appVersionProbe = func() string { return "1.11.0" }
-	t.Cleanup(func() { appVersionProbe = oldProbe })
-	dir := t.TempDir()
-	a := &shelf{dataDir: dir, freshInstall: true, settings: settingsForTest()}
-	a.planOverviewCards()
-	a.welcomeUp = true
-	a.dismissWelcome()
-	if st, _ := loadUIState(dir); st.WhatsNew != "1.11.0" {
-		t.Fatalf("the welcome card recorded whatsNew=%q, want the version", st.WhatsNew)
-	}
-	b := &shelf{dataDir: dir, settings: settingsForTest()}
-	b.planOverviewCards()
-	if b.whatsNewPending {
-		t.Fatal("the new-version card follows the welcome card of the same build")
-	}
-}
-
-// TestBrokenUIStateIsNotOverwritten: a ui.json that does not parse is left
-// alone; the cards still work for the session.
-func TestBrokenUIStateIsNotOverwritten(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, uiStateFile)
-	if err := os.WriteFile(path, []byte("{nope"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	a := &shelf{dataDir: dir, freshInstall: true, settings: settingsForTest()}
-	a.planOverviewCards()
-	if !a.uiStateBroken {
-		t.Fatal("a broken ui.json was not marked")
-	}
-	if !a.welcomePending {
-		t.Fatal("the cards stopped working with a broken file")
-	}
-	a.dismissWelcome()
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(data) != "{nope" {
-		t.Fatalf("the broken file was rewritten:\n%s", data)
-	}
-}
-
-// TestDropLandsBackOnTheOverview: a file dropped on the panel's drop zone
-// returns to the overview when it lands; the tray page was the gesture's
-// page, not the user's choice.
-func TestDropLandsBackOnTheOverview(t *testing.T) {
-	a, view := toolsFixture(t)
-	a.setTab(pageTray)
-	view.Frame()
-	dir := t.TempDir()
-	file := filepath.Join(dir, "dropped.txt")
-	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	a.visible, a.level = true, 2
-	a.drop.on = true // the drag's drop zone is up
-	data, err := transfer.FileData(file)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := a.receive(data); err != nil {
-		t.Fatal(err)
-	}
-	if a.currentLevel() != 1 || a.tab != pageOverview {
-		t.Fatalf("after the drop: level=%d tab=%s, want the overview", a.currentLevel(), a.tab)
 	}
 }
 
@@ -570,73 +497,6 @@ func TestReduceMotionHoverShapeNeverSprings(t *testing.T) {
 	}
 }
 
-// TestOverviewDeadlinesNeverWakeAClosedPanel: the overview works out when
-// its words change and the monitor tick redraws it, but only while the
-// overview is on screen — no frame timer is left behind, so a closed panel
-// draws nothing when a copy ages out.
-func TestOverviewDeadlinesNeverWakeAClosedPanel(t *testing.T) {
-	draws := 0
-	a, _ := levelShelf(t)
-	a.visible, a.level = true, 1
-	if err := a.store.AddClipText("刚复制的文字", "com.example.App"); err != nil {
-		t.Fatal(err)
-	}
-	view := ui.NewTester(func(c *ui.Context) {
-		draws++
-		a.view(c)
-	}, sheetW, panelTestH)
-	view.Frame()
-	if a.overviewDue.IsZero() {
-		t.Fatal("the overview did not work out a deadline")
-	}
-	// A frame timer would still be waiting after the panel closes; the
-	// tick-driven deadline arms nothing.
-	if view.FramePending() {
-		t.Fatal("drawing the overview left a frame timer armed")
-	}
-
-	// Closing forgets the deadline, and the tick draws nothing afterwards.
-	onHide := func() {
-		a.visible = false
-		a.closeAt = time.Now()
-		a.finishClose()
-	}
-	onHide()
-	if !a.overviewDue.IsZero() {
-		t.Fatalf("a closed panel kept the deadline %v", a.overviewDue)
-	}
-	base := draws
-	// Time passes with the panel closed: a frame timer left behind would
-	// fire here and draw a hidden frame; the tick draws nothing.
-	view.Advance(3 * time.Minute)
-	if draws != base {
-		t.Fatalf("a closed panel drew %d frames when its deadline passed", draws-base)
-	}
-	a.tickOverviewDeadlines(view.Now().Add(3 * time.Minute))
-	if draws != base {
-		t.Fatalf("the tick drew %d frames after the close", draws-base)
-	}
-
-	// Open again: the deadline is worked out anew and the tick redraws at
-	// the deadline itself. (The copy aged out during the advance, so a
-	// fresh happy span is what has a deadline now.)
-	a.happyUntil = view.Now().Add(2 * time.Second)
-	a.visible, a.level = true, 1
-	view.Frame()
-	if a.overviewDue.IsZero() {
-		t.Fatal("the reopened overview has no deadline")
-	}
-	due := a.overviewDue
-	a.tickOverviewDeadlines(due.Add(-time.Second))
-	if !a.overviewDue.Equal(due) {
-		t.Fatal("the tick fired before the deadline")
-	}
-	a.tickOverviewDeadlines(due.Add(time.Second))
-	if !a.overviewDue.IsZero() {
-		t.Fatal("the tick did not consume the passed deadline")
-	}
-}
-
 // TestReduceMotionJumpsTheShell: with Reduce Motion the shell takes its
 // size at once (no spring, no overshoot) and only the content fades; the
 // spring still animates when the preference is off.
@@ -649,7 +509,7 @@ func TestReduceMotionJumpsTheShell(t *testing.T) {
 		view.Frame()
 		view.Advance(16 * time.Millisecond)
 	}
-	if a.fx.w != overviewW || a.fx.h != overviewH {
+	if a.fx.w != homeShellW || a.fx.h != homeShellH {
 		t.Fatalf("reduced overview shell = %.1f×%.1f", a.fx.w, a.fx.h)
 	}
 	// Switching to a page: the first frame after the switch is already the
@@ -663,33 +523,5 @@ func TestReduceMotionJumpsTheShell(t *testing.T) {
 	view.Frame()
 	if a.fx.h != sheetH {
 		t.Fatalf("reduced level change overshot to %.0f", a.fx.h)
-	}
-}
-
-// TestOverviewSchedulesItsDeadlines: the otter's happiness and the quiet
-// spell end on their own — a resting panel draws no frames, so the overview
-// asks for the frame where its words and picture change.
-func TestOverviewSchedulesItsDeadlines(t *testing.T) {
-	a, view := overviewShelf(t)
-	base := view.Now()
-	a.lastAct = base
-	a.happyUntil = base.Add(time.Second)
-	view.Frame()
-	if got := a.otterState(base); got != "happy" {
-		t.Fatalf("state inside the happy span = %q", got)
-	}
-	// The scheduled frame runs on its own: the tester only advances the
-	// clock, and the view has already asked for the deadline.
-	view.Advance(1500 * time.Millisecond)
-	if got := a.otterState(view.Now()); got == "happy" {
-		t.Fatalf("the otter is still %q after its span", got)
-	}
-	// The quiet spell is scheduled too: an hour without use makes it
-	// sleepy and the overview still asks for a frame then.
-	a.happyUntil = time.Time{}
-	a.lastAct = view.Now().Add(-otterSleepyAfter - time.Second)
-	view.Frame()
-	if got := a.otterState(view.Now()); got != "sleepy" {
-		t.Fatalf("state after the quiet spell = %q", got)
 	}
 }

@@ -66,10 +66,10 @@ func fixf1Shot(t *testing.T, a *shelf, w *mygo.Window, name string) string {
 	return shot
 }
 
-// TestFixFWingsOpenTheOverview: with a track playing, a press on the hover
-// wings expands the panel on the overview — never on the player page — and
-// the real window shows that overview.
-func TestFixFWingsOpenTheOverview(t *testing.T) {
+// TestFixFWingsOpenTheSearchBar: with a track playing, a press on the hover
+// wings expands the panel on the search bar — never on the player page —
+// and the real window shows it.
+func TestFixFWingsOpenTheSearchBar(t *testing.T) {
 	a := redesignShelf(t)
 	onMain(func() {
 		a.settings.IslandNowPlaying = true
@@ -94,13 +94,13 @@ func TestFixFWingsOpenTheOverview(t *testing.T) {
 		a.syncWindowFrame()
 		a.win.Invalidate()
 	})
-	if tab != pageOverview || level != 1 {
-		t.Fatalf("the wings opened %s (level %d), want the overview", tab, level)
+	if tab != pageTray || level != 1 {
+		t.Fatalf("the wings opened %s (level %d), want the search bar", tab, level)
 	}
-	shot := fixf1Shot(t, a, a.win, "wings-overview")
+	shot := fixf1Shot(t, a, a.win, "wings-search-bar")
 	if img, err := pngDecode(shot); err == nil {
 		if box := opaqueBounds(img); box.Dx() < 200 {
-			t.Fatalf("the overview shot is %dpt wide; the panel did not draw", box.Dx())
+			t.Fatalf("the search bar shot is %dpt wide; the panel did not draw", box.Dx())
 		}
 	} else {
 		t.Fatalf("%s: %v", shot, err)

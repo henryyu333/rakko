@@ -328,8 +328,8 @@ func TestClipboardKeyboardFlow(t *testing.T) {
 	}
 	view.Advance(time.Second)
 	view.Frame()
-	if a.tab != pageOverview || a.search != "" {
-		t.Fatal("⏎ did not settle back to the overview after the fade")
+	if a.tab != pageTray || a.search != "" {
+		t.Fatal("⏎ did not settle back to the search bar after the fade")
 	}
 }
 
@@ -430,7 +430,7 @@ func TestHideLeavesKeyboardMode(t *testing.T) {
 	a.hide(hideExplicit)
 	view.Advance(time.Second)
 	view.Frame()
-	if a.tab != pageOverview || a.search != "" || a.focusMode || a.prevAppPID != 0 {
+	if a.tab != pageTray || a.search != "" || a.focusMode || a.prevAppPID != 0 {
 		t.Fatalf("hide left keyboard state: tab=%s search=%q focus=%v", a.tab, a.search, a.focusMode)
 	}
 }

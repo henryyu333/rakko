@@ -13,6 +13,7 @@ import (
 
 	"shelf/internal/layout"
 	"shelf/internal/mac"
+	"shelf/internal/settings"
 	"shelf/internal/store"
 )
 
@@ -74,3 +75,6 @@ func cardByID(cards []layout.Card, id string) (layout.Card, bool) {
 
 // pinWindowRect is a convenient empty frame for pin seams in tests.
 func pinWindowRect() mygo.Rectangle { return mygo.Rectangle{Width: 200, Height: 100} }
+
+// settingsForTest is the default settings without touching the disk.
+func settingsForTest() settings.Settings { return settings.Default() }

@@ -549,8 +549,8 @@ func TestLevelSpringsBetweenTheTwoSizes(t *testing.T) {
 		view.Frame()
 		view.Advance(16 * time.Millisecond)
 	}
-	if a.fx.w < overviewW-0.5 || a.fx.w > overviewW+1 || a.fx.h < overviewH-0.5 || a.fx.h > overviewH+1 {
-		t.Fatalf("island shell = %.1f×%.1f, want %d×%d", a.fx.w, a.fx.h, overviewW, overviewH)
+	if a.fx.w < homeShellW-0.5 || a.fx.w > homeShellW+1 || a.fx.h < homeShellH-0.5 || a.fx.h > homeShellH+1 {
+		t.Fatalf("island shell = %.1f×%.1f, want %d×%d", a.fx.w, a.fx.h, homeShellW, homeShellH)
 	}
 	a.setLevel(2)
 	for i := range 80 {
@@ -569,7 +569,7 @@ func TestLevelSpringsBetweenTheTwoSizes(t *testing.T) {
 		view.Frame()
 		view.Advance(16 * time.Millisecond)
 	}
-	if a.fx.w > overviewW+1 || a.fx.h > overviewH+1 {
+	if a.fx.w > homeShellW+1 || a.fx.h > homeShellH+1 {
 		t.Fatalf("back to island: shell %.1f×%.1f", a.fx.w, a.fx.h)
 	}
 }

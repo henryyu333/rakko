@@ -79,7 +79,7 @@ func requireBandDrawn(t *testing.T, a *shelf) {
 // the island and the panel together on the locked side, and the release
 // saves the island's place. The panel stays open on its page.
 func TestPanelDragMovesTheIslandAndSaves(t *testing.T) {
-	a, _ := panelDragShelf(t, 1, pageOverview, settings.IslandPos{})
+	a, _ := panelDragShelf(t, 2, pageTray, settings.IslandPos{})
 	requireBandDrawn(t, a)
 	place := a.panelPlacement()
 	p := bandPoint(a, sheetW/2, bandH/2)
@@ -98,7 +98,7 @@ func TestPanelDragMovesTheIslandAndSaves(t *testing.T) {
 	if !a.islandDrag || !a.visible {
 		t.Fatalf("the move: drag=%v visible=%v", a.islandDrag, a.visible)
 	}
-	want := panelPlacement{X: place.X + 10, Y: place.Y + 10, W: sheetW, H: overviewH}
+	want := panelPlacement{X: place.X + 10, Y: place.Y + 10, W: sheetW, H: sheetH}
 	if got := a.panelPlacement(); got != want {
 		t.Fatalf("the dragged panel = %+v, want %+v", got, want)
 	}
@@ -106,7 +106,7 @@ func TestPanelDragMovesTheIslandAndSaves(t *testing.T) {
 		t.Fatalf("the island spot = %+v, want it derived from the panel %+v", got, want)
 	}
 	dragIslandTick(t, a, end, false)
-	if !a.visible || a.tab != pageOverview {
+	if !a.visible || a.tab != pageTray {
 		t.Fatalf("the release changed the panel: visible=%v tab=%s", a.visible, a.tab)
 	}
 	if a.islandPress.active || a.islandDrag {
@@ -129,7 +129,7 @@ func TestPanelDragMovesTheIslandAndSaves(t *testing.T) {
 // never starts a move: the island keeps its place however far the pointer
 // travels.
 func TestPanelDragIgnoresTheBandControlsAndThePage(t *testing.T) {
-	a, _ := panelDragShelf(t, 1, pageOverview, settings.IslandPos{})
+	a, _ := panelDragShelf(t, 2, pageTray, settings.IslandPos{})
 	requireBandDrawn(t, a)
 	place := a.panelPlacement()
 	before := a.islandSpotNow()
@@ -177,7 +177,7 @@ func TestPanelDragIgnoresTheBandControlsAndThePage(t *testing.T) {
 // the panel stays open on its page, the island stays put, and no place is
 // written.
 func TestPanelTapOnTheBandDoesNothing(t *testing.T) {
-	a, _ := panelDragShelf(t, 1, pageOverview, settings.IslandPos{})
+	a, _ := panelDragShelf(t, 2, pageTray, settings.IslandPos{})
 	requireBandDrawn(t, a)
 	before := a.islandSpotNow()
 	p := bandPoint(a, sheetW/2, bandH/2)
@@ -187,7 +187,7 @@ func TestPanelTapOnTheBandDoesNothing(t *testing.T) {
 	if a.islandDrag || a.islandPress.active {
 		t.Fatal("the tap left the gesture open")
 	}
-	if !a.visible || a.tab != pageOverview {
+	if !a.visible || a.tab != pageTray {
 		t.Fatalf("the tap changed the panel: visible=%v tab=%s", a.visible, a.tab)
 	}
 	if got := a.islandSpotNow(); got != before {

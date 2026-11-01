@@ -770,7 +770,7 @@ func TestPinBadgesStayInsideTheirTiles(t *testing.T) {
 // island never holds the sheet's box (that 451pt transparent frame sat
 // over the menu-bar icons beside it), and the mouse only reaches the shell
 // drawn inside it (overlayAcceptsMouse).
-func islandFrame() (int, int) { return openFrameRoom(overviewW, overviewH) }
+func islandFrame() (int, int) { return openFrameRoom(homeShellW, homeShellH) }
 func sheetFrame() (int, int)  { return openFrameRoom(sheetW, sheetH) }
 
 // The shell has exactly two sizes, whatever the pages hold: the overview's
@@ -795,8 +795,8 @@ func TestPanelSizeIsFixedPerLevel(t *testing.T) {
 	}
 	short := a.desiredFrame()
 	iw, _ := islandFrame()
-	if short.Width != iw || short.Height != overviewH {
-		t.Fatalf("empty overview frame = %d×%d, want %d×%d", short.Width, short.Height, iw, overviewH)
+	if short.Width != iw || short.Height != homeShellH {
+		t.Fatalf("empty overview frame = %d×%d, want %d×%d", short.Width, short.Height, iw, homeShellH)
 	}
 	add(gridCols * 4)
 	if got := a.desiredFrame(); got != short {
@@ -896,8 +896,8 @@ func TestRegisteredPageJoinsTheOrderAtFixedSize(t *testing.T) {
 	a.x, a.y = 455, 0
 	fake := &fakePage{on: true}
 	a.registerPage(fake)
-	if got := a.pageIndex("fake"); got != 5 {
-		t.Fatalf("the fake page must register after the five built-ins, got index %d", got)
+	if got := a.pageIndex("fake"); got != 4 {
+		t.Fatalf("the fake page must register after the four built-ins, got index %d", got)
 	}
 	before := a.desiredFrame()
 	a.setTab("fake")
@@ -949,11 +949,11 @@ func TestPanelFrameFollowsTheLevel(t *testing.T) {
 	a := &shelf{visible: true, level: 1}
 	a.x, a.y = 475, 0
 	iw, _ := islandFrame()
-	if f := a.desiredFrame(); f.Width != iw || f.Height != overviewH {
-		t.Fatalf("open island frame = %d×%d, want the island's %d×%d", f.Width, f.Height, iw, overviewH)
+	if f := a.desiredFrame(); f.Width != iw || f.Height != homeShellH {
+		t.Fatalf("open island frame = %d×%d, want the island's %d×%d", f.Width, f.Height, iw, homeShellH)
 	}
 	// Mid-way back from the sheet the drawn shell is still wide.
-	a.fx.w = overviewW + (sheetW-overviewW)*0.5
+	a.fx.w = homeShellW + (sheetW-homeShellW)*0.5
 	if got, want := a.desiredFrame().Width, int(a.fx.w+0.5)+2*earR; got < want {
 		t.Fatalf("frame %d wide clips the shrinking shell at %.1f, want at least %d", got, a.fx.w, want)
 	}
@@ -1213,90 +1213,8 @@ func TestRowsFadeOnlyInTheBand(t *testing.T) {
 	}
 }
 
-// TestBandKeepsTheSamePageIcons: the band carries one icon per page in
-// registry order, the current one included — a switch never removes an
-// icon and reflows the rest.
-func TestBandKeepsTheSamePageIcons(t *testing.T) {
-	fx := newUsageFixture(t, true)
-	a := fx.a
-	a.level, a.visible = 2, true
-	a.setTab(pageTray)
-	view := fx.view
-	view.Frame()
-	view.Frame()
-	pages := a.tabPages()
-	if len(pages) != 5 {
-		t.Fatalf("the band has %d icons, want the design's 5", len(pages))
-	}
-	want := []pageID{pageOverview, pageTray, pageClipboard, pageTools, pageUsage}
-	for i, p := range pages {
-		if p.id() != want[i] {
-			t.Fatalf("band icon %d is %s, want %s (registry order)", i, p.id(), want[i])
-		}
-	}
-	for _, id := range []pageID{pageClipboard, pageTools, pageUsage, pageTray} {
-		if err := view.Click(a.page(id).label()); err != nil {
-			t.Fatalf("the %s icon is missing while on %s: %v", id, a.tab, err)
-		}
-		view.Frame()
-		if a.tab != id {
-			t.Fatalf("clicking the %s icon left the panel on %s", id, a.tab)
-		}
-		if got := a.tabPages(); len(got) != 5 {
-			t.Fatalf("on %s the band has %d icons, want 5", id, len(got))
-		}
-	}
-	// The overview icon steps back to the short size.
-	if err := view.Click("总览"); err != nil {
-		t.Fatal(err)
-	}
-	if a.currentLevel() != 1 || a.tab != pageOverview {
-		t.Fatalf("the overview icon left level=%d tab=%s", a.currentLevel(), a.tab)
-	}
-}
-
-// TestBandIconsKeepOneXAcrossPages: the band's icons keep their x when the
-// panel switches pages; only the capsule moves.
-func TestBandIconsKeepOneXAcrossPages(t *testing.T) {
-	a, view := levelShelf(t)
-	if err := a.store.AddClipImage(testPNG(t), "com.example.Shot"); err != nil {
-		t.Fatal(err)
-	}
-	a.visible, a.level = true, 2
-	a.setTab(pageTray)
-	seen := map[pageID]float32{}
-	for _, id := range []pageID{pageTray, pageClipboard, pageTools, pageTray} {
-		if err := view.Click(a.page(id).label()); err != nil {
-			t.Fatalf("the %s icon is missing while on %s: %v", id, a.tab, err)
-		}
-		view.Frame()
-		view.Frame() // the switch settles
-		if a.tab != id {
-			t.Fatalf("the panel is on %s, want %s", a.tab, id)
-		}
-		for _, p := range a.tabPages() {
-			r, ok := view.Find(p.label())
-			if !ok {
-				t.Fatalf("the %s icon is missing on %s; texts %v", p.id(), id, view.Texts())
-			}
-			if want, ok := seen[p.id()]; ok {
-				if r.X != want {
-					t.Fatalf("the %s icon moved from %.1f to %.1f when the panel switched to %s",
-						p.id(), want, r.X, id)
-				}
-				continue
-			}
-			seen[p.id()] = r.X
-		}
-	}
-	if len(seen) < 4 {
-		t.Fatalf("measured %d icons", len(seen))
-	}
-}
-
 // TestClipboardPageFitsItsControls: with a long history the search field
-// and 清空 fit the 416pt action row, and the five band icons stay clear of
-// each other.
+// and 清空 fit the 416pt action row.
 func TestClipboardPageFitsItsControls(t *testing.T) {
 	a, view := levelShelf(t)
 	a.store.SetTextLimit(300) // the widest history setting
@@ -1306,14 +1224,11 @@ func TestClipboardPageFitsItsControls(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	a.registerPage(&fakePage{on: true}) // a sixth page: the band keeps five
+	a.registerPage(&fakePage{on: true})
 	a.visible, a.level = true, 2
 	a.setTab(pageClipboard)
 	view.Frame()
 	view.Frame()
-	if got := len(a.tabPages()); got != 5 {
-		t.Fatalf("the band has %d icons, want 5", got)
-	}
 	if view.HasText("120 条") {
 		t.Fatal("the page row still draws the clipboard count")
 	}
@@ -1324,16 +1239,5 @@ func TestClipboardPageFitsItsControls(t *testing.T) {
 	rowLeft := float32((sheetW - contentW) / 2)
 	if search.X < rowLeft-0.5 || search.X+search.W > rowLeft+contentW+0.5 {
 		t.Fatalf("the search field %+v leaves the action row", search)
-	}
-	var prev ui.Rect
-	for _, p := range a.tabPages() {
-		r, ok := view.Find(p.label())
-		if !ok {
-			t.Fatalf("the %s icon is missing", p.id())
-		}
-		if prev.W > 0 && r.X < prev.X+prev.W {
-			t.Fatalf("the %s icon at %.1f overlaps the previous icon ending %.1f", p.id(), r.X, prev.X+prev.W)
-		}
-		prev = r
 	}
 }

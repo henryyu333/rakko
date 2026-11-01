@@ -99,10 +99,10 @@ func expandShelf(t *testing.T, a *shelf) {
 		a.place(mygo.Screen.CursorScreenPoint())
 		a.peeking = true
 		a.peekProgress, a.peekFrom = 1, 1
-		want := a.tab // show() opens on the overview; keep the test's page
+		want := a.tab // show() opens on the tray; keep the test's page
 		a.show(false)
 		a.setLevel(2)
-		if want != "" && want != pageOverview {
+		if want != "" {
 			a.setTab(want)
 		}
 		a.jumpLevel = true
@@ -167,7 +167,6 @@ func redesignShelf(t *testing.T) *shelf {
 		a.visible, a.closeAt, a.progress, a.animationFrom = false, time.Time{}, 0, 0
 		a.animationStart = time.Time{}
 		a.peeking, a.peekProgress, a.peekFrom, a.peekAnimStart = false, 0, 0, time.Time{}
-		a.overviewDue = time.Time{}
 	})
 	return a
 }

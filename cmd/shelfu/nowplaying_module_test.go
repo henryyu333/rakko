@@ -333,8 +333,8 @@ func TestPeekWingsShowCoverAndBarsOnly(t *testing.T) {
 		if !a.visible {
 			t.Fatalf("a press on the %s must expand the panel too", p.name)
 		}
-		if a.tab != pageOverview || a.currentLevel() != 1 {
-			t.Fatalf("a press on the %s landed on %s (level %d): every expand opens the overview",
+		if a.tab != pageTray || a.currentLevel() != 1 {
+			t.Fatalf("a press on the %s landed on %s (level %d): every expand opens the search bar",
 				p.name, a.tab, a.currentLevel())
 		}
 	}
@@ -342,8 +342,7 @@ func TestPeekWingsShowCoverAndBarsOnly(t *testing.T) {
 
 // TestExpandingWithMusicNeverOpensThePlayer: with a track loaded, every
 // expand gesture — the hover wings, the shortcut's toggle and a plain open
-// — lands on the overview. The player page is one tap further in, on the
-// overview's track row.
+// — lands on the search bar, never on the player page.
 func TestExpandingWithMusicNeverOpensThePlayer(t *testing.T) {
 	s := newStubNowPlaying(t, true)
 	s.feed(t, `{"ok":true,"isPlaying":true,"appState":1,"title":"夜曲","artist":"周杰伦","duration":100,"elapsed":5}`)
@@ -362,8 +361,8 @@ func TestExpandingWithMusicNeverOpensThePlayer(t *testing.T) {
 	if err := view.Click("正在播放：夜曲 · 展开 Rakko"); err != nil {
 		t.Fatalf("the wings: %v", err)
 	}
-	if !a.visible || a.currentLevel() != 1 || a.tab != pageOverview {
-		t.Fatalf("the wings opened %s (level %d, visible %v), want the overview",
+	if !a.visible || a.currentLevel() != 1 || a.tab != pageTray {
+		t.Fatalf("the wings opened %s (level %d, visible %v), want the search bar",
 			a.tab, a.currentLevel(), a.visible)
 	}
 	view.Frame()
@@ -372,23 +371,15 @@ func TestExpandingWithMusicNeverOpensThePlayer(t *testing.T) {
 			t.Fatalf("the wings drew the player's %q: the overview must not carry the page", txt)
 		}
 	}
-	// The shortcut closes and opens again: the second open is the overview
-	// too, never the page the panel was last on.
+	// The shortcut closes and opens again: the second open is the search
+	// bar too, never the page the panel was last on.
 	a.toggle()
 	if a.visible {
 		t.Fatal("the shortcut did not close the panel")
 	}
 	a.toggle()
-	if !a.visible || a.tab != pageOverview || a.currentLevel() != 1 {
-		t.Fatalf("the shortcut opened %s (level %d), want the overview", a.tab, a.currentLevel())
-	}
-	// From the overview the track row still opens the player.
-	view.Frame()
-	if err := view.Click("正在播放：夜曲"); err != nil {
-		t.Fatalf("the overview's track row: %v", err)
-	}
-	if a.tab != pagePlaying || a.currentLevel() != 2 {
-		t.Fatalf("the track row opened %s (level %d), want the player page", a.tab, a.currentLevel())
+	if !a.visible || a.tab != pageTray || a.currentLevel() != 1 {
+		t.Fatalf("the shortcut opened %s (level %d), want the search bar", a.tab, a.currentLevel())
 	}
 }
 

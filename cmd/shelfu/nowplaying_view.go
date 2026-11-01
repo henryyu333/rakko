@@ -87,9 +87,8 @@ func (m *nowPlayingModule) peekWings(c *ui.Context, w, h, k float32) bool {
 		m.eqBars(c, st.Playing)
 	})
 	if wings.Clicked() {
-		// Expanding the notch is always the overview, music or not: the
-		// player is one tap further in, on the overview's track row.
-		m.host.openOverview()
+		// Expanding the notch always opens the search bar, music or not.
+		m.host.goHome()
 	}
 	return true
 }
