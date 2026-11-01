@@ -15,6 +15,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"shelf/internal/aiusage"
 	"shelf/internal/settings"
 	"shelf/locales"
 )
@@ -239,9 +240,9 @@ func (a *shelf) settingsClipboardPage(c *ui.Context) {
 	settingsFootnote(c, "clip-foot", l.SettingsClipFoot())
 }
 
-// settingsAIUsagePage: the master switch, the quota display, and the source
-// table. Turning the master off dims and locks the table (~40% opaque)
-// while the checkbox states stay readable.
+// settingsAIUsagePage: the display switches, the two quota cards, and the
+// read-only list of every local reader. Local usage is auto-detected, so
+// there is no source checkbox table.
 func (a *shelf) settingsAIUsagePage(c *ui.Context) {
 	l := loc(c)
 	settingsHero(c, "usage", l.SettingsAISection(), l.SettingsAIHero(), "curious",
@@ -267,87 +268,64 @@ func (a *shelf) settingsAIUsagePage(c *ui.Context) {
 		})
 	})
 
-	settingsGroup(c, "sources", l.SettingsAISourcesGroup(), "", func() {
-		table := ui.Column(c.Key("aiusage-table")).FillWidth().
-			Disabled(a.settingsBroken || !a.settings.AIUsage.Enabled)
-		if !a.settingsBroken && !a.settings.AIUsage.Enabled {
-			table.Opacity(0.8)
+	// The quota cards are only visible while the page is on; keep their
+	// switches locked with the same rule the old source table used.
+	quotaLocked := a.settingsBroken || !a.settings.AIUsage.Enabled
+	settingsGroupRows(c, "quota", l.SettingsAIQuotaGroup(), "", quotaLocked, func() {
+		rows := []struct {
+			tool  aiusage.Tool
+			on    bool
+			apply func(*settings.Settings, bool)
+		}{
+			{aiusage.ToolClaude, a.settings.AIUsage.QuotaClaude,
+				func(s *settings.Settings, on bool) { s.AIUsage.QuotaClaude = on }},
+			{aiusage.ToolCodex, a.settings.AIUsage.QuotaCodex,
+				func(s *settings.Settings, on bool) { s.AIUsage.QuotaCodex = on }},
 		}
-		table.Children(func() {
-			aiUsageTable(c, a, l)
-		})
+		for i, row := range rows {
+			if i > 0 {
+				settingsSep(c, "quota-"+string(row.tool))
+			}
+			apply := row.apply
+			settingsToggleRow(c, "quota-"+string(row.tool), toolName(row.tool),
+				a.aiQuotaCaption(row.tool, l), row.on,
+				func(on bool) {
+					a.setAIUsage(func(s *settings.Settings) { apply(s, on) })
+				})
+		}
 	})
-	settingsFootnote(c, "ai-foot", l.SettingsAIFoot())
+
+	settingsFootnote(c, "ai-foot", l.SettingsAILocalFoot())
 }
 
-// aiUsageTable draws the three-column source table: tool names on the left,
-// one 18pt checkbox under each of the two headers.
-func aiUsageTable(c *ui.Context, a *shelf, l locales.Messages) {
-	col := func(key string, fn func()) {
-		ui.Box(c.Key("c-" + key)).Width(84).Center().TextAlign(ui.Center).Children(fn)
+// aiQuotaCaption is the quota row's secondary line: the plan name when the
+// last answer carried one, otherwise the account state. Empty before any
+// answer, so a fresh install shows no invented text.
+func (a *shelf) aiQuotaCaption(t aiusage.Tool, l locales.Messages) string {
+	if a.usage == nil {
+		return ""
 	}
-	check := func(key, label string, on bool, apply func(*settings.Settings, bool)) {
-		b := ui.CheckboxBase(c.Key("ck-"+key), &on).Size(18, 18).Radius(5).Label(label)
-		if on {
-			b.Background(accent)
-		} else {
-			b.Border(1.5, ui.RGBA(255, 255, 255, 0.30))
+	latest := a.usage.quota[quotaIndex(t)].latest
+	if latest.FetchedAt.IsZero() {
+		return ""
+	}
+	switch latest.Status {
+	case aiusage.QuotaOK:
+		if q, _ := a.usage.quotaShown(t); q.Plan != "" {
+			return q.Plan
 		}
-		b.DrawOver(func(p *ui.Painter, r ui.Rect) {
-			if !on {
-				return
-			}
-			var tick ui.Path
-			tick.MoveTo(r.X+r.W*0.22, r.Y+r.H*0.52).LineTo(r.X+r.W*0.42, r.Y+r.H*0.71).
-				LineTo(r.X+r.W*0.78, r.Y+r.H*0.31)
-			p.StrokePath(&tick, 2, ui.RGB(255, 255, 255))
-		})
-		if b.Changed() {
-			a.setAIUsage(func(s *settings.Settings) { apply(s, on) })
-		}
+		return l.SettingsAIQuotaSignedIn()
+	case aiusage.QuotaNotLoggedIn:
+		return l.SettingsAIQuotaSignedOut()
+	case aiusage.QuotaExpired:
+		return l.SettingsAIQuotaExpired()
+	case aiusage.QuotaNoCLI:
+		return l.SettingsAIQuotaNoCLI()
+	case aiusage.QuotaLimitReached:
+		return l.SettingsAIQuotaLimit()
+	default:
+		return l.SettingsAIQuotaUnavailable()
 	}
-	toolRow := func(key, name string, quota, local bool,
-		qApply, lApply func(*settings.Settings, bool)) {
-		ui.Row(c.Key("row-"+key)).AlignItems(ui.Center).Gap(10).MinHeight(44).
-			Padding(0, settingsRowPadX).FillWidth().Children(func() {
-			ui.Box(c.Key("name")).Grow(1).MinWidth(0).Children(func() {
-				settingsLabel(c, name, 13.5, 600).TextColor(ink)
-			})
-			col("quota-"+key, func() {
-				if qApply == nil {
-					ui.Text(c, "—").SingleLine().FontSize(12.5).TextColor(ink3)
-					return
-				}
-				check("q-"+key, l.SettingsAIQuotaCheck(name), quota, qApply)
-			})
-			col("local-"+key, func() {
-				check("l-"+key, l.SettingsAILocalCheck(name), local, lApply)
-			})
-		})
-	}
-	ui.Row(c.Key("aiusage-head")).AlignItems(ui.Center).Gap(10).MinHeight(28).
-		Padding(0, settingsRowPadX).FillWidth().Children(func() {
-		ui.Box(c.Key("hd-pad")).Grow(1)
-		col("hd-quota", func() {
-			ui.Text(c, l.SettingsAIQuotaColumn()).SingleLine().FontSize(10.5).FontWeight(700).
-				LetterSpacing(0.8).TextColor(setLabel)
-		})
-		col("hd-local", func() {
-			ui.Text(c, l.SettingsAILocalColumn()).SingleLine().FontSize(10.5).FontWeight(700).
-				LetterSpacing(0.8).TextColor(setLabel)
-		})
-	})
-	settingsSep(c, "aiusage-head")
-	toolRow("codex", "Codex", a.settings.AIUsage.QuotaCodex, a.settings.AIUsage.LocalCodex,
-		func(s *settings.Settings, on bool) { s.AIUsage.QuotaCodex = on },
-		func(s *settings.Settings, on bool) { s.AIUsage.LocalCodex = on })
-	settingsSep(c, "codex")
-	toolRow("claude", "Claude Code", a.settings.AIUsage.QuotaClaude, a.settings.AIUsage.LocalClaude,
-		func(s *settings.Settings, on bool) { s.AIUsage.QuotaClaude = on },
-		func(s *settings.Settings, on bool) { s.AIUsage.LocalClaude = on })
-	settingsSep(c, "claude")
-	toolRow("omp", "omp", false, a.settings.AIUsage.LocalOmp, nil,
-		func(s *settings.Settings, on bool) { s.AIUsage.LocalOmp = on })
 }
 
 // settingsShortcutsPage: four editable global shortcuts (click the keycaps,

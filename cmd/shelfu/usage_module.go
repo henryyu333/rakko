@@ -67,10 +67,9 @@ type usageDeps struct {
 	// loadLast/saveLast keep the last good reading across restarts.
 	loadLast func() []aiusage.Quota
 	saveLast func(aiusage.Quota)
-	// newScanner builds a fresh local scanner per refresh so the
-	// aiUsage.local* switches apply at once; the on-disk incremental
-	// cache makes a rebuild cheap — the sources a Scanner was built
-	// with are fixed (internal/aiusage.NewScanner).
+	// newScanner builds a fresh local scanner per refresh; every
+	// supported reader is on and the on-disk incremental cache makes a
+	// rebuild cheap.
 	newScanner func() usageScanner
 	now        func() time.Time
 }
@@ -121,7 +120,6 @@ type usageFeature struct {
 	lastLocal  time.Time // last local refresh attempt (schedules the next)
 	summary    aiusage.Summary
 	hasSummary bool
-	scanSrc    aiusage.Sources // the sources the last local scan was built with
 	rangeSel   aiusage.Range
 	wasVisible bool
 	hoverTool  aiusage.Tool // the quota card under the pointer this frame
@@ -162,12 +160,6 @@ func defaultClaudeWait() time.Duration {
 	return (5 + time.Duration(rand.N(11))) * time.Minute
 }
 
-// usageSources maps the aiUsage.local* switches onto the scanner's source
-// selection; read it at refresh time so a settings flip applies at once.
-func usageSources(cfg *settings.AIUsageSettings) aiusage.Sources {
-	return aiusage.Sources{Omp: cfg.LocalOmp, Claude: cfg.LocalClaude, Codex: cfg.LocalCodex}
-}
-
 func (f *usageFeature) cfg() *settings.AIUsageSettings { return &f.host.settings.AIUsage }
 
 // quotaIndex maps the quota tools onto the fixed [2]state slots.
@@ -181,11 +173,6 @@ func quotaIndex(t aiusage.Tool) int {
 // quotaTools is the card order: Codex first, then Claude Code (设计稿).
 func quotaTools() []aiusage.Tool { return []aiusage.Tool{aiusage.ToolCodex, aiusage.ToolClaude} }
 
-// localTools is the local-usage order: omp, Codex, then Claude Code.
-func localTools() []aiusage.Tool {
-	return []aiusage.Tool{aiusage.ToolOmp, aiusage.ToolCodex, aiusage.ToolClaude}
-}
-
 // quotaOn reports whether tool's quota card is enabled.
 func (f *usageFeature) quotaOn(t aiusage.Tool) bool {
 	cfg := f.cfg()
@@ -195,10 +182,10 @@ func (f *usageFeature) quotaOn(t aiusage.Tool) bool {
 	return cfg.QuotaCodex && f.deps.fetchCodex != nil
 }
 
-// localOn reports whether the local usage section is enabled.
+// localOn reports whether the local usage section can draw: it needs a
+// scanner, and every supported reader is on.
 func (f *usageFeature) localOn() bool {
-	cfg := f.cfg()
-	return (cfg.LocalOmp || cfg.LocalClaude || cfg.LocalCodex) && f.deps.newScanner != nil
+	return f.deps.newScanner != nil
 }
 
 // usageVisible reports whether the AI 用量 page is the one the open panel
@@ -291,10 +278,7 @@ func (f *usageFeature) ensureFresh(now time.Time) {
 	}
 	if f.localOn() && !f.localBusy {
 		missing := f.summary.Range != f.rangeSel || !f.hasSummary
-		// The published summary was aggregated from the sources the scan
-		// was built with; a chip flip since then makes it stale.
-		staleSrc := f.hasSummary && f.scanSrc != usageSources(f.cfg())
-		if f.lastLocal.IsZero() || missing || staleSrc || now.Sub(f.lastLocal) >= usageLocalInterval {
+		if f.lastLocal.IsZero() || missing || now.Sub(f.lastLocal) >= usageLocalInterval {
 			f.startLocal(now)
 		}
 	}
@@ -464,7 +448,6 @@ func (f *usageFeature) startLocal(now time.Time) {
 	}
 	f.localBusy = true
 	f.lastLocal = now
-	f.scanSrc = usageSources(f.cfg())
 	f.scanDone.Store(0)
 	f.scanTotal.Store(0)
 	f.invalidate()
@@ -503,9 +486,8 @@ func (f *usageFeature) gotLocal(sum aiusage.Summary, r aiusage.Range, err error,
 		f.localAt = f.deps.now()
 	}
 	f.invalidate()
-	// The range or the source selection may have moved on while the worker
-	// ran: refresh it.
-	if f.localOn() && (f.summary.Range != f.rangeSel || f.scanSrc != usageSources(f.cfg())) && f.usageVisible() {
+	// The range may have moved on while the worker ran: refresh it.
+	if f.localOn() && f.summary.Range != f.rangeSel && f.usageVisible() {
 		f.startLocal(f.deps.now())
 	}
 }

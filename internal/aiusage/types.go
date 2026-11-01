@@ -9,9 +9,12 @@ import "time"
 type Tool string
 
 const (
-	ToolOmp    Tool = "omp"
-	ToolClaude Tool = "claude"
-	ToolCodex  Tool = "codex"
+	ToolOmp      Tool = "omp"
+	ToolClaude   Tool = "claude"
+	ToolCodex    Tool = "codex"
+	ToolPi       Tool = "pi"
+	ToolOpencode Tool = "opencode"
+	ToolGrok     Tool = "grok"
 )
 
 // Window is one rate-limit window of a subscription quota, as the vendor
@@ -140,10 +143,4 @@ type Summary struct {
 	Total   Totals
 	ByTool  map[Tool]Totals
 	Buckets []Bucket
-}
-
-// Sources picks which tools' local usage gets scanned (mirrors the
-// aiUsage.local* settings).
-type Sources struct {
-	Omp, Claude, Codex bool
 }

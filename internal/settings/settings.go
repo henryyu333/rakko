@@ -118,16 +118,13 @@ func (s ShellStyle) Normalized() ShellStyle {
 }
 
 // AIUsageSettings is the aiUsage object in settings.json. Enabled turns
-// the AI 用量 page on; the rest pick which data the page reads: the Codex
-// and Claude Code subscription quotas, and the local token usage of omp,
-// Claude Code and Codex.
+// the AI 用量 page on; QuotaCodex and QuotaClaude pick which subscription
+// cards it shows; QuotaLeft picks the quota display. Local usage is read
+// from every supported agent automatically and has no switch.
 type AIUsageSettings struct {
 	Enabled     bool `json:"enabled"`
 	QuotaCodex  bool `json:"quotaCodex"`
 	QuotaClaude bool `json:"quotaClaude"`
-	LocalOmp    bool `json:"localOmp"`
-	LocalClaude bool `json:"localClaude"`
-	LocalCodex  bool `json:"localCodex"`
 	// QuotaLeft shows how much of a quota window is left instead of how
 	// much is used; the used share is the default, as Magpie shows it.
 	QuotaLeft bool `json:"quotaLeft"`
@@ -155,9 +152,6 @@ func Default() Settings {
 			Enabled:     false,
 			QuotaCodex:  true,
 			QuotaClaude: true,
-			LocalOmp:    true,
-			LocalClaude: true,
-			LocalCodex:  true,
 		},
 		Shortcuts: ShortcutSettings{
 			Toggle:    DefaultShortcutToggle,

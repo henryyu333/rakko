@@ -13,8 +13,6 @@ import (
 
 const fixtureHome = "testdata/scan/home"
 
-var allSources = Sources{Omp: true, Claude: true, Codex: true}
-
 // fixtureNow is inside the fixture day (2026-10-19 UTC).
 func fixtureNow() time.Time {
 	return time.Date(2026, 10, 19, 15, 0, 0, 0, time.UTC)
@@ -63,7 +61,7 @@ func mustScan(t *testing.T, s *Scanner) (lastDone, lastTotal int64) {
 }
 
 func TestScanFixtureTree(t *testing.T) {
-	s := NewScanner(fixtureHome, t.TempDir(), allSources)
+	s := NewScanner(fixtureHome, t.TempDir())
 	done, total := mustScan(t, s)
 	if total == 0 || done != total {
 		t.Fatalf("progress done=%d total=%d, want equal nonzero", done, total)
@@ -116,7 +114,7 @@ func TestScanFixtureTree(t *testing.T) {
 
 func TestSecondScanNoBytes(t *testing.T) {
 	cache := t.TempDir()
-	s := NewScanner(fixtureHome, cache, allSources)
+	s := NewScanner(fixtureHome, cache)
 	mustScan(t, s)
 	sum1 := s.Summary(RangeToday, fixtureNow())
 
@@ -131,10 +129,10 @@ func TestSecondScanNoBytes(t *testing.T) {
 
 func TestCacheSurvivesNewScanner(t *testing.T) {
 	cache := t.TempDir()
-	s1 := NewScanner(fixtureHome, cache, allSources)
+	s1 := NewScanner(fixtureHome, cache)
 	mustScan(t, s1)
 
-	s2 := NewScanner(fixtureHome, cache, allSources)
+	s2 := NewScanner(fixtureHome, cache)
 	done, total := mustScan(t, s2)
 	if total != 0 {
 		t.Fatalf("new scanner reread bytes: total=%d", total)
@@ -151,7 +149,7 @@ func TestCorruptCacheRescans(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(cache, cacheName), []byte("{garbage"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	s := NewScanner(fixtureHome, cache, allSources)
+	s := NewScanner(fixtureHome, cache)
 	mustScan(t, s)
 	if got := s.Summary(RangeToday, fixtureNow()).Total.Requests; got != 7 {
 		t.Fatalf("requests = %d, want 7", got)
@@ -164,7 +162,7 @@ func TestAppendReadsOnlyNewBytes(t *testing.T) {
 	writeLines(t, f,
 		`{"type":"assistant","uuid":"a1","timestamp":"2026-10-19T10:00:00.000Z","message":{"id":"m1","model":"claude-sonnet-4-5","usage":{"input_tokens":10,"output_tokens":1}}}`)
 
-	s := NewScanner(home, t.TempDir(), allSources)
+	s := NewScanner(home, t.TempDir())
 	mustScan(t, s)
 	if got := s.Summary(RangeToday, fixtureNow()).Total.Requests; got != 1 {
 		t.Fatalf("requests = %d, want 1", got)
@@ -189,7 +187,7 @@ func TestTruncateRereads(t *testing.T) {
 		`{"type":"assistant","uuid":"a1","timestamp":"2026-10-19T10:00:00.000Z","message":{"id":"m1","model":"claude-sonnet-4-5","usage":{"input_tokens":10,"output_tokens":1}}}`,
 		`{"type":"assistant","uuid":"a2","timestamp":"2026-10-19T10:01:00.000Z","message":{"id":"m2","model":"claude-sonnet-4-5","usage":{"input_tokens":10,"output_tokens":1}}}`)
 
-	s := NewScanner(home, t.TempDir(), allSources)
+	s := NewScanner(home, t.TempDir())
 	mustScan(t, s)
 
 	// Shrink the file to one different record.
@@ -208,7 +206,7 @@ func TestSameSizeRewriteRereads(t *testing.T) {
 	old := `{"type":"assistant","uuid":"a1","timestamp":"2026-10-19T10:00:00.000Z","message":{"id":"m1","model":"claude-sonnet-4-5","usage":{"input_tokens":10,"output_tokens":1}}}`
 	writeLines(t, f, old)
 
-	s := NewScanner(home, t.TempDir(), allSources)
+	s := NewScanner(home, t.TempDir())
 	mustScan(t, s)
 
 	// Same length, different id, then bump mtime.
@@ -237,7 +235,7 @@ func TestGrowWithReplacedContentRereads(t *testing.T) {
 	writeLines(t, f,
 		`{"type":"assistant","uuid":"a1","timestamp":"2026-10-19T10:00:00.000Z","message":{"id":"m1","model":"claude-sonnet-4-5","usage":{"input_tokens":10,"output_tokens":1}}}`)
 
-	s := NewScanner(home, t.TempDir(), allSources)
+	s := NewScanner(home, t.TempDir())
 	mustScan(t, s)
 
 	// Rewrite bigger with different leading bytes: tail verification
@@ -260,7 +258,7 @@ func TestPartialLastLineWaits(t *testing.T) {
 	// A half-written second line must not be consumed.
 	appendBytes(t, f, `{"type":"assistant","uuid":"a2","timestamp":"2026-1`)
 
-	s := NewScanner(home, t.TempDir(), allSources)
+	s := NewScanner(home, t.TempDir())
 	mustScan(t, s)
 	if got := s.Summary(RangeToday, fixtureNow()).Total.Requests; got != 1 {
 		t.Fatalf("requests = %d, want 1 (partial line ignored)", got)
@@ -285,7 +283,7 @@ func TestDeletedFileDropped(t *testing.T) {
 	writeLines(t, f1, line)
 	writeLines(t, f2, line)
 
-	s := NewScanner(home, t.TempDir(), allSources)
+	s := NewScanner(home, t.TempDir())
 	mustScan(t, s)
 	// Same message id in two files dedupes to one anyway; use a file
 	// with a distinct id to see the drop.
@@ -311,7 +309,7 @@ func TestOmpForkDedupeAcrossAppend(t *testing.T) {
 	f2 := filepath.Join(home, ".omp", "agent", "sessions", "-p", "s2", "fork.jsonl")
 	writeLines(t, f1, line)
 
-	s := NewScanner(home, t.TempDir(), allSources)
+	s := NewScanner(home, t.TempDir())
 	mustScan(t, s)
 	if got := s.Summary(RangeToday, fixtureNow()).Total.Requests; got != 1 {
 		t.Fatalf("requests = %d, want 1", got)
@@ -324,36 +322,18 @@ func TestOmpForkDedupeAcrossAppend(t *testing.T) {
 	}
 }
 
-func TestDisabledSourcesFilteredFromCache(t *testing.T) {
-	cache := t.TempDir()
-	s1 := NewScanner(fixtureHome, cache, allSources)
-	mustScan(t, s1)
-
-	// A new scanner sharing the cache but watching only omp must not
-	// report the other tools' cached records.
-	s2 := NewScanner(fixtureHome, cache, Sources{Omp: true})
-	mustScan(t, s2)
-	sum := s2.Summary(RangeToday, fixtureNow())
-	if sum.Total.Requests != 2 || len(sum.ByTool) != 1 {
-		t.Fatalf("omp-only summary wrong: %+v %+v", sum.Total, sum.ByTool)
-	}
-	if _, ok := sum.ByTool[ToolOmp]; !ok {
-		t.Fatal("omp tool missing")
-	}
-}
-
 func TestScanCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	s := NewScanner(fixtureHome, t.TempDir(), allSources)
+	s := NewScanner(fixtureHome, t.TempDir())
 	err := s.Scan(ctx, nil)
 	if err == nil {
 		t.Fatal("expected cancellation error")
 	}
 }
 
-func TestNoSourcesNoDirs(t *testing.T) {
-	s := NewScanner(t.TempDir(), t.TempDir(), Sources{})
+func TestNoDirsGivesEmptySummary(t *testing.T) {
+	s := NewScanner(t.TempDir(), t.TempDir())
 	mustScan(t, s)
 	sum := s.Summary(RangeToday, fixtureNow())
 	if sum.Total.Requests != 0 || len(sum.ByTool) != 0 {
@@ -378,7 +358,7 @@ func TestCodexResumeDedupeAcrossScans(t *testing.T) {
 	writeLines(t, f, ev("2026-10-19T08:00:00.000Z", 100, 20, 10))
 
 	cache := t.TempDir()
-	s := NewScanner(home, cache, allSources)
+	s := NewScanner(home, cache)
 	mustScan(t, s)
 	if got := s.Summary(RangeToday, fixtureNow()).Total.Requests; got != 1 {
 		t.Fatalf("requests = %d, want 1", got)
@@ -387,7 +367,7 @@ func TestCodexResumeDedupeAcrossScans(t *testing.T) {
 	// must be skipped even after the tail state round-trips the cache.
 	appendBytes(t, f, ev("2026-10-19T08:01:00.000Z", 100, 20, 10)+"\n")
 
-	s2 := NewScanner(home, cache, allSources)
+	s2 := NewScanner(home, cache)
 	mustScan(t, s2)
 	if got := s2.Summary(RangeToday, fixtureNow()).Total.Requests; got != 1 {
 		t.Fatalf("dup across scans counted: requests = %d, want 1", got)
@@ -407,7 +387,7 @@ func TestDuplicateSurvivesWinnerDeletion(t *testing.T) {
 	writeLines(t, f2, line)
 
 	cache := t.TempDir()
-	s := NewScanner(home, cache, allSources)
+	s := NewScanner(home, cache)
 	mustScan(t, s)
 	if got := s.Summary(RangeToday, fixtureNow()).Total.Requests; got != 1 {
 		t.Fatalf("requests = %d, want 1 (copies deduped)", got)
@@ -418,7 +398,7 @@ func TestDuplicateSurvivesWinnerDeletion(t *testing.T) {
 	if err := os.Remove(f2); err != nil {
 		t.Fatal(err)
 	}
-	s2 := NewScanner(home, cache, allSources)
+	s2 := NewScanner(home, cache)
 	mustScan(t, s2)
 	if got := s2.Summary(RangeToday, fixtureNow()).Total.Requests; got != 1 {
 		t.Fatalf("after deleting one copy: requests = %d, want 1", got)
@@ -433,7 +413,7 @@ func TestPartialAppendKeepsFingerprint(t *testing.T) {
 	line1 := `{"type":"assistant","uuid":"a1","timestamp":"2026-10-19T10:00:00.000Z","message":{"id":"m1","model":"claude-sonnet-4-5","usage":{"input_tokens":10,"output_tokens":1}}}`
 	writeLines(t, f, line1)
 
-	s := NewScanner(home, t.TempDir(), allSources)
+	s := NewScanner(home, t.TempDir())
 	mustScan(t, s)
 
 	// Append an incomplete line: consumed, but it replaces no fingerprint.
@@ -461,7 +441,7 @@ func TestRewriteAtConsumedOffsetRereads(t *testing.T) {
 	writeLines(t, f, line1)
 	appendBytes(t, f, `{"type":"assistant","uuid":"a2","timestamp":"2026-1`) // partial tail
 
-	s := NewScanner(home, t.TempDir(), allSources)
+	s := NewScanner(home, t.TempDir())
 	mustScan(t, s)
 
 	// Rewrite the file to exactly the consumed offset's byte count with a
@@ -499,10 +479,10 @@ func TestScanCancelledBeforeWork(t *testing.T) {
 
 	// A previous run wrote a cache for this home; a cancelled scan must
 	// not read it (its records would show up in the summary).
-	wrote := NewScanner(home, cacheDir, allSources)
+	wrote := NewScanner(home, cacheDir)
 	mustScan(t, wrote)
 
-	s := NewScanner(home, cacheDir, allSources)
+	s := NewScanner(home, cacheDir)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	err := s.Scan(ctx, nil)
@@ -530,7 +510,7 @@ func TestSaveCacheAbortsMidSerialization(t *testing.T) {
 
 	// Write a real cache first: this is the version a cancelled write
 	// must leave in place, byte for byte.
-	good := NewScanner(fixtureHome, cacheDir, allSources)
+	good := NewScanner(fixtureHome, cacheDir)
 	mustScan(t, good)
 	cachePath := filepath.Join(cacheDir, cacheName)
 	before, err := os.ReadFile(cachePath)
@@ -541,7 +521,7 @@ func TestSaveCacheAbortsMidSerialization(t *testing.T) {
 	// Snapshot the populated file states and re-save them under a context
 	// that cancels the first time saveCache checks it — i.e. during
 	// serialization.
-	s := NewScanner(fixtureHome, cacheDir, allSources)
+	s := NewScanner(fixtureHome, cacheDir)
 	mustScan(t, s)
 	s.mu.RLock()
 	files := s.files

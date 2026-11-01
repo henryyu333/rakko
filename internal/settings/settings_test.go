@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -107,8 +108,8 @@ func TestAutoCheckUpdatesLoad(t *testing.T) {
 }
 
 // aiUsage is a nested object: a file without the key (every install before
-// the AI 用量 page) must load the page's defaults — the feature off, every
-// source on — never Go's zero value. Partial objects keep defaults for
+// the AI 用量 page) must load the page's defaults — the feature off, both
+// quota cards on — never Go's zero value. Partial objects keep defaults for
 // their missing keys too, and an explicit enabled is honoured.
 func TestAIUsageLoad(t *testing.T) {
 	dir := t.TempDir()
@@ -122,21 +123,46 @@ func TestAIUsageLoad(t *testing.T) {
 	if s.AIUsage.Enabled {
 		t.Fatal("missing aiUsage turned the page on")
 	}
-	for name, on := range map[string]bool{
-		"quotaCodex": s.AIUsage.QuotaCodex, "quotaClaude": s.AIUsage.QuotaClaude,
-		"localOmp": s.AIUsage.LocalOmp, "localClaude": s.AIUsage.LocalClaude, "localCodex": s.AIUsage.LocalCodex,
-	} {
-		if !on {
-			t.Fatalf("missing aiUsage.%s loaded as off", name)
-		}
+	if !s.AIUsage.QuotaCodex || !s.AIUsage.QuotaClaude || s.AIUsage.QuotaLeft {
+		t.Fatalf("missing aiUsage loaded wrong defaults: %+v", s.AIUsage)
 	}
 	// A partial object fills only the keys it sets.
-	if err := os.WriteFile(filepath.Join(dir, FileName), []byte(`{"aiUsage": {"enabled": true, "localCodex": false}}`), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, FileName), []byte(`{"aiUsage": {"enabled": true, "quotaCodex": false}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	s, err = Load(dir)
-	if err != nil || !s.AIUsage.Enabled || s.AIUsage.LocalCodex || !s.AIUsage.QuotaCodex || !s.AIUsage.LocalOmp {
-		t.Fatalf("partial aiUsage = %+v, %v; want enabled, localCodex off, the rest on", s.AIUsage, err)
+	if err != nil || !s.AIUsage.Enabled || s.AIUsage.QuotaCodex || !s.AIUsage.QuotaClaude {
+		t.Fatalf("partial aiUsage = %+v, %v; want enabled, quotaCodex off, quotaClaude on", s.AIUsage, err)
+	}
+}
+
+// Older files carry localOmp/localClaude/localCodex. Load ignores them (the
+// readers are automatic now), and the next Save drops them.
+func TestAIUsageDropsOldLocalSwitches(t *testing.T) {
+	dir := t.TempDir()
+	old := `{"aiUsage":{"enabled":true,"quotaCodex":false,"quotaClaude":true,"quotaLeft":true,` +
+		`"localOmp":false,"localClaude":true,"localCodex":false}}`
+	if err := os.WriteFile(filepath.Join(dir, FileName), []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !s.AIUsage.Enabled || s.AIUsage.QuotaCodex || !s.AIUsage.QuotaClaude || !s.AIUsage.QuotaLeft {
+		t.Fatalf("old aiUsage loaded wrong: %+v", s.AIUsage)
+	}
+	if err := Save(dir, s); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, FileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"localOmp", "localClaude", "localCodex"} {
+		if strings.Contains(string(data), key) {
+			t.Fatalf("saved settings still carries %s: %s", key, data)
+		}
 	}
 }
 

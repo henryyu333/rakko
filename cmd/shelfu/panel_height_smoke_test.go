@@ -98,8 +98,7 @@ func TestSmokePanelHeightFitsMusicAndUsage(t *testing.T) {
 			newScanner:  func() usageScanner { return &smokeUsageScanner{now: now} },
 			now:         func() time.Time { return now },
 		})
-		a.settings.AIUsage = settings.AIUsageSettings{Enabled: true, QuotaCodex: true, QuotaClaude: true,
-			LocalOmp: true, LocalClaude: true, LocalCodex: true}
+		a.settings.AIUsage = settings.AIUsageSettings{Enabled: true, QuotaCodex: true, QuotaClaude: true}
 		a.registerPage(f)
 	})
 	expandShelf(t, a)

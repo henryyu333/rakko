@@ -1,8 +1,8 @@
-// Scanner and its incremental file cache. The scanner walks the three
-// tools' session-log directories under home, parses each *.jsonl file into
-// compact records, and persists per-file state (size, consumed offset,
-// records) into one JSON file under cacheDir so later scans only read new
-// bytes.
+// Scanner and its incremental file cache. The scanner walks every supported
+// reader's session-log directory under home, parses each file into compact
+// records, and persists per-file state (size, consumed offset, records) into
+// one JSON file under cacheDir so later scans only read new bytes. Readers
+// are always all on: an agent that is not installed contributes nothing.
 package aiusage
 
 import (
@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"hash/fnv"
 	"io"
 	"io/fs"
@@ -71,28 +72,26 @@ type fileState struct {
 // seeing the previous consistent snapshot.
 type Scanner struct {
 	home, cacheDir string
-	src            Sources
 
 	mu    sync.RWMutex
 	files map[string]*fileState
 }
 
 // NewScanner makes a Scanner for the given home directory (the parent of
-// .omp/.claude/.codex), cache directory, and source selection.
-func NewScanner(home, cacheDir string, src Sources) *Scanner {
-	return &Scanner{home: home, cacheDir: cacheDir, src: src, files: map[string]*fileState{}}
+// .omp/.claude/.codex/.pi/.grok) and cache directory. Every supported reader
+// is scanned; see agentSpecs.
+func NewScanner(home, cacheDir string) *Scanner {
+	return &Scanner{home: home, cacheDir: cacheDir, files: map[string]*fileState{}}
 }
 
-func (s *Scanner) enabled(t Tool) bool {
-	switch t {
-	case ToolOmp:
-		return s.src.Omp
-	case ToolClaude:
-		return s.src.Claude
-	case ToolCodex:
-		return s.src.Codex
-	}
-	return false
+// wholeParser decodes a file that is one JSON document, not JSONL.
+type wholeParser func([]byte, map[string]*string) ([]rec, error)
+
+// fileSpec is how one collected file is parsed.
+type fileSpec struct {
+	tool  Tool
+	whole bool
+	parse wholeParser
 }
 
 // cacheName is the single cache file inside cacheDir.
@@ -101,15 +100,18 @@ const cacheName = "usage-scan-cache.json"
 // progressEvery throttles progress callbacks to ~4 MiB of read bytes.
 const progressEvery = 4 << 20
 
-// Scan walks the enabled sources' log directories and updates the
+// Scan walks every supported reader's data location and updates the
 // scanner's records and the on-disk cache. Files unchanged since the last
-// scan are skipped; grown files are read from the last complete line;
-// shrunk or replaced files are reread; deleted files are dropped. progress,
-// when non-nil, receives bytes read so far and the total bytes this scan
-// plans to read. Per-file errors are tolerated (the file keeps its
-// previous state); only ctx cancellation makes Scan return an error — the
-// progress already made is still committed, but the on-disk cache is only
-// written for a finished pass.
+// scan are skipped; grown JSONL files are read from the last complete line;
+// shrunk or replaced files are reread; deleted files are dropped. Whole-JSON
+// files (Grok's usage.json) and the opencode database are reread and
+// replaced as a unit when they change. progress, when non-nil, receives
+// bytes read so far and the total bytes this scan plans to read. A reader
+// that fails is skipped for this pass: its records are left out of the
+// snapshot, so the page's one total only covers readers that answered, and
+// every other reader still counts. Only ctx cancellation makes Scan return
+// an error — the progress already made is still committed, but the on-disk
+// cache is only written for a finished pass.
 func (s *Scanner) Scan(ctx context.Context, progress func(done, total int64)) error {
 	// Honour a cancel that arrived before the scan even started: no cache
 	// read, no tree walk, no stat — and, below, no cache write.
@@ -118,45 +120,72 @@ func (s *Scanner) Scan(ctx context.Context, progress func(done, total int64)) er
 	}
 	s.loadCache(ctx)
 
-	want := map[string]Tool{}
-	if s.src.Omp {
-		collectLogs(ctx, filepath.Join(s.home, ".omp", "agent", "sessions"), "*.jsonl", ToolOmp, want)
+	specs := agentSpecs(s.home)
+	want := map[string]fileSpec{}
+	failed := map[Tool]bool{}
+	dbPath := ""
+	if s.home == "" {
+		s.mu.Lock()
+		s.files = map[string]*fileState{}
+		s.mu.Unlock()
+		return nil
 	}
-	if s.src.Claude {
-		collectLogs(ctx, filepath.Join(s.home, ".claude", "projects"), "*.jsonl", ToolClaude, want)
-	}
-	if s.src.Codex {
-		collectLogs(ctx, filepath.Join(s.home, ".codex", "sessions"), "rollout-*.jsonl", ToolCodex, want)
-		collectLogs(ctx, filepath.Join(s.home, ".codex", "archived_sessions"), "*.jsonl", ToolCodex, want)
+	for _, sp := range specs {
+		if sp.db != "" {
+			dbPath = sp.db
+			continue
+		}
+		for _, root := range sp.roots {
+			paths, err := collectLogs(ctx, root.dir, root.match)
+			if err != nil {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+				failed[sp.tool] = true
+				continue
+			}
+			for _, p := range paths {
+				spec := fileSpec{tool: sp.tool, whole: root.whole}
+				if root.whole && sp.tool == ToolGrok {
+					spec.parse = parseGrokUsageFile
+				}
+				want[p] = spec
+			}
+		}
 	}
 
 	s.mu.RLock()
 	prev := s.files
 	s.mu.RUnlock()
 
-	// Carry cache entries for files belonging to sources this scan does
-	// not enumerate (their absence can't be told apart from "source
-	// off"); enabled-source files not seen in the walk are dropped.
-	// Every parsed record stays in its own file's state — duplicates are
-	// removed when Summary aggregates, so a surviving copy still counts
-	// when the file that "won" a key disappears.
+	// Carry the opencode database state (handled below) and drop every
+	// other cached file not seen in this walk. Every parsed record stays in
+	// its own file's state — duplicates are removed when Summary
+	// aggregates, so a surviving copy still counts when the file that "won"
+	// a key disappears.
 	files := make(map[string]*fileState, len(prev))
 	for p, st := range prev {
-		if st != nil && !s.enabled(st.tool) {
-			files[p] = st
+		if st == nil {
+			continue
+		}
+		if _, ok := want[p]; ok {
+			continue
+		}
+		if dbPath != "" && p == dbPath {
+			continue
 		}
 	}
 
 	type job struct {
 		path string
-		tool Tool
+		spec fileSpec
 		from int64
 		st   *fileState
 	}
 	var jobs []job
 	var total int64
 	var scanErr error
-	for path, tool := range want {
+	for path, spec := range want {
 		if err := ctx.Err(); err != nil { // stop the stat walk on cancel
 			scanErr = err
 			break
@@ -166,9 +195,18 @@ func (s *Scanner) Scan(ctx context.Context, progress func(done, total int64)) er
 			continue // vanished between walk and stat: drop
 		}
 		old := prev[path]
+		if spec.whole {
+			if old != nil && fi.Size() == old.size && fi.ModTime().UnixNano() == old.modNano {
+				files[path] = old
+				continue
+			}
+			jobs = append(jobs, job{path, spec, 0, nil})
+			total += fi.Size()
+			continue
+		}
 		switch {
 		case old == nil:
-			jobs = append(jobs, job{path, tool, 0, nil})
+			jobs = append(jobs, job{path, spec, 0, nil})
 			total += fi.Size()
 		case fi.Size() == old.size && fi.ModTime().UnixNano() == old.modNano:
 			files[path] = old // exactly what the last read observed: unchanged
@@ -176,7 +214,7 @@ func (s *Scanner) Scan(ctx context.Context, progress func(done, total int64)) er
 			// Shrunk, same size but touched, or replaced down to the last
 			// consumed offset (a partial tail makes old.size > old.offset):
 			// the content changed, reread everything.
-			jobs = append(jobs, job{path, tool, 0, nil})
+			jobs = append(jobs, job{path, spec, 0, nil})
 			total += fi.Size()
 		default:
 			// Grown past the last complete line: verify the old last line
@@ -187,13 +225,13 @@ func (s *Scanner) Scan(ctx context.Context, progress func(done, total int64)) er
 				from = 0
 			}
 			if from == 0 {
-				jobs = append(jobs, job{path, tool, 0, nil})
+				jobs = append(jobs, job{path, spec, 0, nil})
 				total += fi.Size()
 			} else {
-				st := &fileState{tool: tool, recs: slices.Clone(old.recs), tail: old.tail,
+				st := &fileState{tool: spec.tool, recs: slices.Clone(old.recs), tail: old.tail,
 					tailStart: old.tailStart, tailSum: old.tailSum}
 				files[path] = st
-				jobs = append(jobs, job{path, tool, from, st})
+				jobs = append(jobs, job{path, spec, from, st})
 				total += fi.Size() - from
 			}
 		}
@@ -213,22 +251,33 @@ loop:
 		}
 		st := jb.st
 		if st == nil {
-			st = &fileState{tool: jb.tool}
+			st = &fileState{tool: jb.spec.tool}
 		}
-		err := scanFile(ctx, jb.path, jb.from, st, pool, func(n int64) {
-			done += n
-			if progress != nil && done-lastReport >= progressEvery {
-				lastReport = done
-				progress(done, total)
-			}
-		})
+		var err error
+		if jb.spec.whole {
+			err = scanWholeFile(ctx, jb.path, st, jb.spec.parse, pool, func(n int64) {
+				done += n
+				if progress != nil && done-lastReport >= progressEvery {
+					lastReport = done
+					progress(done, total)
+				}
+			})
+		} else {
+			err = scanFile(ctx, jb.path, jb.from, st, pool, func(n int64) {
+				done += n
+				if progress != nil && done-lastReport >= progressEvery {
+					lastReport = done
+					progress(done, total)
+				}
+			})
+		}
 		if err != nil {
-			if err == ctx.Err() {
-				// Keep the previous state for this file, if any.
-				scanErr = err
+			if ctx.Err() != nil {
+				scanErr = ctx.Err()
 				break loop
 			}
-			continue // unreadable file: keep previous state, move on
+			failed[jb.spec.tool] = true
+			continue
 		}
 		if fi, err2 := os.Stat(jb.path); err2 == nil {
 			st.size, st.modNano = fi.Size(), fi.ModTime().UnixNano()
@@ -241,6 +290,35 @@ loop:
 		progress(done, total)
 	}
 
+	// opencode: replace the whole record set when the database (or its WAL)
+	// changed. A read failure marks the reader failed; its records are
+	// dropped below so the total only covers readers that answered.
+	if dbPath != "" {
+		if size, mod, ok := dbSignature(dbPath); ok {
+			old := prev[dbPath]
+			if old != nil && old.size == size && old.modNano == mod {
+				files[dbPath] = old
+			} else if recs, err := readOpencode(ctx, dbPath, pool); err != nil {
+				if ctx.Err() != nil {
+					scanErr = ctx.Err()
+				}
+				failed[ToolOpencode] = true
+			} else {
+				files[dbPath] = &fileState{tool: ToolOpencode, size: size, modNano: mod, recs: recs}
+			}
+		}
+	}
+
+	// A reader that failed anywhere in this pass is skipped as a whole: the
+	// page shows one total, and a partial reader would silently undercount.
+	if len(failed) > 0 {
+		for p, st := range files {
+			if st != nil && failed[st.tool] {
+				delete(files, p)
+			}
+		}
+	}
+
 	s.mu.Lock()
 	s.files = files
 	s.mu.Unlock()
@@ -251,21 +329,89 @@ loop:
 	return scanErr
 }
 
-// collectLogs adds every file under root matching the glob basename to out;
-// the walk stops the moment ctx is cancelled.
-func collectLogs(ctx context.Context, root, match string, tool Tool, out map[string]Tool) {
-	_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+// dbSignature reports the opencode database's size and newest modification
+// time, including the WAL: SQLite may append there without touching the main
+// file until a checkpoint.
+func dbSignature(path string) (size, mod int64, ok bool) {
+	for _, p := range []string{path, path + "-wal"} {
+		fi, err := os.Stat(p)
+		if err != nil {
+			continue
+		}
+		ok = true
+		size += fi.Size()
+		if m := fi.ModTime().UnixNano(); m > mod {
+			mod = m
+		}
+	}
+	return size, mod, ok
+}
+
+// collectLogs returns every file under root matching the glob basename. A
+// missing root is empty, not an error; an unreadable directory is reported
+// so the reader's status can say 读取失败. The walk stops the moment ctx is
+// cancelled.
+func collectLogs(ctx context.Context, root, match string) ([]string, error) {
+	if _, err := os.Stat(root); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var out []string
+	var firstErr error
+	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		if err != nil || d.IsDir() {
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			return nil
+		}
+		if d.IsDir() {
 			return nil
 		}
 		if ok, _ := filepath.Match(match, d.Name()); ok {
-			out[p] = tool
+			out = append(out, p)
 		}
 		return nil
 	})
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if firstErr == nil {
+			firstErr = err
+		}
+	}
+	return out, firstErr
+}
+
+// scanWholeFile replaces st's records with a whole JSON file's. The file is
+// small (Grok's per-session usage.json), so a change rereads all of it.
+func scanWholeFile(ctx context.Context, path string, st *fileState, parse wholeParser, pool map[string]*string, advance func(int64)) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if parse == nil {
+		return errors.New("aiusage: no parser for whole file")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	recs, err := parse(data, pool)
+	if err != nil {
+		return err
+	}
+	st.recs = recs
+	advance(int64(len(data)))
+	return nil
 }
 
 // tailIntact re-reads the last complete line recorded for the file and
@@ -342,12 +488,14 @@ func (st *fileState) parseLine(line []byte, pool map[string]*string) {
 		ok  bool
 	)
 	switch st.tool {
-	case ToolOmp:
+	case ToolOmp, ToolPi:
 		r, key, ok = parseOmpLine(line, pool)
 	case ToolClaude:
 		r, key, ok = parseClaudeLine(line, pool)
 	case ToolCodex:
 		r, ok = st.tail.parseCodexLine(line, pool)
+	case ToolGrok:
+		r, key, ok = parseGrokUpdateLine(line, pool)
 	default:
 		return
 	}

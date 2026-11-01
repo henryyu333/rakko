@@ -4,13 +4,13 @@ package main
 
 // AI 用量页（原型 variant=B 的 AI 页）：左栏 203 宽、两张 84 高的套餐额度
 // 双圈卡（外圈每周、内圈 5 小时，画「剩余」，悬停出 Synara 式明细）；
-// 右栏 187 宽、本机 token 用量（分段范围、2 × 2 指标、堆叠柱图、时间轴、
-// 图例）。整页在 416 × 174 里一屏看完，不滚动。取数调度在
+// 右栏 187 宽、本机 token 用量（分段范围、2 × 2 指标、合计柱图、时间轴）。
+// 整页在 416 × 174 里一屏看完，不滚动。取数调度在
 // usage_module.go，这里只有绘制和格式化。
 //
 // 颜色例外：额度圈（每周 #30D158、5 小时 #FF9F0A、低余量 #FF453A）与
-// 来源色（omp 蓝、Claude Code #D97757、Codex 灰白）是 DESIGN.md
-// 「唯一强调色」规则的第二个例外，本文件是唯一使用它们的地方。
+// Claude Code / Codex 的套餐卡标志色是 DESIGN.md「唯一强调色」规则的第二个
+// 例外，本文件是唯一使用它们的地方；本机用量只有一条合计柱，用普通强调色。
 
 import (
 	"fmt"
@@ -25,13 +25,14 @@ import (
 	"shelf/locales"
 )
 
-// Quota ring and source colours — the DESIGN.md single-accent rule's only
-// other exception besides the now-playing cover tint (DESIGN.md「AI 用量」).
+// Quota ring colours — the DESIGN.md single-accent rule's only other
+// exception besides the now-playing cover tint (DESIGN.md「AI 用量」). The
+// local usage chart is one series and uses the ordinary accent.
 var (
 	usageWeekly  = success                      // 外圈：每周；费用数值同色
 	usageFive    = warning                      // 内圈：5 小时；节奏告警同色
-	usageClaude  = ui.Hex("#D97757")            // Claude Code 的来源色与标志色
-	usageCodex   = ui.Hex("#B8B8C0")            // Codex 的来源色
+	usageClaude  = ui.Hex("#D97757")            // Claude Code 的标志色
+	usageCodex   = ui.Hex("#B8B8C0")            // Codex 的灰度
 	usagePopBG   = surfaceRaise                 // 悬停明细底色
 	usagePopEdge = ui.RGBA(255, 255, 255, 0.12) // 悬停明细描边
 	usageGrid    = ui.RGBA(255, 255, 255, 0.08) // 柱图网格线
@@ -61,7 +62,7 @@ var (
 	claudeLogo    = ui.MustParseSVG([]byte(`<svg viewBox="0 0 94 94" xmlns="http://www.w3.org/2000/svg"><path fill="#D97757" d="M18.7657 62.4437L37.1822 52.1167L37.4857 51.2122L37.1822 50.7085H36.2715L33.1852 50.5208L22.6615 50.2391L13.5545 49.8636L4.70044 49.3942L2.47428 48.9248L0.399902 46.1553L0.602281 44.794L2.47428 43.5266L5.15579 43.7613L11.0754 44.1837L19.98 44.794L26.4055 45.1695L35.9679 46.1553H37.4857L37.6881 45.545L37.1822 45.1695L36.7774 44.794L27.5692 38.5508L17.6021 31.9791L12.3908 28.1769L9.60812 26.2524L8.19147 24.4686L7.58433 20.5256L10.1141 17.7091L13.5545 17.9438L14.4146 18.1785L17.9056 20.8542L25.343 26.6279L35.0572 33.7629L36.4739 34.9364L37.0443 34.5514L37.1316 34.2792L36.4739 33.1996L31.212 23.6706L25.596 13.9539L23.0663 9.91695L22.4086 7.52296C22.1538 6.51831 22.0038 5.68714 22.0038 4.65957L24.8877 0.716544L26.5067 0.200195L30.4025 0.716544L32.0215 2.12477L34.4501 7.66379L38.3458 16.3478L44.4172 28.1769L46.188 31.6975L47.1493 34.9364L47.5035 35.9222H48.1106V35.3589L48.6166 28.6933L49.5273 20.5256L50.438 10.0108L50.7415 7.05356L52.2088 3.48605L55.1433 1.56148L57.42 2.64112L59.292 5.31674L59.039 7.05356L57.926 14.2824L55.7504 25.5952L54.3337 33.1996H55.1433L56.1046 32.2138L59.9497 27.1442L66.3752 19.0704L69.2085 15.8784L72.5478 12.3579L74.6728 10.668H78.7203L81.6548 15.0804L80.3394 19.6337L76.1906 24.8911L72.7502 29.3504L67.8172 35.9595L64.7562 41.2734L65.0307 41.7118L65.7681 41.6489L76.8989 39.255L82.9197 38.1753L90.1041 36.9549L93.3422 38.457L93.6963 40.006L92.4315 43.151L84.7411 45.0287L75.7353 46.8594L62.3244 50.0164L62.1759 50.1358L62.3512 50.3958L68.399 50.9432L70.9794 51.084H77.3037L89.0922 51.9759L92.1785 53.9944L93.9999 56.4822L93.6963 58.4068L88.9404 60.8008L82.5655 59.2987L67.6401 55.7312L62.5301 54.4638H61.8217V54.8862L66.0717 59.064L73.9139 66.1051L83.6786 75.2116L84.1845 77.4648L82.9197 79.2485L81.6042 79.0608L73.0032 72.5829L69.6639 69.6726L62.1759 63.3356H61.67V63.9928L63.3902 66.5276L72.5478 80.2812L73.0032 84.5059L72.3454 85.8672L69.9675 86.7121L67.3871 86.2427L61.9735 78.6852L56.4587 70.2359L52.0064 62.6315L51.4687 62.971L48.8189 91.2654L47.6047 92.7206L44.7714 93.8002L42.3934 92.0164L41.1286 89.1061L42.3934 83.3324L43.9113 75.8219L45.1255 69.8604L46.2386 62.4437L46.9184 59.9661L46.8583 59.8003L46.3153 59.8916L40.7238 67.5603L32.2239 79.0608L25.4948 86.2427L23.8758 86.8999L21.0931 85.4447L21.3461 82.863L22.9145 80.5629L32.2239 68.7338L37.8399 61.3641L41.4594 57.1337L41.4242 56.5218L41.2244 56.5048L16.489 72.6299L12.0873 73.1932L10.1647 71.4094L10.4176 68.4991L11.3283 67.5603L18.7657 62.4437Z"/></svg>`))
 )
 
-// toolName is a tool's display name on cards and the legend.
+// toolName is a quota card's display name.
 func toolName(t aiusage.Tool) string {
 	switch t {
 	case aiusage.ToolClaude:
@@ -85,31 +86,6 @@ func toolLogo(t aiusage.Tool) (*ui.SVG, ui.Color, float32) {
 		return claudeLogo, usageClaude, 18
 	}
 	return codexLogo, ink, 35.2
-}
-
-// toolColor is a tool's stacked-bar and legend colour.
-func toolColor(t aiusage.Tool) ui.Color {
-	switch t {
-	case aiusage.ToolClaude:
-		return usageClaude
-	case aiusage.ToolCodex:
-		return usageCodex
-	default:
-		return accent
-	}
-}
-
-// localSourceOn reports whether the local-usage chip for tool is on.
-func (f *usageFeature) localSourceOn(t aiusage.Tool) bool {
-	cfg := f.cfg()
-	switch t {
-	case aiusage.ToolClaude:
-		return cfg.LocalClaude
-	case aiusage.ToolCodex:
-		return cfg.LocalCodex
-	default:
-		return cfg.LocalOmp
-	}
 }
 
 // --- panelPage ----------------------------------------------------------
@@ -772,8 +748,8 @@ func (f *usageFeature) shownLabel(l locales.Messages, v float64) string {
 // --- local usage ---------------------------------------------------------
 
 // localPanel is 本机用量: header with range segments, 2 × 2 metrics, the
-// stacked chart filling the rest, axis and legend — or the scan/progress
-// card while there is no summary yet. Everything fits 197 × 174.
+// summed chart filling the rest and the axis — or the scan/progress card
+// while there is no summary yet. Everything fits 197 × 174.
 func (f *usageFeature) localPanel(c *ui.Context) {
 	card := ui.Column(c.Key("local-card")).FillWidth().FillHeight().Radius(14).Background(fill1).
 		Padding(8, 10, 7, 10).Gap(4)
@@ -787,54 +763,10 @@ func (f *usageFeature) localPanel(c *ui.Context) {
 			f.scanCard(c)
 			return
 		}
-		s := f.shownSummary()
+		s := f.summary
 		f.kpiGrid(c, s)
 		f.usageChart(c, s)
-		f.usageLegend(c, s)
 	})
-}
-
-// shownSummary is the summary as it must draw right now: KPI totals, the
-// chart and the legend all follow the live aiUsage.local* chips, so a chip
-// flip repaints the numbers at once instead of waiting for the next scan.
-// With every source on (the default) it returns the published summary
-// unchanged; otherwise it rebuilds Total from the kept per-tool totals
-// and drops the dropped tools' tokens from each bucket.
-func (f *usageFeature) shownSummary() aiusage.Summary {
-	s := f.summary
-	var kept []aiusage.Tool
-	for _, t := range localTools() {
-		if f.localSourceOn(t) {
-			kept = append(kept, t)
-		}
-	}
-	if len(kept) == len(localTools()) {
-		return s
-	}
-	s.ByTool = make(map[aiusage.Tool]aiusage.Totals, len(kept))
-	s.Total = aiusage.Totals{}
-	for _, t := range kept {
-		bt := f.summary.ByTool[t]
-		s.ByTool[t] = bt
-		s.Total.Input += bt.Input
-		s.Total.Output += bt.Output
-		s.Total.CacheRead += bt.CacheRead
-		s.Total.CacheWrite += bt.CacheWrite
-		s.Total.Requests += bt.Requests
-		s.Total.Unpriced += bt.Unpriced
-		s.Total.Cost += bt.Cost
-	}
-	s.Buckets = make([]aiusage.Bucket, len(f.summary.Buckets))
-	for i, b := range f.summary.Buckets {
-		tokens := make(map[aiusage.Tool]int64, len(kept))
-		for _, t := range kept {
-			if v := b.Tokens[t]; v > 0 {
-				tokens[t] = v
-			}
-		}
-		s.Buckets[i] = aiusage.Bucket{Start: b.Start, Tokens: tokens}
-	}
-	return s
 }
 
 // usageSeg is the 今天/7 天/30 天/全部 picker: a fill1 track of small
@@ -899,19 +831,10 @@ func (f *usageFeature) scanCard(c *ui.Context) {
 	})
 }
 
-// scanSources names the enabled local sources in the scan card's caption.
+// scanSources names what the scan card reads: every supported reader, so
+// the caption does not have to list six names in a 197pt column.
 func (f *usageFeature) scanSources(c *ui.Context) string {
-	l := tloc(c)
-	var names []string
-	for _, t := range localTools() {
-		if f.localSourceOn(t) {
-			names = append(names, toolName(t))
-		}
-	}
-	if len(names) == 0 {
-		return l.UsageNoLocalSources()
-	}
-	return l.UsageReadOnly(strings.Join(names, l.UsageListSeparator()))
+	return tloc(c).UsageReadOnlyAll()
 }
 
 // kpiGrid is the 2 × 2 metric block: Token, requests, cost and cache-hit
@@ -958,18 +881,19 @@ func usageTokenSub(l locales.Messages, t aiusage.Totals) string {
 		usageTokens(t.CacheRead+t.CacheWrite))
 }
 
-// usageChart is the stacked bar chart: per bucket a column of per-tool
-// segments (omp bottom, Codex middle, Claude Code top, as the mock's
-// legend orders them), gridlines at half and top, the baseline, and the
-// x labels under it.
+// usageChart is the local usage chart: one bar per bucket, each bar the sum
+// of every reader's tokens. The page asks only how much this Mac used, so
+// there is no per-tool stack, colour or legend.
 func (f *usageFeature) usageChart(c *ui.Context, s aiusage.Summary) {
 	buckets := s.Buckets
+	totals := make([]int64, len(buckets))
 	var maxTokens int64 = 1
-	for _, b := range buckets {
+	for i, b := range buckets {
 		var v int64
-		for _, t := range localTools() {
-			v += b.Tokens[t]
+		for _, n := range b.Tokens {
+			v += n
 		}
+		totals[i] = v
 		if v > maxTokens {
 			maxTokens = v
 		}
@@ -978,7 +902,7 @@ func (f *usageFeature) usageChart(c *ui.Context, s aiusage.Summary) {
 		p.Line(r.X, r.Y+0.25, r.X+r.W, r.Y+0.25, 0.5, usageGrid)
 		p.Line(r.X, r.Y+r.H/2, r.X+r.W, r.Y+r.H/2, 0.5, usageGrid)
 		p.Line(r.X, r.Y+r.H-0.25, r.X+r.W, r.Y+r.H-0.25, 0.5, usageBase)
-		n := len(buckets)
+		n := len(totals)
 		if n == 0 {
 			return
 		}
@@ -988,36 +912,15 @@ func (f *usageFeature) usageChart(c *ui.Context, s aiusage.Summary) {
 			gap = 1
 		}
 		w := max(1, slot-gap)
-		for i, b := range buckets {
-			var tot int64
-			for _, t := range localTools() {
-				tot += b.Tokens[t]
-			}
+		for i, tot := range totals {
 			if tot == 0 {
 				continue
 			}
+			sh := max(0, float32(tot)/float32(maxTokens)*(r.H-1))
 			x0 := r.X + float32(i)*slot + (slot-w)/2
-			y := r.Y + r.H
-			topDone := false
-			// Stacked bottom-up in localTools order: omp, Codex, Claude Code.
-			for j := len(localTools()) - 1; j >= 0; j-- {
-				t := localTools()[j]
-				v := b.Tokens[t]
-				if v <= 0 {
-					continue
-				}
-				sh := max(0, float32(v)/float32(maxTokens)*(r.H-1))
-				col := toolColor(t)
-				if !topDone {
-					var path ui.Path
-					topRoundedRect(&path, x0, y-sh, w, sh, 2)
-					p.FillPath(&path, col)
-					topDone = true
-				} else {
-					p.Fill(ui.Rect{X: x0, Y: y - sh, W: w, H: sh}, col, 0)
-				}
-				y -= sh
-			}
+			var path ui.Path
+			topRoundedRect(&path, x0, r.Y+r.H-sh, w, sh, 2)
+			p.FillPath(&path, accent)
 		}
 	})
 	ui.Row(c.Key("xl")).Justify(ui.SpaceBetween).Padding(0, 2, 0, 2).Children(func() {
@@ -1068,21 +971,6 @@ func (f *usageFeature) xLabels(l locales.Messages, buckets []aiusage.Bucket) []s
 		labels[i] = l.UsageDayMonth(b.Start)
 	}
 	return labels
-}
-
-// usageLegend is the chart's footnote: one chip per enabled local source.
-func (f *usageFeature) usageLegend(c *ui.Context, s aiusage.Summary) {
-	ui.Row(c.Key("legend")).Gap(10).Children(func() {
-		for _, t := range []aiusage.Tool{aiusage.ToolOmp, aiusage.ToolClaude, aiusage.ToolCodex} {
-			if !f.localSourceOn(t) {
-				continue
-			}
-			ui.Row(c.Key("lg-" + string(t))).AlignItems(ui.Center).Children(func() {
-				ui.Box(c).Size(6, 6).Radius(2).Background(toolColor(t)).Margin(0, 4, 0, 0)
-				panelLabel(c, nil, toolName(t), 9.5, 0).TextColor(ink2)
-			})
-		}
-	})
 }
 
 // --- formatting ------------------------------------------------------------

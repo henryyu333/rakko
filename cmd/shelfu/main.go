@@ -276,13 +276,13 @@ func (a *shelf) ready(show bool) {
 		},
 		loadLast: func() []aiusage.Quota { return aiusage.LoadLastQuotas(a.dataDir) },
 		saveLast: func(q aiusage.Quota) { _ = aiusage.SaveLastQuota(a.dataDir, q) },
-		// A fresh scanner per refresh follows the local* switches; the
-		// incremental cache in usage-cache keeps rebuilds cheap.
+		// A fresh scanner per refresh; every supported local reader is on.
+		// The incremental cache in usage-cache keeps rebuilds cheap.
 		newScanner: func() usageScanner {
 			if usageEnv.Home == "" {
 				return nil
 			}
-			return aiusage.NewScanner(usageEnv.Home, filepath.Join(a.dataDir, "usage-cache"), usageSources(&a.settings.AIUsage))
+			return aiusage.NewScanner(usageEnv.Home, filepath.Join(a.dataDir, "usage-cache"))
 		},
 		now: time.Now,
 	}
