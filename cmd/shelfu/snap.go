@@ -455,7 +455,9 @@ func (a *shelf) snapRelease(p mygo.Point) {
 	// as a capsule instead of landing in a pill no one can see.
 	switch {
 	case resizeErr || (target >= 0 && !resize):
-		a.toastStatus(a.appLoc().SnapCantResize(), time.Now().Add(4*time.Second), statusInfo)
+		// A failure like any other: on the search bar it reaches
+		// Notification Center, and its pill carries the error dot.
+		a.toastStatus(a.appLoc().SnapCantResize(), time.Now().Add(4*time.Second), statusErr)
 	case moveErr:
 		a.toastStatus(a.appLoc().SnapCantMove(), time.Now().Add(4*time.Second), statusErr)
 	}

@@ -284,6 +284,15 @@ func (a *shelf) toastQuiet(msg string, until time.Time, kind statusKind) {
 }
 
 func (a *shelf) toast(msg string, until time.Time, kind statusKind, capsule bool, limit time.Duration) {
+	// The search bar has no strip for a toast: a confirmation there would
+	// be invisible, and an error belongs to Notification Center. Pages and
+	// the closed capsule keep their pills.
+	if a.onSearchBar() {
+		if kind == statusErr {
+			sendNotification(appName, oneLine(msg))
+		}
+		return
+	}
 	a.status = msg
 	a.statusUntil, a.statusKind, a.statusCapsule = until, kind, capsule
 	a.statusSeen, a.statusSeenAt = 0, time.Time{}
@@ -389,11 +398,40 @@ func (a *shelf) changed(err error) {
 	}
 }
 func (a *shelf) report(err error) {
-	a.toastStatus(a.appLoc().StatusFailed(err.Error()), time.Time{}, statusErr)
-	log.Print(a.status)
+	msg := a.appLoc().StatusFailed(err.Error())
+	a.toastStatus(msg, time.Time{}, statusErr)
+	log.Print(msg)
 	if a.win != nil {
 		a.win.Invalidate()
 	}
+}
+
+// onSearchBar reports whether the panel shows the search bar, where the
+// toast strip does not exist.
+func (a *shelf) onSearchBar() bool {
+	return a.visible && a.currentLevel() == 1 && !a.snap.panel && !a.snap.drawn
+}
+
+// sendNotification posts a system notification (title plus one line). A
+// packaged app shows it; a test process is not packaged, and tests replace
+// the seam. Show asks for permission on the first notification and waits
+// for the answer, so it runs off the main thread.
+var sendNotification = func(title, body string) bool {
+	if !mygo.App.IsReady() || !mygo.NotificationsSupported() {
+		return false
+	}
+	note := mygo.NewNotification(mygo.NotificationOptions{Title: title, Body: body, Silent: true})
+	go func() { _ = note.Show() }()
+	return true
+}
+
+// oneLine folds a message into one line for a notification.
+func oneLine(s string) string {
+	s = strings.Join(strings.Fields(s), " ")
+	if r := []rune(s); len(r) > 180 {
+		return string(r[:179]) + "…"
+	}
+	return s
 }
 
 // notice adds a startup message to the status toast without hiding an

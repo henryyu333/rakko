@@ -877,9 +877,6 @@ func (a *shelf) view(c *ui.Context) {
 				if results.H > 0.5 {
 					a.resultsView(c, results, reveal)
 				}
-				if h := a.homeStatusH(resultsH); h > 0 {
-					a.homeStatusView(c, ui.Rect{X: 0, Y: shellH + statusGap, W: shellW, H: h}, reveal)
-				}
 				if navK > 0.01 {
 					a.navView(c, nav, navK)
 				}

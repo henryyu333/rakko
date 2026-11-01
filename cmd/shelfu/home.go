@@ -36,9 +36,6 @@ const (
 	resultsActH   = 40 // the 打开 ↩ hint row at the bottom
 	resultsMaxH   = 330
 
-	statusGap   = 8 // shell → the search bar's status pill
-	statusPillH = 22
-
 	navGap    = 10 // panel → page capsule
 	navH      = 36
 	navBtnW   = 36
@@ -233,29 +230,15 @@ func (a *shelf) navPages() []panelPage {
 	return out
 }
 
-// homeStatusH is the status pill's height under the search bar: a notice
-// the user must be able to read from the bar. It is 0 away from the bar,
-// while a query's results are showing, and while the arrangement panel
-// borrows the shell.
-func (a *shelf) homeStatusH(resultsH float32) float32 {
-	if !a.visible || a.status == "" || a.currentLevel() != 1 || a.snap.panel || a.snap.drawn || resultsH > 0.5 {
-		return 0
-	}
-	return statusPillH
-}
-
 // belowBoxes are the shapes the panel hangs under the shell, in the
 // window's coordinates relative to the shell's top-left corner: the results
-// sheet (h may be 0), the search bar's status pill slot (h may be 0) and
-// the page capsule. shellW/shellH are the drawn shell, resultsH the drawn
-// sheet, navK how far the capsule is shown.
+// sheet (h may be 0) and the page capsule. shellW/shellH are the drawn
+// shell, resultsH the drawn sheet, navK how far the capsule is shown.
 func (a *shelf) belowBoxes(shellW, shellH, resultsH float32) (results, nav ui.Rect) {
 	results = ui.Rect{X: 0, Y: shellH + resultsGap, W: shellW, H: resultsH}
 	navTop := shellH + navGap
 	if resultsH > 0.5 {
 		navTop = results.Y + resultsH + navGap
-	} else if h := a.homeStatusH(resultsH); h > 0 {
-		navTop = shellH + statusGap + h + navGap
 	}
 	w := a.navW()
 	nav = ui.Rect{X: (shellW - w) / 2, Y: navTop, W: w, H: navH}
@@ -507,16 +490,6 @@ func (a *shelf) navView(c *ui.Context, r ui.Rect, opacity float32) {
 		}); b.Clicked() {
 			a.hide(hideExplicit)
 		}
-	})
-}
-
-// homeStatusView draws the status pill under the search bar in its own
-// slot above the capsule: a notice stays readable from the bar, where the
-// overview used to carry it.
-func (a *shelf) homeStatusView(c *ui.Context, r ui.Rect, opacity float32) {
-	ui.Row(c.Key("home-status")).Absolute().Left(0).Top(r.Y).Width(r.W).Height(r.H).
-		AlignItems(ui.Center).Justify(ui.Center).PassThrough().Opacity(opacity).Children(func() {
-		a.statusToast(c)
 	})
 }
 

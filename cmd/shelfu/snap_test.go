@@ -3,6 +3,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -443,6 +444,10 @@ func TestSnapPanelTakesOverOpenShelf(t *testing.T) {
 // itself. The old code posted a status nothing rendered and lost it after
 // four seconds.
 func TestSnapFailureNoticeShowsOnIsland(t *testing.T) {
+	var title, body string
+	oldNotify := sendNotification
+	sendNotification = func(t, b string) bool { title, body = t, b; return true }
+	t.Cleanup(func() { sendNotification = oldNotify })
 	a, _ := levelShelf(t)
 	a.notchX, a.notchY, a.notchW, a.notchH = 600, 0, 180, 32
 	a.x, a.y = 410, 0
@@ -461,21 +466,16 @@ func TestSnapFailureNoticeShowsOnIsland(t *testing.T) {
 	a.snapTick(time.Now(), mygo.Point{X: 576, Y: 63}, false) // 左半
 	s.down = false
 	a.snapTick(time.Now(), mygo.Point{X: 576, Y: 63}, false)
-	if a.status != "这个窗口不能调整大小" {
-		t.Fatalf("status = %q, want the resize notice", a.status)
+	// The search bar has no toast strip: the failure goes to Notification
+	// Center, and nothing is kept for a pill that cannot be seen.
+	if title != appName || !strings.Contains(body, "这个窗口不能调整大小") {
+		t.Fatalf("notification = %q %q, want the resize notice", title, body)
+	}
+	if a.status != "" {
+		t.Fatalf("the search bar kept a toast: %q", a.status)
 	}
 	if !a.visible || a.level != 1 || a.snap.drawn {
 		t.Fatalf("island not restored: visible=%v level=%d drawn=%v", a.visible, a.level, a.snap.drawn)
-	}
-	win := a.desiredFrame()
-	view := ui.NewTester(a.view, win.Width, win.Height)
-	view.Frame()
-	notice, ok := view.Find("这个窗口不能调整大小")
-	if !ok {
-		t.Fatalf("the search bar did not draw the notice; texts %v", view.Texts())
-	}
-	if notice.Y < homeShellH-0.5 || notice.Y+notice.H > float32(win.Height)+0.5 {
-		t.Fatalf("the notice at %+v is not under the bar, inside the window %+v", notice, win)
 	}
 }
 
