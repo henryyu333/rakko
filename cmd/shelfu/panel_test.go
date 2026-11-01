@@ -1049,14 +1049,18 @@ func TestTrayMenuRemoveHidesClipboardCapture(t *testing.T) {
 	if !view.HasText(itemTitle(clip)) {
 		t.Fatal("hidden capture missing from the clipboard page")
 	}
-	// 再次复制同一张图：去重命中，回到托盘最前。
+	// 再次复制同一张图：去重命中，回到托盘最前。去重会刷新条目的时间，
+	// 截图标题里的时间也随之更新：比对当前标题，而不是移除前那个。
 	a.setTab(pageTray)
 	if err := s.AddClipImage(pngA, "com.example.Shot"); err != nil {
 		t.Fatal(err)
 	}
 	view.Frame()
-	if len(s.Items) != 1 || !view.HasText(itemTitle(clip)) {
-		t.Fatal("re-capture did not bring the item back to the tray")
+	if len(s.Items) != 1 || s.Items[0].ID != clip.ID || s.Items[0].OffTray {
+		t.Fatalf("re-capture left the item off the tray: %+v", s.Items)
+	}
+	if !view.HasText(itemTitle(s.Items[0])) {
+		t.Fatalf("re-capture did not bring the item back to the tray; texts %v", view.Texts())
 	}
 }
 
