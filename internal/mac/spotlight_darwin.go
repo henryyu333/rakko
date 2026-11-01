@@ -323,7 +323,7 @@ func spotHit(item uintptr) (SpotlightHit, bool) {
 	for _, kind := range spotAttrStrings(item, spotAttrTree()) {
 		switch kind {
 		case "com.apple.application-bundle":
-			hit.App = true
+			hit.App = spotInstalledApp(path)
 		case "public.folder":
 			hit.Folder = true
 		}
@@ -333,6 +333,23 @@ func spotHit(item uintptr) (SpotlightHit, bool) {
 	}
 	hit.LastUsed = spotAttrDate(item, spotAttrUsed())
 	return hit, true
+}
+
+// spotInstalledApp reports whether a bundle lives where applications are
+// installed: /Applications, /System/Applications or the user's own
+// Applications folder. A .app anywhere else — a build folder, Downloads, a
+// mounted image — lists as a file, not as an app.
+func spotInstalledApp(path string) bool {
+	roots := []string{"/Applications/", "/System/Applications/"}
+	if home := spotHome(); home != "" {
+		roots = append(roots, home+"/Applications/")
+	}
+	for _, root := range roots {
+		if strings.HasPrefix(path, root) {
+			return true
+		}
+	}
+	return false
 }
 
 var (

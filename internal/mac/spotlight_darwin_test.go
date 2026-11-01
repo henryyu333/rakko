@@ -131,3 +131,32 @@ func TestWarmSpotlightCancelsWhenTheIndexIsSlow(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 }
+
+// TestSpotInstalledAppOnlyCountsTheApplicationsFolders: only bundles under
+// the three install locations are 应用; the same .app elsewhere is a file.
+func TestSpotInstalledAppOnlyCountsTheApplicationsFolders(t *testing.T) {
+	home := spotHome()
+	if home == "" {
+		t.Skip("no home directory")
+	}
+	for _, path := range []string{
+		"/Applications/Safari.app",
+		"/System/Applications/Calculator.app",
+		"/System/Applications/Utilities/Terminal.app",
+		filepath.Join(home, "Applications/Local.app"),
+	} {
+		if !spotInstalledApp(path) {
+			t.Errorf("%s should list as an application", path)
+		}
+	}
+	for _, path := range []string{
+		filepath.Join(home, "Downloads/Installer.app"),
+		filepath.Join(home, "Developer/build/Debug/My.app"),
+		"/Volumes/Install macOS/Install.app",
+		"/Applications",
+	} {
+		if spotInstalledApp(path) {
+			t.Errorf("%s should list as a file", path)
+		}
+	}
+}
