@@ -188,7 +188,10 @@ func (r *SpotlightRun) query(expr string, limit int, emit func([]SpotlightHit)) 
 	if err := spotLoad(); err != nil {
 		return
 	}
-	q := spotQueryCreate(0, spotString(expr), 0, 0)
+	query := spotString(expr)
+	q := spotQueryCreate(0, query, 0, 0)
+	// MDQueryCreate copies (retains) the query string: ours is done with.
+	spotRelease(query)
 	if q == 0 {
 		return
 	}
