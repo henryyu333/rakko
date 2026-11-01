@@ -9,8 +9,9 @@ package main
 // usage_module.go，这里只有绘制和格式化。
 //
 // 颜色例外：额度圈（每周 #30D158、5 小时 #FF9F0A、低余量 #FF453A）与
-// 来源色（omp 蓝、Claude Code #D97757、Codex 灰白）是 DESIGN.md
-// 「唯一强调色」规则的第二个例外，本文件是唯一使用它们的地方。
+// 来源色（omp 蓝、Claude Code #D97757、Codex 灰白、pi 青、opencode 紫、
+// Grok 粉）是 DESIGN.md「唯一强调色」规则的第二个例外，本文件是唯一使用
+// 它们的地方。
 
 import (
 	"fmt"
@@ -28,14 +29,17 @@ import (
 // Quota ring and source colours — the DESIGN.md single-accent rule's only
 // other exception besides the now-playing cover tint (DESIGN.md「AI 用量」).
 var (
-	usageWeekly  = success                      // 外圈：每周；费用数值同色
-	usageFive    = warning                      // 内圈：5 小时；节奏告警同色
-	usageClaude  = ui.Hex("#D97757")            // Claude Code 的来源色与标志色
-	usageCodex   = ui.Hex("#B8B8C0")            // Codex 的来源色
-	usagePopBG   = surfaceRaise                 // 悬停明细底色
-	usagePopEdge = ui.RGBA(255, 255, 255, 0.12) // 悬停明细描边
-	usageGrid    = ui.RGBA(255, 255, 255, 0.08) // 柱图网格线
-	usageBase    = ui.RGBA(255, 255, 255, 0.12) // 柱图基线
+	usageWeekly   = success                      // 外圈：每周；费用数值同色
+	usageFive     = warning                      // 内圈：5 小时；节奏告警同色
+	usageClaude   = ui.Hex("#D97757")            // Claude Code 的来源色与标志色
+	usageCodex    = ui.Hex("#B8B8C0")            // Codex 的来源色
+	usagePi       = ui.Hex("#64D2FF")            // pi 的来源色
+	usageOpencode = ui.Hex("#BF5AF2")            // opencode 的来源色
+	usageGrok     = ui.Hex("#FF375F")            // Grok CLI 的来源色
+	usagePopBG    = surfaceRaise                 // 悬停明细底色
+	usagePopEdge  = ui.RGBA(255, 255, 255, 0.12) // 悬停明细描边
+	usageGrid     = ui.RGBA(255, 255, 255, 0.08) // 柱图网格线
+	usageBase     = ui.RGBA(255, 255, 255, 0.12) // 柱图基线
 )
 
 // The quota card's metrics from the mock (.qc{height:88}, .quota{gap:6}).
@@ -68,8 +72,27 @@ func toolName(t aiusage.Tool) string {
 		return "Claude Code"
 	case aiusage.ToolCodex:
 		return "Codex"
+	case aiusage.ToolPi:
+		return "pi"
+	case aiusage.ToolOpencode:
+		return "opencode"
+	case aiusage.ToolGrok:
+		return "Grok CLI"
 	default:
 		return "omp"
+	}
+}
+
+// legendName is the shorter name the 197pt legend uses where the full name
+// would crowd a 3-column cell.
+func legendName(t aiusage.Tool) string {
+	switch t {
+	case aiusage.ToolClaude:
+		return "Claude"
+	case aiusage.ToolGrok:
+		return "Grok"
+	default:
+		return toolName(t)
 	}
 }
 
@@ -94,6 +117,12 @@ func toolColor(t aiusage.Tool) ui.Color {
 		return usageClaude
 	case aiusage.ToolCodex:
 		return usageCodex
+	case aiusage.ToolPi:
+		return usagePi
+	case aiusage.ToolOpencode:
+		return usageOpencode
+	case aiusage.ToolGrok:
+		return usageGrok
 	default:
 		return accent
 	}
@@ -894,8 +923,8 @@ func usageTokenSub(l locales.Messages, t aiusage.Totals) string {
 }
 
 // usageChart is the stacked bar chart: per bucket a column of per-tool
-// segments (omp bottom, Codex middle, Claude Code top, as the mock's
-// legend orders them), gridlines at half and top, the baseline, and the
+// segments in localTools order (omp at the bottom, then Codex, Claude Code,
+// pi, opencode and Grok), gridlines at half and top, the baseline, and the
 // x labels under it.
 func (f *usageFeature) usageChart(c *ui.Context, s aiusage.Summary) {
 	buckets := s.Buckets
@@ -1005,13 +1034,25 @@ func (f *usageFeature) xLabels(l locales.Messages, buckets []aiusage.Bucket) []s
 	return labels
 }
 
-// usageLegend is the chart's footnote: one chip per local reader with data.
+// usageLegend is the chart's footnote: one chip per reader that has data in
+// this summary, in localTools order, three per row so six agents fit the
+// 197pt card without a horizontal squeeze.
 func (f *usageFeature) usageLegend(c *ui.Context, s aiusage.Summary) {
-	ui.Row(c.Key("legend")).Gap(10).Children(func() {
-		for _, t := range localTools() {
-			ui.Row(c.Key("lg-" + string(t))).AlignItems(ui.Center).Children(func() {
+	var tools []aiusage.Tool
+	for _, t := range localTools() {
+		if s.ByTool[t].Requests > 0 {
+			tools = append(tools, t)
+		}
+	}
+	if len(tools) == 0 {
+		return
+	}
+	ui.Grid(c.Key("legend")).ColumnTracks(ui.Fr(1), ui.Fr(1), ui.Fr(1)).
+		GapX(4).GapY(2).FillWidth().Children(func() {
+		for _, t := range tools {
+			ui.Row(c.Key("lg-" + string(t))).AlignItems(ui.Center).MinWidth(0).Children(func() {
 				ui.Box(c).Size(6, 6).Radius(2).Background(toolColor(t)).Margin(0, 4, 0, 0)
-				panelLabel(c, nil, toolName(t), 9.5, 0).TextColor(ink2)
+				panelLabel(c, nil, legendName(t), 9.5, 0).TextColor(ink2)
 			})
 		}
 	})

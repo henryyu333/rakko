@@ -1742,3 +1742,44 @@ func TestQuotaRingPaceTickFollowsMode(t *testing.T) {
 		t.Fatalf("剩余 mode tick at %.2f of the ring, want 0.60 (expected left)", got)
 	}
 }
+
+// The local legend follows the summary, not a fixed three-tool list: every
+// reader with data gets a chip, and six chips still fit the 197pt card.
+func TestUsageLegendIncludesEveryDetectedAgent(t *testing.T) {
+	fx := newUsageFixture(t, true)
+	now := *fx.now
+	tools := []aiusage.Tool{
+		aiusage.ToolOmp, aiusage.ToolCodex, aiusage.ToolClaude,
+		aiusage.ToolPi, aiusage.ToolOpencode, aiusage.ToolGrok,
+	}
+	byTool := map[aiusage.Tool]aiusage.Totals{}
+	tokens := map[aiusage.Tool]int64{}
+	for i, tool := range tools {
+		byTool[tool] = aiusage.Totals{Input: int64(100 * (i + 1)), Requests: 1}
+		tokens[tool] = int64(100 * (i + 1))
+	}
+	fx.scan.summaries = map[aiusage.Range]aiusage.Summary{
+		aiusage.RangeToday: {
+			Total:   aiusage.Totals{Requests: 6},
+			ByTool:  byTool,
+			Buckets: []aiusage.Bucket{{Start: now.Add(-time.Hour), Tokens: tokens}},
+		},
+	}
+	drain := fitSink(t)
+	fx.view.Click("AI 用量")
+	fx.f.tick(now)
+	fx.view.Frame()
+	fx.view.Frame()
+	for _, want := range []string{"omp", "Codex", "Claude", "pi", "opencode", "Grok"} {
+		if !fx.view.HasText(want) {
+			t.Fatalf("legend missing %q; texts=%v", want, fx.view.Texts())
+		}
+	}
+	for _, note := range drain() {
+		for _, want := range []string{`"omp"`, `"Codex"`, `"Claude"`, `"pi"`, `"opencode"`, `"Grok"`} {
+			if strings.Contains(note, want) {
+				t.Fatalf("legend label does not fit: %s", note)
+			}
+		}
+	}
+}

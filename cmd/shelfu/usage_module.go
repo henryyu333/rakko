@@ -179,9 +179,13 @@ func quotaIndex(t aiusage.Tool) int {
 // quotaTools is the card order: Codex first, then Claude Code (设计稿).
 func quotaTools() []aiusage.Tool { return []aiusage.Tool{aiusage.ToolCodex, aiusage.ToolClaude} }
 
-// localTools is the local-usage order: omp, Codex, then Claude Code.
+// localTools is the local-usage order: omp, Codex, Claude Code, then the
+// readers added later. The chart stacks bottom-up in this order.
 func localTools() []aiusage.Tool {
-	return []aiusage.Tool{aiusage.ToolOmp, aiusage.ToolCodex, aiusage.ToolClaude}
+	return []aiusage.Tool{
+		aiusage.ToolOmp, aiusage.ToolCodex, aiusage.ToolClaude,
+		aiusage.ToolPi, aiusage.ToolOpencode, aiusage.ToolGrok,
+	}
 }
 
 // quotaOn reports whether tool's quota card is enabled.
