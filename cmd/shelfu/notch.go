@@ -896,7 +896,8 @@ func (a *shelf) show(edge bool) {
 	// The search bar takes the keyboard as it grows: typing starts at
 	// once. The arrangement panel is not a search and keeps it away.
 	if level == 1 && !a.snap.panel {
-		a.homeQuery, a.homeSel = "", 0
+		a.resetHomeSearch()
+		a.warmSpotlight()
 		a.takeKeyboard()
 	}
 }
@@ -1042,10 +1043,7 @@ func (a *shelf) escape() {
 		return
 	}
 	if a.homeQuery != "" {
-		a.homeQuery, a.homeSel = "", 0
-		if a.win != nil {
-			a.win.Invalidate()
-		}
+		a.resetHomeSearch()
 		return
 	}
 	a.hide(hideExplicit)
@@ -1125,6 +1123,9 @@ func (a *shelf) hide(exit hideExit) {
 	// The keyboard went back with the close: a reopen before the fade ends
 	// must open the search bar, not the clipboard search it was left on.
 	a.focusMode = false
+	// A closed bar keeps no query in flight; the drawn hits survive the
+	// content fade and finishClose retires them.
+	a.cancelHomeSpot()
 	a.releaseKeys()
 	// 当前拖拽不再次触发；松开鼠标或出现新会话后解除。
 	a.suppressed = true
@@ -1145,7 +1146,7 @@ func (a *shelf) hide(exit hideExit) {
 func (a *shelf) finishClose() {
 	a.closeAt = time.Time{}
 	a.focusMode, a.tab, a.tabFrom, a.search, a.reveal = false, pageTray, pageTray, "", ""
-	a.homeQuery, a.homeSel = "", 0
+	a.resetHomeSearch()
 	a.tabAt = time.Time{}
 	a.tabOutK, a.tabOutShift = 1, 0
 	a.warming = ""

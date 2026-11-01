@@ -100,6 +100,10 @@ func OpenPrivacySecurityPane() {
 	openURL(privacySecurityPane)
 }
 
+// RevealInFinder selects path in a new Finder window, as Finder's 显示 in
+// enclosing folder. Main thread only.
+func RevealInFinder(path string) { revealInFinder(path) }
+
 // revealInFinder selects path in a new Finder window, as Finder's 显示 in
 // enclosing folder: NSWorkspace.activateFileViewerSelectingURLs:. Main
 // thread only.

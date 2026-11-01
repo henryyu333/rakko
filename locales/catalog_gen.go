@@ -5123,6 +5123,36 @@ func (msgs Messages) HomeGroupClipboard() string {
 	return Catalog.Format(msgs.locale, "homeGroupClipboard", nil)
 }
 
+// HomeGroupApps says "应用"
+// in the language the app shows.
+func HomeGroupApps() string { return In(i18n.Locale()).HomeGroupApps() }
+
+// HomeGroupApps says "应用"
+// in the language of msgs.
+func (msgs Messages) HomeGroupApps() string {
+	return Catalog.Format(msgs.locale, "homeGroupApps", nil)
+}
+
+// HomeGroupFolders says "文件夹"
+// in the language the app shows.
+func HomeGroupFolders() string { return In(i18n.Locale()).HomeGroupFolders() }
+
+// HomeGroupFolders says "文件夹"
+// in the language of msgs.
+func (msgs Messages) HomeGroupFolders() string {
+	return Catalog.Format(msgs.locale, "homeGroupFolders", nil)
+}
+
+// HomeGroupFiles says "文件"
+// in the language the app shows.
+func HomeGroupFiles() string { return In(i18n.Locale()).HomeGroupFiles() }
+
+// HomeGroupFiles says "文件"
+// in the language of msgs.
+func (msgs Messages) HomeGroupFiles() string {
+	return Catalog.Format(msgs.locale, "homeGroupFiles", nil)
+}
+
 // HomeGroupActions says "动作"
 // in the language the app shows.
 func HomeGroupActions() string { return In(i18n.Locale()).HomeGroupActions() }
