@@ -56,6 +56,11 @@ func fillSymbol(paths string) *ui.SVG {
 
 // The palette and every other design token live in theme.go.
 
+// shellFillInset is how far inside the glass pane's bottom corners the
+// black backdrop stops, in points: enough that the pane's own antialiased
+// edge never lets a dark backdrop fringe show through.
+const shellFillInset = 1
+
 // panelTheme keeps the frame dark with the design's single accent: the
 // default theme would take the user's accent color and a light appearance
 // for scrollbars, focus rings and the search caret.
@@ -758,14 +763,30 @@ func (a *shelf) view(c *ui.Context) {
 		botR := min(shellH/2, corner)
 		path.MoveTo(x0-ear+shake, y0)
 		path.QuadTo(x0+shake, y0, x0+shake, y0+earR)
+		// Where the pane is glass, the black backdrop stops a point inside
+		// its bottom corners: the pane clips to a circle and antialiases
+		// against what it covers, so a fill reaching the pane's edge shows
+		// through that last, partly covered pixel as a dark fringe. The
+		// wider circular arc stays inside the pane's circle; the pane, not
+		// the backdrop, draws the corner. Black-only shapes (the peek
+		// capsule) keep the exact quadratic corner.
+		glassy := expanded || openK > 0.3
 		path.LineTo(x0+shake, y1-botR)
-		path.QuadTo(x0+shake, y1, x0+shake+botR, y1)
-		path.LineTo(x1-botR+shake, y1)
-		path.QuadTo(x1+shake, y1, x1+shake, y1-botR)
+		if glassy {
+			r := botR + shellFillInset
+			const k = 0.5522847498
+			path.CubeTo(x0+shake, y1-r+r*k, x0+shake+r-r*k, y1, x0+shake+r, y1)
+			path.LineTo(x1-r+shake, y1)
+			path.CubeTo(x1+shake-r+r*k, y1, x1+shake, y1-r+r*k, x1+shake, y1-r)
+		} else {
+			path.QuadTo(x0+shake, y1, x0+shake+botR, y1)
+			path.LineTo(x1-botR+shake, y1)
+			path.QuadTo(x1+shake, y1, x1+shake, y1-botR)
+		}
 		path.LineTo(x1+shake, y0+earR)
 		path.QuadTo(x1+shake, y0, x1+ear+shake, y0)
 		path.Close()
-		a.panelFill(p, &path, ui.Rect{X: x0 + shake, Y: y0, W: shellW, H: shellH}, botR, expanded || openK > 0.3)
+		a.panelFill(p, &path, ui.Rect{X: x0 + shake, Y: y0, W: shellW, H: shellH}, botR, glassy)
 	})
 	zone.Children(func() {
 		if !expanded {
