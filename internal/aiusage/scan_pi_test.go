@@ -24,9 +24,4 @@ func TestPiReader(t *testing.T) {
 	if sum.Total.Requests != 2 {
 		t.Fatalf("pi records leaked into other tools: %+v", sum.Total)
 	}
-	for _, st := range s.Statuses() {
-		if st.Tool == ToolPi && st.Status != StatusFound {
-			t.Fatalf("pi status = %v, want found", st.Status)
-		}
-	}
 }

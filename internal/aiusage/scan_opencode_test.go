@@ -99,16 +99,7 @@ func TestOpencodeFailureIsIsolated(t *testing.T) {
 	if got := sum.ByTool[ToolOpencode].Requests; got != 0 {
 		t.Fatalf("broken opencode returned %d records", got)
 	}
-	found := false
-	for _, st := range s.Statuses() {
-		if st.Tool == ToolOpencode {
-			found = true
-			if st.Status != StatusReadFailed {
-				t.Fatalf("opencode status = %v, want read failed", st.Status)
-			}
-		}
-	}
-	if !found {
-		t.Fatal("opencode status missing")
+	if sum.Total.Requests != 1 || sum.Total.Input != 10 {
+		t.Fatalf("a failed reader must not reach the total: %+v", sum.Total)
 	}
 }

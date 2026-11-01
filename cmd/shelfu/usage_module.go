@@ -71,9 +71,7 @@ type usageDeps struct {
 	// supported reader is on and the on-disk incremental cache makes a
 	// rebuild cheap.
 	newScanner func() usageScanner
-	// home is the directory the readers and the settings probe inspect.
-	home string
-	now  func() time.Time
+	now        func() time.Time
 }
 
 // usageScanner is the local record store slice B provides: Scan walks new
@@ -126,10 +124,6 @@ type usageFeature struct {
 	wasVisible bool
 	hoverTool  aiusage.Tool // the quota card under the pointer this frame
 
-	// agents is the settings page's last probe of every reader.
-	agents   []aiusage.AgentStatus
-	agentsAt time.Time
-
 	// workGen/workCancel retire local scans and cancel in-flight fetches.
 	// Completed quota answers remain useful after a page change.
 	workGen    int
@@ -179,15 +173,6 @@ func quotaIndex(t aiusage.Tool) int {
 // quotaTools is the card order: Codex first, then Claude Code (设计稿).
 func quotaTools() []aiusage.Tool { return []aiusage.Tool{aiusage.ToolCodex, aiusage.ToolClaude} }
 
-// localTools is the local-usage order: omp, Codex, Claude Code, then the
-// readers added later. The chart stacks bottom-up in this order.
-func localTools() []aiusage.Tool {
-	return []aiusage.Tool{
-		aiusage.ToolOmp, aiusage.ToolCodex, aiusage.ToolClaude,
-		aiusage.ToolPi, aiusage.ToolOpencode, aiusage.ToolGrok,
-	}
-}
-
 // quotaOn reports whether tool's quota card is enabled.
 func (f *usageFeature) quotaOn(t aiusage.Tool) bool {
 	cfg := f.cfg()
@@ -201,18 +186,6 @@ func (f *usageFeature) quotaOn(t aiusage.Tool) bool {
 // scanner, and every supported reader is on.
 func (f *usageFeature) localOn() bool {
 	return f.deps.newScanner != nil
-}
-
-// agentStatuses is the settings page's 本机用量 list, probed at most every
-// 30 seconds so drawing the page does not stat every reader each frame.
-func (f *usageFeature) agentStatuses() []aiusage.AgentStatus {
-	now := f.deps.now()
-	if f.agents != nil && now.Sub(f.agentsAt) < 30*time.Second {
-		return f.agents
-	}
-	f.agents = aiusage.Probe(f.deps.home)
-	f.agentsAt = now
-	return f.agents
 }
 
 // usageVisible reports whether the AI 用量 page is the one the open panel

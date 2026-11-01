@@ -560,20 +560,24 @@ func TestUsageQuotaCardSettings(t *testing.T) {
 }
 
 // The settings page writes through applySettings: the running copy and
-// settings.json change together. It has three groups: 显示, 套餐额度 and the
-// read-only 本机用量 list; the old two-column checkbox table is gone.
+// settings.json change together. It has 显示 and 套餐额度, then one note
+// explaining that local usage is summed automatically.
 func TestUsageSettingsSection(t *testing.T) {
 	stubSettingsSeams(t, false, nil, nil)
 	a, view := newSettingsShelf(t)
 	openSettingsPage(t, view, "AI 用量")
 	for _, want := range []string{
-		"AI 用量", "在刘海里显示 AI 用量", "套餐额度", "本机用量 · 自动识别",
-		"Claude Code", "Codex", "omp", "pi", "opencode", "Grok CLI", "Cursor",
-		"未发现", "不支持", "额度显示", "已用", "剩余",
-		"只读本机日志，不联网、不上传",
+		"AI 用量", "在刘海里显示 AI 用量", "套餐额度",
+		"Claude Code", "Codex", "额度显示", "已用", "剩余",
+		"本机用量自动统计本机所有 AI 工具的 token，只读本机日志，不联网、不上传。",
 	} {
 		if !view.HasText(want) {
 			t.Fatalf("AI 用量 page missing %q; texts=%v", want, view.Texts())
+		}
+	}
+	for _, gone := range []string{"本机用量 · 自动识别", "omp", "pi", "opencode", "Grok CLI", "Cursor", "已识别", "未发现", "不支持"} {
+		if view.HasText(gone) {
+			t.Fatalf("AI 用量 page still lists per-agent %q; texts=%v", gone, view.Texts())
 		}
 	}
 	clickVisible(t, view, "在刘海里显示 AI 用量")
@@ -613,8 +617,7 @@ func TestUsageSettingsSection(t *testing.T) {
 }
 
 // With the master off the quota switches are locked: clicks flip nothing.
-// The local list is read-only and stays visible, so the user can still see
-// what was detected.
+// The local-usage note stays visible because it is not a control.
 func TestUsageSettingsQuotaLockedWhileOff(t *testing.T) {
 	stubSettingsSeams(t, false, nil, nil)
 	a, view := newSettingsShelf(t) // AIUsage.Enabled defaults to false
@@ -624,8 +627,8 @@ func TestUsageSettingsQuotaLockedWhileOff(t *testing.T) {
 	if a.settings.AIUsage != before {
 		t.Fatalf("locked quota switches answered clicks: %+v", a.settings.AIUsage)
 	}
-	if !view.HasText("未发现") {
-		t.Fatal("the read-only local list must stay visible")
+	if !view.HasText("本机用量自动统计本机所有 AI 工具的 token，只读本机日志，不联网、不上传。") {
+		t.Fatal("the local-usage note must stay visible")
 	}
 	clickVisible(t, view, "在刘海里显示 AI 用量")
 	if !a.settings.AIUsage.Enabled {
@@ -1743,9 +1746,9 @@ func TestQuotaRingPaceTickFollowsMode(t *testing.T) {
 	}
 }
 
-// The local legend follows the summary, not a fixed three-tool list: every
-// reader with data gets a chip, and six chips still fit the 197pt card.
-func TestUsageLegendIncludesEveryDetectedAgent(t *testing.T) {
+// The local chart is one summed series: no per-agent chips or legend are
+// drawn, even when every reader has data.
+func TestUsageChartHasNoLegend(t *testing.T) {
 	fx := newUsageFixture(t, true)
 	now := *fx.now
 	tools := []aiusage.Tool{
@@ -1765,21 +1768,16 @@ func TestUsageLegendIncludesEveryDetectedAgent(t *testing.T) {
 			Buckets: []aiusage.Bucket{{Start: now.Add(-time.Hour), Tokens: tokens}},
 		},
 	}
-	drain := fitSink(t)
 	fx.view.Click("AI 用量")
 	fx.f.tick(now)
 	fx.view.Frame()
 	fx.view.Frame()
-	for _, want := range []string{"omp", "Codex", "Claude", "pi", "opencode", "Grok"} {
-		if !fx.view.HasText(want) {
-			t.Fatalf("legend missing %q; texts=%v", want, fx.view.Texts())
-		}
+	if !fx.view.HasText("本机用量") {
+		t.Fatal("local usage section missing")
 	}
-	for _, note := range drain() {
-		for _, want := range []string{`"omp"`, `"Codex"`, `"Claude"`, `"pi"`, `"opencode"`, `"Grok"`} {
-			if strings.Contains(note, want) {
-				t.Fatalf("legend label does not fit: %s", note)
-			}
+	for _, gone := range []string{"omp", "pi", "opencode", "Grok"} {
+		if fx.view.HasText(gone) {
+			t.Fatalf("per-agent legend %q is still drawn; texts=%v", gone, fx.view.Texts())
 		}
 	}
 }

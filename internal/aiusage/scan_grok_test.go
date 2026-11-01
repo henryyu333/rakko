@@ -26,9 +26,4 @@ func TestGrokReaderDedupesUsageAndUpdates(t *testing.T) {
 	if sum.Total.Requests != 3 {
 		t.Fatalf("grok records leaked into other tools: %+v", sum.Total)
 	}
-	for _, st := range s.Statuses() {
-		if st.Tool == ToolGrok && st.Status != StatusFound {
-			t.Fatalf("grok status = %v, want found", st.Status)
-		}
-	}
 }

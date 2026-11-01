@@ -15,9 +15,6 @@ const (
 	ToolPi       Tool = "pi"
 	ToolOpencode Tool = "opencode"
 	ToolGrok     Tool = "grok"
-	// ToolCursor is not a local reader: Cursor keeps usage on its servers.
-	// It is named here only so the settings list can say 不支持.
-	ToolCursor Tool = "cursor"
 )
 
 // Window is one rate-limit window of a subscription quota, as the vendor

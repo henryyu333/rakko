@@ -73,9 +73,8 @@ type fileState struct {
 type Scanner struct {
 	home, cacheDir string
 
-	mu       sync.RWMutex
-	files    map[string]*fileState
-	statuses []AgentStatus
+	mu    sync.RWMutex
+	files map[string]*fileState
 }
 
 // NewScanner makes a Scanner for the given home directory (the parent of
@@ -83,14 +82,6 @@ type Scanner struct {
 // is scanned; see agentSpecs.
 func NewScanner(home, cacheDir string) *Scanner {
 	return &Scanner{home: home, cacheDir: cacheDir, files: map[string]*fileState{}}
-}
-
-// Statuses returns the readers' states from the last completed Scan. The
-// slice is a copy; callers may keep it.
-func (s *Scanner) Statuses() []AgentStatus {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return slices.Clone(s.statuses)
 }
 
 // wholeParser decodes a file that is one JSON document, not JSONL.
@@ -115,12 +106,12 @@ const progressEvery = 4 << 20
 // shrunk or replaced files are reread; deleted files are dropped. Whole-JSON
 // files (Grok's usage.json) and the opencode database are reread and
 // replaced as a unit when they change. progress, when non-nil, receives
-// bytes read so far and the total bytes this scan plans to read. Per-reader
-// errors are tolerated: the reader keeps its previous records, its status
-// becomes StatusReadFailed, and every other reader still counts. Only ctx
-// cancellation makes Scan return an error — the progress already made is
-// still committed, but the on-disk cache is only written for a finished
-// pass.
+// bytes read so far and the total bytes this scan plans to read. A reader
+// that fails is skipped for this pass: its records are left out of the
+// snapshot, so the page's one total only covers readers that answered, and
+// every other reader still counts. Only ctx cancellation makes Scan return
+// an error — the progress already made is still committed, but the on-disk
+// cache is only written for a finished pass.
 func (s *Scanner) Scan(ctx context.Context, progress func(done, total int64)) error {
 	// Honour a cancel that arrived before the scan even started: no cache
 	// read, no tree walk, no stat — and, below, no cache write.
@@ -131,12 +122,12 @@ func (s *Scanner) Scan(ctx context.Context, progress func(done, total int64)) er
 
 	specs := agentSpecs(s.home)
 	want := map[string]fileSpec{}
-	walkErr := map[Tool]error{}
-	readErr := map[Tool]error{}
-	found := map[Tool]bool{}
+	failed := map[Tool]bool{}
 	dbPath := ""
 	if s.home == "" {
-		s.publish(map[string]*fileState{}, nil)
+		s.mu.Lock()
+		s.files = map[string]*fileState{}
+		s.mu.Unlock()
 		return nil
 	}
 	for _, sp := range specs {
@@ -150,11 +141,8 @@ func (s *Scanner) Scan(ctx context.Context, progress func(done, total int64)) er
 				if ctx.Err() != nil {
 					return ctx.Err()
 				}
-				walkErr[sp.tool] = err
+				failed[sp.tool] = true
 				continue
-			}
-			if len(paths) > 0 {
-				found[sp.tool] = true
 			}
 			for _, p := range paths {
 				spec := fileSpec{tool: sp.tool, whole: root.whole}
@@ -170,22 +158,17 @@ func (s *Scanner) Scan(ctx context.Context, progress func(done, total int64)) er
 	prev := s.files
 	s.mu.RUnlock()
 
-	// Carry cache entries for readers whose walk failed (their absence
-	// can't be told apart from "directory temporarily unreadable") and for
-	// the opencode database, which is handled separately below. Every
-	// parsed record stays in its own file's state — duplicates are removed
-	// when Summary aggregates, so a surviving copy still counts when the
-	// file that "won" a key disappears.
+	// Carry the opencode database state (handled below) and drop every
+	// other cached file not seen in this walk. Every parsed record stays in
+	// its own file's state — duplicates are removed when Summary
+	// aggregates, so a surviving copy still counts when the file that "won"
+	// a key disappears.
 	files := make(map[string]*fileState, len(prev))
 	for p, st := range prev {
 		if st == nil {
 			continue
 		}
 		if _, ok := want[p]; ok {
-			continue
-		}
-		if walkErr[st.tool] != nil {
-			files[p] = st
 			continue
 		}
 		if dbPath != "" && p == dbPath {
@@ -293,10 +276,7 @@ loop:
 				scanErr = ctx.Err()
 				break loop
 			}
-			readErr[jb.spec.tool] = err
-			if old := prev[jb.path]; old != nil {
-				files[jb.path] = old // unreadable now: keep the last good records
-			}
+			failed[jb.spec.tool] = true
 			continue
 		}
 		if fi, err2 := os.Stat(jb.path); err2 == nil {
@@ -311,10 +291,10 @@ loop:
 	}
 
 	// opencode: replace the whole record set when the database (or its WAL)
-	// changed. A read failure keeps the last good set.
+	// changed. A read failure marks the reader failed; its records are
+	// dropped below so the total only covers readers that answered.
 	if dbPath != "" {
 		if size, mod, ok := dbSignature(dbPath); ok {
-			found[ToolOpencode] = true
 			old := prev[dbPath]
 			if old != nil && old.size == size && old.modNano == mod {
 				files[dbPath] = old
@@ -322,54 +302,31 @@ loop:
 				if ctx.Err() != nil {
 					scanErr = ctx.Err()
 				}
-				readErr[ToolOpencode] = err
-				if old != nil {
-					files[dbPath] = old
-				}
+				failed[ToolOpencode] = true
 			} else {
 				files[dbPath] = &fileState{tool: ToolOpencode, size: size, modNano: mod, recs: recs}
 			}
 		}
 	}
 
-	statuses := make([]AgentStatus, 0, len(specs))
-	for _, sp := range specs {
-		st := AgentStatus{Tool: sp.tool, Name: sp.name}
-		switch {
-		case sp.db != "":
-			st.Path = displayPath(s.home, sp.db)
-		case len(sp.roots) > 0:
-			st.Path = displayPath(s.home, sp.roots[0].dir)
+	// A reader that failed anywhere in this pass is skipped as a whole: the
+	// page shows one total, and a partial reader would silently undercount.
+	if len(failed) > 0 {
+		for p, st := range files {
+			if st != nil && failed[st.tool] {
+				delete(files, p)
+			}
 		}
-		switch {
-		case readErr[sp.tool] != nil:
-			st.Status, st.Err = StatusReadFailed, readErr[sp.tool].Error()
-		case found[sp.tool]:
-			st.Status = StatusFound
-		default:
-			st.Status = StatusNotFound
-		}
-		statuses = append(statuses, st)
 	}
 
 	s.mu.Lock()
 	s.files = files
-	s.statuses = statuses
 	s.mu.Unlock()
 	// A cancelled pass commits its in-memory progress but must not touch
 	// the disk: saveCache re-checks ctx through serialization and again
 	// before it writes, so the previous cache survives any cancellation.
 	s.saveCache(ctx, files)
 	return scanErr
-}
-
-// publish replaces the scanner's snapshot with files and statuses. Used for
-// the empty-home case, where there is nothing to scan.
-func (s *Scanner) publish(files map[string]*fileState, statuses []AgentStatus) {
-	s.mu.Lock()
-	s.files = files
-	s.statuses = statuses
-	s.mu.Unlock()
 }
 
 // dbSignature reports the opencode database's size and newest modification

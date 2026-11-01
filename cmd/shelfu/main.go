@@ -285,8 +285,7 @@ func (a *shelf) ready(show bool) {
 			}
 			return aiusage.NewScanner(usageEnv.Home, filepath.Join(a.dataDir, "usage-cache"))
 		},
-		home: usageEnv.Home,
-		now:  time.Now,
+		now: time.Now,
 	}
 	usage := newUsageFeature(a, deps)
 	a.registerPage(usage)

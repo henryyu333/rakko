@@ -303,20 +303,6 @@ func (a *shelf) settingsAIUsagePage(c *ui.Context) {
 		}
 	})
 
-	settingsGroup(c, "local", l.SettingsAILocalGroup(), "", func() {
-		var statuses []aiusage.AgentStatus
-		if a.usage != nil {
-			statuses = a.usage.agentStatuses()
-		} else {
-			statuses = aiusage.Probe("")
-		}
-		for i, st := range statuses {
-			if i > 0 {
-				settingsSep(c, "agent-"+string(st.Tool))
-			}
-			settingsAgentRow(c, st, l)
-		}
-	})
 	settingsFootnote(c, "ai-foot", l.SettingsAILocalFoot())
 }
 
@@ -348,33 +334,6 @@ func (a *shelf) aiQuotaCaption(t aiusage.Tool, l locales.Messages) string {
 	default:
 		return l.SettingsAIQuotaUnavailable()
 	}
-}
-
-// settingsAgentRow is one read-only 本机用量 line: name, data location, and
-// the reader's state.
-func settingsAgentRow(c *ui.Context, st aiusage.AgentStatus, l locales.Messages) {
-	settingsRowLine(c, "agent-"+string(st.Tool)).Children(func() {
-		ui.Column(c.Key("text")).Gap(2).Grow(1).MinWidth(0).Children(func() {
-			settingsLabel(c, st.Name, 13.5, 600).TextColor(ink)
-			path := st.Path
-			if path == "" && st.Status == aiusage.StatusUnsupported {
-				path = l.SettingsAICloud()
-			}
-			if path != "" {
-				ui.Text(c, path).FontSize(11.5).TextColor(ink3)
-			}
-		})
-		label, col := l.SettingsAIStatusNotFound(), ink3
-		switch st.Status {
-		case aiusage.StatusFound:
-			label, col = l.SettingsAIStatusFound(), ink2
-		case aiusage.StatusReadFailed:
-			label, col = l.SettingsAIStatusFailed(), danger
-		case aiusage.StatusUnsupported:
-			label, col = l.SettingsAIStatusUnsupported(), ink3
-		}
-		settingsLabel(c, label, 11.5, 600).TextColor(col)
-	})
 }
 
 // settingsShortcutsPage: four editable global shortcuts (click the keycaps,
