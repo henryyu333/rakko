@@ -20,7 +20,7 @@ func scanOne(t *testing.T, lines ...string) *Scanner {
 	t.Helper()
 	home := t.TempDir()
 	writeLines(t, filepath.Join(home, ".claude", "projects", "-p", "s.jsonl"), lines...)
-	s := NewScanner(home, t.TempDir(), allSources)
+	s := NewScanner(home, t.TempDir())
 	if err := s.Scan(context.Background(), nil); err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +197,7 @@ func TestSummaryConcurrentWithScan(t *testing.T) {
 	home := t.TempDir()
 	writeLines(t, filepath.Join(home, ".claude", "projects", "-p", "s.jsonl"),
 		claudeLine("m1", "2026-10-19T10:00:00.000Z", 5, 1))
-	s := NewScanner(home, t.TempDir(), allSources)
+	s := NewScanner(home, t.TempDir())
 
 	var wg sync.WaitGroup
 	for range 8 {

@@ -62,7 +62,7 @@ func (s *Scanner) Summary(r Range, now time.Time) Summary {
 		var firstMs, lastMs int64
 		seenAny := false
 		for _, st := range s.files {
-			if st == nil || !s.enabled(st.tool) {
+			if st == nil {
 				continue
 			}
 			for _, rc := range st.recs {
@@ -113,21 +113,22 @@ func (s *Scanner) Summary(r Range, now time.Time) Summary {
 	// Cross-file and intra-file dedupe lives here (not at parse time) so a
 	// duplicate record survives in every file that holds it: whichever copy
 	// shows up first wins, and deleting the "winner" can't erase the usage.
-	seenOmp, seenClaude := map[string]bool{}, map[string]bool{}
+	seen := map[Tool]map[string]bool{}
 	for _, st := range s.files {
-		if st == nil || !s.enabled(st.tool) {
+		if st == nil {
 			continue
 		}
-		seen := seenOmp
-		if st.tool == ToolClaude {
-			seen = seenClaude
+		keys := seen[st.tool]
+		if keys == nil {
+			keys = map[string]bool{}
+			seen[st.tool] = keys
 		}
 		for _, rc := range st.recs {
 			if rc.key != "" {
-				if seen[rc.key] {
+				if keys[rc.key] {
 					continue
 				}
-				seen[rc.key] = true
+				keys[rc.key] = true
 			}
 			if r != RangeAll && (rc.at < fromMs || rc.at >= toMs) {
 				continue

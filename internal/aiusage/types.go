@@ -9,9 +9,15 @@ import "time"
 type Tool string
 
 const (
-	ToolOmp    Tool = "omp"
-	ToolClaude Tool = "claude"
-	ToolCodex  Tool = "codex"
+	ToolOmp      Tool = "omp"
+	ToolClaude   Tool = "claude"
+	ToolCodex    Tool = "codex"
+	ToolPi       Tool = "pi"
+	ToolOpencode Tool = "opencode"
+	ToolGrok     Tool = "grok"
+	// ToolCursor is not a local reader: Cursor keeps usage on its servers.
+	// It is named here only so the settings list can say 不支持.
+	ToolCursor Tool = "cursor"
 )
 
 // Window is one rate-limit window of a subscription quota, as the vendor
@@ -140,10 +146,4 @@ type Summary struct {
 	Total   Totals
 	ByTool  map[Tool]Totals
 	Buckets []Bucket
-}
-
-// Sources picks which tools' local usage gets scanned (mirrors the
-// aiUsage.local* settings).
-type Sources struct {
-	Omp, Claude, Codex bool
 }
