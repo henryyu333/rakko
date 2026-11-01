@@ -123,6 +123,7 @@ type shelf struct {
 	bandHits                                                    []mygo.Rectangle // the band's controls, relative to its top-left
 	flip                                                        panelFlip        // a panel side change in flight after a band drag
 	ownPress                                                    bool             // a left press is held in our own window
+	preview                                                     bool             // headless preview server: draw the live states without a window
 	dispID                                                      int64
 	idleIslands                                                 []*idleIslandWindow
 	peeking                                                     bool
@@ -182,6 +183,12 @@ func (a *shelf) toggle() {
 		a.show(false)
 	}
 }
+
+// liveSurface reports whether the panel draws as a live surface: a native
+// window, or the headless preview server, which renders the same animation
+// paths through ui.NewTester at the real geometry. A plain unit-test shelf
+// stays on the immediate, expanded test face.
+func (a *shelf) liveSurface() bool { return a.win != nil || a.preview }
 
 func (a *shelf) startMonitoring() {
 	go func() {
