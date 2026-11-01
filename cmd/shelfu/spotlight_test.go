@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo"
+
 	"shelf/internal/mac"
 	"shelf/internal/store"
 )
@@ -252,5 +254,36 @@ func TestNoMatchWaitsForTheQuery(t *testing.T) {
 	}
 	if h := a.resultsTargetH(); h != resultsHeight(nil) {
 		t.Fatalf("sheet = %v pt, want the no-match row at %v", h, resultsHeight(nil))
+	}
+}
+
+// TestSpotIconAsksTheMainThread: NSWorkspace's Finder icon may only be
+// asked for on the main thread. The icon fetch goes through the main-thread
+// seam; the PNG decode stays in the background goroutine.
+func TestSpotIconAsksTheMainThread(t *testing.T) {
+	oldIcon, oldRun := fileIcon, runOnMain
+	t.Cleanup(func() { fileIcon, runOnMain = oldIcon, oldRun })
+	asked := make(chan bool, 1)
+	inRun := false
+	runOnMain = func(fn func()) {
+		inRun = true
+		fn()
+		inRun = false
+	}
+	fileIcon = func(string, int) []byte {
+		asked <- inRun
+		return nil
+	}
+	a := &shelf{win: &mygo.Window{}, spotPending: map[string]bool{}}
+	if got := a.spotIcon("/tmp/rakko-icon-probe"); got != nil {
+		t.Fatalf("the first paint returned an icon instead of the file glyph")
+	}
+	select {
+	case onMainThread := <-asked:
+		if !onMainThread {
+			t.Fatal("the Finder icon was asked for off the main thread")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the icon was never requested")
 	}
 }

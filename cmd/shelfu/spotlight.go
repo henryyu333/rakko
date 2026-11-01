@@ -339,8 +339,12 @@ func (a *shelf) spotIcon(path string) *ui.Bitmap {
 	}
 	a.spotPending[path] = true
 	go func() {
+		// The Finder icon is an AppKit call: ask for it on the main thread,
+		// then decode and scale the PNG here, off the main thread.
+		var png []byte
+		runOnMain(func() { png = fileIcon(path, 40) })
 		var b *ui.Bitmap
-		if png := mac.FileIcon(path, 40); len(png) > 0 {
+		if len(png) > 0 {
 			b, _ = ui.DecodeBitmap(png)
 		}
 		a.onUI(func() {
@@ -354,6 +358,13 @@ func (a *shelf) spotIcon(path string) *ui.Bitmap {
 	}()
 	return nil
 }
+
+// fileIcon and runOnMain are seams: NSWorkspace's icon may only be asked
+// for on the main thread, and the tests check that it is.
+var (
+	fileIcon  = mac.FileIcon
+	runOnMain = mygo.RunOnMain
+)
 
 const (
 	spotIconLimit = 64 // result-icon cache entries
