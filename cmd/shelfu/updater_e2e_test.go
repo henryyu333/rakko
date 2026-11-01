@@ -3,7 +3,7 @@
 package main
 
 // TestUpdateEndToEnd is the local, GitHub-free check of the whole update
-// path. It builds this package twice as a minimal ShelfU.app in a temp dir:
+// path. It builds this package twice as a minimal Rakko.app in a temp dir:
 // the installed copy (version 0.0.1) and the update payload (9.9.9), serves
 // a manifest and a signed archive from a loopback server (mygo's httpGet
 // allows plain HTTP to loopback, which is why the test needs no TLS), and
@@ -47,12 +47,12 @@ type testApp struct {
 }
 
 // buildTestApp compiles the shelf binary and wraps it in the minimal
-// bundle App.Version and the updater need: <name>.app/Contents/MacOS/ShelfU
+// bundle App.Version and the updater need: Rakko.app/Contents/MacOS/Rakko
 // with an Info.plist holding the version.
 func buildTestApp(t *testing.T, dir, version, feed, pub string) testApp {
 	t.Helper()
-	root := filepath.Join(dir, "ShelfU.app")
-	exe := filepath.Join(root, "Contents", "MacOS", "ShelfU")
+	root := filepath.Join(dir, "Rakko.app")
+	exe := filepath.Join(root, "Contents", "MacOS", "Rakko")
 	if err := os.MkdirAll(filepath.Dir(exe), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -66,9 +66,9 @@ func buildTestApp(t *testing.T, dir, version, feed, pub string) testApp {
 	}
 	plist := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0"><dict>
-<key>CFBundleExecutable</key><string>ShelfU</string>
-<key>CFBundleIdentifier</key><string>local.y3.shelfu.e2e</string>
-<key>CFBundleName</key><string>ShelfU</string>
+<key>CFBundleExecutable</key><string>Rakko</string>
+<key>CFBundleIdentifier</key><string>local.y3.rakko.e2e</string>
+<key>CFBundleName</key><string>Rakko</string>
 <key>CFBundleShortVersionString</key><string>%s</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>LSUIElement</key><true/>
@@ -76,7 +76,22 @@ func buildTestApp(t *testing.T, dir, version, feed, pub string) testApp {
 	if err := os.WriteFile(filepath.Join(root, "Contents", "Info.plist"), []byte(plist), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { unregisterBundle(t, root) })
 	return testApp{exe: exe, app: root}
+}
+
+// unregisterBundle drops a test bundle from LaunchServices. A .app launched
+// from a temp dir is registered there, and a deleted one would keep showing
+// up as an "Open With" entry long after the test.
+func unregisterBundle(t *testing.T, app string) {
+	t.Helper()
+	const lsregister = "/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister"
+	if _, err := os.Stat(lsregister); err != nil {
+		return // registration only happens where LaunchServices lives
+	}
+	if out, err := exec.Command(lsregister, "-u", app).CombinedOutput(); err != nil {
+		t.Logf("lsregister -u %s: %v: %s", app, err, out)
+	}
 }
 
 // tarGzApp archives the bundle the way update.WriteArchive does: the .app
@@ -163,7 +178,7 @@ func (l *syncLog) String() string {
 
 func TestUpdateEndToEnd(t *testing.T) {
 	if os.Getenv("SHELF_UPDATE_E2E") != "1" {
-		t.Skip("set SHELF_UPDATE_E2E=1 to run the update end-to-end test (launches a real ShelfU instance)")
+		t.Skip("set SHELF_UPDATE_E2E=1 to run the update end-to-end test (launches a real Rakko instance)")
 	}
 	pub, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
@@ -240,7 +255,7 @@ func TestUpdateEndToEnd(t *testing.T) {
 		<-waited
 		// A run that fails after staging still lets the helper swap the
 		// bundle in and open the new version once this process is gone.
-		// Leave no ShelfU instance behind.
+		// Leave no Rakko instance behind.
 		cleanup := time.Now().Add(2 * time.Second)
 		for time.Now().Before(cleanup) {
 			out, _ := exec.Command("pgrep", "-f", oldApp.exe).Output()
@@ -291,7 +306,7 @@ func TestUpdateEndToEnd(t *testing.T) {
 	if olds, _ := filepath.Glob(filepath.Join(filepath.Dir(oldApp.app), ".*.old-*")); len(olds) > 0 {
 		t.Errorf("swap left leftovers: %v", olds)
 	}
-	// 重新启动 ShelfU 完成更新 must start the new bundle once the helper
+	// 重新启动 Rakko 完成更新 must start the new bundle once the helper
 	// has swapped it in: that is the path the user's menu item takes.
 	pid := 0
 	startDeadline := time.Now().Add(30 * time.Second)
@@ -312,7 +327,7 @@ func TestUpdateEndToEnd(t *testing.T) {
 	}
 	defer func() { _ = exec.Command("kill", strconv.Itoa(pid)).Run() }()
 	for _, line := range strings.Split(logs, "\n") {
-		if strings.Contains(line, "ShelfU:") {
+		if strings.Contains(line, "Rakko:") {
 			t.Logf("app: %s", line)
 		}
 	}
