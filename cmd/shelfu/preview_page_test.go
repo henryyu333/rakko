@@ -730,6 +730,8 @@ function connect() {
   es.onopen = () => {
     conn.className = "conn on";
     conn.querySelector("span").textContent = "已连接";
+    // A rebuilt server restarts its sequence numbers; accept its frames.
+    lastSeq = 0;
     // A restarted server re-applies the page's state.
     fetch("/api/state", {
       method: "POST", headers: { "Content-Type": "application/json" },
