@@ -298,7 +298,7 @@ loop:
 			old := prev[dbPath]
 			if old != nil && old.size == size && old.modNano == mod {
 				files[dbPath] = old
-			} else if recs, err := readOpencode(ctx, dbPath, pool); err != nil {
+			} else if recs, err := readOpencode(ctx, dbPath, s.cacheDir, pool); err != nil {
 				if ctx.Err() != nil {
 					scanErr = ctx.Err()
 				}

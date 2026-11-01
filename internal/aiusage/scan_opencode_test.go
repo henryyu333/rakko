@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 )
 
@@ -101,5 +103,77 @@ func TestOpencodeFailureIsIsolated(t *testing.T) {
 	}
 	if sum.Total.Requests != 1 || sum.Total.Input != 10 {
 		t.Fatalf("a failed reader must not reach the total: %+v", sum.Total)
+	}
+}
+
+// dirEntries lists a directory's file names, sorted, for the read-only checks.
+func dirEntries(t *testing.T, dir string) []string {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := make([]string, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, e.Name())
+	}
+	return out
+}
+
+// TestOpencodeDoesNotWriteToTheUserDirectory: a WAL database with no -shm is
+// exactly the case where sqlite3 -readonly would create one beside it. The
+// reader works on a private copy, so the opencode folder keeps its files —
+// and the read still succeeds.
+func TestOpencodeDoesNotWriteToTheUserDirectory(t *testing.T) {
+	home := t.TempDir()
+	db := opencodeTestDB(t, home)
+	runSQLite(t, db, `PRAGMA journal_mode=WAL;`)
+	dir := filepath.Dir(db)
+	// Leave db + WAL and no -shm: the next read-only open would create one.
+	if err := os.Remove(filepath.Join(dir, "opencode.db-shm")); err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	before := dirEntries(t, dir)
+
+	cache := t.TempDir()
+	s := NewScanner(home, cache)
+	if err := s.Scan(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.Summary(RangeToday, fixtureNow()).ByTool[ToolOpencode]; got.Requests == 0 {
+		t.Fatalf("no opencode records read through the copy: %+v", got)
+	}
+	after := dirEntries(t, dir)
+	if !slices.Equal(before, after) {
+		t.Fatalf("the opencode directory changed: %v -> %v", before, after)
+	}
+	for _, name := range dirEntries(t, cache) {
+		if strings.HasPrefix(name, "opencode-") {
+			t.Fatalf("the read copy was left behind: %s", name)
+		}
+	}
+}
+
+// TestOpencodeReadsWhenTheUserDirectoryIsReadOnly: the copy removes the need
+// for the database's folder to be writable (sqlite3's -shm would fail there).
+func TestOpencodeReadsWhenTheUserDirectoryIsReadOnly(t *testing.T) {
+	home := t.TempDir()
+	db := opencodeTestDB(t, home)
+	runSQLite(t, db, `PRAGMA journal_mode=WAL;`)
+	dir := filepath.Dir(db)
+	if err := os.Remove(filepath.Join(dir, "opencode.db-shm")); err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+
+	s := NewScanner(home, t.TempDir())
+	if err := s.Scan(context.Background(), nil); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	if got := s.Summary(RangeToday, fixtureNow()).ByTool[ToolOpencode]; got.Requests != 2 {
+		t.Fatalf("opencode records through a read-only folder: %+v", got)
 	}
 }

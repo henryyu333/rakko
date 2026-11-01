@@ -19,8 +19,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"io/fs"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -72,11 +77,24 @@ func derefStr(p *string) string {
 
 // readOpencode runs the read-only query and returns one record per assistant
 // message. The caller replaces the whole opencode record set with the result.
-func readOpencode(ctx context.Context, dbPath string, pool map[string]*string) ([]rec, error) {
+//
+// The query runs against a private copy. opencode keeps its database in WAL
+// mode, and a read-only SQLite connection cannot create the -shm a WAL
+// database needs — sqlite3 -readonly fails on it, and a writable open of
+// the user's file would create -shm/-wal beside it. The copy and the files
+// SQLite makes for it live in the scanner's cache directory and are removed
+// afterwards; only SELECT runs against it.
+func readOpencode(ctx context.Context, dbPath, cacheDir string, pool map[string]*string) ([]rec, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	cmd := exec.CommandContext(ctx, sqlite3Path, "-readonly", "-json", dbPath, opencodeQuery)
+	copyPath, cleanup, err := copyOpencodeDB(ctx, dbPath, cacheDir)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+	// No -readonly: the connection must be able to create the copy's -shm.
+	cmd := exec.CommandContext(ctx, sqlite3Path, "-json", copyPath, opencodeQuery)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
@@ -114,4 +132,67 @@ func readOpencode(ctx context.Context, dbPath string, pool map[string]*string) (
 		out = append(out, r)
 	}
 	return out, nil
+}
+
+// copyOpencodeDB copies the database and an existing WAL into a private
+// directory under cacheDir (the system temporary directory when the shell
+// has no cache directory) and returns the database path there. cleanup
+// removes the whole directory: the database, its WAL and the -shm/-wal
+// SQLite created for the copy.
+func copyOpencodeDB(ctx context.Context, dbPath, cacheDir string) (string, func(), error) {
+	if cacheDir != "" {
+		// The first scan of a new install runs before the scan cache has
+		// created this directory.
+		if err := os.MkdirAll(cacheDir, 0o700); err != nil {
+			return "", nil, fmt.Errorf("opencode: making the read copy: %w", err)
+		}
+	}
+	dir, err := os.MkdirTemp(cacheDir, "opencode-")
+	if err != nil {
+		return "", nil, fmt.Errorf("opencode: making the read copy: %w", err)
+	}
+	cleanup := func() { _ = os.RemoveAll(dir) }
+	dst := filepath.Join(dir, "opencode.db")
+	for _, name := range []string{"", "-wal"} {
+		if err := ctx.Err(); err != nil {
+			cleanup()
+			return "", nil, err
+		}
+		src := dbPath + name
+		if name != "" {
+			if _, err := os.Stat(src); err != nil {
+				if errors.Is(err, fs.ErrNotExist) {
+					continue
+				}
+				cleanup()
+				return "", nil, fmt.Errorf("opencode: reading %s: %w", src, err)
+			}
+		}
+		if err := copyFile(src, dst+name); err != nil {
+			cleanup()
+			return "", nil, err
+		}
+	}
+	return dst, cleanup, nil
+}
+
+// copyFile copies src to dst with the owner's read/write mode.
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("opencode: reading %s: %w", src, err)
+	}
+	defer in.Close()
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
+		return fmt.Errorf("opencode: writing the read copy: %w", err)
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		return fmt.Errorf("opencode: copying %s: %w", src, err)
+	}
+	if err := out.Close(); err != nil {
+		return fmt.Errorf("opencode: copying %s: %w", src, err)
+	}
+	return nil
 }
