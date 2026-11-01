@@ -103,7 +103,7 @@ func (a *shelf) homeHits() []homeHit {
 				trayPaths = append(trayPaths, it.Path)
 				tray = append(tray, homeHit{group: l.HomeGroupTray(), icon: fileSymbol, title: title,
 					sub: relativeTime(l, it.CreatedAt, now), run: func() {
-						if err := openPath(it.Path); err != nil {
+						if err := mygo.Shell.OpenPath(it.Path); err != nil {
 							a.report(err)
 							return
 						}

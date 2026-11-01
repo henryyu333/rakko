@@ -407,7 +407,7 @@ var onRowBlur func(a *shelf, id string, sigma float32)
 // for 240ms would cost more than the fade shows.
 func (a *shelf) fadedRow(c *ui.Context, id string, rowTop, rowH, viewH float32, top, bottom bool, band float32, children func()) {
 	row := ui.Column(c.Key(id + "-fade")).Height(rowH)
-	if !a.liveSurface() || a.tabPhase(c.Now()) >= 1 {
+	if a.win == nil || a.tabPhase(c.Now()) >= 1 {
 		if t := rowFade(rowTop, rowH, viewH, top, bottom, band); t > 0 {
 			sigma := band * edgeBlurPerPT * t
 			if onRowBlur != nil {

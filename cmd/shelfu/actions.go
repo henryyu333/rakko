@@ -57,7 +57,7 @@ func (a *shelf) itemMenu(m *ui.Menu, item store.Item) {
 	image := len(items) == 1 && convertible(items[0])
 	if m.Item(l.ItemOpen()).Disabled(!files).Chosen() {
 		for _, p := range paths {
-			if err := openPath(p); err != nil {
+			if err := mygo.Shell.OpenPath(p); err != nil {
 				a.report(err)
 				return
 			}
