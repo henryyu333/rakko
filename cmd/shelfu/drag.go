@@ -309,13 +309,16 @@ func (a *shelf) monitorDrag(now time.Time) {
 	// the summonable drag minus the panel-suppression — a drag the user
 	// cancelled on the panel still wakes the desktop strips.
 	a.pinTick(now, p, dragLeftDown(), active && !a.ownDrag && dragSummonsBasket(dragTypes()))
+	// The otter follows the same pointer: it is carried by a press of its
+	// own, and it reads a drag crossing the shelf for its pose.
+	a.petTick(now, p, dragLeftDown())
 	// The pointer inside the notch drop band grows 「松开放入」 and takes
 	// the drop; outside it the shell only shows the narrow hint.
 	// The peek wings reach past the notch on both sides: the pointer must
 	// be able to rest on them without the shell folding shut under it.
-	// pinReturning holds the 松开放回 pill for the whole put-back zone,
-	// which reaches past the pill's own body.
-	holdPeek := overAnchor || a.pinReturning || (a.peeking && a.overPeekPill(p))
+	// pinReturning and petReturning hold the pill for the whole put-back
+	// zone, which reaches past the pill's own body.
+	holdPeek := overAnchor || a.pinReturning || a.petReturning || (a.peeking && a.overPeekPill(p))
 	// Dragging or hovering reveals the pill; only a click or a real incoming
 	// drag in the trigger zone can open the full panel.
 	if active || holdPeek {

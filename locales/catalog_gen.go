@@ -95,6 +95,106 @@ func (msgs Messages) WindowIsland() string {
 	return Catalog.Format(msgs.locale, "windowIsland", nil)
 }
 
+// WindowPet says "Rakko 海獭"
+// in the language the app shows.
+func WindowPet() string { return In(i18n.Locale()).WindowPet() }
+
+// WindowPet says "Rakko 海獭"
+// in the language of msgs.
+func (msgs Messages) WindowPet() string {
+	return Catalog.Format(msgs.locale, "windowPet", nil)
+}
+
+// PetLabel says "海獭"
+// in the language the app shows.
+func PetLabel() string { return In(i18n.Locale()).PetLabel() }
+
+// PetLabel says "海獭"
+// in the language of msgs.
+func (msgs Messages) PetLabel() string {
+	return Catalog.Format(msgs.locale, "petLabel", nil)
+}
+
+// PetOpen says "打开 Rakko"
+// in the language the app shows.
+func PetOpen() string { return In(i18n.Locale()).PetOpen() }
+
+// PetOpen says "打开 Rakko"
+// in the language of msgs.
+func (msgs Messages) PetOpen() string {
+	return Catalog.Format(msgs.locale, "petOpen", nil)
+}
+
+// PetStow says "收进刘海"
+// in the language the app shows.
+func PetStow() string { return In(i18n.Locale()).PetStow() }
+
+// PetStow says "收进刘海"
+// in the language of msgs.
+func (msgs Messages) PetStow() string {
+	return Catalog.Format(msgs.locale, "petStow", nil)
+}
+
+// PetSizeRow says "大小"
+// in the language the app shows.
+func PetSizeRow() string { return In(i18n.Locale()).PetSizeRow() }
+
+// PetSizeRow says "大小"
+// in the language of msgs.
+func (msgs Messages) PetSizeRow() string {
+	return Catalog.Format(msgs.locale, "petSizeRow", nil)
+}
+
+// PetSizeSmall says "小"
+// in the language the app shows.
+func PetSizeSmall() string { return In(i18n.Locale()).PetSizeSmall() }
+
+// PetSizeSmall says "小"
+// in the language of msgs.
+func (msgs Messages) PetSizeSmall() string {
+	return Catalog.Format(msgs.locale, "petSizeSmall", nil)
+}
+
+// PetSizeMedium says "中"
+// in the language the app shows.
+func PetSizeMedium() string { return In(i18n.Locale()).PetSizeMedium() }
+
+// PetSizeMedium says "中"
+// in the language of msgs.
+func (msgs Messages) PetSizeMedium() string {
+	return Catalog.Format(msgs.locale, "petSizeMedium", nil)
+}
+
+// PetSizeLarge says "大"
+// in the language the app shows.
+func PetSizeLarge() string { return In(i18n.Locale()).PetSizeLarge() }
+
+// PetSizeLarge says "大"
+// in the language of msgs.
+func (msgs Messages) PetSizeLarge() string {
+	return Catalog.Format(msgs.locale, "petSizeLarge", nil)
+}
+
+// SettingsPetGroup says "桌宠"
+// in the language the app shows.
+func SettingsPetGroup() string { return In(i18n.Locale()).SettingsPetGroup() }
+
+// SettingsPetGroup says "桌宠"
+// in the language of msgs.
+func (msgs Messages) SettingsPetGroup() string {
+	return Catalog.Format(msgs.locale, "settingsPetGroup", nil)
+}
+
+// SettingsPetShowRow says "显示海獭"
+// in the language the app shows.
+func SettingsPetShowRow() string { return In(i18n.Locale()).SettingsPetShowRow() }
+
+// SettingsPetShowRow says "显示海獭"
+// in the language of msgs.
+func (msgs Messages) SettingsPetShowRow() string {
+	return Catalog.Format(msgs.locale, "settingsPetShowRow", nil)
+}
+
 // LanguageRow says "语言"
 // in the language the app shows.
 func LanguageRow() string { return In(i18n.Locale()).LanguageRow() }
@@ -1097,6 +1197,16 @@ func TrayQuit() string { return In(i18n.Locale()).TrayQuit() }
 // in the language of msgs.
 func (msgs Messages) TrayQuit() string {
 	return Catalog.Format(msgs.locale, "trayQuit", nil)
+}
+
+// TrayShowPet says "放出海獭"
+// in the language the app shows.
+func TrayShowPet() string { return In(i18n.Locale()).TrayShowPet() }
+
+// TrayShowPet says "放出海獭"
+// in the language of msgs.
+func (msgs Messages) TrayShowPet() string {
+	return Catalog.Format(msgs.locale, "trayShowPet", nil)
 }
 
 // RetentionNever says "不自动清理"
@@ -4353,6 +4463,56 @@ func (msgs Messages) CardAirDrop() string {
 	return Catalog.Format(msgs.locale, "cardAirDrop", nil)
 }
 
+// CardNote says "便利贴"
+// in the language the app shows.
+func CardNote() string { return In(i18n.Locale()).CardNote() }
+
+// CardNote says "便利贴"
+// in the language of msgs.
+func (msgs Messages) CardNote() string {
+	return Catalog.Format(msgs.locale, "cardNote", nil)
+}
+
+// NoteReveal says "在访达中显示"
+// in the language the app shows.
+func NoteReveal() string { return In(i18n.Locale()).NoteReveal() }
+
+// NoteReveal says "在访达中显示"
+// in the language of msgs.
+func (msgs Messages) NoteReveal() string {
+	return Catalog.Format(msgs.locale, "noteReveal", nil)
+}
+
+// NoteKeepOnTop says "置顶"
+// in the language the app shows.
+func NoteKeepOnTop() string { return In(i18n.Locale()).NoteKeepOnTop() }
+
+// NoteKeepOnTop says "置顶"
+// in the language of msgs.
+func (msgs Messages) NoteKeepOnTop() string {
+	return Catalog.Format(msgs.locale, "noteKeepOnTop", nil)
+}
+
+// NoteClose says "关闭"
+// in the language the app shows.
+func NoteClose() string { return In(i18n.Locale()).NoteClose() }
+
+// NoteClose says "关闭"
+// in the language of msgs.
+func (msgs Messages) NoteClose() string {
+	return Catalog.Format(msgs.locale, "noteClose", nil)
+}
+
+// NoteUnreadable says "无法读取便利贴文件"
+// in the language the app shows.
+func NoteUnreadable() string { return In(i18n.Locale()).NoteUnreadable() }
+
+// NoteUnreadable says "无法读取便利贴文件"
+// in the language of msgs.
+func (msgs Messages) NoteUnreadable() string {
+	return Catalog.Format(msgs.locale, "noteUnreadable", nil)
+}
+
 // ToolsAwakeRemain says "剩 {text}"
 // in the language the app shows.
 func ToolsAwakeRemain(text string) string { return In(i18n.Locale()).ToolsAwakeRemain(text) }
@@ -5291,6 +5451,16 @@ func DropReturn() string { return In(i18n.Locale()).DropReturn() }
 // in the language of msgs.
 func (msgs Messages) DropReturn() string {
 	return Catalog.Format(msgs.locale, "dropReturn", nil)
+}
+
+// DropStowPet says "松开收进刘海"
+// in the language the app shows.
+func DropStowPet() string { return In(i18n.Locale()).DropStowPet() }
+
+// DropStowPet says "松开收进刘海"
+// in the language of msgs.
+func (msgs Messages) DropStowPet() string {
+	return Catalog.Format(msgs.locale, "dropStowPet", nil)
 }
 
 // DropOcrTitle says "框选文字"

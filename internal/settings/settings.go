@@ -55,6 +55,18 @@ type Settings struct {
 	// display id. A display with no entry keeps the default position; the
 	// notch style ignores the whole map.
 	IslandPos map[string]IslandPos `json:"islandPos,omitempty"`
+	// Pet is the desktop otter: whether it is out at all, and its size.
+	Pet PetSettings `json:"pet"`
+	// PetPos is where the otter was left on each display, by display id,
+	// measured from that display's origin like IslandPos. A display with
+	// no entry gets the default spot — bottom right, above the Dock — and
+	// that absence is also how the first launch knows to play its arrival.
+	PetPos map[string]IslandPos `json:"petPos,omitempty"`
+	// PetDisplay is the display the otter was last left on, by the same id
+	// PetPos uses. The spots of every display stay remembered, so a display
+	// that comes back keeps its place; this decides which one the otter
+	// returns to.
+	PetDisplay string `json:"petDisplay,omitempty"`
 	// Shortcuts are the global keyboard shortcuts. They are user-editable
 	// in the Settings window, and every one is an Electron-style
 	// accelerator ("Ctrl+Alt+Space").
@@ -96,6 +108,34 @@ type LiveActivitySettings struct {
 	Charging   bool `json:"charging"`
 	Headphones bool `json:"headphones"`
 	Downloads  bool `json:"downloads"`
+}
+
+// PetSettings is the pet object in settings.json: 显示海獭 and its size.
+// A missing object keeps the default (shown, medium), so an older
+// settings.json gets the otter after the update.
+type PetSettings struct {
+	Shown bool    `json:"shown"`
+	Size  PetSize `json:"size"`
+}
+
+// PetSize picks how tall the otter stands on the desktop: 72, 96 or 128
+// points for the picture.
+type PetSize string
+
+const (
+	PetSizeSmall  PetSize = "small"
+	PetSizeMedium PetSize = "medium"
+	PetSizeLarge  PetSize = "large"
+)
+
+// Normalized maps an unknown or empty value (an older settings.json, a
+// hand edit) to the default, medium.
+func (p PetSize) Normalized() PetSize {
+	switch p {
+	case PetSizeSmall, PetSizeLarge:
+		return p
+	}
+	return PetSizeMedium
 }
 
 // ShellStyle picks the closed shelf's outer shape on a screen with a
@@ -153,6 +193,7 @@ func Default() Settings {
 			QuotaCodex:  true,
 			QuotaClaude: true,
 		},
+		Pet: PetSettings{Shown: true, Size: PetSizeMedium},
 		Shortcuts: ShortcutSettings{
 			Toggle:    DefaultShortcutToggle,
 			Clipboard: DefaultShortcutClipboard,
@@ -196,6 +237,7 @@ func Load(dir string) (Settings, error) {
 		s.ClipboardLimit = defaultClipboardLimit
 	}
 	s.ShellStyle = s.ShellStyle.Normalized()
+	s.Pet.Size = s.Pet.Size.Normalized()
 	return s, nil
 }
 

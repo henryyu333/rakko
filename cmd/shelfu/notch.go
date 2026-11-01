@@ -283,10 +283,11 @@ func (a *shelf) windowGeometryChanged() {
 // below the hardware notch: nothing drawn inside it is visible.
 func (a *shelf) peekSize() (w, h float32) {
 	baseW, baseH := a.anchorSize()
-	if a.pinReturning {
-		// A pinned card held over the notch wins over the capsule and
-		// the wings: the release reads this same zone, so the affordance
-		// must always be the drop-pill it acts on (design §4 松开放回).
+	if a.pinReturning || a.petReturning {
+		// A pinned card or the carried otter held over the notch wins
+		// over the capsule and the wings: the release reads this same
+		// zone, so the affordance must always be the pill it acts on
+		// (design §4 松开放回).
 		return baseW + dropPillExtraW, baseH + dropPillBody
 	}
 	now := time.Now()
@@ -876,6 +877,7 @@ func (a *shelf) show(edge bool) {
 	}
 	a.level = level
 	a.jumpLevel = true
+	a.lastAct = time.Now() // using the shelf is activity: the otter stays awake
 	a.snap.drawn = a.snap.panel
 	a.visible, a.edgeOpened, a.received = true, edge, false
 	a.dropZoneSnap(edge)
@@ -1127,6 +1129,8 @@ func (a *shelf) hide(exit hideExit) {
 	// content fade and finishClose retires them.
 	a.cancelHomeSpot()
 	a.releaseKeys()
+	// The note window outlives the panel; what it holds is landed now.
+	a.noteFlush()
 	// 当前拖拽不再次触发；松开鼠标或出现新会话后解除。
 	a.suppressed = true
 	a.dropHot = false

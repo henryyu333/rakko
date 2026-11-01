@@ -168,8 +168,10 @@ func TestAIUsageDropsOldLocalSwitches(t *testing.T) {
 
 func TestSaveRoundTrips(t *testing.T) {
 	dir := t.TempDir()
+	// The pet's size is normalized on load, so the literal spells out
+	// medium rather than the empty string.
 	want := Settings{RetentionDays: 7, ClipboardLimit: 12, ExcludedApps: []string{"com.example.one", "com.example.two"},
-		ShellStyle: ShellStyleIsland}
+		ShellStyle: ShellStyleIsland, Pet: PetSettings{Size: PetSizeMedium}}
 	if err := Save(dir, want); err != nil {
 		t.Fatal(err)
 	}
@@ -325,5 +327,45 @@ func TestRetiredPanelAppearanceIsIgnored(t *testing.T) {
 	}
 	if s.ShellStyle != ShellStyleIsland || s.ClipboardLimit != 12 {
 		t.Fatalf("the saved keys around it were lost: %+v", s)
+	}
+}
+
+// A settings.json from before the otter lived on the desktop has no pet
+// object: it must load shown and medium, never Go's zero value (hidden).
+// A partial object keeps the default it does not set, and a size this
+// build does not know falls back to medium.
+func TestPetLoad(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, FileName), []byte(`{}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !s.Pet.Shown || s.Pet.Size != PetSizeMedium {
+		t.Fatalf("missing pet loaded as %+v, want shown and medium", s.Pet)
+	}
+	if len(s.PetPos) != 0 {
+		t.Fatalf("a fresh file carries pet positions: %v", s.PetPos)
+	}
+
+	if err := os.WriteFile(filepath.Join(dir, FileName),
+		[]byte(`{"pet": {"size": "large"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if s, err = Load(dir); err != nil || !s.Pet.Shown || s.Pet.Size != PetSizeLarge {
+		t.Fatalf("partial pet = %+v, %v; want shown and large", s.Pet, err)
+	}
+
+	if err := os.WriteFile(filepath.Join(dir, FileName),
+		[]byte(`{"pet": {"shown": false, "size": "huge"}, "petPos": {"1": {"x": 20, "y": 30}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if s, err = Load(dir); err != nil || s.Pet.Shown || s.Pet.Size != PetSizeMedium {
+		t.Fatalf("stowed pet = %+v, %v; want hidden and medium", s.Pet, err)
+	}
+	if got := s.PetPos["1"]; got.X != 20 || got.Y != 30 {
+		t.Fatalf("pet position = %+v, want (20, 30)", got)
 	}
 }

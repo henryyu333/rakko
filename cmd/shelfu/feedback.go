@@ -75,6 +75,9 @@ const (
 	// peekReturn is a desktop-pinned card held over the notch: the same
 	// pill as the drop shape, inviting 松开放回 (pin.go pinReturning).
 	peekReturn
+	// peekPetStow is the carried desktop otter held over the notch: the
+	// same pill, inviting 松开收进刘海 (pet.go petReturning).
+	peekPetStow
 	// The realtime activities (live.go): the wide charging or download
 	// wings, and the capsule for headphones or a finished download.
 	peekLiveWings

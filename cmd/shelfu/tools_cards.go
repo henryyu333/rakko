@@ -95,6 +95,7 @@ func toolCatalog() []toolCardDef {
 		{id: "awake", kind: cardWidget, title: "保持唤醒", icon: cupSymbol, span: 1, variableSpan: true, accepts: never, available: always},
 		{id: "recent", kind: cardWidget, title: "最近文件", icon: docSymbol, span: 2, accepts: never, available: always},
 		{id: "clip", kind: cardWidget, title: "剪贴板最新", icon: clipNavSymbol, span: 2, accepts: never, available: always},
+		{id: "note", kind: cardWidget, title: "便利贴", icon: noteSymbol, span: 1, variableSpan: true, accepts: never, available: always},
 		{id: "usage", kind: cardWidget, title: "AI 用量", icon: gaugeSymbol, span: 1, accepts: never, available: usageAvailable},
 	}
 }
@@ -160,6 +161,8 @@ func (d *toolCardDef) name(l locales.Messages) string {
 		return l.RecentFiles()
 	case "clip":
 		return l.LatestClip()
+	case "note":
+		return l.CardNote()
 	case "usage":
 		return l.AiUsage()
 	}
@@ -193,6 +196,9 @@ func (a *shelf) toolCard(c *ui.Context, spec layout.Card, surf toolCardSurface, 
 		// The 1 × 1 card carries no text, so its numbers live in the
 		// accessible name and the hover tip (the same string).
 		title = a.usageCardLabel(c)
+	}
+	if def != nil && def.id == "note" {
+		title = a.noteLabel(loc(c))
 	}
 	key := "tc-" + spec.ID
 	if len(keySfx) > 0 {
@@ -311,6 +317,8 @@ func (a *shelf) toolCardBody(c *ui.Context, card ui.Element, def *toolCardDef, s
 		a.toolRecentBody(c, card)
 	case "clip":
 		a.toolClipBody(c, card)
+	case "note":
+		a.noteBody(c, card, span, surf)
 	case "usage":
 		a.toolUsageBody(c, card, span)
 	default:
@@ -455,6 +463,8 @@ func (a *shelf) runToolCard(id string) bool {
 			return a.copyText(it.Text)
 		}
 		return false
+	case "note":
+		return a.toggleNote()
 	case "usage":
 		if a.usage != nil {
 			a.setTab(pageUsage)
