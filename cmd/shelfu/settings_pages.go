@@ -248,9 +248,9 @@ func (a *shelf) settingsClipboardPage(c *ui.Context) {
 	settingsFootnote(c, "clip-foot", l.SettingsClipFoot())
 }
 
-// settingsAIUsagePage: the display switches, the two quota cards, and the
-// read-only list of every local reader. Local usage is auto-detected, so
-// there is no source checkbox table.
+// settingsAIUsagePage: the display switches and the two quota switches.
+// Local usage is auto-detected and summed into one total, so there is no
+// per-agent list and no source checkbox table.
 func (a *shelf) settingsAIUsagePage(c *ui.Context) {
 	l := loc(c)
 	settingsHero(c, "usage", l.SettingsAISection(), l.SettingsAIHero(), "curious",
