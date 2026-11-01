@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/ebitengine/purego"
+	"github.com/ebitengine/purego/objc"
 )
 
 // SpotlightHit is one result of a Spotlight query.
@@ -205,6 +206,11 @@ func (r *SpotlightRun) query(expr string, limit int, emit func([]SpotlightHit)) 
 		r.mu.Lock()
 		r.qs = slices.DeleteFunc(r.qs, func(v uintptr) bool { return v == q })
 		r.mu.Unlock()
+		// Stop first: no further result update may be queued. Then wait
+		// for the queue to run out the ones already handed to it, so the
+		// release below cannot pull the query out from under a callback.
+		spotQueryStop(q)
+		spotDrainQueue()
 		spotRelease(q)
 	}()
 	if !spotQueryExecute(q, 0) {
@@ -235,6 +241,9 @@ func (r *SpotlightRun) query(expr string, limit int, emit func([]SpotlightHit)) 
 			return
 		}
 		r.mu.Lock()
+		// The query runs on the dispatch queue: freeze its result set while
+		// this goroutine reads it, then let it continue.
+		spotQueryDisable(q)
 		n := spotQueryCount(q)
 		complete := spotQueryComplete(q)
 		for seen < n && len(pending) < spotBatchMax {
@@ -252,6 +261,7 @@ func (r *SpotlightRun) query(expr string, limit int, emit func([]SpotlightHit)) 
 				pending = append(pending, hit)
 			}
 		}
+		spotQueryEnable(q)
 		r.mu.Unlock()
 		if len(pending) > 0 && (first || len(pending) >= spotBatchMax || time.Since(last) >= spotBatchEvery) {
 			if !flush() {
@@ -267,6 +277,7 @@ func (r *SpotlightRun) query(expr string, limit int, emit func([]SpotlightHit)) 
 	}
 	// The index is done: read whatever arrived since the last pass.
 	r.mu.Lock()
+	spotQueryDisable(q)
 	for n := spotQueryCount(q); seen < n; seen++ {
 		if item := spotQueryResult(q, seen); item != 0 {
 			if hit, ok := spotHit(item); ok {
@@ -274,6 +285,7 @@ func (r *SpotlightRun) query(expr string, limit int, emit func([]SpotlightHit)) 
 			}
 		}
 	}
+	spotQueryEnable(q)
 	r.mu.Unlock()
 	flush()
 }
@@ -331,6 +343,9 @@ var (
 	spotQueryCount    func(q uintptr) int64
 	spotQueryResult   func(q uintptr, i int64) uintptr
 	spotQueryStop     func(q uintptr)
+	spotQueryDisable  func(q uintptr)
+	spotQueryEnable   func(q uintptr)
+	spotSync          func(queue, block uintptr)
 	spotItemAttr      func(item, attr uintptr) uintptr
 	spotQueueCreate   func(label *byte, attr uintptr) uintptr
 	spotQueueOnce     sync.Once
@@ -379,6 +394,9 @@ func spotLoad() error {
 		purego.RegisterLibFunc(&spotQueryCount, md, "MDQueryGetResultCount")
 		purego.RegisterLibFunc(&spotQueryResult, md, "MDQueryGetResultAtIndex")
 		purego.RegisterLibFunc(&spotQueryStop, md, "MDQueryStop")
+		purego.RegisterLibFunc(&spotQueryDisable, md, "MDQueryDisableUpdates")
+		purego.RegisterLibFunc(&spotQueryEnable, md, "MDQueryEnableUpdates")
+		purego.RegisterLibFunc(&spotSync, disp, "dispatch_sync")
 		purego.RegisterLibFunc(&spotItemAttr, md, "MDItemCopyAttribute")
 		purego.RegisterLibFunc(&spotQueueCreate, disp, "dispatch_queue_create")
 	})
@@ -393,6 +411,15 @@ func spotQueue() uintptr {
 		spotQueueRef = spotQueueCreate(&label[0], 0)
 	})
 	return spotQueueRef
+}
+
+// spotDrainQueue waits until everything queued on the query's dispatch
+// queue has run: after MDQueryStop no new work is queued, so the wait bounds
+// the query's callbacks that may still hold it.
+func spotDrainQueue() {
+	block := objc.NewBlock(func(objc.Block) {})
+	defer block.Release()
+	spotSync(spotQueue(), uintptr(block))
 }
 
 func spotAttrPath() uintptr { spotAttrs(); return spotAttrPathCF }

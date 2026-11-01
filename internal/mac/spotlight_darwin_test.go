@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestSpotlightQueriesSearchesNamesAndText: a plain term asks the name
@@ -86,5 +87,29 @@ func TestSpotlightPathWantedKeepsTheUserTree(t *testing.T) {
 		if SpotlightPathWanted(path) {
 			t.Errorf("%s should be filtered out", path)
 		}
+	}
+}
+
+// TestSpotlightCancelIsSafe: real queries are read with their updates
+// frozen and are stopped and drained before release; cancelling while the
+// index is still delivering must neither crash nor wedge the query queue.
+func TestSpotlightCancelIsSafe(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real Spotlight queries")
+	}
+	for i := 0; i < 10; i++ {
+		run := StartSpotlight("a", 50, func([]SpotlightHit) {}, nil)
+		if i%2 == 1 {
+			time.Sleep(5 * time.Millisecond) // land mid-delivery
+		}
+		run.Cancel()
+	}
+	// The shared queue must still answer after those cancels.
+	done := make(chan struct{})
+	StartSpotlight("zzz-rakko-cancel-probe", 5, func([]SpotlightHit) {}, func() { close(done) })
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("a query after the cancels never finished")
 	}
 }
