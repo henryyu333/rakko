@@ -386,3 +386,67 @@ func TestLyricsDefaultsClosedAndRemembersOpen(t *testing.T) {
 		t.Fatalf("lyrics.enabled true => %v, %v; want open", s.LyricsOn(), err)
 	}
 }
+
+// TestAgentNotifyOffLoadsClean: the per-tool switch list keeps only tools
+// Rakko knows, once each, and a settings.json without it keeps every tool on.
+func TestAgentNotifyOffLoadsClean(t *testing.T) {
+	dir := t.TempDir()
+	body := `{"agentNotify": {"enabled": true, "off": ["gemini", "nope", "gemini", "claude", ""]}}`
+	if err := os.WriteFile(filepath.Join(dir, FileName), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"gemini", "claude"}; !reflect.DeepEqual(s.AgentNotify.Off, want) {
+		t.Fatalf("off = %v, want %v", s.AgentNotify.Off, want)
+	}
+
+	// The key missing entirely: nothing is switched off, as before the
+	// per-tool switches existed.
+	dir = t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, FileName), []byte(`{"agentNotify": {"enabled": true}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err = Load(dir)
+	if err != nil || len(s.AgentNotify.Off) != 0 || s.AgentNotify.ToolOff("claude") {
+		t.Fatalf("a file without off = %+v, %v; want every tool on", s.AgentNotify, err)
+	}
+}
+
+// TestAgentNotifyToolSwitchRoundTrips: the row's switch edits the list, and
+// the value survives a save and a load.
+func TestAgentNotifyToolSwitchRoundTrips(t *testing.T) {
+	dir := t.TempDir()
+	s := Default()
+	s.AgentNotify.Enabled = true
+	s.AgentNotify.SetToolOn("codex", false)
+	s.AgentNotify.SetToolOn("claude", false)
+	s.AgentNotify.SetToolOn("codex", true)
+	if want := []string{"claude"}; !reflect.DeepEqual(s.AgentNotify.Off, want) {
+		t.Fatalf("off = %v, want %v", s.AgentNotify.Off, want)
+	}
+	if s.AgentNotify.ToolOff("codex") || !s.AgentNotify.ToolOff("claude") {
+		t.Fatalf("switch lookup disagrees with the list: %+v", s.AgentNotify)
+	}
+	if err := Save(dir, s); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got.AgentNotify, s.AgentNotify) {
+		t.Fatalf("reload = %+v, want %+v", got.AgentNotify, s.AgentNotify)
+	}
+	// Switching everything back on drops the key entirely.
+	got.AgentNotify.SetToolOn("claude", true)
+	if err := Save(dir, got); err != nil {
+		t.Fatal(err)
+	}
+	again, err := Load(dir)
+	if err != nil || again.AgentNotify.Off != nil {
+		t.Fatalf("off after every tool is on = %v, %v; want nil", again.AgentNotify.Off, err)
+	}
+}

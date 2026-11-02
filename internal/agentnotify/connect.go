@@ -190,58 +190,58 @@ func Disconnect(home, dataDir string, tool Tool) error {
 // connectHooks adds one entry per event unless the file already carries it.
 func connectHooks(s spec, home, dataDir, exe string) error {
 	s, path := s.at(home)
-	raw, existed, mode, err := readConfig(path)
-	if err != nil {
-		return err
-	}
-	doc, derr := newJSONDoc(raw)
-	if derr != nil {
-		return fmt.Errorf("agentnotify: %s: %w", path, derr)
-	}
-	if existed && !bytes.Contains(raw, []byte(marker(s.tool))) && isDedicated(s.tool) {
-		// The file is Rakko's own name; anything else in it is not ours to
-		// replace.
-		return fmt.Errorf("agentnotify: %s exists and was not written by Rakko; left alone", path)
-	}
-	changed := false
-	if s.version != "" && (!existed || len(bytes.TrimSpace(raw)) == 0) {
-		if v, _ := doc.root.lookup("version"); v == nil {
-			if err := doc.appendMember(doc.root, "version", func(string) string { return s.version }); err != nil {
-				return err
+	return updateFile(path, func(raw []byte, existed bool, mode os.FileMode) (filePlan, error) {
+		doc, derr := newJSONDoc(raw)
+		if derr != nil {
+			return filePlan{}, fmt.Errorf("agentnotify: %s: %w", path, derr)
+		}
+		if existed && !bytes.Contains(raw, []byte(marker(s.tool))) && isDedicated(s.tool) {
+			// The file is Rakko's own name; anything else in it is not ours
+			// to replace.
+			return filePlan{}, fmt.Errorf("agentnotify: %s exists and was not written by Rakko; left alone", path)
+		}
+		changed := false
+		if s.version != "" && (!existed || len(bytes.TrimSpace(raw)) == 0) {
+			if v, _ := doc.root.lookup("version"); v == nil {
+				if err := doc.appendMember(doc.root, "version", func(string) string { return s.version }); err != nil {
+					return filePlan{}, err
+				}
 			}
 		}
-	}
-	timeout := s.timeout
-	if timeout == 0 {
-		timeout = hookTimeout
-	}
-	for _, ev := range s.events {
-		added, aerr := addHook(doc, s, exe, dataDir, ev, timeout)
-		if aerr != nil {
-			return aerr
+		timeout := s.timeout
+		if timeout == 0 {
+			timeout = hookTimeout
 		}
-		changed = changed || added
-	}
-	if !changed {
-		return nil
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
-	backed, err := backupOnce(path, existed)
-	if err != nil {
-		return err
-	}
-	recordOrigin(dataDir, path, originRecord{
-		Created:  !existed,
-		Blank:    existed && len(bytes.TrimSpace(raw)) == 0,
-		BackedUp: backed,
+		for _, ev := range s.events {
+			added, aerr := addHook(doc, s, exe, dataDir, ev, timeout)
+			if aerr != nil {
+				return filePlan{}, aerr
+			}
+			changed = changed || added
+		}
+		if !changed {
+			return filePlan{}, nil
+		}
+		m := os.FileMode(0o600)
+		if existed {
+			m = mode.Perm()
+		}
+		return filePlan{data: doc.bytes(), mode: m, changed: true, before: func() error {
+			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+				return err
+			}
+			backed, err := backupOnce(path, existed)
+			if err != nil {
+				return err
+			}
+			recordOrigin(dataDir, path, originRecord{
+				Created:  !existed,
+				Blank:    existed && len(bytes.TrimSpace(raw)) == 0,
+				BackedUp: backed,
+			})
+			return nil
+		}}, nil
 	})
-	m := os.FileMode(0o600)
-	if existed {
-		m = mode.Perm()
-	}
-	return writeAtomic(path, doc.bytes(), m)
 }
 
 // disconnectHooks removes Rakko's entries from every file the tool may have
@@ -259,40 +259,31 @@ func disconnectHooks(s spec, home, dataDir string) error {
 }
 
 func disconnectHooksAt(s spec, path, dataDir string) error {
-	raw, existed, mode, err := readConfig(path)
-	if err != nil {
-		return err
-	}
-	if !existed {
-		forgetOrigin(dataDir, path)
-		return nil
-	}
-	doc, derr := newJSONDoc(raw)
-	if derr != nil {
-		return fmt.Errorf("agentnotify: %s: %w", path, derr)
-	}
-	if !removeHooks(doc, s) {
-		return nil
-	}
-	rec := readOrigin(dataDir, path)
-	after := doc.bytes()
-	switch {
-	case rec.Created && (isEmptyObject(string(after)) || onlyVersion(after)):
-		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return err
+	return updateFile(path, func(raw []byte, existed bool, mode os.FileMode) (filePlan, error) {
+		if !existed {
+			return filePlan{after: func() { forgetOrigin(dataDir, path) }}, nil
 		}
-		forgetOrigin(dataDir, path)
-		return nil
-	case isEmptyObject(string(after)) && rec.Blank:
-		after = nil
-	}
-	if err := writeAtomic(path, after, mode.Perm()); err != nil {
-		return err
-	}
-	if isEmptyObject(string(after)) && !rec.BackedUp {
-		forgetOrigin(dataDir, path)
-	}
-	return nil
+		doc, derr := newJSONDoc(raw)
+		if derr != nil {
+			return filePlan{}, fmt.Errorf("agentnotify: %s: %w", path, derr)
+		}
+		if !removeHooks(doc, s) {
+			return filePlan{}, nil
+		}
+		rec := readOrigin(dataDir, path)
+		after := doc.bytes()
+		switch {
+		case rec.Created && (isEmptyObject(string(after)) || onlyVersion(after)):
+			return filePlan{remove: true, changed: true, after: func() { forgetOrigin(dataDir, path) }}, nil
+		case isEmptyObject(string(after)) && rec.Blank:
+			after = nil
+		}
+		return filePlan{data: after, mode: mode.Perm(), changed: true, after: func() {
+			if isEmptyObject(string(after)) && !rec.BackedUp {
+				forgetOrigin(dataDir, path)
+			}
+		}}, nil
+	})
 }
 
 // isDedicated reports whether the tool's file is Rakko's alone (Grok's
@@ -302,35 +293,33 @@ func isDedicated(tool Tool) bool { return tool == ToolGrok }
 // writeModule writes the plugin/extension file for a module tool.
 func writeModule(s spec, home, dataDir, exe string) error {
 	path := s.config(home)
-	if raw, existed, _, err := readConfig(path); err != nil {
-		return err
-	} else if existed && !ownsModule(raw, s.tool) {
-		return fmt.Errorf("agentnotify: %s exists and was not written by Rakko; left alone", path)
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
-	body := renderModule(s.module, s.tool, exe, dataDir)
-	recordOrigin(dataDir, path, originRecord{Created: true})
-	return writeAtomic(path, []byte(body), 0o644)
+	return updateFile(path, func(raw []byte, existed bool, _ os.FileMode) (filePlan, error) {
+		if existed && !ownsModule(raw, s.tool) {
+			return filePlan{}, fmt.Errorf("agentnotify: %s exists and was not written by Rakko; left alone", path)
+		}
+		body := renderModule(s.module, s.tool, exe, dataDir)
+		return filePlan{data: []byte(body), mode: 0o644, changed: true, before: func() error {
+			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+				return err
+			}
+			recordOrigin(dataDir, path, originRecord{Created: true})
+			return nil
+		}}, nil
+	})
 }
 
 // removeModule deletes Rakko's module file and nothing else.
 func removeModule(s spec, home, dataDir string) error {
 	path := s.config(home)
-	raw, existed, _, err := readConfig(path)
-	if err != nil || !existed {
-		forgetOrigin(dataDir, path)
-		return err
-	}
-	if !ownsModule(raw, s.tool) {
-		return nil
-	}
-	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	forgetOrigin(dataDir, path)
-	return nil
+	return updateFile(path, func(raw []byte, existed bool, _ os.FileMode) (filePlan, error) {
+		if !existed {
+			return filePlan{after: func() { forgetOrigin(dataDir, path) }}, nil
+		}
+		if !ownsModule(raw, s.tool) {
+			return filePlan{}, nil
+		}
+		return filePlan{remove: true, changed: true, after: func() { forgetOrigin(dataDir, path) }}, nil
+	})
 }
 
 // onlyVersion reports whether a document holds nothing but the "version"
@@ -348,98 +337,91 @@ func onlyVersion(text []byte) bool {
 // {"rakko-agent-completion": {"<event>": [{"type", "command", "timeout"}]}}.
 func connectNamed(s spec, home, dataDir, exe string) error {
 	path := s.config(home)
-	raw, existed, mode, err := readConfig(path)
-	if err != nil {
-		return err
-	}
-	doc, derr := newJSONDoc(raw)
-	if derr != nil {
-		return fmt.Errorf("agentnotify: %s: %w", path, derr)
-	}
-	if member, _ := doc.root.lookup(namedHook); member != nil {
-		return nil
-	}
-	timeout := s.timeout
-	if timeout == 0 {
-		timeout = hookTimeout
-	}
-	render := func(indent string) string {
-		inner := indent + doc.indent
-		var b strings.Builder
-		b.WriteString("{\n")
-		for i, ev := range s.events {
-			event := ""
-			if s.eventArg {
-				event = ev
-			}
-			b.WriteString(inner + quoteJSON(ev) + ": [{" +
-				`"type": "command", "command": ` + quoteJSON(hookCommandFor(exe, s.tool, dataDir, event)) +
-				fmt.Sprintf(`, "timeout": %d}]`, timeout))
-			if i < len(s.events)-1 {
-				b.WriteString(",")
-			}
-			b.WriteString("\n")
+	return updateFile(path, func(raw []byte, existed bool, mode os.FileMode) (filePlan, error) {
+		doc, derr := newJSONDoc(raw)
+		if derr != nil {
+			return filePlan{}, fmt.Errorf("agentnotify: %s: %w", path, derr)
 		}
-		b.WriteString(indent + "}")
-		return b.String()
-	}
-	if err := doc.appendMember(doc.root, namedHook, render); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
-	backed, err := backupOnce(path, existed)
-	if err != nil {
-		return err
-	}
-	recordOrigin(dataDir, path, originRecord{
-		Created:  !existed,
-		Blank:    existed && len(bytes.TrimSpace(raw)) == 0,
-		BackedUp: backed,
+		if member, _ := doc.root.lookup(namedHook); member != nil {
+			return filePlan{}, nil
+		}
+		timeout := s.timeout
+		if timeout == 0 {
+			timeout = hookTimeout
+		}
+		render := func(indent string) string {
+			inner := indent + doc.indent
+			var b strings.Builder
+			b.WriteString("{\n")
+			for i, ev := range s.events {
+				event := ""
+				if s.eventArg {
+					event = ev
+				}
+				b.WriteString(inner + quoteJSON(ev) + ": [{" +
+					`"type": "command", "command": ` + quoteJSON(hookCommandFor(exe, s.tool, dataDir, event)) +
+					fmt.Sprintf(`, "timeout": %d}]`, timeout))
+				if i < len(s.events)-1 {
+					b.WriteString(",")
+				}
+				b.WriteString("\n")
+			}
+			b.WriteString(indent + "}")
+			return b.String()
+		}
+		if err := doc.appendMember(doc.root, namedHook, render); err != nil {
+			return filePlan{}, err
+		}
+		m := os.FileMode(0o600)
+		if existed {
+			m = mode.Perm()
+		}
+		return filePlan{data: doc.bytes(), mode: m, changed: true, before: func() error {
+			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+				return err
+			}
+			backed, err := backupOnce(path, existed)
+			if err != nil {
+				return err
+			}
+			recordOrigin(dataDir, path, originRecord{
+				Created:  !existed,
+				Blank:    existed && len(bytes.TrimSpace(raw)) == 0,
+				BackedUp: backed,
+			})
+			return nil
+		}}, nil
 	})
-	m := os.FileMode(0o600)
-	if existed {
-		m = mode.Perm()
-	}
-	return writeAtomic(path, doc.bytes(), m)
 }
 
 // disconnectNamed removes Rakko's member, and the file when Rakko made it.
 func disconnectNamed(s spec, home, dataDir string) error {
 	path := s.config(home)
-	raw, existed, mode, err := readConfig(path)
-	if err != nil {
-		return err
-	}
-	if !existed {
-		forgetOrigin(dataDir, path)
-		return nil
-	}
-	doc, derr := newJSONDoc(raw)
-	if derr != nil {
-		return fmt.Errorf("agentnotify: %s: %w", path, derr)
-	}
-	idx := memberIndex(doc.root, namedHook)
-	if idx < 0 {
-		return nil
-	}
-	if err := doc.removeMember(doc.root, idx); err != nil {
-		return err
-	}
-	rec := readOrigin(dataDir, path)
-	after := doc.bytes()
-	switch {
-	case isEmptyObject(string(after)) && rec.Created:
-		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return err
+	return updateFile(path, func(raw []byte, existed bool, mode os.FileMode) (filePlan, error) {
+		if !existed {
+			return filePlan{after: func() { forgetOrigin(dataDir, path) }}, nil
 		}
-		forgetOrigin(dataDir, path)
-		return nil
-	case isEmptyObject(string(after)) && rec.Blank:
-		after = nil
-	}
-	return writeAtomic(path, after, mode.Perm())
+		doc, derr := newJSONDoc(raw)
+		if derr != nil {
+			return filePlan{}, fmt.Errorf("agentnotify: %s: %w", path, derr)
+		}
+		idx := memberIndex(doc.root, namedHook)
+		if idx < 0 {
+			return filePlan{}, nil
+		}
+		if err := doc.removeMember(doc.root, idx); err != nil {
+			return filePlan{}, err
+		}
+		rec := readOrigin(dataDir, path)
+		after := doc.bytes()
+		switch {
+		case isEmptyObject(string(after)) && rec.Created:
+			return filePlan{remove: true, changed: true, after: func() { forgetOrigin(dataDir, path) }}, nil
+		case isEmptyObject(string(after)) && rec.Blank:
+			after = nil
+		}
+		return filePlan{data: after, mode: mode.Perm(), changed: true}, nil
+	})
 }
 
 // addHook appends Rakko's entry for ev unless it is already there. Every
@@ -703,6 +685,96 @@ func readConfig(path string) ([]byte, bool, os.FileMode, error) {
 		return nil, false, 0, err
 	}
 	return data, true, fi.Mode(), nil
+}
+
+// filePlan is what one writer decided to do with a tool's configuration
+// file. A plan with changed false leaves the file alone; before then does
+// nothing, and after still runs (a disconnect may only need to forget its
+// note about a file that is already gone).
+type filePlan struct {
+	data   []byte // the file's new bytes
+	mode   os.FileMode
+	remove bool // delete the file instead of replacing it
+	// changed reports whether the file has to be touched at all.
+	changed bool
+	// before runs after the conflict check and before the file is replaced
+	// or removed: the backup, the origin note, the directory.
+	before func() error
+	// after runs once the file is written or removed.
+	after func()
+}
+
+// conflictTries bounds how often updateFile recomputes an edit after another
+// program wrote the file between its read and its replace.
+const conflictTries = 3
+
+// errConflict is updateFile's failure after every attempt lost a race: the
+// file keeps the other program's bytes.
+var errConflict = errors.New("kept being changed by another program; left it alone")
+
+// beforeReplace is a test seam. When a test installs it, it runs after each
+// compute and before the conflict check, so the test can play another
+// program writing the file inside updateFile's read-modify-write window.
+// Production leaves it nil.
+var beforeReplace func(path string)
+
+// updateFile edits a tool's configuration file with protection against
+// another program writing the same file at the same time. compute reads the
+// snapshot updateFile hands it and returns what the file should become.
+// Before replacing it, updateFile reads the file again and compares: when
+// another program changed it meanwhile, the computed result is dropped and
+// compute runs again on the new bytes, so both edits survive. After
+// conflictTries lost races updateFile returns an error and writes nothing.
+//
+// The check and the rename in writeAtomic are still two calls, so a writer
+// that lands in the few instructions between them is still lost. The
+// window is a handful of syscalls rather than a whole read-parse-render
+// pass, and no file lock is taken because the agents write these files
+// without one and would not honour it.
+func updateFile(path string, compute func(raw []byte, existed bool, mode os.FileMode) (filePlan, error)) error {
+	for range conflictTries {
+		raw, existed, mode, err := readConfig(path)
+		if err != nil {
+			return err
+		}
+		plan, err := compute(raw, existed, mode)
+		if err != nil {
+			return err
+		}
+		if !plan.changed {
+			if plan.after != nil {
+				plan.after()
+			}
+			return nil
+		}
+		if beforeReplace != nil {
+			beforeReplace(path)
+		}
+		now, nowExisted, _, err := readConfig(path)
+		if err != nil {
+			return err
+		}
+		if existed != nowExisted || !bytes.Equal(raw, now) {
+			continue // another program wrote it: compute again from its bytes
+		}
+		if plan.before != nil {
+			if err := plan.before(); err != nil {
+				return err
+			}
+		}
+		if plan.remove {
+			if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return err
+			}
+		} else if err := writeAtomic(path, plan.data, plan.mode); err != nil {
+			return err
+		}
+		if plan.after != nil {
+			plan.after()
+		}
+		return nil
+	}
+	return fmt.Errorf("agentnotify: %s %w", path, errConflict)
 }
 
 // writeAtomic replaces path with data, creating the file with mode. A path

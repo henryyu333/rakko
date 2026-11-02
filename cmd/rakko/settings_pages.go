@@ -322,9 +322,9 @@ func (a *shelf) settingsAIUsagePage(c *ui.Context) {
 }
 
 // settingsAgentGroup is the Agent 完成提醒 card: one switch for every
-// tool, then one row per detected tool with its configuration path and the
-// state of Rakko's entry. The rows have no switches of their own — the
-// group is the one thing the user turns on or off.
+// tool, then one row per detected tool with its configuration path, the
+// state of Rakko's entry and the tool's own switch. A tool's switch is
+// locked while the group switch is off: nothing may be written then.
 func (a *shelf) settingsAgentGroup(c *ui.Context) {
 	l := loc(c)
 	f := a.agentFeature()
@@ -360,14 +360,36 @@ func (a *shelf) settingsAgentGroup(c *ui.Context) {
 					caption = l.SettingsAgentNeedsApp()
 				}
 			}
-			settingsRowLine(c, "agent-"+string(tool)).Children(func() {
-				logo, tint, mark := agentLogo(tool)
-				settingsMark(c, logo, tint, mark)
-				settingsRowText(c, tool.Name(), caption)
-				ui.Text(c, status).SingleLine().FontSize(11.5).FontWeight(500).TextColor(color)
-			})
+			a.settingsAgentToolRow(c, tool, caption, status, color,
+				!a.settings.AgentNotify.ToolOff(string(tool)), !a.settings.AgentNotify.Enabled)
 		}
 	})
+}
+
+// settingsAgentToolRow is one detected tool: its mark, name and
+// configuration path on the left, the state of Rakko's entry, then the
+// tool's own switch. The switch mirrors the settings value and is locked
+// while the group switch is off.
+func (a *shelf) settingsAgentToolRow(c *ui.Context, tool agentnotify.Tool, caption, status string, color ui.Color, on, locked bool) {
+	key := "agent-" + string(tool)
+	row := ui.ToggleBase(c.Key("toggle-"+key), &on).FillWidth().AlignItems(ui.Center).
+		Gap(14).MinHeight(settingsRowMinHeight).Padding(settingsRowPadY, settingsRowPadX).
+		Label(tool.Name()).Disabled(locked)
+	var sw ui.Element
+	row.Children(func() {
+		logo, tint, mark := agentLogo(tool)
+		settingsMark(c, logo, tint, mark)
+		settingsRowText(c, tool.Name(), caption)
+		ui.Text(c, status).SingleLine().FontSize(11.5).FontWeight(500).TextColor(color)
+		if !locked {
+			// With the group switch off nothing may be written, so the row
+			// carries no control that would do nothing.
+			sw = ui.Switch(c, &on).Label(tool.Name())
+		}
+	})
+	if !locked && (row.Changed() || sw.Changed()) {
+		a.setAgentNotifyTool(tool, on)
+	}
 }
 
 // aiQuotaCaption is the quota row's secondary line: the plan name when the

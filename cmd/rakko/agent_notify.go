@@ -79,8 +79,9 @@ type agentNotifyFeature struct {
 	states    map[agentnotify.Tool]agentnotify.State
 	notes     map[agentnotify.Tool]string
 	refreshed time.Time
-	// offFailed is why switching off could not clean a tool's file.
-	offFailed map[agentnotify.Tool]string
+	// failed is why the last connect or disconnect of a tool did not work:
+	// its row says so instead of showing a state that is no longer true.
+	failed map[agentnotify.Tool]string
 	// node is the whole-group failure: the binary is not an installed app.
 	node string
 }
@@ -92,6 +93,7 @@ func newAgentNotifyFeature(a *shelf) *agentNotifyFeature {
 		tasks: map[string]agentTask{}, finished: map[string]agentTask{},
 		posted: map[string]time.Time{},
 		states: map[agentnotify.Tool]agentnotify.State{}, notes: map[agentnotify.Tool]string{},
+		failed: map[agentnotify.Tool]string{},
 	}
 }
 
@@ -328,13 +330,13 @@ func (a *shelf) agentApply(on bool) {
 			}
 		}
 		f.mu.Lock()
-		f.offFailed = failed
+		f.failed = failed
 		f.mu.Unlock()
 		f.refresh()
 		return
 	}
 	f.mu.Lock()
-	f.offFailed = nil
+	f.failed = map[agentnotify.Tool]string{}
 	f.mu.Unlock()
 	f.start()
 	exe, err := agentNotifyExe()
@@ -344,15 +346,70 @@ func (a *shelf) agentApply(on bool) {
 	if exe != "" && !agentnotify.StableExe(exe) {
 		exe = "" // a development build: nothing may be written
 	}
-	for _, tool := range agentnotify.Tools() {
-		if !agentnotify.Installed(f.home, tool) {
-			continue
+	failed := map[agentnotify.Tool]string{}
+	if exe != "" {
+		for _, tool := range agentnotify.Tools() {
+			if !agentnotify.Installed(f.home, tool) {
+				continue
+			}
+			if a.settings.AgentNotify.ToolOff(string(tool)) {
+				// Its own switch is off: an entry an earlier version wrote
+				// (or a master-off left behind) goes, and none is added.
+				if err := agentnotify.Disconnect(f.home, f.dir, tool); err != nil {
+					failed[tool] = err.Error()
+				}
+				continue
+			}
+			if err := agentnotify.Connect(f.home, f.dir, exe, tool); err != nil {
+				failed[tool] = err.Error()
+			}
 		}
-		if exe == "" {
-			continue
-		}
-		_ = agentnotify.Connect(f.home, f.dir, exe, tool)
 	}
+	f.mu.Lock()
+	f.failed = failed
+	f.mu.Unlock()
+	f.refresh()
+}
+
+// setAgentNotifyTool stores one tool's own switch and applies it at once:
+// on installs Rakko's entry for that tool, off removes it. Every other
+// tool's configuration is left as it is.
+func (a *shelf) setAgentNotifyTool(tool agentnotify.Tool, on bool) {
+	next := a.settings
+	next.AgentNotify.SetToolOn(string(tool), on)
+	if !a.applySettings(next) {
+		return
+	}
+	a.agentApplyTool(tool, on)
+}
+
+// agentApplyTool is one tool's own switch: connect or disconnect that tool,
+// and nothing else.
+func (a *shelf) agentApplyTool(tool agentnotify.Tool, on bool) {
+	f := a.agentFeature()
+	var err error
+	if on {
+		f.start()
+		exe, xerr := agentNotifyExe()
+		if xerr != nil {
+			exe = ""
+		}
+		if exe != "" && !agentnotify.StableExe(exe) {
+			exe = "" // a development build: nothing may be written
+		}
+		if exe != "" {
+			err = agentnotify.Connect(f.home, f.dir, exe, tool)
+		}
+	} else {
+		err = agentnotify.Disconnect(f.home, f.dir, tool)
+	}
+	f.mu.Lock()
+	if err != nil {
+		f.failed[tool] = err.Error()
+	} else {
+		delete(f.failed, tool)
+	}
+	f.mu.Unlock()
 	f.refresh()
 }
 
@@ -378,7 +435,10 @@ func (f *agentNotifyFeature) refresh() {
 	notes := map[agentnotify.Tool]string{}
 	on := f.host.settings.AgentNotify.Enabled
 	f.mu.Lock()
-	failed := f.offFailed
+	failed := make(map[agentnotify.Tool]string, len(f.failed))
+	for tool, why := range f.failed {
+		failed[tool] = why
+	}
 	f.mu.Unlock()
 	for _, tool := range agentnotify.Tools() {
 		if !agentnotify.Installed(f.home, tool) {
@@ -391,7 +451,11 @@ func (f *agentNotifyFeature) refresh() {
 				// The switch is on but this build cannot own a hook entry.
 				st, note = agentnotify.StateError, agentNeedsAppNote
 			}
-		} else if why, bad := failed[tool]; bad {
+		}
+		if why, bad := failed[tool]; bad {
+			// The last explicit action on this tool did not work; that says
+			// more than the file's state, which the action was meant to
+			// change.
 			st, note = agentnotify.StateError, why
 		}
 		states[tool] = st
