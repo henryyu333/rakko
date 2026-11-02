@@ -205,8 +205,9 @@ func TestIslandPanelDragSmoke(t *testing.T) {
 		t.Fatalf("the second drag did not move the panel: %+v", second)
 	}
 
-	// The page capsule still takes clicks after the move: its second page
-	// button switches the panel, drawn where the moved window puts it.
+	// The page capsule still takes clicks after the move: a page button
+	// other than the current page's (that one goes back to the search bar)
+	// switches the panel, drawn where the moved window puts it.
 	var icon mygo.Point
 	var wantTab pageID
 	var findErr string
@@ -214,13 +215,19 @@ func TestIslandPanelDragSmoke(t *testing.T) {
 		f := a.win.Bounds()
 		view := ui.NewTester(a.view, f.Width, f.Height)
 		view.Frame()
-		pages := a.navPages()
-		if len(pages) < 2 {
-			findErr = fmt.Sprintf("the capsule has %d pages", len(pages))
+		var target panelPage
+		for _, p := range a.navPages() {
+			if p.id() != a.tab {
+				target = p
+				break
+			}
+		}
+		if target == nil {
+			findErr = "the capsule has no page besides the current one"
 			return
 		}
-		wantTab = pages[1].id()
-		r, ok := view.Find(pages[1].label())
+		wantTab = target.id()
+		r, ok := view.Find(target.label())
 		if !ok {
 			findErr = fmt.Sprintf("the capsule's %s button is missing; texts %v", wantTab, view.Texts())
 			return
