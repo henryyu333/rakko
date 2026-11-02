@@ -112,7 +112,7 @@ func Status(home string, tool Tool) (State, string) {
 	if !ok {
 		return StateUnsupported, ""
 	}
-	path := s.config(home)
+	s, path := s.at(home)
 	raw, existed, _, err := readConfig(path)
 	if err != nil {
 		return StateError, err.Error()
@@ -146,7 +146,7 @@ func Status(home string, tool Tool) (State, string) {
 		if derr != nil {
 			return StateError, derr.Error()
 		}
-		if hooksHasMarker(doc, tool) {
+		if hooksHasMarker(doc, s) {
 			return StateInjected, ""
 		}
 		return StateNotInjected, ""
@@ -189,7 +189,7 @@ func Disconnect(home, dataDir string, tool Tool) error {
 
 // connectHooks adds one entry per event unless the file already carries it.
 func connectHooks(s spec, home, dataDir, exe string) error {
-	path := s.config(home)
+	s, path := s.at(home)
 	raw, existed, mode, err := readConfig(path)
 	if err != nil {
 		return err
@@ -244,9 +244,21 @@ func connectHooks(s spec, home, dataDir, exe string) error {
 	return writeAtomic(path, doc.bytes(), m)
 }
 
-// disconnectHooks removes Rakko's entries, and the containers it emptied.
+// disconnectHooks removes Rakko's entries from every file the tool may have
+// been given one in, and the containers it emptied.
 func disconnectHooks(s spec, home, dataDir string) error {
-	path := s.config(home)
+	var first error
+	for _, path := range s.candidates(home) {
+		r := s
+		r.bare = s.bareName != "" && filepath.Base(path) == s.bareName
+		if err := disconnectHooksAt(r, path, dataDir); err != nil && first == nil {
+			first = err
+		}
+	}
+	return first
+}
+
+func disconnectHooksAt(s spec, path, dataDir string) error {
 	raw, existed, mode, err := readConfig(path)
 	if err != nil {
 		return err
@@ -259,7 +271,7 @@ func disconnectHooks(s spec, home, dataDir string) error {
 	if derr != nil {
 		return fmt.Errorf("agentnotify: %s: %w", path, derr)
 	}
-	if !removeHooks(doc, s.tool) {
+	if !removeHooks(doc, s) {
 		return nil
 	}
 	rec := readOrigin(dataDir, path)
@@ -434,12 +446,12 @@ func disconnectNamed(s spec, home, dataDir string) error {
 // edit re-reads the tree, because a splice replaces the parsed document.
 func addHook(doc *jsonDoc, s spec, exe, dataDir, ev string, timeout int) (bool, error) {
 	tool := s.tool
-	hooks, _ := doc.root.lookup("hooks")
-	if hooks == nil {
+	hooks := hooksIn(doc, s.bare)
+	if hooks == nil && !s.bare {
 		if err := doc.appendMember(doc.root, "hooks", func(string) string { return "{}" }); err != nil {
 			return false, err
 		}
-		hooks, _ = doc.root.lookup("hooks")
+		hooks = hooksIn(doc, s.bare)
 	}
 	if hooks == nil || hooks.kind != jObject {
 		return false, errors.New("agentnotify: \"hooks\" is not an object")
@@ -449,7 +461,7 @@ func addHook(doc *jsonDoc, s spec, exe, dataDir, ev string, timeout int) (bool, 
 		if err := doc.appendMember(hooks, ev, func(string) string { return "[]" }); err != nil {
 			return false, err
 		}
-		hooks, _ = doc.root.lookup("hooks")
+		hooks = hooksIn(doc, s.bare)
 		arr, _ = hooks.lookup(ev)
 	}
 	if arr == nil || arr.kind != jArray {
@@ -483,9 +495,20 @@ func addHook(doc *jsonDoc, s spec, exe, dataDir, ev string, timeout int) (bool, 
 	return true, doc.appendItem(arr, render)
 }
 
-// hooksHasMarker reports whether any hooks array holds Rakko's command.
-func hooksHasMarker(doc *jsonDoc, tool Tool) bool {
+// hooksIn is the object keyed by event: the "hooks" member, or the whole
+// document for a tool whose hooks file is nothing else (bare).
+func hooksIn(doc *jsonDoc, bare bool) *jnode {
+	if bare {
+		return doc.root
+	}
 	hooks, _ := doc.root.lookup("hooks")
+	return hooks
+}
+
+// hooksHasMarker reports whether any hooks array holds Rakko's command.
+func hooksHasMarker(doc *jsonDoc, s spec) bool {
+	tool := s.tool
+	hooks := hooksIn(doc, s.bare)
 	if hooks == nil || hooks.kind != jObject {
 		return false
 	}
@@ -504,30 +527,31 @@ func hooksHasMarker(doc *jsonDoc, tool Tool) bool {
 
 // removeHooks deletes every command carrying Rakko's marker for a tool, and
 // the containers it leaves empty.
-func removeHooks(doc *jsonDoc, tool Tool) bool {
+func removeHooks(doc *jsonDoc, s spec) bool {
 	changed := false
 	// One command per step: every splice re-parses the document, so the
 	// nodes of the previous step no longer describe the file.
 	for range 4096 {
-		if !removeOneHookCommand(doc, tool) {
+		if !removeOneHookCommand(doc, s.tool, s.bare) {
 			break
 		}
 		changed = true
 	}
-	dropEmptyHookContainers(doc)
+	dropEmptyHookContainers(doc, s.bare)
 	return changed
 }
 
 // removeOneHookCommand drops exactly one of Rakko's commands. A hook list
 // item that holds other commands keeps them: only the inner command with our
-// marker goes, and the item itself only when nothing else is left in it.
-func removeOneHookCommand(doc *jsonDoc, tool Tool) bool {
-	hooks, _ := doc.root.lookup("hooks")
+// marker goes, and the item itself only when nothing else is left in it —
+// no other command and no other key such as a user's matcher.
+func removeOneHookCommand(doc *jsonDoc, tool Tool, bare bool) bool {
+	hooks := hooksIn(doc, bare)
 	if hooks == nil || hooks.kind != jObject {
 		return false
 	}
 	for _, key := range memberKeys(hooks) {
-		hooks, _ := doc.root.lookup("hooks")
+		hooks := hooksIn(doc, bare)
 		if hooks == nil {
 			return false
 		}
@@ -537,7 +561,7 @@ func removeOneHookCommand(doc *jsonDoc, tool Tool) bool {
 		}
 		for i := range arr.items {
 			// Re-resolve: an earlier step may have shifted the spans.
-			hooks, _ = doc.root.lookup("hooks")
+			hooks = hooksIn(doc, bare)
 			if hooks == nil {
 				return false
 			}
@@ -555,7 +579,7 @@ func removeOneHookCommand(doc *jsonDoc, tool Tool) bool {
 				continue
 			}
 			for j := range inner.items {
-				item = reResolveHookItem(doc, key, i)
+				item = reResolveHookItem(doc, bare, key, i)
 				if item == nil {
 					break
 				}
@@ -570,12 +594,13 @@ func removeOneHookCommand(doc *jsonDoc, tool Tool) bool {
 					return false
 				}
 				// An item that held nothing but our command goes too.
-				item = reResolveHookItem(doc, key, i)
+				item = reResolveHookItem(doc, bare, key, i)
 				if item == nil {
 					return true
 				}
-				if inner, _ := item.lookup("hooks"); inner != nil && inner.kind == jArray && len(inner.items) == 0 {
-					hooks, _ = doc.root.lookup("hooks")
+				if inner, _ := item.lookup("hooks"); inner != nil && inner.kind == jArray && len(inner.items) == 0 &&
+					len(item.members) == 1 {
+					hooks = hooksIn(doc, bare)
 					if hooks == nil {
 						return true
 					}
@@ -591,8 +616,8 @@ func removeOneHookCommand(doc *jsonDoc, tool Tool) bool {
 }
 
 // reResolveHookItem returns hooks[event][index] after a splice.
-func reResolveHookItem(doc *jsonDoc, event string, index int) *jnode {
-	hooks, _ := doc.root.lookup("hooks")
+func reResolveHookItem(doc *jsonDoc, bare bool, event string, index int) *jnode {
+	hooks := hooksIn(doc, bare)
 	if hooks == nil || hooks.kind != jObject {
 		return nil
 	}
@@ -605,15 +630,15 @@ func reResolveHookItem(doc *jsonDoc, event string, index int) *jnode {
 
 // dropEmptyHookContainers removes the event arrays and the hooks object Rakko
 // emptied, so a file the user no longer needs does not keep our scaffolding.
-func dropEmptyHookContainers(doc *jsonDoc) {
+func dropEmptyHookContainers(doc *jsonDoc, bare bool) {
 	for range 64 {
-		hooks, _ := doc.root.lookup("hooks")
+		hooks := hooksIn(doc, bare)
 		if hooks == nil || hooks.kind != jObject {
 			return
 		}
 		dropped := false
 		for _, key := range memberKeys(hooks) {
-			hooks, _ = doc.root.lookup("hooks")
+			hooks = hooksIn(doc, bare)
 			if hooks == nil {
 				return
 			}
@@ -632,6 +657,9 @@ func dropEmptyHookContainers(doc *jsonDoc) {
 		if !dropped {
 			break
 		}
+	}
+	if bare {
+		return
 	}
 	if hooks, _ := doc.root.lookup("hooks"); hooks != nil && hooks.kind == jObject && len(hooks.members) == 0 {
 		if idx := memberIndex(doc.root, "hooks"); idx >= 0 {
@@ -677,8 +705,17 @@ func readConfig(path string) ([]byte, bool, os.FileMode, error) {
 	return data, true, fi.Mode(), nil
 }
 
-// writeAtomic replaces path with data, creating the file with mode.
+// writeAtomic replaces path with data, creating the file with mode. A path
+// that is a symbolic link (a dotfiles repository, say) is written through:
+// the link stays and its target gets the new bytes.
 func writeAtomic(path string, data []byte, mode os.FileMode) error {
+	if fi, err := os.Lstat(path); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+		target, err := filepath.EvalSymlinks(path)
+		if err != nil {
+			return err
+		}
+		path = target
+	}
 	dir := filepath.Dir(path)
 	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".rakko-*")
 	if err != nil {

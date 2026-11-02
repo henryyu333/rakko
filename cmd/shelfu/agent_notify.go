@@ -63,6 +63,8 @@ type agentNotifyFeature struct {
 	states    map[agentnotify.Tool]agentnotify.State
 	notes     map[agentnotify.Tool]string
 	refreshed time.Time
+	// offFailed is why switching off could not clean a tool's file.
+	offFailed map[agentnotify.Tool]string
 	// node is the whole-group failure: the binary is not an installed app.
 	node string
 }
@@ -259,13 +261,23 @@ func (a *shelf) agentApply(on bool) {
 		f.stop()
 		// Every tool, not only the detected ones: an entry written while a
 		// tool looked installed must still go when it no longer does.
-		// Disconnect leaves files without Rakko's marker untouched.
+		// Disconnect leaves files without Rakko's marker untouched; one it
+		// could not clean (unparseable now) keeps its row in 出错.
+		failed := map[agentnotify.Tool]string{}
 		for _, tool := range agentnotify.Tools() {
-			_ = agentnotify.Disconnect(f.home, f.dir, tool)
+			if err := agentnotify.Disconnect(f.home, f.dir, tool); err != nil {
+				failed[tool] = err.Error()
+			}
 		}
+		f.mu.Lock()
+		f.offFailed = failed
+		f.mu.Unlock()
 		f.refresh()
 		return
 	}
+	f.mu.Lock()
+	f.offFailed = nil
+	f.mu.Unlock()
 	f.start()
 	exe, err := agentNotifyExe()
 	if err != nil {
@@ -307,6 +319,9 @@ func (f *agentNotifyFeature) refresh() {
 	states := map[agentnotify.Tool]agentnotify.State{}
 	notes := map[agentnotify.Tool]string{}
 	on := f.host.settings.AgentNotify.Enabled
+	f.mu.Lock()
+	failed := f.offFailed
+	f.mu.Unlock()
 	for _, tool := range agentnotify.Tools() {
 		if !agentnotify.Installed(f.home, tool) {
 			continue
@@ -318,6 +333,8 @@ func (f *agentNotifyFeature) refresh() {
 				// The switch is on but this build cannot own a hook entry.
 				st, note = agentnotify.StateError, agentNeedsAppNote
 			}
+		} else if why, bad := failed[tool]; bad {
+			st, note = agentnotify.StateError, why
 		}
 		states[tool] = st
 		if note != "" {

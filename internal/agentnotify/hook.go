@@ -87,12 +87,16 @@ func forward(tool Tool, dataDir, event string, stdin io.Reader) {
 	if !tool.Valid() {
 		return
 	}
-	// Grok, Devin CLI and Cursor read Claude Code's hook files too. Their
-	// own hook entries report the event with the same session; the Claude
-	// command fired inside one of them must not announce it a second time
-	// as Claude Code. Each sets its own variable for every hook it runs.
-	if tool == ToolClaude && (os.Getenv("GROK_SESSION_ID") != "" || os.Getenv("DEVIN_PROJECT_DIR") != "" ||
-		os.Getenv("CURSOR_VERSION") != "") {
+	// Grok, Devin CLI and Cursor read Claude Code's hook files too, and Grok
+	// also reads Cursor's. Their own hook entries report the event with the
+	// same session; a borrowed entry fired inside one of them must not
+	// announce it a second time under the other name. Each sets its own
+	// variable for every hook it runs.
+	inGrok := os.Getenv("GROK_SESSION_ID") != ""
+	if tool == ToolClaude && (inGrok || os.Getenv("DEVIN_PROJECT_DIR") != "" || os.Getenv("CURSOR_VERSION") != "") {
+		return
+	}
+	if tool == ToolCursor && inGrok {
 		return
 	}
 	payload, err := io.ReadAll(io.LimitReader(stdin, forwardReadLimit))
@@ -137,13 +141,17 @@ func buildRequest(tool Tool, payload []byte) Event {
 		UserPrompt     string   `json:"user_prompt"`
 		Message        string   `json:"message"`
 		Status         string   `json:"status"`
+		StopCause      string   `json:"agent_stop_cause"`
 	}
 	if len(payload) > 0 {
 		_ = json.Unmarshal(payload, &p)
 	}
-	// Cursor's stop also ends aborted and failed loops; only a completed
-	// one is a finished task.
+	// Cursor's stop also ends aborted and failed loops, and Auggie's Stop
+	// also fires on an interrupt; only a completed turn is a finished task.
 	if tool == ToolCursor && p.Status != "" && p.Status != "completed" {
+		return Event{}
+	}
+	if tool == ToolAugment && p.StopCause != "" && p.StopCause != "end_turn" {
 		return Event{}
 	}
 	req := Event{

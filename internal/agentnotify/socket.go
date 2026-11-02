@@ -89,8 +89,14 @@ func (s *Server) accept() {
 			case <-s.done:
 				return
 			default:
+			}
+			if errors.Is(err, net.ErrClosed) {
 				return
 			}
+			// A transient failure (too many open files, say) must not end
+			// every later notice; try again shortly.
+			time.Sleep(50 * time.Millisecond)
+			continue
 		}
 		go s.handle(conn)
 	}

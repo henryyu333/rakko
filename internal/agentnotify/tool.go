@@ -81,10 +81,43 @@ type spec struct {
 	eventArg bool
 	// module is the KindModule source.
 	module string
+	// bareName is the file name of a hooks document that is keyed by event
+	// at its root, with no "hooks" wrapper (Factory's hooks.json). bare is
+	// set for the file at hand by at().
+	bareName string
+	bare     bool
+	// also lists other files an earlier switch-on may have written to;
+	// switching off cleans them too.
+	also func(home string) []string
+}
+
+// at resolves the file Rakko writes now, and whether it is bare.
+func (s spec) at(home string) (spec, string) {
+	path := s.config(home)
+	s.bare = s.bareName != "" && filepath.Base(path) == s.bareName
+	return s, path
+}
+
+// candidates is every file switching off must clean.
+func (s spec) candidates(home string) []string {
+	out := []string{s.config(home)}
+	if s.also != nil {
+		for _, p := range s.also(home) {
+			if p != out[0] {
+				out = append(out, p)
+			}
+		}
+	}
+	return out
 }
 
 func join(home string, parts ...string) string {
 	return filepath.Join(append([]string{home}, parts...)...)
+}
+
+func exists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 // paths joins home-relative markers. Every marker is inside the user's home,
@@ -245,16 +278,28 @@ var specs = []spec{
 		events: []string{"UserPromptSubmit", "Stop"},
 	},
 	{
-		// Factory Droid: the "hooks" key of ~/.factory/settings.json.
-		// Installers create that file for tools never run, so detection
-		// looks for Droid's own sessions or binary.
+		// Factory Droid reads ~/.factory/hooks.json (keyed by event at its
+		// root) and only falls back to the "hooks" key of settings.json when
+		// that file is absent. Rakko writes where Droid reads, and never
+		// creates hooks.json: that would hide the user's settings.json
+		// hooks. Installers create settings.json for tools never run, so
+		// detection looks for Droid's own sessions or binary.
 		tool: ToolFactory,
 		name: "Droid",
 		kind: KindHooks,
 		detect: func(home string) []string {
 			return paths(home, ".factory/projects", ".factory/sessions", ".local/bin/droid")
 		},
-		config: func(home string) string { return join(home, ".factory", "settings.json") },
+		config: func(home string) string {
+			if hooks := join(home, ".factory", "hooks.json"); exists(hooks) {
+				return hooks
+			}
+			return join(home, ".factory", "settings.json")
+		},
+		bareName: "hooks.json",
+		also: func(home string) []string {
+			return paths(home, ".factory/hooks.json", ".factory/settings.json")
+		},
 		events: []string{"UserPromptSubmit", "Stop"},
 	},
 	{

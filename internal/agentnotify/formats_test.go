@@ -182,3 +182,122 @@ func TestForwarderEventArgAndCursorFilters(t *testing.T) {
 		t.Fatalf("Cursor's run of Claude's hook was announced as Claude: %+v", ev)
 	}
 }
+
+// TestSymlinkedConfigStaysALink: a settings file kept in a dotfiles
+// repository and linked into place keeps its link; the target gets the bytes.
+func TestSymlinkedConfigStaysALink(t *testing.T) {
+	home, dataDir := testHome(t), testDataDir(t)
+	if err := os.MkdirAll(filepath.Join(home, ".claude", "projects"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(home, "dotfiles", "claude-settings.json")
+	user := `{"theme": "dark"}`
+	writeFile(t, target, user)
+	link := ConfigPath(home, ToolClaude)
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := Connect(home, dataDir, exePath, ToolClaude); err != nil {
+		t.Fatal(err)
+	}
+	if fi, err := os.Lstat(link); err != nil || fi.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("the link was replaced: %v %v", fi, err)
+	}
+	if body, _ := os.ReadFile(target); !strings.Contains(string(body), "--agent-hook --tool claude") {
+		t.Fatalf("target did not get the entry:\n%s", body)
+	}
+	if err := Disconnect(home, dataDir, ToolClaude); err != nil {
+		t.Fatal(err)
+	}
+	if body, _ := os.ReadFile(target); string(body) != user {
+		t.Fatalf("target after off:\n%s", body)
+	}
+}
+
+// TestDroidWritesWhereDroidReads: with ~/.factory/hooks.json present Droid
+// ignores settings.json hooks, so the entry goes into hooks.json (keyed by
+// event at its root); without it, into settings.json, and hooks.json is
+// never created.
+func TestDroidWritesWhereDroidReads(t *testing.T) {
+	home, dataDir := testHome(t), testDataDir(t)
+	settings := filepath.Join(home, ".factory", "settings.json")
+	writeFile(t, settings, `{"hooks": {}}`)
+	if err := Connect(home, dataDir, exePath, ToolFactory); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".factory", "hooks.json")); !os.IsNotExist(err) {
+		t.Fatal("hooks.json was created; it would hide settings.json hooks")
+	}
+	if body, _ := os.ReadFile(settings); !strings.Contains(string(body), "--agent-hook --tool droid") {
+		t.Fatalf("settings.json:\n%s", body)
+	}
+	if err := Disconnect(home, dataDir, ToolFactory); err != nil {
+		t.Fatal(err)
+	}
+
+	hooks := filepath.Join(home, ".factory", "hooks.json")
+	user := `{"Stop": [{"hooks": [{"type": "command", "command": "say done"}]}]}`
+	writeFile(t, hooks, user)
+	if err := Connect(home, dataDir, exePath, ToolFactory); err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string][]struct {
+		Hooks []struct {
+			Command string `json:"command"`
+		} `json:"hooks"`
+	}
+	body, _ := os.ReadFile(hooks)
+	if err := json.Unmarshal(body, &doc); err != nil {
+		t.Fatalf("%v\n%s", err, body)
+	}
+	if len(doc["Stop"]) != 2 || len(doc["UserPromptSubmit"]) != 1 {
+		t.Fatalf("hooks.json:\n%s", body)
+	}
+	if st, _ := Status(home, ToolFactory); st != StateInjected {
+		t.Fatalf("status = %v", st)
+	}
+	if err := Disconnect(home, dataDir, ToolFactory); err != nil {
+		t.Fatal(err)
+	}
+	if after, _ := os.ReadFile(hooks); string(after) != user {
+		t.Fatalf("hooks.json after off:\n%s", after)
+	}
+}
+
+// TestOffKeepsAUserMatcherGroup: a hook group that carries the user's own
+// key keeps it when Rakko's command leaves.
+func TestOffKeepsAUserMatcherGroup(t *testing.T) {
+	home, dataDir := testHome(t), testDataDir(t)
+	path := ConfigPath(home, ToolClaude)
+	cmd := HookCommand(exePath, ToolClaude, "")
+	raw, _ := json.Marshal(cmd)
+	writeFile(t, path, `{"hooks": {"Stop": [{"matcher": "x", "hooks": [{"type": "command", "command": `+string(raw)+`}]}]}}`)
+	if err := Disconnect(home, dataDir, ToolClaude); err != nil {
+		t.Fatal(err)
+	}
+	if body, _ := os.ReadFile(path); !strings.Contains(string(body), `"matcher": "x"`) || strings.Contains(string(body), "--agent-hook") {
+		t.Fatalf("after off:\n%s", body)
+	}
+}
+
+// TestForwarderDropsBorrowedAndInterrupted: Grok runs Cursor's entries too,
+// and Auggie's Stop also fires on an interrupt; neither is announced.
+func TestForwarderDropsBorrowedAndInterrupted(t *testing.T) {
+	dataDir := testDataDir(t)
+	got := make(chan Event, 4)
+	srv, err := Listen(dataDir, func(ev Event) { got <- ev })
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Close()
+	RunHookCLI([]string{"--agent-hook", "--tool", "auggie", "--data-dir", dataDir},
+		strings.NewReader(`{"conversation_id":"a1","hook_event_name":"Stop","agent_stop_cause":"interrupted"}`))
+	t.Setenv("GROK_SESSION_ID", "g1")
+	RunHookCLI([]string{"--agent-hook", "--tool", "cursor", "--data-dir", dataDir},
+		strings.NewReader(`{"conversation_id":"g1","hook_event_name":"stop","status":"completed"}`))
+	select {
+	case ev := <-got:
+		t.Fatalf("announced: %+v", ev)
+	case <-time.After(400 * time.Millisecond):
+	}
+}
