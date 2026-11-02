@@ -35,6 +35,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/i18n"
 
+	"shelf/internal/agentnotify"
 	"shelf/locales"
 )
 
@@ -72,8 +73,8 @@ const (
 	liveHoldHeadset  = 3500 * time.Millisecond
 	liveHoldUnplug   = 2 * time.Second
 	liveHoldDownload = 4 * time.Second
-	// liveHoldAgent is the reading time of an agent completion: the task
-	// line and 搞定了, five seconds as the plan asks.
+	// liveHoldAgent is the reading time of an agent completion card: the
+	// tool and its task, five seconds as the plan asks.
 	liveHoldAgent = 5 * time.Second
 	// liveHoldDownloadMax bounds a batch: every further file in the same
 	// notice adds a second to read, up to this.
@@ -96,8 +97,8 @@ const (
 	liveHeadset
 	liveHeadsetOff
 	liveDownloadDone
-	// liveAgentDone is an agent harness finishing a turn: agent, task and
-	// 搞定了 in the capsule under the notch.
+	// liveAgentDone is an agent harness finishing a turn: the two-line card
+	// under the notch (agentCard).
 	liveAgentDone
 )
 
@@ -117,9 +118,10 @@ type liveEvent struct {
 	// one scan's completions share one event.
 	paths []string
 	// agent and task describe an agent completion: the tool's product name
-	// and the session's latest task.
+	// and the session's latest task; tool picks its mark.
 	agent string
 	task  string
+	tool  agentnotify.Tool
 	token string // device UID: a late battery reading enriches this event
 	width float32
 	// hold is how long the event stays once it reaches the screen;
@@ -344,6 +346,9 @@ func (a *shelf) liveShape(ev liveEvent) (w, h float32) {
 	baseW, baseH := a.anchorSize()
 	if ev.kind.wings() {
 		return baseW + 2*float32(a.liveWingW()), baseH + npWingsBody
+	}
+	if ev.kind == liveAgentDone {
+		return a.agentCardSize()
 	}
 	w = ev.width
 	if w <= 0 {

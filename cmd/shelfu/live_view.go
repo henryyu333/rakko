@@ -182,6 +182,17 @@ func liveHeadsetIcon(label string) (*ui.SVG, float32) {
 // into the tray and opens the tray page.
 func (a *shelf) liveCapsule(c *ui.Context, shellW, shellH, k float32, ev liveEvent) {
 	l := loc(c)
+	if ev.kind == liveAgentDone {
+		clip := ui.Column(c.Key("live-capsule")).Width(shellW).Height(shellH).Clip().
+			AlignItems(ui.Center).Margin(float32(a.sheetTop()), 0, 0, 0)
+		clip.Children(func() {
+			// The card has said what it came to say; a click folds it.
+			if a.agentCard(c, shellW, shellH, k, ev).Clicked() {
+				a.clearLive()
+			}
+		})
+		return
+	}
 	w := ev.width
 	if w <= 0 {
 		baseW, _ := a.anchorSize()
@@ -223,21 +234,10 @@ func (a *shelf) liveCapsule(c *ui.Context, shellW, shellH, k float32, ev liveEve
 				ui.Text(c, middleEllipsis(c, ev.label, w-13-2*fbPadX-verbW-7-fbGap*3-7)).
 					SingleLine().FontSize(12).FontWeight(500).TextColor(ink2)
 				ui.Box(c.Key("live-done-dot")).Size(7, 7).Radius(3.5).Background(liveGreen)
-			case liveAgentDone:
-				ui.Text(c, ev.agent).SingleLine().FontSize(12).FontWeight(600).TextColor(ink)
-				ui.Text(c, "·").SingleLine().FontSize(12).FontWeight(500).TextColor(ink3)
-				ui.Text(c, ev.task).SingleLine().FontSize(12).FontWeight(500).TextColor(ink2).
-					Shrink(1).MinWidth(0).Ellipsis("…")
-				ui.Text(c, "·").SingleLine().FontSize(12).FontWeight(500).TextColor(ink3)
-				ui.Text(c, l.LiveAgentDone()).SingleLine().FontSize(12).FontWeight(500).TextColor(ink2)
 			}
 		})
-		switch {
-		case ev.kind == liveDownloadDone && body.Clicked():
+		if ev.kind == liveDownloadDone && body.Clicked() {
 			a.openDownloaded(ev)
-		case ev.kind == liveAgentDone && body.Clicked():
-			// The capsule has said what it came to say; a click folds it.
-			a.clearLive()
 		}
 	})
 }

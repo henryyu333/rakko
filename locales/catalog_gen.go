@@ -5753,11 +5753,11 @@ func (msgs Messages) LiveStatusLow(pct int) string {
 	return Catalog.Format(msgs.locale, "liveStatusLow", map[string]any{"pct": pct})
 }
 
-// LiveAgentDone says "搞定了"
+// LiveAgentDone says "完成"
 // in the language the app shows.
 func LiveAgentDone() string { return In(i18n.Locale()).LiveAgentDone() }
 
-// LiveAgentDone says "搞定了"
+// LiveAgentDone says "完成"
 // in the language of msgs.
 func (msgs Messages) LiveAgentDone() string {
 	return Catalog.Format(msgs.locale, "liveAgentDone", nil)
@@ -5773,13 +5773,13 @@ func (msgs Messages) LiveAgentTaskFallback() string {
 	return Catalog.Format(msgs.locale, "liveAgentTaskFallback", nil)
 }
 
-// LiveStatusAgentDone says "{agent} · {task} · 搞定了"
+// LiveStatusAgentDone says "{agent} · {task} · 完成"
 // in the language the app shows.
 func LiveStatusAgentDone(agent string, task string) string {
 	return In(i18n.Locale()).LiveStatusAgentDone(agent, task)
 }
 
-// LiveStatusAgentDone says "{agent} · {task} · 搞定了"
+// LiveStatusAgentDone says "{agent} · {task} · 完成"
 // in the language of msgs.
 func (msgs Messages) LiveStatusAgentDone(agent string, task string) string {
 	return Catalog.Format(msgs.locale, "liveStatusAgentDone", map[string]any{"agent": agent, "task": task})

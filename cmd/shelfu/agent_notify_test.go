@@ -93,8 +93,8 @@ func TestAgentCompletionCapsule(t *testing.T) {
 	if ev.agent != "Claude Code" || ev.task != "Fix the failing test" {
 		t.Fatalf("capsule names %q / %q", ev.agent, ev.task)
 	}
-	if line := ev.statusLine(); !strings.Contains(line, "搞定了") || !strings.Contains(line, "Claude Code") {
-		t.Fatalf("status line = %q", line)
+	if ev.tool != agentnotify.ToolClaude {
+		t.Fatalf("capsule tool = %q, want claude for its mark", ev.tool)
 	}
 	if w, _ := a.liveShape(ev); w <= 0 {
 		t.Fatalf("capsule width = %v", w)

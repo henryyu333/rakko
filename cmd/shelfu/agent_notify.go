@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
 
 	"shelf/internal/agentnotify"
 )
@@ -174,8 +175,69 @@ func (a *shelf) postAgentDone(tool agentnotify.Tool, task string) {
 	if task == "" {
 		task = a.appLoc().LiveAgentTaskFallback()
 	}
-	ev := liveEvent{kind: liveAgentDone, agent: tool.Name(), task: task}
+	ev := liveEvent{kind: liveAgentDone, agent: tool.Name(), task: task, tool: tool}
 	a.pushLive(ev, liveHoldAgent, time.Now())
+}
+
+// The agent completion card (design/explore/agent-done.html, option B): a
+// first line with the tool's mark, its name and a green 完成, and the task
+// on a second line under the name.
+const (
+	agentCardW     = 360
+	agentCardBody  = 46 // both lines under the notch band
+	agentCardPadX  = 16
+	agentCardIsleH = 58 // the island's floating card
+	agentCardCheck = 16
+)
+
+// agentCardSize is the shell the card needs.
+func (a *shelf) agentCardSize() (w, h float32) {
+	baseW, _ := a.anchorSize()
+	w = max(agentCardW, baseW+60)
+	if a.island {
+		return w, agentCardIsleH
+	}
+	return w, float32(max(32, a.notchH) + agentCardBody)
+}
+
+// agentCard draws the card's two lines inside the shell's lower band.
+func (a *shelf) agentCard(c *ui.Context, w, h float32, k float32, ev liveEvent) ui.Element {
+	l := loc(c)
+	top := h - agentCardBody
+	if a.island {
+		top = (h - (agentCardBody - 8)) / 2
+	}
+	card := ui.Column(c.Key("live-agent-card")).Width(w).Height(h).
+		Padding(top, agentCardPadX, 0, agentCardPadX).Gap(5).
+		Opacity(min(max(k*k, 0), 1)).Label(ev.statusLineIn(l))
+	card.Children(func() {
+		ui.Row(c.Key("live-agent-l1")).FillWidth().Gap(9).AlignItems(ui.Center).Children(func() {
+			logo, tint, mark := agentLogo(ev.tool)
+			settingsMark(c, logo, tint, mark)
+			ui.Text(c, ev.agent).SingleLine().FontSize(13).FontWeight(600).TextColor(ink).
+				Shrink(1).MinWidth(0).Ellipsis("…")
+			ui.Box(c).Grow(1)
+			ui.Row(c.Key("live-agent-done")).Gap(6).AlignItems(ui.Center).Children(func() {
+				agentCheck(c)
+				ui.Text(c, l.LiveAgentDone()).SingleLine().FontSize(12).FontWeight(600).TextColor(liveGreen)
+			})
+		})
+		ui.Text(c, ev.task).SingleLine().FontSize(12).FontWeight(500).TextColor(ink2).
+			Margin(0, 0, 0, settingsRowMark+9).Shrink(1).MinWidth(0).Ellipsis("…")
+	})
+	return card
+}
+
+// agentCheck is the green disc with a dark tick.
+func agentCheck(c *ui.Context) {
+	ui.Box(c.Key("live-agent-check")).Size(agentCardCheck, agentCardCheck).Draw(func(p *ui.Painter, r ui.Rect) {
+		var disc ui.Path
+		disc.Circle(r.X+r.W/2, r.Y+r.H/2, r.W/2)
+		p.FillPath(&disc, liveGreen)
+		var tick ui.Path
+		tick.MoveTo(r.X+r.W*0.27, r.Y+r.H*0.52).LineTo(r.X+r.W*0.44, r.Y+r.H*0.69).LineTo(r.X+r.W*0.74, r.Y+r.H*0.34)
+		p.StrokePath(&tick, 2, ui.RGB(0, 0, 0))
+	})
 }
 
 // setAgentNotify saves the switch and applies it: on starts the socket and
