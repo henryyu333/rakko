@@ -47,8 +47,9 @@ type spec struct {
 	tool Tool
 	name string
 	kind Kind
-	// detect is the directory whose presence says the tool is installed.
-	detect func(home string) string
+	// detect lists the paths whose presence says the tool is installed for
+	// this user: any one of them is enough.
+	detect func(home string) []string
 	// config is the file Rakko writes: the hooks document, or the module.
 	config func(home string) string
 	// events are the hook events registered in a KindHooks document, and
@@ -73,7 +74,7 @@ var specs = []spec{
 		tool:   ToolClaude,
 		name:   "Claude Code",
 		kind:   KindHooks,
-		detect: func(home string) string { return join(home, ".claude") },
+		detect: func(home string) []string { return []string{join(home, ".claude")} },
 		config: func(home string) string { return join(home, ".claude", "settings.json") },
 		events: []string{"UserPromptSubmit", "Stop"},
 	},
@@ -81,7 +82,7 @@ var specs = []spec{
 		tool:   ToolCodex,
 		name:   "Codex",
 		kind:   KindHooks,
-		detect: func(home string) string { return join(home, ".codex") },
+		detect: func(home string) []string { return []string{join(home, ".codex")} },
 		config: func(home string) string { return join(home, ".codex", "hooks.json") },
 		events: []string{"UserPromptSubmit", "Stop"},
 	},
@@ -89,7 +90,7 @@ var specs = []spec{
 		tool:   ToolOpencode,
 		name:   "opencode",
 		kind:   KindModule,
-		detect: func(home string) string { return join(home, ".config", "opencode") },
+		detect: func(home string) []string { return []string{join(home, ".config", "opencode")} },
 		config: func(home string) string {
 			return join(home, ".config", "opencode", "plugins", "rakko-agent-completion.js")
 		},
@@ -99,7 +100,7 @@ var specs = []spec{
 		tool:   ToolOmp,
 		name:   "omp",
 		kind:   KindModule,
-		detect: func(home string) string { return join(home, ".omp", "agent") },
+		detect: func(home string) []string { return []string{join(home, ".omp", "agent")} },
 		config: func(home string) string {
 			return join(home, ".omp", "agent", "hooks", "pre", "rakko-agent-completion.ts")
 		},
@@ -109,17 +110,27 @@ var specs = []spec{
 		tool:   ToolPi,
 		name:   "pi",
 		kind:   KindModule,
-		detect: func(home string) string { return join(home, ".pi", "agent") },
+		detect: func(home string) []string { return []string{join(home, ".pi", "agent")} },
 		config: func(home string) string {
 			return join(home, ".pi", "agent", "extensions", "rakko-agent-completion.ts")
 		},
 		module: extensionModule,
 	},
 	{
-		tool:   ToolGemini,
-		name:   "Gemini CLI",
-		kind:   KindHooks,
-		detect: func(home string) string { return join(home, ".gemini") },
+		tool: ToolGemini,
+		name: "Gemini CLI",
+		kind: KindHooks,
+		// ~/.gemini alone is not Gemini CLI: Antigravity and other Google
+		// tools keep their own files there too. These are what Gemini CLI
+		// itself writes on first run and sign-in.
+		detect: func(home string) []string {
+			return []string{
+				join(home, ".gemini", "installation_id"),
+				join(home, ".gemini", "google_accounts.json"),
+				join(home, ".gemini", "oauth_creds.json"),
+				join(home, ".gemini", "tmp"),
+			}
+		},
 		config: func(home string) string { return join(home, ".gemini", "settings.json") },
 		events: []string{"BeforeAgent", "AfterAgent"},
 		// Gemini CLI reads timeout in milliseconds.
@@ -129,7 +140,7 @@ var specs = []spec{
 		tool:   ToolGrok,
 		name:   "Grok",
 		kind:   KindHooks,
-		detect: func(home string) string { return join(home, ".grok") },
+		detect: func(home string) []string { return []string{join(home, ".grok")} },
 		config: func(home string) string { return join(home, ".grok", "hooks", "rakko.json") },
 		events: []string{"UserPromptSubmit", "Stop"},
 	},
@@ -168,16 +179,20 @@ func (t Tool) Valid() bool {
 	return ok
 }
 
-// Installed reports whether the tool looks installed for this home: its
-// configuration directory exists. Only the directory is looked at, never
-// the files inside it.
+// Installed reports whether the tool looks installed for this user's home:
+// one of its own paths exists there. Only presence is looked at, never the
+// files' contents, so the answer is per machine and per user.
 func Installed(home string, tool Tool) bool {
 	s, ok := specFor(tool)
 	if !ok || home == "" {
 		return false
 	}
-	fi, err := os.Stat(s.detect(home))
-	return err == nil && fi.IsDir()
+	for _, p := range s.detect(home) {
+		if _, err := os.Stat(p); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // ConfigPath is the file Rakko writes for a tool.

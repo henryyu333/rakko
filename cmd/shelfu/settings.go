@@ -575,18 +575,27 @@ func settingsToggleRowCap(c *ui.Context, key, label, caption string, captionColo
 
 // settingsToggleRowMark is settingsToggleRow with the row's own mark before
 // the title and caption: the quota list, whose tools are recognised by their
-// logos. mark is the icon box in points that shows the artwork at
-// settingsRowMark; the box is centred in a settingsRowMark slot, so marks
-// whose official SVGs pad their viewBox differently still read at one size
-// and leave both rows' text on one left edge.
+// logos.
 func settingsToggleRowMark(c *ui.Context, key, label, caption string, logo *ui.SVG, color ui.Color, mark float32, on bool, apply func(bool)) {
 	settingsSwitchRow(c, key, label, caption, ink3, func() {
-		slot := ui.Box(c.Key("mark")).Size(settingsRowMark, settingsRowMark)
-		slot.Children(func() {
-			off := (settingsRowMark - mark) / 2
-			ui.Icon(c, logo).Size(mark, mark).TextColor(color).Absolute().Left(off).Top(off)
-		})
+		settingsMark(c, logo, color, mark)
 	}, on, apply)
+}
+
+// settingsMark draws a row's lead logo. mark is the icon box in points that
+// shows the artwork at settingsRowMark; the box is centred in a
+// settingsRowMark slot, so marks whose official SVGs pad their viewBox
+// differently still read at one size and leave every row's text on one
+// left edge.
+func settingsMark(c *ui.Context, logo *ui.SVG, color ui.Color, mark float32) {
+	slot := ui.Box(c.Key("mark")).Size(settingsRowMark, settingsRowMark)
+	slot.Children(func() {
+		if logo == nil {
+			return
+		}
+		off := (settingsRowMark - mark) / 2
+		ui.Icon(c, logo).Size(mark, mark).TextColor(color).Absolute().Left(off).Top(off)
+	})
 }
 
 // settingsSwitchRow is the switch row itself: lead draws the row's mark, when

@@ -370,6 +370,8 @@ func (a *shelf) settingsAgentGroup(c *ui.Context) {
 				}
 			}
 			settingsRowLine(c, "agent-"+string(tool)).Children(func() {
+				logo, tint, mark := agentLogo(tool)
+				settingsMark(c, logo, tint, mark)
 				settingsRowText(c, tool.Name(), caption)
 				ui.Text(c, status).SingleLine().FontSize(11.5).FontWeight(500).TextColor(color)
 			})

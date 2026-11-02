@@ -378,3 +378,27 @@ func TestBuildRequestFallsBackToPid(t *testing.T) {
 		t.Fatalf("session = %q, want the harness pid", ev.Session)
 	}
 }
+
+// TestGeminiNeedsItsOwnFiles: a ~/.gemini that only Antigravity or another
+// Google tool wrote is not Gemini CLI, so its row must not appear; any file
+// Gemini CLI writes on first run makes it installed.
+func TestGeminiNeedsItsOwnFiles(t *testing.T) {
+	home := testHome(t)
+	for _, p := range []string{".gemini/antigravity-cli", ".gemini/config"} {
+		if err := os.MkdirAll(filepath.Join(home, p), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(home, ".gemini", "settings.json"), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if Installed(home, ToolGemini) {
+		t.Fatal("a ~/.gemini without Gemini CLI's own files counted as installed")
+	}
+	if err := os.WriteFile(filepath.Join(home, ".gemini", "installation_id"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if !Installed(home, ToolGemini) {
+		t.Fatal("Gemini CLI's installation_id did not count as installed")
+	}
+}

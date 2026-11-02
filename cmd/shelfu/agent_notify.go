@@ -195,10 +195,10 @@ func (a *shelf) agentApply(on bool) {
 	f := a.agentFeature()
 	if !on {
 		f.stop()
+		// Every tool, not only the detected ones: an entry written while a
+		// tool looked installed must still go when it no longer does.
+		// Disconnect leaves files without Rakko's marker untouched.
 		for _, tool := range agentnotify.Tools() {
-			if !agentnotify.Installed(f.home, tool) {
-				continue
-			}
 			_ = agentnotify.Disconnect(f.home, f.dir, tool)
 		}
 		f.refresh()
