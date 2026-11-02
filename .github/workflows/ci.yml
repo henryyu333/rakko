@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    # Apple Silicon runner: the app only targets darwin/arm64.
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      # Builds the Now Playing helper bundle the mac package loads.
+      - run: go generate ./...
+      - run: go build ./...
+      - run: go vet ./...
+      # Window smoke tests skip without their opt-in variable; they need a
+      # real desktop and run locally before a release.
+      - run: go test -count=1 ./...
