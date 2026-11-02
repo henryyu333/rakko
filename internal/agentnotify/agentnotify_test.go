@@ -136,6 +136,24 @@ func TestConnectClaudePreservesUserFile(t *testing.T) {
 	}
 }
 
+func TestHookTimeoutsUseEachToolUnit(t *testing.T) {
+	home := testHome(t)
+	dataDir := testDataDir(t)
+	if err := Connect(home, dataDir, exePath, ToolClaude); err != nil {
+		t.Fatal(err)
+	}
+	if body := readFile(t, ConfigPath(home, ToolClaude)); !strings.Contains(body, `"timeout": 5`) {
+		t.Fatalf("Claude Code's timeout is not 5 seconds:\n%s", body)
+	}
+	if err := Connect(home, dataDir, exePath, ToolGemini); err != nil {
+		t.Fatal(err)
+	}
+	// Gemini CLI reads the number as milliseconds.
+	if body := readFile(t, ConfigPath(home, ToolGemini)); !strings.Contains(body, `"timeout": 5000`) {
+		t.Fatalf("Gemini CLI's timeout is not 5000 ms:\n%s", body)
+	}
+}
+
 func TestConnectCreatesFileAndRemovesIt(t *testing.T) {
 	home := testHome(t)
 	dataDir := testDataDir(t)

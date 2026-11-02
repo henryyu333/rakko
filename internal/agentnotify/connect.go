@@ -170,8 +170,12 @@ func connectHooks(s spec, home, dataDir, exe string) error {
 		return fmt.Errorf("agentnotify: %s exists and was not written by Rakko; left alone", path)
 	}
 	changed := false
+	timeout := s.timeout
+	if timeout == 0 {
+		timeout = hookTimeout
+	}
 	for _, ev := range s.events {
-		added, aerr := addHook(doc, s.tool, exe, dataDir, ev)
+		added, aerr := addHook(doc, s.tool, exe, dataDir, ev, timeout)
 		if aerr != nil {
 			return aerr
 		}
@@ -278,7 +282,7 @@ func removeModule(s spec, home, dataDir string) error {
 
 // addHook appends Rakko's entry for ev unless it is already there. Every
 // edit re-reads the tree, because a splice replaces the parsed document.
-func addHook(doc *jsonDoc, tool Tool, exe, dataDir, ev string) (bool, error) {
+func addHook(doc *jsonDoc, tool Tool, exe, dataDir, ev string, timeout int) (bool, error) {
 	hooks, _ := doc.root.lookup("hooks")
 	if hooks == nil {
 		if err := doc.appendMember(doc.root, "hooks", func(string) string { return "{}" }); err != nil {
@@ -313,7 +317,7 @@ func addHook(doc *jsonDoc, tool Tool, exe, dataDir, ev string) (bool, error) {
 			deep + "{\n" +
 			deep + doc.indent + `"type": ` + quoteJSON("command") + ",\n" +
 			deep + doc.indent + `"command": ` + quoteJSON(command) + ",\n" +
-			deep + doc.indent + fmt.Sprintf(`"timeout": %d`, hookTimeout) + "\n" +
+			deep + doc.indent + fmt.Sprintf(`"timeout": %d`, timeout) + "\n" +
 			deep + "}\n" + inner + "]\n" + indent + "}"
 	}
 	return true, doc.appendItem(arr, render)

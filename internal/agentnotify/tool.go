@@ -54,6 +54,10 @@ type spec struct {
 	// events are the hook events registered in a KindHooks document, and
 	// also the event names the module reports (in the module itself).
 	events []string
+	// timeout is the number written into the hook entry in that tool's
+	// unit: seconds for Claude Code, Codex and Grok, milliseconds for
+	// Gemini CLI. Zero means hookTimeout (seconds).
+	timeout int
 	// module is the KindModule source, keyed by tool.
 	module string
 }
@@ -118,6 +122,8 @@ var specs = []spec{
 		detect: func(home string) string { return join(home, ".gemini") },
 		config: func(home string) string { return join(home, ".gemini", "settings.json") },
 		events: []string{"BeforeAgent", "AfterAgent"},
+		// Gemini CLI reads timeout in milliseconds.
+		timeout: 5000,
 	},
 	{
 		tool:   ToolGrok,
