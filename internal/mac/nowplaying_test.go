@@ -395,11 +395,11 @@ func TestCommandName(t *testing.T) {
 
 // TestLiveNowPlayingProbe reports what the system is playing right now,
 // read through the Apple-signed perl host. It is read-only (no commands)
-// and only runs with SHELF_NP_PROBE=1, since it starts a real process and
+// and only runs with RAKKO_NP_PROBE=1, since it starts a real process and
 // reflects the user's live media state.
 func TestLiveNowPlayingProbe(t *testing.T) {
-	if os.Getenv("SHELF_NP_PROBE") != "1" {
-		t.Skip("set SHELF_NP_PROBE=1 to probe the live Now Playing state")
+	if os.Getenv("RAKKO_NP_PROBE") != "1" {
+		t.Skip("set RAKKO_NP_PROBE=1 to probe the live Now Playing state")
 	}
 	bundle, err := helperBundlePath()
 	if err != nil {

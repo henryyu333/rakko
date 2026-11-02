@@ -37,7 +37,7 @@ import (
 
 const (
 	// npHelperBundle is the bundle inside the app's resource directory.
-	npHelperBundle = "ShelfUNowPlaying.bundle"
+	npHelperBundle = "RakkoNowPlaying.bundle"
 	// npHelperEntry is the C function the perl host calls.
 	npHelperEntry = "shelf_np_run"
 	// npPerlScript loads the bundle and calls shelf_np_run; the bundle

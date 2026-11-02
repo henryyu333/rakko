@@ -1,6 +1,6 @@
-// Command npbuild compiles the ShelfU now-playing helper bundle from the
+// Command npbuild compiles the Rakko now-playing helper bundle from the
 // C source next to this file and places it where `mygo build` picks it
-// up: resources/darwin-arm64/ShelfUNowPlaying.bundle. `mygo build` signs
+// up: resources/darwin-arm64/RakkoNowPlaying.bundle. `mygo build` signs
 // the bundle as part of the app (mygo signs Mach-O code inside
 // Contents/Resources).
 //
@@ -61,7 +61,7 @@ func build() error {
 	if _, err := os.Stat(src); err != nil {
 		return fmt.Errorf("helper source: %w", err)
 	}
-	out := filepath.Join(root, "resources", "darwin-arm64", "ShelfUNowPlaying.bundle")
+	out := filepath.Join(root, "resources", "darwin-arm64", "RakkoNowPlaying.bundle")
 	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
 		return err
 	}

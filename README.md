@@ -265,7 +265,7 @@ The packaged `Rakko.app` and a `.dmg` land in a `darwin-arm64` subfolder under t
 
 | Path | Contents |
 | --- | --- |
-| `cmd/shelfu/` | Application entry point, native interface and application tests |
+| `cmd/rakko/` | Application entry point, native interface and application tests |
 | `internal/` | macOS integration, storage, settings, layout, notes, agent hooks, document export and AI usage modules |
 | `resources/` | Third-party notices and generated native helper |
 | `docs/` | User manual |
@@ -522,7 +522,7 @@ go run github.com/egoist/mygo/cmd/mygo build
 
 | 路径 | 内容 |
 | --- | --- |
-| `cmd/shelfu/` | 应用入口、原生界面和应用测试 |
+| `cmd/rakko/` | 应用入口、原生界面和应用测试 |
 | `internal/` | macOS 集成、存储、设置、布局、便利贴、agent hook、文档导出和 AI 用量模块 |
 | `resources/` | 第三方声明和构建生成的原生辅助模块 |
 | `docs/` | 使用手册 |

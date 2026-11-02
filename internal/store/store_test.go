@@ -865,7 +865,7 @@ func TestLockedSecondInstanceCannotOverwrite(t *testing.T) {
 
 // lockHelperEnv marks the re-executed test binary that only opens the
 // store to hold the directory lock for TestExclusiveLockAcrossProcesses.
-const lockHelperEnv = "SHELF_TEST_LOCK_HELPER_ROOT"
+const lockHelperEnv = "RAKKO_TEST_LOCK_HELPER_ROOT"
 
 func TestStoreLockHelperProcess(t *testing.T) {
 	root := os.Getenv(lockHelperEnv)

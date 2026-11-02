@@ -106,10 +106,10 @@ func TestDragFilesFromEmptyBoard(t *testing.T) {
 // learns whether its parse path survives the live board; the board is
 // cleared afterwards so no stale test content outlives the run. Off by
 // default because it mutates a shared system object; run with
-// SHELF_DRAGFILES_LIVE=1.
+// RAKKO_DRAGFILES_LIVE=1.
 func TestDragFilesOnLiveDragBoard(t *testing.T) {
-	if os.Getenv("SHELF_DRAGFILES_LIVE") != "1" {
-		t.Skip("set SHELF_DRAGFILES_LIVE=1 to touch the real drag pasteboard")
+	if os.Getenv("RAKKO_DRAGFILES_LIVE") != "1" {
+		t.Skip("set RAKKO_DRAGFILES_LIVE=1 to touch the real drag pasteboard")
 	}
 	if err := Init(); err != nil {
 		t.Fatal(err)

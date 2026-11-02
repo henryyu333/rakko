@@ -1,4 +1,4 @@
-module shelf
+module rakko
 
 go 1.27.3
 

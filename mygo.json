@@ -8,7 +8,7 @@
     "github": "henryyu333/rakko"
   },
   "i18n": { "dir": "locales", "source": "zh-Hans" },
-  "main": "./cmd/shelfu",
+  "main": "./cmd/rakko",
   "out": "dist.noindex",
   "buildCommand": "go generate ./...",
   "macos": {

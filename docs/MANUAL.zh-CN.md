@@ -284,7 +284,7 @@ Agent 完成提醒不增加任何流量：那些 hook 只在本机运行 Rakko �
 
 灵敏度（投放带、悬停余量、离开后多久收起）仍是编译期常量，要改需要改源码后自己重新打包（需要 Go 1.27 或以上以及 Xcode Command Line Tools）。
 
-1. 下载本项目源码，用代码编辑器打开 `cmd/shelfu/config.go`。
+1. 下载本项目源码，用代码编辑器打开 `cmd/rakko/config.go`。
 2. 可以调整：`dropBandPadX`（投放带相对刘海的水平外扩，默认 24pt）、`guardDropPad`（投放带比菜单栏向下多出的高度，默认 16pt）、`notchHoverPadX` / `notchHoverPadY`（空手悬停刘海的感应余量，8 × 4 pt）、`edgeLeaveDelay`（离开后多久收起，350 毫秒）。
 3. 在终端进入项目目录，运行：
 
