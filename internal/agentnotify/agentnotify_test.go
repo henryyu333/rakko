@@ -136,6 +136,28 @@ func TestConnectClaudePreservesUserFile(t *testing.T) {
 	}
 }
 
+func TestBackupHappensOnce(t *testing.T) {
+	home := testHome(t)
+	dataDir := testDataDir(t)
+	path := ConfigPath(home, ToolClaude)
+	writeFile(t, path, "{\n  \"theme\": \"dark\"\n}\n")
+	for range 2 {
+		if err := Connect(home, dataDir, exePath, ToolClaude); err != nil {
+			t.Fatal(err)
+		}
+	}
+	matches, err := filepath.Glob(path + ".rakko-backup-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(matches) != 1 {
+		t.Fatalf("%d backups for one file", len(matches))
+	}
+	if body := readFile(t, matches[0]); body != "{\n  \"theme\": \"dark\"\n}\n" {
+		t.Fatalf("the backup is not what the user had: %q", body)
+	}
+}
+
 func TestHookTimeoutsUseEachToolUnit(t *testing.T) {
 	home := testHome(t)
 	dataDir := testDataDir(t)
@@ -299,6 +321,11 @@ func TestForwarderDeliversToSocket(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer srv.Close()
+	if fi, err := os.Stat(filepath.Join(dataDir, SocketName)); err != nil {
+		t.Fatal(err)
+	} else if fi.Mode().Perm() != 0o600 {
+		t.Fatalf("socket mode = %v, want 0600", fi.Mode().Perm())
+	}
 	payload := `{"session_id":"sess-1","hook_event_name":"UserPromptSubmit","cwd":"/tmp/proj","prompt":"Fix the tests\nsecond line"}`
 	if !RunHookCLI([]string{"--agent-hook", "--tool", "codex", "--data-dir", dataDir}, strings.NewReader(payload)) {
 		t.Fatal("not handled")
