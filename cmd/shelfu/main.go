@@ -14,6 +14,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"shelf/internal/agentnotify"
 	"shelf/internal/aiusage"
 	"shelf/internal/mac"
 	"shelf/internal/settings"
@@ -31,6 +32,12 @@ func main() {
 		if err := mygo.App.Run(); err != nil {
 			log.Fatal(err)
 		}
+		return
+	}
+	// A tool's hook runs this same binary with --agent-hook: it forwards one
+	// event and exits before the app touches its data directory, its
+	// bundle, or any window.
+	if agentnotify.RunHookCLI(os.Args[1:], os.Stdin) {
 		return
 	}
 	// A bundle an in-app update left at ShelfU.app or Shelf.app moves to
@@ -120,6 +127,9 @@ func main() {
 			a.note.watch = nil
 		}
 		a.closePet()
+		if a.agent != nil {
+			a.agent.stop()
+		}
 		close(a.stop)
 		a.stopDragGuard()
 		a.endSnapSession(true)
@@ -328,6 +338,7 @@ func (a *shelf) ready(show bool) {
 	// The desktop otter comes out after the pins: it stands among them on
 	// the same floating level, outside the dock's and the panel's zones.
 	a.petStart()
+	a.agentStartEnabled()
 	a.startMonitoring()
 	log.Print("Rakko ready")
 }

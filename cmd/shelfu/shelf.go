@@ -53,6 +53,7 @@ type shelf struct {
 	live                                                        liveQueue             // transient charging / headphone / download-done events
 	conv                                                        *converter            // image conversion jobs; nil until the app starts
 	usage                                                       *usageFeature         // nil until the AI usage page registers itself
+	agent                                                       *agentNotifyFeature   // nil until the Agent 完成提醒 switch or a hook event needs it
 	clip                                                        *clipboardModule      // nil until monitoring starts
 	awake                                                       *awakeModule          // nil until the app starts
 	vol                                                         volumeControl         // system output volume; nil = CoreAudio

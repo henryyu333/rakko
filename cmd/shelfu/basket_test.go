@@ -21,6 +21,14 @@ import (
 // (CGWindowListCopyWindowInfo) and screenshotted. The test instance uses a
 // temporary data dir and never touches ~/Library/Application Support/Rakko.
 func TestMain(m *testing.M) {
+	// The agent-notify code reads a home directory; tests get a temporary
+	// one so no test can see the real ~/.claude, ~/.codex or any other
+	// tool configuration.
+	home, err := os.MkdirTemp("", "shelf-test-home-")
+	if err != nil {
+		panic(err)
+	}
+	agentNotifyHome = func() (string, error) { return home, nil }
 	if os.Getenv("SHELF_BASKET_SMOKE") != "1" {
 		os.Exit(m.Run())
 	}

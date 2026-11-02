@@ -72,6 +72,9 @@ const (
 	liveHoldHeadset  = 3500 * time.Millisecond
 	liveHoldUnplug   = 2 * time.Second
 	liveHoldDownload = 4 * time.Second
+	// liveHoldAgent is the reading time of an agent completion: the task
+	// line and 搞定了, five seconds as the plan asks.
+	liveHoldAgent = 5 * time.Second
 	// liveHoldDownloadMax bounds a batch: every further file in the same
 	// notice adds a second to read, up to this.
 	liveHoldDownloadMax = 8 * time.Second
@@ -93,6 +96,9 @@ const (
 	liveHeadset
 	liveHeadsetOff
 	liveDownloadDone
+	// liveAgentDone is an agent harness finishing a turn: agent, task and
+	// 搞定了 in the capsule under the notch.
+	liveAgentDone
 )
 
 // wings reports whether the event uses the wide two-wing shape instead of
@@ -110,6 +116,10 @@ type liveEvent struct {
 	// paths are the downloaded files, for the completion capsule's click:
 	// one scan's completions share one event.
 	paths []string
+	// agent and task describe an agent completion: the tool's product name
+	// and the session's latest task.
+	agent string
+	task  string
 	token string // device UID: a late battery reading enriches this event
 	width float32
 	// hold is how long the event stays once it reaches the screen;
@@ -139,15 +149,19 @@ func (a *shelf) liveEnabled(kind liveKind) bool {
 		return s.Headphones
 	case liveDownloadDone:
 		return s.Downloads
+	case liveAgentDone:
+		return a.settings.AgentNotify.Enabled
 	}
 	return false
 }
 
 // pushLive queues one activity. Events posted while the panel is open are
 // dropped: the design shows nothing transient over an open panel, and a
-// late popup after closing is not what the event meant.
+// late popup after closing is not what the event meant. An agent
+// completion is the exception: it waits for the panel to fold and shows
+// then, because the work it announces does not stop when the panel opens.
 func (a *shelf) pushLive(ev liveEvent, hold time.Duration, now time.Time) {
-	if !a.liveEnabled(ev.kind) || a.visible {
+	if !a.liveEnabled(ev.kind) || (a.visible && ev.kind != liveAgentDone) {
 		return
 	}
 	if ev.kind == liveDownloadDone && a.mergeDownloadDone(ev.paths) {
@@ -283,8 +297,9 @@ func (a *shelf) liveNow(now time.Time, allow bool) (liveEvent, bool) {
 		}
 		// A download result is not a transient state: the file the user
 		// asked for finished, whether or not a busy queue delayed the
-		// words. Every other kind is stale after the wait bound.
-		if ev.kind != liveDownloadDone && now.Sub(ev.queuedAt) > liveQueueMaxWait {
+		// words. An agent completion waits for the panel to fold, which can
+		// take longer than the bound. Every other kind is stale after it.
+		if ev.kind != liveDownloadDone && ev.kind != liveAgentDone && now.Sub(ev.queuedAt) > liveQueueMaxWait {
 			continue
 		}
 		// The hold starts now, not at arrival, so waiting behind another
@@ -377,6 +392,12 @@ func liveCapsuleWidth(l locales.Messages, ev liveEvent, baseW float32) float32 {
 		add(l.LiveDownloaded(), 12)
 		add(ev.label, 12)
 		w += fbGap + 7 // the green dot
+	case liveAgentDone:
+		add(ev.agent, 12)
+		add("·", 12)
+		add(ev.task, 12)
+		add("·", 12)
+		add(l.LiveAgentDone(), 12)
 	}
 	w = max(w, minW, baseW+60)
 	return min(w, fbMaxW)
@@ -443,13 +464,14 @@ func (a *shelf) liveUp() bool {
 	return a.live.shown || a.downloadRunning()
 }
 
-// liveClickable reports whether the drawn shape is the completion capsule,
-// whose click belongs to the view and not to the shell's open handler.
+// liveClickable reports whether the drawn shape is a capsule whose click
+// belongs to the view and not to the shell's open handler: the download
+// completion (opens the tray) and the agent completion (dismisses).
 func (a *shelf) liveClickable(now time.Time) bool {
 	if !a.live.shown || now.After(a.live.until) {
 		return false
 	}
-	return a.live.cur.kind == liveDownloadDone
+	return a.live.cur.kind == liveDownloadDone || a.live.cur.kind == liveAgentDone
 }
 
 // downloadFile is one browser download that is still in flight.
@@ -490,6 +512,8 @@ func (ev liveEvent) statusLineIn(l locales.Messages) string {
 	switch ev.kind {
 	case liveDownloadDone:
 		return l.LiveStatusDownloaded(ev.label)
+	case liveAgentDone:
+		return l.LiveStatusAgentDone(ev.agent, ev.task)
 	case liveHeadsetOff:
 		return l.LiveStatusOff(ev.label)
 	case liveHeadset:

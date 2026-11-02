@@ -223,10 +223,21 @@ func (a *shelf) liveCapsule(c *ui.Context, shellW, shellH, k float32, ev liveEve
 				ui.Text(c, middleEllipsis(c, ev.label, w-13-2*fbPadX-verbW-7-fbGap*3-7)).
 					SingleLine().FontSize(12).FontWeight(500).TextColor(ink2)
 				ui.Box(c.Key("live-done-dot")).Size(7, 7).Radius(3.5).Background(liveGreen)
+			case liveAgentDone:
+				ui.Text(c, ev.agent).SingleLine().FontSize(12).FontWeight(600).TextColor(ink)
+				ui.Text(c, "·").SingleLine().FontSize(12).FontWeight(500).TextColor(ink3)
+				ui.Text(c, ev.task).SingleLine().FontSize(12).FontWeight(500).TextColor(ink2).
+					Shrink(1).MinWidth(0).Ellipsis("…")
+				ui.Text(c, "·").SingleLine().FontSize(12).FontWeight(500).TextColor(ink3)
+				ui.Text(c, l.LiveAgentDone()).SingleLine().FontSize(12).FontWeight(500).TextColor(ink2)
 			}
 		})
-		if ev.kind == liveDownloadDone && body.Clicked() {
+		switch {
+		case ev.kind == liveDownloadDone && body.Clicked():
 			a.openDownloaded(ev)
+		case ev.kind == liveAgentDone && body.Clicked():
+			// The capsule has said what it came to say; a click folds it.
+			a.clearLive()
 		}
 	})
 }

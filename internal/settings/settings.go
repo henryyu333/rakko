@@ -51,6 +51,10 @@ type Settings struct {
 	// download notices on the notch. Every switch is on for a fresh
 	// install; a settings.json without the object keeps all three.
 	LiveActivities LiveActivitySettings `json:"liveActivities"`
+	// AgentNotify is the 设置 → AI 用量 group that announces a finished
+	// agent turn on the notch. Off by default: while it is on, Rakko's hook
+	// entries live in the installed agents' own configuration files.
+	AgentNotify AgentNotifySettings `json:"agentNotify"`
 	// IslandPos is where the floating island was left on each display, by
 	// display id. A display with no entry keeps the default position; the
 	// notch style ignores the whole map.
@@ -108,6 +112,14 @@ type LiveActivitySettings struct {
 	Charging   bool `json:"charging"`
 	Headphones bool `json:"headphones"`
 	Downloads  bool `json:"downloads"`
+}
+
+// AgentNotifySettings is the agentNotify object in settings.json. Enabled
+// is off for a fresh install: turning it on writes Rakko's hook entries
+// into the agents' own configuration files, and turning it off removes them
+// again.
+type AgentNotifySettings struct {
+	Enabled bool `json:"enabled"`
 }
 
 // PetSettings is the pet object in settings.json: 显示海獭 and its size.
@@ -193,6 +205,7 @@ func Default() Settings {
 			QuotaCodex:  true,
 			QuotaClaude: true,
 		},
+		AgentNotify: AgentNotifySettings{Enabled: false},
 		Pet: PetSettings{Shown: true, Size: PetSizeMedium},
 		Shortcuts: ShortcutSettings{
 			Toggle:    DefaultShortcutToggle,

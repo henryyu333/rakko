@@ -639,6 +639,96 @@ func (msgs Messages) SettingsAILocalFoot() string {
 	return Catalog.Format(msgs.locale, "settingsAILocalFoot", nil)
 }
 
+// SettingsAgentGroup says "Agent 完成提醒"
+// in the language the app shows.
+func SettingsAgentGroup() string { return In(i18n.Locale()).SettingsAgentGroup() }
+
+// SettingsAgentGroup says "Agent 完成提醒"
+// in the language of msgs.
+func (msgs Messages) SettingsAgentGroup() string {
+	return Catalog.Format(msgs.locale, "settingsAgentGroup", nil)
+}
+
+// SettingsAgentRow says "完成时在刘海提醒"
+// in the language the app shows.
+func SettingsAgentRow() string { return In(i18n.Locale()).SettingsAgentRow() }
+
+// SettingsAgentRow says "完成时在刘海提醒"
+// in the language of msgs.
+func (msgs Messages) SettingsAgentRow() string {
+	return Catalog.Format(msgs.locale, "settingsAgentRow", nil)
+}
+
+// SettingsAgentCaption says "打开会在下列工具的配置文件里加入 hook，关闭时移除"
+// in the language the app shows.
+func SettingsAgentCaption() string { return In(i18n.Locale()).SettingsAgentCaption() }
+
+// SettingsAgentCaption says "打开会在下列工具的配置文件里加入 hook，关闭时移除"
+// in the language of msgs.
+func (msgs Messages) SettingsAgentCaption() string {
+	return Catalog.Format(msgs.locale, "settingsAgentCaption", nil)
+}
+
+// SettingsAgentInjected says "已注入"
+// in the language the app shows.
+func SettingsAgentInjected() string { return In(i18n.Locale()).SettingsAgentInjected() }
+
+// SettingsAgentInjected says "已注入"
+// in the language of msgs.
+func (msgs Messages) SettingsAgentInjected() string {
+	return Catalog.Format(msgs.locale, "settingsAgentInjected", nil)
+}
+
+// SettingsAgentNotInjected says "未注入"
+// in the language the app shows.
+func SettingsAgentNotInjected() string { return In(i18n.Locale()).SettingsAgentNotInjected() }
+
+// SettingsAgentNotInjected says "未注入"
+// in the language of msgs.
+func (msgs Messages) SettingsAgentNotInjected() string {
+	return Catalog.Format(msgs.locale, "settingsAgentNotInjected", nil)
+}
+
+// SettingsAgentUnsupported says "不支持"
+// in the language the app shows.
+func SettingsAgentUnsupported() string { return In(i18n.Locale()).SettingsAgentUnsupported() }
+
+// SettingsAgentUnsupported says "不支持"
+// in the language of msgs.
+func (msgs Messages) SettingsAgentUnsupported() string {
+	return Catalog.Format(msgs.locale, "settingsAgentUnsupported", nil)
+}
+
+// SettingsAgentError says "出错"
+// in the language the app shows.
+func SettingsAgentError() string { return In(i18n.Locale()).SettingsAgentError() }
+
+// SettingsAgentError says "出错"
+// in the language of msgs.
+func (msgs Messages) SettingsAgentError() string {
+	return Catalog.Format(msgs.locale, "settingsAgentError", nil)
+}
+
+// SettingsAgentNone says "没有检测到支持的 agent"
+// in the language the app shows.
+func SettingsAgentNone() string { return In(i18n.Locale()).SettingsAgentNone() }
+
+// SettingsAgentNone says "没有检测到支持的 agent"
+// in the language of msgs.
+func (msgs Messages) SettingsAgentNone() string {
+	return Catalog.Format(msgs.locale, "settingsAgentNone", nil)
+}
+
+// SettingsAgentNeedsApp says "需要从安装的 Rakko.app 运行"
+// in the language the app shows.
+func SettingsAgentNeedsApp() string { return In(i18n.Locale()).SettingsAgentNeedsApp() }
+
+// SettingsAgentNeedsApp says "需要从安装的 Rakko.app 运行"
+// in the language of msgs.
+func (msgs Messages) SettingsAgentNeedsApp() string {
+	return Catalog.Format(msgs.locale, "settingsAgentNeedsApp", nil)
+}
+
 // SettingsTraySection says "托盘"
 // in the language the app shows.
 func SettingsTraySection() string { return In(i18n.Locale()).SettingsTraySection() }
@@ -5651,6 +5741,38 @@ func LiveStatusLow(pct int) string { return In(i18n.Locale()).LiveStatusLow(pct)
 // in the language of msgs.
 func (msgs Messages) LiveStatusLow(pct int) string {
 	return Catalog.Format(msgs.locale, "liveStatusLow", map[string]any{"pct": pct})
+}
+
+// LiveAgentDone says "搞定了"
+// in the language the app shows.
+func LiveAgentDone() string { return In(i18n.Locale()).LiveAgentDone() }
+
+// LiveAgentDone says "搞定了"
+// in the language of msgs.
+func (msgs Messages) LiveAgentDone() string {
+	return Catalog.Format(msgs.locale, "liveAgentDone", nil)
+}
+
+// LiveAgentTaskFallback says "一轮任务"
+// in the language the app shows.
+func LiveAgentTaskFallback() string { return In(i18n.Locale()).LiveAgentTaskFallback() }
+
+// LiveAgentTaskFallback says "一轮任务"
+// in the language of msgs.
+func (msgs Messages) LiveAgentTaskFallback() string {
+	return Catalog.Format(msgs.locale, "liveAgentTaskFallback", nil)
+}
+
+// LiveStatusAgentDone says "{agent} · {task} · 搞定了"
+// in the language the app shows.
+func LiveStatusAgentDone(agent string, task string) string {
+	return In(i18n.Locale()).LiveStatusAgentDone(agent, task)
+}
+
+// LiveStatusAgentDone says "{agent} · {task} · 搞定了"
+// in the language of msgs.
+func (msgs Messages) LiveStatusAgentDone(agent string, task string) string {
+	return Catalog.Format(msgs.locale, "liveStatusAgentDone", map[string]any{"agent": agent, "task": task})
 }
 
 // AudioLevelLeft says "左 {pct, number, ::group-off}%"

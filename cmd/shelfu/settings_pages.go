@@ -15,6 +15,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"shelf/internal/agentnotify"
 	"shelf/internal/aiusage"
 	"shelf/internal/settings"
 	"shelf/locales"
@@ -324,7 +325,56 @@ func (a *shelf) settingsAIUsagePage(c *ui.Context) {
 		}
 	})
 
+	a.settingsAgentGroup(c)
+
 	settingsFootnote(c, "ai-foot", l.SettingsAILocalFoot())
+}
+
+// settingsAgentGroup is the Agent 完成提醒 card: one switch for every
+// tool, then one row per detected tool with its configuration path and the
+// state of Rakko's entry. The rows have no switches of their own — the
+// group is the one thing the user turns on or off.
+func (a *shelf) settingsAgentGroup(c *ui.Context) {
+	l := loc(c)
+	f := a.agentFeature()
+	f.refreshIfStale()
+	settingsGroupRows(c, "agentnotify", l.SettingsAgentGroup(), "", a.settingsBroken, func() {
+		settingsToggleRow(c, "agentnotify", l.SettingsAgentRow(), l.SettingsAgentCaption(),
+			a.settings.AgentNotify.Enabled, a.setAgentNotify)
+		tools := f.detected()
+		if len(tools) == 0 {
+			settingsSep(c, "agent-none")
+			settingsRowLine(c, "agent-none").Children(func() {
+				settingsRowText(c, l.SettingsAgentNone(), "")
+			})
+			return
+		}
+		for _, tool := range tools {
+			settingsSep(c, "agent-"+string(tool))
+			state, note, _ := f.settingRow(tool)
+			status, color := l.SettingsAgentNotInjected(), ink3
+			switch state {
+			case agentnotify.StateInjected:
+				status = l.SettingsAgentInjected()
+			case agentnotify.StateUnsupported:
+				status = l.SettingsAgentUnsupported()
+			case agentnotify.StateError:
+				status, color = l.SettingsAgentError(), danger
+			}
+			caption := agentnotify.DisplayPath(f.home, tool)
+			if state == agentnotify.StateError && note != "" {
+				// The reason is more useful than the path the user can't use.
+				caption = note
+				if note == agentNeedsAppNote {
+					caption = l.SettingsAgentNeedsApp()
+				}
+			}
+			settingsRowLine(c, "agent-"+string(tool)).Children(func() {
+				settingsRowText(c, tool.Name(), caption)
+				ui.Text(c, status).SingleLine().FontSize(11.5).FontWeight(500).TextColor(color)
+			})
+		}
+	})
 }
 
 // aiQuotaCaption is the quota row's secondary line: the plan name when the
