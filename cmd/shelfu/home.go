@@ -34,7 +34,9 @@ const (
 	resultsPad    = 12
 	resultsRowH   = 44
 	resultsSecH   = 21 // a group's caption row
-	resultsActH   = 40 // the 打开 ↩ hint row at the bottom
+	resultsActGap = 6  // results → the action bar
+	resultsActBar = 28 // the action bar inside the sheet's bottom edge
+	resultsActH   = resultsActGap + resultsActBar
 	resultsMaxH   = 330
 
 	navGap    = 10 // panel → page capsule
@@ -97,7 +99,7 @@ func (a *shelf) homeHits() []homeHit {
 			switch {
 			case it.Source == store.SourceClipboard && it.Kind == store.KindText && !it.OffClip:
 				clip = append(clip, homeHit{group: l.HomeGroupClipboard(), icon: clipNavSymbol, title: title,
-					sub: relativeTime(l, it.CreatedAt, now), run: func() {
+					sub: a.clipRowMeta(l, it), run: func() {
 						if a.copyItem(it) {
 							a.hide(hideExplicit)
 						}
@@ -374,7 +376,7 @@ func (a *shelf) resultsView(c *ui.Context, r ui.Rect, opacity float32) {
 			if a.homeSearching() {
 				return
 			}
-			ui.Row(c.Key("results-none")).Height(resultsRowH).Padding(0, 10, 0, 10).AlignItems(ui.Center).Children(func() {
+			ui.Row(c.Key("results-none")).Height(resultsRowH).Padding(0, 8, 0, 8).AlignItems(ui.Center).Children(func() {
 				panelLabel(c, nil, l.HomeNoMatch(), 13, 500).TextColor(ink3)
 			})
 			return
@@ -388,7 +390,7 @@ func (a *shelf) resultsView(c *ui.Context, r ui.Rect, opacity float32) {
 				})
 			}
 			row := ui.ButtonBase(c.Key(rowKey{"hit", i})).Height(resultsRowH).FillWidth().Radius(12).
-				Padding(0, 10, 0, 10).Gap(11).AlignItems(ui.Center).Justify(ui.Start).Label(hit.title)
+				Padding(0, 8, 0, 8).Gap(10).AlignItems(ui.Center).Justify(ui.Start).Label(hit.title)
 			if i == a.homeSel {
 				row.Background(fill2)
 			} else if row.Hovered() {
@@ -406,25 +408,48 @@ func (a *shelf) resultsView(c *ui.Context, r ui.Rect, opacity float32) {
 						ui.Icon(c, fileSymbol).Size(15, 15).TextColor(ink2)
 					}
 				})
-				ui.Text(c, hit.title).SingleLine().Grow(1).MinWidth(0).FontSize(13).FontWeight(600).TextColor(ink)
-				if hit.sub != "" {
-					// A hit's folder can be deep; it takes at most 45% of
-					// the row and ellipsizes, so the name keeps the rest.
-					ui.Text(c, hit.sub).SingleLine().FontSize(11.5).TextColor(ink3).MaxWidthPercent(45)
-				}
+				// A row is two lines — the name, then where it comes from —
+				// ending at the right with the category the group caption
+				// names, so every row's right edge is the same line.
+				ui.Column(c.Key(rowKey{"hit-txt", i})).Grow(1).MinWidth(0).Gap(1).Justify(ui.Center).Children(func() {
+					ui.Text(c, hit.title).SingleLine().FontSize(13).FontWeight(600).TextColor(ink)
+					if hit.sub != "" {
+						ui.Text(c, hit.sub).SingleLine().FontSize(11.5).TextColor(ink3)
+					}
+				})
+				ui.Text(c, hit.group).SingleLine().FontSize(11.5).TextColor(ink3)
 			})
 			if row.Clicked() {
 				a.homeSel = i
 				hit.run()
 			}
 		}
-		hint := ui.Row(c.Key("results-act")).Absolute().Right(0).Bottom(0).Height(28).Radius(14).
-			Padding(0, 6, 0, 12).Gap(8).AlignItems(ui.Center).Background(ui.RGBA(70, 70, 78, 0.55))
-		hint.Children(func() {
-			panelLabel(c, nil, l.ItemOpen(), 11.5, 600).TextColor(ink)
-			ui.Row(c.Key("results-key")).Padding(1, 5, 1, 5).Radius(5).Background(ui.RGBA(255, 255, 255, 0.14)).Children(func() {
-				ui.Text(c, "↩").FontSize(10).TextColor(ink2)
+		// The action bar is the sheet's last row, inside its rounded
+		// corners: the results end above it instead of running under it.
+		bar := ui.Row(c.Key("results-act")).Height(resultsActBar).FillWidth().Margin(resultsActGap, 0, 0, 0).
+			Gap(16).AlignItems(ui.Center).Justify(ui.End)
+		bar.Children(func() {
+			keycap := func(name, key string) {
+				ui.Box(c.Key("results-key-"+name)).Padding(2, 5, 2, 5).Radius(5).
+					Background(ui.RGBA(255, 255, 255, 0.14)).Center().Children(func() {
+					ui.Text(c, key).FontSize(10).TextColor(ink2)
+				})
+			}
+			open := ui.Row(c.Key("results-open")).Gap(5).AlignItems(ui.Center)
+			open.Children(func() {
+				panelLabel(c, nil, l.ItemOpen(), 11.5, 600).TextColor(ink2)
+				keycap("open", "↩")
 			})
+			// Files, folders and apps can also be shown where they live;
+			// the clipboard, notes, tray rows and actions cannot.
+			if hits[min(a.homeSel, len(hits)-1)].reveal != nil {
+				reveal := ui.Row(c.Key("results-reveal")).Gap(5).AlignItems(ui.Center)
+				reveal.Children(func() {
+					panelLabel(c, nil, l.ItemShowInFinder(), 11.5, 600).TextColor(ink2)
+					keycap("reveal-cmd", "⌘")
+					keycap("reveal-enter", "↩")
+				})
+			}
 		})
 	})
 }
