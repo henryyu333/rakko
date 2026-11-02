@@ -367,22 +367,22 @@ func TestPetLoad(t *testing.T) {
 	}
 }
 
-// Lyrics default on: a settings.json from before the switch existed (no
-// lyrics key) must still fetch lyrics; an explicit false turns it off.
-func TestLyricsDefaultsOnAndHonoursOff(t *testing.T) {
+// Lyrics default closed: a settings.json without the key (and a fresh
+// install) asks lrclib.net nothing; opening the column is remembered.
+func TestLyricsDefaultsClosedAndRemembersOpen(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, FileName), []byte(`{}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	s, err := Load(dir)
-	if err != nil || !s.LyricsOn() {
-		t.Fatalf("missing lyrics = %v, %v; want on", s.LyricsOn(), err)
+	if err != nil || s.LyricsOn() || Default().LyricsOn() {
+		t.Fatalf("missing lyrics = %v, %v; want closed", s.LyricsOn(), err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, FileName), []byte(`{"lyrics":{"enabled":false}}`), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, FileName), []byte(`{"lyrics":{"enabled":true}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	s, err = Load(dir)
-	if err != nil || s.LyricsOn() {
-		t.Fatalf("lyrics.enabled false => %v, %v; want off", s.LyricsOn(), err)
+	if err != nil || !s.LyricsOn() {
+		t.Fatalf("lyrics.enabled true => %v, %v; want open", s.LyricsOn(), err)
 	}
 }

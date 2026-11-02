@@ -2,20 +2,20 @@
 
 package main
 
-// 首页（design/explore/home-v3.html）：点刘海仍是搜索条，页面胶囊最左边
-// 的「首页」进这里。它只看「此刻」：有正在播放时就是播放器（拿到同步歌词
-// 时加宽到 640，右边滚动歌词）；没有播放时是 Agent 在跑 / 刚完成与最近放
-// 进托盘、最近复制的东西。没有方格、不接受拖入、没有编辑模式。
+// 首页（design/explore/home-v3.html、home-v4.html）：点刘海仍是搜索条，页面
+// 胶囊最左边的「首页」进这里。它只看「此刻」：有正在播放时就是播放器，左下
+// 角的歌词按钮开着时加宽到 640，右边滚动歌词（找不到时写一行原因）；没有
+// 播放时是海獭陪着：今天的日期和几行状态。没有方格、不接受拖入、没有编辑
+// 模式。
 
 import (
 	"context"
 	"fmt"
 	"math"
-	"strings"
+	"strconv"
 	"time"
 
 	"github.com/egoist/mygo"
-	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
 	"shelf/internal/lyrics"
@@ -25,17 +25,18 @@ import (
 )
 
 const (
-	homeLyricsW   = 640 // the page beside scrolling lyrics
+	homeLyricsW   = 640 // the page beside the lyrics column
 	homePlayerCol = 300 // the player's column there
 	homeLineH     = 28  // one lyric line
-	homeRecent    = 4   // newest tray thumbnails
-	homeAgentRows = 3   // running + finished rows above 最近
-	homeGlyph     = 12  // the running ring and the done dot
+	homeLyricsBtn = 30  // the player's lyrics button
+	homeOtterW    = 112 // the idle page's otter
 )
 
 var (
-	// homeLyricsWide is the house glyph in the capsule.
+	// homeSymbol is the house glyph in the capsule.
 	homeSymbol = symbol(`<path d="M4 11l8-6 8 6v8H4z"/><path d="M10 19v-5h4v5"/>`)
+	// lyricsSymbol is the player's lyrics button: lines of text and a note.
+	lyricsSymbol = symbol(`<path d="M4 6h11M4 10h11M4 14h7"/><circle cx="16.5" cy="17" r="2.2"/><path d="M18.7 17V9l2.3 1.2"/>`)
 
 	// homeFetch is the network seam: the app asks lrclib.net; tests replace
 	// it (TestMain makes it answer "no lyrics" so no test goes online).
@@ -80,16 +81,13 @@ func (p *homePage) icon(c *ui.Context, _ bool) ui.Element {
 }
 func (p *homePage) actions(c *ui.Context) []ui.Element { return nil }
 
-// width is the shell width this page needs now: 640 while it shows lyrics,
-// otherwise the sheet's 440. layout calls it before the body, so the shell,
-// the window frame and the content agree on one width.
+// width is the shell width this page needs now: 640 while the lyrics
+// column is open beside a track, otherwise the sheet's 440. layout calls it
+// before the body, so the shell, the window frame and the content agree on
+// one width.
 func (p *homePage) width() float32 {
-	p.prepare(false) // a cache hit must widen the first frame, not the second
-	if !p.host.settings.LyricsOn() {
-		return sheetW
-	}
-	st, ok := p.track()
-	if !ok || p.key != homeTrackKey(st) || len(p.lines) == 0 {
+	p.prepare(false)
+	if _, ok := p.track(); !ok || !p.host.settings.LyricsOn() {
 		return sheetW
 	}
 	return homeLyricsW
@@ -111,7 +109,7 @@ func (p *homePage) body(c *ui.Context, _ bool, live bool) ui.Element {
 	if !ok {
 		return p.idleBody(c, w)
 	}
-	if p.host.settings.LyricsOn() && len(p.lines) > 0 {
+	if p.host.settings.LyricsOn() {
 		return p.lyricsBody(c, w, st)
 	}
 	return p.playerBody(c, w, st)
@@ -200,6 +198,21 @@ func (a *shelf) homeChanged() {
 	}
 }
 
+// setLyrics opens or closes the lyrics column (the player's lyrics button).
+// The page reads it before the next layout, so closing narrows the page at
+// once and stops any later request; a lookup already in flight is ignored.
+func (a *shelf) setLyrics(on bool) {
+	next := a.settings
+	next.SetLyrics(on)
+	if !a.applySettings(next) {
+		return
+	}
+	if p, ok := a.page(pageHome).(*homePage); ok {
+		p.shown = -1
+	}
+	a.homeChanged()
+}
+
 // lyricsCache is the per-shelf cache in the data directory.
 func (a *shelf) lyricsCache() *lyrics.Cache {
 	if a.lyrCache == nil {
@@ -258,14 +271,43 @@ func (p *homePage) player(c *ui.Context, w float32, st mac.NowPlayingState) {
 		p.host.seekRail(c, "home-progress", frac, dur, 14, 5).Grow(1).MinWidth(0)
 		panelLabel(c, nil, remLabel, 11.5, 500).TextColor(ink3).Width(rw)
 	})
-	ui.Row(c.Key("home-ctrl")).Margin(16, 0, 0, 0).Width(w).Justify(ui.Center).
-		AlignItems(ui.Center).Gap(26).Children(func() {
-		m.controlButton(c, "home-prev", prevFill, l.PreviousTrack(), mac.NPPrevious, 30, 17)
-		m.controlButton(c, "home-toggle", toggleSymbol(st.Playing), playPauseText(l, st.Playing), mac.NPPlayPause, 38, 22)
-		m.controlButton(c, "home-next", nextFill, l.NextTrack(), mac.NPNext, 30, 17)
+	// The lyrics button sits at the left and an empty slot of the same
+	// width at the right, so the transport stays centred.
+	ui.Row(c.Key("home-ctrl")).Margin(16, 0, 0, 0).Width(w).Justify(ui.SpaceBetween).
+		AlignItems(ui.Center).Children(func() {
+		p.lyricsButton(c)
+		ui.Row(c.Key("home-transport")).AlignItems(ui.Center).Gap(26).Children(func() {
+			m.controlButton(c, "home-prev", prevFill, l.PreviousTrack(), mac.NPPrevious, 30, 17)
+			m.controlButton(c, "home-toggle", toggleSymbol(st.Playing), playPauseText(l, st.Playing), mac.NPPlayPause, 38, 22)
+			m.controlButton(c, "home-next", nextFill, l.NextTrack(), mac.NPNext, 30, 17)
+		})
+		ui.Box(c.Key("home-ctrl-pad")).Size(homeLyricsBtn, homeLyricsBtn)
 	})
 	if st.Playing {
 		c.After(time.Second) // the clock and the lyric line move on
+	}
+}
+
+// lyricsButton opens and closes the lyrics column; lit while it is open.
+func (p *homePage) lyricsButton(c *ui.Context) {
+	on := p.host.settings.LyricsOn()
+	b := ui.ButtonBase(c.Key("home-lyrics-btn")).Size(homeLyricsBtn, homeLyricsBtn).
+		Radius(homeLyricsBtn / 2).Center().Label(loc(c).HomeLyrics())
+	switch {
+	case on:
+		b.Background(fill2)
+	case b.Hovered():
+		b.Background(fill1)
+	}
+	b.Children(func() {
+		col := ink2
+		if on {
+			col = ink
+		}
+		ui.Icon(c, lyricsSymbol).Size(17, 17).TextColor(col)
+	})
+	if b.Clicked() {
+		p.host.setLyrics(!on)
 	}
 }
 
@@ -280,10 +322,30 @@ func (p *homePage) lyricsBody(c *ui.Context, w float32, st mac.NowPlayingState) 
 		})
 		ui.Box(c.Key("home-rule")).Width(1).Height(150).Background(ui.RGBA(255, 255, 255, 0.09))
 		ui.Column(c.Key("home-lyrics-col")).Width(right).Height(pageBodyH).Children(func() {
+			if len(p.lines) == 0 {
+				p.lyricsNote(c, right)
+				return
+			}
 			p.lyricsView(c, st, right)
 		})
 	})
 	return ui.Box(c).Size(0, 0)
+}
+
+// lyricsNote fills the lyrics column while there are no lines to show:
+// still looking, nothing found for this track, or the service unreachable.
+func (p *homePage) lyricsNote(c *ui.Context, w float32) {
+	l := loc(c)
+	text := l.HomeLyricsNone()
+	switch {
+	case p.loading || (!p.fetched && !p.none && !p.failed):
+		text = l.HomeLyricsLoading()
+	case p.failed:
+		text = l.HomeLyricsFailed()
+	}
+	ui.Column(c.Key("home-lyrics-note")).Width(w).Height(pageBodyH).Center().Children(func() {
+		panelLabel(c, nil, text, 13, 500).TextColor(ink3)
+	})
 }
 
 // lyricsView is the scrolling lyric block: the current line bold and
@@ -354,232 +416,99 @@ func homeLineOpacity(i, cur int, scrollY, pad, viewH float32) float32 {
 	return base * max(0, min(1, edge))
 }
 
-// idleBody is state ③ / ③′: no track. With Agent 完成提醒 on and something
-// to say, the AGENT rows and 最近; otherwise just 最近, larger, with the
-// keep-awake and quota chips that are on.
+// idleBody is the page with nothing playing (design/explore/home-v4.html,
+// B): the otter on the left — standing, or asleep after a quiet spell —
+// and today's date with a few lines of what is going on beside it.
 func (p *homePage) idleBody(c *ui.Context, w float32) ui.Element {
 	l := loc(c)
 	now := c.Now()
-	var running, done []agentRun
-	if p.host.settings.AgentNotify.Enabled {
-		running, done = p.host.agentFeature().snapshot(now)
+	pose := petIdle
+	if a := p.host; !a.lastAct.IsZero() && now.Sub(a.lastAct) > otterSleepyAfter {
+		pose = petSleep
 	}
-	rows := append(append([]agentRun{}, running...), done...)
-	hasAgent := len(rows) > 0
-	files := p.host.homeRecentFiles(homeRecent)
-	clip, hasClip := p.host.homeLatestClip()
-	if !hasAgent && len(files) == 0 && !hasClip {
-		ui.Column(c.Key("home-empty")).Width(w).Height(pageBodyH).Center().Children(func() {
-			panelLabel(c, nil, l.HomeEmpty(), 12.5, 500).TextColor(ink3)
+	otter := otterImage(pose)
+	if otter == nil {
+		otter = otterImage(petIdle)
+	}
+	ui.Row(c.Key("home-idle")).Width(w).Height(pageBodyH).AlignItems(ui.Center).Gap(20).Children(func() {
+		if otter != nil {
+			ui.Row(c.Key("home-otter")).Width(homeOtterW + 18).Justify(ui.Center).Children(func() {
+				ui.Image(c.Key("home-otter-img"), otter).Width(homeOtterW).Height(homeOtterW * 640 / 491).Fit(ui.Contain)
+			})
+		}
+		ui.Column(c.Key("home-today")).Grow(1).MinWidth(0).Gap(12).Children(func() {
+			ui.Column(c.Key("home-date")).Gap(2).Children(func() {
+				ui.Text(c, l.HomeDate(now)).SingleLine().FontSize(26).FontWeight(700).TextColor(ink)
+				ui.Text(c, l.HomeWeekday(now)).SingleLine().FontSize(13).TextColor(ink2)
+			})
+			p.statusLines(c, now)
 		})
-		return ui.Box(c).Size(0, 0)
-	}
-	if !hasAgent {
-		p.compactBody(c, w, files, clip, hasClip, now)
-		return ui.Box(c).Size(0, 0)
-	}
-	if len(rows) > homeAgentRows {
-		rows = rows[:homeAgentRows]
-	}
-	thumb := float32(34)
-	ui.Column(c.Key("home-idle")).Width(w).Height(pageBodyH).Justify(ui.Center).Gap(0).Children(func() {
-		panelLabel(c, nil, l.HomeAgentSection(), 10.5, 600).TextColor(ink3)
-		ui.Column(c.Key("home-agent-rows")).FillWidth().Gap(4).Margin(7, 0, 0, 0).Children(func() {
-			start := len(running)
-			for i, row := range rows {
-				p.agentRow(c, i, row, i < start, now)
-			}
-		})
-		ui.Box(c.Key("home-sep")).FillWidth().Height(1).Margin(10, 0, 10, 0).
-			Background(ui.RGBA(255, 255, 255, 0.08))
-		panelLabel(c, nil, l.HomeRecentSection(), 10.5, 600).TextColor(ink3)
-		p.recentRow(c, files, clip, hasClip, thumb, 7)
 	})
-	if len(running) > 0 {
-		c.AnimationFrame()
-	}
-	c.After(time.Minute)
+	c.After(time.Minute) // the date, the otter's pose and the times move on
 	return ui.Box(c).Size(0, 0)
 }
 
-// compactBody is state ③′: 最近 alone, one size larger, with the chips for
-// what else is on.
-func (p *homePage) compactBody(c *ui.Context, w float32, files []store.Item, clip store.Item, hasClip bool, now time.Time) {
+// statusLines are at most three lines under the date: the newest agent
+// turn (running or just finished), how much the tray holds, and keep
+// awake's remaining time or else the tightest AI quota. A line only
+// appears when it has something to say.
+func (p *homePage) statusLines(c *ui.Context, now time.Time) {
 	l := loc(c)
-	ui.Column(c.Key("home-compact")).Width(w).Height(pageBodyH).Justify(ui.Center).Gap(10).Children(func() {
-		panelLabel(c, nil, l.HomeRecentSection(), 10.5, 600).TextColor(ink3)
-		p.recentRow(c, files, clip, hasClip, 44, 0)
-		p.statusChips(c, now)
-	})
-	c.After(time.Minute)
-}
-
-// agentRow is one AGENT line: a running ring or a done dot, the tool's
-// mark, the task, and how long it ran / how long ago it finished.
-func (p *homePage) agentRow(c *ui.Context, i int, row agentRun, running bool, now time.Time) {
-	l := loc(c)
-	ui.Row(c.Key(i)).Height(26).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
-		if running {
-			homeRunRing(c)
-		} else {
-			ui.Box(c.Key("done")).Size(homeGlyph, homeGlyph).Radius(homeGlyph / 2).Background(liveGreen)
-		}
-		logo, tint, mark := agentLogo(row.Tool)
-		settingsMark(c, logo, tint, mark)
-		ui.Text(c, row.Task).SingleLine().FontSize(12).FontWeight(500).TextColor(ink).
-			Grow(1).MinWidth(0).Ellipsis("…")
-		var when string
-		if running {
-			d := now.Sub(row.At)
-			if d < time.Minute {
-				when = l.HomeRunningStarted()
-			} else {
-				when = l.HomeRunningFor(itoa(int(d / time.Minute)))
-			}
-		} else {
-			d := now.Sub(row.At)
-			if d < time.Minute {
-				when = l.ClipJustNow()
-			} else {
-				when = l.ClipMinutesAgo(int(d / time.Minute))
-			}
-		}
-		panelLabel(c, nil, when, 11, 500).TextColor(ink3).Shrink(0)
-	})
-}
-
-// homeRunRing is the blue hoop that turns while a turn is running.
-func homeRunRing(c *ui.Context) {
-	phase := float32(c.Now().UnixMilli()%1200) / 1200
-	ui.Box(c.Key("run")).Size(homeGlyph, homeGlyph).Draw(func(pt *ui.Painter, r ui.Rect) {
-		cx, cy := r.X+r.W/2, r.Y+r.H/2
-		rad := r.W/2 - 1
-		var track ui.Path
-		track.Circle(cx, cy, rad)
-		pt.StrokePath(&track, 2, fill3)
-		homeArc(pt, cx, cy, rad, 2, phase, accent)
-		homeArc(pt, cx, cy, rad, 2, phase+0.5, accent)
-	})
-}
-
-// homeArc strokes a quarter of a circle starting at frac of the way round
-// from 12 o'clock, wrapping past the start.
-func homeArc(p *ui.Painter, cx, cy, rad, lw, frac float32, col ui.Color) {
-	start := 0.75 + frac
-	for start >= 1 {
-		start -= 1
+	a := p.host
+	line := func(key string, lead func(), text string) {
+		ui.Row(c.Key(key)).FillWidth().Gap(9).AlignItems(ui.Center).Children(func() {
+			ui.Row(c.Key("lead")).Size(16, 16).Center().Children(lead)
+			ui.Text(c, text).SingleLine().FontSize(12.5).TextColor(ink2).Grow(1).MinWidth(0).Ellipsis("…")
+		})
 	}
-	end := start + 0.25
-	if end <= 1 {
-		var path ui.Path
-		path.Circle(cx, cy, rad).Trim(start, end)
-		p.StrokePath(&path, lw, col)
+	if a.settings.AgentNotify.Enabled {
+		running, done := a.agentFeature().snapshot(now)
+		var row agentRun
+		text := ""
+		switch {
+		case len(running) > 0:
+			row = running[0]
+			text = l.HomeAgentRunning(row.Tool.Name(), row.Task)
+		case len(done) > 0:
+			row = done[0]
+			text = l.HomeAgentDone(row.Tool.Name(), row.Task)
+		}
+		if text != "" {
+			line("home-agent", func() {
+				logo, tint, mark := agentLogo(row.Tool)
+				box := mark * 16 / settingsRowMark
+				ui.Box(c.Key("mark")).Size(16, 16).Children(func() {
+					off := (16 - box) / 2
+					ui.Icon(c, logo).Size(box, box).TextColor(tint).Absolute().Left(off).Top(off)
+				})
+			}, text)
+		}
+	}
+	if n := a.homeTrayCount(); n > 0 {
+		line("home-tray", func() { ui.Icon(c, trayNavSymbol).Size(14, 14).TextColor(ink3) }, l.HomeTrayCount(n))
+	}
+	if m := a.awake; m != nil && m.active() {
+		line("home-awake", func() { ui.Icon(c, cupSymbol).Size(14, 14).TextColor(ink3) },
+			l.AwakeLine(l.AwakeTitle(), homeAwakeRemain(l, m, now)))
 		return
 	}
-	var head, tail ui.Path
-	head.Circle(cx, cy, rad).Trim(start, 1)
-	tail.Circle(cx, cy, rad).Trim(0, end-1)
-	p.StrokePath(&head, lw, col)
-	p.StrokePath(&tail, lw, col)
-}
-
-// recentRow is the newest tray files (or folders) and the newest copied
-// text: thumbs drag out like the tray's tiles and open on a click; the
-// text copies on a click.
-func (p *homePage) recentRow(c *ui.Context, files []store.Item, clip store.Item, hasClip bool, size, gap float32) {
-	ui.Row(c.Key("home-recent")).FillWidth().AlignItems(ui.Center).Gap(6).Children(func() {
-		for _, it := range files {
-			p.host.homeThumb(c, it, size)
-		}
-		if hasClip {
-			title := itemTitle(clip)
-			row := ui.Row(c.Key("home-clip")).Grow(1).MinWidth(0).Height(size).
-				Padding(0, 6, 0, 6).Radius(7).AlignItems(ui.Center).Label(title)
-			if row.Hovered() {
-				row.Background(fill1)
-			}
-			row.Children(func() {
-				ui.Text(c, "“"+title+"”").SingleLine().FontSize(12).TextColor(ink2).Grow(1).MinWidth(0).Ellipsis("…")
-			})
-			if row.Clicked() {
-				p.host.copyText(clip.Text)
-			}
-		}
-		if gap > 0 {
-			ui.Box(c).Width(gap)
-		}
-	})
-}
-
-// homeThumb is one recent file: its tray thumbnail (or a file glyph), a
-// drag-out like the tray tile, and a click that opens it.
-func (a *shelf) homeThumb(c *ui.Context, it store.Item, size float32) {
-	el := ui.Row(c.Key("hthumb-"+it.ID)).Size(size, size).Radius(8).Center().Clip().
-		Label(itemTitle(it))
-	if !it.Missing {
-		el.DragDataFrom(func() transfer.Data {
-			a.beginOwnDrag()
-			a.takeServiceOwnership()
-			if a.win != nil {
-				a.win.Invalidate()
-			}
-			a.dragOutIDs = nil
-			return a.dragOut(it)
-		}, transfer.DragOptions{Operations: transfer.Copy, Done: a.completed})
+	if !a.settings.AIUsage.Enabled || a.usage == nil {
+		return
 	}
-	if b := a.thumbnail(it); b != nil {
-		el.Children(func() { ui.Image(c.Key("bmp"), b).Size(size, size).Fit(ui.Cover) })
-	} else {
-		el.Background(fill2).Children(func() {
-			ui.Icon(c, fileSymbol).Size(size*0.45, size*0.45).TextColor(ink3)
+	five, week, tool, ok := a.usage.leastWindow()
+	win := five
+	if win == nil {
+		win = week
+	}
+	if !ok || win == nil {
+		return
+	}
+	pct := int(math.Round(win.LeftPct()))
+	line("home-quota", func() {
+		ui.Box(c.Key("ring")).Size(13, 13).Draw(func(pt *ui.Painter, r ui.Rect) {
+			a.usage.drawWindowRing(pt, r, r.W/2-1.5, 2.5, win, usageFive, false, false)
 		})
-	}
-	if el.Clicked() && !it.Missing {
-		if err := mygo.Shell.OpenPath(it.Path); err != nil {
-			a.report(err)
-		}
-	}
-}
-
-// statusChips is the ③′ footer: 保持唤醒 with its remaining time while on,
-// and the tightest AI quota while AI 用量 is on.
-func (p *homePage) statusChips(c *ui.Context, now time.Time) {
-	l := loc(c)
-	ui.Row(c.Key("home-chips")).Gap(6).AlignItems(ui.Center).Children(func() {
-		if m := p.host.awake; m != nil && m.active() {
-			chip := ui.Row(c.Key("home-awake")).Height(22).Padding(0, 9, 0, 9).Radius(11).
-				Background(fill2).Gap(6).AlignItems(ui.Center)
-			chip.Children(func() {
-				ui.Icon(c, cupSymbol).Size(12, 12).TextColor(ink2)
-				ui.Text(c, l.AwakeLine(l.AwakeTitle(), homeAwakeRemain(l, m, now))).SingleLine().
-					FontSize(11.5).TextColor(ink2)
-			})
-		}
-		if !p.host.settings.AIUsage.Enabled || p.host.usage == nil {
-			return
-		}
-		five, week, tool, ok := p.host.usage.leastWindow()
-		if !ok {
-			return
-		}
-		win := five
-		if win == nil {
-			win = week
-		}
-		if win == nil {
-			return
-		}
-		pct := int(math.Round(win.LeftPct()))
-		chip := ui.Row(c.Key("home-quota")).Height(22).Padding(0, 9, 0, 9).Radius(11).
-			Background(fill2).Gap(6).AlignItems(ui.Center)
-		chip.Children(func() {
-			ui.Box(c.Key("ring")).Size(13, 13).Draw(func(pt *ui.Painter, r ui.Rect) {
-				p.host.usage.drawWindowRing(pt, r, r.W/2-1.5, 2.5, win, usageFive, false, false)
-			})
-			ui.Text(c, l.HomeQuotaLeft(toolName(tool), itoa(pct))).SingleLine().
-				FontSize(11.5).TextColor(ink2)
-		})
-	})
+	}, l.HomeQuotaLeft(toolName(tool), strconv.Itoa(pct)))
 }
 
 // homeAwakeRemain is awakeModule.remainText in the language of the page:
@@ -595,35 +524,17 @@ func homeAwakeRemain(l locales.Messages, m *awakeModule, now time.Time) string {
 	return l.AwakeRemaining(mac.FormatClock(rem.Seconds()))
 }
 
-// homeRecentFiles is the newest tray entries, files and folders only: the
-// clipboard's text and what was removed from the tray stay out.
-func (a *shelf) homeRecentFiles(n int) []store.Item {
+// homeTrayCount is how many files and folders the tray holds now.
+func (a *shelf) homeTrayCount() int {
 	if a.store == nil {
-		return nil
+		return 0
 	}
-	var out []store.Item
+	n := 0
 	for _, it := range a.store.Items {
-		if len(out) == n {
-			break
-		}
 		if it.OffTray || it.Missing || it.Kind == store.KindText || a.isLeaving(it) {
 			continue
 		}
-		out = append(out, it)
+		n++
 	}
-	return out
-}
-
-// homeLatestClip is the newest text copied into the clipboard history.
-func (a *shelf) homeLatestClip() (store.Item, bool) {
-	if a.store == nil {
-		return store.Item{}, false
-	}
-	for _, it := range a.store.Items {
-		if it.Source == store.SourceClipboard && !it.OffClip && it.Kind == store.KindText &&
-			strings.TrimSpace(it.Text) != "" {
-			return it, true
-		}
-	}
-	return store.Item{}, false
+	return n
 }

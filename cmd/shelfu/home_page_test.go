@@ -74,21 +74,38 @@ func TestHomePlayerWithoutLyrics(t *testing.T) {
 	if _, ok := view.Find("播放进度"); !ok {
 		t.Fatal("the player has no seek rail")
 	}
-	if view.HasText("最近") || view.HasText("AGENT") {
-		t.Fatal("a loaded track must show the player, not the idle sections")
+	if view.HasText("托盘里 2 个文件") {
+		t.Fatal("a loaded track must show the player, not the idle page")
 	}
 	if w := a.pageShellW(); w != sheetW {
-		t.Fatalf("a player without lyrics is %.0f wide, want %.0f", w, float32(sheetW))
+		t.Fatalf("a player with the lyrics column closed is %.0f wide, want %.0f", w, float32(sheetW))
+	}
+	// The lyrics button opens the column beside the player, says when
+	// nothing was found, and the choice is kept in settings.
+	oldGo, oldMain := homeGo, homeOnMain
+	homeGo = func(fn func()) { fn() }
+	homeOnMain = func(fn func()) { fn() }
+	t.Cleanup(func() { homeGo, homeOnMain = oldGo, oldMain })
+	clickVisible(t, view, "歌词（来自 lrclib.net）")
+	view.SetSize(homeLyricsW+2*earR, panelTestH)
+	view.Frame()
+	view.Frame()
+	if !a.settings.LyricsOn() || a.pageShellW() != homeLyricsW {
+		t.Fatalf("lyrics button: on %v, width %.0f", a.settings.LyricsOn(), a.pageShellW())
+	}
+	if !view.HasText("没有找到这首歌的歌词") || !view.HasText("夜曲") {
+		t.Fatalf("an empty lookup must say so beside the player; texts %v", view.Texts())
 	}
 }
 
 func TestHomeLyricsWidenAndAdvance(t *testing.T) {
 	st := homeTrack()
 	st.Elapsed = 6
-	a, view, p := homeShelfWith(t, &st, homeLyricsW+2*earR, func(_ *shelf, p *homePage) {
+	a, view, p := homeShelfWith(t, &st, homeLyricsW+2*earR, func(a *shelf, p *homePage) {
 		p.key = homeTrackKey(st)
 		p.lines = lyrics.ParseLRC("[00:00.00]第一句\n[00:05.00]第二句\n[00:10.00]第三句\n[00:15.00]第四句")
 		p.fetched = true
+		a.settings.SetLyrics(true)
 	})
 	view.Frame()
 	view.Frame()
@@ -131,14 +148,16 @@ func TestHomeLyricsLookupFailureKeepsPlayer(t *testing.T) {
 	homeOnMain = func(fn func()) { fn() }
 	t.Cleanup(func() { homeFetch, homeGo, homeOnMain = oldFetch, oldGo, oldMain })
 
-	a, view, p := homeShelf(t, &st)
+	a, view, p := homeShelfWith(t, &st, homeLyricsW+2*earR, func(a *shelf, _ *homePage) {
+		a.settings.SetLyrics(true)
+	})
 	view.Frame()
 	view.Frame()
 	if !p.failed {
 		t.Fatal("a failed lookup must be recorded for this track")
 	}
-	if a.pageShellW() != sheetW || !view.HasText("夜曲") {
-		t.Fatalf("a failed lookup must leave the 440 player up: width %.0f", a.pageShellW())
+	if a.pageShellW() != homeLyricsW || !view.HasText("夜曲") || !view.HasText("歌词暂时取不到") {
+		t.Fatalf("a failed lookup must say so beside the player: width %.0f, texts %v", a.pageShellW(), view.Texts())
 	}
 	// The failure is not retried on every frame.
 	calls := 0
@@ -159,6 +178,7 @@ func TestHomeCachedLyricsLoadWithoutNetwork(t *testing.T) {
 	t.Cleanup(func() { homeFetch = oldFetch })
 
 	a, view, p := homeShelfWith(t, &st, homeLyricsW+2*earR, func(a *shelf, _ *homePage) {
+		a.settings.SetLyrics(true)
 		a.lyricsCache().Put(homeTrackKey(st), lyrics.Result{Synced: "[00:00.00]缓存第一句\n[00:05.00]缓存第二句"})
 	})
 	view.Frame()
@@ -241,36 +261,47 @@ func agentFixture(a *shelf, now time.Time) {
 	f.finished["cursor|s3"] = agentTask{tool: agentnotify.ToolCursor, task: "重构设置页布局", at: now.Add(-12*time.Minute - 5*time.Second)}
 }
 
-func TestHomeIdleAgentAndRecent(t *testing.T) {
+func TestHomeIdleOtterAndStatus(t *testing.T) {
 	a, view, _ := homeShelf(t, nil)
 	homeFixtureStore(t, a)
 	agentFixture(a, time.Now())
 	view.Frame()
 	view.Frame()
-	for _, text := range []string{"AGENT", "整理发布说明并更新 CHANGELOG", "修好解析器失败的测试", "重构设置页布局", "3 分钟", "刚刚", "12 分钟前", "最近"} {
+	l := a.appLoc()
+	for _, text := range []string{l.HomeDate(time.Now()), l.HomeWeekday(time.Now()),
+		"Codex 正在：整理发布说明并更新 CHANGELOG", "托盘里 2 个文件"} {
 		if !view.HasText(text) {
 			t.Fatalf("idle home lacks %q; texts %v", text, view.Texts())
 		}
 	}
-	if !view.HasText("“git merge --ff-only fix 之后再继续”") {
-		t.Fatalf("the newest copied text is not on the home page: %v", view.Texts())
-	}
 	if _, ok := view.Find("0:56"); ok {
 		t.Fatal("no track, but the player drew")
 	}
+	// With nothing running, the newest finished turn takes the line.
+	f := a.agentFeature()
+	f.mu.Lock()
+	delete(f.tasks, "codex|s1")
+	f.mu.Unlock()
+	view.Frame()
+	if !view.HasText("Claude Code 刚完成：修好解析器失败的测试") {
+		t.Fatalf("the newest finished turn is missing; texts %v", view.Texts())
+	}
 }
 
-func TestHomeIdleCompactChips(t *testing.T) {
-	_, view, _ := homeHelfCompact(t)
+func TestHomeIdleAwakeThenQuota(t *testing.T) {
+	a, view, _ := homeHelfCompact(t)
 	view.Frame()
 	view.Frame()
-	for _, text := range []string{"最近", "保持唤醒 · 剩余 42:00", "Claude Code 剩 62%"} {
-		if !view.HasText(text) {
-			t.Fatalf("compact home lacks %q; texts %v", text, view.Texts())
-		}
+	if !view.HasText("保持唤醒 · 剩余 42:00") || view.HasText("Claude Code 额度剩 62%") {
+		t.Fatalf("keep awake must take the third line while on; texts %v", view.Texts())
 	}
-	if view.HasText("AGENT") {
-		t.Fatal("the Agent section must not appear while the switch is off")
+	if view.HasText("Codex 正在：整理发布说明并更新 CHANGELOG") {
+		t.Fatal("the agent line must not appear while the switch is off")
+	}
+	a.awake = nil
+	view.Frame()
+	if !view.HasText("Claude Code 额度剩 62%") {
+		t.Fatalf("with keep awake off the tightest quota shows; texts %v", view.Texts())
 	}
 }
 
@@ -404,7 +435,8 @@ func homeShotLyrics(t *testing.T, c homeShotContent) (*shelf, *ui.Tester, *homeP
 	t.Helper()
 	st := homeTrack()
 	st.Title, st.Artist, st.Elapsed = c.title, c.artist, 10.2
-	a, view, p := homeShelfWith(t, &st, homeLyricsW+2*earR, func(_ *shelf, p *homePage) {
+	a, view, p := homeShelfWith(t, &st, homeLyricsW+2*earR, func(a *shelf, p *homePage) {
+		a.settings.SetLyrics(true)
 		p.key = homeTrackKey(st)
 		var b []string
 		for i, line := range c.lyrics {
@@ -553,7 +585,8 @@ func TestMusicCardOpensHome(t *testing.T) {
 func TestHomeSwitchAwayAndBack(t *testing.T) {
 	st := homeTrack()
 	st.Elapsed = 6
-	a, view, p := homeShelfWith(t, &st, homeLyricsW+2*earR, func(_ *shelf, p *homePage) {
+	a, view, p := homeShelfWith(t, &st, homeLyricsW+2*earR, func(a *shelf, p *homePage) {
+		a.settings.SetLyrics(true)
 		p.key = homeTrackKey(st)
 		p.lines = lyrics.ParseLRC("[00:00.00]第一句\n[00:05.00]第二句\n[00:10.00]第三句")
 		p.fetched = true

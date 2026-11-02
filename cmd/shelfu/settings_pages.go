@@ -82,12 +82,6 @@ func (a *shelf) settingsGeneralPage(c *ui.Context) {
 		})
 	})
 
-	// 首页的两块来源：同步歌词只在开关开着时联网，关掉后首页仍显示播放器。
-	settingsGroup(c, "playback", l.SettingsLyricsGroup(), "", func() {
-		settingsToggleRow(c, "lyrics", l.SettingsLyricsRow(), "",
-			a.settings.LyricsOn(), a.setLyrics)
-	})
-
 	settingsGroup(c, "update", l.SettingsUpdateGroup(), "", func() {
 		ui.Column(c.Key("update-rows")).FillWidth().Disabled(a.settingsBroken).Children(func() {
 			settingsToggleRow(c, "autocheck", l.SettingsAutoCheckRow(), l.SettingsAutoCheckCaption(),
@@ -181,21 +175,6 @@ func (a *shelf) settingsNotchPage(c *ui.Context) {
 				a.settings.SnapWindows, a.setSnapWindows)
 		})
 	})
-}
-
-// setLyrics saves the lyrics switch. The home page reads it before the
-// next layout, so turning it off narrows the page at once and stops any
-// later request; a lookup already in flight is ignored by the page.
-func (a *shelf) setLyrics(on bool) {
-	next := a.settings
-	next.SetLyrics(on)
-	if !a.applySettings(next) {
-		return
-	}
-	if p, ok := a.page(pageHome).(*homePage); ok {
-		p.shown = -1
-	}
-	a.homeChanged()
 }
 
 // setLiveActivity saves one 实时活动 switch and repaints.

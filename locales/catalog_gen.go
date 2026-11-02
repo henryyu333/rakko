@@ -5083,84 +5083,108 @@ func (msgs Messages) PageHome() string {
 	return Catalog.Format(msgs.locale, "pageHome", nil)
 }
 
-// SettingsLyricsGroup says "歌词"
+// HomeLyrics says "歌词（来自 lrclib.net）"
 // in the language the app shows.
-func SettingsLyricsGroup() string { return In(i18n.Locale()).SettingsLyricsGroup() }
+func HomeLyrics() string { return In(i18n.Locale()).HomeLyrics() }
 
-// SettingsLyricsGroup says "歌词"
+// HomeLyrics says "歌词（来自 lrclib.net）"
 // in the language of msgs.
-func (msgs Messages) SettingsLyricsGroup() string {
-	return Catalog.Format(msgs.locale, "settingsLyricsGroup", nil)
+func (msgs Messages) HomeLyrics() string {
+	return Catalog.Format(msgs.locale, "homeLyrics", nil)
 }
 
-// SettingsLyricsRow says "显示歌词（从 lrclib.net 获取）"
+// HomeLyricsLoading says "正在找歌词…"
 // in the language the app shows.
-func SettingsLyricsRow() string { return In(i18n.Locale()).SettingsLyricsRow() }
+func HomeLyricsLoading() string { return In(i18n.Locale()).HomeLyricsLoading() }
 
-// SettingsLyricsRow says "显示歌词（从 lrclib.net 获取）"
+// HomeLyricsLoading says "正在找歌词…"
 // in the language of msgs.
-func (msgs Messages) SettingsLyricsRow() string {
-	return Catalog.Format(msgs.locale, "settingsLyricsRow", nil)
+func (msgs Messages) HomeLyricsLoading() string {
+	return Catalog.Format(msgs.locale, "homeLyricsLoading", nil)
 }
 
-// HomeAgentSection says "AGENT"
+// HomeLyricsNone says "没有找到这首歌的歌词"
 // in the language the app shows.
-func HomeAgentSection() string { return In(i18n.Locale()).HomeAgentSection() }
+func HomeLyricsNone() string { return In(i18n.Locale()).HomeLyricsNone() }
 
-// HomeAgentSection says "AGENT"
+// HomeLyricsNone says "没有找到这首歌的歌词"
 // in the language of msgs.
-func (msgs Messages) HomeAgentSection() string {
-	return Catalog.Format(msgs.locale, "homeAgentSection", nil)
+func (msgs Messages) HomeLyricsNone() string {
+	return Catalog.Format(msgs.locale, "homeLyricsNone", nil)
 }
 
-// HomeRecentSection says "最近"
+// HomeLyricsFailed says "歌词暂时取不到"
 // in the language the app shows.
-func HomeRecentSection() string { return In(i18n.Locale()).HomeRecentSection() }
+func HomeLyricsFailed() string { return In(i18n.Locale()).HomeLyricsFailed() }
 
-// HomeRecentSection says "最近"
+// HomeLyricsFailed says "歌词暂时取不到"
 // in the language of msgs.
-func (msgs Messages) HomeRecentSection() string {
-	return Catalog.Format(msgs.locale, "homeRecentSection", nil)
+func (msgs Messages) HomeLyricsFailed() string {
+	return Catalog.Format(msgs.locale, "homeLyricsFailed", nil)
 }
 
-// HomeQuotaLeft says "{name} 剩 {pct}%"
+// HomeDate says "{t, date, ::MMMMd}"
+// in the language the app shows.
+func HomeDate(t time.Time) string { return In(i18n.Locale()).HomeDate(t) }
+
+// HomeDate says "{t, date, ::MMMMd}"
+// in the language of msgs.
+func (msgs Messages) HomeDate(t time.Time) string {
+	return Catalog.Format(msgs.locale, "homeDate", map[string]any{"t": t})
+}
+
+// HomeWeekday says "{t, date, ::EEEE}"
+// in the language the app shows.
+func HomeWeekday(t time.Time) string { return In(i18n.Locale()).HomeWeekday(t) }
+
+// HomeWeekday says "{t, date, ::EEEE}"
+// in the language of msgs.
+func (msgs Messages) HomeWeekday(t time.Time) string {
+	return Catalog.Format(msgs.locale, "homeWeekday", map[string]any{"t": t})
+}
+
+// HomeAgentRunning says "{name} 正在：{task}"
+// in the language the app shows.
+func HomeAgentRunning(name string, task string) string {
+	return In(i18n.Locale()).HomeAgentRunning(name, task)
+}
+
+// HomeAgentRunning says "{name} 正在：{task}"
+// in the language of msgs.
+func (msgs Messages) HomeAgentRunning(name string, task string) string {
+	return Catalog.Format(msgs.locale, "homeAgentRunning", map[string]any{"name": name, "task": task})
+}
+
+// HomeAgentDone says "{name} 刚完成：{task}"
+// in the language the app shows.
+func HomeAgentDone(name string, task string) string {
+	return In(i18n.Locale()).HomeAgentDone(name, task)
+}
+
+// HomeAgentDone says "{name} 刚完成：{task}"
+// in the language of msgs.
+func (msgs Messages) HomeAgentDone(name string, task string) string {
+	return Catalog.Format(msgs.locale, "homeAgentDone", map[string]any{"name": name, "task": task})
+}
+
+// HomeTrayCount says "托盘里 {n, number, ::group-off} 个文件"
+// in the language the app shows.
+func HomeTrayCount(n int) string { return In(i18n.Locale()).HomeTrayCount(n) }
+
+// HomeTrayCount says "托盘里 {n, number, ::group-off} 个文件"
+// in the language of msgs.
+func (msgs Messages) HomeTrayCount(n int) string {
+	return Catalog.Format(msgs.locale, "homeTrayCount", map[string]any{"n": n})
+}
+
+// HomeQuotaLeft says "{name} 额度剩 {pct}%"
 // in the language the app shows.
 func HomeQuotaLeft(name string, pct string) string { return In(i18n.Locale()).HomeQuotaLeft(name, pct) }
 
-// HomeQuotaLeft says "{name} 剩 {pct}%"
+// HomeQuotaLeft says "{name} 额度剩 {pct}%"
 // in the language of msgs.
 func (msgs Messages) HomeQuotaLeft(name string, pct string) string {
 	return Catalog.Format(msgs.locale, "homeQuotaLeft", map[string]any{"name": name, "pct": pct})
-}
-
-// HomeRunningFor says "已跑 {n} 分钟"
-// in the language the app shows.
-func HomeRunningFor(n string) string { return In(i18n.Locale()).HomeRunningFor(n) }
-
-// HomeRunningFor says "已跑 {n} 分钟"
-// in the language of msgs.
-func (msgs Messages) HomeRunningFor(n string) string {
-	return Catalog.Format(msgs.locale, "homeRunningFor", map[string]any{"n": n})
-}
-
-// HomeRunningStarted says "刚开始"
-// in the language the app shows.
-func HomeRunningStarted() string { return In(i18n.Locale()).HomeRunningStarted() }
-
-// HomeRunningStarted says "刚开始"
-// in the language of msgs.
-func (msgs Messages) HomeRunningStarted() string {
-	return Catalog.Format(msgs.locale, "homeRunningStarted", nil)
-}
-
-// HomeEmpty says "还没有内容"
-// in the language the app shows.
-func HomeEmpty() string { return In(i18n.Locale()).HomeEmpty() }
-
-// HomeEmpty says "还没有内容"
-// in the language of msgs.
-func (msgs Messages) HomeEmpty() string {
-	return Catalog.Format(msgs.locale, "homeEmpty", nil)
 }
 
 // PageClipboard says "剪贴板"

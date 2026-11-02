@@ -53,9 +53,9 @@ type Settings struct {
 	// agent turn on the notch. Off by default: while it is on, Rakko's hook
 	// entries live in the installed agents' own configuration files.
 	AgentNotify AgentNotifySettings `json:"agentNotify"`
-	// Lyrics is the 设置 → 通用 → 歌词 switch. A missing object keeps it on,
-	// so a settings.json written before the home page had lyrics still shows
-	// them.
+	// Lyrics remembers whether the home page's lyrics column is open (the
+	// player's lyrics button). A missing object keeps it closed: nothing is
+	// asked of lrclib.net until the user opens it.
 	Lyrics *LyricsSettings `json:"lyrics,omitempty"`
 	// IslandPos is where the floating island was left on each display, by
 	// display id. A display with no entry keeps the default position; the
@@ -125,15 +125,16 @@ type AgentNotifySettings struct {
 }
 
 // LyricsSettings is the lyrics object in settings.json: whether the home
-// page may ask lrclib.net for synced lyrics. On for a fresh install and for
-// a file that has no lyrics object at all.
+// page's lyrics column is open, which is also the only time it asks
+// lrclib.net for synced lyrics. Closed for a fresh install and for a file
+// that has no lyrics object; the player's lyrics button opens it.
 type LyricsSettings struct {
 	Enabled bool `json:"enabled"`
 }
 
-// LyricsOn reports the switch, defaulting to on when the file predates it.
+// LyricsOn reports whether the lyrics column is open.
 func (s Settings) LyricsOn() bool {
-	return s.Lyrics == nil || s.Lyrics.Enabled
+	return s.Lyrics != nil && s.Lyrics.Enabled
 }
 
 // SetLyrics stores the switch.
@@ -224,7 +225,6 @@ func Default() Settings {
 			QuotaClaude: true,
 		},
 		AgentNotify: AgentNotifySettings{Enabled: false},
-		Lyrics:      &LyricsSettings{Enabled: true},
 		Pet:         PetSettings{Shown: true, Size: PetSizeMedium},
 		Shortcuts: ShortcutSettings{
 			Toggle:    DefaultShortcutToggle,
