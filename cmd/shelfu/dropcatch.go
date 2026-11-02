@@ -31,8 +31,7 @@ const (
 	dropOtterUp   = -20
 	// dropOtterMargin is the gap between the picture and the row's right
 	// edge, its own padding, and dropOtterSlot the room the row keeps
-	// clear for it: the picture, the margin, and a gap from the
-	// thumbnails, which give way to its left.
+	// clear for it: the picture, the margin, and a gap from the text.
 	dropOtterMargin = 16
 	dropOtterSlot   = dropOtterMargin + dropOtterW + 8
 	// The catch, in the design's timing: the file shrinks into the arms,
@@ -141,7 +140,7 @@ func (a *shelf) dropOtter(c *ui.Context, hot bool) {
 // otter keeps the file a moment, then sinks back. The release point comes
 // from the pointer the drag left on the row, so the file is seen falling
 // from where it was let go; a drop that answered no pointer point (a test,
-// a promised-file source) starts it from the thumbnails instead. Nothing
+// a promised-file source) starts it just left of the otter instead. Nothing
 // starts without the artwork.
 func (a *shelf) startDropCatch(row ui.Element) {
 	if dropOtterBase() == nil {
@@ -158,7 +157,7 @@ func (a *shelf) catchDrop(x, y float32) {
 	d.flySeeded = false
 	pw, _ := dropRowBox()
 	if x < 8 || y < 4 || x > pw-8 || y > dropTrayH-4 {
-		d.catchX, d.catchY = -1, -1 // no usable point: the stack's end
+		d.catchX, d.catchY = -1, -1 // no usable point: just left of the otter
 		return
 	}
 	d.catchX, d.catchY = int(x), int(y)
@@ -194,7 +193,7 @@ func (a *shelf) dropCatchFile(c *ui.Context, paths []string) {
 	size := dropCatchIcon * (1 - 0.5*k)
 	x := fromX + (chestX-fromX)*k
 	y := fromY + (chestY-fromY)*k
-	cell.Left(x - size/2).Top(y - size/2).Size(size, size).Radius(6).Clip().
+	cell.Left(x-size/2).Top(y-size/2).Size(size, size).Radius(6).Clip().
 		Opacity(1 - max(0, (k-0.6)/0.4))
 	cell.Children(func() {
 		var bmp *ui.Bitmap

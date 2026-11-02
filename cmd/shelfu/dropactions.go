@@ -466,9 +466,9 @@ func (a *shelf) dropStage(c *ui.Context, paths []string, class dropClass) {
 // 保存引用，随时拖出, and up to three stacked thumbnails of the dragged
 // files. It is a nested drop target, so releasing over it — the largest
 // target — means 放入托盘 exactly like dropping on empty space. When the
-// artwork is installed, the otter waits under the row's bottom edge and
-// rises from it, the row clipping the rest away; the thumbnails keep clear
-// of the slot it occupies at the right (see dropcatch.go).
+// artwork is installed, the otter takes the thumbnails' place: it waits
+// under the row's bottom edge and rises from it, the row clipping the rest
+// away (see dropcatch.go).
 func (a *shelf) dropTrayCell(c *ui.Context, paths []string) {
 	otter := dropOtterBase() != nil
 	row := ui.Row(c.Key("drop-tray")).Height(dropTrayH).FillWidth().Radius(14).
@@ -491,7 +491,13 @@ func (a *shelf) dropTrayCell(c *ui.Context, paths []string) {
 			panelLabel(c, nil, loc(c).DropTrayHint(), 11, 0).TextColor(ink3)
 		})
 		ui.Box(c).Grow(1)
-		a.dropThumbStack(c, paths)
+		if otter {
+			// No stack beside the otter; the catch's flight still shows
+			// the first thumbnail, so keep the cache warm for it.
+			a.dropThumbs(paths)
+		} else {
+			a.dropThumbStack(c, paths)
+		}
 		if otter {
 			a.dropOtter(c, hot)
 			a.dropCatchFile(c, paths)
