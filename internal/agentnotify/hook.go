@@ -38,17 +38,17 @@ const (
 // RunHookCLI handles `--agent-hook`. handled=false means the flag was
 // absent and the caller should continue starting the app.
 func RunHookCLI(args []string, stdin io.Reader) (handled bool) {
-	tool, dataDir, ok := parseHookArgs(args)
+	tool, dataDir, event, ok := parseHookArgs(args)
 	if !ok {
 		return false
 	}
-	forward(tool, dataDir, stdin)
+	forward(tool, dataDir, event, stdin)
 	return true
 }
 
 // parseHookArgs reads the forwarder's arguments without the flag package,
 // so nothing allocates more than needed on the hot path.
-func parseHookArgs(args []string) (tool Tool, dataDir string, ok bool) {
+func parseHookArgs(args []string) (tool Tool, dataDir, event string, ok bool) {
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		name, value, hasValue := strings.Cut(a, "=")
@@ -75,22 +75,24 @@ func parseHookArgs(args []string) (tool Tool, dataDir string, ok bool) {
 			tool = Tool(next())
 		case "--data-dir":
 			dataDir = next()
+		case "--event":
+			event = next()
 		}
 	}
-	return tool, dataDir, ok
+	return tool, dataDir, event, ok
 }
 
 // forward sends one event, then returns. Every failure is silent.
-func forward(tool Tool, dataDir string, stdin io.Reader) {
+func forward(tool Tool, dataDir, event string, stdin io.Reader) {
 	if !tool.Valid() {
 		return
 	}
-	// Grok and Devin CLI read Claude Code's hook files too. Their own hook
-	// entries report the event with the same session; the Claude command
-	// fired inside a Grok or Devin process must not announce it a second
-	// time as Claude Code. Devin sets DEVIN_PROJECT_DIR for every hook it
-	// runs.
-	if tool == ToolClaude && (os.Getenv("GROK_SESSION_ID") != "" || os.Getenv("DEVIN_PROJECT_DIR") != "") {
+	// Grok, Devin CLI and Cursor read Claude Code's hook files too. Their
+	// own hook entries report the event with the same session; the Claude
+	// command fired inside one of them must not announce it a second time
+	// as Claude Code. Each sets its own variable for every hook it runs.
+	if tool == ToolClaude && (os.Getenv("GROK_SESSION_ID") != "" || os.Getenv("DEVIN_PROJECT_DIR") != "" ||
+		os.Getenv("CURSOR_VERSION") != "") {
 		return
 	}
 	payload, err := io.ReadAll(io.LimitReader(stdin, forwardReadLimit))
@@ -100,6 +102,9 @@ func forward(tool Tool, dataDir string, stdin io.Reader) {
 	req := buildRequest(tool, payload)
 	if req.Session == "" {
 		return
+	}
+	if req.Event == "" {
+		req.Event = event
 	}
 	if dataDir == "" {
 		dataDir = os.Getenv("RAKKO_DATA_DIR")
@@ -117,25 +122,35 @@ func forward(tool Tool, dataDir string, stdin io.Reader) {
 // buildRequest turns a tool's hook payload into the wire event.
 func buildRequest(tool Tool, payload []byte) Event {
 	var p struct {
-		SessionID     string `json:"session_id"`
-		SessionIDAlt  string `json:"sessionId"`
-		ThreadID      string `json:"thread_id"`
-		Cwd           string `json:"cwd"`
-		WorkspaceRoot string `json:"workspaceRoot"`
-		EventName     string `json:"hook_event_name"`
-		EventNameAlt  string `json:"hookEventName"`
-		Prompt        string `json:"prompt"`
-		UserPrompt    string `json:"user_prompt"`
-		Message       string `json:"message"`
+		SessionID      string   `json:"session_id"`
+		SessionIDAlt   string   `json:"sessionId"`
+		ThreadID       string   `json:"thread_id"`
+		Conversation   string   `json:"conversation_id"`
+		ConvAlt        string   `json:"conversationId"`
+		Cwd            string   `json:"cwd"`
+		WorkspaceRoot  string   `json:"workspaceRoot"`
+		WorkspaceRoots []string `json:"workspace_roots"`
+		WorkspacePaths []string `json:"workspacePaths"`
+		EventName      string   `json:"hook_event_name"`
+		EventNameAlt   string   `json:"hookEventName"`
+		Prompt         string   `json:"prompt"`
+		UserPrompt     string   `json:"user_prompt"`
+		Message        string   `json:"message"`
+		Status         string   `json:"status"`
 	}
 	if len(payload) > 0 {
 		_ = json.Unmarshal(payload, &p)
 	}
+	// Cursor's stop also ends aborted and failed loops; only a completed
+	// one is a finished task.
+	if tool == ToolCursor && p.Status != "" && p.Status != "completed" {
+		return Event{}
+	}
 	req := Event{
 		V:       protoVersion,
 		Tool:    tool,
-		Session: firstNonEmpty(p.SessionID, p.SessionIDAlt, p.ThreadID, os.Getenv("GROK_SESSION_ID")),
-		Cwd:     firstNonEmpty(p.Cwd, p.WorkspaceRoot),
+		Session: firstNonEmpty(p.SessionID, p.SessionIDAlt, p.ThreadID, p.Conversation, p.ConvAlt, os.Getenv("GROK_SESSION_ID")),
+		Cwd:     firstNonEmpty(p.Cwd, p.WorkspaceRoot, first(p.WorkspaceRoots), first(p.WorkspacePaths)),
 		Prompt:  firstNonEmpty(p.Prompt, p.UserPrompt, p.Message),
 		Event:   firstNonEmpty(p.EventName, p.EventNameAlt, os.Getenv("GROK_HOOK_EVENT")),
 	}
@@ -145,6 +160,13 @@ func buildRequest(tool Tool, payload []byte) Event {
 		req.Session = "pid:" + strconv.Itoa(os.Getppid())
 	}
 	return req
+}
+
+func first(values []string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	return values[0]
 }
 
 // send writes one line to the socket and closes. It never blocks on a

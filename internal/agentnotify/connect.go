@@ -53,16 +53,34 @@ func StableExe(exe string) bool {
 // marker identifies Rakko's own entries inside a hooks document.
 func marker(tool Tool) string { return "--agent-hook --tool " + string(tool) }
 
+// namedHook is the member Rakko owns in a hooks document keyed by hook name.
+const namedHook = moduleMarker
+
 // HookCommand is the command line written into a tool's configuration. It
 // runs the forwarder only while the app binary still exists: after the app
 // is moved to the Trash the command succeeds and does nothing, so the agent
 // keeps working.
 func HookCommand(exe string, tool Tool, dataDir string) string {
-	call := shellQuote(exe) + " --agent-hook --tool " + string(tool)
+	return hookCommandFor(exe, tool, dataDir, "")
+}
+
+// hookCommandFor is HookCommand naming the event on the command line, for
+// tools whose payload does not.
+func hookCommandFor(exe string, tool Tool, dataDir, event string) string {
+	call := shellQuote(exe) + " " + marker(tool)
+	if event != "" {
+		call += " --event " + shellQuote(event)
+	}
 	if dataDir != "" {
 		call += " --data-dir " + shellQuote(dataDir)
 	}
 	return "if [ -x " + shellQuote(exe) + " ]; then " + call + "; fi"
+}
+
+// ownsModule reports whether a module file is Rakko's: a script carries
+// moduleMarker in its header, a JSON hook file Rakko's command.
+func ownsModule(raw []byte, tool Tool) bool {
+	return bytes.Contains(raw, []byte(moduleMarker)) || bytes.Contains(raw, []byte(marker(tool)))
 }
 
 // shellQuote quotes one word for /bin/sh so the shell hands it over
@@ -104,10 +122,22 @@ func Status(home string, tool Tool) (State, string) {
 		if !existed {
 			return StateNotInjected, ""
 		}
-		if bytes.Contains(raw, []byte(moduleMarker)) {
+		if ownsModule(raw, tool) {
 			return StateInjected, ""
 		}
 		return StateError, path + " was not written by Rakko"
+	case KindNamed:
+		if !existed {
+			return StateNotInjected, ""
+		}
+		doc, derr := newJSONDoc(raw)
+		if derr != nil {
+			return StateError, derr.Error()
+		}
+		if member, _ := doc.root.lookup(namedHook); member != nil {
+			return StateInjected, ""
+		}
+		return StateNotInjected, ""
 	default:
 		if !existed {
 			return StateNotInjected, ""
@@ -133,6 +163,8 @@ func Connect(home, dataDir, exe string, tool Tool) error {
 	switch s.kind {
 	case KindModule:
 		return writeModule(s, home, dataDir, exe)
+	case KindNamed:
+		return connectNamed(s, home, dataDir, exe)
 	default:
 		return connectHooks(s, home, dataDir, exe)
 	}
@@ -148,6 +180,8 @@ func Disconnect(home, dataDir string, tool Tool) error {
 	switch s.kind {
 	case KindModule:
 		return removeModule(s, home, dataDir)
+	case KindNamed:
+		return disconnectNamed(s, home, dataDir)
 	default:
 		return disconnectHooks(s, home, dataDir)
 	}
@@ -170,12 +204,19 @@ func connectHooks(s spec, home, dataDir, exe string) error {
 		return fmt.Errorf("agentnotify: %s exists and was not written by Rakko; left alone", path)
 	}
 	changed := false
+	if s.version != "" && (!existed || len(bytes.TrimSpace(raw)) == 0) {
+		if v, _ := doc.root.lookup("version"); v == nil {
+			if err := doc.appendMember(doc.root, "version", func(string) string { return s.version }); err != nil {
+				return err
+			}
+		}
+	}
 	timeout := s.timeout
 	if timeout == 0 {
 		timeout = hookTimeout
 	}
 	for _, ev := range s.events {
-		added, aerr := addHook(doc, s.tool, exe, dataDir, ev, timeout)
+		added, aerr := addHook(doc, s, exe, dataDir, ev, timeout)
 		if aerr != nil {
 			return aerr
 		}
@@ -224,7 +265,7 @@ func disconnectHooks(s spec, home, dataDir string) error {
 	rec := readOrigin(dataDir, path)
 	after := doc.bytes()
 	switch {
-	case isEmptyObject(string(after)) && rec.Created:
+	case rec.Created && (isEmptyObject(string(after)) || onlyVersion(after)):
 		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
@@ -251,7 +292,7 @@ func writeModule(s spec, home, dataDir, exe string) error {
 	path := s.config(home)
 	if raw, existed, _, err := readConfig(path); err != nil {
 		return err
-	} else if existed && !bytes.Contains(raw, []byte(moduleMarker)) {
+	} else if existed && !ownsModule(raw, s.tool) {
 		return fmt.Errorf("agentnotify: %s exists and was not written by Rakko; left alone", path)
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
@@ -270,7 +311,7 @@ func removeModule(s spec, home, dataDir string) error {
 		forgetOrigin(dataDir, path)
 		return err
 	}
-	if !bytes.Contains(raw, []byte(moduleMarker)) {
+	if !ownsModule(raw, s.tool) {
 		return nil
 	}
 	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -280,9 +321,119 @@ func removeModule(s spec, home, dataDir string) error {
 	return nil
 }
 
+// onlyVersion reports whether a document holds nothing but the "version"
+// Rakko started it with.
+func onlyVersion(text []byte) bool {
+	doc, err := newJSONDoc(text)
+	if err != nil || doc.root == nil || doc.root.kind != jObject || len(doc.root.members) != 1 {
+		return false
+	}
+	v, _ := doc.root.lookup("version")
+	return v != nil
+}
+
+// connectNamed adds Rakko's member to a hooks document keyed by hook name:
+// {"rakko-agent-completion": {"<event>": [{"type", "command", "timeout"}]}}.
+func connectNamed(s spec, home, dataDir, exe string) error {
+	path := s.config(home)
+	raw, existed, mode, err := readConfig(path)
+	if err != nil {
+		return err
+	}
+	doc, derr := newJSONDoc(raw)
+	if derr != nil {
+		return fmt.Errorf("agentnotify: %s: %w", path, derr)
+	}
+	if member, _ := doc.root.lookup(namedHook); member != nil {
+		return nil
+	}
+	timeout := s.timeout
+	if timeout == 0 {
+		timeout = hookTimeout
+	}
+	render := func(indent string) string {
+		inner := indent + doc.indent
+		var b strings.Builder
+		b.WriteString("{\n")
+		for i, ev := range s.events {
+			event := ""
+			if s.eventArg {
+				event = ev
+			}
+			b.WriteString(inner + quoteJSON(ev) + ": [{" +
+				`"type": "command", "command": ` + quoteJSON(hookCommandFor(exe, s.tool, dataDir, event)) +
+				fmt.Sprintf(`, "timeout": %d}]`, timeout))
+			if i < len(s.events)-1 {
+				b.WriteString(",")
+			}
+			b.WriteString("\n")
+		}
+		b.WriteString(indent + "}")
+		return b.String()
+	}
+	if err := doc.appendMember(doc.root, namedHook, render); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	backed, err := backupOnce(path, existed)
+	if err != nil {
+		return err
+	}
+	recordOrigin(dataDir, path, originRecord{
+		Created:  !existed,
+		Blank:    existed && len(bytes.TrimSpace(raw)) == 0,
+		BackedUp: backed,
+	})
+	m := os.FileMode(0o600)
+	if existed {
+		m = mode.Perm()
+	}
+	return writeAtomic(path, doc.bytes(), m)
+}
+
+// disconnectNamed removes Rakko's member, and the file when Rakko made it.
+func disconnectNamed(s spec, home, dataDir string) error {
+	path := s.config(home)
+	raw, existed, mode, err := readConfig(path)
+	if err != nil {
+		return err
+	}
+	if !existed {
+		forgetOrigin(dataDir, path)
+		return nil
+	}
+	doc, derr := newJSONDoc(raw)
+	if derr != nil {
+		return fmt.Errorf("agentnotify: %s: %w", path, derr)
+	}
+	idx := memberIndex(doc.root, namedHook)
+	if idx < 0 {
+		return nil
+	}
+	if err := doc.removeMember(doc.root, idx); err != nil {
+		return err
+	}
+	rec := readOrigin(dataDir, path)
+	after := doc.bytes()
+	switch {
+	case isEmptyObject(string(after)) && rec.Created:
+		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		forgetOrigin(dataDir, path)
+		return nil
+	case isEmptyObject(string(after)) && rec.Blank:
+		after = nil
+	}
+	return writeAtomic(path, after, mode.Perm())
+}
+
 // addHook appends Rakko's entry for ev unless it is already there. Every
 // edit re-reads the tree, because a splice replaces the parsed document.
-func addHook(doc *jsonDoc, tool Tool, exe, dataDir, ev string, timeout int) (bool, error) {
+func addHook(doc *jsonDoc, s spec, exe, dataDir, ev string, timeout int) (bool, error) {
+	tool := s.tool
 	hooks, _ := doc.root.lookup("hooks")
 	if hooks == nil {
 		if err := doc.appendMember(doc.root, "hooks", func(string) string { return "{}" }); err != nil {
@@ -309,9 +460,18 @@ func addHook(doc *jsonDoc, tool Tool, exe, dataDir, ev string, timeout int) (boo
 			return false, nil
 		}
 	}
-	command := HookCommand(exe, tool, dataDir)
+	event := ""
+	if s.eventArg {
+		event = ev
+	}
+	command := hookCommandFor(exe, tool, dataDir, event)
 	render := func(indent string) string {
 		inner := indent + doc.indent
+		if s.flat {
+			return "{\n" +
+				inner + `"command": ` + quoteJSON(command) + ",\n" +
+				inner + fmt.Sprintf(`"timeout": %d`, timeout) + "\n" + indent + "}"
+		}
 		deep := inner + doc.indent
 		return "{\n" + inner + `"hooks": [` + "\n" +
 			deep + "{\n" +

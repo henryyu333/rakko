@@ -131,7 +131,7 @@ func TestAgentNotifySmoke(t *testing.T) {
 		t.Fatal(err)
 	}
 	home := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(home, ".claude"), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Join(home, ".claude", "projects"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	exe := buildHookBinary(t)

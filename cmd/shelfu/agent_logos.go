@@ -27,6 +27,8 @@ var (
 
 	ompColor    = ui.Hex("#9B4DFF") // omp.sh favicon gradient's middle stop
 	geminiColor = ui.Hex("#3186FF") // Gemini spark blue
+	qwenColor   = ui.Hex("#615CED") // Qwen's brand violet
+	kiroColor   = ui.Hex("#9046FF") // kiro.dev icon's tile
 )
 
 // agentLogo is a tool's mark, its colour, and the icon box that shows the
@@ -50,6 +52,21 @@ func agentLogo(t agentnotify.Tool) (*ui.SVG, ui.Color, float32) {
 	case agentnotify.ToolDevin:
 		// The favicon's mark spans 329 of its 425 units.
 		return devinLogo, ink, settingsRowMark * 425 / 329
+	case agentnotify.ToolCursor:
+		return cursorLogo, ink, settingsRowMark
+	case agentnotify.ToolCopilot:
+		return copilotLogo, ink, settingsRowMark
+	case agentnotify.ToolAntigravity:
+		return antigravityLogo, ink, settingsRowMark
+	case agentnotify.ToolQwen:
+		return qwenLogo, qwenColor, settingsRowMark
+	case agentnotify.ToolKiro:
+		return kiroLogo, kiroColor, settingsRowMark
+	case agentnotify.ToolFactory:
+		// The icon's mark spans about 338 of its 508 units.
+		return factoryLogo, ink, settingsRowMark * 508 / 338
+	case agentnotify.ToolAugment:
+		return augmentLogo, ink, settingsRowMark
 	}
 	return nil, ink, settingsRowMark
 }

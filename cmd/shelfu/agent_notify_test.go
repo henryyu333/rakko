@@ -160,7 +160,7 @@ func TestAgentCompletionMergesRepeats(t *testing.T) {
 
 func TestAgentSwitchInjectsAndRemoves(t *testing.T) {
 	a, home, _ := agentShelf(t)
-	for _, dir := range []string{".claude", ".codex"} {
+	for _, dir := range []string{".claude/projects", ".codex/sessions"} {
 		if err := os.MkdirAll(filepath.Join(home, dir), 0o700); err != nil {
 			t.Fatal(err)
 		}
@@ -205,7 +205,7 @@ func TestAgentSwitchInjectsAndRemoves(t *testing.T) {
 func TestAgentSwitchKeepsUserHookBytes(t *testing.T) {
 	a, home, _ := agentShelf(t)
 	path := agentnotify.ConfigPath(home, agentnotify.ToolGemini)
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Join(home, ".gemini", "tmp"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	user := "{\n  \"theme\": \"GitHub\"\n}\n"
@@ -227,7 +227,7 @@ func TestAgentSwitchKeepsUserHookBytes(t *testing.T) {
 // Claude Code hook takes once the switch is on.
 func TestAgentEventReachesTheNotch(t *testing.T) {
 	a, home, dir := agentShelf(t)
-	if err := os.MkdirAll(filepath.Join(home, ".claude"), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Join(home, ".claude", "projects"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	a.setAgentNotify(true)

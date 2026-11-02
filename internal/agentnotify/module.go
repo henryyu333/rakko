@@ -129,13 +129,65 @@ export default function (pi) {
 }
 `
 
+// copilotHooks is GitHub Copilot CLI's hook file. Its payloads name no
+// event, so each command says which one it is.
+const copilotHooks = `{
+  "version": 1,
+  "hooks": {
+    "userPromptSubmitted": [
+      { "type": "command", "bash": __RAKKO_CMD:userPromptSubmitted__, "timeoutSec": 5 }
+    ],
+    "agentStop": [
+      { "type": "command", "bash": __RAKKO_CMD:agentStop__, "timeoutSec": 5 }
+    ]
+  }
+}
+`
+
+// kiroHooks is Kiro's v1 hook file; its payloads carry hook_event_name.
+const kiroHooks = `{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "` + moduleMarker + `-prompt",
+      "trigger": "UserPromptSubmit",
+      "action": { "type": "command", "command": __RAKKO_CMD:__ },
+      "timeout": 5,
+      "enabled": true
+    },
+    {
+      "name": "` + moduleMarker + `-stop",
+      "trigger": "Stop",
+      "action": { "type": "command", "command": __RAKKO_CMD:__ },
+      "timeout": 5,
+      "enabled": true
+    }
+  ]
+}
+`
+
 // renderModule fills a module template's baked-in values. The values are
 // JSON strings, so a path with quotes or backslashes stays a literal.
+// __RAKKO_CMD:<event>__ becomes the hook command line for that event (an
+// empty event leaves it to the payload).
 func renderModule(tmpl string, tool Tool, exe, dataDir string) string {
 	r := strings.NewReplacer(
 		"__RAKKO_EXE__", quoteJSON(exe),
 		"__RAKKO_DATA__", quoteJSON(dataDir),
 		"__RAKKO_TOOL__", quoteJSON(string(tool)),
 	)
-	return r.Replace(tmpl)
+	out := r.Replace(tmpl)
+	const open, end = "__RAKKO_CMD:", "__"
+	for {
+		i := strings.Index(out, open)
+		if i < 0 {
+			return out
+		}
+		j := strings.Index(out[i+len(open):], end)
+		if j < 0 {
+			return out
+		}
+		event := out[i+len(open) : i+len(open)+j]
+		out = out[:i] + quoteJSON(hookCommandFor(exe, tool, dataDir, event)) + out[i+len(open)+j+len(end):]
+	}
 }
