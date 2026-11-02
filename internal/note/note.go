@@ -49,8 +49,15 @@ func Open(dataDir string) (*Store, error) {
 	id, err := os.ReadFile(filepath.Join(dir, currentFile))
 	s.id = strings.TrimSpace(string(id))
 	if err == nil && validID(s.id) {
-		if _, statErr := os.Stat(s.Path()); statErr == nil {
+		_, statErr := os.Stat(s.Path())
+		if statErr == nil {
 			return s, nil
+		}
+		// Only a note that is really gone starts a fresh id; a note that
+		// cannot be looked at right now (permissions, a file provider
+		// hiccup) must not lose its place to a blank one.
+		if !errors.Is(statErr, fs.ErrNotExist) {
+			return nil, fmt.Errorf("note: %w", statErr)
 		}
 	} else if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return nil, fmt.Errorf("note: reading %s: %w", currentFile, err)

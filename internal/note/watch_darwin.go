@@ -147,6 +147,10 @@ func (w *Watch) run(notify func()) {
 	evs := make([]syscall.Kevent_t, 8)
 	for {
 		n, err := syscall.Kevent(w.kq, nil, evs, nil)
+		if err == syscall.EINTR {
+			// A signal interrupted the wait; the watch itself is fine.
+			continue
+		}
 		if err != nil {
 			return
 		}

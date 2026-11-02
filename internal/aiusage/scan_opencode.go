@@ -27,6 +27,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const (
@@ -85,6 +86,26 @@ func derefStr(p *string) string {
 // SQLite makes for it live in the scanner's cache directory and are removed
 // afterwards; only SELECT runs against it.
 func readOpencode(ctx context.Context, dbPath, cacheDir string, pool map[string]*string) ([]rec, error) {
+	// opencode may be writing while the files are copied, and a copy taken
+	// mid-checkpoint can fail to open. A fresh copy a moment later is
+	// consistent again; a few tries keep one busy second from blanking the
+	// whole tool's usage.
+	var err error
+	for range 3 {
+		var out []rec
+		if out, err = readOpencodeOnce(ctx, dbPath, cacheDir, pool); err == nil || ctx.Err() != nil {
+			return out, err
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(150 * time.Millisecond):
+		}
+	}
+	return nil, err
+}
+
+func readOpencodeOnce(ctx context.Context, dbPath, cacheDir string, pool map[string]*string) ([]rec, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
