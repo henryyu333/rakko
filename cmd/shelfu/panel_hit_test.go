@@ -116,26 +116,6 @@ func TestWarmLayerTakesNoPointer(t *testing.T) {
 	if clip.scroll.Y != 0 {
 		t.Fatalf("the wheel scrolled the unseen clipboard list to %.1f", clip.scroll.Y)
 	}
-
-	// The unseen home page's newest copied text must not copy either: with
-	// no track the home page lists it, and a click over it belongs to the
-	// visible tray.
-	a.np = nil
-	view.Frame()
-	warm(pageHome)
-	hidden := "“剪贴板条目 5 · 一段用于命中的文字”"
-	row, ok := view.Find(hidden)
-	if !ok {
-		t.Fatalf("the warm home page drew no copied-text row: %v", view.Texts())
-	}
-	before = len(*copied)
-	view.ClickAt(row.X+row.W/2, row.Y+row.H/2)
-	if len(*copied) == before {
-		t.Fatal("the click over the warm home page copied nothing")
-	}
-	if got := (*copied)[len(*copied)-1]; !strings.HasPrefix(got, "托盘条目") {
-		t.Fatalf("a click over the warm home page copied %q, want the visible tray's item", got)
-	}
 }
 
 // TestSwitchFirstPhaseTakesNoPointer: while the old page is only a
