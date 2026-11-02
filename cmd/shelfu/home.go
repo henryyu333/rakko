@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
-	"github.com/egoist/mygo/plugins/glass"
 	"github.com/egoist/mygo/ui"
 
 	"shelf/internal/mac"
@@ -356,7 +355,7 @@ func (a *shelf) resultsView(c *ui.Context, r ui.Rect, opacity float32) {
 	glassBase(c, "results-base", r, radius, opacity)
 	box := ui.Column(c.Key("results")).Absolute().Left(r.X).Top(r.Y).Width(r.W).Height(r.H).
 		Padding(resultsPad, resultsPad, resultsPad, resultsPad).Clip().Opacity(opacity).
-		Radius(radius).Material(glass.Glass{}).Border(0.5, paneRim)
+		Radius(radius).Draw(glassPaneDraw(radius)).Border(0.5, paneRim)
 	box.Children(func() {
 		if len(hits) == 0 {
 			// Still gathering: the sheet has no row to show yet, and
@@ -427,6 +426,14 @@ func glassBase(c *ui.Context, key string, r ui.Rect, radius, opacity float32) {
 		Radius(radius).Background(surface).Opacity(opacity).PassThrough()
 }
 
+// glassPaneDraw is the pane's glass, painted under its content and clipped
+// back to the pane's own edge (see paintGlassPane).
+func glassPaneDraw(radius float32) func(*ui.Painter, ui.Rect) {
+	return func(p *ui.Painter, r ui.Rect) {
+		paintGlassPane(p, r, radius, [4]float32{radius, radius, radius, radius})
+	}
+}
+
 // navView draws the page capsule's buttons inside its box r (window-local):
 // the pages, a divider, settings and collapse. A page button opens its
 // page; on the page already shown it goes back to the search bar.
@@ -435,7 +442,7 @@ func (a *shelf) navView(c *ui.Context, r ui.Rect, opacity float32) {
 	glassBase(c, "nav-base", r, navH/2, opacity)
 	row := ui.Row(c.Key("nav")).Absolute().Left(r.X).Top(r.Y).Width(r.W).Height(r.H).
 		Padding(0, navPadX, 0, navPadX).Gap(navBtnGap).AlignItems(ui.Center).Opacity(opacity).
-		Radius(navH/2).Material(glass.Glass{}).Border(0.5, paneRim)
+		Radius(navH/2).Draw(glassPaneDraw(navH/2)).Border(0.5, paneRim)
 	if opacity < 0.5 {
 		row.PassThrough()
 	}

@@ -35,6 +35,26 @@ func (a *shelf) refreshAppearance(now time.Time) {
 	}
 }
 
+// glassRimClip is how far past a pane its glass is drawn and clipped away
+// again, in points: the material lights a hairline on the pane's own edge,
+// and on a dark screen that hairline reads as a second, bright line along
+// the pane's bottom edge.
+const glassRimClip float32 = 1
+
+// paintGlassPane paints the glass of a pane filling box, rounded by radii.
+// The glass reaches one point past the box and is clipped back to it, so
+// the material's lit edge hairline never shows and the pane's edge is its
+// base's own outline.
+func paintGlassPane(p *ui.Painter, box ui.Rect, clipR float32, radii [4]float32) {
+	out := ui.Rect{X: box.X - glassRimClip, Y: box.Y - glassRimClip, W: box.W + 2*glassRimClip, H: box.H + 2*glassRimClip}
+	for i := range radii {
+		radii[i] += glassRimClip
+	}
+	p.Clip(box, clipR, func() {
+		glass.Glass{}.PaintMaterial(p, out, radii)
+	})
+}
+
 // panelFill is the shell's own paint. Hover shapes, the drop hint, the
 // completion capsule and the live activities stay pure black: they hang
 // off the notch and must read as hardware. The open panel (glassy) is
@@ -51,7 +71,7 @@ func (a *shelf) panelFill(p *ui.Painter, path *ui.Path, body ui.Rect, botR float
 	// ears included, is painted black first, so that is a defined black
 	// and never the transparent window.
 	p.FillPath(path, surface)
-	glass.Glass{}.PaintMaterial(p, body, [4]float32{0, 0, botR, botR})
+	paintGlassPane(p, body, botR, [4]float32{0, 0, botR, botR})
 	band := min(float32(bandH+24), body.H)
 	p.FillGradient(ui.Rect{X: body.X, Y: body.Y, W: body.W, H: band}, ui.LinearGradient{
 		Angle: 180,
