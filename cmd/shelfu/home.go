@@ -3,6 +3,7 @@
 package main
 
 import (
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"shelf/internal/mac"
+	"shelf/internal/note"
 	"shelf/internal/store"
 )
 
@@ -68,11 +70,13 @@ func (h homeHit) bitmap(a *shelf) *ui.Bitmap {
 	return a.spotIcon(h.path)
 }
 
-// homeHits is what the query finds, grouped tray → clipboard → 应用 →
-// 文件夹 → 文件 → actions, three rows per group and no more than the
+// homeHits is what the query finds, grouped tray → clipboard → 便利贴 →
+// 应用 → 文件夹 → 文件 → actions, three rows per group and no more than the
 // sheet's 330 pt holds. Tray rows open the file, clipboard rows copy the
-// text, Spotlight rows open the file and action rows run the tool; each
-// closes the panel like the page's own ⏎ does.
+// text, note rows bring the note up, Spotlight rows open the file and
+// action rows run the tool; each closes the panel like the page's own ⏎
+// does. The notes come from the in-memory index (see notesearch.go), so
+// their group is there with the clipboard's on the first keystroke.
 func (a *shelf) homeHits() []homeHit {
 	q := strings.ToLower(strings.TrimSpace(a.homeQuery))
 	if q == "" {
@@ -111,14 +115,21 @@ func (a *shelf) homeHits() []homeHit {
 			}
 		}
 	}
+	// The notes' text is indexed in memory: no file is read while typing.
+	docs := a.noteDocs()
+	notes := a.noteHits(docs, q)
 	// The index repeats what the tray already shows: those rows stay in
-	// the tray group only.
-	shown := make(map[string]bool, len(tray))
+	// the tray group only — and a note file never shows twice, once as a
+	// 便利贴 row and once as a Spotlight file.
+	shown := make(map[string]bool, len(tray)+len(docs))
 	for i, path := range trayPaths {
 		if i == homeGroupMax {
 			break
 		}
 		shown[path] = true
+	}
+	for _, d := range docs {
+		shown[filepath.Join(a.dataDir, note.DirName, d.ID+note.FileExt)] = true
 	}
 	var apps, folders, files []homeHit
 	if items := a.homeSpotItems(); len(items) > 0 {
@@ -146,7 +157,7 @@ func (a *shelf) homeHits() []homeHit {
 		}
 	}
 	var out []homeHit
-	for _, g := range [][]homeHit{tray, clip, apps, folders, files, acts} {
+	for _, g := range [][]homeHit{tray, clip, notes, apps, folders, files, acts} {
 		for i, h := range g {
 			if i == homeGroupMax {
 				break
@@ -525,6 +536,7 @@ func (a *shelf) takeKeyboard() {
 		}
 	}
 	a.focusMode = true
+	a.noteStale() // the notes may have changed while the panel was shut
 	a.syncMousePassThrough()
 	mac.ActivateSelf()
 	a.win.Focus()

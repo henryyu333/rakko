@@ -5383,6 +5383,16 @@ func (msgs Messages) HomeGroupClipboard() string {
 	return Catalog.Format(msgs.locale, "homeGroupClipboard", nil)
 }
 
+// HomeGroupNotes says "便利贴"
+// in the language the app shows.
+func HomeGroupNotes() string { return In(i18n.Locale()).HomeGroupNotes() }
+
+// HomeGroupNotes says "便利贴"
+// in the language of msgs.
+func (msgs Messages) HomeGroupNotes() string {
+	return Catalog.Format(msgs.locale, "homeGroupNotes", nil)
+}
+
 // HomeGroupApps says "应用"
 // in the language the app shows.
 func HomeGroupApps() string { return In(i18n.Locale()).HomeGroupApps() }

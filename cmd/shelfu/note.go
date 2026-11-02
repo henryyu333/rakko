@@ -124,6 +124,39 @@ func (n *noteUI) load() error {
 	return nil
 }
 
+// selectNote makes another note the one the card edits and reads it in:
+// the watch follows the new file, so a change to either still lands. The
+// current draft is written first, so a search row never costs a sentence.
+// A note that cannot be read keeps the window locked, as load does.
+func (n *noteUI) selectNote(id string) error {
+	if id == n.store.ID() {
+		return nil
+	}
+	if err := n.flush(); err != nil {
+		return err
+	}
+	if err := n.store.Select(id); err != nil {
+		return err
+	}
+	if n.watch != nil {
+		n.watch.Close()
+		n.watch = nil
+	}
+	a := n.host
+	if err := n.load(); err != nil {
+		a.report(err)
+	}
+	if w, err := note.WatchFile(n.store.Path(), func() {
+		mygo.RunOnMain(a.noteOutside)
+	}); err == nil {
+		n.watch = w
+	} else {
+		a.report(err)
+	}
+	n.invalidate()
+	return nil
+}
+
 // dirty reports unsaved text in the editor.
 func (n *noteUI) dirty() bool { return n.draft != n.text }
 
@@ -161,7 +194,8 @@ func (n *noteUI) flush() error {
 		return err
 	}
 	n.text, n.seen, n.since = n.draft, n.draft, time.Time{}
-	n.invalidate() // the card's heading and preview follow the file
+	n.host.noteStale() // the search's index has older text
+	n.invalidate()     // the card's heading and preview follow the file
 	return nil
 }
 
@@ -208,6 +242,7 @@ func (a *shelf) noteOutside() {
 		a.report(err)
 		return
 	}
+	a.noteStale() // another editor wrote; the search's index has older text
 	if n.locked {
 		// The file is readable again (an editor's save replaced it, or the
 		// permissions came back): the window returns to editing it.

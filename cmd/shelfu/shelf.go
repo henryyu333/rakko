@@ -155,6 +155,9 @@ type shelf struct {
 	// note 是便利贴卡片背后的那个 Markdown 文件，以及打开时的窗口
 	// （note.go）；首次画到卡片或点开时才建立文件与监听。
 	note *noteUI
+	// noteIdx 是搜索「便利贴」组用的便签文本（notesearch.go）：只在保存、
+	// 外部改动或搜索框重新拿到键盘时重扫，敲键时只查内存。
+	noteIdx noteIndex
 
 	// 框选文字：同一时间只有一轮（ocrScan，capture+识别全程）；ocrBusyAt
 	// 记这轮开始时刻给进行中胶囊的 250ms 延迟计时；ocrSheet 为真时展开

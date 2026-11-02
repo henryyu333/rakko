@@ -313,7 +313,13 @@ func agentTaskName(prompt string) string {
 // two units, so 20 Chinese characters and 40 Latin ones end at the same
 // place on the capsule.
 func truncateAgentTask(s string) string {
-	const limit = 40
+	return clipUnits(s, 40)
+}
+
+// clipUnits shortens s to units display columns, a wide (CJK) rune
+// counting two, and marks the cut with an ellipsis. The caller decides how
+// many columns fit.
+func clipUnits(s string, limit int) string {
 	units := 0
 	for i, r := range s {
 		w := 1
