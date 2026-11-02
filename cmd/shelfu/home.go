@@ -442,7 +442,7 @@ func (a *shelf) resultsView(c *ui.Context, r ui.Rect, opacity float32) {
 			})
 			// Files, folders and apps can also be shown where they live;
 			// the clipboard, notes, tray rows and actions cannot.
-			if hits[min(a.homeSel, len(hits)-1)].reveal != nil {
+			if hits[max(0, min(a.homeSel, len(hits)-1))].reveal != nil {
 				reveal := ui.Row(c.Key("results-reveal")).Gap(5).AlignItems(ui.Center)
 				reveal.Children(func() {
 					panelLabel(c, nil, l.ItemShowInFinder(), 11.5, 600).TextColor(ink2)
