@@ -56,7 +56,9 @@ export const RakkoAgentCompletion = async ({ directory }) => {
         const part = p.part || {};
         if (type === "message.updated" && info.role === "user" && info.id) {
           users.add(info.id);
-          if (info.sessionID && !prompts.has(info.sessionID)) prompts.set(info.sessionID, "");
+          // A new user message starts a new task: clear what the previous
+          // turn left, so the first text part of this message names it.
+          if (info.sessionID) prompts.set(info.sessionID, "");
         }
         if (type === "message.part.updated" && part.type === "text" && part.text &&
             users.has(part.messageID)) {
@@ -88,8 +90,39 @@ export default function (pi) {
       if (event && typeof event.prompt === "string") task = event.prompt;
     });
     pi.on("agent_end", (event, ctx) => {
-      if (event && event.willContinue) return;
+      // A continuation is already scheduled, and awaiting background work
+      // means the session has not finished yet.
+      if (event && (event.willContinue || event.awaitingAsyncWork === true)) return;
       rakkoSend("agent_end", String(process.pid), (ctx && ctx.cwd) || process.cwd(), task);
+      task = "";
+    });
+  } catch (_) {}
+}
+`
+
+// ompModule differs from extensionModule on purpose. omp runs a user-level
+// hook inside task/subagent sessions too, which share the process id, so
+// agent_end would announce every subagent; session_stop is omp's main-session
+// stop hook and never fires for a subagent. It also waits until the session's
+// own background jobs are idle, so an awaited stop is a real finish. The
+// handler returns nothing: omp reads a returned decision as a request to keep
+// the turn going.
+const ompModule = `// ` + moduleMarker + `: written by Rakko. Removed when its switch is off.
+import { existsSync } from "node:fs";
+import { spawn } from "node:child_process";
+
+const EXE = __RAKKO_EXE__;
+const DATA = __RAKKO_DATA__;
+const TOOL = __RAKKO_TOOL__;
+` + sendHelper + `
+export default function (pi) {
+  let task = "";
+  try {
+    pi.on("before_agent_start", (event) => {
+      if (event && typeof event.prompt === "string") task = event.prompt;
+    });
+    pi.on("session_stop", (event, ctx) => {
+      rakkoSend("session_stop", String(process.pid), (ctx && ctx.cwd) || process.cwd(), task);
       task = "";
     });
   } catch (_) {}

@@ -103,7 +103,7 @@ var specs = []spec{
 		config: func(home string) string {
 			return join(home, ".omp", "agent", "hooks", "pre", "rakko-agent-completion.ts")
 		},
-		module: extensionModule,
+		module: ompModule,
 	},
 	{
 		tool:   ToolPi,
@@ -202,7 +202,7 @@ func DisplayPath(home string, tool Tool) string {
 // DoneEvent reports whether a hook event means "this turn is finished".
 func DoneEvent(event string) bool {
 	switch event {
-	case "Stop", "StopFailure", "AfterAgent", "session.idle", "agent_end", "agent_settled":
+	case "Stop", "StopFailure", "AfterAgent", "session.idle", "agent_end", "agent_settled", "session_stop":
 		return true
 	}
 	return false
