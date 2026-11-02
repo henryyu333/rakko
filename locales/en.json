@@ -666,8 +666,5 @@
   "settingsRetentionCaption": "Pinned items are never removed",
   "settingsNotchNav": "Appearance",
   "settingsPermStatusOn": "All Permissions On",
-  "settingsPermStatusMissing": "{count, plural, one {One Permission Missing} other {{count, number, ::group-off} Permissions Missing}}",
-  "settingsNowPlayingRow": "Show Now Playing in the Notch",
-  "settingsHoverGroup": "Hovering the Notch",
-  "trayNowPlaying": "Now Playing"
+  "settingsPermStatusMissing": "{count, plural, one {One Permission Missing} other {{count, number, ::group-off} Permissions Missing}}"
 }

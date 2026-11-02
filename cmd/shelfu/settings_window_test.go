@@ -781,3 +781,19 @@ func TestSettingsPetGroupFollowsTheArtwork(t *testing.T) {
 		t.Fatal("a build without the artwork still offers the otter")
 	}
 }
+
+// The now-playing switch and its tray item are gone: both surfaces are
+// always on, and no old row may come back by accident.
+func TestNowPlayingHasNoVisibilitySetting(t *testing.T) {
+	stubSettingsSeams(t, false, nil, nil)
+	a, view := newSettingsShelf(t)
+	openSettingsPage(t, view, "外形与提示")
+	if view.HasText("刘海显示正在播放") {
+		t.Fatal("外形与提示 still offers the removed now-playing switch")
+	}
+	for _, it := range a.trayMenu().Items() {
+		if it.Label == "正在播放" {
+			t.Fatal("the tray menu still offers the removed now-playing item")
+		}
+	}
+}

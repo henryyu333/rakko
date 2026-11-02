@@ -65,9 +65,10 @@ func TestSnapWindowsLoad(t *testing.T) {
 	}
 }
 
-// The legacy islandNowPlaying key still loads (a file may set it off), and
-// the removed battery/volume keys are ignored.
-func TestNowPlayingToggleAndLegacyIslandKeysLoad(t *testing.T) {
+// A legacy islandNowPlaying key (and the removed battery/volume keys) is
+// ignored, and the load keeps every current default: the wings and the home
+// player are always on.
+func TestLegacyIslandKeysAreIgnored(t *testing.T) {
 	dir := t.TempDir()
 	legacy := `{"islandNowPlaying": false, "islandBattery": false, "islandVolume": false}`
 	if err := os.WriteFile(filepath.Join(dir, FileName), []byte(legacy), 0o600); err != nil {
@@ -77,8 +78,8 @@ func TestNowPlayingToggleAndLegacyIslandKeysLoad(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.IslandNowPlaying {
-		t.Fatalf("islandNowPlaying: false => %v, want false", s.IslandNowPlaying)
+	if !reflect.DeepEqual(s, Default()) {
+		t.Fatalf("legacy keys changed the settings: %+v", s)
 	}
 }
 
@@ -167,7 +168,7 @@ func TestSaveRoundTrips(t *testing.T) {
 	// The pet's size is normalized on load, so the literal spells out
 	// medium rather than the empty string.
 	want := Settings{RetentionDays: 7, ClipboardLimit: 12, ExcludedApps: []string{"com.example.one", "com.example.two"},
-		ShellStyle: ShellStyleIsland, IslandNowPlaying: true, Pet: PetSettings{Size: PetSizeMedium}, Lyrics: Default().Lyrics}
+		ShellStyle: ShellStyleIsland, Pet: PetSettings{Size: PetSizeMedium}, Lyrics: Default().Lyrics}
 	if err := Save(dir, want); err != nil {
 		t.Fatal(err)
 	}

@@ -377,10 +377,6 @@ func (a *shelf) trayMenu() *mygo.Menu {
 		a.permissionMenuItem(),
 		{Label: l.TrayRetention(), Type: mygo.MenuItemSubmenu, Submenu: a.retentionMenu()},
 		{Label: l.TrayClipboard(), Type: mygo.MenuItemSubmenu, Submenu: a.clipboardMenu()},
-		{Label: l.TrayNowPlaying(), Type: mygo.MenuItemCheckbox, Checked: a.settings.IslandNowPlaying, Disabled: a.settingsBroken,
-			Click: func(*mygo.MenuItem, *mygo.Window) {
-				a.setNowPlaying(func(s *settings.Settings) { s.IslandNowPlaying = !s.IslandNowPlaying })
-			}},
 	}
 	if it := a.petMenuItem(); it != nil {
 		items = append(items, it)
@@ -459,14 +455,4 @@ func (a *shelf) clipboardMenu() []*mygo.MenuItem {
 		})
 	}
 	return items
-}
-
-// setNowPlaying saves the now-playing preference; the module reads its
-// setting on every tick, so a change applies at once without a restart.
-// Disabled while settings.json could not be read, so a broken file is
-// never overwritten.
-func (a *shelf) setNowPlaying(mutate func(*settings.Settings)) {
-	next := a.settings
-	mutate(&next)
-	a.applySettings(next)
 }

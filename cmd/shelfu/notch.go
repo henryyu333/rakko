@@ -196,7 +196,7 @@ func (a *shelf) desiredFrame() mygo.Rectangle {
 	// state, so hovering only redraws; it resizes when a track comes or
 	// goes, while nothing is drawn.
 	pw, ph := a.peekSize()
-	if a.np != nil && a.np.hasTrack() && a.settings.IslandNowPlaying {
+	if a.np != nil && a.np.hasTrack() {
 		// The capsule and the wings can alternate on the same strip: keep
 		// room for both so one hand-off never resizes the window.
 		mw, mh := a.wingsSize()

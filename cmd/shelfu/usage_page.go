@@ -1137,7 +1137,7 @@ func usageDeplete(l locales.Messages, d time.Duration) string {
 // --- settings ------------------------------------------------------------
 
 // setAIUsage saves an aiUsage mutation through applySettings (the single
-// path), like setNowPlaying; the page reads the settings every frame and
+// path); the page reads the settings every frame and
 // tick, so a change applies without a restart.
 func (a *shelf) setAIUsage(mutate func(*settings.Settings)) {
 	wasOn := a.settings.AIUsage.Enabled

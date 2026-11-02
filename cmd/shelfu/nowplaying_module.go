@@ -24,10 +24,8 @@ import (
 //
 // The state comes from mac.NowPlayingHost, which reads MediaRemote
 // through an Apple-signed perl host (macOS 15.4 and later deny
-// Apple-unsigned readers). The host is started lazily while the
-// islandNowPlaying setting is on and stopped when it is turned off, so
-// an off switch costs no process at all. The same setting covers every
-// now-playing surface here (peek wings and panel card).
+// Apple-unsigned readers). The host runs for the life of the app: the
+// now-playing wings, the home player and the panel card are always on.
 //
 // Artwork arrives in its own MediaRemote notification, often a moment
 // after the title. The helper therefore waits a short grace window before
@@ -126,13 +124,9 @@ func npSnapOf(st mac.NowPlayingState, have, panelVisible bool, now time.Time) np
 // again after a failed attempt (perl missing, bundle unreadable).
 const npRetryDelay = 30 * time.Second
 
-// tick keeps the helper alive according to the setting and folds new
-// helper lines into the displayed state.
+// tick keeps the helper alive and folds new helper lines into the
+// displayed state.
 func (m *nowPlayingModule) tick(now time.Time) {
-	if !m.host.settings.IslandNowPlaying {
-		m.stop()
-		return
-	}
 	if !m.started {
 		if !m.retryAt.IsZero() && now.Before(m.retryAt) {
 			return
@@ -340,12 +334,9 @@ func (m *nowPlayingModule) track() (mac.NowPlayingState, bool) {
 	return m.last, true
 }
 
-// hasTrack reports whether a now-playing card may be shown: the setting is
-// on and the source names a track, paused or not.
+// hasTrack reports whether a now-playing surface may be shown: the source
+// names a track, paused or not.
 func (m *nowPlayingModule) hasTrack() bool {
-	if !m.host.settings.IslandNowPlaying {
-		return false
-	}
 	_, ok := m.track()
 	return ok
 }

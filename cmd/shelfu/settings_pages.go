@@ -111,8 +111,7 @@ func (a *shelf) settingsGeneralPage(c *ui.Context) {
 }
 
 // settingsNotchPage: the shelf's mantle (shape, island position), the
-// now-playing wings, the desktop otter, the three live activities, and
-// window snapping.
+// desktop otter, the three live activities, and window snapping.
 func (a *shelf) settingsNotchPage(c *ui.Context) {
 	l := loc(c)
 	settingsHero(c, "notch", l.SettingsNotchPage(), l.SettingsNotchHero(), "curious",
@@ -143,14 +142,6 @@ func (a *shelf) settingsNotchPage(c *ui.Context) {
 		})
 	})
 	settingsFootnote(c, "shape-foot", l.SettingsNotchFoot())
-
-	settingsGroup(c, "hover", l.SettingsHoverGroup(), "", func() {
-		ui.Column(c.Key("hover-rows")).FillWidth().Disabled(a.settingsBroken).Children(func() {
-			settingsToggleRow(c, "np", l.SettingsNowPlayingRow(), "", a.settings.IslandNowPlaying, func(on bool) {
-				a.setNowPlaying(func(s *settings.Settings) { s.IslandNowPlaying = on })
-			})
-		})
-	})
 
 	// 桌宠: the desktop otter's own two switches. A build without the
 	// artwork draws no otter, so the group is not there either — an empty

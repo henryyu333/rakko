@@ -54,11 +54,10 @@ var (
 )
 
 // showsPlayer reports whether hovering the notch shows the two wings rather
-// than the plain bulge: a track is loaded, the setting is on and no file
-// drag is asking for the notch's drop target.
+// than the plain bulge: a track is loaded and no file drag is asking for the
+// notch's drop target.
 func (m *nowPlayingModule) showsPlayer() bool {
-	_, ok := m.track()
-	return ok && m.host.settings.IslandNowPlaying && !m.host.dragging
+	return m.hasTrack() && !m.host.dragging
 }
 
 // peekWings draws the hover wings at their final size w×h: the cover in

@@ -6792,33 +6792,3 @@ func SettingsPermStatusMissing(count int) string {
 func (msgs Messages) SettingsPermStatusMissing(count int) string {
 	return Catalog.Format(msgs.locale, "settingsPermStatusMissing", map[string]any{"count": count})
 }
-
-// SettingsNowPlayingRow says "刘海显示正在播放"
-// in the language the app shows.
-func SettingsNowPlayingRow() string { return In(i18n.Locale()).SettingsNowPlayingRow() }
-
-// SettingsNowPlayingRow says "刘海显示正在播放"
-// in the language of msgs.
-func (msgs Messages) SettingsNowPlayingRow() string {
-	return Catalog.Format(msgs.locale, "settingsNowPlayingRow", nil)
-}
-
-// SettingsHoverGroup says "悬停刘海时"
-// in the language the app shows.
-func SettingsHoverGroup() string { return In(i18n.Locale()).SettingsHoverGroup() }
-
-// SettingsHoverGroup says "悬停刘海时"
-// in the language of msgs.
-func (msgs Messages) SettingsHoverGroup() string {
-	return Catalog.Format(msgs.locale, "settingsHoverGroup", nil)
-}
-
-// TrayNowPlaying says "正在播放"
-// in the language the app shows.
-func TrayNowPlaying() string { return In(i18n.Locale()).TrayNowPlaying() }
-
-// TrayNowPlaying says "正在播放"
-// in the language of msgs.
-func (msgs Messages) TrayNowPlaying() string {
-	return Catalog.Format(msgs.locale, "trayNowPlaying", nil)
-}

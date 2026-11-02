@@ -666,8 +666,5 @@
   "settingsRetentionCaption": "置顶的项目不会清理",
   "settingsNotchNav": "外形与提示",
   "settingsPermStatusOn": "系统权限已全部开启",
-  "settingsPermStatusMissing": "还差 {count, number, ::group-off} 项权限",
-  "settingsNowPlayingRow": "刘海显示正在播放",
-  "settingsHoverGroup": "悬停刘海时",
-  "trayNowPlaying": "正在播放"
+  "settingsPermStatusMissing": "还差 {count, number, ::group-off} 项权限"
 }
