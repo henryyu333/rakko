@@ -658,3 +658,70 @@ func TestToolsGridDrawsNoEdgeBlur(t *testing.T) {
 		t.Fatalf("the tools grid melts at its top edge: %d there, %d in the open", edge, open)
 	}
 }
+
+// TestToolsPickerRowsShareTheColumns: each catalogue row owns its own
+// cell — half the card, rounded, hovered alone — and keeps its default
+// size at its own right edge instead of the row's outside.
+func TestToolsPickerRowsShareTheColumns(t *testing.T) {
+	s, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	a := &shelf{store: s, tab: pageTools, visible: true, dataDir: t.TempDir()}
+	p := a.toolsPage()
+	p.editing, p.picking = true, true
+	view := ui.NewTester(a.view, sheetW, panelTestH)
+	view.Frame()
+
+	group := p.pickerGroups()[0]
+	if len(group) < 2 {
+		t.Fatalf("the first group has %d rows", len(group))
+	}
+	left, ok := view.Find(group[0].name(a.appLoc()))
+	if !ok {
+		t.Fatalf("row %q missing", group[0].name(a.appLoc()))
+	}
+	right, ok := view.Find(group[1].name(a.appLoc()))
+	if !ok {
+		t.Fatalf("row %q missing", group[1].name(a.appLoc()))
+	}
+	if left.W != right.W {
+		t.Fatalf("columns are %v and %v wide", left.W, right.W)
+	}
+	if got := right.X - (left.X + left.W); got != 4 {
+		t.Fatalf("the column gap is %v, want the grid's 4", got)
+	}
+	// Both cells end inside the card: no row overflows its column, which
+	// would put the size label under the neighbouring row.
+	if right.X+right.W > sheetW-16 {
+		t.Fatalf("the second column ends at %v, past the card", right.X+right.W)
+	}
+	size, ok := view.Find(a.appLoc().CellSize(group[0].span, group[0].rows))
+	if !ok {
+		t.Fatalf("no size label for %q", group[0].name(a.appLoc()))
+	}
+	if size.X < left.X || size.X+size.W > left.X+left.W {
+		t.Fatalf("the left row's size %+v leaves its cell %+v", size, left)
+	}
+
+	// Point at the left row's top inner edge: the hover fill covers that
+	// cell only. The same point in the right row stays as it was.
+	probe := func(r ui.Rect) (int, int) { return int(r.X + r.W*0.6), int(r.Y + 4) }
+	lx, ly := probe(left)
+	rx, ry := probe(right)
+	before := view.Image()
+	rc, gc, bc, _ := before.At(rx, ry).RGBA()
+	view.Move(left.X+left.W/2, left.Y+left.H/2)
+	view.Frame()
+	after := view.Image()
+	ar, ag, ab, _ := after.At(rx, ry).RGBA()
+	if ar != rc || ag != gc || ab != bc {
+		t.Fatal("hovering the left row tinted the right one")
+	}
+	lr, lg, lb, _ := after.At(lx, ly).RGBA()
+	br, bg, bb, _ := before.At(lx, ly).RGBA()
+	if lr == br && lg == bg && lb == bb {
+		t.Fatal("the left row did not show its own hover")
+	}
+}

@@ -785,7 +785,7 @@ func (p *toolsPage) pickerBody(c *ui.Context, live bool) ui.Element {
 // pickRow is one catalogue row: glyph, name and the default size.
 func (p *toolsPage) pickRow(c *ui.Context, def toolCardDef, live bool) ui.Element {
 	a := p.host
-	row := ui.Row(c.Key("pick-"+def.id)).Height(toolPickRowH).FillWidth().Gap(8).
+	row := ui.Row(c.Key("pick-"+def.id)).Height(toolPickRowH).Gap(8).
 		Padding(0, 6, 0, 6).Radius(rRow).AlignItems(ui.Center).Label(def.name(loc(c)))
 	if row.Hovered() {
 		row.Background(fill1)
