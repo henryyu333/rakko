@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="https://github.com/henryyu333/shelfu/releases/download/v1.10.1/ShelfU-icon.png" width="128" alt="ShelfU icon">
+  <img src="https://github.com/henryyu333/shelfu/releases/download/v1.10.1/ShelfU-icon.png" width="128" alt="Rakko icon">
 </p>
 
-<h1 align="center">ShelfU</h1>
+<h1 align="center">Rakko</h1>
 
 <p align="center">
   A notch tool for the Mac. Files, clipboard, music and everyday tools grow out of the MacBook notch when you need them, and fold back into it when you're done.<br>
@@ -10,16 +10,17 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/henryyu333/shelfu/releases/latest/download/ShelfU.dmg"><img src="https://img.shields.io/badge/Download_for_macOS-ShelfU.dmg-007AFF?style=for-the-badge&logo=apple&logoColor=white" alt="Download ShelfU.dmg for macOS"></a>
+  <a href="https://github.com/henryyu333/rakko/releases/latest/download/Rakko.dmg"><img src="https://img.shields.io/badge/Download_for_macOS-Rakko.dmg-007AFF?style=for-the-badge&logo=apple&logoColor=white" alt="Download Rakko.dmg for macOS"></a>
 </p>
 
 <p align="center">
-  Apple Silicon · macOS 13+ · Free and open source · <a href="#install">Install guide</a> · <a href="https://github.com/henryyu333/shelfu/releases/latest">All downloads</a><br>
-  Apple Silicon 芯片 · macOS 13 或以上 · 免费开源 · <a href="#安装">安装说明</a> · <a href="https://github.com/henryyu333/shelfu/releases/latest">全部下载</a>
+  Apple Silicon · macOS 13+ · Free and open source · <a href="#install">Install guide</a> · <a href="https://github.com/henryyu333/rakko/releases/latest">All downloads</a><br>
+  Apple Silicon 芯片 · macOS 13 或以上 · 免费开源 · <a href="#安装">安装说明</a> · <a href="https://github.com/henryyu333/rakko/releases/latest">全部下载</a>
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License: MIT"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License: Apache-2.0"></a>
+  <a href="TRADEMARKS.md"><img src="https://img.shields.io/badge/brand-not--licensed-lightgrey.svg" alt="Brand not licensed"></a>
   <img src="https://img.shields.io/badge/macOS-13%2B%20Apple%20Silicon-blue.svg" alt="macOS 13+ Apple Silicon">
   <img src="https://img.shields.io/badge/built%20with-Go-00ADD8.svg" alt="Built with Go">
 </p>
@@ -32,26 +33,36 @@
 
 <a id="english"></a>
 
-## What is ShelfU
+## What is Rakko
 
-ShelfU is a notch tool for the Mac: it turns the black notch around the camera into a working part of the screen. It stays out of sight until you need it: hover the notch and it grows a pair of wings, or a small down-arrow pill, and a click opens the search bar. Type to search this Mac — the sheet under the bar lists the Tray and Clipboard first, then applications, folders, files and actions — or pick a page from the capsule hanging under the bar: Tray, Clipboard, Tools, and AI Usage when you turn it on. A page grows out of the notch in the bar's place, 440 × 250. Drag something onto the notch instead and the Tray opens on its own, already waiting for the drop. Only the black shape on screen takes clicks: the menu bar beside it works as usual. Esc steps back one level at a time: a page returns to the search bar, a typed query clears first, and the next Esc folds the bar into the notch.
+Rakko is a notch tool for the Mac: it turns the black notch around the camera into a working part of the screen. It stays out of sight until you need it: hover the notch and it grows a pair of wings, or a small down-arrow pill, and a click opens the search bar. Type to search this Mac — the sheet under the bar lists the Tray and Clipboard first, then your sticky notes, applications, folders, files and actions — or pick a page from the capsule hanging under the bar: Tray, Clipboard, Tools, and AI Usage when you turn it on. A page grows out of the notch in the bar's place, 440 × 250. Drag something onto the notch instead and the Tray opens on its own, already waiting for the drop. Only the black shape on screen takes clicks: the menu bar beside it works as usual. Esc steps back…
 
 It lives in the menu bar, has no Dock icon, keeps everything on your Mac, and never copies your files — it only remembers where they are.
 
 ## Highlights
 
 **A shelf in the notch**
-- Drag files, folders, images or text toward the notch — it shows "Release to Add" and the Tray opens while you are still dragging. The page becomes a drop zone: drop on Put in Tray, or on an action tile that fits the files — compress pictures to 1 MB, turn them into a PDF or JPEG, convert PDFs to Word or images, extract archives, zip anything, or AirDrop it. Results land on the shelf; originals stay where they are.
+- Drag files, folders, images or text toward the notch — it shows "Release to Add" and the Tray opens while you are still dragging. The page becomes a drop zone: drop on Put in Tray, or on an action tile that fits the files — compress pictures to 1 MB, turn them into a PDF or JPEG, convert PDFs to Word or images, extract archives, zip anything, or AirDrop it. Results land on the shelf; originals stay where they are. The otter under the Put in Tray row pokes its head out as the drag arrives and hugs the file when you let go.
 - Files show as thumbnails. Drag one or several (⌘/⇧ to select) straight into any app.
 - Press Space for Quick Look; right-click to open, reveal in Finder, AirDrop, copy, pin or remove — pictures get an extra "Copy Image" entry that copies the image itself.
 - Convert in place: right-click a picture → Convert to → JPEG, HEIC, PNG or PDF, or Word (Recognize Text) for the text in it; select several to merge them into one PDF. Right-click a PDF → Convert to → Word (Extract Text), or PNG (One per Page) or JPEG (One per Page). Resize Images sets the long edge to 2560, 1600 or 800 px. Everything runs on this Mac, the original stays untouched, and results land at the front of the shelf.
 - Tidy files where they sit: right-click a picture → Compress to and pick 500 KB, 1 MB, 2 MB or 5 MB; right-click a zip, tar, 7z or rar archive → Extract; right-click files → Rename… to rename a batch the way Finder does — replace text, add text, or name plus number — with a live preview and undo.
-- Other ways in: shake the pointer while dragging to summon a drop basket beside the cursor, or use Services → "Add to ShelfU" in Finder and other apps.
+- Other ways in: shake the pointer while dragging to summon a drop basket beside the cursor, or use Services → "Add to Rakko" in Finder and other apps.
+
+**Desktop otter**
+- The sea otter stands on the desktop as a small companion. Drag it anywhere — it settles above the Dock or against a screen edge and stays there on that display; drag it up to the notch and it goes back in. Click it to open the panel, or right-click for Open Rakko, Stow in the Notch, Size and Settings….
+- Drop files or text on it and they land in the Tray, the same way the notch takes them; the otter holds what it caught for a moment. It is quiet otherwise: it changes pose (standing, paws up while a drag hovers over it, lifted while you carry it, startled when a drag crosses the screen, asleep after ten quiet minutes) and never walks about.
+- Settings → Appearance → Desktop Otter: Show the otter, and Small, Medium or Large. While it is stowed, right-click the menu-bar icon → Bring Out the Otter brings it back.
 
 **Clipboard history**
 - Text you copy is kept automatically, along with the app it came from. Screenshots and copied images land on the shelf too.
 - Press `⌃⌥V` to search: type to filter, ↑/↓ to choose, ⏎ copies it and takes you back to the app you were in. Text inside screenshots and copied pictures is recognized on this Mac and searchable too; right-click a picture → Copy Recognized Text to copy what it says.
 - Pin what matters. Exclude apps you never want recorded. Passwords that password managers mark as private are skipped.
+
+**Sticky notes**
+- The Tools page has a Sticky Note card (add it from the + catalogue). Click it and a 320 × 380 window opens on the note: plain Markdown, the first line becomes its heading, and it is saved 400 ms after you stop typing — no save button, no saved line. Esc closes the window; a change another editor makes to the file shows up here while nothing is unsaved.
+- The card follows the note: 1 × 1 is the glyph and the name, 2 × 1 is the heading over the first three lines. The window's top row has Show in Finder, Keep on Top and Close.
+- The note is searchable: type in the notch's search bar and the Sticky Notes group lists the notes whose text matches; ⏎ brings that note up in its window. A hit in the heading comes before a hit in the body.
 
 **Now playing**
 - Hover the notch while music plays and it grows two small wings: the cover on the left, a moving equalizer on the right. Nothing drops down over your windows. Click anywhere on the wings and the search bar opens.
@@ -59,25 +70,51 @@ It lives in the menu bar, has no Dock icon, keeps everything on your Mac, and ne
 - The music widget is still a card on the Tools page: at 2 × 2 it is the full player, at 2 × 1 it shows the cover, title, artist and play-pause, and at 1 × 1 a tap toggles playback.
 
 **AI usage** (optional, off by default)
-- Enable it in Settings → AI Usage and the panel gains one more page icon: the left column holds a double-ring card per tool — outer ring weekly, inner ring 5-hour — and the right column holds this Mac's total token usage over Today / 7D / 30D / All, as four numbers and one chart. The page fits one screen and never scrolls. Hover a card for its reset times and any per-model weekly limits; hover the token or cost number for its parts.
-- Quotas show how much is used by default; switch to what is left in Settings → AI Usage → Quota Shown. The AI Usage card on Tools reads the same quotas: at 1 × 1 it draws one double ring — outer weekly, inner 5-hour — around the mark of the tool with the least left; hover it for the numbers. At 2 × 1 it keeps the ring beside its name.
-- The Claude Code quota comes from Claude Code itself: ShelfU runs your installed Claude Code's `/usage` command, so the numbers match what Claude Code reports. Claude Code must be installed; ShelfU never downloads it. The Codex quota reads the login Codex already saved on this Mac and sends it only to chatgpt.com.
+- Turn it on in Settings → AI Usage → Show AI Usage in the Notch and the panel gains one more page icon. The page fits one screen and never scrolls: the left column holds a double-ring card per tool — outer ring weekly, inner ring 5-hour — and the right column holds this Mac's total token usage over Today / 7D / 30D / All, as four numbers (tokens, requests, cost, cache hits) and one chart. Hover a card for its plan, reset times, the even-pace mark and any per-model weekly limits; hover a number for its parts.
+- Quotas show how much is used by default; switch to what is left in Settings → AI Usage → Quota Shown. The same page has one switch per quota source — Claude Code and Codex. The AI Usage card on Tools reads the same quotas: at 1 × 1 it draws one double ring — outer weekly, inner 5-hour — around the mark of the tool with the least left; hover it for the numbers. At 2 × 1 it keeps the ring beside its name.
+- The Claude Code quota comes from Claude Code itself: Rakko runs your installed Claude Code's `/usage` command, so the numbers match what Claude Code reports. Claude Code must be installed; Rakko never downloads it. The Codex quota reads the login Codex already saved on this Mac and sends it only to chatgpt.com.
 - Opening the page or pressing refresh reads the quota (Claude Code at most once every 30 seconds); while the page stays open, Claude Code is read again every 5–15 minutes, and only after you used it. The last reading is kept, so the page shows it right after a restart.
+- Local usage is found on its own: the session records of omp, Claude Code, Codex, pi, opencode and Grok are read where those tools keep them, and everything is summed into one total. There is no per-tool split and no switch per tool; the numbers are only ever drawn on this page.
+
+**Agent completion notices** (optional, off by default)
+- Settings → AI Usage → Agent Completion → Notify When a Turn Finishes. While it is on, Rakko writes a hook entry into the configuration file of each agent it finds installed, so a finished turn reaches the notch. Turning it off removes every entry it wrote, whole; a file it cannot parse is never rewritten.
+- The notice is a two-line card under the notch: the tool's mark, its name and a green Done on the first line, the task it was working on below. It only reports — nothing approves, answers or reads a conversation, and the agent keeps working exactly as it would without Rakko.
+- Codex asks once before it runs the entry: open `/hooks` in Codex, review the hook Rakko added and trust it. Until then Codex skips it.
+- Supported tools, and the file Rakko writes for each:
+
+| Tool | File |
+| --- | --- |
+| Claude Code | `~/.claude/settings.json` |
+| Codex | `~/.codex/hooks.json` |
+| Cursor | `~/.cursor/hooks.json` |
+| Copilot CLI | `~/.copilot/hooks/rakko-agent-completion.json` |
+| Devin | `~/.config/devin/config.json` |
+| Gemini CLI | `~/.gemini/settings.json` |
+| Antigravity | `~/.gemini/config/hooks.json` |
+| opencode | `~/.config/opencode/plugins/rakko-agent-completion.js` |
+| omp | `~/.omp/agent/hooks/pre/rakko-agent-completion.ts` |
+| pi | `~/.pi/agent/extensions/rakko-agent-completion.ts` |
+| Grok | `~/.grok/hooks/rakko.json` |
+| Qwen Code | `~/.qwen/settings.json` |
+| Droid | `~/.factory/settings.json` |
+| Kiro | `~/.kiro/hooks/rakko-agent-completion.json` |
+| Auggie | `~/.augment/settings.json` |
+
+A tool counts as installed only by files it writes itself, so a stray `~/.claude` folder from an installer does not put a row in the list. The switch needs the installed app: a build run from a terminal writes nothing and says so.
 
 **Stay awake**
 - Right-click the menu-bar icon → Keep Awake and your Mac won't fall asleep for 30 minutes, 1, 2 or 4 hours, or until you turn it off. Tick Keep Screen On to keep the display awake as well.
 - While it is on, every open page shows a moon in its top row: hover it for the time left, click it to end the hold.
 
 **Search bar and pages**
-- A click on the notch (or `⌃⌥Space`) grows a black search bar out of it and puts the keyboard in its field. Type to search this Mac: the sheet under the bar lists the Tray and Clipboard first, then applications, folders, files and actions. ↑/↓ chooses a row, ⏎ opens it (or copies the text, or runs the action), and ⌘⏎ shows a file in the Finder.
+- A click on the notch (or `⌃⌥Space`) grows a black search bar out of it and puts the keyboard in its field. Type to search this Mac: the sheet under the bar lists the Tray, the Clipboard and your sticky notes first, then apps, folders, files and actions. ↑/↓ chooses a row, ⏎ opens it (or copies the text, brings up the note, or runs the action), and ⌘⏎ shows a file in the Finder.
 - The capsule hanging under the bar carries the pages — Tray, Clipboard, Tools, and AI Usage when it is on — beside Settings and Collapse. A page grows out of the notch in the bar's place; the current page's button takes you back to the bar.
 - Esc steps back: a page returns to the search bar, a typed query clears first, and the next Esc folds the panel into the notch.
 
 **Tools page**
-- Tools is one grid: the action cards and the widgets live together. A new install fits exactly two rows with no scrolling: the music widget at 2 × 2, Keep Awake and AI Usage at 1 × 1 (Fit 1 MB takes that cell while AI Usage is off), then Capture Text and Zip. Every other card, AirDrop included, is in the + catalogue. A layout you already have stays as it is. The grid scrolls inside the page when it holds more than two rows.
+- Tools is one grid: the action cards and the widgets live together. A new install fits exactly two rows with no scrolling: the music widget at 2 × 2, Keep Awake and AI Usage at 1 × 1 (Fit 1 MB takes that cell while AI Usage is off), then Capture Text and Zip. Every other card and widget — AirDrop, Sticky Note and the rest — is in the + catalogue. A layout you already have stays as it is. The grid scrolls inside the page when it holds more than two rows.
 - Only a real drag of files over the panel dims the action cards that cannot take them. Widgets and cards pinned to the desktop stay as they are.
-- If you used the Home page in an earlier version, the widgets you placed there move into the Tools grid, at the sizes they had.
-- Tap an action card to run it on the pictures or files selected on the shelf, or drop files straight onto it.
+- Tap an action card to run it on the pictures or files selected on the shelf, or drop files straight onto it. Tap the Sticky Note card to open its window; tap it again to close.
 - Long-press a card (or click the pencil) to edit: drag to reorder, ⊖ to remove, the corner handle to cycle the sizes a widget offers (1 × 1, 2 × 1, 2 × 2), and the dashed + cell to add a card from the catalogue. Done or Esc to finish. Drag a card out of the panel to keep it on the desktop.
 
 **Pin to the desktop**
@@ -92,30 +129,30 @@ It lives in the menu bar, has no Dock icon, keeps everything on your Mac, and ne
 - Plug in the charger and the notch widens for a few seconds: Charging on the left, a green level bar and the percentage on the right. It also tells you once when the battery is full, and once at 20 % and 10 % while on battery.
 - Connect Bluetooth headphones and the notch shows their name — for AirPods, the left, right and case levels when macOS reports them — and again when they disconnect.
 - While a browser downloads into Downloads, the notch shows a progress ring and the percentage (or the size so far); when the download finishes, click the notice to put the file on the Tray. Several downloads that finish together share one notice, and a click puts all of them on the tray. Needs Full Disk Access — see [Optional](#optional).
-- Each one can be turned off in Settings → Appearance & Notifications → Live Activities.
+- Each one can be turned off in Settings → Appearance → Live Activities.
 
 **Dynamic Island style**
-- On a display without a notch, ShelfU floats as a Dynamic Island: a small black pill near the top that grows into everything the notch does.
-- On a MacBook you can choose it too: Settings → Appearance & Notifications → Notch Style → Dynamic Island. The notch style stays the default.
-- Hold the island and drag it anywhere on the screen; it stays where you let go, on each display. The panel finds its own place: it opens below the island when there is room, moves aside near a screen edge, and opens above the island when the space below is too small. While the panel is open, hold a blank part of its top row and the whole panel moves with the island. Settings → Appearance & Notifications → Reset Position brings it back to the top.
+- On a display without a notch, Rakko floats as a Dynamic Island: a small black pill near the top that grows into everything the notch does.
+- On a MacBook you can choose it too: Settings → Appearance → Notch Style → Dynamic Island. The notch style stays the default.
+- Hold the island and drag it anywhere on the screen; it stays where you let go, on each display. The panel finds its own place: it opens below the island when there is room, moves aside near a screen edge, and opens above the island when the space below is too small. While the panel is open, hold a blank part of its top row and the whole panel moves with the island. Settings → Appearance → Reset Position brings it back to the top.
 - The notch style cannot be dragged.
 
 **Arrange windows from the notch**
 - Drag any window by its title bar toward the notch: a panel offers left half, full, right half and left, middle or right third. Hover a tile to see where the window will go, let go to arrange it. Move away to cancel.
-- Uses Accessibility permission; turn it off in Settings → Appearance & Notifications → Snap Windows at the Notch.
+- Uses Accessibility permission; turn it off in Settings → Appearance → Snap Windows at the Notch.
 
 **Language**
 - Settings → General → Language offers Follow System (the default), 简体中文 and English.
 - Follow System shows Chinese when the Mac's first preferred language is Chinese — Simplified or Traditional, both in Simplified Chinese — and English for every other first language. A language you pick is shown exactly as you picked it. The switch takes effect at once, with no restart.
-- Dates and times follow the Mac's region and its 12- or 24-hour setting, whatever the interface language. The Services menu item, Add to ShelfU, follows the system language.
+- Dates and times follow the Mac's region and its 12- or 24-hour setting, whatever the interface language. The Services menu item, Add to Rakko, follows the system language.
 
 **Quiet by design**
 - One shortcut, `⌃⌥Space`, opens the search bar or closes the shelf; clicking anywhere else tucks it away, and Esc steps back one level at a time — a page returns to the search bar, a typed query clears first, and the bar folds into the notch.
 - Reduce Transparency draws the panel pure black; Reduce Motion keeps the fades and drops the travel and bounce. Secondary text — times, counts, captions — is drawn brighter than before, so it stays readable on black.
 - Every page switch is one fade: the page you leave fades out while the new page fades in. Over the open panel the pointer stays a plain arrow.
-- Settings… is a normal window with a sidebar: General (Open at Login, Language, automatic updates with Check Now), Appearance & Notifications (notch style, island position, now playing, live activities, snap windows), Tray, Clipboard, AI Usage, Shortcuts, System Permissions and About. The sidebar's footer says whether every permission is on; About holds the version, Check Now, the source link and the data folder. A downloaded update waits in General → Updates with its Restart button. Every control applies at once.
+- Settings… is a normal window with a sidebar: General (Open at Login, Language, automatic updates with Check Now), Appearance (notch style, island position, now playing, desktop otter, live activities, snap windows), Tray, Clipboard, AI Usage (display, quota, Agent Completion), Shortcuts, System Permissions and About. The sidebar's footer says whether every permission is on; About holds the version, Check Now, the source link and the data folder. Every control applies at once.
 - The four global shortcuts can be changed in Settings → Shortcuts: click a row, press the new keys, Delete to clear it, Esc to cancel. Show / Hide is `⌃⌥Space`, Clipboard Search `⌃⌥V`, Capture Text `⌃⌥O`, and Open Tray has none until you set one. A combination another app already holds leaves the previous shortcut in place.
-- Updates are checked against this repository's GitHub releases. ShelfU tells you when one is out and installs it only when you say so; once it is downloaded, Settings → General → Updates shows New Version Ready with a Restart button, and the bottom of the panel offers the restart too.
+- Updates are checked against this repository's GitHub releases. Rakko tells you when one is out and installs it only when you say so. Settings → General → Updates is where it lives: the last check's time and result, Check Now, and — once a version is downloaded — a Restart button; the pill at the bottom of the panel offers the same restart.
 
 <a id="install"></a>
 
@@ -123,47 +160,51 @@ It lives in the menu bar, has no Dock icon, keeps everything on your Mac, and ne
 
 Requires a Mac with Apple Silicon (M1 or later) running macOS 13 or later. Intel Macs are not supported.
 
-1. Download **[ShelfU.dmg](https://github.com/henryyu333/shelfu/releases/latest/download/ShelfU.dmg)**.
-2. Open the downloaded file and drag **ShelfU** onto the **Applications** folder.
-3. Open ShelfU from Applications. The first time, macOS will stop it — follow [First launch](#first-launch) below. You only do this once.
-4. ShelfU lives in the menu bar, not the Dock. Hover the notch, or press `⌃⌥Space`.
+1. Download **[Rakko.dmg](https://github.com/henryyu333/rakko/releases/latest/download/Rakko.dmg)**.
+2. Open the downloaded file and drag **Rakko** onto the **Applications** folder.
+3. Open Rakko from Applications. The first time, macOS will stop it — follow [First launch](#first-launch) below. You only do this once.
+4. Rakko lives in the menu bar, not the Dock. Hover the notch, or press `⌃⌥Space`.
 
-Prefer a zip? Every release on the [Releases page](https://github.com/henryyu333/shelfu/releases/latest) also has a `.zip` of the same version.
+Prefer a zip? Every release on the [Releases page](https://github.com/henryyu333/rakko/releases/latest) also has `Rakko-<version>-macos-arm64.zip` and the `.dmg` of the same version.
 
 <a id="first-launch"></a>
 
-### First launch: "ShelfU Not Opened"
+### First launch: "Rakko Not Opened"
 
-ShelfU is free and not notarized by Apple, so macOS asks you to confirm it once. Only do this for a copy you downloaded from this repository.
+Rakko is free and not notarized by Apple, so macOS asks you to confirm it once. Only do this for a copy you downloaded from this repository.
 
 **macOS 15 or later**
 
-1. Double-click ShelfU in Applications. When macOS says ShelfU was not opened, click **Done** (not Move to Trash).
+1. Double-click Rakko in Applications. When macOS says Rakko was not opened, click **Done** (not Move to Trash).
 2. Open **System Settings → Privacy & Security** and scroll down to **Security**.
-3. Next to "ShelfU was blocked to protect your Mac", click **Open Anyway**.
+3. Next to "Rakko was blocked to protect your Mac", click **Open Anyway**.
 4. Enter your password or use Touch ID, then click **Open Anyway** once more.
 
 **macOS 13 or 14**
 
-Control-click (or right-click) ShelfU in Applications, choose **Open**, then click **Open** in the dialog.
+Control-click (or right-click) Rakko in Applications, choose **Open**, then click **Open** in the dialog.
 
-From then on ShelfU opens normally. If macOS ever says the app **is damaged**, don't bypass it — delete it and download it again from the Releases page. Apple's guide: [Safely open apps on your Mac](https://support.apple.com/102445).
+From then on Rakko opens normally. If macOS ever says the app **is damaged**, don't bypass it — delete it and download it again from the Releases page. Apple's guide: [Safely open apps on your Mac](https://support.apple.com/102445).
 
 ### Optional
 
 - **Start at login**: right-click the menu-bar icon → Settings → General → Open at Login.
-- **System permissions**: Settings → System Permissions lists the three permissions with their state, and its last row is one switch; you can also right-click the menu-bar icon → Turn On System Permissions (3 missing)… — the number is how many are still off. Turning it on walks you through three System Settings pages in turn: Full Disk Access, Accessibility, then Screen Recording. Turn ShelfU on in each (on the Full Disk Access page, press + and choose ShelfU, or drag in the ShelfU that Finder shows), and ShelfU moves to the next one by itself; at the end, click Reopen ShelfU. macOS requires you to switch on each one yourself. Moving from Shelf to ShelfU asks for them once more (see below). Official ShelfU releases keep the grants across later updates; a build you compile yourself is signed afresh each time and may ask again.
-- **Full Disk Access**: files dragged in from Downloads, Desktop, Documents or iCloud Drive no longer bring up a "ShelfU would like to access files…" dialog.
+- **System permissions**: Settings → System Permissions lists the three permissions with their state, and its last row is one switch; you can also right-click the menu-bar icon → Turn On System Permissions (3 missing)… — the number is how many are still off. Turning it on walks you through three System Settings pages in turn: Full Disk Access, Accessibility, then Screen Recording. Turn Rakko on in each (on the Full Disk Access page, press + and choose Rakko, or drag in the Rakko that Finder shows), and Rakko moves to the next one by itself; at the end, click Reopen Rakko. macOS requires you to switch on each one yourself. Coming from the app's earlier name asks for them once more (see below). Official Rakko releases keep the grants across later updates; a build you compile yourself is signed afresh each time and may ask again.
+- **Full Disk Access**: files dragged in from Downloads, Desktop, Documents or iCloud Drive no longer bring up a "Rakko would like to access files…" dialog.
 - **Accessibility** (notch drop protection): while you drag toward the notch, the pointer stays in the drop area instead of hitting the very top edge of the screen.
 - **Screen Recording** (Capture Text): only the area you select is captured, text is recognized on this Mac, and the shot is not kept.
-- **Uninstall**: right-click the menu-bar icon → Quit, then move ShelfU from Applications to the Trash. To also delete your saved items, remove `~/Library/Application Support/ShelfU/`.
+- **Uninstall**: right-click the menu-bar icon → Quit, then move Rakko from Applications to the Trash. To also delete your saved items, remove `~/Library/Application Support/Rakko/`.
 
-### Coming from Shelf
+### Coming from ShelfU
 
-ShelfU is the new name of Shelf. The first time ShelfU opens, it copies your saved items from `~/Library/Application Support/Shelf/` to `~/Library/Application Support/ShelfU/`; the old folder stays as it was, and you can delete it once everything is there. macOS treats ShelfU as a new app, so turn its system permissions and Open at login on again.
+Rakko is the new name of ShelfU. The first time Rakko opens, it copies the data folder over: `~/Library/Application Support/ShelfU/` becomes `~/Library/Application Support/Rakko/`, with the saved items, managed images, converted files, layout and settings intact, and absolute paths inside them rewritten. It copies rather than moves, in one step, so a failure leaves both folders as they were; the old folder stays as a complete backup, and you can delete it once everything is there. The copy is skipped when the new folder already exists, and Rakko refuses to migrate while ShelfU is running — quit ShelfU first.
 
-- **Updating inside Shelf**: after the update is installed, open Shelf from Applications. It renames itself to `ShelfU.app` and opens as ShelfU.
-- **Installing from ShelfU.dmg**: quit Shelf and move `Shelf.app` to the Trash first, so that only ShelfU keeps using your items.
+macOS treats Rakko as a new app, so turn its system permissions and Open at Login on again after the upgrade.
+
+- **Updating inside ShelfU**: after the update is installed, open ShelfU from Applications. It renames its bundle to `Rakko.app` and opens from there; the data folder is copied on that first launch.
+- **Installing from Rakko.dmg**: quit ShelfU and move `ShelfU.app` to the Trash first, so that only Rakko keeps using your items.
+
+Coming from the older Shelf app? Rakko copies from `Application Support/Shelf/` the same way when no ShelfU folder exists, and renames a `Shelf.app` bundle the same way too.
 
 ## Everyday use
 
@@ -173,7 +214,9 @@ ShelfU is the new name of Shelf. The first time ShelfU opens, it copies your sav
 | Open a page | Click a page in the capsule under the search bar: Tray, Clipboard, Tools, or AI Usage when enabled; the page grows out of the notch |
 | Open the player | Open Tools and tap the music card |
 | Go back | Press Esc — a page returns to the search bar, a query clears first, and Esc again folds it into the notch; clicking outside the panel (not on the menu bar) or the shortcut closes the whole shelf |
-| Put something in | Drag it toward the notch: the Tray opens as the drag arrives, and you let go to add it; or shake the pointer while dragging and drop on the basket |
+| Put something in | Drag it toward the notch: the Tray opens as the drag arrives, and you let go to add it; or shake the pointer while dragging and drop on the basket; or drop it on the desktop otter |
+| Write a sticky note | On Tools, tap the Sticky Note card (add it from +) and type — it saves as you stop; Esc closes the window |
+| Search your notes | Type in the notch's search bar; the Sticky Notes group lists the matches and ⏎ opens the note |
 | Take something out | Drag it from the shelf into any app; ⌘/⇧-click to take several at once |
 | Copy text back | Click a text item, then paste with `⌘V` |
 | Copy image data | Select one picture and press `⌘C`, or right-click it → Copy Image — the clipboard gets PNG data, not the path |
@@ -194,14 +237,17 @@ ShelfU is the new name of Shelf. The first time ShelfU opens, it copies your sav
 | Change settings | Right-click the menu-bar icon → Settings… |
 | Change a shortcut | Settings → Shortcuts: click the row, press the new combination; Delete clears it, Esc cancels |
 | Check for updates | Right-click the menu-bar icon → Check for Updates…, or Settings → General → Check Now |
+| Get told an agent finished | Settings → AI Usage → Agent Completion → Notify When a Turn Finishes; Codex asks you to trust the hook once in its own `/hooks` |
 
 The full manual is in [docs/MANUAL.zh-CN.md](docs/MANUAL.zh-CN.md) (Chinese).
 
 ## Privacy
 
-Everything stays on your Mac: no account, no telemetry, no cloud sync. The only network requests are the update check — shortly after launch and then once a day, ShelfU asks this repository's latest GitHub release whether a newer version exists — and, only if you enable the optional AI usage page, its quota lookups: the Codex quota goes to chatgpt.com with the login Codex saved, and the Claude Code quota is read by running your installed Claude Code, which talks to Anthropic itself as it always does. Nothing else is sent. The update request sends nothing but the app version in the standard User-Agent header. Turn it off in Settings → General → Check for Updates Automatically; checking by hand from the menu still works.
+Everything stays on your Mac: no account, no telemetry, no cloud sync. The only network requests are the update check — shortly after launch and then once a day, Rakko asks this repository's latest GitHub release whether a newer version exists — and, only if you enable the optional AI usage page, its quota lookups: the Codex quota goes to chatgpt.com with the login Codex saved, and the Claude Code quota is read by running your installed Claude Code, which talks to Anthropic itself as it always does. Nothing else is sent. The update request sends nothing but the app version in the standard User-Agent header. Turn it off in Settings → General → Check for Updates Automatically; checking by hand from the menu still works.
 
-Clipboard text is stored in plain text in `~/Library/Application Support/ShelfU/`. Recording is always on. To keep an app's copies out, right-click one of its clipboard entries and exclude the app; to copy something you don't want kept, quit ShelfU first.
+The Agent Completion switch adds no traffic: those hooks run Rakko's own binary on this Mac, hand it the tool's own event through a local socket in the data folder, and send nothing over the network. They report only that a turn finished and what the task was — never a conversation, never an answer.
+
+Clipboard text is stored in plain text in `~/Library/Application Support/Rakko/`. Recording is always on. To keep an app's copies out, right-click one of its clipboard entries and exclude the app; to copy something you don't want kept, quit Rakko first.
 
 ## Build from source
 
@@ -211,14 +257,14 @@ Requires Go 1.27 or later and Xcode Command Line Tools. Run the following comman
 go run github.com/egoist/mygo/cmd/mygo build
 ```
 
-The packaged `ShelfU.app` and a `.dmg` land in a `darwin-arm64` subfolder under the output directory configured in `mygo.json`. ShelfU is written in Go with [MyGo](https://github.com/egoist/mygo). The app icon and the menu-bar icon are not in this repository: a build from source uses the default icon and shows the name in the menu bar.
+The packaged `Rakko.app` and a `.dmg` land in a `darwin-arm64` subfolder under the output directory configured in `mygo.json`. Rakko is written in Go with [MyGo](https://github.com/egoist/mygo). The app icon and the menu-bar icon are not in this repository: a build from source uses the default icon and shows the name in the menu bar.
 
 ### Source layout
 
 | Path | Contents |
 | --- | --- |
 | `cmd/shelfu/` | Application entry point, native interface and application tests |
-| `internal/` | macOS integration, storage, settings, layout, document export and AI usage modules |
+| `internal/` | macOS integration, storage, settings, layout, notes, agent hooks, document export and AI usage modules |
 | `resources/` | Third-party notices and generated native helper |
 | `docs/` | User manual |
 
@@ -233,36 +279,46 @@ MyGo reads the application package from `mygo.json`; the build command above als
 
 ## License
 
-ShelfU's source code is licensed under the MIT License (see [LICENSE](LICENSE)).
+Rakko's source code is licensed under the Apache License, Version 2.0 (see [LICENSE](LICENSE)); the notices that must travel with it are in [NOTICE](NOTICE), and third-party software and marks in `resources/THIRD_PARTY_NOTICES.txt`.
 
-The ShelfU name, app icon, menu-bar icon, sea otter mascot, and associated brand artwork, including character variants and original design files, are excluded from the MIT License.
+The Rakko brand is not licensed by Apache-2.0 (section 6). The name Rakko, the logo, the app icon, the menu-bar icon and the sea otter character — its poses, variants and original design files — are reserved; see [TRADEMARKS.md](TRADEMARKS.md). The artwork is not in this repository. You may build and run Rakko from source, and say your work is based on Rakko; a modified release must use a different name and different icons.
 
-Users may install and use official ShelfU releases. Separate extraction, reproduction, modification, or redistribution of these brand assets requires authorization.
+Releases v1.0.0 through v1.12.1 were published under the MIT License and stay available under it.
 
 ---
 
 <a id="简体中文"></a>
 
-## ShelfU 是什么
+## Rakko 是什么
 
-ShelfU 是住在 Mac 刘海里的工具：它把摄像头周围那块黑色刘海变成屏幕上能用的一部分。平时它不露面；鼠标移到刘海上，它会向两侧长出两翼或一个小箭头提示，点一下就打开搜索条：输入就能搜整台 Mac（下方结果面板先列托盘和剪贴板，再列应用、文件夹、文件和动作），也可以点搜索条下方胶囊里的页面：托盘、剪贴板、工具，打开 AI 用量后还有 AI 用量。页面从刘海原来的位置长出来，440 × 250。如果是拖着东西过来，打开的是「托盘」页，直接等着接收。屏幕上只有画出来的黑块接鼠标，旁边的菜单栏照常可点。Esc 一级一级往回退：页面回到搜索条，有输入时先清空输入，再按一次收回刘海。
+Rakko 是住在 Mac 刘海里的工具：它把摄像头周围那块黑色刘海变成屏幕上能用的一部分。平时它不露面；鼠标移到刘海上，它会向两侧长出两翼或一个小箭头提示，点一下就打开搜索条：输入就能搜整台 Mac（下方结果面板先列托盘、剪贴板和便利贴，再列应用、文件夹、文件和动作），也可以点搜索条下方胶囊里的页面：托盘、剪贴板、工具，打开 AI 用量后还有 AI 用量。页面从刘海原来的位置长出来，440 × 250。如果是拖着东西过来，打开的是「托盘」页，直接等着接收。屏幕上只有画出来的黑块接鼠标，旁边的菜单栏照常可点。Esc 一级一级往回退：页面回到搜索条，有输入时先清空输入，再按一次收回刘海。
 
-它只在菜单栏里，不占 Dock；所有内容都留在你的 Mac 上；放进来的文件不会被复制，ShelfU 只记住它们在哪儿。
+它只在菜单栏里，不占 Dock；所有内容都留在你的 Mac 上；放进来的文件不会被复制，Rakko 只记住它们在哪儿。
 
 ## 亮点
 
 **刘海里的托盘**
-- 把文件、文件夹、图片或文字往刘海拖，刘海会提示「松开放入」，还在拖着的时候「托盘」页就已经打开。整页变成投放区：松在「放入托盘」就收进托盘；松在下方的动作格上，就按文件类型直接压缩到 1 MB、转成 PDF 或 JPEG、PDF 转 Word 或图片、解压、打成 zip，或隔空投送。结果放进托盘，原文件不动。
+- 把文件、文件夹、图片或文字往刘海拖，刘海会提示「松开放入」，还在拖着的时候「托盘」页就已经打开。整页变成投放区：松在「放入托盘」就收进托盘；松在下方的动作格上，就按文件类型直接压缩到 1 MB、转成 PDF 或 JPEG、PDF 转 Word 或图片、解压、打成 zip，或隔空投送。结果放进托盘，原文件不动。「放入托盘」那一行下沿会探出海獭的头，松手时它把文件抱进怀里。
 - 文件以缩略图显示（iPhone 拍的 HEIC 照片也有预览），可以一次拖出一个或多个（按住 ⌘ 或 ⇧ 多选），直接拖进任何应用；也可以在设置里让拖出去的东西自动离开托盘。
 - 按空格快速查看；右键可以打开、在 Finder 中显示、隔空投送、复制（图片多一项「复制图片」，复制图片数据本身）、置顶或移除。
 - 图片和 PDF 可以直接转换：右键图片 →「转换为」JPEG、HEIC、PNG、PDF，或识别图里的文字生成 Word，多张还能合并成一个 PDF；大图可以一键缩小；右键 PDF 可以提取文字生成 Word，或每页存成一张图片。文件和文件夹可以压缩成 zip。全部在本机完成，原文件不动，做好的文件放在托盘最前面。
 - 文件整理也能就地完成：右键图片 →「压缩到」500 KB / 1 MB / 2 MB / 5 MB 以内；右键 zip、tar、7z、rar 压缩包 →「解压」；右键托盘里的文件 →「重新命名…」，像 Finder 一样替换文字、添加文字或按序号命名，改之前先预览，改完可以撤销。
-- 还有别的放法：拖着东西时左右晃动指针，光标旁会出现一个暂存篮；也可以在 Finder 或其他应用里右键 →「服务」→「添加到 ShelfU」。
+- 还有别的放法：拖着东西时左右晃动指针，光标旁会出现一个暂存篮；也可以在 Finder 或其他应用里右键 →「服务」→「添加到 Rakko」。
+
+**桌宠**
+- 海獭会站在桌面上陪着你。拖它可以放到任何地方——靠近 Dock 或屏幕左右边缘会自动站好（贴边），每块屏幕分别记住；拖到刘海上就是「收进刘海」。点它一下打开面板；右键有「打开 Rakko」「收进刘海」「大小」和「设置…」。
+- 把文件或文字拖到它身上，就和平常放进刘海一样收进托盘，海獭会把刚接到的东西抱一会儿。平时它很安静，只换表情和姿态（站着；有东西悬在它上面时抬起爪子；被你拎着时被拎起；有拖拽经过屏幕时吓一跳；安静十分钟后打瞌睡），不会到处走动。
+- 设置… →「外形与提示」→「桌宠」：「显示海獭」和「大小」小 / 中 / 大。收进刘海以后，右键菜单栏图标 →「放出海獭」让它回来。
 
 **剪贴板记录**
 - 复制过的文字会自动收好，并记住来自哪个应用；截图和复制的图片也会进托盘。
 - 按 `⌃⌥V` 搜索：输入即筛选，`↑`/`↓` 选择，回车复制并回到你原来的应用。截图和复制的图片里的文字会在本机识别，也能搜到；右键图片 →「识别文字并复制」可以直接复制图中文字。
 - 重要的内容可以置顶；不想被记录的应用可以排除；密码管理器标记为隐私的密码不会被记录。
+
+**便利贴**
+- 工具页有「便利贴」卡片（在「+」的目录里加）。点一下打开一块 320 × 380 的窗口，里面就是这张便利贴：纯 Markdown，第一行是标题，停止输入 400 毫秒后自动保存——没有保存按钮，也没有「已保存」字样。Esc 关窗口；没有未保存的输入时，别的编辑器改了文件这里也会跟着变。
+- 卡片跟着便利贴走：1×1 是图标和名字，2×1 是标题加前三行。窗口顶栏有「在访达中显示」「置顶」「关闭」。
+- 便利贴能被搜到：在刘海搜索条里输入，「便利贴」一组列出文字相符的便利贴，回车把它在窗口里打开；标题命中的排在正文命中之前。
 
 **正在播放**
 - 放音乐时把鼠标移到刘海上，刘海只向左右各长出一小截：左边是封面，右边是跳动的音频条，不会向下盖住窗口。点这一小截，打开的是搜索条。
@@ -270,25 +326,51 @@ ShelfU 是住在 Mac 刘海里的工具：它把摄像头周围那块黑色刘�
 - 音乐小组件仍留在工具页：2×2 是完整播放器，2×1 显示封面、歌名、歌手和播放暂停，1×1 点一下切换播放。
 
 **AI 用量**（可选，默认关闭）
-- 在设置 → AI 用量里打开「在刘海里显示 AI 用量」，顶栏会多出一个页面图标：左栏是 Codex、Claude Code 的套餐额度卡（每张卡内外双圈：外圈每周、内圈 5 小时），右栏是这台电脑上的 token 用量总量——今天 / 7 天 / 30 天 / 全部、四个数字、一根柱图。整页一屏看全，不用滚动。悬停额度卡看重置时间和按模型的每周额度；悬停 Token 或费用数字看它的组成部分。
-- 额度默认显示「已用」；可以在 设置… → AI 用量 →「额度显示」改成「剩余」。工具页的 AI 用量卡用同一份额度数据：1×1 只画一个双圈——外圈每周、内圈 5 小时——中间是剩余额度最少的那个工具的标志，鼠标悬停看具体数字；2×1 仍是圈在左、名字在右。
-- Claude Code 的额度由 Claude Code 自己给出：ShelfU 运行你装好的 Claude Code 的 `/usage` 命令，所以数字和 Claude Code 显示的一致。需要先装好 Claude Code，ShelfU 不会替你下载。Codex 的额度读取 Codex 保存在本机的登录信息，只发给 chatgpt.com。
+- 在 设置… →「AI 用量」→「在刘海里显示 AI 用量」打开后，顶栏会多出一个页面图标。整页一屏看全，不用滚动：左栏是 Claude Code、Codex 的套餐额度卡（每张卡内外双圈：外圈每周、内圈 5 小时），右栏是这台电脑上的 token 用量总量——今天 / 7 天 / 30 天 / 全部，四个数字（Token、请求、费用、缓存命中）和一根柱图。悬停额度卡可以看到套餐名、重置时间、均匀消耗标记和按模型的每周额度；悬停数字可以看到它的组成部分。
+- 额度默认显示「已用」；可以在 设置… →「AI 用量」→「额度显示」改成「剩余」。同一页里每个额度来源各有一个开关（Claude Code、Codex）。工具页的 AI 用量卡用同一份额度数据：1×1 只画一个双圈——外圈每周、内圈 5 小时——中间是剩余额度最少的那个工具的标志，鼠标悬停看具体数字；2×1 仍是圈在左、名字在右。
+- Claude Code 的额度由 Claude Code 自己给出：Rakko 运行你装好的 Claude Code 的 `/usage` 命令，所以数字和 Claude Code 显示的一致。需要先装好 Claude Code，Rakko 不会替你下载。Codex 的额度读取 Codex 保存在本机的登录信息，只发给 chatgpt.com。
 - 打开这一页或点刷新时会查询额度（Claude Code 最多 30 秒查一次）；页面一直开着时，只有你用过 Claude Code 才会每 5–15 分钟再查一次。上次的结果会保存，重启后打开就能看到。
+- 本机用量自己去找：omp、Claude Code、Codex、pi、opencode、Grok 各自的会话记录在它们自己的位置被读取，再加成一个总数。没有按工具拆分，也没有逐个工具的开关；这些数字只画在这一页上。
+
+**Agent 完成提醒**（可选，默认关闭）
+- 设置… →「AI 用量」→「Agent 完成提醒」→「完成时在刘海提醒」。打开后，Rakko 会在它找到的每个 agent 的配置文件里写入一条 hook，让「这一轮做完了」传到刘海。关掉时，它写进去的条目会整条移除；解析不了的文件绝不会被改写。
+- 提示是刘海下面的一张两行卡：第一行是这个工具的标志、名字和绿色的「完成」，第二行是它刚才在做的事。它只负责通知——不批准、不回复、不读对话，agent 的工作和没有 Rakko 时完全一样。
+- Codex 要你自己确认一次：在 Codex 里打开 `/hooks`，审阅 Rakko 加的那条 hook 并信任它；在那之前 Codex 会跳过它。
+- 支持的工具，以及 Rakko 为各自写入的文件：
+
+| 工具 | 文件 |
+| --- | --- |
+| Claude Code | `~/.claude/settings.json` |
+| Codex | `~/.codex/hooks.json` |
+| Cursor | `~/.cursor/hooks.json` |
+| Copilot CLI | `~/.copilot/hooks/rakko-agent-completion.json` |
+| Devin | `~/.config/devin/config.json` |
+| Gemini CLI | `~/.gemini/settings.json` |
+| Antigravity | `~/.gemini/config/hooks.json` |
+| opencode | `~/.config/opencode/plugins/rakko-agent-completion.js` |
+| omp | `~/.omp/agent/hooks/pre/rakko-agent-completion.ts` |
+| pi | `~/.pi/agent/extensions/rakko-agent-completion.ts` |
+| Grok | `~/.grok/hooks/rakko.json` |
+| Qwen Code | `~/.qwen/settings.json` |
+| Droid | `~/.factory/settings.json` |
+| Kiro | `~/.kiro/hooks/rakko-agent-completion.json` |
+| Auggie | `~/.augment/settings.json` |
+
+一个工具算不算装好，只看它自己写出来的文件，所以安装器留下的空文件夹不会在列表里多出一行。这个开关需要安装版：从终端直接跑起来的构建不会写入任何东西，设置页里也会这样说明。
 
 **保持唤醒**
 - 右键菜单栏图标 →「保持唤醒」，选 30 分钟、1 小时、2 小时、4 小时或「一直（直到关闭）」，这段时间里 Mac 不会自动睡眠；勾选「屏幕也保持亮着」，屏幕也不会熄灭。
 - 开启后，打开任何一页都能在顶栏看到一个月亮图标：鼠标停在上面看剩余时间，点一下结束。
 
 **搜索条与页面**
-- 点刘海（或按 `⌃⌥Space`）从刘海里长出一条黑色搜索条，键盘直接进输入框。输入就能搜整台 Mac：下方结果面板先列托盘和剪贴板，再列应用、文件夹、文件和动作；`↑`/`↓` 选择，回车打开（文字则复制，动作则执行），`⌘回车` 在 Finder 中显示。
+- 点刘海（或按 `⌃⌥Space`）从刘海里长出一条黑色搜索条，键盘直接进输入框。输入就能搜整台 Mac：下方结果面板先列托盘、剪贴板、便利贴，再列应用、文件夹、文件和动作；`↑`/`↓` 选择，回车打开（文字则复制，便利贴则打开它的窗口，动作则执行），`⌘回车` 在 Finder 中显示。
 - 搜索条下方挂着页面胶囊：托盘、剪贴板、工具，打开 AI 用量后还有 AI 用量，旁边是设置和收起。点一个页面，它在搜索条原来的位置长出来；点当前页面的按钮回到搜索条。
 - Esc 一级一级往回退：页面回到搜索条，有输入时先清空输入，再按一次收回刘海。
 
 **工具页**
-- 工具页是一张统一的网格：动作卡和小组件放在一起。全新安装时正好两行、不用滚动：音乐 2×2，保持唤醒和 AI 用量各 1×1（AI 用量页关着时，这一格是「压缩到 1 MB」），下面是框选文字和打成 zip。其余卡片（包括隔空投送）都在「+」打开的目录里，可以自己加。已有的布局不变。超过两行时在页内滚动。
+- 工具页是一张统一的网格：动作卡和小组件放在一起。全新安装时正好两行、不用滚动：音乐 2×2，保持唤醒和 AI 用量各 1×1（AI 用量页关着时，这一格是「压缩到 1 MB」），下面是框选文字和打成 zip。其余卡片和小组件（隔空投送、便利贴等）都在「+」打开的目录里，可以自己加。已有的布局不变。超过两行时在页内滚动。
 - 只有真的把文件拖过面板时，不能处理的动作卡才变暗；小组件和固定到桌面的卡片保持原样。
-- 如果你用过旧版本的「主页」，那里的小组件会按原来的尺寸搬进工具页的网格。
-- 点按动作卡，对托盘里选中的图片或文件执行；也可以把文件直接拖到卡片上。
+- 点按动作卡，对托盘里选中的图片或文件执行；也可以把文件直接拖到卡片上。点「便利贴」卡片打开它的窗口，再点一下关掉。
 - 长按卡片（或点铅笔图标）进入编辑：拖动排序、点 ⊖ 删除、拖右下角的把手在小组件支持的 1×1、2×1、2×2 之间切换、点虚线「+」格从目录添加。点「完成」或按 Esc 结束。把卡片拖出面板，它就固定到桌面。
 
 **固定到桌面**
@@ -306,15 +388,15 @@ ShelfU 是住在 Mac 刘海里的工具：它把摄像头周围那块黑色刘�
 - 每一项都可以在 设置… →「外形与提示」→「实时活动」里关掉。
 
 **灵动岛样式**
-- 在没有刘海的屏幕上，ShelfU 变成一颗悬浮的灵动岛：屏幕顶部一颗小黑胶囊，刘海能做的事它都能做。
+- 在没有刘海的屏幕上，Rakko 变成一颗悬浮的灵动岛：屏幕顶部一颗小黑胶囊，刘海能做的事它都能做。
 - MacBook 上也可以选：设置… →「外形与提示」→「刘海样式」→「灵动岛」。默认仍是刘海样式。
 - 按住小岛可以拖到屏幕任何位置，松手就留在那里，每块屏幕分别记住。展开后的面板自己找位置：下方放得下就向下展开，靠边时和岛错开，下方放不下就向岛上方展开。面板展开时，按住顶栏的空白处也能拖，整块面板跟着岛一起走。设置… →「外形与提示」→「恢复默认位置」让它回到屏幕顶部。
 - 刘海样式不能拖。
 
 **语言**
 - 设置… → 通用 →「语言」有三档：「跟随系统」（默认）、「简体中文」和「English」。
-- 跟随系统时，Mac 的首选语言是中文就显示中文（简体、繁体都显示简体中文），其他语言显示英文；选定哪一档就按哪一档显示。切换立即生效，不用重新打开 ShelfU。
-- 日期和时间按 Mac 的地区和 12/24 小时制显示；服务菜单里的「添加到 ShelfU」跟系统语言走。
+- 跟随系统时，Mac 的首选语言是中文就显示中文（简体、繁体都显示简体中文），其他语言显示英文；选定哪一档就按哪一档显示。切换立即生效，不用重新打开 Rakko。
+- 日期和时间按 Mac 的地区和 12/24 小时制显示；服务菜单里的「添加到 Rakko」跟系统语言走。
 
 **拖窗口到刘海分屏**
 - 拖着任意窗口的标题栏往刘海走，会出现排列面板：左半、全屏、右半、左 1/3、中 1/3、右 1/3。指针停在哪一格就预览窗口会落在哪儿，松手就排好；拖离刘海就取消。
@@ -324,9 +406,9 @@ ShelfU 是住在 Mac 刘海里的工具：它把摄像头周围那块黑色刘�
 - 一个快捷键 `⌃⌥Space` 打开搜索条或收起；点别处就自动缩回刘海。Esc 一级一级往回退：页面先回到搜索条，有输入时先清空输入，再按一次收回刘海。
 - 打开「减少透明度」时面板画成纯黑；「减少动态效果」时只保留淡入淡出。时间、计数、说明这类次要文字在纯黑上更容易看清。
 - 页面之间用同一种切换：旧页淡出，新页淡入。指针在展开的面板上始终是普通箭头。
-- 设置… 是一个带侧栏的普通窗口：通用（开机时自动启动、语言、自动更新和「现在检查」）、外形与提示（刘海样式、灵动岛位置、正在播放、实时活动、拖窗口分屏）、托盘、剪贴板、AI 用量、快捷键、系统权限和关于。侧栏底部显示权限状态；关于页有版本号、「现在检查」、源代码链接和数据文件夹。下载好的更新在 通用 → 更新 里，带「重新启动」按钮。改完立即生效。
+- 设置… 是一个带侧栏的普通窗口：通用（开机时自动启动、语言、自动更新和「现在检查」）、外形与提示（刘海样式、灵动岛位置、正在播放、桌宠、实时活动、拖窗口分屏）、托盘、剪贴板、AI 用量（显示、额度、Agent 完成提醒）、快捷键、系统权限和关于。侧栏底部显示权限状态；关于页有版本号、「现在检查」、源代码链接和数据文件夹。改完立即生效。
 - 四个全局快捷键可以在 设置… → 快捷键 里改：点一下那一行，按新的组合键；Delete 清空，Esc 取消。显示 / 收起是 `⌃⌥Space`、剪贴板搜索 `⌃⌥V`、框选文字 `⌃⌥O`，「打开托盘」默认不设。组合被其他应用占用时，保留原来的组合并提示。
-- 新版本从本仓库的 GitHub Releases 检查；有更新时会提示你，你点了才会安装。下载好后，设置… → 通用 → 更新 里显示「新版本已就绪」和「重新启动」按钮，面板底部也会提示重新启动。
+- 新版本从本仓库的 GitHub Releases 检查；有更新时会提示你，你点了才会安装。更新的信息都在 设置… → 通用 →「更新」里：上次检查的时间和结果、「现在检查」，下载好后还有「重新启动」按钮；面板底部的小胶囊也会提示，并给出同样的重新启动。
 
 <a id="安装"></a>
 
@@ -334,47 +416,51 @@ ShelfU 是住在 Mac 刘海里的工具：它把摄像头周围那块黑色刘�
 
 需要 Apple Silicon 芯片（M1 或更新）的 Mac，系统 macOS 13 或以上。不支持 Intel 芯片的 Mac。
 
-1. 下载 **[ShelfU.dmg](https://github.com/henryyu333/shelfu/releases/latest/download/ShelfU.dmg)**。
-2. 打开下载好的文件，把 **ShelfU** 拖到 **Applications（应用程序）** 文件夹上。
-3. 从“应用程序”里打开 ShelfU。第一次打开会被系统拦下，按下面的[第一次打开](#第一次打开)操作即可，只需要做一次。
-4. ShelfU 在屏幕顶部的菜单栏里，不在 Dock 上。把鼠标移到刘海上，或按 `⌃⌥Space`。
+1. 下载 **[Rakko.dmg](https://github.com/henryyu333/rakko/releases/latest/download/Rakko.dmg)**。
+2. 打开下载好的文件，把 **Rakko** 拖到 **Applications（应用程序）** 文件夹上。
+3. 从“应用程序”里打开 Rakko。第一次打开会被系统拦下，按下面的[第一次打开](#第一次打开)操作即可，只需要做一次。
+4. Rakko 在屏幕顶部的菜单栏里，不在 Dock 上。把鼠标移到刘海上，或按 `⌃⌥Space`。
 
-想要 zip 压缩包？[Releases 页面](https://github.com/henryyu333/shelfu/releases/latest)的每个版本里也有同一版本的 `.zip`。
+想要 zip 压缩包？[Releases 页面](https://github.com/henryyu333/rakko/releases/latest)的每个版本里也有同一版本的 `Rakko-<version>-macos-arm64.zip` 和 `.dmg`。
 
 <a id="第一次打开"></a>
 
-### 第一次打开：提示“未打开 ShelfU”
+### 第一次打开：提示“未打开 Rakko”
 
-ShelfU 是免费软件，没有经过 Apple 公证，所以 macOS 会让你确认一次。请只对从本仓库下载的版本这样做。
+Rakko 是免费软件，没有经过 Apple 公证，所以 macOS 会让你确认一次。请只对从本仓库下载的版本这样做。
 
 **macOS 15 或更新**
 
-1. 在“应用程序”里双击 ShelfU。系统提示未打开时，点 **完成**（不要点“移到废纸篓”）。
+1. 在“应用程序”里双击 Rakko。系统提示未打开时，点 **完成**（不要点“移到废纸篓”）。
 2. 打开 **系统设置 → 隐私与安全性**，往下滚动到 **安全性**。
-3. 在“已阻止 ShelfU 以保护 Mac”旁边，点 **仍要打开**。
+3. 在“已阻止 Rakko 以保护 Mac”旁边，点 **仍要打开**。
 4. 输入开机密码或用触控 ID 确认，再点一次 **仍要打开**。
 
 **macOS 13 或 14**
 
-在“应用程序”里按住 Control 点按（或右键点按）ShelfU，选 **打开**，再在弹窗里点 **打开**。
+在“应用程序”里按住 Control 点按（或右键点按）Rakko，选 **打开**，再在弹窗里点 **打开**。
 
 之后就能正常打开了。如果系统提示 App **已损坏**，不要绕过，删掉后从 Releases 页面重新下载。Apple 官方说明：[在 Mac 上安全地打开 App](https://support.apple.com/zh-cn/102445)。
 
 ### 可选
 
 - **开机自动启动**：右键菜单栏图标 → 设置… → 通用 →「开机时自动启动」。
-- **系统权限**：设置… → 系统权限 里列出三项权限的状态，最后一行是一个开关；也可以右键菜单栏图标 →「开启系统权限」。打开开关后，ShelfU 依次打开系统设置里的三页：「完整磁盘访问」「辅助功能」「屏幕录制」。在每页打开 ShelfU 的开关（「完整磁盘访问」这一页要点 + 选 ShelfU，或把访达里选中的 ShelfU 拖进列表），ShelfU 会自动走到下一项；最后点「重新打开 ShelfU」。macOS 要求每一项都由你自己打开。从 Shelf 换到 ShelfU 时要再开一次（见下）；ShelfU 的正式发布版在之后更新时保留授权，自己编译的构建每次签名都会变，可能要重新开启。
-- **完整磁盘访问**：从「下载」「桌面」「文稿」或 iCloud 云盘拖文件进来时，不再弹出「ShelfU 想要取用……中的文件」。
+- **系统权限**：设置… → 系统权限 里列出三项权限的状态，最后一行是一个开关；也可以右键菜单栏图标 →「开启系统权限」。打开开关后，Rakko 依次打开系统设置里的三页：「完整磁盘访问」「辅助功能」「屏幕录制」。在每页打开 Rakko 的开关（「完整磁盘访问」这一页要点 + 选 Rakko，或把访达里选中的 Rakko 拖进列表），Rakko 会自动走到下一项；最后点「重新打开 Rakko」。macOS 要求每一项都由你自己打开。从旧名字换过来时要再开一次（见下）；Rakko 的正式发布版在之后更新时保留授权，自己编译的构建每次签名都会变，可能要重新开启。
+- **完整磁盘访问**：从「下载」「桌面」「文稿」或 iCloud 云盘拖文件进来时，不再弹出「Rakko 想要取用……中的文件」。
 - **辅助功能**（刘海拖放保护）：拖着东西靠近刘海时，指针会停在托盘的接收区里，不会顶到屏幕最上沿。
 - **屏幕录制**（框选文字）：只截取你框选的那一块，文字在本机识别，不保存截图。
-- **卸载**：右键菜单栏图标 → 退出 ShelfU，再把“应用程序”里的 ShelfU 移到废纸篓。如果连保存的内容也要删除，删掉 `~/Library/Application Support/ShelfU/` 文件夹。
+- **卸载**：右键菜单栏图标 → 退出 Rakko，再把“应用程序”里的 Rakko 移到废纸篓。如果连保存的内容也要删除，删掉 `~/Library/Application Support/Rakko/` 文件夹。
 
-### 从 Shelf 升级
+### 从 ShelfU 升级
 
-ShelfU 是 Shelf 的新名字。ShelfU 第一次打开时，会把 `~/Library/Application Support/Shelf/` 里保存的内容复制到 `~/Library/Application Support/ShelfU/`；旧文件夹保持原样，确认内容都在以后可以删掉。macOS 会把 ShelfU 当成一个新应用，所以系统权限和「开机时自动启动」要重新打开一次。
+Rakko 是 ShelfU 的新名字。Rakko 第一次打开时会把数据文件夹整个复制过来：`~/Library/Application Support/ShelfU/` 变成 `~/Library/Application Support/Rakko/`，托盘内容、Rakko 自己保存的图片、转换结果、布局和设置都在，里面指向旧文件夹的绝对路径也会一并改写。它是复制而不是搬移，并且一步到位：失败时两个文件夹都保持原样，旧文件夹完整保留，确认内容都在以后可以删掉。新文件夹已经存在时不会复制；ShelfU 还在运行时 Rakko 不会迁移——先退出 ShelfU。
 
-- **在 Shelf 里应用内更新**：更新装好后，在“应用程序”里打开 Shelf。它会自己改名为 `ShelfU.app` 并以 ShelfU 打开。
-- **用 ShelfU.dmg 安装**：先退出 Shelf，把 `Shelf.app` 移到废纸篓，只让 ShelfU 使用你的内容。
+macOS 会把 Rakko 当成一个新应用，所以升级后系统权限和「开机时自动启动」要重新打开一次。
+
+- **在 ShelfU 里应用内更新**：更新装好后，在“应用程序”里打开 ShelfU。它会把应用包改名为 `Rakko.app` 并从那里打开；数据文件夹在那一次启动时复制过来。
+- **用 Rakko.dmg 安装**：先退出 ShelfU，把 `ShelfU.app` 移到废纸篓，只让 Rakko 使用你的内容。
+
+从更早的 Shelf 升上来？没有 ShelfU 文件夹时，Rakko 同样从 `Application Support/Shelf/` 复制，也会把 `Shelf.app` 改名。
 
 ## 日常使用
 
@@ -384,7 +470,9 @@ ShelfU 是 Shelf 的新名字。ShelfU 第一次打开时，会把 `~/Library/Ap
 | 打开某一页 | 点搜索条下方胶囊里的页面：托盘、剪贴板、工具，开了 AI 用量时还有 AI 用量；页面从刘海里长出来 |
 | 打开播放器 | 打开「工具」页，点音乐卡片 |
 | 退回上一层 | 按 Esc：页面先回到搜索条（有输入时先清空），再按一次收回刘海。点面板外（菜单栏高度内不算）或再按快捷键都直接收起 |
-| 放东西进来 | 拖着它靠近刘海，还没松手「托盘」页就打开了，松手放进去；或拖拽时左右晃动指针，放进暂存篮 |
+| 放东西进来 | 拖着它靠近刘海，还没松手「托盘」页就打开了，松手放进去；或拖拽时左右晃动指针，放进暂存篮；也可以直接丢到桌面上的海獭身上 |
+| 写便利贴 | 打开「工具」页，点「便利贴」卡片（在「+」里加）直接输入，停手就自动保存；Esc 关窗口 |
+| 搜索便利贴 | 在刘海搜索条里输入，「便利贴」一组列出相符的内容，回车打开 |
 | 拿东西出去 | 从托盘拖到任意应用；按住 `⌘` 或 `⇧` 可以一次拖多个 |
 | 把文字复制回来 | 单击文字项，再在任意地方 `⌘V` 粘贴 |
 | 复制图片数据 | 选中一张图片后按 `⌘C`，或右键图片 →「复制图片」，再在目标应用 `⌘V` 粘贴（复制的是图片，不是路径） |
@@ -412,7 +500,9 @@ ShelfU 是 Shelf 的新名字。ShelfU 第一次打开时，会把 `~/Library/Ap
 
 一切都留在你的 Mac 上：不用注册账号，没有遥测，没有云同步。联网请求只有两类：检查更新（启动后不久一次、之后每天一次，向本仓库 GitHub 上的最新 Release 询问有没有新版本，请求里只带一个标准的 User-Agent 头）；以及可选的 AI 用量页的额度查询——只有打开它才会发生：Codex 的额度用 Codex 保存的登录信息发给 chatgpt.com；Claude Code 的额度通过运行你装好的 Claude Code 读取，由 Claude Code 自己照常联系 Anthropic。除此之外不发送任何内容。「自动检查更新」可以在 设置… → 通用 里关闭；关闭后仍可在菜单里手动检查。
 
-剪贴板文字以明文保存在 `~/Library/Application Support/ShelfU/`。剪贴板记录始终开启。不想记录某个应用复制的内容，右键它的剪贴板条目把应用排除；要复制不希望被保存的内容时，先退出 ShelfU 再复制。
+Agent 完成提醒这个开关不增加任何流量：那些 hook 只在本机运行 Rakko 自己的可执行文件，把工具自己的事件通过数据文件夹里的本地 socket 交给它，不经过网络。它们只报告「这一轮做完了」和这一轮在做什么——不读对话，也不回话。
+
+剪贴板文字以明文保存在 `~/Library/Application Support/Rakko/`。剪贴板记录始终开启。不想记录某个应用复制的内容，右键它的剪贴板条目把应用排除；要复制不希望被保存的内容时，先退出 Rakko 再复制。
 
 ## 从源码构建
 
@@ -422,14 +512,14 @@ ShelfU 是 Shelf 的新名字。ShelfU 第一次打开时，会把 `~/Library/Ap
 go run github.com/egoist/mygo/cmd/mygo build
 ```
 
-打包好的 `ShelfU.app` 和 `.dmg` 在 `mygo.json` 配置的输出目录下的 `darwin-arm64` 子文件夹中。ShelfU 用 Go 和 [MyGo](https://github.com/egoist/mygo) 编写。应用图标和菜单栏图标不在本仓库里：自己从源码构建时用的是默认图标，菜单栏里显示文字名称。
+打包好的 `Rakko.app` 和 `.dmg` 在 `mygo.json` 配置的输出目录下的 `darwin-arm64` 子文件夹中。Rakko 用 Go 和 [MyGo](https://github.com/egoist/mygo) 编写。应用图标和菜单栏图标不在本仓库里：自己从源码构建时用的是默认图标，菜单栏里显示文字名称。
 
 ### 源码结构
 
 | 路径 | 内容 |
 | --- | --- |
 | `cmd/shelfu/` | 应用入口、原生界面和应用测试 |
-| `internal/` | macOS 集成、存储、设置、布局、文档导出和 AI 用量模块 |
+| `internal/` | macOS 集成、存储、设置、布局、便利贴、agent hook、文档导出和 AI 用量模块 |
 | `resources/` | 第三方声明和构建生成的原生辅助模块 |
 | `docs/` | 使用手册 |
 
@@ -444,8 +534,8 @@ MyGo 从 `mygo.json` 读取应用入口；上面的构建命令也会生成正�
 
 ## 许可
 
-ShelfU 的源代码采用 MIT 许可证，详见 [LICENSE](LICENSE)。
+Rakko 的源代码采用 Apache License 2.0，详见 [LICENSE](LICENSE)；随附的声明在 [NOTICE](NOTICE)，第三方软件与商标列在 `resources/THIRD_PARTY_NOTICES.txt`。
 
-ShelfU 的品牌名称、应用图标、菜单栏图标、海獭品牌角色及其相关视觉素材（包括不同表情、姿态和原始设计文件）不属于 MIT 许可证的授权范围。
+Rakko 品牌不在 Apache-2.0 的授权范围内（许可证第 6 条）：Rakko 名称、logo、应用图标、菜单栏图标和海獭形象（含各种姿态、变体与原始设计文件）保留所有权利，见 [TRADEMARKS.md](TRADEMARKS.md)。这些图片不在本仓库里。你可以自己从源码构建使用，也可以说明你的作品基于 Rakko；修改版必须改名并换图标。
 
-用户可以正常安装和使用官方发布的 ShelfU 应用，但未经授权，不得将上述品牌素材提取后用于其他产品或独立复制、修改和再分发。
+v1.0.0 到 v1.12.1 的发布版本采用 MIT 许可证，并继续按 MIT 提供。

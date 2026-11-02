@@ -6641,11 +6641,11 @@ func (msgs Messages) SettingsAboutSource() string {
 	return Catalog.Format(msgs.locale, "settingsAboutSource", nil)
 }
 
-// SettingsAboutSourceCaption says "github.com/henryyu333/rakko · 代码 MIT 许可；名称和图标不在 MIT 范围内"
+// SettingsAboutSourceCaption says "github.com/henryyu333/rakko · 代码 Apache 2.0 许可；名称、图标和海獭不在许可范围内"
 // in the language the app shows.
 func SettingsAboutSourceCaption() string { return In(i18n.Locale()).SettingsAboutSourceCaption() }
 
-// SettingsAboutSourceCaption says "github.com/henryyu333/rakko · 代码 MIT 许可；名称和图标不在 MIT 范围内"
+// SettingsAboutSourceCaption says "github.com/henryyu333/rakko · 代码 Apache 2.0 许可；名称、图标和海獭不在许可范围内"
 // in the language of msgs.
 func (msgs Messages) SettingsAboutSourceCaption() string {
 	return Catalog.Format(msgs.locale, "settingsAboutSourceCaption", nil)

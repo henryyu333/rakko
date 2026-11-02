@@ -5,7 +5,7 @@ package mac
 // Finder 右键“服务/快速操作”与应用内文字服务的接收端。Info.plist 的
 // NSServices 声明由 pbs（pasteboard server）汇总进服务菜单；用户调用时
 // pbs 通过 NSPortName 对应的 mach 端口把请求送到已注册的 services
-// provider，于是 ShelfU 不用暴露快捷键或常驻监听也能收到“添加到 ShelfU”。
+// provider，于是 Rakko 不用暴露快捷键或常驻监听也能收到“添加到 Rakko”。
 // 主线程注册与派发；回调把剪贴板内容读成 Go 值后交给调用方。
 
 import (
@@ -58,7 +58,7 @@ func retainedString(s string) id {
 	return str
 }
 
-// addToShelf serves the "添加到 ShelfU" request (NSMessage addToShelf,
+// addToShelf serves the "添加到 Rakko" request (NSMessage addToShelf,
 // selector addToShelf:userData:error:, type encoding v@:@@^@). pbs copies
 // the caller's payload into this fresh pasteboard; it is read only here,
 // never written back. Files beat text; an empty payload faults the request
@@ -114,7 +114,7 @@ func addToShelf(_ id, _ objc.SEL, pboard id, _ id, errOut *id) {
 }
 
 // InstallServiceProvider registers the process as the handler for the
-// "添加到 ShelfU" service and routes each invocation to fn. fn receives the
+// "添加到 Rakko" service and routes each invocation to fn. fn receives the
 // payload as Go values and must not keep Objective-C objects.
 // setServicesProvider: installs the provider on this NSApplication; the
 // explicit NSRegisterServicesProvider additionally vends the classic

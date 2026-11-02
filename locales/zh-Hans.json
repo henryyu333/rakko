@@ -652,7 +652,7 @@
   "settingsAboutPrivacy": "隐私",
   "settingsAboutPrivacyCaption": "不收集使用数据；只在检查更新时连接 GitHub",
   "settingsAboutSource": "源代码",
-  "settingsAboutSourceCaption": "github.com/henryyu333/rakko · 代码 MIT 许可；名称和图标不在 MIT 范围内",
+  "settingsAboutSourceCaption": "github.com/henryyu333/rakko · 代码 Apache 2.0 许可；名称、图标和海獭不在许可范围内",
   "settingsAboutSourceOpen": "打开",
   "settingsGroupNotch": "刘海",
   "settingsGroupContent": "内容",

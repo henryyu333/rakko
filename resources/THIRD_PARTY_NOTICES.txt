@@ -13,9 +13,47 @@ only, to identify the service a card reports on:
 - The Claude "Spark" logo is a trademark of Anthropic (source:
   https://anthropic.com/press-kit — Claude Spark - Clay.svg).
 
-Rakko is not affiliated with, sponsored, or endorsed by OpenAI or
-Anthropic; the marks are used only to identify the corresponding service.
+Settings → AI 用量 → Agent 完成提醒 and the completion card show each
+agent tool's mark, recoloured or flattened to one colour and scaled only, to
+identify the tool:
 
+- opencode (opencode.ai favicon), pi (pi.dev favicon), omp (omp.sh
+  favicon), Devin (devin.ai favicon), Factory Droid (factory.com icon),
+  Augment (augmentcode.com favicon): marks of their respective owners.
+- Gemini, Grok, Cursor, GitHub Copilot, Google Antigravity, Qwen and Kiro:
+  marks of Google, xAI, Anysphere, GitHub/Microsoft, Google, Alibaba Cloud
+  and Amazon respectively; the vector shapes come from @lobehub/icons
+  (lobehub/lobe-icons, MIT License, copyright (c) 2023 LobeHub; full text
+  below).
+
+Rakko is not affiliated with, sponsored, or endorsed by any of these
+companies; the marks are used only to identify the corresponding service.
+
+
+========================================================================
+@lobehub/icons-static-svg v1.102.0
+========================================================================
+MIT License
+
+Copyright (c) 2023 LobeHub
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 ========================================================================
 github.com/egoist/mygo v0.5.5
