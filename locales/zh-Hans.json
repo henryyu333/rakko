@@ -655,7 +655,7 @@
   "settingsAboutTagline": "托盘、剪贴板、实时活动和小工具，都从刘海里长出来。",
   "settingsAboutPrivacyGroup": "隐私与源代码",
   "settingsAboutPrivacy": "隐私",
-  "settingsAboutPrivacyCaption": "不收集使用数据；只在检查更新时连接 GitHub",
+  "settingsAboutPrivacyCaption": "不收集使用数据；只连接 GitHub 检查更新、lrclib.net 查歌词",
   "settingsAboutSource": "源代码",
   "settingsAboutSourceCaption": "github.com/henryyu333/rakko · 代码 Apache 2.0 许可；名称、图标和海獭不在许可范围内",
   "settingsAboutSourceOpen": "打开",

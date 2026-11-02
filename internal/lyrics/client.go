@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"net/http"
 	"net/url"
@@ -151,7 +152,8 @@ func (f Fetcher) read(ctx context.Context, u string) ([]byte, int, error) {
 	}
 	defer resp.Body.Close()
 	var body json.RawMessage
-	dec := json.NewDecoder(resp.Body)
+	// A lyrics answer is a few kilobytes; never read more than a bound.
+	dec := json.NewDecoder(io.LimitReader(resp.Body, 2<<20))
 	if err := dec.Decode(&body); err != nil {
 		if resp.StatusCode == http.StatusOK {
 			return nil, resp.StatusCode, fmt.Errorf("lyrics: reading lrclib body: %w", err)

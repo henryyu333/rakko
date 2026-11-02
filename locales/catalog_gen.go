@@ -6671,11 +6671,11 @@ func (msgs Messages) SettingsAboutPrivacy() string {
 	return Catalog.Format(msgs.locale, "settingsAboutPrivacy", nil)
 }
 
-// SettingsAboutPrivacyCaption says "不收集使用数据；只在检查更新时连接 GitHub"
+// SettingsAboutPrivacyCaption says "不收集使用数据；只连接 GitHub 检查更新、lrclib.net 查歌词"
 // in the language the app shows.
 func SettingsAboutPrivacyCaption() string { return In(i18n.Locale()).SettingsAboutPrivacyCaption() }
 
-// SettingsAboutPrivacyCaption says "不收集使用数据；只在检查更新时连接 GitHub"
+// SettingsAboutPrivacyCaption says "不收集使用数据；只连接 GitHub 检查更新、lrclib.net 查歌词"
 // in the language of msgs.
 func (msgs Messages) SettingsAboutPrivacyCaption() string {
 	return Catalog.Format(msgs.locale, "settingsAboutPrivacyCaption", nil)

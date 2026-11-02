@@ -27,7 +27,7 @@ type Settings struct {
 	// recorded into the shelf.
 	ExcludedApps []string `json:"excludedApps"`
 	// AutoCheckUpdates checks the GitHub release feed for a newer version
-	// in the background; it is the app's only network access.
+	// in the background.
 	AutoCheckUpdates bool `json:"autoCheckUpdates"`
 	// RemoveAfterDrag takes an item off the tray once it was dragged out
 	// and dropped; pinned items stay.
