@@ -11,6 +11,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"image"
 	"image/png"
 	"io/fs"
 	"os"
@@ -24,6 +25,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"shelf/internal/aiusage"
 	"shelf/internal/mac"
 	"shelf/internal/settings"
 	"shelf/locales"
@@ -204,6 +206,110 @@ func TestSettingsViewShowsSections(t *testing.T) {
 		}
 	}
 	a.settingsPage = settingsPageGeneral
+}
+
+// TestAIUsageQuotaRowsLeadWithToolMarks: the quota list puts each tool's own
+// logo before its name — the Spark in Claude Code's colour, the Blossom in
+// white — at one size and one left edge, centred on the row's two lines.
+func TestAIUsageQuotaRowsLeadWithToolMarks(t *testing.T) {
+	stubSettingsSeams(t, false, nil, nil)
+	now := time.Date(2026, 10, 19, 12, 0, 0, 0, time.Local)
+	fx := newUsageFixtureWith(t, true, nil)
+	a := fx.a
+	// A plan name captions both rows, so each mark centres on two lines.
+	fx.f.quota[quotaIndex(aiusage.ToolClaude)] = usageQuotaState{
+		latest: okQuota(aiusage.ToolClaude, "Pro", now)}
+	fx.f.quota[quotaIndex(aiusage.ToolCodex)] = usageQuotaState{
+		latest: okQuota(aiusage.ToolCodex, "Plus", now)}
+	view := ui.NewTester(a.settingsView, settingsWidth, settingsHeight)
+	view.Frame()
+	openSettingsPage(t, view, "AI 用量")
+	a.settingsScroll.Y = 0
+	view.SetScale(2)
+	view.Frame()
+	view.Frame()
+	img := view.Image()
+
+	left := [2]float32{}
+	for i, tc := range []struct {
+		tool        aiusage.Tool
+		rust, white bool
+	}{
+		{aiusage.ToolClaude, true, false},
+		{aiusage.ToolCodex, false, true},
+	} {
+		row, ok := view.Find(toolName(tc.tool))
+		if !ok {
+			t.Fatalf("the %s quota row is missing", toolName(tc.tool))
+		}
+		mark, rust, white := quotaRowMark(img, row)
+		if tc.rust != (rust > 0 && white == 0) || tc.white != (white > 0 && rust == 0) {
+			t.Errorf("%s: rust=%d white=%d, want its own mark only", toolName(tc.tool), rust, white)
+		}
+		if mark.W < settingsRowMark-1 || mark.W > settingsRowMark+1 ||
+			mark.H < settingsRowMark-1 || mark.H > settingsRowMark+1 {
+			t.Errorf("%s: mark is %.1f × %.1f, want %d", toolName(tc.tool), mark.W, mark.H, settingsRowMark)
+		}
+		if off := mark.X - (row.X + settingsRowPadX); off < -1 || off > 1 {
+			t.Errorf("%s: mark starts %.1fpt from the row's left, want %d", toolName(tc.tool), mark.X-row.X, settingsRowPadX)
+		}
+		if gap := (mark.Y + mark.H/2) - (row.Y + row.H/2); gap < -1 || gap > 1 {
+			t.Errorf("%s: mark centre sits %.1fpt off the row's centre", toolName(tc.tool), gap)
+		}
+		left[i] = mark.X
+	}
+	if gap := left[1] - left[0]; gap < -0.5 || gap > 0.5 {
+		t.Errorf("the two marks start %.1fpt apart; they share one left edge", gap)
+	}
+}
+
+// quotaRowMark finds what a switch row draws left of its text over the card —
+// its mark — and counts the rust pixels of Claude Code's Spark and the white
+// ones of Codex's Blossom there. The band skips the card's rounded corners and
+// stops short of the text column.
+func quotaRowMark(img *image.RGBA, row ui.Rect) (ink ui.Rect, rust, white int) {
+	const scale = 2 // the test renders at 2x
+	b := img.Bounds()
+	x0 := max(int((row.X+4)*scale), b.Min.X)
+	x1 := min(int((row.X+44)*scale), b.Max.X)
+	y0 := max(int((row.Y+row.H*0.25)*scale), b.Min.Y)
+	y1 := min(int((row.Y+row.H*0.75)*scale), b.Max.Y)
+	bg := img.RGBAAt(x0+2, (y0+y1)/2)
+	bgR, bgG, bgB, _ := bg.RGBA()
+	minX, minY, maxX, maxY := 1<<30, 1<<30, -1, -1
+	for y := y0; y < y1; y++ {
+		for x := x0; x < x1; x++ {
+			r, g, bl, a := img.At(x, y).RGBA()
+			r, g, bl, a = r>>8, g>>8, bl>>8, a>>8
+			if a < 250 || (channelGap(int(r), int(bgR>>8)) < 24 &&
+				channelGap(int(g), int(bgG>>8)) < 24 && channelGap(int(bl), int(bgB>>8)) < 24) {
+				continue
+			}
+			minX, minY = min(minX, x), min(minY, y)
+			maxX, maxY = max(maxX, x), max(maxY, y)
+			switch {
+			case r > 180 && g >= 90 && g <= 140 && bl >= 55 && bl <= 115:
+				rust++
+			case r > 210 && g > 210 && bl > 210:
+				white++
+			}
+		}
+	}
+	if maxX < 0 {
+		return ui.Rect{}, rust, white
+	}
+	return ui.Rect{
+		X: float32(minX) / scale, Y: float32(minY) / scale,
+		W: float32(maxX-minX+1) / scale, H: float32(maxY-minY+1) / scale,
+	}, rust, white
+}
+
+// channelGap is how far two 8-bit channels are apart.
+func channelGap(a, b int) int {
+	if a > b {
+		return a - b
+	}
+	return b - a
 }
 
 func TestSettingsViewNowPlayingToggleSaves(t *testing.T) {

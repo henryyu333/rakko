@@ -91,6 +91,7 @@ const (
 	settingsRowMinHeight = 50
 	settingsRowPadX      = 16
 	settingsRowPadY      = 10
+	settingsRowMark      = 18 // a switch row's lead mark reads this big; the quota rows' tool logos are the only ones
 )
 
 // appGlyph fills an excluded-app row when the app has no icon on disk.
@@ -569,10 +570,36 @@ func settingsToggleRow(c *ui.Context, key, label, caption string, on bool, apply
 // settingsToggleRowCap is settingsToggleRow with a caption color of its own:
 // the login item shows a failure in red there.
 func settingsToggleRowCap(c *ui.Context, key, label, caption string, captionColor ui.Color, on bool, apply func(bool)) {
+	settingsSwitchRow(c, key, label, caption, captionColor, nil, on, apply)
+}
+
+// settingsToggleRowMark is settingsToggleRow with the row's own mark before
+// the title and caption: the quota list, whose tools are recognised by their
+// logos. mark is the icon box in points that shows the artwork at
+// settingsRowMark; the box is centred in a settingsRowMark slot, so marks
+// whose official SVGs pad their viewBox differently still read at one size
+// and leave both rows' text on one left edge.
+func settingsToggleRowMark(c *ui.Context, key, label, caption string, logo *ui.SVG, color ui.Color, mark float32, on bool, apply func(bool)) {
+	settingsSwitchRow(c, key, label, caption, ink3, func() {
+		slot := ui.Box(c.Key("mark")).Size(settingsRowMark, settingsRowMark)
+		slot.Children(func() {
+			off := (settingsRowMark - mark) / 2
+			ui.Icon(c, logo).Size(mark, mark).TextColor(color).Absolute().Left(off).Top(off)
+		})
+	}, on, apply)
+}
+
+// settingsSwitchRow is the switch row itself: lead draws the row's mark, when
+// it has one, then the label and optional caption on the left and a
+// macOS-style switch on the right.
+func settingsSwitchRow(c *ui.Context, key, label, caption string, captionColor ui.Color, lead func(), on bool, apply func(bool)) {
 	row := ui.ToggleBase(c.Key("toggle-"+key), &on).FillWidth().AlignItems(ui.Center).
 		Gap(14).MinHeight(settingsRowMinHeight).Padding(settingsRowPadY, settingsRowPadX).Label(label)
 	var sw ui.Element
 	row.Children(func() {
+		if lead != nil {
+			lead()
+		}
 		ui.Column(c.Key("text")).Gap(2).Grow(1).MinWidth(0).Children(func() {
 			settingsLabel(c, label, 13.5, 600).TextColor(ink)
 			if caption != "" {

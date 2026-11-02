@@ -315,8 +315,9 @@ func (a *shelf) settingsAIUsagePage(c *ui.Context) {
 				settingsSep(c, "quota-"+string(row.tool))
 			}
 			apply := row.apply
-			settingsToggleRow(c, "quota-"+string(row.tool), toolName(row.tool),
-				a.aiQuotaCaption(row.tool, l), row.on,
+			logo, color, mark := toolLogo(row.tool)
+			settingsToggleRowMark(c, "quota-"+string(row.tool), toolName(row.tool),
+				a.aiQuotaCaption(row.tool, l), logo, color, mark, row.on,
 				func(on bool) {
 					a.setAIUsage(func(s *settings.Settings) { apply(s, on) })
 				})
