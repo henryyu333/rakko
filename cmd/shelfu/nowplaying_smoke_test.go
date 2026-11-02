@@ -53,7 +53,6 @@ func TestNowPlayingPeekSmokeScreenshot(t *testing.T) {
 	}
 	mod := &nowPlayingModule{}
 	onMain(func() {
-		a.settings.IslandNowPlaying = true
 		a.np = mod
 		mod.host = a
 		mod.rememberArt(art, false) // same path as decodeArt: bitmap + glow

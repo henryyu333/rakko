@@ -210,7 +210,6 @@ func TestDragReturningToTheBandReopensThePanel(t *testing.T) {
 // wings/capsule's taller frames are not retained through a drag.
 func TestIncomingDragFrameStaysInMenuBand(t *testing.T) {
 	a := dragShelf()
-	a.settings.IslandNowPlaying = true
 	a.np = &nowPlayingModule{host: a, have: true, last: mac.NowPlayingState{Title: "Track"}}
 	f := a.desiredFrame()
 	bandW := max(180, a.notchW) + 2*dropBandPadX

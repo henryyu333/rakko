@@ -250,7 +250,7 @@ func TestEveryPageFitsTheContentBox(t *testing.T) {
 	a, view := levelShelf(t)
 	a.visible, a.level = true, 2
 	drain := fitSink(t)
-	for _, id := range []pageID{pageTray, pageClipboard, pageTools, pagePlaying} {
+	for _, id := range []pageID{pageTray, pageClipboard, pageTools} {
 		a.setTab(id)
 		view.Frame()
 		drain() // the first frame has no boxes to measure yet
@@ -496,7 +496,6 @@ func TestCapsuleHoldsEveryPageAndTheCommands(t *testing.T) {
 
 func TestTwoActivityChipsFitTheRightEar(t *testing.T) {
 	a := &shelf{level: 2, notchW: 180, notchH: 32, topInset: 32, settings: settings.Default()}
-	a.settings.IslandNowPlaying = true
 	a.np = &nowPlayingModule{host: a, have: true, last: mac.NowPlayingState{Playing: true, Title: "夜曲", Artist: "周杰伦"}}
 	p := newFakePower()
 	awake := newAwakeStub(p)
@@ -528,7 +527,6 @@ func TestMusicAndCancelChipsFitTheRightEar(t *testing.T) {
 	j.total.Store(3)
 	j.done.Store(1)
 	a := &shelf{level: 2, notchW: 180, notchH: 32, topInset: 32, settings: settings.Default()}
-	a.settings.IslandNowPlaying = true
 	a.np = &nowPlayingModule{host: a, have: true, last: mac.NowPlayingState{Playing: true, Title: "夜曲"}}
 	a.conv = &converter{host: a, job: j, cancelOpen: true}
 	a.modules = []module{a.np, a.conv}

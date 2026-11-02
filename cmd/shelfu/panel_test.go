@@ -775,7 +775,6 @@ func TestPanelSizeIsFixedPerLevel(t *testing.T) {
 		t.Fatalf("sheet frame = %d×%d, want %d×%d", sheet.Width, sheet.Height, sw, panelFrameH(sheetH))
 	}
 	add(gridCols)
-	a.settings.IslandNowPlaying = true
 	a.np = &nowPlayingModule{host: a, have: true, last: mac.NowPlayingState{Title: "T", Artist: "A"}}
 	a.modules = []module{a.np}
 	if got := a.desiredFrame(); got != sheet {

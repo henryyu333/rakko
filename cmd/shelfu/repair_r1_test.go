@@ -271,7 +271,6 @@ func TestReduceMotionHoverShapeNeverSprings(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			a := motionWindow()
-			a.settings.IslandNowPlaying = false
 			a.np = nil
 			a.visible, a.level = false, 1
 			view := ui.NewTester(a.view, sheetW, panelTestH)
@@ -286,7 +285,6 @@ func TestReduceMotionHoverShapeNeverSprings(t *testing.T) {
 			}
 			// A track arrives: the wings replace the chevron's bulge, a
 			// much wider shape.
-			a.settings.IslandNowPlaying = true
 			a.np = &nowPlayingModule{host: a, have: true, last: mac.NowPlayingState{
 				Title: "夜曲", Playing: true, Duration: 200, Received: time.Now(),
 			}}

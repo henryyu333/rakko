@@ -58,6 +58,7 @@ func hitShelf(t *testing.T) (*shelf, *ui.Tester, *[]string, *fakeVolume) {
 	a.setTab(pageTray)
 	a.tabAt = time.Time{} // the sheet rests: no page switch is under way
 	view := ui.NewTester(a.view, sheetW, panelTestH)
+	_ = vol
 	return a, view, &copied, vol
 }
 
@@ -66,7 +67,7 @@ func hitShelf(t *testing.T) (*shelf, *ui.Tester, *[]string, *fakeVolume) {
 // tile that is really there, right-clicking must open that tile's menu,
 // and the wheel must leave the unseen list alone.
 func TestWarmLayerTakesNoPointer(t *testing.T) {
-	a, view, copied, vol := hitShelf(t)
+	a, view, copied, _ := hitShelf(t)
 	view.Frame()
 	warm := func(id pageID) {
 		t.Helper()
@@ -116,19 +117,24 @@ func TestWarmLayerTakesNoPointer(t *testing.T) {
 		t.Fatalf("the wheel scrolled the unseen clipboard list to %.1f", clip.scroll.Y)
 	}
 
-	// The unseen playing page's volume bar writes nothing on a release.
-	*vol = fakeVolume{v: 0.4, ok: true}
-	warm(pagePlaying)
-	bar, ok := view.Find("音量")
-	if !ok {
-		t.Fatal("the warm playing page drew no volume bar")
-	}
-	view.Press(bar.X+bar.W/2, bar.Y+bar.H/2)
-	view.Move(bar.X+bar.W*3/4, bar.Y+bar.H/2)
-	view.Release(bar.X+bar.W*3/4, bar.Y+bar.H/2)
+	// The unseen home page's newest copied text must not copy either: with
+	// no track the home page lists it, and a click over it belongs to the
+	// visible tray.
+	a.np = nil
 	view.Frame()
-	if len(vol.sets) != 0 {
-		t.Fatalf("a press on the unseen home page's volume bar wrote %v", vol.sets)
+	warm(pageHome)
+	hidden := "“剪贴板条目 5 · 一段用于命中的文字”"
+	row, ok := view.Find(hidden)
+	if !ok {
+		t.Fatalf("the warm home page drew no copied-text row: %v", view.Texts())
+	}
+	before = len(*copied)
+	view.ClickAt(row.X+row.W/2, row.Y+row.H/2)
+	if len(*copied) == before {
+		t.Fatal("the click over the warm home page copied nothing")
+	}
+	if got := (*copied)[len(*copied)-1]; !strings.HasPrefix(got, "托盘条目") {
+		t.Fatalf("a click over the warm home page copied %q, want the visible tray's item", got)
 	}
 }
 

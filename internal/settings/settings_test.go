@@ -40,9 +40,6 @@ func TestMissingKeyKeepsDefault(t *testing.T) {
 	if len(s.ExcludedApps) != 0 {
 		t.Fatalf("missing excludedApps = %v, want empty", s.ExcludedApps)
 	}
-	if !s.IslandNowPlaying {
-		t.Fatalf("missing islandNowPlaying must stay on: %+v", s)
-	}
 }
 
 // The now-playing toggle still loads from the file, and the removed
@@ -68,6 +65,8 @@ func TestSnapWindowsLoad(t *testing.T) {
 	}
 }
 
+// The legacy islandNowPlaying key still loads (a file may set it off), and
+// the removed battery/volume keys are ignored.
 func TestNowPlayingToggleAndLegacyIslandKeysLoad(t *testing.T) {
 	dir := t.TempDir()
 	legacy := `{"islandNowPlaying": false, "islandBattery": false, "islandVolume": false}`
@@ -79,10 +78,7 @@ func TestNowPlayingToggleAndLegacyIslandKeysLoad(t *testing.T) {
 		t.Fatal(err)
 	}
 	if s.IslandNowPlaying {
-		t.Fatal("islandNowPlaying: false was ignored")
-	}
-	if !s.AutoCheckUpdates {
-		t.Fatalf("unrelated keys must keep their defaults: %+v", s)
+		t.Fatalf("islandNowPlaying: false => %v, want false", s.IslandNowPlaying)
 	}
 }
 
@@ -171,7 +167,7 @@ func TestSaveRoundTrips(t *testing.T) {
 	// The pet's size is normalized on load, so the literal spells out
 	// medium rather than the empty string.
 	want := Settings{RetentionDays: 7, ClipboardLimit: 12, ExcludedApps: []string{"com.example.one", "com.example.two"},
-		ShellStyle: ShellStyleIsland, Pet: PetSettings{Size: PetSizeMedium}}
+		ShellStyle: ShellStyleIsland, IslandNowPlaying: true, Pet: PetSettings{Size: PetSizeMedium}, Lyrics: Default().Lyrics}
 	if err := Save(dir, want); err != nil {
 		t.Fatal(err)
 	}
@@ -367,5 +363,25 @@ func TestPetLoad(t *testing.T) {
 	}
 	if got := s.PetPos["1"]; got.X != 20 || got.Y != 30 {
 		t.Fatalf("pet position = %+v, want (20, 30)", got)
+	}
+}
+
+// Lyrics default on: a settings.json from before the switch existed (no
+// lyrics key) must still fetch lyrics; an explicit false turns it off.
+func TestLyricsDefaultsOnAndHonoursOff(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, FileName), []byte(`{}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Load(dir)
+	if err != nil || !s.LyricsOn() {
+		t.Fatalf("missing lyrics = %v, %v; want on", s.LyricsOn(), err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, FileName), []byte(`{"lyrics":{"enabled":false}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err = Load(dir)
+	if err != nil || s.LyricsOn() {
+		t.Fatalf("lyrics.enabled false => %v, %v; want off", s.LyricsOn(), err)
 	}
 }

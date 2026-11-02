@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"image"
 	"image/png"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -160,7 +159,7 @@ func TestTrayMenuOffersSettings(t *testing.T) {
 	for _, it := range a.trayMenu().Items() {
 		labels = append(labels, it.Label)
 	}
-	for _, want := range []string{"显示 / 收起 Rakko", "自动清理", "剪贴板记录", "正在播放", "设置…", "退出 Rakko"} {
+	for _, want := range []string{"显示 / 收起 Rakko", "自动清理", "剪贴板记录", "设置…", "退出 Rakko"} {
 		if !slices.Contains(labels, want) {
 			t.Fatalf("tray menu lacks %q; labels=%v", want, labels)
 		}
@@ -188,8 +187,8 @@ func TestSettingsViewShowsSections(t *testing.T) {
 		nav   string
 		texts []string
 	}{
-		{"通用", []string{"开机时自动启动", "自动检查更新", "检查更新", "现在检查"}},
-		{"外形与提示", []string{"刘海样式", "刘海显示正在播放", "充电提示", "耳机连接提示", "下载进度", "拖窗口到刘海分屏"}},
+		{"通用", []string{"开机时自动启动", "自动检查更新", "检查更新", "现在检查", "显示歌词（从 lrclib.net 获取）"}},
+		{"外形与提示", []string{"刘海样式", "充电提示", "耳机连接提示", "下载进度", "拖窗口到刘海分屏"}},
 		{"托盘", []string{"自动清理旧内容", "拖出后从托盘移除"}},
 		{"剪贴板", []string{"保留条数", "排除的应用"}},
 		{"AI 用量", []string{"在刘海里显示 AI 用量", "额度显示", "套餐额度", "本机用量自动统计本机所有 AI 工具的 token"}},
@@ -312,20 +311,6 @@ func channelGap(a, b int) int {
 	return b - a
 }
 
-func TestSettingsViewNowPlayingToggleSaves(t *testing.T) {
-	stubSettingsSeams(t, false, nil, nil)
-	a, view := newSettingsShelf(t)
-	openSettingsPage(t, view, "外形与提示")
-	clickVisible(t, view, "刘海显示正在播放")
-	if a.settings.IslandNowPlaying {
-		t.Fatal("now-playing toggle did not apply")
-	}
-	saved, _ := settings.Load(a.dataDir)
-	if saved.IslandNowPlaying {
-		t.Fatalf("saved flags wrong: %+v", saved)
-	}
-}
-
 // The 通用 section's 自动检查更新 switch drives setAutoCheckUpdates through
 // the same applySettings path the menus use, so the file holds the choice.
 func TestSettingsViewAutoCheckToggle(t *testing.T) {
@@ -387,11 +372,11 @@ func TestSettingsViewBrokenDisablesEditing(t *testing.T) {
 	}
 	// Clicks on disabled controls must change nothing and write nothing.
 	openSettingsPage(t, view, "外形与提示")
-	clickVisible(t, view, "刘海显示正在播放")
+	clickVisible(t, view, "充电提示")
 	openSettingsPage(t, view, "剪贴板")
 	clickVisible(t, view, "100")
 	clickVisible(t, view, "移除 com.example.One")
-	if !a.settings.IslandNowPlaying || a.settings.ClipboardLimit != 30 || len(a.settings.ExcludedApps) != 1 {
+	if a.settings.ClipboardLimit != 30 || len(a.settings.ExcludedApps) != 1 {
 		t.Fatalf("broken settings were mutated: %+v", a.settings)
 	}
 	if _, err := os.Stat(filepath.Join(dir, settings.FileName)); !errors.Is(err, os.ErrNotExist) {
@@ -594,56 +579,6 @@ func TestAppVersionFallback(t *testing.T) {
 	appVersionProbe = func() string { return "" }
 	if v := appVersion(); v == "" {
 		t.Fatal("empty version")
-	}
-}
-
-// The 正在播放 tray item saves its setting and is disabled while
-// settings.json could not be read (so a broken file is never overwritten).
-func TestNowPlayingMenuSavesToggle(t *testing.T) {
-	stubSettingsSeams(t, false, nil, nil)
-	dir := t.TempDir()
-	a := &shelf{dataDir: dir, settings: settings.Default()}
-	var item *mygo.MenuItem
-	for _, it := range a.trayMenu().Items() {
-		if it.Label == "正在播放" {
-			item = it
-		}
-	}
-	if item == nil || !item.Checked {
-		t.Fatal("the tray menu must offer a checked 正在播放 item")
-	}
-	item.Click(nil, nil)
-	saved, err := settings.Load(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if saved.IslandNowPlaying || a.settings.IslandNowPlaying {
-		t.Fatal("unchecking 正在播放 must save islandNowPlaying=false and follow it")
-	}
-	// A rebuilt menu shows the saved state.
-	var again *mygo.MenuItem
-	for _, it := range a.trayMenu().Items() {
-		if it.Label == "正在播放" {
-			again = it
-		}
-	}
-	if again == nil || again.Checked {
-		t.Fatal("a rebuilt menu must show the saved off state")
-	}
-	// A broken settings file is never overwritten: the item is disabled
-	// and its click must not write anything.
-	broken := &shelf{dataDir: t.TempDir(), settingsBroken: true, settings: settings.Default()}
-	for _, it := range broken.trayMenu().Items() {
-		if it.Label != "正在播放" {
-			continue
-		}
-		if !it.Disabled {
-			t.Fatal("the 正在播放 item must be disabled while settings are broken")
-		}
-		it.Click(nil, nil)
-	}
-	if _, err := os.Stat(filepath.Join(broken.dataDir, settings.FileName)); !errors.Is(err, fs.ErrNotExist) {
-		t.Fatalf("broken settings were written: %v", err)
 	}
 }
 

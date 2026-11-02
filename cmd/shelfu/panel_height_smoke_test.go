@@ -88,7 +88,6 @@ func TestSmokePanelHeightFitsMusicAndUsage(t *testing.T) {
 	now := time.Now()
 	var f *usageFeature
 	onMain(func() {
-		a.settings.IslandNowPlaying = true
 		fakeTrack(a, true)
 		a.modules = []module{a.np}
 		f = newUsageFeature(a, usageDeps{
@@ -135,7 +134,6 @@ func TestSmokePanelHeightFitsMusicAndUsage(t *testing.T) {
 		a.modules = nil
 		a.np = nil
 		a.settings.AIUsage.Enabled = false
-		a.settings.IslandNowPlaying = false
 		a.setTab(pageTray)
 	})
 }

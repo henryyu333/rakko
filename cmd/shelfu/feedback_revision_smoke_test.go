@@ -116,7 +116,9 @@ func TestCollapsedMarginsReachUnderlyingWindow(t *testing.T) {
 			warpPointerTo(t, float64(point.X), float64(point.Y))
 			time.Sleep(350 * time.Millisecond)
 			var now int
-			onMain(func() { now = mac.WindowAtPoint(float64(point.X), float64(point.Y), float64(a.dispBounds.Y+a.dispBounds.Height)) })
+			onMain(func() {
+				now = mac.WindowAtPoint(float64(point.X), float64(point.Y), float64(a.dispBounds.Y+a.dispBounds.Height))
+			})
 			if now != receiverNum {
 				owner := windowOwnerPID(t, now)
 				if owner > 0 && owner != os.Getpid() {

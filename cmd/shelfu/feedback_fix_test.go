@@ -37,7 +37,6 @@ func fixLiveJob() *convertJob {
 // status words draw, the player does not.
 func TestCapsuleOutranksThePlayer(t *testing.T) {
 	a := motionWindow()
-	a.settings.IslandNowPlaying = true
 	a.np = &nowPlayingModule{host: a, have: true, last: mac.NowPlayingState{
 		Playing: true, Title: "Song Title", Artist: "Artist", Duration: 200, Elapsed: 30,
 		Received: time.Now(),

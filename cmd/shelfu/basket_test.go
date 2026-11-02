@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"image"
 	"os"
 	"testing"
@@ -12,6 +13,7 @@ import (
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
+	"shelf/internal/lyrics"
 	"shelf/internal/mac"
 	"shelf/internal/store"
 )
@@ -29,6 +31,11 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 	agentNotifyHome = func() (string, error) { return home, nil }
+	// No test asks lrclib.net: the home page's lyrics seam answers "none".
+	// Tests that need synced lines fill the page's cache or override this.
+	homeFetch = func(context.Context, lyrics.Track) (lyrics.Result, error) {
+		return lyrics.Result{None: true}, nil
+	}
 	if os.Getenv("SHELF_BASKET_SMOKE") != "1" {
 		os.Exit(m.Run())
 	}

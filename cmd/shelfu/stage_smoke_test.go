@@ -121,7 +121,6 @@ func fillShelf(t *testing.T, a *shelf) {
 				t.Fatal(err)
 			}
 		}
-		a.settings.IslandNowPlaying = true
 		fakeTrack(a, true)
 		a.modules = []module{a.np}
 	})

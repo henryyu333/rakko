@@ -72,7 +72,6 @@ func fixf1Shot(t *testing.T, a *shelf, w *mygo.Window, name string) string {
 func TestFixFWingsOpenTheSearchBar(t *testing.T) {
 	a := redesignShelf(t)
 	onMain(func() {
-		a.settings.IslandNowPlaying = true
 		fakeTrack(a, true)
 	})
 	peekShelf(a)
@@ -116,7 +115,6 @@ func TestFixFWingsOpenTheSearchBar(t *testing.T) {
 func TestFixFToolsPageShots(t *testing.T) {
 	a := redesignShelf(t)
 	onMain(func() {
-		a.settings.IslandNowPlaying = true
 		fakeTrack(a, true)
 		a.tab = pageTools
 		// A fresh install's grid fits the viewport on purpose; this shot
@@ -175,7 +173,6 @@ func TestFixFToolsPageShots(t *testing.T) {
 func TestFixFToolsMusicCardShots(t *testing.T) {
 	a := redesignShelf(t)
 	onMain(func() {
-		a.settings.IslandNowPlaying = true
 		fakeTrack(a, true)
 		a.tab = pageTools
 		// A fresh install's grid fits the viewport on purpose; this shot

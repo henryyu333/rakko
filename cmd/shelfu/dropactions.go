@@ -314,6 +314,12 @@ func dropCountTextIn(l locales.Messages, n int, class dropClass) string {
 // already open on the tools page keeps the grid and routes drops to the
 // cards; a drag that opens the panel always gets the zone, whatever tab
 // the panel shows.
+// homeTakesNoDrop reports whether the home page is the one on screen: it
+// never accepts a dragged file (design: 首页只看此刻，不接收拖入).
+func (a *shelf) homeTakesNoDrop() bool {
+	return a.visible && a.currentLevel() == 2 && a.currentPage().id() == pageHome
+}
+
 func (a *shelf) dropZoneShow() (on bool, need int) {
 	if a.dragOpenTools {
 		return false, 0
@@ -335,6 +341,12 @@ func (a *shelf) dropZoneShow() (on bool, need int) {
 func (a *shelf) dropZoneSnap(over bool) []string {
 	d := &a.drop
 	d.on = false
+	if a.homeTakesNoDrop() {
+		// The home page is 此刻, not a target: a file dragged over it gets
+		// no zone and no drop, and any picture an earlier page left goes.
+		*d = dropZoneState{serial: d.serial}
+		return nil
+	}
 	if a.ownDrag {
 		// ShelfU's own drag-out writes the pasteboard too. It is not an
 		// incoming drag, and a set an earlier drop left must not linger.

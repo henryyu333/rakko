@@ -273,3 +273,48 @@ func TestAgentEventReachesTheNotch(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 }
+
+// The home page's AGENT section reads running turns and the completions of
+// the last 30 minutes from the same session table the notices use.
+func TestAgentSnapshotRunningAndFinished(t *testing.T) {
+	a, _, _ := agentShelf(t)
+	f := a.agentFeature()
+	now := time.Now()
+	f.accept(agentnotify.Event{Tool: agentnotify.ToolClaude, Event: "UserPromptSubmit",
+		Session: "s1", Prompt: "修好解析器失败的测试"})
+	f.accept(agentnotify.Event{Tool: agentnotify.ToolCodex, Event: "UserPromptSubmit",
+		Session: "s2", Prompt: "整理发布说明并更新 CHANGELOG"})
+
+	running, done := f.snapshot(now)
+	if len(running) != 2 || len(done) != 0 {
+		t.Fatalf("running=%v done=%v, want two running and none finished", running, done)
+	}
+	if running[0].Tool != agentnotify.ToolCodex {
+		t.Fatalf("newest running first: %v", running)
+	}
+
+	f.accept(agentnotify.Event{Tool: agentnotify.ToolClaude, Event: "Stop", Session: "s1"})
+	running, done = f.snapshot(time.Now())
+	if len(running) != 1 || running[0].Tool != agentnotify.ToolCodex {
+		t.Fatalf("after one finish running=%v, want only Codex", running)
+	}
+	if len(done) != 1 || done[0].Task != "修好解析器失败的测试" || done[0].Tool != agentnotify.ToolClaude {
+		t.Fatalf("finished=%v, want Claude with the prompt as task", done)
+	}
+	// A second report of the same finish changes nothing.
+	f.accept(agentnotify.Event{Tool: agentnotify.ToolClaude, Event: "Stop", Session: "s1"})
+	if r, d := f.snapshot(time.Now()); len(r) != 1 || len(d) != 1 {
+		t.Fatalf("duplicate finish changed the table: running=%v done=%v", r, d)
+	}
+	// Thirty minutes later the finished row is gone.
+	if _, d := f.snapshot(time.Now().Add(agentFinishedWindow + time.Second)); len(d) != 0 {
+		t.Fatalf("finished row outlived its window: %v", d)
+	}
+	// A new prompt in the same session starts a new running turn and
+	// takes that session's finished row away.
+	f.accept(agentnotify.Event{Tool: agentnotify.ToolClaude, Event: "UserPromptSubmit",
+		Session: "s1", Prompt: "下一件事"})
+	if r, d := f.snapshot(time.Now()); len(r) != 2 || len(d) != 0 {
+		t.Fatalf("new turn: running=%v done=%v", r, d)
+	}
+}

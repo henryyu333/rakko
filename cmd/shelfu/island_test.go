@@ -364,7 +364,6 @@ func panelTop(a *shelf) int { return a.y + a.sheetTop() }
 
 func TestIslandHoverPeekFromMonitor(t *testing.T) {
 	a := islandShelf(false, settings.ShellStyleNotch)
-	a.settings.IslandNowPlaying = false
 	driveMonitor(t, a, mygo.Point{X: 735, Y: islandTopGap + 10}, false, 1, nil)
 	if !a.peeking {
 		t.Fatal("the pointer on the idle capsule did not peek")

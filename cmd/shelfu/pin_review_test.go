@@ -52,7 +52,6 @@ func TestPinReturnPillBeatsOtherContent(t *testing.T) {
 	for _, state := range []string{"player", "capsule", "retracting"} {
 		t.Run(state, func(t *testing.T) {
 			a := motionWindow()
-			a.settings.IslandNowPlaying = true
 			a.np = &nowPlayingModule{host: a, have: true, last: mac.NowPlayingState{Playing: true, Title: "Review Track"}}
 			if state != "player" {
 				a.toastStatus("已复制", time.Now().Add(time.Hour), statusOK)

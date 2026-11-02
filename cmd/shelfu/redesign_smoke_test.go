@@ -160,7 +160,6 @@ func redesignShelf(t *testing.T) *shelf {
 		a.dropStaleThumbnails()
 		a.modules, a.np = nil, nil
 		a.search, a.focusMode = "", false
-		a.settings.IslandNowPlaying = false
 		a.setTab(pageTray)
 		// Each shot starts from the closed panel; a previous test may have
 		// left it open, and redesignShelf is the shared reset.
@@ -176,7 +175,6 @@ func redesignShelf(t *testing.T) *shelf {
 func TestRedesignPeekMusic(t *testing.T) {
 	a := redesignShelf(t)
 	onMain(func() {
-		a.settings.IslandNowPlaying = true
 		fakeTrack(a, true)
 	})
 	peekShelf(a)
@@ -188,7 +186,6 @@ func TestRedesignPeekMusic(t *testing.T) {
 func TestRedesignPeekPlain(t *testing.T) {
 	a := redesignShelf(t)
 	onMain(func() {
-		a.settings.IslandNowPlaying = false
 		a.np = nil
 	})
 	peekShelf(a)
@@ -259,7 +256,6 @@ func TestRedesignTrayMusic(t *testing.T) {
 		t.Fatal(err)
 	}
 	onMain(func() {
-		a.settings.IslandNowPlaying = true
 		fakeTrack(a, true)
 		a.modules = []module{a.np} // the activity strip asks modules for live activities
 		_ = a.store.AddText("周五发布 ShelfU v1.0 · 记得更新截图")
@@ -326,7 +322,6 @@ func TestRedesignClipboardSearch(t *testing.T) {
 func TestRedesignClipboardMusic(t *testing.T) {
 	a := redesignShelf(t)
 	onMain(func() {
-		a.settings.IslandNowPlaying = true
 		fakeTrack(a, true)
 		a.modules = []module{a.np}
 		_ = a.store.AddClipText("购物清单：牛奶、鸡蛋、面包", "com.apple.Notes")

@@ -845,7 +845,7 @@ func (a *shelf) view(c *ui.Context) {
 				if levelK <= 0.001 {
 					return
 				}
-				inner := ui.Column(c.Key("panel")).Width(sheetW).Height(sheetH).Opacity(levelK)
+				inner := ui.Column(c.Key("panel")).Width(a.pageShellW()).Height(sheetH).Opacity(levelK)
 				if levelK < 0.5 {
 					inner.PassThrough()
 				}
@@ -897,7 +897,9 @@ func (a *shelf) view(c *ui.Context) {
 	}
 	if drop, ok := ui.DropData(zone, opts); ok {
 		a.drop.done = true
-		a.receive(drop.Data)
+		if !a.homeTakesNoDrop() {
+			a.receive(drop.Data)
+		}
 		if !a.visible {
 			a.show(false)
 		}
@@ -930,19 +932,12 @@ func (a *shelf) bandRow(c *ui.Context) {
 }
 
 // tabPages are the page icons the band draws: five at most, in the
-// registry's order, with the current page always among them (a page such
-// as 正在播放 takes the last seat while it is current).
+// registry's order, with the current page always among them.
 func (a *shelf) tabPages() []panelPage {
 	// 正在播放 is a detail page: it takes one of the five seats only while
 	// it is the page on screen, never in place of an ordinary page.
-	var pages []panelPage
+	pages := a.enabledPages()
 	cur := a.currentPage()
-	for _, p := range a.enabledPages() {
-		if p.id() == pagePlaying && cur.id() != pagePlaying {
-			continue
-		}
-		pages = append(pages, p)
-	}
 	if len(pages) <= tabMaxPages {
 		return pages
 	}
@@ -999,7 +994,7 @@ func pageTitle(c *ui.Context, p panelPage) string {
 // screen-recording card replace the page whole — they are live gestures;
 // everything else switches through the page transition (see pageBody).
 func (a *shelf) tabBody(c *ui.Context, over bool) {
-	ui.Column(c.Key("sheet-body")).Width(sheetW).Height(sheetH-bandH).
+	ui.Column(c.Key("sheet-body")).Width(a.pageShellW()).Height(sheetH-bandH).
 		Padding(0, sheetPadX, sheetPadBottom, sheetPadX).Children(func() {
 		switch {
 		case a.drop.on && len(a.drop.files) > 0:
@@ -1042,14 +1037,14 @@ func (a *shelf) pageBody(c *ui.Context, over bool) {
 			out = p
 		}
 	}
-	box := ui.Column(c.Key("page-switch")).Width(contentW).Height(pageBodyH)
+	box := ui.Column(c.Key("page-switch")).Width(pageBoxW(a.currentPage())).Height(pageBodyH)
 	box.Children(func() {
 		if !(a.snap.panel || a.snap.drawn) {
 			a.warmPage(c)
 		}
 		if out != nil && outAlpha > 0.001 {
 			old := ui.Column(c.Key("frame-out")).Absolute().Top(0).Left(outLeft).
-				Width(contentW).Height(pageBodyH).PassThrough().Opacity(outAlpha)
+				Width(pageBoxW(out)).Height(pageBodyH).PassThrough().Opacity(outAlpha)
 			old.Children(func() { a.pageBlock(c, out, over, false, outAlpha, outLeft) })
 		}
 		// The arrival offset is a layout offset, not a paint transform: a
@@ -1067,7 +1062,7 @@ func (a *shelf) pageBody(c *ui.Context, over bool) {
 		cur := a.currentPage()
 		shift := tabShift * dir * (1 - inK)
 		frame := ui.Column(c.Key("frame")).Absolute().Top(0).Left(shift).
-			Width(contentW).Height(pageBodyH).Opacity(op)
+			Width(pageBoxW(cur)).Height(pageBodyH).Opacity(op)
 		frame.Children(func() { a.pageBlock(c, cur, over, true, op, shift) })
 		if t < tabInShare {
 			// Neither page is a target in a switch's first phase: the old
@@ -1090,10 +1085,19 @@ func (a *shelf) pageBlock(c *ui.Context, p panelPage, over, live bool, opacity, 
 	if onPageBlock != nil {
 		onPageBlock(a, p.id(), live, opacity, left)
 	}
-	ui.Column(c.Key("block")).Width(contentW).Height(pageBodyH).Children(func() {
+	w := pageBoxW(p)
+	ui.Column(c.Key("block")).Width(w).Height(pageBodyH).Children(func() {
+		if pageBleeds(p) {
+			// The home page owns the whole area: no action row, no shared
+			// 174pt box.
+			ui.Column(c.Key("page-content")).Width(w).Height(pageBodyH).Clip().Children(func() {
+				p.body(c, over, live)
+			})
+			return
+		}
 		a.pageActions(c, p)
 		ui.Box(c.Key("page-gap")).Height(pageActionsGap)
-		ui.Column(c.Key("page-content")).Width(contentW).Height(contentH).Clip().Children(func() {
+		ui.Column(c.Key("page-content")).Width(w).Height(contentH).Clip().Children(func() {
 			p.body(c, over, live)
 		})
 	})
@@ -1144,8 +1148,12 @@ func (a *shelf) warmPage(c *ui.Context) {
 	// The same box the page's own content draws in: below its action row
 	// and gap, so the hidden page's rows sit exactly where the real ones
 	// will and a pointer over it still reaches the page above.
+	top, h := float32(pageActionH+pageActionsGap), float32(contentH)
+	if pageBleeds(p) {
+		top, h = 0, pageBodyH
+	}
 	hidden := ui.Column(c.Key("warm-" + string(id))).Absolute().Left(0).
-		Top(pageActionH + pageActionsGap).Width(contentW).Height(contentH).
+		Top(top).Width(pageBoxW(p)).Height(h).
 		PassThrough().Opacity(pageWarmOpacity)
 	hidden.Children(func() { p.body(c, false, false) })
 	a.warmed[id] = true
@@ -1234,9 +1242,9 @@ func (a *shelf) dropBar(c *ui.Context, name, count, hint string) {
 // activities move up to fill the slot.
 func (a *shelf) liveActivities() []liveActivity {
 	var acts []liveActivity
-	onPlaying := a.tab == pagePlaying
+	onHome := a.tab == pageHome
 	for _, m := range a.modules {
-		if _, ok := m.(*nowPlayingModule); ok && onPlaying {
+		if _, ok := m.(*nowPlayingModule); ok && onHome {
 			continue
 		}
 		if act, ok := m.(liveActivity); ok && act.live() {

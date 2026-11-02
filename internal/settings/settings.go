@@ -55,6 +55,10 @@ type Settings struct {
 	// agent turn on the notch. Off by default: while it is on, Rakko's hook
 	// entries live in the installed agents' own configuration files.
 	AgentNotify AgentNotifySettings `json:"agentNotify"`
+	// Lyrics is the 设置 → 通用 → 歌词 switch. A missing object keeps it on,
+	// so a settings.json written before the home page had lyrics still shows
+	// them.
+	Lyrics *LyricsSettings `json:"lyrics,omitempty"`
 	// IslandPos is where the floating island was left on each display, by
 	// display id. A display with no entry keeps the default position; the
 	// notch style ignores the whole map.
@@ -120,6 +124,23 @@ type LiveActivitySettings struct {
 // again.
 type AgentNotifySettings struct {
 	Enabled bool `json:"enabled"`
+}
+
+// LyricsSettings is the lyrics object in settings.json: whether the home
+// page may ask lrclib.net for synced lyrics. On for a fresh install and for
+// a file that has no lyrics object at all.
+type LyricsSettings struct {
+	Enabled bool `json:"enabled"`
+}
+
+// LyricsOn reports the switch, defaulting to on when the file predates it.
+func (s Settings) LyricsOn() bool {
+	return s.Lyrics == nil || s.Lyrics.Enabled
+}
+
+// SetLyrics stores the switch.
+func (s *Settings) SetLyrics(on bool) {
+	s.Lyrics = &LyricsSettings{Enabled: on}
 }
 
 // PetSettings is the pet object in settings.json: 显示海獭 and its size.
@@ -206,7 +227,8 @@ func Default() Settings {
 			QuotaClaude: true,
 		},
 		AgentNotify: AgentNotifySettings{Enabled: false},
-		Pet: PetSettings{Shown: true, Size: PetSizeMedium},
+		Lyrics:      &LyricsSettings{Enabled: true},
+		Pet:         PetSettings{Shown: true, Size: PetSizeMedium},
 		Shortcuts: ShortcutSettings{
 			Toggle:    DefaultShortcutToggle,
 			Clipboard: DefaultShortcutClipboard,

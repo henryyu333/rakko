@@ -20,7 +20,6 @@ import (
 func dragPeekShelf() *shelf {
 	a := motionWindow()
 	fakeTrack(a, true)
-	a.settings.IslandNowPlaying = true
 	a.dragging, a.dropHot = true, true
 	a.peeking = true
 	a.peekProgress, a.peekFrom = 1, 1

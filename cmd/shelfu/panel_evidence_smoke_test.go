@@ -61,7 +61,6 @@ func TestSmokePanelEvidence(t *testing.T) {
 	var f *usageFeature
 	onMain(func() {
 		a.settings = settings.Default()
-		a.settings.IslandNowPlaying = true
 		fakeTrack(a, true)
 		a.modules = []module{a.np}
 		f = newUsageFeature(a, usageDeps{
@@ -94,7 +93,6 @@ func TestSmokePanelEvidence(t *testing.T) {
 	keepShot(t, shotNotch(t, a, "island-music"), "island-music")
 
 	onMain(func() {
-		a.settings.IslandNowPlaying = false
 		a.np = nil
 		a.modules = nil
 		a.win.Invalidate()
@@ -103,7 +101,6 @@ func TestSmokePanelEvidence(t *testing.T) {
 	keepShot(t, shotNotch(t, a, "island-counts"), "island-counts")
 
 	onMain(func() {
-		a.settings.IslandNowPlaying = true
 		fakeTrack(a, true)
 		a.modules = []module{a.np}
 		a.setLevel(2)
@@ -231,7 +228,6 @@ func renderEvidence(t *testing.T, now time.Time) {
 	}
 	a := &shelf{store: s, dataDir: t.TempDir(), level: 1, visible: true, settings: settings.Default(),
 		thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{}, appNames: map[string]string{}}
-	a.settings.IslandNowPlaying = true
 	a.np = &nowPlayingModule{host: a, have: true, last: mac.NowPlayingState{Playing: true, Title: "座右铭", Artist: "吴雨霏", App: "com.apple.Music", Duration: 243, Elapsed: 112, Rate: 1, Received: now}, artColor: ui.Hex("#C9A27E")}
 	a.modules = []module{a.np}
 	f := newUsageFeature(a, usageDeps{

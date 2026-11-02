@@ -97,7 +97,7 @@ func TestEnglishPanelPagesHaveNoChineseAndFit(t *testing.T) {
 	}
 
 	a.level = 2
-	for _, id := range []pageID{pageTray, pageClipboard, pageTools, pagePlaying} {
+	for _, id := range []pageID{pageTray, pageClipboard, pageTools} {
 		a.setTab(id)
 		view.Frame()
 		drain() // the first frame of a tab has no boxes yet

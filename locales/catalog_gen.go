@@ -789,16 +789,6 @@ func (msgs Messages) SettingsDragOutCaption() string {
 	return Catalog.Format(msgs.locale, "settingsDragOutCaption", nil)
 }
 
-// SettingsNowPlayingRow says "刘海显示正在播放"
-// in the language the app shows.
-func SettingsNowPlayingRow() string { return In(i18n.Locale()).SettingsNowPlayingRow() }
-
-// SettingsNowPlayingRow says "刘海显示正在播放"
-// in the language of msgs.
-func (msgs Messages) SettingsNowPlayingRow() string {
-	return Catalog.Format(msgs.locale, "settingsNowPlayingRow", nil)
-}
-
 // SettingsShortcutsSection says "快捷键"
 // in the language the app shows.
 func SettingsShortcutsSection() string { return In(i18n.Locale()).SettingsShortcutsSection() }
@@ -1257,16 +1247,6 @@ func TrayClipboard() string { return In(i18n.Locale()).TrayClipboard() }
 // in the language of msgs.
 func (msgs Messages) TrayClipboard() string {
 	return Catalog.Format(msgs.locale, "trayClipboard", nil)
-}
-
-// TrayNowPlaying says "正在播放"
-// in the language the app shows.
-func TrayNowPlaying() string { return In(i18n.Locale()).TrayNowPlaying() }
-
-// TrayNowPlaying says "正在播放"
-// in the language of msgs.
-func (msgs Messages) TrayNowPlaying() string {
-	return Catalog.Format(msgs.locale, "trayNowPlaying", nil)
 }
 
 // TraySettings says "设置…"
@@ -5093,6 +5073,96 @@ func (msgs Messages) PageTray() string {
 	return Catalog.Format(msgs.locale, "pageTray", nil)
 }
 
+// PageHome says "首页"
+// in the language the app shows.
+func PageHome() string { return In(i18n.Locale()).PageHome() }
+
+// PageHome says "首页"
+// in the language of msgs.
+func (msgs Messages) PageHome() string {
+	return Catalog.Format(msgs.locale, "pageHome", nil)
+}
+
+// SettingsLyricsGroup says "歌词"
+// in the language the app shows.
+func SettingsLyricsGroup() string { return In(i18n.Locale()).SettingsLyricsGroup() }
+
+// SettingsLyricsGroup says "歌词"
+// in the language of msgs.
+func (msgs Messages) SettingsLyricsGroup() string {
+	return Catalog.Format(msgs.locale, "settingsLyricsGroup", nil)
+}
+
+// SettingsLyricsRow says "显示歌词（从 lrclib.net 获取）"
+// in the language the app shows.
+func SettingsLyricsRow() string { return In(i18n.Locale()).SettingsLyricsRow() }
+
+// SettingsLyricsRow says "显示歌词（从 lrclib.net 获取）"
+// in the language of msgs.
+func (msgs Messages) SettingsLyricsRow() string {
+	return Catalog.Format(msgs.locale, "settingsLyricsRow", nil)
+}
+
+// HomeAgentSection says "AGENT"
+// in the language the app shows.
+func HomeAgentSection() string { return In(i18n.Locale()).HomeAgentSection() }
+
+// HomeAgentSection says "AGENT"
+// in the language of msgs.
+func (msgs Messages) HomeAgentSection() string {
+	return Catalog.Format(msgs.locale, "homeAgentSection", nil)
+}
+
+// HomeRecentSection says "最近"
+// in the language the app shows.
+func HomeRecentSection() string { return In(i18n.Locale()).HomeRecentSection() }
+
+// HomeRecentSection says "最近"
+// in the language of msgs.
+func (msgs Messages) HomeRecentSection() string {
+	return Catalog.Format(msgs.locale, "homeRecentSection", nil)
+}
+
+// HomeQuotaLeft says "{name} 剩 {pct}%"
+// in the language the app shows.
+func HomeQuotaLeft(name string, pct string) string { return In(i18n.Locale()).HomeQuotaLeft(name, pct) }
+
+// HomeQuotaLeft says "{name} 剩 {pct}%"
+// in the language of msgs.
+func (msgs Messages) HomeQuotaLeft(name string, pct string) string {
+	return Catalog.Format(msgs.locale, "homeQuotaLeft", map[string]any{"name": name, "pct": pct})
+}
+
+// HomeRunningFor says "已跑 {n} 分钟"
+// in the language the app shows.
+func HomeRunningFor(n string) string { return In(i18n.Locale()).HomeRunningFor(n) }
+
+// HomeRunningFor says "已跑 {n} 分钟"
+// in the language of msgs.
+func (msgs Messages) HomeRunningFor(n string) string {
+	return Catalog.Format(msgs.locale, "homeRunningFor", map[string]any{"n": n})
+}
+
+// HomeRunningStarted says "刚开始"
+// in the language the app shows.
+func HomeRunningStarted() string { return In(i18n.Locale()).HomeRunningStarted() }
+
+// HomeRunningStarted says "刚开始"
+// in the language of msgs.
+func (msgs Messages) HomeRunningStarted() string {
+	return Catalog.Format(msgs.locale, "homeRunningStarted", nil)
+}
+
+// HomeEmpty says "还没有内容"
+// in the language the app shows.
+func HomeEmpty() string { return In(i18n.Locale()).HomeEmpty() }
+
+// HomeEmpty says "还没有内容"
+// in the language of msgs.
+func (msgs Messages) HomeEmpty() string {
+	return Catalog.Format(msgs.locale, "homeEmpty", nil)
+}
+
 // PageClipboard says "剪贴板"
 // in the language the app shows.
 func PageClipboard() string { return In(i18n.Locale()).PageClipboard() }
@@ -6083,16 +6153,6 @@ func (msgs Messages) MusicVolumeUnsupported() string {
 	return Catalog.Format(msgs.locale, "musicVolumeUnsupported", nil)
 }
 
-// MusicEmpty says "没有在播放"
-// in the language the app shows.
-func MusicEmpty() string { return In(i18n.Locale()).MusicEmpty() }
-
-// MusicEmpty says "没有在播放"
-// in the language of msgs.
-func (msgs Messages) MusicEmpty() string {
-	return Catalog.Format(msgs.locale, "musicEmpty", nil)
-}
-
 // SettingsGeneralHero says "启动、语言和更新。"
 // in the language the app shows.
 func SettingsGeneralHero() string { return In(i18n.Locale()).SettingsGeneralHero() }
@@ -6287,16 +6347,6 @@ func SettingsNotchFoot() string { return In(i18n.Locale()).SettingsNotchFoot() }
 // in the language of msgs.
 func (msgs Messages) SettingsNotchFoot() string {
 	return Catalog.Format(msgs.locale, "settingsNotchFoot", nil)
-}
-
-// SettingsHoverGroup says "悬停刘海时"
-// in the language the app shows.
-func SettingsHoverGroup() string { return In(i18n.Locale()).SettingsHoverGroup() }
-
-// SettingsHoverGroup says "悬停刘海时"
-// in the language of msgs.
-func (msgs Messages) SettingsHoverGroup() string {
-	return Catalog.Format(msgs.locale, "settingsHoverGroup", nil)
 }
 
 // SettingsWindowGroup says "窗口"
@@ -6741,4 +6791,34 @@ func SettingsPermStatusMissing(count int) string {
 // in the language of msgs.
 func (msgs Messages) SettingsPermStatusMissing(count int) string {
 	return Catalog.Format(msgs.locale, "settingsPermStatusMissing", map[string]any{"count": count})
+}
+
+// SettingsNowPlayingRow says "刘海显示正在播放"
+// in the language the app shows.
+func SettingsNowPlayingRow() string { return In(i18n.Locale()).SettingsNowPlayingRow() }
+
+// SettingsNowPlayingRow says "刘海显示正在播放"
+// in the language of msgs.
+func (msgs Messages) SettingsNowPlayingRow() string {
+	return Catalog.Format(msgs.locale, "settingsNowPlayingRow", nil)
+}
+
+// SettingsHoverGroup says "悬停刘海时"
+// in the language the app shows.
+func SettingsHoverGroup() string { return In(i18n.Locale()).SettingsHoverGroup() }
+
+// SettingsHoverGroup says "悬停刘海时"
+// in the language of msgs.
+func (msgs Messages) SettingsHoverGroup() string {
+	return Catalog.Format(msgs.locale, "settingsHoverGroup", nil)
+}
+
+// TrayNowPlaying says "正在播放"
+// in the language the app shows.
+func TrayNowPlaying() string { return In(i18n.Locale()).TrayNowPlaying() }
+
+// TrayNowPlaying says "正在播放"
+// in the language of msgs.
+func (msgs Messages) TrayNowPlaying() string {
+	return Catalog.Format(msgs.locale, "trayNowPlaying", nil)
 }

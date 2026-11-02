@@ -22,7 +22,6 @@ func TestIdleOverlayLetsClicksThrough(t *testing.T) {
 	oldCursor := cursorPoint
 	t.Cleanup(func() { onMain(func() { cursorPoint = oldCursor }) })
 	onMain(func() {
-		a.settings.IslandNowPlaying = true
 		fakeTrack(a, true) // the strip reserves the hover wings' size
 		a.modules = []module{a.np}
 		a.place(mygo.Screen.CursorScreenPoint())
@@ -231,7 +230,6 @@ func TestDragBandKeepsShelfInTheMenuBar(t *testing.T) {
 		a.visible, a.progress, a.peeking, a.peekProgress = false, 0, false, 0
 		a.fb = feedback{}
 		a.np = nil
-		a.settings.IslandNowPlaying = false
 		point = mygo.Point{X: 100, Y: a.dispBounds.Y + a.dispBounds.Height - 40} // parked outside the band
 		cursorPoint = func() mygo.Point { return point }
 		a.dragging, a.pointerDrag, a.dropHot, a.inBand = true, true, false, false

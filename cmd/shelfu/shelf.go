@@ -13,6 +13,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"shelf/internal/layout"
+	"shelf/internal/lyrics"
 	"shelf/internal/mac"
 	"shelf/internal/settings"
 	"shelf/internal/store"
@@ -54,6 +55,7 @@ type shelf struct {
 	conv                                                        *converter            // image conversion jobs; nil until the app starts
 	usage                                                       *usageFeature         // nil until the AI usage page registers itself
 	agent                                                       *agentNotifyFeature   // nil until the Agent 完成提醒 switch or a hook event needs it
+	lyrCache                                                    *lyrics.Cache         // synced lyrics for the home page; nil until first used
 	clip                                                        *clipboardModule      // nil until monitoring starts
 	awake                                                       *awakeModule          // nil until the app starts
 	vol                                                         volumeControl         // system output volume; nil = CoreAudio

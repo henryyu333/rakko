@@ -230,7 +230,6 @@ func TestIslandSmokeScreenshots(t *testing.T) {
 
 	// Hover with music: the wings grow from the capsule, 224 × 34.
 	onMain(func() {
-		a.settings.IslandNowPlaying = true
 		fakeTrack(a, true)
 	})
 	peekShelf(a)
@@ -321,7 +320,6 @@ func TestIslandSmokeScreenshots(t *testing.T) {
 	// notch's ears and starts at the display's top edge.
 	islandStyle(t, a, settings.ShellStyleNotch)
 	onMain(func() {
-		a.settings.IslandNowPlaying = true
 		fakeTrack(a, true)
 	})
 	peekShelf(a)

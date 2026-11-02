@@ -523,8 +523,8 @@ func (p *toolsPage) toolCardInput(c *ui.Context, card ui.Element, cell toolCell,
 // tray's selection (design §3: 对托盘页当前选中的项目执行), a widget card
 // does what its whole-card tap has always meant (keep-awake toggles, the
 // clipboard card copies its newest capture, AI 用量 opens its page) —
-// the music card opens the now-playing page: its transport buttons and
-// rails own their presses, and a tap beside them is never a play toggle.
+// the music card opens the home page: its transport buttons and rails own
+// their presses, and a tap beside them is never a play toggle.
 // A card with nothing to act on jiggles with the hint.
 func (p *toolsPage) toolCardTapped(id string) {
 	a := p.host
@@ -533,8 +533,8 @@ func (p *toolsPage) toolCardTapped(id string) {
 	}
 	if def := toolCardDefFor(id); def != nil && def.kind == cardWidget && def.id == "playing" {
 		// The transport and the rails own their own presses; a tap on the
-		// card itself opens the full player.
-		a.openPlaying()
+		// card itself opens the home page and its player.
+		a.openHomePage()
 		return
 	}
 	if a.runToolCard(id) {

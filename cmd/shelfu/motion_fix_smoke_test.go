@@ -241,7 +241,6 @@ func TestFixNativeCapsuleScreenshots(t *testing.T) {
 	fixCapsuleShot(t, a, "capsule-running")
 	reset()
 	onMain(func() {
-		a.settings.IslandNowPlaying = true
 		fakeTrack(a, true)
 		a.toastStatus("已转换 3 项 · 已选中，可直接拖出", time.Now().Add(6*time.Second), statusOK)
 	})
@@ -274,7 +273,6 @@ func TestFixNativeFoldTrace(t *testing.T) {
 	time.Sleep(600 * time.Millisecond)
 	defer motionClosed(a)
 	onMain(func() {
-		a.settings.IslandNowPlaying = true
 		fakeTrack(a, true)
 		a.dragging = true
 		a.peeking, a.peekProgress, a.peekFrom = true, 1, 1

@@ -376,7 +376,6 @@ func TestClosingFollowsCurrentPeekAfterOpeningStateChanges(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			makePanel := func() (*shelf, *ui.Tester) {
 				a := motionWindow()
-				a.settings.IslandNowPlaying = true
 				a.np = &nowPlayingModule{host: a, have: true, last: mac.NowPlayingState{Title: "Track"}}
 				a.modules = []module{a.np}
 				a.dragging = name == "drag ends"

@@ -10,6 +10,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -44,9 +45,23 @@ const agentNeedsAppNote = "needs-app"
 
 // agentTask is one session's latest prompt and when it arrived.
 type agentTask struct {
+	tool agentnotify.Tool
 	task string
 	at   time.Time
 }
+
+// agentRun is one row of the home page's AGENT section: a running or a
+// just-finished session. Tool and At are what the row shows beside the
+// task.
+type agentRun struct {
+	Tool agentnotify.Tool
+	Task string
+	At   time.Time
+}
+
+// agentFinishedWindow is how long a finished session stays in the home
+// page's AGENT section.
+const agentFinishedWindow = 30 * time.Minute
 
 // agentNotifyFeature holds the socket, the per-session task names and the
 // settings rows' last known state.
@@ -56,9 +71,10 @@ type agentNotifyFeature struct {
 	dir  string
 	srv  *agentnotify.Server
 
-	mu     sync.Mutex
-	tasks  map[string]agentTask
-	posted map[string]time.Time
+	mu       sync.Mutex
+	tasks    map[string]agentTask // running: prompt seen, no completion yet
+	finished map[string]agentTask // completed, kept for the home page
+	posted   map[string]time.Time
 	// states and notes are the settings rows' last computed answer.
 	states    map[agentnotify.Tool]agentnotify.State
 	notes     map[agentnotify.Tool]string
@@ -73,7 +89,8 @@ func newAgentNotifyFeature(a *shelf) *agentNotifyFeature {
 	home, _ := agentNotifyHome()
 	return &agentNotifyFeature{
 		host: a, home: home, dir: a.dataDir,
-		tasks: map[string]agentTask{}, posted: map[string]time.Time{},
+		tasks: map[string]agentTask{}, finished: map[string]agentTask{},
+		posted: map[string]time.Time{},
 		states: map[agentnotify.Tool]agentnotify.State{}, notes: map[agentnotify.Tool]string{},
 	}
 }
@@ -121,7 +138,8 @@ func (f *agentNotifyFeature) accept(ev agentnotify.Event) {
 	if agentnotify.PromptEvent(ev.Event) {
 		if task := agentTaskName(ev.Prompt); task != "" {
 			f.mu.Lock()
-			f.tasks[key] = agentTask{task: task, at: now}
+			f.tasks[key] = agentTask{tool: ev.Tool, task: task, at: now}
+			delete(f.finished, key) // a new turn in this session
 			f.pruneLocked(now)
 			f.mu.Unlock()
 		}
@@ -155,7 +173,42 @@ func (f *agentNotifyFeature) accept(ev agentnotify.Event) {
 		}
 	}
 	tool := ev.Tool
+	if task != "" {
+		f.mu.Lock()
+		f.finished[key] = agentTask{tool: tool, task: task, at: now}
+		f.mu.Unlock()
+	}
 	agentRunOnMain(func() { f.host.postAgentDone(tool, task) })
+}
+
+// snapshot is the home page's AGENT section: the turns under way now,
+// newest first, and the ones that finished in the last 30 minutes, newest
+// first. Both are copies; the caller may run off the main thread's lock.
+func (f *agentNotifyFeature) snapshot(now time.Time) (running, done []agentRun) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, t := range f.tasks {
+		running = append(running, agentRun{Tool: t.tool, Task: t.task, At: t.at})
+	}
+	for _, t := range f.finished {
+		if now.Sub(t.at) <= agentFinishedWindow {
+			done = append(done, agentRun{Tool: t.tool, Task: t.task, At: t.at})
+		}
+	}
+	byRecent := func(rows []agentRun) {
+		sort.Slice(rows, func(i, j int) bool {
+			if !rows[i].At.Equal(rows[j].At) {
+				return rows[i].At.After(rows[j].At)
+			}
+			if rows[i].Task != rows[j].Task {
+				return rows[i].Task < rows[j].Task
+			}
+			return rows[i].Tool < rows[j].Tool
+		})
+	}
+	byRecent(running)
+	byRecent(done)
+	return running, done
 }
 
 // pruneLocked forgets sessions and dedupe marks that aged out.
@@ -163,6 +216,11 @@ func (f *agentNotifyFeature) pruneLocked(now time.Time) {
 	for key, t := range f.tasks {
 		if now.Sub(t.at) > agentNotifyTaskTTL {
 			delete(f.tasks, key)
+		}
+	}
+	for key, t := range f.finished {
+		if now.Sub(t.at) > agentNotifyTaskTTL {
+			delete(f.finished, key)
 		}
 	}
 	for key, at := range f.posted {

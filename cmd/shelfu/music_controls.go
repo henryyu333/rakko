@@ -3,8 +3,8 @@
 package main
 
 // The player's seek and volume rails, shared by every surface that draws
-// them: the 正在播放 page, the tools page's 2 × 2 music card and that card
-// pinned to the desktop. One state on the shelf means the three draw the
+// them: the home page's player, the tools page's 2 × 2 music card and that
+// card pinned to the desktop. One state on the shelf means the three draw the
 // same knob, and a drag begun on one is the drag the others would show;
 // the command still goes out once, on release — one seek, one volume
 // write.
@@ -14,7 +14,35 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+
+	"shelf/internal/mac"
 )
+
+// Speaker glyphs for the volume row.
+var (
+	volLoSymbol = symbol(`<path d="M4 10h3l4-3.5v11L7 14H4z"/>`)
+	volHiSymbol = symbol(`<path d="M4 10h3l4-3.5v11L7 14H4z"/><path d="M15 9a4.5 4.5 0 0 1 0 6M17.5 6.5a8 8 0 0 1 0 11"/>`)
+)
+
+// volumeControl is the default output device's volume. Tests replace it
+// with a fake so no test ever changes the machine's volume.
+type volumeControl interface {
+	level() (float32, bool)
+	set(float32) error
+}
+
+type systemVolume struct{}
+
+func (systemVolume) level() (float32, bool) { return mac.OutputVolume() }
+func (systemVolume) set(v float32) error    { return mac.SetOutputVolume(v) }
+
+// volumeControl is the seam: nil means the real CoreAudio device.
+func (a *shelf) volumeControl() volumeControl {
+	if a.vol != nil {
+		return a.vol
+	}
+	return systemVolume{}
+}
 
 // volumePoll is how often a drawn rail re-reads the output device: the
 // monitor tick's pace, not every frame, so switching the system output
@@ -135,7 +163,7 @@ func (a *shelf) volumeRow(c *ui.Context, key string, icon, gap float32) {
 	// The row is the only place that knows about the output device, so
 	// while a player surface is on screen it asks for the next frame at
 	// the poll's pace: a paused panel then still notices a device switch.
-	if a.visible && (a.tab == pagePlaying || a.tab == pageTools) {
+	if a.visible && (a.tab == pageHome || a.tab == pageTools) {
 		c.After(volumePoll)
 	}
 	v, ok := a.outputVolume(c.Now())

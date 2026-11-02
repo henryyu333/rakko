@@ -473,7 +473,6 @@ func TestSmokePeekMorphNeverClipped(t *testing.T) {
 	motionClosed(a)
 	time.Sleep(300 * time.Millisecond)
 	onMain(func() {
-		a.settings.IslandNowPlaying = true
 		mod := &nowPlayingModule{host: a}
 		mod.have = true
 		mod.last = mac.NowPlayingState{Playing: true, Title: "Fashion Killa", Duration: 200, Elapsed: 30, Received: time.Now()}

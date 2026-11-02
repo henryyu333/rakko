@@ -73,7 +73,6 @@ func TestPeekDropHintHiddenDuringOwnDrag(t *testing.T) {
 func TestDragStartNeverCarriesFoldRemnant(t *testing.T) {
 	a := motionWindow()
 	a.settings = settings.Default()
-	a.settings.IslandNowPlaying = true
 	fakeTrack(a, true)
 	a.dispBounds = mygo.Rectangle{X: 0, Y: 0, Width: 1470, Height: 956}
 	view := ui.NewTester(a.view, sheetW, panelTestH)

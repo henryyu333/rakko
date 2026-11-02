@@ -233,12 +233,7 @@ func (a *shelf) navW() float32 {
 // now-playing detail page has no seat.
 func (a *shelf) navPages() []panelPage {
 	var out []panelPage
-	for _, p := range a.enabledPages() {
-		if p.id() == pagePlaying {
-			continue
-		}
-		out = append(out, p)
-	}
+	out = append(out, a.enabledPages()...)
 	return out
 }
 

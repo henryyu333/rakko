@@ -31,7 +31,7 @@ type stubNowPlaying struct {
 	cmds  chan string    // module → test: commands the module sent
 }
 
-func newStubNowPlaying(t *testing.T, on bool) *stubNowPlaying {
+func newStubNowPlaying(t *testing.T) *stubNowPlaying {
 	t.Helper()
 	// module → test (commands the module sends)
 	cmdR, cmdW := io.Pipe()
@@ -54,7 +54,7 @@ func newStubNowPlaying(t *testing.T, on bool) *stubNowPlaying {
 		return cmdW, lineR, wait, nil
 	})
 	s.mod = &nowPlayingModule{
-		host: &shelf{settings: settings.Settings{IslandNowPlaying: on}},
+		host: &shelf{},
 	}
 	s.mod.np = host
 	if err := host.Start(); err != nil {
@@ -120,8 +120,8 @@ func TestNPSnapOf(t *testing.T) {
 	}
 }
 
-func TestNowPlayingTrackAndSettingOff(t *testing.T) {
-	s := newStubNowPlaying(t, true)
+func TestNowPlayingTrackWhilePlayingAndPaused(t *testing.T) {
+	s := newStubNowPlaying(t)
 	s.feed(t, `{"ok":true,"isPlaying":true,"appState":1,"title":"T","artist":"A","duration":100,"elapsed":5}`)
 	// Music never owns the collapsed notch: it feeds only the peek wings
 	// and the panel card, so playing must report a track while paused does
@@ -134,21 +134,12 @@ func TestNowPlayingTrackAndSettingOff(t *testing.T) {
 	if !s.mod.hasTrack() {
 		t.Fatal("paused playback must still have a card")
 	}
-	// Turning the setting off hides both.
-	s.mod.host.settings.IslandNowPlaying = false
-	s.mod.tick(time.Now())
-	if s.mod.hasTrack() {
-		t.Fatal("the setting off must hide the card and the peek player")
-	}
-	if s.mod.np != nil || s.mod.started {
-		t.Fatal("the setting off must stop the helper")
-	}
 }
 
 func TestNowPlayingChipDrawsTrackAndToggle(t *testing.T) {
-	s := newStubNowPlaying(t, true)
+	s := newStubNowPlaying(t)
 	s.feed(t, `{"ok":true,"isPlaying":true,"appState":1,"title":"夜曲","artist":"周杰伦","duration":100,"elapsed":5}`)
-	a := &shelf{settings: settings.Settings{IslandNowPlaying: true}}
+	a := &shelf{settings: settings.Settings{}}
 	a.modules = []module{s.mod, &retentionModule{host: a}}
 	view := ui.NewTester(a.view, sheetW, panelTestH)
 	// The chip is a 22pt capsule: cover, bars and play/pause, named by the
@@ -184,16 +175,15 @@ func TestNowPlayingChipDrawsTrackAndToggle(t *testing.T) {
 	}
 }
 
-// TestPlayingPageDropsThePlayerChip: on the playing page the artwork and
-// transport already show the track, so the band's right ear must not
-// repeat it with a chip. Other activities keep their place and move up;
-// leaving the page brings the chip back. A switch whose arrival page is
-// the playing page counts too.
-func TestPlayingPageDropsThePlayerChip(t *testing.T) {
-	s := newStubNowPlaying(t, true)
+// TestHomeDropsThePlayerChip: on the home page the player already shows
+// the track, so the band's right ear must not repeat it with a chip. Other
+// activities keep their place and move up; leaving the page brings the
+// chip back. A switch whose arrival page is the home page counts too.
+func TestHomeDropsThePlayerChip(t *testing.T) {
+	s := newStubNowPlaying(t)
 	s.feed(t, `{"ok":true,"isPlaying":true,"appState":1,"title":"夜曲","artist":"周杰伦","duration":100,"elapsed":5}`)
 	job := &convertJob{target: toJPEG, started: time.Now().Add(-time.Second)}
-	a := &shelf{settings: settings.Settings{IslandNowPlaying: true}, level: 2, tab: pagePlaying}
+	a := &shelf{settings: settings.Settings{}, level: 2, tab: pageHome}
 	a.modules = []module{s.mod, &converter{host: a, job: job}}
 	acts := a.liveActivities()
 	if len(acts) != 1 {
@@ -210,14 +200,14 @@ func TestPlayingPageDropsThePlayerChip(t *testing.T) {
 	}
 	// The arrival page decides during a switch, not the page fading out.
 	a.visible = true
-	a.startPageSwitch(pageTray, pagePlaying)
+	a.startPageSwitch(pageTray, pageHome)
 	if acts := a.liveActivities(); len(acts) != 1 {
 		t.Fatalf("a switch to the playing page kept %d chips", len(acts))
 	}
 }
 
 func TestPeekGrowsIntoTheWingsForATrack(t *testing.T) {
-	a := &shelf{settings: settings.Settings{IslandNowPlaying: true}, notchW: 180, notchH: 32}
+	a := &shelf{settings: settings.Settings{}, notchW: 180, notchH: 32}
 	if w, h := a.peekSize(); w != 220 || h != 32+peekBody {
 		t.Fatalf("idle peek = %.0fx%.0f, want 220x%d (notch +40/+%d)", w, h, 32+peekBody, peekBody)
 	}
@@ -233,8 +223,8 @@ func TestPeekGrowsIntoTheWingsForATrack(t *testing.T) {
 	}
 	// A file drag inside the notch band needs the drop pill — its
 	// 「松开放入」 line wholly below the hardware notch. Outside the band
-	// the drag only gets the band-height hint. Switching the feature off
-	// collapses the wings even before the next tick stops the helper.
+	// the drag only gets the band-height hint. The wings are always on, so
+	// they return as soon as the drag ends.
 	a.dragging = true
 	if w, h := a.peekSize(); w != 180+dropHintExtraW || h != 32 {
 		t.Fatalf("a drag outside the band must show only the hint, got %.0fx%.0f", w, h)
@@ -244,9 +234,8 @@ func TestPeekGrowsIntoTheWingsForATrack(t *testing.T) {
 		t.Fatalf("a drag inside the band must show the drop pill, got %.0fx%.0f", w, h)
 	}
 	a.dragging = false
-	a.settings.IslandNowPlaying = false
-	if w, _ := a.peekSize(); w != 220 {
-		t.Fatalf("the wings must close when now playing is off, got %.0f", w)
+	if w, _ := a.peekSize(); w != 284 {
+		t.Fatalf("the wings must return after the drag, got %.0f", w)
 	}
 }
 
@@ -278,10 +267,10 @@ func TestPeekShapesFitTheIdleStrip(t *testing.T) {
 }
 
 func TestPeekWingsShowCoverAndBarsOnly(t *testing.T) {
-	s := newStubNowPlaying(t, true)
+	s := newStubNowPlaying(t)
 	s.feed(t, `{"ok":true,"isPlaying":true,"appState":1,"title":"夜曲","artist":"周杰伦","duration":100,"elapsed":5}`)
 	a := &shelf{
-		settings:     settings.Settings{IslandNowPlaying: true},
+		settings:     settings.Settings{},
 		notchX:       500,
 		notchW:       180,
 		notchH:       32,
@@ -346,10 +335,10 @@ func TestPeekWingsShowCoverAndBarsOnly(t *testing.T) {
 // expand gesture — the hover wings, the shortcut's toggle and a plain open
 // — lands on the search bar, never on the player page.
 func TestExpandingWithMusicNeverOpensThePlayer(t *testing.T) {
-	s := newStubNowPlaying(t, true)
+	s := newStubNowPlaying(t)
 	s.feed(t, `{"ok":true,"isPlaying":true,"appState":1,"title":"夜曲","artist":"周杰伦","duration":100,"elapsed":5}`)
 	a := &shelf{
-		settings:     settings.Settings{IslandNowPlaying: true},
+		settings:     settings.Settings{},
 		notchX:       500,
 		notchW:       180,
 		notchH:       32,
@@ -389,7 +378,7 @@ func TestExpandingWithMusicNeverOpensThePlayer(t *testing.T) {
 // automation surface still reads 「展开 Rakko」.
 func TestPeekWingsLabelWithoutATitle(t *testing.T) {
 	a := &shelf{
-		settings:     settings.Settings{IslandNowPlaying: true},
+		settings:     settings.Settings{},
 		notchW:       180,
 		notchH:       32,
 		peeking:      true,
@@ -406,10 +395,10 @@ func TestPeekWingsLabelWithoutATitle(t *testing.T) {
 }
 
 func TestPeekPressExpandsAndSendsNoCommand(t *testing.T) {
-	s := newStubNowPlaying(t, true)
+	s := newStubNowPlaying(t)
 	s.feed(t, `{"ok":true,"isPlaying":true,"appState":1,"title":"T","artist":"A","duration":100,"elapsed":5}`)
 	a := &shelf{
-		settings:     settings.Settings{IslandNowPlaying: true},
+		settings:     settings.Settings{},
 		notchX:       500,
 		notchW:       180,
 		notchH:       32,
@@ -452,7 +441,7 @@ func (s *stubNowPlaying) push(t *testing.T, line string) {
 }
 
 func TestPlayPausePressHoldsUntilHelperAgrees(t *testing.T) {
-	s := newStubNowPlaying(t, true)
+	s := newStubNowPlaying(t)
 	s.feed(t, `{"ok":true,"isPlaying":true,"appState":1,"title":"T","duration":100,"elapsed":5,"hasRate":true,"rate":1}`)
 	s.mod.send(mac.NPPlayPause)
 	s.expectCommand(t, "toggle")
@@ -479,7 +468,7 @@ func TestPlayPausePressHoldsUntilHelperAgrees(t *testing.T) {
 }
 
 func TestNowPlayingActivityHiddenWithoutTrack(t *testing.T) {
-	s := newStubNowPlaying(t, true)
+	s := newStubNowPlaying(t)
 	if s.mod.live() {
 		t.Fatal("no track: the activity must not be live")
 	}
@@ -591,7 +580,7 @@ func TestNowPlayingFallsBackToTheAppIcon(t *testing.T) {
 }
 
 func TestNowPlayingStopsWhenHelperDies(t *testing.T) {
-	s := newStubNowPlaying(t, true)
+	s := newStubNowPlaying(t)
 	s.feed(t, `{"ok":true,"isPlaying":true,"appState":1,"title":"T","elapsed":1}`)
 	if !s.mod.playing() {
 		t.Fatal("state must be live")
@@ -619,7 +608,7 @@ func TestNowPlayingStopsWhenHelperDies(t *testing.T) {
 }
 
 func TestNowPlayingStartFailureIsRetriedLater(t *testing.T) {
-	m := &nowPlayingModule{host: &shelf{settings: settings.Settings{IslandNowPlaying: true}}}
+	m := &nowPlayingModule{host: &shelf{settings: settings.Settings{}}}
 	m.newHost = func() *mac.NowPlayingHost {
 		return mac.NewNowPlayingHostWithSource(func(context.Context) (io.WriteCloser, io.ReadCloser, func() error, error) {
 			return nil, nil, nil, errors.New("no helper here")

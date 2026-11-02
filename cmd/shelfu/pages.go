@@ -18,9 +18,9 @@ import (
 type pageID string
 
 const (
+	pageHome      pageID = "home"      // 首页：此刻（播放器 / Agent / 最近）
 	pageTray      pageID = "tray"      // 托盘：全部内容
 	pageClipboard pageID = "clipboard" // 剪贴板：只显示剪贴板收录的文字与图片
-	pagePlaying   pageID = "playing"   // 正在播放：音乐小组件的整页版
 	pageUsage     pageID = "usage"     // AI 用量（由 AI 用量切片实现并登记）
 )
 
@@ -43,6 +43,20 @@ type panelPage interface {
 	actions(c *ui.Context) []ui.Element // the back row's right side, appended in order
 }
 
+// pageWidth is a page whose shell is not the sheet's 440 points: the home
+// page widens to 640 beside its lyrics. A page without it uses sheetW and
+// the 416 × 174 content box every other page shares.
+type pageWidth interface {
+	width() float32
+}
+
+// pageBleed is a page that owns its whole 200pt page area: no action row
+// above the content, no shared 174pt box. The home page uses it so the
+// player sits in the middle of the page, as the design has it.
+type pageBleed interface {
+	fullBleed() bool
+}
+
 // pageText is a page whose name it says in a given language. label and
 // title carry no context, so the panel asks for the name in the language
 // of its window here; a page without it falls back to its own label and
@@ -62,7 +76,7 @@ func (a *shelf) ensurePages() {
 	}
 	a.pagesReady = true
 	extra := a.pages
-	a.pages = []panelPage{&trayPage{host: a}, &clipboardPage{host: a}, &toolsPage{host: a}, &playingPage{host: a}}
+	a.pages = []panelPage{&homePage{host: a}, &trayPage{host: a}, &clipboardPage{host: a}, &toolsPage{host: a}}
 	for _, p := range extra {
 		a.registerPage(p)
 	}
@@ -145,8 +159,8 @@ func (a *shelf) normalizeTab() {
 	a.selection.keepExisting(a.visibleItems())
 }
 
-// trayPage is the panel's home page: the 5-column thumbnail grid of every
-// stored item except ones hidden from the tray.
+// trayPage is the 托盘 page: the 5-column thumbnail grid of every stored
+// item except ones hidden from the tray.
 type trayPage struct {
 	host   *shelf
 	scroll ui.ScrollState // where the grid is scrolled to

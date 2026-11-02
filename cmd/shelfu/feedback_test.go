@@ -493,7 +493,6 @@ func TestCapsuleGrowNeverPaintsPastTheShell(t *testing.T) {
 func TestPeekMorphFlightKeepsStripRoom(t *testing.T) {
 	a := motionShelf()
 	a.np = &nowPlayingModule{host: a, have: true, last: mac.NowPlayingState{Title: "T"}}
-	a.settings.IslandNowPlaying = true
 	pw, ph := a.peekSize()
 	a.fx.sizeMoving = true
 	f := a.desiredFrame()
@@ -577,7 +576,6 @@ func TestSettledCapsuleAsksForNoFrames(t *testing.T) {
 // shell (peekK) — instead of snapping back to the bare chevron mid-retract.
 func TestWingsFadeOutWithTheShell(t *testing.T) {
 	a := motionShelf()
-	a.settings.IslandNowPlaying = true
 	a.np = &nowPlayingModule{host: a, have: true, last: mac.NowPlayingState{
 		Playing: true, Title: "Fashion Killa", Duration: 200, Elapsed: 30, Received: time.Now(),
 	}}

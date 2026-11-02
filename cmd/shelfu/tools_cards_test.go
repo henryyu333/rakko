@@ -233,7 +233,7 @@ func TestOCRCardDropCopiesText(t *testing.T) {
 // the 2 × 2 music card's rows are laid out for real.
 func musicCardShelf(t *testing.T) (*shelf, *ui.Tester, *fakeVolume, *stubNowPlaying) {
 	t.Helper()
-	s := newStubNowPlaying(t, true)
+	s := newStubNowPlaying(t)
 	s.feed(t, `{"ok":true,"isPlaying":true,"appState":1,"title":"夜曲","artist":"周杰伦","duration":200,"elapsed":20}`)
 	a := &shelf{
 		store: mustStore(t), dataDir: t.TempDir(), tab: pageTools, visible: true, level: 2,
@@ -383,7 +383,7 @@ func TestToolsMusicCardEditingKeepsThePlayer(t *testing.T) {
 // desktop keeps the full player in the pin's wide, short window, and its
 // rails work there too.
 func TestPinnedMusicCardShowsTheFullPlayer(t *testing.T) {
-	s := newStubNowPlaying(t, true)
+	s := newStubNowPlaying(t)
 	s.feed(t, `{"ok":true,"isPlaying":true,"appState":1,"title":"夜曲","artist":"周杰伦","duration":200,"elapsed":20}`)
 	vol := &fakeVolume{v: 0.3, ok: true}
 	a := &shelf{dataDir: t.TempDir()}

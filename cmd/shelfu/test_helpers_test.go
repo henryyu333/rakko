@@ -40,8 +40,8 @@ func (f *fakeVolume) set(v float32) error {
 	return nil
 }
 
-// musicShelf builds a shelf with a real track, a page tester and a volume
-// seam: the now-playing page's controls live in a real layout.
+// musicShelf builds a shelf with a real track and a page tester: the home
+// page's player controls live in a real layout.
 func musicShelf(t *testing.T) (*shelf, *ui.Tester) {
 	t.Helper()
 	s, err := store.Open(t.TempDir())
@@ -58,7 +58,7 @@ func musicShelf(t *testing.T) (*shelf, *ui.Tester) {
 			Rate: 1, Received: time.Now(),
 		},
 	}
-	a.setTab(pagePlaying)
+	a.setTab(pageHome)
 	view := ui.NewTester(a.view, sheetW, panelTestH)
 	return a, view
 }

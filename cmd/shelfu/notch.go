@@ -351,7 +351,7 @@ func (a *shelf) shellSize(openK, levelK, peekK, peekW, peekH float32) (w, h floa
 	if barW <= 0 {
 		barW = a.homeBoxW()
 	}
-	lvlW := barW + (sheetW-barW)*levelK
+	lvlW := barW + (a.pageShellW()-barW)*levelK
 	lvlH := float32(homeShellH) + (sheetH-homeShellH)*levelK
 	if a.snap.panel || a.snap.drawn {
 		// The arrangement panel is its own box; it never morphs through
@@ -815,6 +815,36 @@ func (a *shelf) panelH() int {
 		return snapH
 	}
 	return sheetH
+}
+
+// pageShellW is the open panel's width for the page on screen: 440 for
+// every page but the home page, which asks for 640 beside its lyrics. The
+// shell path, the window frame and the page layout all read this one
+// number, so a track gaining lyrics cannot leave the shell and its content
+// on different widths.
+func (a *shelf) pageShellW() float32 { return pageShellWidth(a.currentPage()) }
+
+// pageShellWidth is pageShellW for a page that may not be current: the
+// outgoing picture of a switch keeps its own width while it fades.
+func pageShellWidth(p panelPage) float32 {
+	if p == nil {
+		return sheetW
+	}
+	if w, ok := p.(pageWidth); ok {
+		return max(sheetW, w.width())
+	}
+	return sheetW
+}
+
+// pageBoxW is the width a page draws in inside the shell's horizontal
+// padding.
+func pageBoxW(p panelPage) float32 { return pageShellWidth(p) - 2*sheetPadX }
+
+// pageBleeds reports whether a page owns the whole page area (no action
+// row above its content).
+func pageBleeds(p panelPage) bool {
+	b, ok := p.(pageBleed)
+	return ok && b.fullBleed()
 }
 
 // panelBox is the open panel's target size. The arrangement panel replaces

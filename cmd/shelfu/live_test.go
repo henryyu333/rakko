@@ -157,7 +157,6 @@ func TestLivePanelCancelsQueue(t *testing.T) {
 func TestLiveCoversNowPlayingAndReturns(t *testing.T) {
 	a := liveShelf()
 	fakeTrack(a, true)
-	a.settings.IslandNowPlaying = true
 	now := time.Now()
 	a.pushLive(liveEvent{kind: liveCharging, label: "正在充电", pct: 80}, liveHoldCharge, now)
 
