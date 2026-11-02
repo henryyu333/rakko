@@ -85,10 +85,12 @@ func forward(tool Tool, dataDir string, stdin io.Reader) {
 	if !tool.Valid() {
 		return
 	}
-	// Grok reads Claude Code's hook files too. Its own hook file reports the
-	// event with the same session; the Claude command fired into a Grok
-	// process must not announce it a second time as Claude Code.
-	if tool == ToolClaude && os.Getenv("GROK_SESSION_ID") != "" {
+	// Grok and Devin CLI read Claude Code's hook files too. Their own hook
+	// entries report the event with the same session; the Claude command
+	// fired inside a Grok or Devin process must not announce it a second
+	// time as Claude Code. Devin sets DEVIN_PROJECT_DIR for every hook it
+	// runs.
+	if tool == ToolClaude && (os.Getenv("GROK_SESSION_ID") != "" || os.Getenv("DEVIN_PROJECT_DIR") != "") {
 		return
 	}
 	payload, err := io.ReadAll(io.LimitReader(stdin, forwardReadLimit))

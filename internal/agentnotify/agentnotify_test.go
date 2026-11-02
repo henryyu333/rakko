@@ -372,6 +372,57 @@ func TestForwarderIgnoresClaudeEntryInsideGrok(t *testing.T) {
 	}
 }
 
+// TestDevinReportsItselfOnce: Devin CLI runs both its own entry and the one
+// in ~/.claude/settings.json; only its own reaches the notch, as Devin. Its
+// entry goes under the "hooks" key of its user config, beside the user's
+// other settings.
+func TestDevinReportsItselfOnce(t *testing.T) {
+	t.Setenv("DEVIN_PROJECT_DIR", "/tmp/project")
+	dataDir := testDataDir(t)
+	got := make(chan Event, 2)
+	srv, err := Listen(dataDir, func(ev Event) { got <- ev })
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Close()
+	payload := `{"session_id":"devin-session","hook_event_name":"Stop"}`
+	RunHookCLI([]string{"--agent-hook", "--tool", "claude", "--data-dir", dataDir}, strings.NewReader(payload))
+	RunHookCLI([]string{"--agent-hook", "--tool", "devin", "--data-dir", dataDir}, strings.NewReader(payload))
+	select {
+	case ev := <-got:
+		if ev.Tool != ToolDevin || ev.Session != "devin-session" {
+			t.Fatalf("event = %+v", ev)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Devin's own event did not arrive")
+	}
+	select {
+	case ev := <-got:
+		t.Fatalf("a second announcement arrived: %+v", ev)
+	case <-time.After(300 * time.Millisecond):
+	}
+
+	home := testHome(t)
+	path := ConfigPath(home, ToolDevin)
+	writeFile(t, path, `{"version": 1, "theme_mode": "dark"}`)
+	if !Installed(home, ToolDevin) {
+		t.Fatal("~/.config/devin did not count as Devin installed")
+	}
+	if err := Connect(home, dataDir, exePath, ToolDevin); err != nil {
+		t.Fatal(err)
+	}
+	body, _ := os.ReadFile(path)
+	if !strings.Contains(string(body), `"theme_mode": "dark"`) || !strings.Contains(string(body), "--agent-hook --tool devin") {
+		t.Fatalf("config after connect:\n%s", body)
+	}
+	if err := Disconnect(home, dataDir, ToolDevin); err != nil {
+		t.Fatal(err)
+	}
+	if after, _ := os.ReadFile(path); string(after) != `{"version": 1, "theme_mode": "dark"}` {
+		t.Fatalf("config after disconnect:\n%s", after)
+	}
+}
+
 func TestBuildRequestFallsBackToPid(t *testing.T) {
 	ev := buildRequest(ToolPi, []byte(`{"prompt":"x"}`))
 	if !strings.HasPrefix(ev.Session, "pid:") {

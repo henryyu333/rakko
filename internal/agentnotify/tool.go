@@ -28,6 +28,7 @@ const (
 	ToolPi       Tool = "pi"
 	ToolGemini   Tool = "gemini"
 	ToolGrok     Tool = "grok"
+	ToolDevin    Tool = "devin"
 )
 
 // Kind says how a tool takes Rakko's entry.
@@ -35,7 +36,7 @@ type Kind int
 
 const (
 	// KindHooks is a JSON configuration with a hooks object (Claude, Codex,
-	// Gemini, Grok).
+	// Gemini, Grok, Devin).
 	KindHooks Kind = iota
 	// KindModule is a JavaScript/TypeScript module in a plugin directory
 	// (opencode, omp, pi).
@@ -142,6 +143,16 @@ var specs = []spec{
 		kind:   KindHooks,
 		detect: func(home string) []string { return []string{join(home, ".grok")} },
 		config: func(home string) string { return join(home, ".grok", "hooks", "rakko.json") },
+		events: []string{"UserPromptSubmit", "Stop"},
+	},
+	{
+		// Devin CLI: Claude Code's hook format under the "hooks" key of its
+		// user config (docs.devin.ai/cli/extensibility/hooks).
+		tool:   ToolDevin,
+		name:   "Devin",
+		kind:   KindHooks,
+		detect: func(home string) []string { return []string{join(home, ".config", "devin")} },
+		config: func(home string) string { return join(home, ".config", "devin", "config.json") },
 		events: []string{"UserPromptSubmit", "Stop"},
 	},
 }
