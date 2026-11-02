@@ -248,3 +248,145 @@ func TestOpenKeepsANoteAnEarlierBuildWrote(t *testing.T) {
 		t.Fatalf("read %q, %v; want %q", got, err, text)
 	}
 }
+
+// writeNote puts a note file in dir's folder by hand, as an earlier build
+// or another editor would.
+func writeNote(t *testing.T, dir, id, text string) string {
+	t.Helper()
+	folder := filepath.Join(dir, DirName)
+	if err := os.MkdirAll(folder, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(folder, id+FileExt)
+	if err := os.WriteFile(path, []byte(text), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// TestDocsListsTheFoldersNotes: every note comes back newest first, and a
+// file that is not one of the package's notes is not a note.
+func TestDocsListsTheFoldersNotes(t *testing.T) {
+	dir := t.TempDir()
+	old := strings.Repeat("a", idLen)
+	recent := strings.Repeat("b", idLen)
+	writeNote(t, dir, old, "# 早的\n")
+	writeNote(t, dir, recent, "# 晚的\n")
+	base := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(filepath.Join(dir, DirName, old+FileExt), base, base); err != nil {
+		t.Fatal(err)
+	}
+	// Not notes: the current name, a name that is not an id, a strange
+	// extension and a subfolder.
+	folder := filepath.Join(dir, DirName)
+	for name, body := range map[string]string{
+		currentFile:                         recent + "\n",
+		"not-a-note" + FileExt:              "# 不认识的\n",
+		strings.Repeat("c", idLen) + ".txt": "# 扩展名不对\n",
+		"." + old + FileExt + ".tmp-123456": "# 临时文件\n",
+	} {
+		if err := os.WriteFile(filepath.Join(folder, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	docs, err := Docs(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(docs) != 2 {
+		t.Fatalf("docs = %+v, want the two notes", docs)
+	}
+	if docs[0].ID != recent || docs[1].ID != old {
+		t.Fatalf("order = %q, %q; want the recently written note first", docs[0].ID, docs[1].ID)
+	}
+	if docs[1].Text != "# 早的\n" {
+		t.Fatalf("text = %q", docs[1].Text)
+	}
+	// A data directory with no notes/ folder has no notes, and asking
+	// never creates it.
+	empty := t.TempDir()
+	if got, err := Docs(empty); err != nil || len(got) != 0 {
+		t.Fatalf("empty folder: %v, %v", got, err)
+	}
+	if _, err := os.Stat(filepath.Join(empty, DirName)); !os.IsNotExist(err) {
+		t.Fatalf("Docs created the notes folder: %v", err)
+	}
+}
+
+// TestSearchRanksHeadingBeforeBodyThenNewest: a heading hit answers before
+// a body hit whatever the dates, the body hit names the line, and neither
+// depends on the case typed.
+func TestSearchRanksHeadingBeforeBodyThenNewest(t *testing.T) {
+	base := time.Now().Add(-time.Hour)
+	docs := []Doc{
+		{ID: strings.Repeat("a", idLen), Text: "# 发版清单\n– 改 README\n", Mod: base.Add(2 * time.Second)},
+		{ID: strings.Repeat("b", idLen), Text: "# 周五\n– 发版前跑测试\n", Mod: base.Add(3 * time.Second)},
+		{ID: strings.Repeat("c", idLen), Text: "# 发版\n", Mod: base.Add(4 * time.Second)},
+		{ID: strings.Repeat("d", idLen), Text: "# 无关\n", Mod: base.Add(time.Minute)},
+	}
+	hits := Search(docs, "发版")
+	if len(hits) != 3 {
+		t.Fatalf("hits = %+v, want the three notes that mention it", hits)
+	}
+	// The two headings first: the newest heading, then the older one.
+	if hits[0].ID != docs[2].ID || hits[1].ID != docs[0].ID {
+		t.Fatalf("order = %q, %q; want the heading hits first", hits[0].ID, hits[1].ID)
+	}
+	if hits[0].Line != "" || hits[1].Line != "" {
+		t.Fatalf("a heading hit carried a second line: %+v", hits[:2])
+	}
+	// Then the body hit, with the line that matched.
+	if hits[2].ID != docs[1].ID || hits[2].Line != "– 发版前跑测试" {
+		t.Fatalf("body hit = %+v", hits[2])
+	}
+	if got := Search(docs, "README"); len(got) != 1 || got[0].Line != "– 改 README" {
+		t.Fatalf("case-insensitive body search = %+v", got)
+	}
+	if got := Search(docs, "  "); len(got) != 0 {
+		t.Fatalf("blank query returned %+v", got)
+	}
+}
+
+// TestSelectSwitchesTheNote: the store edits another note, its path and
+// the current file follow, and an id the folder does not hold changes
+// nothing.
+func TestSelectSwitchesTheNote(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := s.ID()
+	other := strings.Repeat("d", idLen)
+	writeNote(t, dir, other, "# 另一张\n")
+	if err := s.Select(other); err != nil {
+		t.Fatal(err)
+	}
+	if s.ID() != other || filepath.Base(s.Path()) != other+FileExt {
+		t.Fatalf("store edits %q at %q", s.ID(), s.Path())
+	}
+	if got, err := s.Read(); err != nil || got != "# 另一张\n" {
+		t.Fatalf("read %q, %v", got, err)
+	}
+	cur, err := os.ReadFile(filepath.Join(dir, DirName, currentFile))
+	if err != nil || strings.TrimSpace(string(cur)) != other {
+		t.Fatalf("current = %q, %v; want %q", cur, err, other)
+	}
+	// A missing note and a name that is not an id are refused, and the
+	// store still edits the note it just switched to.
+	for _, id := range []string{strings.Repeat("e", idLen), "nope"} {
+		if err := s.Select(id); err == nil {
+			t.Fatalf("Select(%q) succeeded", id)
+		}
+		if s.ID() != other {
+			t.Fatalf("a refused Select left the store on %q", s.ID())
+		}
+	}
+	// Back to the first note: both files are still there.
+	if err := s.Select(first); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.Read(); err != nil || got != "" {
+		t.Fatalf("read %q, %v; want the first note's empty text", got, err)
+	}
+}

@@ -13,7 +13,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"time"
 )
 
 const (
@@ -97,6 +99,74 @@ func (s *Store) Write(text string) error {
 	return nil
 }
 
+// Select makes id the note the card edits: the current file names it, and
+// the store's path follows. An id that is not one of the folder's notes is
+// an error and leaves the store as it was.
+func (s *Store) Select(id string) error {
+	if !validID(id) {
+		return fmt.Errorf("note: %q is not a note id", id)
+	}
+	if _, err := os.Stat(filepath.Join(s.dir, id+FileExt)); err != nil {
+		return fmt.Errorf("note: %s: %w", id+FileExt, err)
+	}
+	prev := s.id
+	s.id = id
+	if err := s.writeID(); err != nil {
+		s.id = prev
+		return err
+	}
+	return nil
+}
+
+// Doc is one note file: its id, its text as Read would return it, and when
+// it was last written.
+type Doc struct {
+	ID   string
+	Text string
+	Mod  time.Time
+}
+
+// Docs lists every note under dataDir's notes/ folder, most recently
+// written first. A folder that is not there has no notes — reading the
+// notes never creates the folder or a note — and a file that is not a note
+// this package writes (current, a temporary) is not one.
+func Docs(dataDir string) ([]Doc, error) {
+	dir := filepath.Join(dataDir, DirName)
+	entries, err := os.ReadDir(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("note: %w", err)
+	}
+	out := make([]Doc, 0, len(entries))
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), FileExt) {
+			continue
+		}
+		id := strings.TrimSuffix(e.Name(), FileExt)
+		if !validID(id) {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		if err != nil {
+			continue // one unreadable note must not hide the rest
+		}
+		mod := time.Time{}
+		if info, err := e.Info(); err == nil {
+			mod = info.ModTime()
+		}
+		out = append(out, Doc{ID: id, Text: strings.ToValidUTF8(string(data), "\uFFFD"), Mod: mod})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if !out[i].Mod.Equal(out[j].Mod) {
+			return out[i].Mod.After(out[j].Mod)
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out, nil
+}
+
 // NewID returns a fresh 32-digit hex id.
 func NewID() (string, error) {
 	var b [idLen / 2]byte
@@ -171,6 +241,57 @@ func Preview(text string, max int) []string {
 		lines = lines[:max]
 	}
 	return lines
+}
+
+// Hit is one note that answers a query, as a search row shows it.
+type Hit struct {
+	ID    string
+	Title string    // the note's heading, as the card shows it
+	Line  string    // the first body line that matched, trimmed; "" when the heading matched
+	Mod   time.Time // when the note was last written
+}
+
+// Search returns the notes whose text contains q, ignoring case: a hit in
+// the heading comes before a hit in the body, then the most recently
+// written note first. q is trimmed; a blank one finds nothing.
+func Search(docs []Doc, q string) []Hit {
+	q = strings.ToLower(strings.TrimSpace(q))
+	if q == "" {
+		return nil
+	}
+	type hit struct {
+		Hit
+		heading bool
+	}
+	var hits []hit
+	for _, d := range docs {
+		if !strings.Contains(strings.ToLower(d.Text), q) {
+			continue
+		}
+		title, lines := split(d.Text)
+		h := hit{Hit: Hit{ID: d.ID, Title: title, Mod: d.Mod},
+			heading: strings.Contains(strings.ToLower(title), q)}
+		if !h.heading {
+			for _, line := range lines {
+				if strings.Contains(strings.ToLower(line), q) {
+					h.Line = line
+					break
+				}
+			}
+		}
+		hits = append(hits, h)
+	}
+	sort.SliceStable(hits, func(i, j int) bool {
+		if hits[i].heading != hits[j].heading {
+			return hits[i].heading
+		}
+		return hits[i].Mod.After(hits[j].Mod)
+	})
+	out := make([]Hit, len(hits))
+	for i, h := range hits {
+		out[i] = h.Hit
+	}
+	return out
 }
 
 // split returns the heading and the non-blank lines after it, each with
