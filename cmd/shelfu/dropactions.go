@@ -111,6 +111,20 @@ type dropZoneState struct {
 	frozen bool      // the release happened (or the board rewrote): the shown set is final
 	on     bool      // the zone drew this frame
 
+	// The catch a release on the 放入托盘 row earns: when it began, the
+	// point in the row it began at (negative when the drag left none), and
+	// whether each animated value got its starting place yet.
+	catchAt    time.Time
+	catchX     int
+	catchY     int
+	riseSeeded bool
+	flySeeded  bool
+}
+
+// catchOn reports whether the otter still holds what it caught: the zone
+// stays laid out, and frames keep coming, until the retract is over.
+func (d *dropZoneState) catchOn(now time.Time) bool {
+	return !d.catchAt.IsZero() && now.Sub(d.catchAt) < dropCatchFor
 }
 
 // dropHoldGrace is how long the zone outlives the dragging flag so the
@@ -327,6 +341,15 @@ func (a *shelf) dropZoneSnap(over bool) []string {
 		*d = dropZoneState{serial: d.serial}
 		return nil
 	}
+	// The catch outlives the drop: the otter holds the file, then sinks
+	// back under the row's edge, and the zone goes with the last frame.
+	// The file itself is already in the tray — the hold only keeps the
+	// picture that shows it being caught. A new drag takes over at once.
+	newDrag := a.dragging && d.serial != a.dragSerial
+	if !d.catchAt.IsZero() && d.catchOn(time.Now()) && !newDrag {
+		d.on, _ = a.dropZoneShow()
+		return d.files
+	}
 	if raw := os.Getenv("SHELF_DEBUG_DROP_FILES"); raw != "" {
 		if !slices.Equal(d.files, dropDebugFiles()) {
 			d.files = dropDebugFiles()
@@ -442,10 +465,17 @@ func (a *shelf) dropStage(c *ui.Context, paths []string, class dropClass) {
 // dropTrayCell is the 64pt 放入托盘 row: a file-icon well, the title and
 // 保存引用，随时拖出, and up to three stacked thumbnails of the dragged
 // files. It is a nested drop target, so releasing over it — the largest
-// target — means 放入托盘 exactly like dropping on empty space.
+// target — means 放入托盘 exactly like dropping on empty space. When the
+// artwork is installed, the otter waits under the row's bottom edge and
+// rises from it, the row clipping the rest away; the thumbnails keep clear
+// of the slot it occupies at the right (see dropcatch.go).
 func (a *shelf) dropTrayCell(c *ui.Context, paths []string) {
+	otter := dropOtterBase() != nil
 	row := ui.Row(c.Key("drop-tray")).Height(dropTrayH).FillWidth().Radius(14).
 		Padding(0, 16, 0, 16).Gap(12).AlignItems(ui.Center).Label(loc(c).DropPutInTray())
+	if otter {
+		row.Padding(0, dropOtterSlot, 0, 16).Clip()
+	}
 	_, hot := ui.DataDragOver(row, dropCellOpts)
 	if hot {
 		row.Background(accent16).Border(1.5, accent.Alpha(0.9))
@@ -462,9 +492,19 @@ func (a *shelf) dropTrayCell(c *ui.Context, paths []string) {
 		})
 		ui.Box(c).Grow(1)
 		a.dropThumbStack(c, paths)
+		if otter {
+			a.dropOtter(c, hot)
+			a.dropCatchFile(c, paths)
+			if !a.drop.catchAt.IsZero() {
+				dropCatchAsk(c, c.Now().Sub(a.drop.catchAt))
+			}
+		}
 	})
 	if drop, ok := ui.DropData(row, dropCellOpts); ok {
 		a.drop.done = true
+		if otter {
+			a.startDropCatch(row)
+		}
 		a.receive(drop.Data)
 	}
 }
