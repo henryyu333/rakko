@@ -416,3 +416,43 @@ func TestOwnWindowPressParksTheNotchCorridor(t *testing.T) {
 	}
 	a.ownDrag = false
 }
+
+// TestEdgeAutoHideWaitsForTheDropCatch: a drag-opened panel whose receive
+// failed still starts the otter's catch. While catchOn holds, leaving the
+// panel must not count toward edgeLeaveDelay; once the retract is over the
+// ordinary leave delay runs and collapses it.
+func TestEdgeAutoHideWaitsForTheDropCatch(t *testing.T) {
+	a := dragShelf()
+	a.dragging = false
+	cx := a.stripCenter()
+	enter := mygo.Point{X: cx, Y: a.notchY + a.notchH - 1}
+	driveMonitor(t, a, enter, true, 1, []string{"public.file-url"})
+	if !a.visible || !a.edgeOpened || a.received {
+		t.Fatalf("the drag did not open the panel: visible=%v edgeOpened=%v received=%v", a.visible, a.edgeOpened, a.received)
+	}
+	a.animationStart = time.Time{} // the open animation is done
+	a.catchDrop(120, 30)           // the otter holds it; receive failed
+
+	away := mygo.Point{X: 100, Y: 800}
+	now := time.Now()
+	driveMonitorAt(t, a, now, away, false, 1, nil)
+	driveMonitorAt(t, a, now.Add(2*edgeLeaveDelay), away, false, 1, nil)
+	if !a.visible {
+		t.Fatal("the panel collapsed during the catch")
+	}
+	if !a.leftSince.IsZero() {
+		t.Fatalf("leaving counted during the catch: leftSince %v", a.leftSince)
+	}
+
+	// The retract ends: the leave delay starts now, not before.
+	end := time.Now()
+	a.drop.catchAt = end.Add(-dropCatchFor - time.Millisecond)
+	driveMonitorAt(t, a, end, away, false, 1, nil)
+	if !a.visible {
+		t.Fatal("the panel collapsed before the leave delay after the catch")
+	}
+	driveMonitorAt(t, a, end.Add(edgeLeaveDelay+time.Millisecond), away, false, 1, nil)
+	if a.visible {
+		t.Fatal("leaving after the catch did not collapse the edge-opened panel")
+	}
+}

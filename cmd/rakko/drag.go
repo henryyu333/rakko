@@ -343,7 +343,8 @@ func (a *shelf) monitorDrag(now time.Time) {
 	}
 	// 自动收起：仅拖拽唤出的托盘在未收到内容、光标离开面板与触发区
 	// edgeLeaveDelay 后缩回刘海；点击探头/托盘唤出的托盘由用户显式收起。
-	// 动画途中不判离开。
+	// 动画途中不判离开，接住动画（catchOn）期间也不算离开：落点出错时
+	// received 不会置位，但 otter 仍要把文件抱完。
 	if a.visible && a.edgeOpened && !a.received {
 		panel := a.panelDropRect()
 		inside := p.X >= panel.X-24 && p.X < panel.X+panel.Width+24 &&
@@ -352,7 +353,7 @@ func (a *shelf) monitorDrag(now time.Time) {
 		// drag-out and settling; restart the leave delay afterward.
 		tp := a.toolsPage()
 		holdingCard := tp != nil && tp.press != nil
-		if !inside && !a.inBand && !holdingCard && a.animationStart.IsZero() {
+		if !inside && !a.inBand && !holdingCard && a.animationStart.IsZero() && !a.drop.catchOn(now) {
 			if a.leftSince.IsZero() {
 				a.leftSince = now
 			}
