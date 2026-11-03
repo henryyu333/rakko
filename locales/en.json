@@ -514,7 +514,6 @@
   "pageTrayEmptyTitle": "Drop Files Here",
   "pageClipEmptyTitle": "No Clipboard Items Yet",
   "pageClipNoMatchTitle": "No matching content",
-  "pageClipNoMatchHint": "Try another keyword, or press Esc to clear the search",
   "clipPinned": "Pinned",
   "clipCopyHint": "↩ Copy",
   "clipMovedName": "{name} · Moved",

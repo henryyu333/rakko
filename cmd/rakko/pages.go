@@ -315,7 +315,7 @@ func (p *clipboardPage) body(c *ui.Context, _ bool, _ bool) ui.Element {
 		l := loc(c)
 		icon, title, hint := textSymbol, l.PageClipEmptyTitle(), ""
 		if a.search != "" {
-			icon, title, hint = searchSymbol, l.PageClipNoMatchTitle(), l.PageClipNoMatchHint()
+			icon, title = searchSymbol, l.PageClipNoMatchTitle()
 		}
 		return a.emptyState(c, icon, title, hint)
 	}

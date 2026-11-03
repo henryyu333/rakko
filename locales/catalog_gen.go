@@ -5247,16 +5247,6 @@ func (msgs Messages) PageClipNoMatchTitle() string {
 	return Catalog.Format(msgs.locale, "pageClipNoMatchTitle", nil)
 }
 
-// PageClipNoMatchHint says "换个关键词，或按 Esc 清空搜索"
-// in the language the app shows.
-func PageClipNoMatchHint() string { return In(i18n.Locale()).PageClipNoMatchHint() }
-
-// PageClipNoMatchHint says "换个关键词，或按 Esc 清空搜索"
-// in the language of msgs.
-func (msgs Messages) PageClipNoMatchHint() string {
-	return Catalog.Format(msgs.locale, "pageClipNoMatchHint", nil)
-}
-
 // ClipPinned says "已置顶"
 // in the language the app shows.
 func ClipPinned() string { return In(i18n.Locale()).ClipPinned() }
