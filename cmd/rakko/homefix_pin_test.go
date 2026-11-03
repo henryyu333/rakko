@@ -148,7 +148,6 @@ func pinLines(a *shelf, id string, span int) []pinLine {
 	case "recent":
 		return []pinLine{
 			{text: "最近文件", size: 12, weight: 600},
-			{text: "拖出即可", size: 10},
 			{text: "alpha.png", min: 28}, {text: "bravo.pdf", min: 28}, {text: "charlie.txt", min: 28},
 		}
 	case "clip":

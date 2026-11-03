@@ -710,7 +710,6 @@ func (a *shelf) toolRecentBody(c *ui.Context, card ui.Element) {
 		ui.Row(c).AlignItems(ui.Center).Gap(8).FillWidth().Children(func() {
 			ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
 				panelLabel(c, nil, loc(c).RecentFiles(), 12, 600).TextColor(ink)
-				panelLabel(c, nil, loc(c).DragOut(), 10, 0).TextColor(ink3)
 			})
 			ui.Row(c.Key("recent-thumbs")).Gap(4).AlignItems(ui.Center).Children(func() {
 				items := a.itemsFor(pageTray)
