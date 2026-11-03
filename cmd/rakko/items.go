@@ -71,12 +71,11 @@ func (a *shelf) itemTile(c *ui.Context, item store.Item) {
 		ui.Text(c, name).SingleLine().TextAlign(ui.Center).FontSize(10.5).
 			TextColor(ink.Alpha(0.86)).Margin(5, 4, 0, 4).MaxWidth(70)
 		if item.Pinned {
-			// 右上 16pt 黑底图钉角标：作为 tile 的子元素定位，不能放到
-			// 网格层（否则所有角标叠在网格右上角并抢走点击）。
-			ui.Row(c.Key("pin")).Absolute().Top(6).Right(10).Size(16, 16).Radius(8).Center().
-				Background(surface).Label(l.ClipPinned()).
+			// Keep the badge in the tile corner, clear of the thumbnail.
+			ui.Row(c.Key("pin")).Absolute().Top(2).Right(2).Size(16, 16).Radius(8).Center().
+				Background(fill2).Label(l.ClipPinned()).
 				Children(func() {
-					ui.Icon(c, pinFill).Size(9, 9).TextColor(ink)
+					ui.Icon(c, pinFill).Size(10, 10).TextColor(ink)
 				})
 		}
 	})
