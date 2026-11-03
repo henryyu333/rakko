@@ -766,9 +766,7 @@ func (a *shelf) recentThumbAt(c *ui.Context, item store.Item, size float32) {
 	}
 }
 
-// toolClipBody is the 剪贴板最新 widget: the newest capture's text (or
-// the screenshot title), with 点按复制 as the hint. The tap is wired by
-// the surface (runToolCard).
+// toolClipBody is the 剪贴板最新 widget. The surface wires its copy action.
 func (a *shelf) toolClipBody(c *ui.Context, card ui.Element) {
 	card.Padding(0, 12, 0, 12).Justify(ui.Center).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Gap(10).FillWidth().Children(func() {
@@ -778,7 +776,6 @@ func (a *shelf) toolClipBody(c *ui.Context, card ui.Element) {
 			ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
 				if it, ok := a.latestClipboardItem(); ok {
 					ui.Text(c, itemTitle(it)).SingleLine().FontSize(12).FontWeight(600).TextColor(ink)
-					panelLabel(c, nil, loc(c).TapToCopy(), 10, 0).TextColor(ink3)
 				} else {
 					panelLabel(c, nil, loc(c).LatestClip(), 12, 600).TextColor(ink)
 					panelLabel(c, nil, loc(c).NoClipItems(), 10, 0).TextColor(ink3)

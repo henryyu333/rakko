@@ -151,7 +151,7 @@ func pinLines(a *shelf, id string, span int) []pinLine {
 			{text: "alpha.png", min: 28}, {text: "bravo.pdf", min: 28}, {text: "charlie.txt", min: 28},
 		}
 	case "clip":
-		return []pinLine{{text: "剪贴板里的一段很长的文字", size: 12, weight: 600}, {text: "点按复制", size: 10}}
+		return []pinLine{{text: "剪贴板里的一段很长的文字", size: 12, weight: 600}}
 	case "awake":
 		return []pinLine{{text: "保持唤醒", size: 12, weight: 600}, {text: "关", size: 10}}
 	case "usage":

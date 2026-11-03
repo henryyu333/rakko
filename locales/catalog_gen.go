@@ -4193,16 +4193,6 @@ func (msgs Messages) LatestClip() string {
 	return Catalog.Format(msgs.locale, "latestClip", nil)
 }
 
-// TapToCopy says "点按复制"
-// in the language the app shows.
-func TapToCopy() string { return In(i18n.Locale()).TapToCopy() }
-
-// TapToCopy says "点按复制"
-// in the language of msgs.
-func (msgs Messages) TapToCopy() string {
-	return Catalog.Format(msgs.locale, "tapToCopy", nil)
-}
-
 // NoRecords says "还没有记录"
 // in the language the app shows.
 func NoRecords() string { return In(i18n.Locale()).NoRecords() }
