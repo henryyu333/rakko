@@ -205,16 +205,6 @@ func (msgs Messages) LanguageRow() string {
 	return Catalog.Format(msgs.locale, "languageRow", nil)
 }
 
-// LanguageCaption says "跟随系统时，中文系统显示中文，其他显示英文"
-// in the language the app shows.
-func LanguageCaption() string { return In(i18n.Locale()).LanguageCaption() }
-
-// LanguageCaption says "跟随系统时，中文系统显示中文，其他显示英文"
-// in the language of msgs.
-func (msgs Messages) LanguageCaption() string {
-	return Catalog.Format(msgs.locale, "languageCaption", nil)
-}
-
 // LanguageFollowSystem says "跟随系统"
 // in the language the app shows.
 func LanguageFollowSystem() string { return In(i18n.Locale()).LanguageFollowSystem() }
@@ -333,16 +323,6 @@ func SettingsAutoCheckRow() string { return In(i18n.Locale()).SettingsAutoCheckR
 // in the language of msgs.
 func (msgs Messages) SettingsAutoCheckRow() string {
 	return Catalog.Format(msgs.locale, "settingsAutoCheckRow", nil)
-}
-
-// SettingsAutoCheckCaption says "只连接 GitHub，安装前会先问你"
-// in the language the app shows.
-func SettingsAutoCheckCaption() string { return In(i18n.Locale()).SettingsAutoCheckCaption() }
-
-// SettingsAutoCheckCaption says "只连接 GitHub，安装前会先问你"
-// in the language of msgs.
-func (msgs Messages) SettingsAutoCheckCaption() string {
-	return Catalog.Format(msgs.locale, "settingsAutoCheckCaption", nil)
 }
 
 // SettingsIslandPosRow says "灵动岛位置"
@@ -6171,16 +6151,6 @@ func SettingsUpdateResultDisabled() string { return In(i18n.Locale()).SettingsUp
 // in the language of msgs.
 func (msgs Messages) SettingsUpdateResultDisabled() string {
 	return Catalog.Format(msgs.locale, "settingsUpdateResultDisabled", nil)
-}
-
-// SettingsUpdateFoot says "有新版本下载好后，面板底部会显示可以安装的版本；重新启动由你决定。"
-// in the language the app shows.
-func SettingsUpdateFoot() string { return In(i18n.Locale()).SettingsUpdateFoot() }
-
-// SettingsUpdateFoot says "有新版本下载好后，面板底部会显示可以安装的版本；重新启动由你决定。"
-// in the language of msgs.
-func (msgs Messages) SettingsUpdateFoot() string {
-	return Catalog.Format(msgs.locale, "settingsUpdateFoot", nil)
 }
 
 // SettingsNotchPage says "外形与提示"

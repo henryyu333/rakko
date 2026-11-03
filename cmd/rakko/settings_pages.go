@@ -72,7 +72,7 @@ func (a *shelf) settingsGeneralPage(c *ui.Context) {
 		settingsToggleRowCap(c, "login", l.SettingsLoginRow(), loginCap, capColor, a.loginOn, a.applyOpenAtLogin)
 		settingsSep(c, "login")
 		ui.Column(c.Key("language")).FillWidth().Disabled(a.settingsBroken).Children(func() {
-			settingsRow(c, "language", l.LanguageRow(), l.LanguageCaption(), func() {
+			settingsRow(c, "language", l.LanguageRow(), "", func() {
 				idx := languageIndex(a.settings.Language)
 				if sg := settingsSegmented(c, "language", l.LanguageRow(), &idx,
 					l.LanguageFollowSystem(), l.LanguageChinese(), l.LanguageEnglish()); sg.Changed() {
@@ -84,7 +84,7 @@ func (a *shelf) settingsGeneralPage(c *ui.Context) {
 
 	settingsGroup(c, "update", l.SettingsUpdateGroup(), "", func() {
 		ui.Column(c.Key("update-rows")).FillWidth().Disabled(a.settingsBroken).Children(func() {
-			settingsToggleRow(c, "autocheck", l.SettingsAutoCheckRow(), l.SettingsAutoCheckCaption(),
+			settingsToggleRow(c, "autocheck", l.SettingsAutoCheckRow(), "",
 				a.settings.AutoCheckUpdates, a.setAutoCheckUpdates)
 			settingsSep(c, "autocheck")
 			settingsRow(c, "check", l.SettingsUpdateCheckRow(), a.updateCaption(l), func() {
@@ -101,7 +101,6 @@ func (a *shelf) settingsGeneralPage(c *ui.Context) {
 			}
 		})
 	})
-	settingsFootnote(c, "update-foot", l.SettingsUpdateFoot())
 }
 
 // settingsNotchPage: the shelf's mantle (shape, island position), the
