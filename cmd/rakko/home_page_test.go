@@ -86,7 +86,7 @@ func TestHomePlayerWithoutLyrics(t *testing.T) {
 	homeGo = func(fn func()) { fn() }
 	homeOnMain = func(fn func()) { fn() }
 	t.Cleanup(func() { homeGo, homeOnMain = oldGo, oldMain })
-	clickVisible(t, view, "歌词（来自 lrclib.net）")
+	clickVisible(t, view, "歌词（来自 lrclib.net 和网易云音乐）")
 	view.SetSize(homeLyricsW+2*earR, panelTestH)
 	view.Frame()
 	view.Frame()
@@ -165,6 +165,49 @@ func TestHomeLyricsLookupFailureKeepsPlayer(t *testing.T) {
 	view.Frame()
 	if calls != 0 {
 		t.Fatalf("a failed track was retried %d times", calls)
+	}
+}
+
+// A failed track is asked again once the pause is over, while it is still
+// playing and the lyrics column is open, and the answer then shows.
+func TestHomeLyricsRetriesAfterPause(t *testing.T) {
+	st := homeTrack()
+	oldFetch, oldGo, oldMain := homeFetch, homeGo, homeOnMain
+	var calls int
+	homeFetch = func(context.Context, lyrics.Track) (lyrics.Result, error) {
+		calls++
+		if calls == 1 {
+			return lyrics.Result{}, context.DeadlineExceeded
+		}
+		return lyrics.Result{Synced: "[00:00.00]第二遍查到了"}, nil
+	}
+	homeGo = func(fn func()) { fn() }
+	homeOnMain = func(fn func()) { fn() }
+	t.Cleanup(func() { homeFetch, homeGo, homeOnMain = oldFetch, oldGo, oldMain })
+
+	_, view, p := homeShelfWith(t, &st, homeLyricsW+2*earR, func(a *shelf, _ *homePage) {
+		a.settings.SetLyrics(true)
+	})
+	view.Frame()
+	view.Frame()
+	if !p.failed || calls != 1 {
+		t.Fatalf("first lookup: failed %v, calls %d", p.failed, calls)
+	}
+	// Inside the pause nothing is asked, even with frames arriving.
+	view.Frame()
+	view.Frame()
+	if calls != 1 {
+		t.Fatalf("a failed track was retried %d times inside the pause", calls)
+	}
+	// The page asks for a frame at the end of the pause; prepare then
+	// asks again. Move the failure back to stand at that frame.
+	p.failedAt = time.Now().Add(-homeLyricsRetry - time.Second)
+	view.Frame()
+	if calls != 2 {
+		t.Fatalf("after the pause the track was asked %d times, want 2", calls)
+	}
+	if !view.HasText("第二遍查到了") {
+		t.Fatalf("the retry's lyrics are not shown; texts %v", view.Texts())
 	}
 }
 

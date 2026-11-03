@@ -5083,11 +5083,11 @@ func (msgs Messages) PageHome() string {
 	return Catalog.Format(msgs.locale, "pageHome", nil)
 }
 
-// HomeLyrics says "歌词（来自 lrclib.net）"
+// HomeLyrics says "歌词（来自 lrclib.net 和网易云音乐）"
 // in the language the app shows.
 func HomeLyrics() string { return In(i18n.Locale()).HomeLyrics() }
 
-// HomeLyrics says "歌词（来自 lrclib.net）"
+// HomeLyrics says "歌词（来自 lrclib.net 和网易云音乐）"
 // in the language of msgs.
 func (msgs Messages) HomeLyrics() string {
 	return Catalog.Format(msgs.locale, "homeLyrics", nil)
@@ -6695,11 +6695,11 @@ func (msgs Messages) SettingsAboutPrivacy() string {
 	return Catalog.Format(msgs.locale, "settingsAboutPrivacy", nil)
 }
 
-// SettingsAboutPrivacyCaption says "不收集使用数据；只连接 GitHub 检查更新、lrclib.net 查歌词"
+// SettingsAboutPrivacyCaption says "不收集使用数据；只连接 GitHub 检查更新、lrclib.net 和网易云音乐查歌词"
 // in the language the app shows.
 func SettingsAboutPrivacyCaption() string { return In(i18n.Locale()).SettingsAboutPrivacyCaption() }
 
-// SettingsAboutPrivacyCaption says "不收集使用数据；只连接 GitHub 检查更新、lrclib.net 查歌词"
+// SettingsAboutPrivacyCaption says "不收集使用数据；只连接 GitHub 检查更新、lrclib.net 和网易云音乐查歌词"
 // in the language of msgs.
 func (msgs Messages) SettingsAboutPrivacyCaption() string {
 	return Catalog.Format(msgs.locale, "settingsAboutPrivacyCaption", nil)

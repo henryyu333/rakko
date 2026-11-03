@@ -25,11 +25,13 @@ import (
 )
 
 const (
-	homeLyricsW   = 640 // the page beside the lyrics column
-	homePlayerCol = 300 // the player's column there
-	homeLineH     = 28  // one lyric line
-	homeLyricsBtn = 30  // the player's lyrics button
-	homeOtterW    = 112 // the idle page's otter
+	homeLyricsW     = 640              // the page beside the lyrics column
+	homePlayerCol   = 300              // the player's column there
+	homeLineH       = 28               // one lyric line
+	homeLyricsBtn   = 30               // the player's lyrics button
+	homeOtterW      = 112              // the idle page's otter
+	homeLyricsWait  = 10 * time.Second // lrclib, its retries and netease
+	homeLyricsRetry = 30 * time.Second // before a failed track is asked again
 )
 
 var (
@@ -38,8 +40,9 @@ var (
 	// lyricsSymbol is the player's lyrics button: lines of text and a note.
 	lyricsSymbol = symbol(`<path d="M4 6h11M4 10h11M4 14h7"/><circle cx="16.5" cy="17" r="2.2"/><path d="M18.7 17V9l2.3 1.2"/>`)
 
-	// homeFetch is the network seam: the app asks lrclib.net; tests replace
-	// it (TestMain makes it answer "no lyrics" so no test goes online).
+	// homeFetch is the network seam: the app asks lrclib.net, then NetEase;
+	// tests replace it (TestMain makes it answer "no lyrics" so no test goes
+	// online).
 	homeFetch = func(ctx context.Context, t lyrics.Track) (lyrics.Result, error) {
 		f := lyrics.Fetcher{UserAgent: fmt.Sprintf("Rakko/%s (https://github.com/henryyu333/rakko)", appVersion())}
 		return f.Fetch(ctx, t)
@@ -61,10 +64,11 @@ type homePage struct {
 	synced   string
 	none     bool // a completed lookup with nothing to show
 	loading  bool
-	failed   bool // this track's lookup failed: stay on the player
-	fetched  bool // the fetch for key was started
-	shown    int  // lyric line the scroll was last moved to
-	scrollTo int  // line to centre once the scroll has a measured range
+	failed   bool      // this track's lookup failed: stay on the player
+	failedAt time.Time // when it failed; a retry waits homeLyricsRetry
+	fetched  bool      // the fetch for key was started
+	shown    int       // lyric line the scroll was last moved to
+	scrollTo int       // line to centre once the scroll has a measured range
 
 	lscroll ui.ScrollState
 }
@@ -121,15 +125,20 @@ func (p *homePage) body(c *ui.Context, _ bool, live bool) ui.Element {
 func (p *homePage) prepare(live bool) {
 	st, ok := p.track()
 	if !ok {
-		p.key, p.lines, p.none, p.loading, p.failed, p.fetched, p.shown, p.scrollTo = "", nil, false, false, false, false, -1, -1
+		p.key, p.lines, p.none, p.loading, p.failed, p.failedAt, p.fetched, p.shown, p.scrollTo = "", nil, false, false, false, time.Time{}, false, -1, -1
 		return
 	}
 	key := homeTrackKey(st)
 	if key != p.key {
-		p.key, p.lines, p.none, p.loading, p.failed, p.fetched, p.shown, p.scrollTo = key, nil, false, false, false, false, -1, -1
+		p.key, p.lines, p.none, p.loading, p.failed, p.failedAt, p.fetched, p.shown, p.scrollTo = key, nil, false, false, false, time.Time{}, false, -1, -1
 		if r, ok := p.host.lyricsCache().Get(key); ok {
 			p.adopt(r)
 		}
+	}
+	if p.failed && !p.failedAt.IsZero() && time.Since(p.failedAt) >= homeLyricsRetry {
+		// The service was busy or down; ask once more after a pause
+		// instead of blacklisting the track for as long as it plays.
+		p.failed, p.fetched = false, false
 	}
 	if !live || !p.host.settings.LyricsOn() || p.loading || p.fetched || p.failed || len(p.lines) > 0 || p.none {
 		return
@@ -140,7 +149,7 @@ func (p *homePage) prepare(live bool) {
 		Duration: int(math.Round(st.Duration)),
 	}
 	homeGo(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), homeLyricsWait)
 		defer cancel()
 		res, err := homeFetch(ctx, t)
 		homeOnMain(func() { p.apply(key, res, err) })
@@ -166,7 +175,7 @@ func (p *homePage) apply(key string, r lyrics.Result, err error) {
 	}
 	p.loading = false
 	if err != nil {
-		p.failed = true
+		p.failed, p.failedAt = true, time.Now()
 		return
 	}
 	p.adopt(r)
@@ -342,6 +351,11 @@ func (p *homePage) lyricsNote(c *ui.Context, w float32) {
 		text = l.HomeLyricsLoading()
 	case p.failed:
 		text = l.HomeLyricsFailed()
+		// Nothing else animates on this page, so ask for the frame that
+		// lets prepare ask again at the end of the pause.
+		if wait := time.Until(p.failedAt.Add(homeLyricsRetry)); wait > 0 {
+			c.After(wait)
+		}
 	}
 	ui.Column(c.Key("home-lyrics-note")).Width(w).Height(pageBodyH).Center().Children(func() {
 		panelLabel(c, nil, text, 13, 500).TextColor(ink3)
