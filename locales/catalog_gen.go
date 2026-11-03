@@ -6243,16 +6243,6 @@ func (msgs Messages) SettingsClipGroup() string {
 	return Catalog.Format(msgs.locale, "settingsClipGroup", nil)
 }
 
-// SettingsClipFoot says "在剪贴板条目上右键可添加。密码管理器标为隐私的内容本来就不会记录。"
-// in the language the app shows.
-func SettingsClipFoot() string { return In(i18n.Locale()).SettingsClipFoot() }
-
-// SettingsClipFoot says "在剪贴板条目上右键可添加。密码管理器标为隐私的内容本来就不会记录。"
-// in the language of msgs.
-func (msgs Messages) SettingsClipFoot() string {
-	return Catalog.Format(msgs.locale, "settingsClipFoot", nil)
-}
-
 // SettingsAIHero says "在刘海里看 Claude Code、Codex 的套餐额度和本机所有 AI 工具的用量。"
 // in the language the app shows.
 func SettingsAIHero() string { return In(i18n.Locale()).SettingsAIHero() }
@@ -6583,16 +6573,6 @@ func SettingsGroupSystem() string { return In(i18n.Locale()).SettingsGroupSystem
 // in the language of msgs.
 func (msgs Messages) SettingsGroupSystem() string {
 	return Catalog.Format(msgs.locale, "settingsGroupSystem", nil)
-}
-
-// SettingsClipLimitCaption says "超过后最旧的会被移除，置顶的保留"
-// in the language the app shows.
-func SettingsClipLimitCaption() string { return In(i18n.Locale()).SettingsClipLimitCaption() }
-
-// SettingsClipLimitCaption says "超过后最旧的会被移除，置顶的保留"
-// in the language of msgs.
-func (msgs Messages) SettingsClipLimitCaption() string {
-	return Catalog.Format(msgs.locale, "settingsClipLimitCaption", nil)
 }
 
 // SettingsRetentionCaption says "置顶的项目不会清理"

@@ -221,7 +221,7 @@ func (a *shelf) settingsClipboardPage(c *ui.Context) {
 			limit = settings.Default().ClipboardLimit
 		}
 		labels, values, selected := choiceSegments(limit, clipboardLimitChoices, strconv.Itoa)
-		settingsRow(c, "limit", l.SettingsClipboardLimitRow(), l.SettingsClipLimitCaption(), func() {
+		settingsRow(c, "limit", l.SettingsClipboardLimitRow(), "", func() {
 			if sg := settingsSegmented(c, "limit", l.SettingsClipboardLimitRow(), &selected, labels...); sg.Changed() {
 				a.setClipboardLimit(values[selected])
 			}
@@ -247,7 +247,6 @@ func (a *shelf) settingsClipboardPage(c *ui.Context) {
 				}
 				ui.Column(c.Key("id")).Gap(1).Grow(1).MinWidth(0).Children(func() {
 					settingsLabel(c, a.appName(bundleID), 13.5, 600).TextColor(ink)
-					ui.Text(c, bundleID).SingleLine().FontSize(11.5).TextColor(ink3)
 				})
 				settingsButton(c, "rm-"+bundleID, l.SettingsClipboardRemove(), false, func() {
 					a.removeExcludedApp(bundleID)
@@ -256,7 +255,6 @@ func (a *shelf) settingsClipboardPage(c *ui.Context) {
 		}
 	}
 	settingsGroupRows(c, "excluded", l.SettingsClipboardExcludedRow(), "", a.settingsBroken, rows)
-	settingsFootnote(c, "clip-foot", l.SettingsClipFoot())
 }
 
 // settingsAIUsagePage: the display switches and the two quota switches.
