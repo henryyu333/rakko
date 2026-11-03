@@ -308,6 +308,9 @@ func clipboardOrder(items []store.Item) []store.Item {
 func (p *clipboardPage) body(c *ui.Context, _ bool, _ bool) ui.Element {
 	a := p.host
 	list := p.items()
+	if a.tab == pageClipboard && a.search != "" && len(list) > 0 && indexOf(list, a.selection.anchor) < 0 {
+		a.selection.only(list[0].ID)
+	}
 	if len(list) == 0 {
 		l := loc(c)
 		icon, title, hint := textSymbol, l.PageClipEmptyTitle(), l.PageClipEmptyHint()
