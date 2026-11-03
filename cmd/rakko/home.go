@@ -500,14 +500,6 @@ func (a *shelf) navView(c *ui.Context, r ui.Rect, opacity float32) {
 				} else {
 					g.TextColor(ink2)
 				}
-				if p.id() == pageTray && a.store != nil {
-					if n := len(a.itemsFor(pageTray)); n > 0 {
-						ui.Row(c.Key("nav-badge")).Absolute().Top(1).Right(3).Height(14).Padding(0, 3, 0, 3).
-							Radius(7).Background(ui.RGBA(58, 58, 64, 1)).Center().Children(func() {
-							ui.Text(c, itoa(n)).FontSize(9.5).FontWeight(700).TextColor(ink)
-						})
-					}
-				}
 			})
 			if b.Clicked() {
 				if on {
@@ -572,20 +564,3 @@ type rowKey struct {
 	i    int
 }
 
-// itoa is strconv.Itoa for the badge's small counts.
-func itoa(n int) string {
-	if n > 99 {
-		return "99+"
-	}
-	var b [3]byte
-	i := len(b)
-	for {
-		i--
-		b[i] = byte('0' + n%10)
-		n /= 10
-		if n == 0 {
-			break
-		}
-	}
-	return string(b[i:])
-}
