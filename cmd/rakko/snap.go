@@ -31,7 +31,7 @@ const (
 	snapMiniW      = 34
 	snapMiniH      = 22
 	snapGhostR     = 12
-	snapGhostEdge  = 2
+	snapGhostEdge  = 1
 	snapZonePad    = 8  // 触发区相对刘海的水平、上沿外扩
 	snapZoneBottom = 40 // 触发区相对刘海下沿再向下
 	snapDragDist   = 4.0
@@ -84,8 +84,7 @@ func snapTargetName(l locales.Messages, slot int) string {
 	return l.SnapRightThird()
 }
 
-// snapGhost is the transparent target preview: one floating window with an
-// accent-tinted, accent-outlined rounded rect. It never takes the mouse.
+// snapGhost is the translucent target preview; it never takes the mouse.
 type snapGhost struct {
 	win            *mygo.Window
 	frame          mygo.Rectangle // last applied screen rect
@@ -736,12 +735,11 @@ func (a *shelf) closeGhost() {
 	}
 }
 
-// snapGhostView paints the preview: accent 16% fill, 2pt accent edge,
-// 12pt corners, nothing else.
+// snapGhostView paints a translucent light preview with a thin white edge.
 func snapGhostView(c *ui.Context) {
 	c.Root().Background(ui.Transparent)
-	ui.Column(c.Key("ghost")).Fill().Radius(snapGhostR).
-		Background(accent16).Border(snapGhostEdge, accent)
+	ui.Column(c.Key("ghost")).Fill().Radius(16).
+		Background(ui.RGBA(255, 255, 255, 0.22)).Border(snapGhostEdge, ui.RGBA(255, 255, 255, 0.4))
 }
 
 // snapView lays out the 360 × 150 panel: the title at the top left, the
