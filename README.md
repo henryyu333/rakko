@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://github.com/henryyu333/shelfu/releases/download/v1.10.1/ShelfU-icon.png" width="128" alt="Rakko icon">
+  <img src="https://github.com/henryyu333/rakko/releases/download/v1.13.1/Rakko-icon.png" width="128" alt="Rakko icon">
 </p>
 
 <h1 align="center">Rakko</h1>
