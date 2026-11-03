@@ -983,6 +983,12 @@ func gallerySearchShelf(t *testing.T, lang string) *shelf {
 		st.Items[i].CreatedAt = base.Add(-time.Duration(i*5+2) * time.Hour)
 	}
 	galleryFillThumbs(t, a, st)
+	a.spotIcons = make(map[string]*ui.Bitmap)
+	for _, item := range st.Items {
+		if imageExts[strings.ToLower(filepath.Ext(item.Path))] {
+			a.spotIcons[item.Path] = a.thumbnails[item.ID]
+		}
+	}
 	return a
 }
 
