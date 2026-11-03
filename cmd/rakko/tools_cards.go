@@ -310,6 +310,9 @@ func (a *shelf) toolCardBody(c *ui.Context, card ui.Element, def *toolCardDef, s
 			a.toolPlayingTall(c, card, surf)
 			return
 		}
+		if surf == cardDesktop {
+			span = 2
+		}
 		a.toolPlayingBody(c, card, span)
 	case "awake":
 		a.toolAwakeBody(c, card, span)
