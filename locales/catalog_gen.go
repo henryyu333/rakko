@@ -6453,14 +6453,14 @@ func (msgs Messages) SettingsPermHero() string {
 	return Catalog.Format(msgs.locale, "settingsPermHero", nil)
 }
 
-// SettingsPermNeeded says "需要 {count, number, ::group-off} 项"
+// SettingsPermNeeded says "权限"
 // in the language the app shows.
-func SettingsPermNeeded(count int) string { return In(i18n.Locale()).SettingsPermNeeded(count) }
+func SettingsPermNeeded() string { return In(i18n.Locale()).SettingsPermNeeded() }
 
-// SettingsPermNeeded says "需要 {count, number, ::group-off} 项"
+// SettingsPermNeeded says "权限"
 // in the language of msgs.
-func (msgs Messages) SettingsPermNeeded(count int) string {
-	return Catalog.Format(msgs.locale, "settingsPermNeeded", map[string]any{"count": count})
+func (msgs Messages) SettingsPermNeeded() string {
+	return Catalog.Format(msgs.locale, "settingsPermNeeded", nil)
 }
 
 // SettingsPermOn says "已开启"

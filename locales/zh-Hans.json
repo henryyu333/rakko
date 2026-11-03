@@ -633,7 +633,7 @@
   "settingsShortcutEscCaption": "页面 → 搜索条 → 收起",
   "settingsShortcutSelectRow": "剪贴板里选择并复制",
   "settingsPermHero": "都在你的 Mac 上处理，不上传。",
-  "settingsPermNeeded": "需要 {count, number, ::group-off} 项",
+  "settingsPermNeeded": "权限",
   "settingsPermOn": "已开启",
   "settingsPermOff": "未开启",
   "settingsPermFoot": "第一次使用，或在系统设置里关掉过开关时，在这里重新开启。",

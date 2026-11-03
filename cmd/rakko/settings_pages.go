@@ -536,7 +536,7 @@ func (a *shelf) settingsPermissionsPage(c *ui.Context) {
 	settingsHero(c, "perm", l.PermTitle(), l.SettingsPermHero(), "neutral",
 		heroPermFrom, heroPermTo, heroPermGlow)
 
-	settingsGroup(c, "perm", l.SettingsPermNeeded(len(permissions)), "", func() {
+	settingsGroup(c, "perm", l.SettingsPermNeeded(), "", func() {
 		for i, p := range permissions {
 			if i > 0 {
 				settingsSep(c, "perm-"+p.id)

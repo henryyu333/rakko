@@ -231,7 +231,6 @@ func TestSettingsPermissionsPageListsEveryPermission(t *testing.T) {
 	}
 	for _, want := range []string{
 		"系统权限",
-		"需要 3 项",
 		"未开启",
 		"还差 3 项：完整磁盘访问、辅助功能、屏幕录制",
 	} {

@@ -633,7 +633,7 @@
   "settingsShortcutEscCaption": "Page → Search → Close",
   "settingsShortcutSelectRow": "Choose and Copy in the Clipboard",
   "settingsPermHero": "Everything is handled on your Mac and never uploaded.",
-  "settingsPermNeeded": "{count, plural, one {One Permission Needed} other {{count, number, ::group-off} Permissions Needed}}",
+  "settingsPermNeeded": "Permissions",
   "settingsPermOn": "On",
   "settingsPermOff": "Off",
   "settingsPermFoot": "Turn them on here the first time, or after macOS turned one off.",
