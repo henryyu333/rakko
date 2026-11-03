@@ -1385,7 +1385,7 @@ func (a *shelf) toastLayer(c *ui.Context, over bool) {
 		a.renameUndoPill(c)
 		// The drop zone carries its own release hint in the back row;
 		// the 松开放入 capsule stays hidden while it is up.
-		if (over || (a.dragging && !a.ownDrag)) && !a.drop.on {
+		if (over || (a.dragging && !a.ownDrag)) && !a.drop.on && a.tab != pageTools {
 			a.pill(c, "drop", l.DropRelease(), false)
 		}
 	})
