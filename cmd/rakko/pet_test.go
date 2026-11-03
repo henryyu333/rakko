@@ -585,3 +585,24 @@ func TestPetReceiveCatchesIntoTheTray(t *testing.T) {
 		t.Fatalf("the caught drop is not the pose: %q", a.petPoseFor(time.Now(), false))
 	}
 }
+
+// TestPetOwnDragIsNotCaught: dragging a tray item out and dropping it back
+// on the otter is not an incoming drop. It must not re-add the file at the
+// front of the tray or flash the caught pose — the item never left.
+func TestPetOwnDragIsNotCaught(t *testing.T) {
+	a := petShelf(t)
+	windowlessPet(a, 400, 300, 74, 96)
+	p := filepath.Join(t.TempDir(), "照片.png")
+	if err := os.WriteFile(p, testPNGBytes(t), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	u := (&url.URL{Scheme: "file", Path: p}).String()
+	a.ownDrag = true
+	a.petReceive(transfer.New(transfer.NewItem(transfer.Bytes(transfer.FileList, []byte(u)))))
+	if len(a.store.Items) != 0 {
+		t.Fatalf("our own drag added %d items to the tray", len(a.store.Items))
+	}
+	if !a.pet.caught.IsZero() {
+		t.Fatal("our own drag made the otter hold what it never caught")
+	}
+}

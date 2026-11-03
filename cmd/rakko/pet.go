@@ -663,10 +663,11 @@ func (a *shelf) petRelease(p mygo.Point) {
 
 // petReceive is a drop on the otter itself: the files land in the tray
 // through the same path the notch uses, and the otter holds them for a
-// moment.
+// moment. A drop from our own tray is not an incoming drag — the item is
+// already here — so it neither re-adds it at the front nor plays the catch.
 func (a *shelf) petReceive(data transfer.Data) {
 	pet := a.pet
-	if pet == nil {
+	if pet == nil || a.ownDrag {
 		return
 	}
 	if err := a.receive(data); err != nil {
@@ -694,6 +695,9 @@ func (pet *petWindow) view(c *ui.Context) {
 	// asking the screen module here would need the main loop, which a
 	// headless render does not run.
 	_, over := ui.DataDragOver(zone, opts)
+	if a.ownDrag {
+		over = false // our own drag-out is not something to catch
+	}
 	pose := a.petPoseFor(c.Now(), over)
 	pet.drawn = pose
 	b := otterImage(pose)
