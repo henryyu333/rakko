@@ -151,7 +151,7 @@
   "itemExcludeApp": "Stop Recording from “{app}”",
   "itemRemove": "Remove",
   "itemRemoveMany": "{count, plural, one {Remove {count, number, ::group-off} item} other {Remove {count, number, ::group-off} items}}",
-  "itemCopied": "Copied · Press ⌘V in another app to paste",
+  "itemCopied": "Copied",
   "itemCopiedImage": "Image copied · Press ⌘V in another app to paste",
   "itemOCRCopyRecordFailed": "Copied, but it could not be added to the clipboard page: {err}",
   "itemOCRCopied": "{count, plural, one {Copied the recognized text · {count, number, ::group-off} character} other {Copied the recognized text · {count, number, ::group-off} characters}}",

@@ -582,7 +582,7 @@ func galleryGroupB() []galleryItem {
 			now := time.Now()
 			switch kind {
 			case "ok":
-				a.status, a.statusKind = galleryText(lang, "已复制 · 在其他应用按 ⌘V 粘贴", "Copied · Press ⌘V in the other app"), statusOK
+				a.status, a.statusKind = galleryLoc(lang).ItemCopied(), statusOK
 				a.statusUntil = now.Add(3 * time.Second)
 			case "err":
 				a.status, a.statusKind = galleryText(lang, "解压失败 · 文件已损坏", "Couldn't unzip · The archive is damaged"), statusErr

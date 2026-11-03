@@ -1569,11 +1569,11 @@ func (msgs Messages) ItemRemoveMany(count int) string {
 	return Catalog.Format(msgs.locale, "itemRemoveMany", map[string]any{"count": count})
 }
 
-// ItemCopied says "已复制 · 在其他应用按 ⌘V 粘贴"
+// ItemCopied says "已复制"
 // in the language the app shows.
 func ItemCopied() string { return In(i18n.Locale()).ItemCopied() }
 
-// ItemCopied says "已复制 · 在其他应用按 ⌘V 粘贴"
+// ItemCopied says "已复制"
 // in the language of msgs.
 func (msgs Messages) ItemCopied() string {
 	return Catalog.Format(msgs.locale, "itemCopied", nil)

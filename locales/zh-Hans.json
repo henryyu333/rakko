@@ -151,7 +151,7 @@
   "itemExcludeApp": "不再记录来自「{app}」的内容",
   "itemRemove": "移除",
   "itemRemoveMany": "{count, plural, other {移除 {count, number, ::group-off} 项}}",
-  "itemCopied": "已复制 · 在其他应用按 ⌘V 粘贴",
+  "itemCopied": "已复制",
   "itemCopiedImage": "已复制图片 · 在其他应用按 ⌘V 粘贴",
   "itemOCRCopyRecordFailed": "已复制，但没能记进剪贴板页：{err}",
   "itemOCRCopied": "{count, plural, other {已复制识别出的文字 · {count, number, ::group-off} 字}}",
