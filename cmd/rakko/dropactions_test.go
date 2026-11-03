@@ -347,7 +347,7 @@ func TestDropZoneShowsForImageDrag(t *testing.T) {
 		writeFile(t, dir, "3.png", testPNGBytes(t)),
 	}
 	_, view := dropViewShelf(t, imgs)
-	for _, want := range []string{"投放", "3 张图片", "松开放入托盘", "放入托盘", "保存引用，随时拖出", "压缩到 1 MB", "合成一个 PDF", "转 JPEG", "隔空投送"} {
+	for _, want := range []string{"投放", "3 张图片", "放入托盘", "压缩到 1 MB", "合成一个 PDF", "转 JPEG", "隔空投送"} {
 		if !view.HasText(want) {
 			t.Fatalf("drop zone missing %q; texts %v", want, view.Texts())
 		}
@@ -587,29 +587,8 @@ func TestDropActionSubtitlesMatchBehavior(t *testing.T) {
 		t.Fatalf("single image pdf cell = %+v", single[1])
 	}
 	double := dropActions([]string{one, more})
-	if double[1].label != "合成一个 PDF" || double[1].sub != "按拖入顺序" {
+	if double[1].target != toMergedPDF {
 		t.Fatalf("multi image pdf cell = %+v", double[1])
-	}
-	pdf := writeFile(t, dir, "doc.pdf", []byte("%PDF"))
-	for _, act := range dropActions([]string{pdf}) {
-		switch act.id {
-		case "toword":
-			if act.sub != "提取文字" {
-				t.Fatalf("转 Word sub %q", act.sub)
-			}
-		case "topng":
-			if act.sub != "PNG · 每页一张" {
-				t.Fatalf("每页存成图片 sub %q", act.sub)
-			}
-		case "zip":
-			if act.sub != "" {
-				t.Fatalf("single zip sub %q", act.sub)
-			}
-		case "airdrop":
-			if act.sub != "" {
-				t.Fatalf("airdrop sub %q", act.sub)
-			}
-		}
 	}
 }
 

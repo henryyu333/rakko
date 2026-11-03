@@ -4563,16 +4563,6 @@ func (msgs Messages) DropPutInTray() string {
 	return Catalog.Format(msgs.locale, "dropPutInTray", nil)
 }
 
-// DropTrayHint says "保存引用，随时拖出"
-// in the language the app shows.
-func DropTrayHint() string { return In(i18n.Locale()).DropTrayHint() }
-
-// DropTrayHint says "保存引用，随时拖出"
-// in the language of msgs.
-func (msgs Messages) DropTrayHint() string {
-	return Catalog.Format(msgs.locale, "dropTrayHint", nil)
-}
-
 // DropPdfMerged says "合成一个 PDF"
 // in the language the app shows.
 func DropPdfMerged() string { return In(i18n.Locale()).DropPdfMerged() }
@@ -4623,16 +4613,6 @@ func (msgs Messages) DropWithin() string {
 	return Catalog.Format(msgs.locale, "dropWithin", nil)
 }
 
-// DropExtractText says "提取文字"
-// in the language the app shows.
-func DropExtractText() string { return In(i18n.Locale()).DropExtractText() }
-
-// DropExtractText says "提取文字"
-// in the language of msgs.
-func (msgs Messages) DropExtractText() string {
-	return Catalog.Format(msgs.locale, "dropExtractText", nil)
-}
-
 // DropPagesAsImages says "每页存成图片"
 // in the language the app shows.
 func DropPagesAsImages() string { return In(i18n.Locale()).DropPagesAsImages() }
@@ -4641,16 +4621,6 @@ func DropPagesAsImages() string { return In(i18n.Locale()).DropPagesAsImages() }
 // in the language of msgs.
 func (msgs Messages) DropPagesAsImages() string {
 	return Catalog.Format(msgs.locale, "dropPagesAsImages", nil)
-}
-
-// DropPngPage says "PNG · 每页一张"
-// in the language the app shows.
-func DropPngPage() string { return In(i18n.Locale()).DropPngPage() }
-
-// DropPngPage says "PNG · 每页一张"
-// in the language of msgs.
-func (msgs Messages) DropPngPage() string {
-	return Catalog.Format(msgs.locale, "dropPngPage", nil)
 }
 
 // DropCountItems says "{n, number, ::group-off} 项"
@@ -5545,16 +5515,6 @@ func DropTitle() string { return In(i18n.Locale()).DropTitle() }
 // in the language of msgs.
 func (msgs Messages) DropTitle() string {
 	return Catalog.Format(msgs.locale, "dropTitle", nil)
-}
-
-// DropReleaseTray says "松开放入托盘"
-// in the language the app shows.
-func DropReleaseTray() string { return In(i18n.Locale()).DropReleaseTray() }
-
-// DropReleaseTray says "松开放入托盘"
-// in the language of msgs.
-func (msgs Messages) DropReleaseTray() string {
-	return Catalog.Format(msgs.locale, "dropReleaseTray", nil)
 }
 
 // DropRelease says "松开放入"

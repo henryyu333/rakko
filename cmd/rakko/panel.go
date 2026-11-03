@@ -1215,7 +1215,7 @@ func (a *shelf) sheetFrame(c *ui.Context, back, body func()) {
 func (a *shelf) dropFrame(c *ui.Context, paths []string, class dropClass) {
 	l := loc(c)
 	a.sheetFrame(c, func() {
-		a.dropBar(c, l.DropTitle(), dropCountTextIn(l, len(paths), class), l.DropReleaseTray())
+		a.dropBar(c, l.DropTitle(), dropCountTextIn(l, len(paths), class), "")
 	}, func() {
 		a.dropStage(c, paths, class)
 	})

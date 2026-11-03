@@ -232,7 +232,7 @@ func dropActionsForIn(l locales.Messages, paths []string, class dropClass) []dro
 		allJPEG := true
 		pdfLabel, pdfSub, pdfTarget := l.CardToPDF(), l.DropPdfPage(), toPDF
 		if len(paths) > 1 {
-			pdfLabel, pdfSub, pdfTarget = l.DropPdfMerged(), l.DropPdfMergedSub(), toMergedPDF
+			pdfLabel, pdfSub, pdfTarget = l.DropPdfMerged(), "", toMergedPDF
 		}
 		for _, p := range paths {
 			if ext := strings.ToLower(filepath.Ext(p)); ext != ".jpg" && ext != ".jpeg" {
@@ -240,20 +240,20 @@ func dropActionsForIn(l locales.Messages, paths []string, class dropClass) []dro
 				break
 			}
 		}
-		other := dropAction{id: "tojpeg", icon: imgSymbol, label: l.CardToJPEG(), sub: l.DropPerFile(), target: toJPEG}
+		other := dropAction{id: "tojpeg", icon: imgSymbol, label: l.CardToJPEG(), target: toJPEG}
 		if allJPEG {
-			other = dropAction{id: "topng", icon: imgSymbol, label: l.CardToPNG(), sub: l.DropPerFile(), target: toPNG}
+			other = dropAction{id: "topng", icon: imgSymbol, label: l.CardToPNG(), target: toPNG}
 		}
 		return []dropAction{
-			{id: "fit1m", icon: shrinkSymbol, label: l.CardFit1M(), sub: l.DropWithin(), target: toFit1M},
+			{id: "fit1m", icon: shrinkSymbol, label: l.CardFit1M(), target: toFit1M},
 			{id: "topdf", icon: pdfSymbol, label: pdfLabel, sub: pdfSub, target: pdfTarget},
 			other,
 			air,
 		}
 	case classPDFs:
 		return []dropAction{
-			{id: "toword", icon: docSymbol, label: l.CardToWord(), sub: l.DropExtractText(), target: toWord},
-			{id: "topng", icon: imgSymbol, label: l.DropPagesAsImages(), sub: l.DropPngPage(), target: toPNG},
+			{id: "toword", icon: docSymbol, label: l.CardToWord(), target: toWord},
+			{id: "topng", icon: imgSymbol, label: l.DropPagesAsImages(), target: toPNG},
 			zipAction(l, len(paths)),
 			air,
 		}
@@ -500,7 +500,6 @@ func (a *shelf) dropTrayCell(c *ui.Context, paths []string) {
 		})
 		ui.Column(c).Gap(2).Children(func() {
 			panelLabel(c, nil, loc(c).DropPutInTray(), 13, 600).TextColor(ink)
-			panelLabel(c, nil, loc(c).DropTrayHint(), 11, 0).TextColor(ink3)
 		})
 		ui.Box(c).Grow(1)
 		if otter {

@@ -771,17 +771,17 @@ func TestDropZoneFitsEveryVariant(t *testing.T) {
 	}
 	variants := []variant{
 		{"image", []string{png1},
-			[]string{"Fit 1 MB", "or smaller", "Make PDF", "1 Page", "To JPEG", "One per File", "AirDrop"},
-			[]string{"压缩到 1 MB", "以内", "转成 PDF", "1 页", "转 JPEG", "每张一份", "隔空投送"}},
+			[]string{"Fit 1 MB", "Make PDF", "1 Page", "To JPEG", "AirDrop"},
+			[]string{"压缩到 1 MB", "转成 PDF", "1 页", "转 JPEG", "隔空投送"}},
 		{"images", []string{png1, png2},
-			[]string{"Merge into PDF", "In Drop Order", "To JPEG", "One per File"},
-			[]string{"合成一个 PDF", "按拖入顺序", "转 JPEG", "每张一份"}},
+			[]string{"Merge into PDF", "To JPEG"},
+			[]string{"合成一个 PDF", "转 JPEG"}},
 		{"pdf", []string{pdf1},
-			[]string{"To Word", "Extract Text", "To Images", "PNG · Per Page", "Zip", "AirDrop"},
-			[]string{"转 Word", "提取文字", "每页存成图片", "PNG · 每页一张", "打成 zip", "隔空投送"}},
+			[]string{"To Word", "To Images", "Zip", "AirDrop"},
+			[]string{"转 Word", "每页存成图片", "打成 zip", "隔空投送"}},
 		{"pdfs", []string{pdf1, pdf2},
-			[]string{"To Images", "PNG · Per Page", "2 PDFs"},
-			[]string{"每页存成图片", "PNG · 每页一张", "2 个 PDF"}},
+			[]string{"To Images", "2 PDFs"},
+			[]string{"每页存成图片", "2 个 PDF"}},
 		{"archive", []string{zip1},
 			[]string{"Extract", "AirDrop"},
 			[]string{"解压", "隔空投送"}},
@@ -796,8 +796,8 @@ func TestDropZoneFitsEveryVariant(t *testing.T) {
 		tag  string
 		tray []string
 	}{
-		{"en", []string{"Put in Tray", "Stays Here — Drag Out Anytime"}},
-		{"zh-Hans", []string{"放入托盘", "保存引用，随时拖出"}},
+		{"en", []string{"Put in Tray"}},
+		{"zh-Hans", []string{"放入托盘"}},
 	} {
 		for _, v := range variants {
 			t.Run(lang.tag+"/"+v.name, func(t *testing.T) {
