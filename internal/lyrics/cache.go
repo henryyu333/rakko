@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -49,8 +48,7 @@ func NewCache(dir string) *Cache {
 // Key identifies a track for the cache: case-folded title, artist and the
 // rounded duration.
 func Key(t Track) string {
-	norm := func(s string) string { return strings.ToLower(strings.Join(strings.Fields(s), " ")) }
-	return norm(t.Title) + "|" + norm(t.Artist) + "|" + strconv.Itoa(t.Duration)
+	return normText(t.Title) + "|" + normText(t.Artist) + "|" + strconv.Itoa(t.Duration)
 }
 
 // Get answers a fresh entry, dropping an expired one.

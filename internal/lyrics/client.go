@@ -8,6 +8,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -25,7 +26,7 @@ type Track struct {
 	Duration int
 }
 
-// Result is what LRCLIB knows: the synced lyrics text, or nothing. None
+// Result is what a service knows: the synced lyrics text, or nothing. None
 // means the lookup completed and produced no synced lyrics (no match, only
 // plain lyrics, or an instrumental); Instrumental is kept apart so the
 // cache can say why.
@@ -35,13 +36,16 @@ type Result struct {
 	None         bool
 }
 
-// Fetcher asks LRCLIB for a track. Client defaults to a five-second
-// http.Client; BaseURL defaults to DefaultBaseURL. UserAgent is required by
-// LRCLIB and should name the app and a contact URL.
+// Fetcher asks LRCLIB, then NetEase Cloud Music, for a track. Client
+// defaults to a five-second http.Client; BaseURL and NeteaseBaseURL
+// default to the services' public addresses. UserAgent is required by
+// LRCLIB and should name the app and a contact URL; NetEase is asked with
+// a browser's.
 type Fetcher struct {
-	Client    *http.Client
-	BaseURL   string
-	UserAgent string
+	Client         *http.Client
+	BaseURL        string
+	NeteaseBaseURL string
+	UserAgent      string
 }
 
 type apiTrack struct {
@@ -51,14 +55,42 @@ type apiTrack struct {
 	Duration     float64 `json:"duration"`
 }
 
-// Fetch looks one track up. A 404 on the exact match falls back to a
-// search for the closest track within three seconds. Only synced lyrics
-// are used: plain lyrics and instrumentals answer None.
+// Fetch looks one track up. LRCLIB answers first, with the exact match,
+// then a search, then a search of the title without its trailing version
+// tag; NetEase answers when LRCLIB has an error or no synced lyrics. Both
+// services missing the song is None; only both failing is an error.
 func (f Fetcher) Fetch(ctx context.Context, t Track) (Result, error) {
-	title := strings.TrimSpace(t.Title)
-	if title == "" {
+	if strings.TrimSpace(t.Title) == "" {
 		return Result{None: true}, nil
 	}
+	lr, lerr := f.fetchLRCLIB(ctx, t)
+	if lerr == nil && !lr.None {
+		return lr, nil
+	}
+	nr, nerr := f.fetchNetease(ctx, t)
+	switch {
+	case nerr == nil && !nr.None:
+		return nr, nil
+	case nerr == nil:
+		// NetEase agrees there are no words; keep LRCLIB's reason if it
+		// had one.
+		if lerr == nil {
+			return lr, nil
+		}
+		return nr, nil
+	case lerr == nil:
+		// LRCLIB answered; NetEase only failed on the way.
+		return lr, nil
+	default:
+		return Result{}, fmt.Errorf("lyrics: lrclib: %v; netease: %w", lerr, nerr)
+	}
+}
+
+// fetchLRCLIB asks LRCLIB: the exact track, a search for it, and a search
+// for the bare title when the version tag hid the recording. Only synced
+// lyrics are used: plain lyrics and instrumentals answer None.
+func (f Fetcher) fetchLRCLIB(ctx context.Context, t Track) (Result, error) {
+	title := strings.TrimSpace(t.Title)
 	artist := strings.TrimSpace(t.Artist)
 	base := strings.TrimRight(f.BaseURL, "/")
 	if base == "" {
@@ -86,25 +118,30 @@ func (f Fetcher) Fetch(ctx context.Context, t Track) (Result, error) {
 		return Result{}, fmt.Errorf("lyrics: lrclib answered %d", status)
 	}
 
-	vals = url.Values{}
-	vals.Set("track_name", title)
-	if artist != "" {
-		vals.Set("artist_name", artist)
+	names := []string{title}
+	if bare := baseTitle(title); bare != "" && bare != title {
+		names = append(names, bare)
 	}
-	items, err := f.search(ctx, base+"/api/search?"+vals.Encode())
-	if err != nil {
-		return Result{}, err
+	for _, name := range names {
+		vals = url.Values{}
+		vals.Set("track_name", name)
+		if artist != "" {
+			vals.Set("artist_name", artist)
+		}
+		items, err := f.search(ctx, base+"/api/search?"+vals.Encode())
+		if err != nil {
+			return Result{}, err
+		}
+		if best := closest(items, t.Duration); best != nil {
+			return resultOf(*best), nil
+		}
 	}
-	best := closest(items, t.Duration)
-	if best == nil {
-		return Result{None: true}, nil
-	}
-	return resultOf(*best), nil
+	return Result{None: true}, nil
 }
 
 // get reads one track; a 404 is an answer (status), not an error.
 func (f Fetcher) get(ctx context.Context, u string) (apiTrack, int, error) {
-	body, status, err := f.read(ctx, u)
+	body, status, err := f.readRetry(ctx, u)
 	if err != nil || status != http.StatusOK {
 		return apiTrack{}, status, err
 	}
@@ -117,7 +154,7 @@ func (f Fetcher) get(ctx context.Context, u string) (apiTrack, int, error) {
 
 // search reads the search list; a 404 is an empty list.
 func (f Fetcher) search(ctx context.Context, u string) ([]apiTrack, error) {
-	body, status, err := f.read(ctx, u)
+	body, status, err := f.readRetry(ctx, u)
 	if err != nil {
 		return nil, err
 	}
@@ -134,13 +171,50 @@ func (f Fetcher) search(ctx context.Context, u string) ([]apiTrack, error) {
 	return out, nil
 }
 
+// readRetry reads one LRCLIB answer, retrying an overloaded or failed
+// service twice with a short backoff. A 404 and the other definite answers
+// come back at once; the caller's deadline bounds the whole retry.
+func (f Fetcher) readRetry(ctx context.Context, u string) ([]byte, int, error) {
+	const attempts = 3
+	var body []byte
+	var status int
+	var err error
+	for i := range attempts {
+		body, status, err = f.read(ctx, u)
+		if ctx.Err() != nil {
+			return nil, 0, ctx.Err()
+		}
+		if err == nil && !retryableStatus(status) {
+			return body, status, nil
+		}
+		if i == attempts-1 {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return nil, 0, ctx.Err()
+		case <-time.After(time.Duration(150*(i+1)) * time.Millisecond):
+		}
+	}
+	return body, status, err
+}
+
+// retryableStatus is a transient answer: the service is busy or broken.
+func retryableStatus(status int) bool {
+	return status == http.StatusTooManyRequests || status >= 500
+}
+
 func (f Fetcher) read(ctx context.Context, u string) ([]byte, int, error) {
+	return f.readUA(ctx, u, f.UserAgent)
+}
+
+func (f Fetcher) readUA(ctx context.Context, u, userAgent string) ([]byte, int, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, 0, err
 	}
-	if f.UserAgent != "" {
-		req.Header.Set("User-Agent", f.UserAgent)
+	if userAgent != "" {
+		req.Header.Set("User-Agent", userAgent)
 	}
 	client := f.Client
 	if client == nil {
@@ -156,7 +230,7 @@ func (f Fetcher) read(ctx context.Context, u string) ([]byte, int, error) {
 	dec := json.NewDecoder(io.LimitReader(resp.Body, 2<<20))
 	if err := dec.Decode(&body); err != nil {
 		if resp.StatusCode == http.StatusOK {
-			return nil, resp.StatusCode, fmt.Errorf("lyrics: reading lrclib body: %w", err)
+			return nil, resp.StatusCode, fmt.Errorf("lyrics: reading answer: %w", err)
 		}
 		// An error page may not be JSON; the status is the answer.
 		return nil, resp.StatusCode, nil
@@ -203,4 +277,29 @@ func resultOf(t apiTrack) Result {
 		return Result{Synced: synced}
 	}
 	return Result{None: true}
+}
+
+// titleTail is a trailing version tag: "(Live)", "（伴奏）", "[Remix]",
+// "【电影版】". Several may follow one another.
+var titleTail = regexp.MustCompile(`\s*[(（\[【][^)）\]】]*[)）\]】]\s*$`)
+
+// baseTitle drops the version tags a player reports and the title's
+// trailing explanation (" - 电影《…》插曲"): the bare name LRCLIB's search
+// knows, while the full title stays for the exact match.
+func baseTitle(title string) string {
+	s := strings.TrimSpace(title)
+	if i := strings.Index(s, " - "); i > 0 {
+		s = s[:i]
+	}
+	for {
+		next := strings.TrimSpace(titleTail.ReplaceAllString(s, ""))
+		if next == s || next == "" {
+			break
+		}
+		s = next
+	}
+	if s == "" {
+		return strings.TrimSpace(title)
+	}
+	return s
 }
