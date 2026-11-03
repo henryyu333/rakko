@@ -10,7 +10,11 @@ package main
 // shell, exactly like the now-playing wings and the completion capsule.
 
 import (
+	"bytes"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"math"
 	"strconv"
 	"strings"
@@ -18,6 +22,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"rakko/internal/mac"
 	"rakko/locales"
 )
 
@@ -26,7 +31,6 @@ import (
 // pair of headphones, and a document.
 var (
 	liveBoltSym   = ui.MustParseSVG([]byte(`<svg viewBox="0 0 11 14" xmlns="http://www.w3.org/2000/svg"><path d="M6.5 0 0 8h4.5L3.8 14 11 5.5H6.3z" fill="currentColor"/></svg>`))
-	livePodsSym   = ui.MustParseSVG([]byte(`<svg viewBox="0 0 18 16" xmlns="http://www.w3.org/2000/svg"><path d="M4.2 1.2a3 3 0 0 0-3 3.1c0 1.6 1.1 2.7 2.4 3l.3 6.6a1 1 0 0 0 2 0V3.3a2.2 2.2 0 0 0-1.7-2.1zM13.8 1.2a3 3 0 0 1 3 3.1c0 1.6-1.1 2.7-2.4 3l-.3 6.6a1 1 0 0 1-2 0V3.3a2.2 2.2 0 0 1 1.7-2.1z" fill="currentColor"/></svg>`))
 	livePhonesSym = ui.MustParseSVG([]byte(`<svg viewBox="0 0 17 16" xmlns="http://www.w3.org/2000/svg"><path d="M2 10V8.5a6.5 6.5 0 0 1 13 0V10" stroke="currentColor" stroke-width="1.6" fill="none"/><rect x="1" y="9" width="4" height="6" rx="1.5" fill="currentColor"/><rect x="12" y="9" width="4" height="6" rx="1.5" fill="currentColor"/></svg>`))
 	liveFileSym   = ui.MustParseSVG([]byte(`<svg viewBox="0 0 13 16" xmlns="http://www.w3.org/2000/svg"><path d="M1.5 0h6.6L13 4.9v9.6A1.5 1.5 0 0 1 11.5 16h-10A1.5 1.5 0 0 1 0 14.5v-13A1.5 1.5 0 0 1 1.5 0z" fill="#D1D1D6"/><path d="M8 0v5h5" fill="#A1A1A6"/></svg>`))
 )
@@ -169,14 +173,60 @@ func (a *shelf) downloadWings(c *ui.Context, shellW, shellH, k float32, dl downl
 	})
 }
 
-// liveHeadsetIcon picks the notice's glyph: AirPods (by name) use the
-// earbuds, every other headset the over-ear headphones from the design
-// preview's PHONES symbol.
-func liveHeadsetIcon(label string) (*ui.SVG, float32) {
-	if strings.Contains(strings.ToLower(label), "airpods") {
-		return livePodsSym, 18
+// headsetSymbol selects the closest SF Symbol available for the device.
+func headsetSymbol(label string) string {
+	name := strings.ToLower(label)
+	switch {
+	case strings.Contains(name, "airpods") && strings.Contains(name, "max"):
+		return "airpodsmax"
+	case strings.Contains(name, "airpods") && strings.Contains(name, "pro") && strings.Contains(name, "3"):
+		return "airpodspro3"
+	case strings.Contains(name, "airpods") && strings.Contains(name, "pro"):
+		return "airpodspro"
+	case strings.Contains(name, "airpods"):
+		return "airpods"
+	case strings.Contains(name, "beats"):
+		return "beats.headphones"
+	default:
+		return "headphones"
 	}
-	return livePhonesSym, 17
+}
+
+var headsetSymbols = map[string]*ui.Bitmap{}
+
+// headsetBitmap caches a white template raster; nil keeps the generic fallback.
+func headsetBitmap(name string) *ui.Bitmap {
+	if b, ok := headsetSymbols[name]; ok {
+		return b
+	}
+	data := mac.SystemSymbol(name, 24)
+	if len(data) == 0 && name != "headphones" {
+		data = mac.SystemSymbol("headphones", 24)
+	}
+	var b *ui.Bitmap
+	if src, err := png.Decode(bytes.NewReader(data)); err == nil {
+		dst := image.NewNRGBA(src.Bounds())
+		for y := dst.Bounds().Min.Y; y < dst.Bounds().Max.Y; y++ {
+			for x := dst.Bounds().Min.X; x < dst.Bounds().Max.X; x++ {
+				_, _, _, alpha := src.At(x, y).RGBA()
+				dst.SetNRGBA(x, y, color.NRGBA{R: 255, G: 255, B: 255, A: uint8(alpha >> 8)})
+			}
+		}
+		b = ui.NewBitmap(dst)
+	}
+	headsetSymbols[name] = b
+	return b
+}
+func (a *shelf) headsetGlyph(c *ui.Context, label string) {
+	var glyph *ui.Bitmap
+	if a.win != nil {
+		glyph = headsetBitmap(headsetSymbol(label))
+	}
+	if glyph != nil {
+		ui.Image(c.Key("headset-symbol"), glyph).Size(18, 18).Fit(ui.Contain)
+	} else {
+		ui.Icon(c, livePhonesSym).Size(17, 16).TextColor(ink)
+	}
 }
 
 // liveCapsule draws the headphone / download-done notice in the band under
@@ -215,8 +265,7 @@ func (a *shelf) liveCapsule(c *ui.Context, shellW, shellH, k float32, ev liveEve
 		body.Children(func() {
 			switch ev.kind {
 			case liveHeadset:
-				glyph, gw := liveHeadsetIcon(ev.label)
-				ui.Icon(c, glyph).Size(gw, 16).TextColor(ink)
+				a.headsetGlyph(c, ev.label)
 				ui.Text(c, ev.label).SingleLine().FontSize(12).FontWeight(600).TextColor(ink).
 					Shrink(1).MinWidth(0).Ellipsis("…")
 				for _, lv := range ev.levels {
@@ -226,7 +275,7 @@ func (a *shelf) liveCapsule(c *ui.Context, shellW, shellH, k float32, ev liveEve
 					ui.Text(c, l.LiveConnected()).SingleLine().FontSize(12).FontWeight(500).TextColor(ink2)
 				}
 			case liveHeadsetOff:
-				ui.Box(c.Key("live-off-dot")).Size(7, 7).Radius(3.5).Background(ink)
+				a.headsetGlyph(c, ev.label)
 				ui.Text(c, ev.label).SingleLine().FontSize(12).FontWeight(600).TextColor(ink)
 				ui.Text(c, l.LiveDisconnected()).SingleLine().FontSize(12).FontWeight(500).TextColor(ink2)
 			case liveDownloadDone:

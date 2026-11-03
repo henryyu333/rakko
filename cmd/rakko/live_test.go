@@ -611,17 +611,18 @@ func TestLiveSettingsDefaultOnForOldFiles(t *testing.T) {
 	}
 }
 
-// The headphone notice's glyph follows the device: AirPods keep the
-// earbuds, any other headset gets the over-ear headphones.
 func TestLiveHeadsetGlyph(t *testing.T) {
-	if got, w := liveHeadsetIcon("AirPods Pro"); got != livePodsSym || w != 18 {
-		t.Fatalf("AirPods glyph = %p w=%g, want the earbuds", got, w)
-	}
-	if got, _ := liveHeadsetIcon("Sony WH-1000XM5"); got != livePhonesSym {
-		t.Fatal("a non-AirPods headset did not get the over-ear glyph")
-	}
-	if got, _ := liveHeadsetIcon("ALLENCHAN的AirPods Pro"); got != livePodsSym {
-		t.Fatal("a named AirPods pair did not get the earbuds")
+	for name, want := range map[string]string{
+		"AirPods Pro":     "airpodspro",
+		"AirPods Pro 3":   "airpodspro3",
+		"AirPods Max":     "airpodsmax",
+		"AirPods":         "airpods",
+		"Beats Studio":    "beats.headphones",
+		"Sony WH-1000XM5": "headphones",
+	} {
+		if got := headsetSymbol(name); got != want {
+			t.Errorf("%s: symbol %q, want %q", name, got, want)
+		}
 	}
 }
 

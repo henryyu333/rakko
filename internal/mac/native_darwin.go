@@ -1000,6 +1000,16 @@ func AppIcon(bundle string, size int) []byte {
 	})
 }
 
+// SystemSymbol returns an SF Symbol raster as PNG. Call on the main thread.
+func SystemSymbol(name string, size int) []byte {
+	if name == "" || size <= 0 || Init() != nil {
+		return nil
+	}
+	return iconPNG(size, func(_ id) id {
+		return send(class("NSImage"), "imageWithSystemSymbolName:accessibilityDescription:", uintptr(nsString(name)), 0)
+	})
+}
+
 // iconPNG rasterises iconOf's NSImage to PNG bytes at size×size points.
 // Only the one size is drawn: TIFFRepresentation would encode every
 // representation up to 1024px, ~160ms per icon on the main thread.

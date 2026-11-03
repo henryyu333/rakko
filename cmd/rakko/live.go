@@ -426,10 +426,8 @@ func liveTextWidth(s string, size float32) float32 {
 // liveIconWidth is the leading glyph's width in the capsule.
 func liveIconWidth(k liveKind) float32 {
 	switch k {
-	case liveHeadset:
+	case liveHeadset, liveHeadsetOff:
 		return 18
-	case liveHeadsetOff:
-		return 7
 	case liveDownloadDone:
 		return 13
 	}
