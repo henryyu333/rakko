@@ -4833,26 +4833,6 @@ func (msgs Messages) OcrPermissionTitle() string {
 	return Catalog.Format(msgs.locale, "ocrPermissionTitle", nil)
 }
 
-// OcrPermissionPrivacy says "只在你框选的那一下截取所选区域，识别在本机完成，不保存截图、不联网。"
-// in the language the app shows.
-func OcrPermissionPrivacy() string { return In(i18n.Locale()).OcrPermissionPrivacy() }
-
-// OcrPermissionPrivacy says "只在你框选的那一下截取所选区域，识别在本机完成，不保存截图、不联网。"
-// in the language of msgs.
-func (msgs Messages) OcrPermissionPrivacy() string {
-	return Catalog.Format(msgs.locale, "ocrPermissionPrivacy", nil)
-}
-
-// OcrPermissionRelaunch says "在「系统设置」里打开 Rakko 的开关后，需要退出并重新打开 Rakko …"
-// in the language the app shows.
-func OcrPermissionRelaunch() string { return In(i18n.Locale()).OcrPermissionRelaunch() }
-
-// OcrPermissionRelaunch says "在「系统设置」里打开 Rakko 的开关后，需要退出并重新打开 Rakko …"
-// in the language of msgs.
-func (msgs Messages) OcrPermissionRelaunch() string {
-	return Catalog.Format(msgs.locale, "ocrPermissionRelaunch", nil)
-}
-
 // OcrOpenSettings says "打开系统设置"
 // in the language the app shows.
 func OcrOpenSettings() string { return In(i18n.Locale()).OcrOpenSettings() }

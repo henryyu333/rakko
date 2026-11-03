@@ -202,10 +202,6 @@ func (a *shelf) ocrSheetStage(c *ui.Context) {
 		})
 		ui.Column(c.Key("txt")).Grow(1).MinWidth(0).Children(func() {
 			ui.Text(c, loc(c).OcrPermissionTitle()).FontSize(13).FontWeight(600).TextColor(ink)
-			ui.Text(c, loc(c).OcrPermissionPrivacy()).
-				FontSize(11).TextColor(ink2).Margin(4, 0, 0, 0)
-			ui.Text(c, loc(c).OcrPermissionRelaunch()).
-				FontSize(11).TextColor(ink3).Margin(4, 0, 0, 0)
 			ui.Row(c.Key("acts")).Gap(8).Margin(10, 0, 0, 0).Children(func() {
 				primary := ui.ButtonBase(c.Key("grant")).Height(24).Radius(12).Padding(0, 10, 0, 10).
 					Background(accent).Center().Label(loc(c).OcrOpenSettings())

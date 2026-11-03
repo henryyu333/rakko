@@ -473,8 +473,6 @@
   "snapNeedsAccess": "Needs Accessibility Access",
   "snapEnable": "Turn On",
   "ocrPermissionTitle": "Capture Text Needs Screen Recording",
-  "ocrPermissionPrivacy": "Rakko captures only the part you select, recognizes it on this Mac, keeps no screenshot, and never goes online.",
-  "ocrPermissionRelaunch": "Turn on Rakko in System Settings, then quit and reopen Rakko for it to apply. Then choose Capture Text again.",
   "ocrOpenSettings": "Open System Settings",
   "cancel": "Cancel",
   "ocrNoText": "No Text Found",
