@@ -452,17 +452,7 @@ func (a *shelf) permissionCaption(l locales.Messages, permissions, missing []sys
 		if a.perm.step < 0 || a.perm.step >= len(a.perm.ids) {
 			break
 		}
-		id := a.perm.ids[a.perm.step]
-		name := id
-		if p, ok := permissionIn(permissions, id); ok {
-			name = p.short
-		}
-		if id == fullDiskPermissionID {
-			// Full Disk Access has no list entry for an app that never asked:
-			// the request reveals the bundle in Finder for exactly this.
-			return l.PermStepFullDisk(a.perm.step+1, len(a.perm.ids), name)
-		}
-		return l.PermStep(a.perm.step+1, len(a.perm.ids), name)
+		return l.PermStep(a.perm.step+1, len(a.perm.ids))
 	case permissionRelaunch:
 		return l.PermRelaunchStep()
 	}

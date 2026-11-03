@@ -981,28 +981,14 @@ func (msgs Messages) PermAllGranted(granted int, total int) string {
 	return Catalog.Format(msgs.locale, "permAllGranted", map[string]any{"granted": granted, "total": total})
 }
 
-// PermStep says "第 {step, number, ::group-off} 项，共 {total, number, ::group-off} 项：{short} · …"
+// PermStep says "第 {step, number, ::group-off}/{total, number, ::group-off} 项：在「系统设置」里打开 Rakko"
 // in the language the app shows.
-func PermStep(step int, total int, short string) string {
-	return In(i18n.Locale()).PermStep(step, total, short)
-}
+func PermStep(step int, total int) string { return In(i18n.Locale()).PermStep(step, total) }
 
-// PermStep says "第 {step, number, ::group-off} 项，共 {total, number, ::group-off} 项：{short} · …"
+// PermStep says "第 {step, number, ::group-off}/{total, number, ::group-off} 项：在「系统设置」里打开 Rakko"
 // in the language of msgs.
-func (msgs Messages) PermStep(step int, total int, short string) string {
-	return Catalog.Format(msgs.locale, "permStep", map[string]any{"step": step, "total": total, "short": short})
-}
-
-// PermStepFullDisk says "第 {step, number, ::group-off} 项，共 {total, number, ::group-off} 项：{short} · …"
-// in the language the app shows.
-func PermStepFullDisk(step int, total int, short string) string {
-	return In(i18n.Locale()).PermStepFullDisk(step, total, short)
-}
-
-// PermStepFullDisk says "第 {step, number, ::group-off} 项，共 {total, number, ::group-off} 项：{short} · …"
-// in the language of msgs.
-func (msgs Messages) PermStepFullDisk(step int, total int, short string) string {
-	return Catalog.Format(msgs.locale, "permStepFullDisk", map[string]any{"step": step, "total": total, "short": short})
+func (msgs Messages) PermStep(step int, total int) string {
+	return Catalog.Format(msgs.locale, "permStep", map[string]any{"step": step, "total": total})
 }
 
 // PermRelaunchStep says "还差最后一步：重新打开 Rakko 才生效"

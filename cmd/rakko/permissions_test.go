@@ -262,7 +262,7 @@ func TestPermissionSwitchStates(t *testing.T) {
 	if st.fdaRequests != 1 || a.perm.stage != permissionWaiting {
 		t.Fatalf("turning the switch on did not start the walk: stage=%v fda=%d", a.perm.stage, st.fdaRequests)
 	}
-	if got := permissionRowCaption(t, view); !strings.HasPrefix(got, "第 1 项，共 3 项：完整磁盘访问 · ") {
+	if got := permissionRowCaption(t, view); !strings.HasPrefix(got, "第 1/3 项：") {
 		t.Fatalf("walking caption = %q", got)
 	}
 	a.stopPermissionFlow()
@@ -320,7 +320,7 @@ func TestPermissionFlowOrderSkipsGranted(t *testing.T) {
 	if st.axRequests != 1 || st.scRequests != 0 {
 		t.Fatalf("the walk did not start at Accessibility: ax=%d screen=%d", st.axRequests, st.scRequests)
 	}
-	if got := permissionRowCaption(t, view); !strings.HasPrefix(got, "第 1 项，共 2 项：辅助功能 · ") {
+	if got := permissionRowCaption(t, view); !strings.HasPrefix(got, "第 1/2 项：") {
 		t.Fatalf("walking caption = %q", got)
 	}
 	if !view.HasText("停止") {
@@ -329,7 +329,7 @@ func TestPermissionFlowOrderSkipsGranted(t *testing.T) {
 	// A poll while the switch is still off stays on the same step.
 	clk.fireLast(t)
 	view.Frame()
-	if st.scRequests != 0 || !strings.HasPrefix(permissionRowCaption(t, view), "第 1 项，共 2 项：辅助功能") {
+	if st.scRequests != 0 || !strings.HasPrefix(permissionRowCaption(t, view), "第 1/2 项：") {
 		t.Fatalf("an ungranted poll advanced the walk: screen=%d", st.scRequests)
 	}
 	// The grant lands in System Settings; the poll sees it and moves on.
@@ -339,7 +339,7 @@ func TestPermissionFlowOrderSkipsGranted(t *testing.T) {
 	if st.scRequests != 1 {
 		t.Fatalf("screen recording not requested after Accessibility: %d", st.scRequests)
 	}
-	if got := permissionRowCaption(t, view); !strings.HasPrefix(got, "第 2 项，共 2 项：屏幕录制 · ") {
+	if got := permissionRowCaption(t, view); !strings.HasPrefix(got, "第 2/2 项：") {
 		t.Fatalf("second step caption = %q", got)
 	}
 	// The screen step hands over to the relaunch step.
@@ -359,15 +359,14 @@ func TestPermissionFlowOrderSkipsGranted(t *testing.T) {
 	}
 }
 
-// The Full Disk Access step names the + / drag route, because the pane has
-// no entry for an app that never asked.
+// Full Disk Access still advances to the relaunch stage after its grant.
 func TestPermissionFlowFullDiskCaption(t *testing.T) {
 	st, clk := stubPermissions(t)
 	st.ax, st.screen = true, true
 	_, view := newSettingsShelf(t)
 	clickPermissionSwitch(t, view)
 	view.Frame()
-	want := "第 1 项，共 1 项：完整磁盘访问 · 在「系统设置」里打开 Rakko，这里会自动往下走（列表里没有就点 +，或把访达里选中的 Rakko 拖进去）"
+	want := "第 1/1 项：在「系统设置」里打开 Rakko"
 	if got := permissionRowCaption(t, view); got != want {
 		t.Fatalf("Full Disk Access caption = %q, want %q", got, want)
 	}
