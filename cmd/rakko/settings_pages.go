@@ -50,10 +50,6 @@ var (
 	heroPermFrom = ui.Hex("#1D1736")
 	heroPermTo   = ui.Hex("#0B0916")
 	heroPermGlow = ui.RGBA(94, 92, 230, 1)
-
-	heroAboutFrom = ui.Hex("#2A2018")
-	heroAboutTo   = ui.Hex("#100C09")
-	heroAboutGlow = ui.RGBA(246, 228, 213, 1)
 )
 
 // settingsGeneralPage: 启动 (open at login, language) and 更新 (automatic
@@ -561,8 +557,6 @@ func (a *shelf) settingsPermissionsPage(c *ui.Context) {
 // privacy and source notes.
 func (a *shelf) settingsAboutPage(c *ui.Context) {
 	l := loc(c)
-	settingsHero(c, "about", l.SettingsAboutHero(), "happy",
-		heroAboutFrom, heroAboutTo, heroAboutGlow)
 
 	ui.Row(c.Key("about")).FillWidth().AlignItems(ui.Center).Gap(18).Padding(4, 4, 4, 4).Children(func() {
 		if b := otterImage("happy"); b != nil {
@@ -575,7 +569,6 @@ func (a *shelf) settingsAboutPage(c *ui.Context) {
 			ui.Text(c, appName).SingleLine().FontSize(24).FontWeight(700).TextColor(ink)
 			ui.Text(c, l.SettingsAboutVersion(appVersion(), runtime.GOARCH)).SingleLine().
 				FontSize(12).TextColor(ink3).Padding(2, 0, 0, 0)
-			ui.Text(c, l.SettingsAboutTagline()).FontSize(13).TextColor(ink2).Padding(8, 0, 0, 0)
 			ui.Row(c.Key("about-actions")).AlignItems(ui.Center).Gap(8).Padding(14, 0, 0, 0).Children(func() {
 				settingsButton(c, "update", l.SettingsUpdateCheckNow(), false, func() { a.checkUpdates(true) }).
 					Disabled(a.updateChecking || a.updateInstalling)
@@ -591,7 +584,8 @@ func (a *shelf) settingsAboutPage(c *ui.Context) {
 	settingsGroup(c, "privacy", l.SettingsAboutPrivacyGroup(), "", func() {
 		settingsRow(c, "privacy", l.SettingsAboutPrivacy(), l.SettingsAboutPrivacyCaption(), func() {})
 		settingsSep(c, "source")
-		settingsRow(c, "source", l.SettingsAboutSource(), l.SettingsAboutSourceCaption(), func() {
+		settingsRowLine(c, "source").Tooltip(l.SettingsAboutSourceLicense()).Children(func() {
+			settingsRowText(c, l.SettingsAboutSource(), l.SettingsAboutSourceCaption())
 			settingsButton(c, "source-open", l.SettingsAboutSourceOpen(), false, func() {
 				if err := openExternal(sourceURL); err != nil {
 					a.report(err)

@@ -6319,16 +6319,6 @@ func (msgs Messages) SettingsAboutPage() string {
 	return Catalog.Format(msgs.locale, "settingsAboutPage", nil)
 }
 
-// SettingsAboutHero says "关于 Rakko"
-// in the language the app shows.
-func SettingsAboutHero() string { return In(i18n.Locale()).SettingsAboutHero() }
-
-// SettingsAboutHero says "关于 Rakko"
-// in the language of msgs.
-func (msgs Messages) SettingsAboutHero() string {
-	return Catalog.Format(msgs.locale, "settingsAboutHero", nil)
-}
-
 // SettingsAboutVersion says "版本 {version}（{arch}）"
 // in the language the app shows.
 func SettingsAboutVersion(version string, arch string) string {
@@ -6339,16 +6329,6 @@ func SettingsAboutVersion(version string, arch string) string {
 // in the language of msgs.
 func (msgs Messages) SettingsAboutVersion(version string, arch string) string {
 	return Catalog.Format(msgs.locale, "settingsAboutVersion", map[string]any{"version": version, "arch": arch})
-}
-
-// SettingsAboutTagline says "托盘、剪贴板、实时活动和小工具，都从刘海里长出来。"
-// in the language the app shows.
-func SettingsAboutTagline() string { return In(i18n.Locale()).SettingsAboutTagline() }
-
-// SettingsAboutTagline says "托盘、剪贴板、实时活动和小工具，都从刘海里长出来。"
-// in the language of msgs.
-func (msgs Messages) SettingsAboutTagline() string {
-	return Catalog.Format(msgs.locale, "settingsAboutTagline", nil)
 }
 
 // SettingsAboutPrivacyGroup says "隐私与源代码"
@@ -6391,14 +6371,24 @@ func (msgs Messages) SettingsAboutSource() string {
 	return Catalog.Format(msgs.locale, "settingsAboutSource", nil)
 }
 
-// SettingsAboutSourceCaption says "github.com/henryyu333/rakko · 代码 Apache 2.0 许可；名称、图标和海獭不在许可范围内"
+// SettingsAboutSourceCaption says "github.com/henryyu333/rakko · Apache 2.0"
 // in the language the app shows.
 func SettingsAboutSourceCaption() string { return In(i18n.Locale()).SettingsAboutSourceCaption() }
 
-// SettingsAboutSourceCaption says "github.com/henryyu333/rakko · 代码 Apache 2.0 许可；名称、图标和海獭不在许可范围内"
+// SettingsAboutSourceCaption says "github.com/henryyu333/rakko · Apache 2.0"
 // in the language of msgs.
 func (msgs Messages) SettingsAboutSourceCaption() string {
 	return Catalog.Format(msgs.locale, "settingsAboutSourceCaption", nil)
+}
+
+// SettingsAboutSourceLicense says "代码采用 Apache 2.0 许可；名称、图标和海獭不在许可范围内"
+// in the language the app shows.
+func SettingsAboutSourceLicense() string { return In(i18n.Locale()).SettingsAboutSourceLicense() }
+
+// SettingsAboutSourceLicense says "代码采用 Apache 2.0 许可；名称、图标和海獭不在许可范围内"
+// in the language of msgs.
+func (msgs Messages) SettingsAboutSourceLicense() string {
+	return Catalog.Format(msgs.locale, "settingsAboutSourceLicense", nil)
 }
 
 // SettingsAboutSourceOpen says "打开"
