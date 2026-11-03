@@ -80,14 +80,25 @@ func TestSettingsWindowAnswersClicksAndScroll(t *testing.T) {
 	}
 
 	// Scroll: a wheel event on the Settings surface must move the tracked
-	// scroll state. The 快捷键 page is taller than the 560pt window (the
-	// 通用 page fits, and must stay scroll-free).
+	// scroll state. Use the first page that is taller than the 560pt
+	// window; which page that is moves as the pages are trimmed.
 	var before, after float32
-	onMain(func() {
-		a.settingsPage = settingsPageShortcuts
-		a.settingsScroll.Y = 0
-		a.settingsWin.Invalidate()
-	})
+	tall := false
+	for _, page := range []settingsPageID{settingsPageAIUsage, settingsPageShortcuts, settingsPageNotch, settingsPagePermissions, settingsPageAbout} {
+		onMain(func() {
+			a.settingsPage = page
+			a.settingsScroll.Y = 0
+			a.settingsWin.Invalidate()
+		})
+		time.Sleep(150 * time.Millisecond)
+		onMain(func() { tall = a.settingsScroll.MaxY > 0 })
+		if tall {
+			break
+		}
+	}
+	if !tall {
+		t.Fatal("no Settings page is taller than the window, so the scroll path cannot be exercised")
+	}
 	time.Sleep(150 * time.Millisecond)
 	onMain(func() {
 		a.settingsWin.Invalidate()
