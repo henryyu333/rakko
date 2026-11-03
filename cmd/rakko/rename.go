@@ -28,7 +28,7 @@ import (
 // window like Settings, roomy enough for the preview list.
 const (
 	renameWidth  = 480
-	renameHeight = 470
+	renameHeight = 552
 )
 
 // renameable reports whether an item can take part in a rename: only real
@@ -524,7 +524,7 @@ func (a *shelf) renameView(c *ui.Context) {
 			r.doneView(c)
 			return
 		}
-		ui.Column(c.Key("body")).Padding(0, 16, 0, 16).Gap(10).Fill().Children(func() {
+		ui.Column(c.Key("body")).Padding(0, 16, 12, 16).Gap(10).Fill().Children(func() {
 			if sg := ui.Segmented(c.Key("mode"), &r.mode,
 				l.RenameModeReplace(), l.RenameModeAdd(), l.RenameModeFormat()).
 				FillWidth().Label(l.RenameModeLabel()); sg.Changed() {
@@ -629,7 +629,7 @@ func (r *renameUI) previewSection(c *ui.Context) {
 		ui.Text(c, l.RenamePreview()).SingleLine().FontSize(11).FontWeight(600).TextColor(ink3).Padding(0, 0, 6, 4)
 		ui.Column(c.Key("card-preview")).Radius(10).Background(setCard).Border(0.5, setCardEdge).
 			FillWidth().Grow(1).MinHeight(0).Children(func() {
-			ui.Scroll(c.Key("rn-preview")).Fill().MinHeight(0).TrackScroll(&r.scroll).Children(func() {
+			ui.Scroll(c.Key("rn-preview")).FillWidth().Height(90).TrackScroll(&r.scroll).Children(func() {
 				ui.Column(c.Key("rn-rows")).FillWidth().Children(func() {
 					for i, row := range pl.rows {
 						if i > 0 {
