@@ -126,6 +126,15 @@ func settingsAppIcon(bundleID string) *ui.Bitmap {
 	return icon
 }
 
+// settingsOpen shows the Settings window; a seam, so the AI 用量
+// shortcut's fallback is testable without a window server. It is assigned
+// in init because the shortcut path reaches setSettingsPage, which reaches
+// the shortcut actions again: a package-level initializer would close that
+// loop as an initialization cycle.
+var settingsOpen func(*shelf)
+
+func init() { settingsOpen = (*shelf).openSettings }
+
 // openSettings shows the Settings window, creating it the first time, or
 // re-focuses the one already open (single instance). The window is a normal
 // titled window — not the notch panel — centered on the cursor's display.

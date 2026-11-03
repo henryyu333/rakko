@@ -450,3 +450,31 @@ func TestAgentNotifyToolSwitchRoundTrips(t *testing.T) {
 		t.Fatalf("off after every tool is on = %v, %v; want nil", again.AgentNotify.Off, err)
 	}
 }
+
+// The shortcuts added for playback, panel pages and the desktop features
+// default to unset and survive a save and load like the original four.
+func TestShortcutSettingsNewKeys(t *testing.T) {
+	def := Default().Shortcuts
+	if def.PlayPause != "" || def.Previous != "" || def.Next != "" ||
+		def.Tools != "" || def.Usage != "" || def.Awake != "" ||
+		def.Note != "" || def.Pet != "" {
+		t.Fatalf("a fresh install sets a new shortcut: %+v", def)
+	}
+	dir := t.TempDir()
+	prefs := Default()
+	prefs.Shortcuts.PlayPause = "Ctrl+Alt+P"
+	prefs.Shortcuts.Previous = "Ctrl+Alt+Left"
+	prefs.Shortcuts.Next = "Ctrl+Alt+Right"
+	prefs.Shortcuts.Tools = "Ctrl+Alt+G"
+	prefs.Shortcuts.Usage = "Ctrl+Alt+U"
+	prefs.Shortcuts.Awake = "Ctrl+Alt+W"
+	prefs.Shortcuts.Note = "Ctrl+Alt+N"
+	prefs.Shortcuts.Pet = "Ctrl+Alt+E"
+	if err := Save(dir, prefs); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := Load(dir)
+	if err != nil || loaded.Shortcuts != prefs.Shortcuts {
+		t.Fatalf("new shortcuts did not round-trip: %+v, %v", loaded.Shortcuts, err)
+	}
+}

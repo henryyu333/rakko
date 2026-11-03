@@ -10,12 +10,15 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"rakko/internal/mac"
+	"rakko/internal/note"
 	"rakko/internal/settings"
 	"rakko/locales"
 )
@@ -576,5 +579,252 @@ func TestSettingsCheckNowRow(t *testing.T) {
 	// stubbed check finishes at once, so updateChecking is already clear.
 	if calls != 1 {
 		t.Fatalf("现在检查 did not start a check: calls=%d", calls)
+	}
+}
+
+// Every new global shortcut ships unset: a fresh install registers only the
+// three combinations it always had.
+func TestShortcutDefaultsForNewKindsAreUnset(t *testing.T) {
+	def := settings.Default().Shortcuts
+	for name, acc := range map[string]string{
+		"playPause": def.PlayPause, "previous": def.Previous, "next": def.Next,
+		"tools": def.Tools, "usage": def.Usage, "awake": def.Awake,
+		"note": def.Note, "pet": def.Pet,
+	} {
+		if acc != "" {
+			t.Fatalf("%s defaults to %q, want unset", name, acc)
+		}
+	}
+}
+
+// Launch registers every new combination settings.json holds, the
+// recording flow releases them, and restore claims them back.
+func TestRegisterShortcutsCoversNewKinds(t *testing.T) {
+	stubSettingsSeams(t, false, nil, nil)
+	f := installFakeKeys(t)
+	a := &shelf{settings: settings.Default()}
+	accs := map[shortcutKind]string{
+		shortcutPlayPause: "Ctrl+Alt+P", shortcutPrevious: "Ctrl+Alt+Left",
+		shortcutNext: "Ctrl+Alt+Right", shortcutTools: "Ctrl+Alt+G",
+		shortcutUsage: "Ctrl+Alt+U", shortcutAwake: "Ctrl+Alt+W",
+		shortcutNote: "Ctrl+Alt+N", shortcutPet: "Ctrl+Alt+E",
+	}
+	for k, acc := range accs {
+		*k.field(&a.settings.Shortcuts) = acc
+	}
+	a.registerShortcuts()
+	for k, acc := range accs {
+		if !f.has(acc) || a.shortcutHeld(k) != acc {
+			t.Fatalf("%v: registered=%v held=%q, want %q", k, f.has(acc), a.shortcutHeld(k), acc)
+		}
+	}
+	for _, acc := range []string{"Ctrl+Alt+Space", "Ctrl+Alt+V", "Ctrl+Alt+O"} {
+		if !f.has(acc) {
+			t.Fatalf("the launch registration dropped %q: %v", acc, f.regs)
+		}
+	}
+	a.suspendShortcuts()
+	for k, acc := range accs {
+		if f.has(acc) || a.shortcutHeld(k) != "" {
+			t.Fatalf("%v stayed registered while recording", k)
+		}
+	}
+	a.restoreShortcuts()
+	for k, acc := range accs {
+		if !f.has(acc) || a.shortcutHeld(k) != acc {
+			t.Fatalf("%v was not restored: %v", k, f.regs)
+		}
+	}
+}
+
+// A recorded combination on one of the new rows lands in settings.json,
+// registers at once and shows on the row.
+func TestRecordingANewShortcutSavesAndRegisters(t *testing.T) {
+	a, view, f := shortcutShelf(t)
+	openSettingsPage(t, view, "快捷键")
+	if err := view.Click(locales.In("").SettingsShortcutPlayPause()); err != nil {
+		t.Fatal(err)
+	}
+	view.Frame()
+	if a.settingsRecording != shortcutPlayPause {
+		t.Fatalf("the row did not start recording: %v", a.settingsRecording)
+	}
+	view.Key(ui.Ctrl|ui.Alt, ui.KeyP)
+	view.Frame()
+	if got := a.settings.Shortcuts.PlayPause; got != "Ctrl+Alt+P" {
+		t.Fatalf("saved play/pause = %q", got)
+	}
+	saved, err := settings.Load(a.dataDir)
+	if err != nil || saved.Shortcuts.PlayPause != "Ctrl+Alt+P" {
+		t.Fatalf("settings.json playPause = %q, %v", saved.Shortcuts.PlayPause, err)
+	}
+	if !f.has("Ctrl+Alt+P") {
+		t.Fatalf("the recorded combination is not registered: %v", f.regs)
+	}
+}
+
+// The three transport shortcuts reach the player with their own command,
+// through the same channel the home player's buttons use.
+func TestPlayerShortcutsSendTransportCommands(t *testing.T) {
+	orig := playerShortcut
+	var got []mac.NowPlayingCommand
+	playerShortcut = func(_ *shelf, cmd mac.NowPlayingCommand) { got = append(got, cmd) }
+	t.Cleanup(func() { playerShortcut = orig })
+
+	f := installFakeKeys(t)
+	a := &shelf{settings: settings.Default()}
+	a.settings.Shortcuts.PlayPause, a.settings.Shortcuts.Previous, a.settings.Shortcuts.Next =
+		"Ctrl+Alt+P", "Ctrl+Alt+Left", "Ctrl+Alt+Right"
+	a.registerShortcuts()
+	for _, acc := range []string{"Ctrl+Alt+P", "Ctrl+Alt+Left", "Ctrl+Alt+Right"} {
+		f.press(acc)
+	}
+	if !slices.Equal(got, []mac.NowPlayingCommand{mac.NPPlayPause, mac.NPPrevious, mac.NPNext}) {
+		t.Fatalf("commands = %v", got)
+	}
+}
+
+// 打开工具页 opens the panel on the tools page; 打开 AI 用量 opens its page
+// while the feature is on, and the Settings page that turns it on while off.
+func TestPageShortcutsOpenTheirPages(t *testing.T) {
+	f := installFakeKeys(t)
+	a, _ := levelShelf(t)
+	a.settings.Shortcuts.Tools = "Ctrl+Alt+G"
+	a.registerShortcuts()
+	a.visible = false
+	f.press("Ctrl+Alt+G")
+	if !a.visible || a.currentLevel() != 2 || a.currentPage().id() != pageTools {
+		t.Fatalf("tools shortcut: visible=%v level=%d page=%v",
+			a.visible, a.currentLevel(), a.currentPage().id())
+	}
+
+	// A fresh registry: the fixture shelf's own launch registration must
+	// not share the previous shelf's combinations.
+	usage := installFakeKeys(t)
+	fx := newUsageFixture(t, true)
+	fx.a.settings.Shortcuts.Usage = "Ctrl+Alt+U"
+	fx.a.registerShortcuts()
+	fx.a.visible, fx.a.level, fx.a.tab = true, 2, pageTray
+	usage.press("Ctrl+Alt+U")
+	if got := fx.a.currentPage().id(); got != pageUsage {
+		t.Fatalf("usage shortcut landed on %v", got)
+	}
+
+	// Off: the page is not on the ear bar, so the shortcut opens the
+	// Settings page that turns it on instead of landing on the tray.
+	offReg := installFakeKeys(t)
+	origOpen := settingsOpen
+	opened := false
+	settingsOpen = func(*shelf) { opened = true }
+	t.Cleanup(func() { settingsOpen = origOpen })
+	off, _ := newSettingsShelf(t)
+	off.settings.Shortcuts.Usage = "Ctrl+Alt+U"
+	off.registerShortcuts()
+	offReg.press("Ctrl+Alt+U")
+	if !opened || off.settingsPage != settingsPageAIUsage {
+		t.Fatalf("disabled usage: opened=%v page=%v", opened, off.settingsPage)
+	}
+}
+
+// 保持唤醒开 / 关 holds the same power assertion the card's tap does.
+func TestAwakeShortcutTogglesTheHold(t *testing.T) {
+	f := installFakeKeys(t)
+	power := newFakePower()
+	a := &shelf{settings: settings.Default()}
+	a.awake = newAwakeStub(power)
+	a.awake.host = a
+	a.settings.Shortcuts.Awake = "Ctrl+Alt+W"
+	a.registerShortcuts()
+	f.press("Ctrl+Alt+W")
+	if !a.awake.active() || power.held() != 1 {
+		t.Fatalf("the shortcut did not start the hold: active=%v held=%d", a.awake.active(), power.held())
+	}
+	f.press("Ctrl+Alt+W")
+	if a.awake.active() || power.held() != 0 {
+		t.Fatalf("a second press did not stop the hold: active=%v held=%d", a.awake.active(), power.held())
+	}
+}
+
+// 新建便利贴 writes a fresh empty note beside the current one and brings
+// it to the window; the note it replaces keeps its text.
+func TestNewNoteShortcutStartsANote(t *testing.T) {
+	f := installFakeKeys(t)
+	a := &shelf{dataDir: t.TempDir(), settings: settings.Default()}
+	n := a.noteSession()
+	if n == nil {
+		t.Fatal("no note session")
+	}
+	oldID := n.store.ID()
+	if err := n.store.Write("旧笔记\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := n.load(); err != nil {
+		t.Fatal(err)
+	}
+	origFront := openNoteFront
+	opened := false
+	openNoteFront = func(*noteUI) bool { opened = true; return true }
+	t.Cleanup(func() { openNoteFront = origFront })
+
+	a.settings.Shortcuts.Note = "Ctrl+Alt+N"
+	a.registerShortcuts()
+	f.press("Ctrl+Alt+N")
+	if !opened {
+		t.Fatal("the shortcut did not bring the new note up")
+	}
+	if a.note.store.ID() == oldID {
+		t.Fatal("the shortcut kept editing the old note")
+	}
+	if got, _ := os.ReadFile(filepath.Join(a.dataDir, "notes", oldID+".md")); string(got) != "旧笔记\n" {
+		t.Fatalf("the old note = %q", got)
+	}
+	docs, err := note.Docs(a.dataDir)
+	if err != nil || len(docs) != 2 {
+		t.Fatalf("notes after the shortcut = %d, %v", len(docs), err)
+	}
+	if a.note.text != "" || a.note.draft != "" {
+		t.Fatalf("the new note is not empty: %q", a.note.text)
+	}
+}
+
+// 放出 / 收回海獭 toggles the same switch the tray menu carries.
+func TestPetShortcutShowsAndHidesTheOtter(t *testing.T) {
+	f := installFakeKeys(t)
+	a := petShelf(t)
+	a.settings.Pet.Shown = false
+	a.settings.Shortcuts.Pet = "Ctrl+Alt+E"
+	a.registerShortcuts()
+	f.press("Ctrl+Alt+E")
+	if !a.settings.Pet.Shown || a.pet == nil {
+		t.Fatalf("the shortcut did not show the otter: shown=%v pet=%v", a.settings.Pet.Shown, a.pet)
+	}
+	f.press("Ctrl+Alt+E")
+	if a.settings.Pet.Shown || a.pet != nil {
+		t.Fatalf("a second press did not hide it: shown=%v pet=%v", a.settings.Pet.Shown, a.pet)
+	}
+}
+
+// The page groups the rows by what they act on and shows every new row
+// unset on a fresh install.
+func TestShortcutPageGroupsTheRows(t *testing.T) {
+	stubSettingsSeams(t, false, nil, nil)
+	_, view := newSettingsShelf(t)
+	openSettingsPage(t, view, "快捷键")
+	l := locales.In("")
+	if !view.HasText(l.SettingsKeysGlobalGroup()) {
+		t.Fatalf("the page lacks %q; texts %v", l.SettingsKeysGlobalGroup(), view.Texts())
+	}
+	for _, want := range []string{
+		l.SettingsShortcutPlaybackGroup(), l.SettingsShortcutToolsGroup(),
+		l.SettingsShortcutPlayPause(), l.SettingsShortcutPrevious(), l.SettingsShortcutNext(),
+		l.SettingsShortcutTools(), l.SettingsShortcutUsage(), l.SettingsShortcutAwake(),
+		l.SettingsShortcutNewNote(), l.SettingsShortcutPet(),
+	} {
+		if !view.HasText(want) {
+			t.Fatalf("the page lacks %q; texts %v", want, view.Texts())
+		}
+	}
+	if !view.HasText(l.SettingsShortcutNoShortcut()) {
+		t.Fatalf("an unset row does not say %q; texts %v", l.SettingsShortcutNoShortcut(), view.Texts())
 	}
 }

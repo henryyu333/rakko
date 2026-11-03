@@ -125,6 +125,27 @@ func (s *Store) Select(id string) error {
 	return nil
 }
 
+// New starts a fresh, empty note beside the others and makes it the one
+// the card edits: the file exists before current names it, so a crash
+// between the two writes leaves an unused note, never a dangling name.
+func (s *Store) New() error {
+	id, err := NewID()
+	if err != nil {
+		return err
+	}
+	prev := s.id
+	s.id = id
+	if err := s.Write(""); err != nil {
+		s.id = prev
+		return err
+	}
+	if err := s.writeID(); err != nil {
+		s.id = prev
+		return err
+	}
+	return nil
+}
+
 // Doc is one note file: its id, its text as Read would return it, and when
 // it was last written.
 type Doc struct {

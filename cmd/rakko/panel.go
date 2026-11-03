@@ -1700,6 +1700,39 @@ func (a *shelf) openPage(id pageID) {
 	a.setLevelPage(2, id)
 }
 
+// showPage opens a page's global shortcut or a card tap: the panel comes
+// up when it is closed, grows from the search bar, and lands on the page.
+// openTray is the same move for the tray, which also has a page of its own.
+func (a *shelf) showPage(id pageID) {
+	p := a.page(id)
+	if p == nil || !p.enabled() {
+		return
+	}
+	if !a.visible {
+		a.show(false)
+	}
+	if a.currentLevel() == 1 {
+		a.setLevel(2)
+	}
+	a.setTab(id)
+	if a.win != nil {
+		a.win.Invalidate()
+	}
+}
+
+// openUsagePage opens the AI 用量 page, or — while the feature is off and
+// the page is not on the ear bar — the Settings window on the page that
+// turns it on. Opening a page the panel does not offer would silently land
+// on the tray instead.
+func (a *shelf) openUsagePage() {
+	if p := a.page(pageUsage); p != nil && p.enabled() {
+		a.showPage(pageUsage)
+		return
+	}
+	settingsOpen(a)
+	a.setSettingsPage(settingsPageAIUsage)
+}
+
 // setLevel moves between the search bar (1) and the pages (2), landing on
 // the page already current. The content runs the page switch; the shell's
 // height springs to the new size.

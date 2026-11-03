@@ -89,10 +89,22 @@ type ShortcutSettings struct {
 	Clipboard string `json:"clipboard"`
 	Capture   string `json:"capture"`
 	Tray      string `json:"tray"`
+	// PlayPause, Previous and Next drive the system's now-playing app.
+	PlayPause string `json:"playPause"`
+	Previous  string `json:"previous"`
+	Next      string `json:"next"`
+	// Tools and Usage open a panel page.
+	Tools string `json:"tools"`
+	Usage string `json:"usage"`
+	// Awake toggles 保持唤醒, Note starts a new 便利贴, and Pet shows or
+	// hides the desktop otter.
+	Awake string `json:"awake"`
+	Note  string `json:"note"`
+	Pet   string `json:"pet"`
 }
 
 // The shortcut defaults: the tray toggle, clipboard search and text
-// capture ship set; opening the tray alone has none.
+// capture ship set; every other shortcut has none.
 const (
 	DefaultShortcutToggle    = "Ctrl+Alt+Space"
 	DefaultShortcutClipboard = "Ctrl+Alt+V"

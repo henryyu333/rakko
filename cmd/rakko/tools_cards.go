@@ -451,15 +451,10 @@ func (a *shelf) runToolCard(id string) bool {
 	case "playing", "recent":
 		return true // the card acts only through its own controls/thumbs
 	case "awake":
-		m := a.awake
-		if m == nil {
+		if a.awake == nil {
 			return false
 		}
-		if m.active() {
-			m.stop(time.Now())
-		} else {
-			m.start(time.Now(), time.Hour)
-		}
+		a.toggleAwake()
 		return true
 	case "clip":
 		if it, ok := a.latestClipboardItem(); ok {

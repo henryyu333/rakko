@@ -382,6 +382,12 @@ func (a *shelf) setPetShown(on bool) {
 	}
 }
 
+// togglePet is the 放出 / 收回海獭 global shortcut: the same switch the
+// tray menu's 放出海獭 and the Settings row carry, in both directions.
+func (a *shelf) togglePet() {
+	a.setPetShown(!a.settings.Pet.Shown)
+}
+
 // setPetSize saves 小 / 中 / 大 and reshapes the window around the otter's
 // feet: the bottom centre stays put, so a bigger otter stands where the
 // smaller one did.

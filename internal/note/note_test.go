@@ -418,3 +418,38 @@ func TestWatchFileArmFailureClosesEveryFD(t *testing.T) {
 		t.Fatal("the abandoned watch is not marked closed")
 	}
 }
+
+// New starts a second note, empties it and makes it the current one; the
+// note it leaves keeps its text.
+func TestNewStartsAFreshNote(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Write("旧笔记\n"); err != nil {
+		t.Fatal(err)
+	}
+	oldID, oldPath := s.ID(), s.Path()
+	if err := s.New(); err != nil {
+		t.Fatal(err)
+	}
+	if s.ID() == oldID {
+		t.Fatal("New kept the old id")
+	}
+	if text, err := s.Read(); err != nil || text != "" {
+		t.Fatalf("the new note = %q, %v", text, err)
+	}
+	if text, err := os.ReadFile(oldPath); err != nil || string(text) != "旧笔记\n" {
+		t.Fatalf("the old note = %q, %v", text, err)
+	}
+	docs, err := Docs(dir)
+	if err != nil || len(docs) != 2 {
+		t.Fatalf("notes = %d, %v", len(docs), err)
+	}
+	// A reopen keeps the new note current.
+	again, err := Open(dir)
+	if err != nil || again.ID() != s.ID() {
+		t.Fatalf("reopen = %q, %v; want %q", again.ID(), err, s.ID())
+	}
+}

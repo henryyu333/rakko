@@ -6219,6 +6219,106 @@ func (msgs Messages) SettingsShortcutOpenTray() string {
 	return Catalog.Format(msgs.locale, "settingsShortcutOpenTray", nil)
 }
 
+// SettingsShortcutPlaybackGroup says "播放"
+// in the language the app shows.
+func SettingsShortcutPlaybackGroup() string { return In(i18n.Locale()).SettingsShortcutPlaybackGroup() }
+
+// SettingsShortcutPlaybackGroup says "播放"
+// in the language of msgs.
+func (msgs Messages) SettingsShortcutPlaybackGroup() string {
+	return Catalog.Format(msgs.locale, "settingsShortcutPlaybackGroup", nil)
+}
+
+// SettingsShortcutToolsGroup says "工具"
+// in the language the app shows.
+func SettingsShortcutToolsGroup() string { return In(i18n.Locale()).SettingsShortcutToolsGroup() }
+
+// SettingsShortcutToolsGroup says "工具"
+// in the language of msgs.
+func (msgs Messages) SettingsShortcutToolsGroup() string {
+	return Catalog.Format(msgs.locale, "settingsShortcutToolsGroup", nil)
+}
+
+// SettingsShortcutPlayPause says "播放 / 暂停"
+// in the language the app shows.
+func SettingsShortcutPlayPause() string { return In(i18n.Locale()).SettingsShortcutPlayPause() }
+
+// SettingsShortcutPlayPause says "播放 / 暂停"
+// in the language of msgs.
+func (msgs Messages) SettingsShortcutPlayPause() string {
+	return Catalog.Format(msgs.locale, "settingsShortcutPlayPause", nil)
+}
+
+// SettingsShortcutPrevious says "上一首"
+// in the language the app shows.
+func SettingsShortcutPrevious() string { return In(i18n.Locale()).SettingsShortcutPrevious() }
+
+// SettingsShortcutPrevious says "上一首"
+// in the language of msgs.
+func (msgs Messages) SettingsShortcutPrevious() string {
+	return Catalog.Format(msgs.locale, "settingsShortcutPrevious", nil)
+}
+
+// SettingsShortcutNext says "下一首"
+// in the language the app shows.
+func SettingsShortcutNext() string { return In(i18n.Locale()).SettingsShortcutNext() }
+
+// SettingsShortcutNext says "下一首"
+// in the language of msgs.
+func (msgs Messages) SettingsShortcutNext() string {
+	return Catalog.Format(msgs.locale, "settingsShortcutNext", nil)
+}
+
+// SettingsShortcutTools says "打开工具页"
+// in the language the app shows.
+func SettingsShortcutTools() string { return In(i18n.Locale()).SettingsShortcutTools() }
+
+// SettingsShortcutTools says "打开工具页"
+// in the language of msgs.
+func (msgs Messages) SettingsShortcutTools() string {
+	return Catalog.Format(msgs.locale, "settingsShortcutTools", nil)
+}
+
+// SettingsShortcutUsage says "打开 AI 用量"
+// in the language the app shows.
+func SettingsShortcutUsage() string { return In(i18n.Locale()).SettingsShortcutUsage() }
+
+// SettingsShortcutUsage says "打开 AI 用量"
+// in the language of msgs.
+func (msgs Messages) SettingsShortcutUsage() string {
+	return Catalog.Format(msgs.locale, "settingsShortcutUsage", nil)
+}
+
+// SettingsShortcutAwake says "保持唤醒开 / 关"
+// in the language the app shows.
+func SettingsShortcutAwake() string { return In(i18n.Locale()).SettingsShortcutAwake() }
+
+// SettingsShortcutAwake says "保持唤醒开 / 关"
+// in the language of msgs.
+func (msgs Messages) SettingsShortcutAwake() string {
+	return Catalog.Format(msgs.locale, "settingsShortcutAwake", nil)
+}
+
+// SettingsShortcutNewNote says "新建便利贴"
+// in the language the app shows.
+func SettingsShortcutNewNote() string { return In(i18n.Locale()).SettingsShortcutNewNote() }
+
+// SettingsShortcutNewNote says "新建便利贴"
+// in the language of msgs.
+func (msgs Messages) SettingsShortcutNewNote() string {
+	return Catalog.Format(msgs.locale, "settingsShortcutNewNote", nil)
+}
+
+// SettingsShortcutPet says "放出 / 收回海獭"
+// in the language the app shows.
+func SettingsShortcutPet() string { return In(i18n.Locale()).SettingsShortcutPet() }
+
+// SettingsShortcutPet says "放出 / 收回海獭"
+// in the language of msgs.
+func (msgs Messages) SettingsShortcutPet() string {
+	return Catalog.Format(msgs.locale, "settingsShortcutPet", nil)
+}
+
 // SettingsShortcutNoShortcut says "未设置"
 // in the language the app shows.
 func SettingsShortcutNoShortcut() string { return In(i18n.Locale()).SettingsShortcutNoShortcut() }

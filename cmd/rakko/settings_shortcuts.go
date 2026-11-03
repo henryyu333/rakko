@@ -19,6 +19,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"rakko/internal/mac"
 	"rakko/internal/settings"
 )
 
@@ -31,8 +32,16 @@ const (
 	shortcutNone shortcutKind = iota
 	shortcutToggle
 	shortcutClipboard
-	shortcutCapture
 	shortcutOpenTray
+	shortcutPlayPause
+	shortcutPrevious
+	shortcutNext
+	shortcutCapture
+	shortcutTools
+	shortcutUsage
+	shortcutAwake
+	shortcutNote
+	shortcutPet
 	shortcutKindCount
 )
 
@@ -51,6 +60,22 @@ func (k shortcutKind) field(s *settings.ShortcutSettings) *string {
 		return &s.Capture
 	case shortcutOpenTray:
 		return &s.Tray
+	case shortcutPlayPause:
+		return &s.PlayPause
+	case shortcutPrevious:
+		return &s.Previous
+	case shortcutNext:
+		return &s.Next
+	case shortcutTools:
+		return &s.Tools
+	case shortcutUsage:
+		return &s.Usage
+	case shortcutAwake:
+		return &s.Awake
+	case shortcutNote:
+		return &s.Note
+	case shortcutPet:
+		return &s.Pet
 	}
 	return nil
 }
@@ -66,8 +91,32 @@ func (a *shelf) shortcutAction(k shortcutKind) func() {
 		return a.startScreenOCR
 	case shortcutOpenTray:
 		return a.openTray
+	case shortcutPlayPause:
+		return func() { playerShortcut(a, mac.NPPlayPause) }
+	case shortcutPrevious:
+		return func() { playerShortcut(a, mac.NPPrevious) }
+	case shortcutNext:
+		return func() { playerShortcut(a, mac.NPNext) }
+	case shortcutTools:
+		return func() { a.showPage(pageTools) }
+	case shortcutUsage:
+		return a.openUsagePage
+	case shortcutAwake:
+		return a.toggleAwake
+	case shortcutNote:
+		return a.newNote
+	case shortcutPet:
+		return a.togglePet
 	}
 	return func() {}
+}
+
+// playerShortcut forwards a transport command to the now-playing app; a
+// seam, so a test sees the command without a helper host.
+var playerShortcut = func(a *shelf, cmd mac.NowPlayingCommand) {
+	if a.np != nil {
+		a.np.send(cmd)
+	}
 }
 
 // shortcutAcc is the kind's saved combination, "" for none.

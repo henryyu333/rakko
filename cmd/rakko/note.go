@@ -157,6 +157,50 @@ func (n *noteUI) selectNote(id string) error {
 	return nil
 }
 
+// newNote starts a fresh note beside the current one, loads it and brings
+// its window up — the global shortcut's action.
+func (a *shelf) newNote() {
+	n := a.noteSession()
+	if n == nil {
+		return
+	}
+	if err := n.newNote(); err != nil {
+		a.report(err)
+		return
+	}
+	a.hide(hideExplicit)
+	openNoteFront(n)
+}
+
+// newNote makes a fresh empty note the one the card edits: the draft is
+// written first, so the old note never loses a sentence.
+func (n *noteUI) newNote() error {
+	if err := n.flush(); err != nil {
+		return err
+	}
+	if err := n.store.New(); err != nil {
+		return err
+	}
+	if n.watch != nil {
+		n.watch.Close()
+		n.watch = nil
+	}
+	a := n.host
+	if err := n.load(); err != nil {
+		a.report(err)
+	}
+	if w, err := note.WatchFile(n.store.Path(), func() {
+		mygo.RunOnMain(a.noteOutside)
+	}); err == nil {
+		n.watch = w
+	} else {
+		a.report(err)
+	}
+	a.noteStale()
+	n.invalidate()
+	return nil
+}
+
 // dirty reports unsaved text in the editor.
 func (n *noteUI) dirty() bool { return n.draft != n.text }
 

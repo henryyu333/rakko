@@ -66,6 +66,20 @@ func newAwakeModule(host *shelf) *awakeModule {
 	return m
 }
 
+// toggleAwake is the 保持唤醒 card's tap and its global shortcut: a hold
+// that runs stops, otherwise a one-hour hold starts.
+func (a *shelf) toggleAwake() {
+	m := a.awake
+	if m == nil {
+		return
+	}
+	if m.active() {
+		m.stop(time.Now())
+	} else {
+		m.start(time.Now(), time.Hour)
+	}
+}
+
 // awakeMenu is the 保持唤醒 submenu of the tray menu: the timed choices
 // with the current one checked, the display toggle, and 关闭 greyed out
 // while nothing is held. Rebuilt with the menu on every right-click.

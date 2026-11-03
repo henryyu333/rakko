@@ -415,21 +415,41 @@ func (a *shelf) aiQuotaCaption(t aiusage.Tool, l locales.Messages) string {
 	}
 }
 
-// settingsShortcutsPage: four editable global shortcuts (click the keycaps,
-// press the new combination) and the two the panel answers, read-only.
+// settingsShortcutsPage: the editable global shortcuts, grouped by what
+// they act on, and the two the panel answers, read-only.
 func (a *shelf) settingsShortcutsPage(c *ui.Context) {
 	l := loc(c)
 	settingsHero(c, "keys", l.SettingsShortcutsSection(), "neutral",
 		heroKeysFrom, heroKeysTo, heroKeysGlow)
 
-	settingsGroupRows(c, "keys", l.SettingsKeysGlobalGroup(), "", a.settingsBroken, func() {
+	settingsGroupRows(c, "keys-panel", l.SettingsKeysGlobalGroup(), "", a.settingsBroken, func() {
 		a.settingsShortcutRow(c, shortcutToggle, l.SettingsShortcutTray(), "")
 		settingsSep(c, "sc-toggle")
 		a.settingsShortcutRow(c, shortcutClipboard, l.SettingsShortcutClipboard(), "")
 		settingsSep(c, "sc-clipboard")
+		a.settingsShortcutRow(c, shortcutOpenTray, l.SettingsShortcutOpenTray(), "")
+	})
+
+	settingsGroupRows(c, "keys-play", l.SettingsShortcutPlaybackGroup(), "", a.settingsBroken, func() {
+		a.settingsShortcutRow(c, shortcutPlayPause, l.SettingsShortcutPlayPause(), "")
+		settingsSep(c, "sc-play")
+		a.settingsShortcutRow(c, shortcutPrevious, l.SettingsShortcutPrevious(), "")
+		settingsSep(c, "sc-prev")
+		a.settingsShortcutRow(c, shortcutNext, l.SettingsShortcutNext(), "")
+	})
+
+	settingsGroupRows(c, "keys-tools", l.SettingsShortcutToolsGroup(), "", a.settingsBroken, func() {
 		a.settingsShortcutRow(c, shortcutCapture, l.SettingsShortcutOCR(), "")
 		settingsSep(c, "sc-capture")
-		a.settingsShortcutRow(c, shortcutOpenTray, l.SettingsShortcutOpenTray(), "")
+		a.settingsShortcutRow(c, shortcutTools, l.SettingsShortcutTools(), "")
+		settingsSep(c, "sc-tools")
+		a.settingsShortcutRow(c, shortcutUsage, l.SettingsShortcutUsage(), "")
+		settingsSep(c, "sc-usage")
+		a.settingsShortcutRow(c, shortcutAwake, l.SettingsShortcutAwake(), "")
+		settingsSep(c, "sc-awake")
+		a.settingsShortcutRow(c, shortcutNote, l.SettingsShortcutNewNote(), "")
+		settingsSep(c, "sc-note")
+		a.settingsShortcutRow(c, shortcutPet, l.SettingsShortcutPet(), "")
 	})
 
 	settingsGroup(c, "keys-notch", l.SettingsKeysNotchGroup(), "", func() {
