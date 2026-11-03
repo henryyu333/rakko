@@ -232,13 +232,8 @@ func (a *shelf) basketView(c *ui.Context) {
 			}
 			ui.Icon(c, shelfSymbol).Size(28, 28).TextColor(iconColor)
 			ui.Text(c, label).FontSize(13).FontWeight(600).TextColor(ink)
-			switch {
-			case a.basket.failed && a.basket.failMsg != "":
+			if a.basket.failed && a.basket.failMsg != "" {
 				ui.Text(c, a.basket.failMsg).MaxLines(2).TextAlign(ui.Center).FontSize(11).TextColor(ink3)
-			case a.basket.failed || a.basket.dropped:
-				// 完成/失败态不再显示拖入提示副标题。
-			default:
-				ui.Text(c, l.BasketReleaseHint()).SingleLine().FontSize(11).TextColor(ink3)
 			}
 		})
 	})

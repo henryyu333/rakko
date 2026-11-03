@@ -4703,16 +4703,6 @@ func (msgs Messages) BasketFailed() string {
 	return Catalog.Format(msgs.locale, "basketFailed", nil)
 }
 
-// BasketReleaseHint says "松开即放入 Rakko"
-// in the language the app shows.
-func BasketReleaseHint() string { return In(i18n.Locale()).BasketReleaseHint() }
-
-// BasketReleaseHint says "松开即放入 Rakko"
-// in the language of msgs.
-func (msgs Messages) BasketReleaseHint() string {
-	return Catalog.Format(msgs.locale, "basketReleaseHint", nil)
-}
-
 // SnapTitle says "排列窗口"
 // in the language the app shows.
 func SnapTitle() string { return In(i18n.Locale()).SnapTitle() }
