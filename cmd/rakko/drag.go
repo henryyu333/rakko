@@ -277,7 +277,12 @@ func (a *shelf) monitorDrag(now time.Time) {
 		if !dragLeftDown() {
 			a.pointerDrag = false
 		}
+	} else {
+		// The user is dragging again: a press that asked to close during
+		// the catch is no longer what they want.
+		a.hidePending = false
 	}
+	a.settlePendingHide(now)
 	p := cursorPoint()
 	if !a.visible && !insideRect(p, a.dispBounds) {
 		a.place(p)
@@ -362,6 +367,17 @@ func (a *shelf) monitorDrag(now time.Time) {
 	}
 
 	a.basketTick(now, p)
+}
+
+// settlePendingHide closes a panel whose outside press arrived while the
+// otter was still holding a caught file. The catch owns the screen until
+// its retract ends; after that the press means what it said.
+func (a *shelf) settlePendingHide(now time.Time) {
+	if !a.hidePending || a.drop.catchOn(now) {
+		return
+	}
+	a.hidePending = false
+	a.hide(hidePassive)
 }
 func insideRect(p mygo.Point, r mygo.Rectangle) bool {
 	return p.X >= r.X && p.X < r.X+r.Width && p.Y >= r.Y && p.Y < r.Y+r.Height

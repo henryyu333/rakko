@@ -470,6 +470,7 @@ func (a *shelf) mouseDown(inside bool, button int, p mygo.Point) {
 		// Esc and Space are taken only while the panel is open; a press
 		// on the collapsed notch band or a closing panel must not hold them.
 		if a.visible {
+			a.hidePending = false // the user came back before the catch ended
 			a.holdKeys()
 			// The open panel's band is a handle, but only its blank
 			// stretches: the page icons, the activity chips, the settings
@@ -495,6 +496,13 @@ func (a *shelf) mouseDown(inside bool, button int, p mygo.Point) {
 		inMenuBar = inMenuBar || insideRect(p, a.islandRect())
 	}
 	if a.visible && !a.dragging && !inMenuBar && !insideRect(p, a.panelDropRect()) {
+		if a.drop.catchOn(time.Now()) {
+			// The otter is still holding what it just caught: the panel
+			// stays for the animation, and settlePendingHide closes it
+			// when the retract ends.
+			a.hidePending = true
+			return
+		}
 		a.hide(hidePassive)
 	}
 }
@@ -876,6 +884,7 @@ func (a *shelf) show(edge bool) {
 	if a.visible {
 		return
 	}
+	a.hidePending = false
 	// 跟随系统时，系统语言可能已经变了（用户在系统设置里改过）：每次打开
 	// 面板都按同一条规则重新解析；显式选择的语言不受影响。
 	a.followSystemLanguage()
@@ -1163,6 +1172,7 @@ func (a *shelf) hide(exit hideExit) {
 	a.noteFlush()
 	// 当前拖拽不再次触发；松开鼠标或出现新会话后解除。
 	a.suppressed = true
+	a.hidePending = false
 	a.dropHot = false
 	a.syncMousePassThrough()
 	// A suppressed drag is not pushed: the corridor parks with it.

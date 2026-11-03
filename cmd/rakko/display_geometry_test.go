@@ -4,6 +4,7 @@ package main
 
 import (
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo"
 )
@@ -215,5 +216,60 @@ func TestMouseDownMenuBarRuleOnSecondaryDisplay(t *testing.T) {
 	a.mouseDown(false, 0, mygo.Point{X: 200, Y: a.notchY + 200})
 	if a.visible {
 		t.Fatal("click on the desktop area below the menu bar must collapse the shelf")
+	}
+}
+
+// TestMouseDownOutsideWaitsForTheDropCatch: a press outside the panel
+// during the otter's catch must not collapse it before the retract ends.
+// The press is remembered and closes the panel once the animation is over;
+// a press after it, or one back inside, behaves as before.
+func TestMouseDownOutsideWaitsForTheDropCatch(t *testing.T) {
+	oldReg, oldUnreg := registerKey, unregisterKey
+	registerKey = func(string, func()) error { return nil }
+	unregisterKey = func(string) {}
+	t.Cleanup(func() { registerKey, unregisterKey = oldReg, oldUnreg })
+
+	a := secondaryShelfBelow()
+	a.visible = true
+	outside := mygo.Point{X: 200, Y: a.notchY + 200}
+	// No catch: the press closes at once.
+	a.mouseDown(false, 0, outside)
+	if a.visible || a.hidePending {
+		t.Fatalf("an ordinary outside press: visible %v pending %v", a.visible, a.hidePending)
+	}
+
+	b := secondaryShelfBelow()
+	b.visible = true
+	b.catchDrop(120, 30)
+	b.mouseDown(false, 0, outside)
+	if !b.visible || !b.hidePending {
+		t.Fatalf("press during the catch: visible %v pending %v", b.visible, b.hidePending)
+	}
+	// The tick that sees the retract over closes the panel.
+	b.drop.catchAt = time.Now().Add(-dropCatchFor - time.Millisecond)
+	b.settlePendingHide(time.Now())
+	if b.visible || b.hidePending {
+		t.Fatalf("after the catch: visible %v pending %v", b.visible, b.hidePending)
+	}
+
+	// A press after the catch ended is an ordinary dismiss.
+	c := secondaryShelfBelow()
+	c.visible = true
+	c.catchDrop(120, 30)
+	c.drop.catchAt = time.Now().Add(-dropCatchFor - time.Millisecond)
+	c.mouseDown(false, 0, outside)
+	if c.visible || c.hidePending {
+		t.Fatalf("press after the catch: visible %v pending %v", c.visible, c.hidePending)
+	}
+
+	// Coming back to the panel during the catch cancels the deferred close.
+	d := secondaryShelfBelow()
+	d.visible = true
+	d.catchDrop(120, 30)
+	d.mouseDown(false, 0, outside)
+	inside := mygo.Point{X: d.notchX + 10, Y: d.notchY + 10}
+	d.mouseDown(true, 0, inside)
+	if !d.visible || d.hidePending {
+		t.Fatalf("back inside during the catch: visible %v pending %v", d.visible, d.hidePending)
 	}
 }

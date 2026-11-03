@@ -113,6 +113,7 @@ type shelf struct {
 	selection                                                   selection
 	stopMouseObservation, stopDragObservation                   func()
 	leftSince                                                   time.Time
+	hidePending                                                 bool // a press outside waited for the drop catch to finish
 	topInset                                                    int
 	notchX, notchY, notchW, notchH                              int
 	hasNotch                                                    bool
