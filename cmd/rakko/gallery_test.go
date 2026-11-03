@@ -781,9 +781,9 @@ func galleryGroupE() []galleryItem {
 				prep(t, st, a, lang)
 			}
 			// Dates that read like a real history rather than one instant.
-			base := time.Now().Add(-20 * time.Minute)
+			base := galleryTodayAt(0, 0).AddDate(0, 0, -1)
 			for i := range st.Items {
-				st.Items[i].CreatedAt = base.Add(-time.Duration(i*4+1) * time.Hour)
+				st.Items[i].CreatedAt = base
 			}
 			a.tab, a.visible, a.level, a.progress = pageClipboard, true, 2, 1
 			a.locale = lang
@@ -978,9 +978,9 @@ func gallerySearchShelf(t *testing.T, lang string) *shelf {
 		{Path: "/Users/x/Documents/" + folder, Name: folder, Folder: true},
 		{Path: "/Users/x/Documents/" + file, Name: file},
 	}
-	base := time.Now().Add(-20 * time.Minute)
+	base := galleryTodayAt(0, 0).AddDate(0, 0, -1)
 	for i := range st.Items {
-		st.Items[i].CreatedAt = base.Add(-time.Duration(i*5+2) * time.Hour)
+		st.Items[i].CreatedAt = base
 	}
 	galleryFillThumbs(t, a, st)
 	a.spotIcons = make(map[string]*ui.Bitmap)
