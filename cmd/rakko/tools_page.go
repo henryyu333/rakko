@@ -793,7 +793,9 @@ func (p *toolsPage) pickRow(c *ui.Context, def toolCardDef, live bool) ui.Elemen
 	row.Children(func() {
 		ui.Icon(c, def.icon).Size(15, 15).TextColor(ink2)
 		panelLabel(c, nil, def.name(loc(c)), typeCallout, 0).TextColor(ink).Grow(1).MinWidth(0)
-		ui.Text(c, loc(c).CellSize(def.span, def.rows)).SingleLine().FontSize(typeMini).TextColor(ink3)
+		if def.span != 1 || def.rows != 1 {
+			ui.Text(c, loc(c).CellSize(def.span, def.rows)).SingleLine().FontSize(typeMini).TextColor(ink3)
+		}
 	})
 	if live && row.Clicked() {
 		a.mutateToolsChanged(func(l *layout.Layout) bool {

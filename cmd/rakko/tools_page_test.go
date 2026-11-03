@@ -697,13 +697,6 @@ func TestToolsPickerRowsShareTheColumns(t *testing.T) {
 	if right.X+right.W > sheetW-16 {
 		t.Fatalf("the second column ends at %v, past the card", right.X+right.W)
 	}
-	size, ok := view.Find(a.appLoc().CellSize(group[0].span, group[0].rows))
-	if !ok {
-		t.Fatalf("no size label for %q", group[0].name(a.appLoc()))
-	}
-	if size.X < left.X || size.X+size.W > left.X+left.W {
-		t.Fatalf("the left row's size %+v leaves its cell %+v", size, left)
-	}
 
 	// Point at the left row's top inner edge: the hover fill covers that
 	// cell only. The same point in the right row stays as it was.
