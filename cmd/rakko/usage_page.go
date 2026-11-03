@@ -824,17 +824,10 @@ func (f *usageFeature) scanCard(c *ui.Context) {
 					p.Fill(ui.Rect{X: r.X, Y: r.Y, W: r.W * frac, H: r.H}, progress, 2)
 				}
 			})
-			ui.Text(c, f.scanSources(c)).MaxLines(2).TextAlign(ui.Center).FontSize(9.5).TextColor(ink3)
 		default:
 			panelLabel(c, nil, l.UsageScanCounting(), 10.5, 0).TextColor(ink2)
 		}
 	})
-}
-
-// scanSources names what the scan card reads: every supported reader, so
-// the caption does not have to list six names in a 197pt column.
-func (f *usageFeature) scanSources(c *ui.Context) string {
-	return tloc(c).UsageReadOnlyAll()
 }
 
 // kpiGrid is the 2 × 2 metric block: Token, requests, cost and cache-hit

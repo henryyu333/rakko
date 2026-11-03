@@ -220,7 +220,6 @@
   "usageScanFirstPct": "第一次统计本机记录… {pct, number, ::group-off}%",
   "usageScanCounting": "正在统计本机用量…",
   "usageScanFailed": "本机记录读取失败\n稍后再试",
-  "usageReadOnlyAll": "只读本机日志",
   "usageKpiRequests": "请求",
   "usageKpiCost": "费用",
   "usageKpiCacheHit": "缓存命中",

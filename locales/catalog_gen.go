@@ -2271,16 +2271,6 @@ func (msgs Messages) UsageScanFailed() string {
 	return Catalog.Format(msgs.locale, "usageScanFailed", nil)
 }
 
-// UsageReadOnlyAll says "只读本机日志"
-// in the language the app shows.
-func UsageReadOnlyAll() string { return In(i18n.Locale()).UsageReadOnlyAll() }
-
-// UsageReadOnlyAll says "只读本机日志"
-// in the language of msgs.
-func (msgs Messages) UsageReadOnlyAll() string {
-	return Catalog.Format(msgs.locale, "usageReadOnlyAll", nil)
-}
-
 // UsageKpiRequests says "请求"
 // in the language the app shows.
 func UsageKpiRequests() string { return In(i18n.Locale()).UsageKpiRequests() }

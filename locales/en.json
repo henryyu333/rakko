@@ -220,7 +220,6 @@
   "usageScanFirstPct": "Scanning local records… {pct, number, ::group-off}%",
   "usageScanCounting": "Counting local usage…",
   "usageScanFailed": "Local records unreadable\nTry again later",
-  "usageReadOnlyAll": "Local logs only",
   "usageKpiRequests": "Requests",
   "usageKpiCost": "Cost",
   "usageKpiCacheHit": "Cache Hit",
