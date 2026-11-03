@@ -462,7 +462,7 @@ func liveIconWidth(k liveKind) float32 {
 	case liveHeadset:
 		return 0
 	case liveHeadsetOff:
-		return 18
+		return 7
 	case liveDownloadDone:
 		return 13
 	}

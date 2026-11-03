@@ -341,7 +341,7 @@ func (a *shelf) liveCapsule(c *ui.Context, shellW, shellH, k float32, ev liveEve
 					a.batteryBadge(c, ev.label, lv)
 				}
 			case liveHeadsetOff:
-				a.headsetGlyph(c, ev.label)
+				ui.Box(c.Key("live-off-dot")).Size(7, 7).Radius(3.5).Background(ink)
 				ui.Text(c, ev.label).SingleLine().FontSize(12).FontWeight(600).TextColor(ink)
 				ui.Text(c, l.LiveDisconnected()).SingleLine().FontSize(12).FontWeight(500).TextColor(ink2)
 			case liveDownloadDone:
