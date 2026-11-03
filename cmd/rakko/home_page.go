@@ -233,7 +233,7 @@ func (a *shelf) lyricsCache() *lyrics.Cache {
 // playerBody is state ②: cover, title/artist, equalizer, the seek rail and
 // the transport, centred in the page.
 func (p *homePage) playerBody(c *ui.Context, w float32, st mac.NowPlayingState) ui.Element {
-	ui.Column(c.Key("home-player")).Width(w).Height(pageBodyH).Justify(ui.Center).Children(func() {
+	ui.Column(c.Key("home-player")).Width(w).Height(pageBodyH).Justify(ui.Center).Translate(0, 23).Children(func() {
 		p.player(c, w, st)
 	})
 	return ui.Box(c).Size(0, 0)
@@ -326,7 +326,7 @@ func (p *homePage) lyricsBody(c *ui.Context, w float32, st mac.NowPlayingState) 
 	right := w - homePlayerCol - 1 - 2*18
 	ui.Row(c.Key("home-with-lyrics")).Width(w).Height(pageBodyH).Gap(18).Children(func() {
 		ui.Column(c.Key("home-left")).Width(homePlayerCol).Height(pageBodyH).
-			Justify(ui.Center).Children(func() {
+			Justify(ui.Center).Translate(0, 23).Children(func() {
 			p.player(c, homePlayerCol, st)
 		})
 		ui.Box(c.Key("home-rule")).Width(1).Height(150).Background(ui.RGBA(255, 255, 255, 0.09))
