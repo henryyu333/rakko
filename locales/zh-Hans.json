@@ -602,7 +602,7 @@
   "settingsUpdateResultDisabled": "此构建不能检查更新",
   "settingsNotchPage": "外形与提示",
   "settingsShapeGroup": "外形",
-  "settingsNotchFoot": "减少透明度时面板画成纯黑；灵动岛样式始终纯黑。",
+  "settingsNotchFoot": "减少透明度时面板画成纯黑。",
   "settingsWindowGroup": "窗口",
   "settingsTidyGroup": "整理",
   "settingsClipGroup": "记录",

@@ -602,7 +602,7 @@
   "settingsUpdateResultDisabled": "this build cannot update",
   "settingsNotchPage": "Appearance & Notifications",
   "settingsShapeGroup": "Appearance",
-  "settingsNotchFoot": "Reduce Transparency draws the panel black; the island style is always black.",
+  "settingsNotchFoot": "Reduce Transparency draws the panel black.",
   "settingsWindowGroup": "Windows",
   "settingsTidyGroup": "Keeping Things Tidy",
   "settingsClipGroup": "Recording",

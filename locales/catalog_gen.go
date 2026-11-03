@@ -6139,11 +6139,11 @@ func (msgs Messages) SettingsShapeGroup() string {
 	return Catalog.Format(msgs.locale, "settingsShapeGroup", nil)
 }
 
-// SettingsNotchFoot says "减少透明度时面板画成纯黑；灵动岛样式始终纯黑。"
+// SettingsNotchFoot says "减少透明度时面板画成纯黑。"
 // in the language the app shows.
 func SettingsNotchFoot() string { return In(i18n.Locale()).SettingsNotchFoot() }
 
-// SettingsNotchFoot says "减少透明度时面板画成纯黑；灵动岛样式始终纯黑。"
+// SettingsNotchFoot says "减少透明度时面板画成纯黑。"
 // in the language of msgs.
 func (msgs Messages) SettingsNotchFoot() string {
 	return Catalog.Format(msgs.locale, "settingsNotchFoot", nil)
