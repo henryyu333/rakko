@@ -807,6 +807,13 @@ func galleryGroupE() []galleryItem {
 		if err := st.AddClipImage(gallerySolidPNG(color.RGBA{80, 160, 120, 255}), "com.apple.Safari"); err != nil {
 			t.Fatal(err)
 		}
+		for _, item := range st.Items {
+			if item.Kind == store.KindImage {
+				if img := decodeThumb(item.Path); img != nil {
+					a.thumbnails[item.ID] = ui.NewBitmap(img)
+				}
+			}
+		}
 		if err := st.AddClipText(galleryText(lang, "识别出来的两行字", "Two recognized lines"), clipSourceOCR); err != nil {
 			t.Fatal(err)
 		}

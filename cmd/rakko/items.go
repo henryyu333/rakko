@@ -219,6 +219,12 @@ func (a *shelf) clipRow(c *ui.Context, item store.Item) {
 // clipRowIcon is the row's 16pt source-app icon, cached by bundle id, or
 // the kind's glyph when no app is known.
 func (a *shelf) clipRowIcon(c *ui.Context, item store.Item) {
+	if item.Kind == store.KindImage {
+		if thumb := a.thumbnail(item); thumb != nil {
+			ui.Image(c.Key("clip-thumb"), thumb).Size(16, 16).Radius(4).Fit(ui.Cover)
+			return
+		}
+	}
 	if item.SourceApp == clipSourceOCR {
 		// ShelfU's own recognition has no app: the 框选文字 glyph says where
 		// the words came from, like the tools card that produced them.
