@@ -403,16 +403,13 @@ func (a *shelf) resultsView(c *ui.Context, r ui.Rect, opacity float32) {
 						ui.Icon(c, fileSymbol).Size(15, 15).TextColor(ink2)
 					}
 				})
-				// A row is two lines — the name, then where it comes from —
-				// ending at the right with the category the group caption
-				// names, so every row's right edge is the same line.
+				// A row shows the name and its source beneath the group heading.
 				ui.Column(c.Key(rowKey{"hit-txt", i})).Grow(1).MinWidth(0).Gap(1).Justify(ui.Center).Children(func() {
 					ui.Text(c, hit.title).SingleLine().FontSize(13).FontWeight(600).TextColor(ink)
 					if hit.sub != "" {
 						ui.Text(c, hit.sub).SingleLine().FontSize(11.5).TextColor(ink3)
 					}
 				})
-				ui.Text(c, hit.group).SingleLine().FontSize(11.5).TextColor(ink3)
 			})
 			if row.Clicked() {
 				a.homeSel = i
