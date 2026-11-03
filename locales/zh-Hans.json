@@ -448,7 +448,6 @@
   "noteKeepOnTop": "置顶",
   "noteClose": "关闭",
   "noteUnreadable": "无法读取便利贴文件",
-  "toolsAwakeRemain": "剩 {text}",
   "dropPutInTray": "放入托盘",
   "dropTrayHint": "保存引用，随时拖出",
   "dropPdfMerged": "合成一个 PDF",

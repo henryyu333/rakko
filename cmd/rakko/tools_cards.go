@@ -592,7 +592,7 @@ func (a *shelf) awakeRemain(l locales.Messages) string {
 	if m.duration == 0 {
 		return l.AwakeAlways()
 	}
-	return l.ToolsAwakeRemain(m.remainText(time.Now()))
+	return homeAwakeRemain(l, m, time.Now())
 }
 
 // toolAwakeBody is the 保持唤醒 widget: the 1-column form centres

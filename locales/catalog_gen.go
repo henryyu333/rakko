@@ -4583,16 +4583,6 @@ func (msgs Messages) NoteUnreadable() string {
 	return Catalog.Format(msgs.locale, "noteUnreadable", nil)
 }
 
-// ToolsAwakeRemain says "剩 {text}"
-// in the language the app shows.
-func ToolsAwakeRemain(text string) string { return In(i18n.Locale()).ToolsAwakeRemain(text) }
-
-// ToolsAwakeRemain says "剩 {text}"
-// in the language of msgs.
-func (msgs Messages) ToolsAwakeRemain(text string) string {
-	return Catalog.Format(msgs.locale, "toolsAwakeRemain", map[string]any{"text": text})
-}
-
 // DropPutInTray says "放入托盘"
 // in the language the app shows.
 func DropPutInTray() string { return In(i18n.Locale()).DropPutInTray() }
