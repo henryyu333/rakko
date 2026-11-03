@@ -207,7 +207,7 @@ func (p *trayPage) body(c *ui.Context, _ bool, _ bool) ui.Element {
 	list := p.items()
 	if len(list) == 0 {
 		l := loc(c)
-		return a.emptyState(c, shelfSymbol, l.PageTrayEmptyTitle(), l.PageTrayEmptyHint())
+		return a.emptyState(c, shelfSymbol, l.PageTrayEmptyTitle(), "")
 	}
 	// 托盘网格不做滚动边缘模糊：格子是 85pt 高、5 列一块，比模糊边带
 	// 宽得多，任何模糊都会落到整块缩略图和文件名上，而不是把半行融进

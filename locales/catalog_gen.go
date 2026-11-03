@@ -5227,16 +5227,6 @@ func (msgs Messages) PageTrayEmptyTitle() string {
 	return Catalog.Format(msgs.locale, "pageTrayEmptyTitle", nil)
 }
 
-// PageTrayEmptyHint says "文件、文件夹、文字和图片\n复制的文字与截图也会自动收好"
-// in the language the app shows.
-func PageTrayEmptyHint() string { return In(i18n.Locale()).PageTrayEmptyHint() }
-
-// PageTrayEmptyHint says "文件、文件夹、文字和图片\n复制的文字与截图也会自动收好"
-// in the language of msgs.
-func (msgs Messages) PageTrayEmptyHint() string {
-	return Catalog.Format(msgs.locale, "pageTrayEmptyHint", nil)
-}
-
 // PageClipEmptyTitle says "还没有剪贴板记录"
 // in the language the app shows.
 func PageClipEmptyTitle() string { return In(i18n.Locale()).PageClipEmptyTitle() }

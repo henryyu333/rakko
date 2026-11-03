@@ -1358,7 +1358,9 @@ func (a *shelf) emptyState(c *ui.Context, icon *ui.SVG, title, hint string) ui.E
 	return ui.Column(c).Grow(1).Center().Gap(8).Children(func() {
 		ui.Icon(c, icon).Size(28, 28).TextColor(ink3)
 		panelLabel(c, nil, title, 13, 500).TextColor(ink2)
-		panelLabel(c, nil, hint, 11, 0).TextAlign(ui.Center).TextColor(ink3)
+		if hint != "" {
+			panelLabel(c, nil, hint, 11, 0).TextAlign(ui.Center).TextColor(ink3)
+		}
 	})
 }
 

@@ -512,7 +512,6 @@
   "pageMultiHint": "⌘ / ⇧ to select",
   "pageSelectedCount": "{n, number, ::group-off} selected",
   "pageTrayEmptyTitle": "Drop Files Here",
-  "pageTrayEmptyHint": "Files, folders, text and images\nCopied text and screenshots are saved here too",
   "pageClipEmptyTitle": "No Clipboard Items Yet",
   "pageClipEmptyHint": "Press ⌘C in any app to save text and screenshots here",
   "pageClipNoMatchTitle": "No matching content",
