@@ -279,7 +279,6 @@
   "renameStartNotNumber": "起始号需要是数字",
   "renameConflicts": "有 {n, number, ::group-off} 项冲突，解决后才能改名",
   "renameNoChange": "名字没有变化",
-  "renameWillChange": "将重新命名 {n, number, ::group-off} 项",
   "renameCancel": "取消",
   "renameCancelLabel": "取消改名",
   "renameApply": "改名",

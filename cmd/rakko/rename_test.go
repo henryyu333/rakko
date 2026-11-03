@@ -172,7 +172,7 @@ func TestRenameViewReplaceApplies(t *testing.T) {
 	}
 	view.Type("照片")
 	view.Frame()
-	if !view.HasText("照片 1.jpg") || !view.HasText("将重新命名 2 项") {
+	if !view.HasText("照片 1.jpg") {
 		t.Fatalf("live preview did not update: %v", view.Texts())
 	}
 	if err := view.Click("应用改名"); err != nil {
@@ -301,8 +301,8 @@ func TestRenameViewConflictBlocksApply(t *testing.T) {
 	// Fixing the conflict re-enables the apply.
 	r.replace = "renamed"
 	view.Frame()
-	if !view.HasText("将重新命名 1 项") {
-		t.Fatalf("resolved conflict must re-enable: %v", view.Texts())
+	if r.blocked(r.plan()) {
+		t.Fatal("resolved conflict must re-enable apply")
 	}
 }
 

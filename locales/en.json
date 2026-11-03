@@ -279,7 +279,6 @@
   "renameStartNotNumber": "The start number must be a number",
   "renameConflicts": "{n, plural, one {{n, number, ::group-off} conflict} other {{n, number, ::group-off} conflicts}} to resolve before renaming",
   "renameNoChange": "No name changes",
-  "renameWillChange": "Will rename {n, plural, one {{n, number, ::group-off} item} other {{n, number, ::group-off} items}}",
   "renameCancel": "Cancel",
   "renameCancelLabel": "Cancel Rename",
   "renameApply": "Rename",

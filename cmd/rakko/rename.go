@@ -545,14 +545,8 @@ func (a *shelf) renameView(c *ui.Context) {
 // look (label left, control right) on a grouped card.
 func (r *renameUI) inputSection(c *ui.Context) {
 	l := loc(c)
-	title := l.RenameModeReplace()
-	switch renameMode(r.mode) {
-	case modeAdd:
-		title = l.RenameModeAdd()
-	case modeFormat:
-		title = l.RenameModeFormat()
-	}
-	settingsSection(c, title, "", false, func() {
+	ui.Column(c.Key("rename-input-card")).Radius(14).Background(setCard).
+		Border(1, setCardEdge).FillWidth().Children(func() {
 		switch renameMode(r.mode) {
 		case modeReplace:
 			settingsRow(c, "rn-find", l.RenameFindRow(), "", func() {
@@ -666,10 +660,14 @@ func (r *renameUI) previewSection(c *ui.Context) {
 			foot = l.RenameConflicts(pl.conflicts)
 		case pl.changed == 0:
 			foot = l.RenameNoChange()
-		default:
-			foot = l.RenameWillChange(pl.changed)
 		}
-		ui.Text(c, foot).FontSize(11).TextColor(ink3).Padding(4, 12, 0, 12)
+		if foot != "" {
+			color := ink3
+			if pl.conflicts > 0 {
+				color = danger
+			}
+			ui.Text(c, foot).FontSize(11).TextColor(color).Padding(4, 12, 0, 12)
+		}
 	})
 }
 

@@ -2871,16 +2871,6 @@ func (msgs Messages) RenameNoChange() string {
 	return Catalog.Format(msgs.locale, "renameNoChange", nil)
 }
 
-// RenameWillChange says "将重新命名 {n, number, ::group-off} 项"
-// in the language the app shows.
-func RenameWillChange(n int) string { return In(i18n.Locale()).RenameWillChange(n) }
-
-// RenameWillChange says "将重新命名 {n, number, ::group-off} 项"
-// in the language of msgs.
-func (msgs Messages) RenameWillChange(n int) string {
-	return Catalog.Format(msgs.locale, "renameWillChange", map[string]any{"n": n})
-}
-
 // RenameCancel says "取消"
 // in the language the app shows.
 func RenameCancel() string { return In(i18n.Locale()).RenameCancel() }
