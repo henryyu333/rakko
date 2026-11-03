@@ -310,7 +310,7 @@ func (a *shelf) toolCardBody(c *ui.Context, card ui.Element, def *toolCardDef, s
 			a.toolPlayingTall(c, card, surf)
 			return
 		}
-		a.toolPlayingBody(c, card)
+		a.toolPlayingBody(c, card, span)
 	case "awake":
 		a.toolAwakeBody(c, card, span)
 	case "recent":
@@ -1013,7 +1013,7 @@ func (a *shelf) toolPlayingTallBars(c *ui.Context, st mac.NowPlayingState, ctrlG
 // 歌手 · 应用 meta, and the transport buttons — the activity strip's
 // parts in card form (design §3: 按钮就地控制). No track collapses to a
 // quiet name-only card.
-func (a *shelf) toolPlayingBody(c *ui.Context, card ui.Element) {
+func (a *shelf) toolPlayingBody(c *ui.Context, card ui.Element, span int) {
 	m := a.np
 	if m == nil {
 		card.Center().Gap(5).Children(func() {
@@ -1028,6 +1028,18 @@ func (a *shelf) toolPlayingBody(c *ui.Context, card ui.Element) {
 			ui.Icon(c, musicSymbol).Size(20, 20).TextColor(ink3)
 			panelLabel(c, nil, loc(c).NowPlaying(), 12, 600).TextColor(ink)
 			panelLabel(c, nil, loc(c).NothingPlaying(), 10, 0).TextColor(ink3)
+		})
+		return
+	}
+	if span == 1 {
+		card.Center().Children(func() {
+			ui.Box(c.Key("tc-np-compact")).Size(52, 52).Center().Children(func() {
+				m.coverArt(c, "tc-np-art", 52, 10)
+				ui.Box(c.Key("tc-np-overlay")).Absolute().Top(10).Left(10).
+					Size(32, 32).Radius(16).Background(ui.RGBA(0, 0, 0, 0.6)).Center().Children(func() {
+					m.controlButton(c, "tc-np-toggle", toggleSymbol(st.Playing), playPauseText(loc(c), st.Playing), mac.NPPlayPause, 32, 18)
+				})
+			})
 		})
 		return
 	}
