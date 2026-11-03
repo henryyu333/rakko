@@ -433,9 +433,8 @@ func (a *shelf) settingsShortcutsPage(c *ui.Context) {
 		settingsSep(c, "sc-clipboard")
 		a.settingsShortcutRow(c, shortcutCapture, l.SettingsShortcutOCR(), "")
 		settingsSep(c, "sc-capture")
-		a.settingsShortcutRow(c, shortcutOpenTray, l.SettingsShortcutOpenTray(), l.SettingsShortcutTrayCaption())
+		a.settingsShortcutRow(c, shortcutOpenTray, l.SettingsShortcutOpenTray(), "")
 	})
-	settingsFootnote(c, "keys-foot", l.SettingsKeysFoot())
 
 	settingsGroup(c, "keys-notch", l.SettingsKeysNotchGroup(), "", func() {
 		settingsReadonlyShortcutRow(c, "sc-esc", l.SettingsShortcutEscRow(), l.SettingsShortcutEscCaption(),

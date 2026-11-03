@@ -406,7 +406,7 @@ func acceleratorKey(key ui.Key) (string, bool) {
 // shortcutTokens splits an accelerator into the keycaps the page draws:
 // modifiers as glyphs ("⌃", "⌥", "⌘", "⇧") and the key as it is spelled.
 // ok is false for an empty or malformed accelerator, so the row can show
-// 「点一下设置」 instead of claiming a shortcut.
+// 「未设置」 instead of claiming a shortcut.
 func shortcutTokens(acc string) (tokens []string, ok bool) {
 	if strings.TrimSpace(acc) == "" {
 		return nil, false

@@ -6209,16 +6209,6 @@ func (msgs Messages) SettingsKeysNotchGroup() string {
 	return Catalog.Format(msgs.locale, "settingsKeysNotchGroup", nil)
 }
 
-// SettingsKeysFoot says "和其他应用或系统快捷键冲突时，这一行显示「已被占用」，保留原来的组合。"
-// in the language the app shows.
-func SettingsKeysFoot() string { return In(i18n.Locale()).SettingsKeysFoot() }
-
-// SettingsKeysFoot says "和其他应用或系统快捷键冲突时，这一行显示「已被占用」，保留原来的组合。"
-// in the language of msgs.
-func (msgs Messages) SettingsKeysFoot() string {
-	return Catalog.Format(msgs.locale, "settingsKeysFoot", nil)
-}
-
 // SettingsShortcutOpenTray says "打开托盘"
 // in the language the app shows.
 func SettingsShortcutOpenTray() string { return In(i18n.Locale()).SettingsShortcutOpenTray() }
@@ -6229,21 +6219,11 @@ func (msgs Messages) SettingsShortcutOpenTray() string {
 	return Catalog.Format(msgs.locale, "settingsShortcutOpenTray", nil)
 }
 
-// SettingsShortcutTrayCaption says "默认不设置"
-// in the language the app shows.
-func SettingsShortcutTrayCaption() string { return In(i18n.Locale()).SettingsShortcutTrayCaption() }
-
-// SettingsShortcutTrayCaption says "默认不设置"
-// in the language of msgs.
-func (msgs Messages) SettingsShortcutTrayCaption() string {
-	return Catalog.Format(msgs.locale, "settingsShortcutTrayCaption", nil)
-}
-
-// SettingsShortcutNoShortcut says "点一下设置"
+// SettingsShortcutNoShortcut says "未设置"
 // in the language the app shows.
 func SettingsShortcutNoShortcut() string { return In(i18n.Locale()).SettingsShortcutNoShortcut() }
 
-// SettingsShortcutNoShortcut says "点一下设置"
+// SettingsShortcutNoShortcut says "未设置"
 // in the language of msgs.
 func (msgs Messages) SettingsShortcutNoShortcut() string {
 	return Catalog.Format(msgs.locale, "settingsShortcutNoShortcut", nil)
