@@ -112,8 +112,8 @@ func (a *shelf) tileThumb(c *ui.Context, item store.Item) {
 			})
 			return
 		}
-		box.Radius(8).Background(fill2).AlignItems(ui.Start).Justify(ui.Start).Clip().Children(func() {
-			ui.Text(c, text).MaxLines(2).FontSize(7.5).TextColor(ink2).Padding(4, 4, 0, 4)
+		box.Radius(8).Background(fill2).Padding(4, 4, 4, 4).AlignItems(ui.Start).Justify(ui.Start).Clip().Children(func() {
+			ui.Text(c, text).Width(tileArt - 8).MaxLines(2).FontSize(7.5).TextColor(ink2)
 		})
 		return
 	}
