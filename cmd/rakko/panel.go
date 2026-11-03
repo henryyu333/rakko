@@ -1373,9 +1373,6 @@ func (a *shelf) toastLayer(c *ui.Context, over bool) {
 		AlignItems(ui.Center).Gap(6).PassThrough()
 	stack.Children(func() {
 		l := loc(c)
-		if a.tab == pageClipboard && (a.focusMode || a.search != "") && len(a.itemsFor(pageClipboard)) > 0 {
-			a.pill(c, "hint", l.PanelSearchHint(), false)
-		}
 		if a.status != "" {
 			a.statusToast(c)
 		}

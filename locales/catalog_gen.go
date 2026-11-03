@@ -5383,16 +5383,6 @@ func (msgs Messages) PanelSearch() string {
 	return Catalog.Format(msgs.locale, "panelSearch", nil)
 }
 
-// PanelSearchHint says "↑↓ 选择 · ↩ 复制并返回 · Esc 关闭"
-// in the language the app shows.
-func PanelSearchHint() string { return In(i18n.Locale()).PanelSearchHint() }
-
-// PanelSearchHint says "↑↓ 选择 · ↩ 复制并返回 · Esc 关闭"
-// in the language of msgs.
-func (msgs Messages) PanelSearchHint() string {
-	return Catalog.Format(msgs.locale, "panelSearchHint", nil)
-}
-
 // PanelRestart says "重新启动"
 // in the language the app shows.
 func PanelRestart() string { return In(i18n.Locale()).PanelRestart() }

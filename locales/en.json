@@ -528,7 +528,6 @@
   "panelExpand": "Expand Rakko",
   "panelExpandText": "Expand Rakko · {text}",
   "panelSearch": "Search Clipboard",
-  "panelSearchHint": "↑↓ Select · ↩ Copy and Close · Esc Close",
   "panelRestart": "Restart",
   "panelRestartLabel": "Restart Rakko to Finish Updating",
   "panelInstallUpdate": "Install Update {version}",

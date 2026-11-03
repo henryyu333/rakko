@@ -528,7 +528,6 @@
   "panelExpand": "展开 Rakko",
   "panelExpandText": "展开 Rakko · {text}",
   "panelSearch": "搜索剪贴板",
-  "panelSearchHint": "↑↓ 选择 · ↩ 复制并返回 · Esc 关闭",
   "panelRestart": "重新启动",
   "panelRestartLabel": "重新启动 Rakko 完成更新",
   "panelInstallUpdate": "安装更新 {version}",
