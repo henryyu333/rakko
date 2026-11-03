@@ -339,13 +339,20 @@ func (a *shelf) spotIcon(path string) *ui.Bitmap {
 	}
 	a.spotPending[path] = true
 	go func() {
-		// The Finder icon is an AppKit call: ask for it on the main thread,
-		// then decode and scale the PNG here, off the main thread.
-		var png []byte
-		runOnMain(func() { png = fileIcon(path, 40) })
 		var b *ui.Bitmap
-		if len(png) > 0 {
-			b, _ = ui.DecodeBitmap(png)
+		if imageExts[strings.ToLower(filepath.Ext(path))] {
+			if img := decodeThumb(path); img != nil {
+				b = ui.NewBitmap(img)
+			} else if img, err := mac.Thumbnail(path, thumbPx); err == nil && img != nil {
+				b = ui.NewBitmap(img)
+			}
+		}
+		if b == nil {
+			var png []byte
+			runOnMain(func() { png = fileIcon(path, 40) })
+			if len(png) > 0 {
+				b, _ = ui.DecodeBitmap(png)
+			}
 		}
 		a.onUI(func() {
 			delete(a.spotPending, path)

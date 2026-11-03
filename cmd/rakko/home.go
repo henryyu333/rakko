@@ -106,7 +106,7 @@ func (a *shelf) homeHits() []homeHit {
 					}})
 			case it.Kind != store.KindText && !it.OffTray && !it.Missing:
 				trayPaths = append(trayPaths, it.Path)
-				tray = append(tray, homeHit{group: l.HomeGroupTray(), icon: fileSymbol, title: title,
+				tray = append(tray, homeHit{group: l.HomeGroupTray(), icon: fileSymbol, path: it.Path, title: title,
 					sub: relativeTime(l, it.CreatedAt, now), run: func() {
 						if err := mygo.Shell.OpenPath(it.Path); err != nil {
 							a.report(err)
@@ -396,7 +396,10 @@ func (a *shelf) resultsView(c *ui.Context, r ui.Rect, opacity float32) {
 					bmp := hit.bitmap(a)
 					switch {
 					case bmp != nil:
-						ui.Image(c.Key(rowKey{"hit-img", i}), bmp).Size(19, 19)
+						im := ui.Image(c.Key(rowKey{"hit-img", i}), bmp).Size(19, 19)
+						if imageExts[strings.ToLower(filepath.Ext(hit.path))] {
+							im.Radius(4).Fit(ui.Cover)
+						}
 					case hit.icon != nil:
 						ui.Icon(c, hit.icon).Size(15, 15).TextColor(ink2)
 					default:
