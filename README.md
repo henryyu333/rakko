@@ -56,7 +56,7 @@ It lives in the menu bar, has no Dock icon, keeps everything on your Mac, and ne
 
 **Clipboard history**
 - Text you copy is kept automatically, along with the app it came from. Screenshots and copied images land on the shelf too.
-- Press `⌃⌥V` to search: type to filter, ↑/↓ to choose, ⏎ copies it and takes you back to the app you were in. Text inside screenshots and copied pictures is recognized on this Mac and searchable too; right-click a picture → Copy Recognized Text to copy what it says.
+- Press `⌃⌥V` to search: type to filter — the first match is already selected and marked ↩ Copy — ↑/↓ to choose, ⏎ copies it and takes you back to the app you were in. Text inside screenshots and copied pictures is recognized on this Mac and searchable too; right-click a picture → Copy Recognized Text to copy what it says.
 - Pin what matters. Exclude apps you never want recorded. Passwords that password managers mark as private are skipped.
 
 **Sticky notes**
@@ -69,7 +69,7 @@ It lives in the menu bar, has no Dock icon, keeps everything on your Mac, and ne
 - Home is the player while something plays or stays paused: the cover, the title and artist, an equalizer that moves while the track plays, a progress bar you drag to skip with the elapsed time on its left and what is left on its right, previous, play-pause and next, and the lyrics button at the bottom left.
 - The lyrics button opens a column beside the player and the page widens to 640. Synced lyrics scroll there with the current line bold; Rakko asks lrclib.net first and NetEase Cloud Music when lrclib.net has none or is busy. While the lookup runs the column says Finding lyrics…, a finished lookup with nothing to show says No lyrics found for this song, and a failed one says Lyrics are unavailable right now and tries again after 30 seconds. The column is closed on a fresh install and the choice is remembered; only an open column asks for lyrics.
 - With nothing playing Home shows the otter — asleep after ten quiet minutes — with today's date and weekday, and up to three lines: the newest agent turn running or just finished (only while Agent Completion notices are on), how many files the Tray holds, and either how much Keep Awake time is left or the tightest AI quota.
-- The music widget is still a card on the Tools page: at 2 × 2 it is the full player with the volume bar for your default output device, at 2 × 1 the cover, title, artist and the transport buttons, at 1 × 1 the smallest form. A tap on the card itself, beside its own buttons, opens Home.
+- The music widget is still a card on the Tools page: at 2 × 2 it is the full player with the volume bar for your default output device, at 2 × 1 the cover, title, artist and the transport buttons, at 1 × 1 the cover with a play/pause button on it. A tap on the card itself, beside its own buttons, opens Home.
 
 **AI usage** (optional, off by default)
 - Turn it on in Settings → AI Usage → Show AI Usage in the Notch and the panel gains one more page icon. The page fits one screen and never scrolls: the left column holds a double-ring card per tool — outer ring weekly, inner ring 5-hour — and the right column holds this Mac's total token usage over Today / 7D / 30D / All, as four numbers (tokens, requests, cost, cache hits) and one chart. Hover a card for its plan, reset times, the even-pace mark and any per-model weekly limits; hover a number for its parts.
@@ -109,13 +109,13 @@ A tool counts as installed only by files it writes itself, so a stray `~/.claude
 - While it is on, every open page shows a moon in its top row: hover it for the time left, click it to end the hold.
 
 **Search bar and pages**
-- A click on the notch (or `⌃⌥Space`) grows a black search bar out of it and puts the keyboard in its field. Type to search this Mac: the sheet under the bar lists the Tray, the Clipboard and your sticky notes first, then apps, folders, files and actions. A row is two lines — the name, then the folder it lives in, the app it came from and the time, or the time — with its category on the right. ↑/↓ chooses a row, ⏎ opens it (or copies the text, brings up the note, or runs the action), and ⌘⏎ shows a file in the Finder. The action bar inside the sheet's last row names both keys: Open ↩, and Show in Finder ⌘↩ for files, folders and apps.
+- A click on the notch (or `⌃⌥Space`) grows a black search bar out of it and puts the keyboard in its field. Type to search this Mac: the sheet under the bar lists the Tray, the Clipboard and your sticky notes first, then apps, folders, files and actions. A row is two lines — the name (pictures show a thumbnail), then the folder it lives in, the app it came from and the time, or the time. ↑/↓ chooses a row, ⏎ opens it (or copies the text, brings up the note, or runs the action), and ⌘⏎ shows a file in the Finder. The action bar inside the sheet's last row names both keys: Open ↩, and Show in Finder ⌘↩ for files, folders and apps.
 - The capsule hanging under the bar carries the pages — Home, Tray, Clipboard, Tools, and AI Usage when it is on — beside Settings and Collapse. A page grows out of the notch in the bar's place; the current page's button takes you back to the bar.
 - Esc steps back: a page returns to the search bar, a typed query clears first, and the next Esc folds the panel into the notch.
 
 **Tools page**
 - Tools is one grid: the action cards and the widgets live together. A new install fits exactly two rows with no scrolling: the music widget at 2 × 2, Keep Awake and AI Usage at 1 × 1 (Fit 1 MB takes that cell while AI Usage is off), then Capture Text and Zip. Every other card and widget — AirDrop, Sticky Note and the rest — is in the + catalogue. A layout you already have stays as it is. The grid scrolls inside the page when it holds more than two rows.
-- Only a real drag of files over the panel dims the action cards that cannot take them. Widgets and cards pinned to the desktop stay as they are.
+- Only a real drag of files over the panel dims the action cards that cannot take them. While a conversion runs, the action cards dim and refuse taps. Widgets and cards pinned to the desktop stay as they are.
 - Tap an action card to run it on the pictures or files selected on the shelf, or drop files straight onto it. Tap the Sticky Note card to open its window; tap it again to close. Tap the music card itself, beside its buttons, to open Home and its player.
 - Long-press a card (or click the pencil) to edit: drag to reorder, ⊖ to remove, the corner handle to cycle the sizes a widget offers (1 × 1, 2 × 1, 2 × 2), and the dashed + cell to add a card from the catalogue. Done or Esc to finish. Drag a card out of the panel to keep it on the desktop.
 
@@ -128,8 +128,8 @@ A tool counts as installed only by files it writes itself, so a stray `~/.claude
 - Needs Screen Recording permission — see [Optional](#optional).
 
 **Live activities**
-- Plug in the charger and the notch widens for a few seconds: Charging on the left, a green level bar and the percentage on the right. It also tells you once when the battery is full, and once at 20 % and 10 % while on battery.
-- Connect Bluetooth headphones and the notch shows their name — for AirPods, the left, right and case levels when macOS reports them — and again when they disconnect.
+- Plug in the charger and the notch widens for a few seconds: a bolt on the left, a green level bar and the percentage on the right. It also tells you once when the battery is full, and once at 20 % and 10 % while on battery.
+- Connect Bluetooth headphones and the notch shows their name with the system symbol for the model. When macOS reports a level for each part, the left bud, right bud and case each get an icon, a battery ring and the percentage, the ring turning red at 20 % or below. The notice shows again when they disconnect.
 - While a browser downloads into Downloads, the notch shows a progress ring and the percentage (or the size so far); when the download finishes, click the notice to put the file on the Tray. Several downloads that finish together share one notice, and a click puts all of them on the tray. Needs Full Disk Access — see [Optional](#optional).
 - Each one can be turned off in Settings → Appearance → Live Activities.
 
@@ -149,11 +149,12 @@ A tool counts as installed only by files it writes itself, so a stray `~/.claude
 - Dates and times follow the Mac's region and its 12- or 24-hour setting, whatever the interface language. The Services menu item, Add to Rakko, follows the system language.
 
 **Quiet by design**
-- One shortcut, `⌃⌥Space`, opens the search bar or closes the shelf; clicking anywhere else tucks it away, and Esc steps back one level at a time — a page returns to the search bar, a typed query clears first, and the bar folds into the notch.
+- Show / Hide (`⌃⌥Space`) opens the search bar or closes the shelf; clicking anywhere else tucks it away, and Esc steps back one level at a time — a page returns to the search bar, a typed query clears first, and the bar folds into the notch.
 - Reduce Transparency draws the panel pure black; Reduce Motion keeps the fades and drops the travel and bounce. Secondary text — times, counts, captions — is drawn brighter than before, so it stays readable on black.
 - Every page switch is one fade: the page you leave fades out while the new page fades in. Over the open panel the pointer stays a plain arrow.
 - Settings… is a normal window with a sidebar: General (Open at Login, Language, automatic updates with Check Now), Appearance (notch style, island position, desktop otter, live activities, snap windows), Tray, Clipboard, AI Usage (display, quota, Agent Completion), Shortcuts, System Permissions and About. The sidebar's footer says whether every permission is on; About holds the version, Check Now, the source link and the data folder. Every control applies at once.
-- The four global shortcuts can be changed in Settings → Shortcuts: click a row, press the new keys, Delete to clear it, Esc to cancel. Show / Hide is `⌃⌥Space`, Clipboard Search `⌃⌥V`, Capture Text `⌃⌥O`, and Open Tray has none until you set one. A combination another app already holds leaves the previous shortcut in place.
+- Twelve global shortcuts live in Settings → Shortcuts, in three groups: Global Shortcuts (Show / Hide `⌃⌥Space`, Clipboard Search `⌃⌥V`, Open Tray), Playback (Play / Pause, Previous Track, Next Track) and Tools (Capture Text `⌃⌥O`, Open Tools, Open AI Usage, Toggle Keep Awake, New Note, Show or Hide the Otter). Only the three with defaults start set; every other row says Not Set. Click a row and press the new keys: a key with ⌃, ⌥ or ⌘ saves at once; F1–F12, the arrows, Home, End, PageUp, PageDown and Insert work alone or with ⇧; a key that types text asks first — "X" will be taken from every app — with Use Anyway or Cancel. Delete clears the row, Esc cancels, and a combination another app already holds leaves the previous one in place.
+- Pressing Clipboard Search, Open Tray, Open Tools or Open AI Usage while that page is already showing closes the panel. With AI Usage off, its shortcut opens Settings → AI Usage.
 - Updates are checked against this repository's GitHub releases. Rakko tells you when one is out and installs it only when you say so. Settings → General → Updates is where it lives: the last check's time and result, Check Now, and — once a version is downloaded — a Restart button; the pill at the bottom of the panel offers the same restart.
 
 <a id="install"></a>
@@ -314,7 +315,7 @@ Rakko 是住在 Mac 刘海里的工具：它把摄像头周围那块黑色刘海
 
 **剪贴板记录**
 - 复制过的文字会自动收好，并记住来自哪个应用；截图和复制的图片也会进托盘。
-- 按 `⌃⌥V` 搜索：输入即筛选，`↑`/`↓` 选择，回车复制并回到你原来的应用。截图和复制的图片里的文字会在本机识别，也能搜到；右键图片 →「识别文字并复制」可以直接复制图中文字。
+- 按 `⌃⌥V` 搜索：输入即筛选，第一条自动选中，选中行右侧写「↩ 复制」；`↑`/`↓` 选择，回车复制并回到你原来的应用。截图和复制的图片里的文字会在本机识别，也能搜到；右键图片 →「识别文字并复制」可以直接复制图中文字。
 - 重要的内容可以置顶；不想被记录的应用可以排除；密码管理器标记为隐私的密码不会被记录。
 
 **便利贴**
@@ -327,7 +328,7 @@ Rakko 是住在 Mac 刘海里的工具：它把摄像头周围那块黑色刘海
 - 有歌在放、或者只是暂停着，首页就是播放器：封面、歌名和歌手，播放时音频条在跳动，可拖动跳转的进度条左边是已经播了多久、右边是还剩多久，中间是上一首 / 播放暂停 / 下一首，左下角是歌词按钮。
 - 点左下角的歌词按钮，播放器右边多出一栏歌词，页面加宽到 640。同步歌词在这里滚动，当前一行是粗体；先问 lrclib.net，它没有或太忙时再问网易云音乐。找的时候写「正在找歌词…」，找不到写「没有找到这首歌的歌词」，取不到写「歌词暂时取不到」，30 秒后再试。全新安装时这一栏是关着的，开关记在 `settings.json` 的 `lyrics` 里；只有打开它才会去查歌词。
 - 没有歌在放时，首页是海獭陪着你——安静十分钟后它打瞌睡——旁边是今天的日期和星期，下面最多三行：最近一轮 agent 是正在做还是刚做完（只在打开「Agent 完成提醒」时出现）、托盘里有多少个文件、保持唤醒还剩多久；没有开启保持唤醒时，这一行是剩余最少的那个 AI 额度（AI 用量页关着时不显示）。
-- 音乐小组件仍留在工具页：2×2 是完整播放器，带系统默认输出设备的音量条；2×1 显示封面、歌名、歌手和上一首 / 播放暂停 / 下一首；1×1 是最小的样子。点卡片本身（不是卡片上的按钮）打开首页。
+- 音乐小组件仍留在工具页：2×2 是完整播放器，带系统默认输出设备的音量条；2×1 显示封面、歌名、歌手和上一首 / 播放暂停 / 下一首；1×1 只有封面，上面盖着播放 / 暂停按钮。点卡片本身（不是卡片上的按钮）打开首页。
 
 **AI 用量**（可选，默认关闭）
 - 在 设置… →「AI 用量」→「在刘海里显示 AI 用量」打开后，顶栏会多出一个页面图标。整页一屏看全，不用滚动：左栏是 Claude Code、Codex 的套餐额度卡（每张卡内外双圈：外圈每周、内圈 5 小时），右栏是这台电脑上的 token 用量总量——今天 / 7 天 / 30 天 / 全部，四个数字（Token、请求、费用、缓存命中）和一根柱图。悬停额度卡可以看到套餐名、重置时间、均匀消耗标记和按模型的每周额度；悬停数字可以看到它的组成部分。
@@ -367,13 +368,13 @@ Rakko 是住在 Mac 刘海里的工具：它把摄像头周围那块黑色刘海
 - 开启后，打开任何一页都能在顶栏看到一个月亮图标：鼠标停在上面看剩余时间，点一下结束。
 
 **搜索条与页面**
-- 点刘海（或按 `⌃⌥Space`）从刘海里长出一条黑色搜索条，键盘直接进输入框。输入就能搜整台 Mac：下方结果面板先列托盘、剪贴板、便利贴，再列应用、文件夹、文件和动作；每一行是两行字——名字，下面是所在文件夹 / 来源应用 · 时间 / 时间——右边是它所属的分类。`↑`/`↓` 选择，回车打开（文字则复制，便利贴则打开它的窗口，动作则执行），`⌘回车` 在 Finder 中显示。面板最后一行的动作条把两个键写出来：「打开 ↩」，文件和文件夹、应用还有「在 Finder 中显示 ⌘↩」。
+- 点刘海（或按 `⌃⌥Space`）从刘海里长出一条黑色搜索条，键盘直接进输入框。输入就能搜整台 Mac：下方结果面板先列托盘、剪贴板、便利贴，再列应用、文件夹、文件和动作；每一行是两行字——名字（图片在最左边显示缩略图），下面是所在文件夹 / 来源应用 · 时间 / 时间。`↑`/`↓` 选择，回车打开（文字则复制，便利贴则打开它的窗口，动作则执行），`⌘回车` 在 Finder 中显示。面板最后一行的动作条把两个键写出来：「打开 ↩」，文件和文件夹、应用还有「在 Finder 中显示 ⌘↩」。
 - 搜索条下方挂着页面胶囊：首页、托盘、剪贴板、工具，打开 AI 用量后还有 AI 用量，旁边是设置和收起。点一个页面，它在搜索条原来的位置长出来；点当前页面的按钮回到搜索条。
 - Esc 一级一级往回退：页面回到搜索条，有输入时先清空输入，再按一次收回刘海。
 
 **工具页**
 - 工具页是一张统一的网格：动作卡和小组件放在一起。全新安装时正好两行、不用滚动：音乐 2×2，保持唤醒和 AI 用量各 1×1（AI 用量页关着时，这一格是「压缩到 1 MB」），下面是框选文字和打成 zip。其余卡片和小组件（隔空投送、便利贴等）都在「+」打开的目录里，可以自己加。已有的布局不变。超过两行时在页内滚动。
-- 只有真的把文件拖过面板时，不能处理的动作卡才变暗；小组件和固定到桌面的卡片保持原样。
+- 只有真的把文件拖过面板时，不能处理的动作卡才变暗；转换进行时，动作卡变暗、点按没有反应。小组件和固定到桌面的卡片保持原样。
 - 点按动作卡，对托盘里选中的图片或文件执行；也可以把文件直接拖到卡片上。点「便利贴」卡片打开它的窗口，再点一下关掉；点音乐卡片本身（不是卡片上的按钮）打开首页。
 - 长按卡片（或点铅笔图标）进入编辑：拖动排序、点 ⊖ 删除、拖右下角的把手在小组件支持的 1×1、2×1、2×2 之间切换、点虚线「+」格从目录添加。点「完成」或按 Esc 结束。把卡片拖出面板，它就固定到桌面。
 
@@ -386,8 +387,8 @@ Rakko 是住在 Mac 刘海里的工具：它把摄像头周围那块黑色刘海
 - 需要「屏幕录制」权限，见下面的[可选](#可选)。
 
 **实时活动**
-- 插上电源时，刘海向两边变宽几秒：左边是「正在充电」，右边是绿色电量条和电量数字。充满时提醒一次；不插电时，电量降到 20% 和 10% 各提醒一次。
-- 蓝牙耳机连上时，刘海显示耳机名字；AirPods 在系统给出电量时还会显示左耳、右耳和充电盒的电量。断开时也会提示一次。
+- 插上电源时，刘海向两边变宽几秒：左边是闪电图标，右边是绿色电量条和电量数字。充满时提醒一次；不插电时，电量降到 20% 和 10% 各提醒一次。
+- 蓝牙耳机连上时，刘海显示耳机名字和对应型号的系统图标；系统给出各部件电量时，左耳、右耳和充电盒各有一个图标、一圈电量环和百分比，电量 20% 及以下时电量环变红。断开时也会提示一次。
 - 浏览器往「下载」文件夹下载文件时，刘海显示进度环和百分比（不知道总大小时显示已下载多少）；下载完成后点一下提示，文件就放进「托盘」。同时下载完的几个文件合成一条提示，点一下全部放进托盘。需要「完整磁盘访问」，见下面的[可选](#可选)。
 - 每一项都可以在 设置… →「外形与提示」→「实时活动」里关掉。
 
@@ -407,11 +408,12 @@ Rakko 是住在 Mac 刘海里的工具：它把摄像头周围那块黑色刘海
 - 需要「辅助功能」权限；可以在 设置… →「外形与提示」→「拖窗口到刘海分屏」关掉。
 
 **安静、不打扰**
-- 一个快捷键 `⌃⌥Space` 打开搜索条或收起；点别处就自动缩回刘海。Esc 一级一级往回退：页面先回到搜索条，有输入时先清空输入，再按一次收回刘海。
+- 「显示 / 收起」是 `⌃⌥Space`，用来打开搜索条或收起；点别处就自动缩回刘海。Esc 一级一级往回退：页面先回到搜索条，有输入时先清空输入，再按一次收回刘海。
 - 打开「减少透明度」时面板画成纯黑；「减少动态效果」时只保留淡入淡出。时间、计数、说明这类次要文字在纯黑上更容易看清。
 - 页面之间用同一种切换：旧页淡出，新页淡入。指针在展开的面板上始终是普通箭头。
 - 设置… 是一个带侧栏的普通窗口：通用（开机时自动启动、语言、自动更新和「现在检查」）、外形与提示（刘海样式、灵动岛位置、桌宠、实时活动、拖窗口分屏）、托盘、剪贴板、AI 用量（显示、额度、Agent 完成提醒）、快捷键、系统权限和关于。侧栏底部显示权限状态；关于页有版本号、「现在检查」、源代码链接和数据文件夹。改完立即生效。
-- 四个全局快捷键可以在 设置… → 快捷键 里改：点一下那一行，按新的组合键；Delete 清空，Esc 取消。显示 / 收起是 `⌃⌥Space`、剪贴板搜索 `⌃⌥V`、框选文字 `⌃⌥O`，「打开托盘」默认不设。组合被其他应用占用时，保留原来的组合并提示。
+- 设置… → 快捷键 里有十二个全局快捷键，分三组：「全局快捷键」（显示 / 收起 `⌃⌥Space`、剪贴板搜索 `⌃⌥V`、打开托盘）、「播放」（播放 / 暂停、上一首、下一首）、「工具」（框选文字 `⌃⌥O`、打开工具页、打开 AI 用量、保持唤醒开 / 关、新建便利贴、放出 / 收回海獭）。除显示 / 收起、剪贴板搜索、框选文字外，其余初始都是「未设置」。点一下那一行，按新的组合键：带 ⌃、⌥ 或 ⌘ 的立即保存；F1–F12、方向键、Home、End、PageUp、PageDown、Insert 可以单用，也可以加 ⇧；会打字的键先问一句「X」会在所有应用里被截走，再选「仍然使用」或「取消」。Delete 清空，Esc 取消；组合被其他应用占用时，保留原来的组合并提示。
+- 页面已经打开时，再按剪贴板搜索、打开托盘、打开工具页或打开 AI 用量，就收起面板；AI 用量页关着时，「打开 AI 用量」打开 设置… →「AI 用量」。
 - 新版本从本仓库的 GitHub Releases 检查；有更新时会提示你，你点了才会安装。更新的信息都在 设置… → 通用 →「更新」里：上次检查的时间和结果、「现在检查」，下载好后还有「重新启动」按钮；面板底部的小胶囊也会提示，并给出同样的重新启动。
 
 <a id="安装"></a>
