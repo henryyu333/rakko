@@ -5237,16 +5237,6 @@ func (msgs Messages) PageClipEmptyTitle() string {
 	return Catalog.Format(msgs.locale, "pageClipEmptyTitle", nil)
 }
 
-// PageClipEmptyHint says "在其他应用按 ⌘C，文字和截图会自动收好"
-// in the language the app shows.
-func PageClipEmptyHint() string { return In(i18n.Locale()).PageClipEmptyHint() }
-
-// PageClipEmptyHint says "在其他应用按 ⌘C，文字和截图会自动收好"
-// in the language of msgs.
-func (msgs Messages) PageClipEmptyHint() string {
-	return Catalog.Format(msgs.locale, "pageClipEmptyHint", nil)
-}
-
 // PageClipNoMatchTitle says "没有匹配的内容"
 // in the language the app shows.
 func PageClipNoMatchTitle() string { return In(i18n.Locale()).PageClipNoMatchTitle() }
