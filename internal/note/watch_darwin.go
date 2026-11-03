@@ -31,6 +31,10 @@ type Watch struct {
 	done bool
 }
 
+// watchArm is Watch.arm as WatchFile calls it; a test replaces it to take
+// the registration failure path, which a working kqueue will not produce.
+var watchArm = (*Watch).arm
+
 // WatchFile starts watching path. notify runs on a goroutine other than
 // the caller's, once per batch of file system events.
 func WatchFile(path string, notify func()) (*Watch, error) {
@@ -45,19 +49,17 @@ func WatchFile(path string, notify func()) (*Watch, error) {
 	}
 	w := &Watch{dir: dir, quit: quit, stop: stop, path: path, kq: -1}
 	if w.kq, err = syscall.Kqueue(); err != nil {
-		dir.Close()
-		quit.Close()
-		stop.Close()
+		w.closeAll()
 		return nil, err
 	}
-	if err := w.arm(uint64(dir.Fd()), syscall.NOTE_WRITE|syscall.NOTE_DELETE|syscall.NOTE_RENAME); err != nil {
-		w.Close()
+	if err := watchArm(w, uint64(dir.Fd()), syscall.NOTE_WRITE|syscall.NOTE_DELETE|syscall.NOTE_RENAME); err != nil {
+		w.closeAll()
 		return nil, err
 	}
 	// The stop pipe's read end tells run when Close happened.
 	ev := syscall.Kevent_t{Ident: uint64(quit.Fd()), Filter: syscall.EVFILT_READ, Flags: syscall.EV_ADD | syscall.EV_CLEAR}
 	if _, err := syscall.Kevent(w.kq, []syscall.Kevent_t{ev}, nil, nil); err != nil {
-		w.Close()
+		w.closeAll()
 		return nil, err
 	}
 	w.rearm()
@@ -102,6 +104,14 @@ func (w *Watch) closeFDs() {
 		syscall.Close(w.kq)
 		w.kq = -1
 	}
+}
+
+// closeAll releases everything WatchFile opened. Its failure paths return
+// no Watch, so the goroutine never starts and would never call closeFDs:
+// the folder, the stop pipe and the kqueue must go here.
+func (w *Watch) closeAll() {
+	w.Close()
+	w.closeFDs()
 }
 
 // arm adds one ident to the kqueue with NOTE_CLEAR semantics.
