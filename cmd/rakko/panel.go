@@ -751,6 +751,10 @@ func (a *shelf) view(c *ui.Context) {
 			// 四角全圆的胶囊：空闲 15、两翼/提示条半圆、面板 22 → 24。
 			islandPath(&path, x0+shake, y0, x1+shake, y1, min(shellH/2, corner))
 			p.FillPath(&path, surface)
+			if (expanded || openK > 0.3) && !a.reduceTrans {
+				radius := min(shellH/2, corner)
+				paintGlassPane(p, ui.Rect{X: x0 + shake, Y: y0, W: shellW, H: shellH}, radius, [4]float32{radius, radius, radius, radius})
+			}
 			return
 		}
 		ear := float32(earR)
