@@ -67,7 +67,7 @@ It lives in the menu bar, has no Dock icon, keeps everything on your Mac, and ne
 **Home and music**
 - Hover the notch while music plays and it grows two small wings: the cover on the left, a moving equalizer on the right. Nothing drops down over your windows. Click anywhere on the wings and the search bar opens.
 - Home is the player while something plays or stays paused: the cover, the title and artist, an equalizer that moves while the track plays, a progress bar you drag to skip with the elapsed time on its left and what is left on its right, previous, play-pause and next, and the lyrics button at the bottom left.
-- The lyrics button opens a column beside the player and the page widens to 640. Synced lyrics from lrclib.net scroll there with the current line bold; while the lookup runs the column says Finding lyrics…, a finished lookup with nothing to show says No lyrics found for this song, and a failed one says Lyrics are unavailable right now. The column is closed on a fresh install and the choice is remembered; only an open column asks lrclib.net.
+- The lyrics button opens a column beside the player and the page widens to 640. Synced lyrics scroll there with the current line bold; Rakko asks lrclib.net first and NetEase Cloud Music when lrclib.net has none or is busy. While the lookup runs the column says Finding lyrics…, a finished lookup with nothing to show says No lyrics found for this song, and a failed one says Lyrics are unavailable right now and tries again after 30 seconds. The column is closed on a fresh install and the choice is remembered; only an open column asks for lyrics.
 - With nothing playing Home shows the otter — asleep after ten quiet minutes — with today's date and weekday, and up to three lines: the newest agent turn running or just finished (only while Agent Completion notices are on), how many files the Tray holds, and either how much Keep Awake time is left or the tightest AI quota.
 - The music widget is still a card on the Tools page: at 2 × 2 it is the full player with the volume bar for your default output device, at 2 × 1 the cover, title, artist and the transport buttons, at 1 × 1 the smallest form. A tap on the card itself, beside its own buttons, opens Home.
 
@@ -245,7 +245,7 @@ The full manual is in [docs/MANUAL.zh-CN.md](docs/MANUAL.zh-CN.md) (Chinese).
 
 ## Privacy
 
-Everything stays on your Mac: no account, no telemetry, no cloud sync. Rakko makes three kinds of network requests. The update check — shortly after launch and then once a day, Rakko asks this repository's latest GitHub release whether a newer version exists; it sends nothing but the app version in the standard User-Agent header. Turn it off in Settings → General → Check for Updates Automatically; checking by hand from the menu still works. Lyrics — only after you open the lyrics column with the button on the Home player, and only for a song Rakko has not looked up before, it sends the title, artist, album and length to lrclib.net and keeps the answer on this Mac; close the column and nothing more is asked. And, only if you enable the optional AI usage page, its quota lookups: the Codex quota goes to chatgpt.com with the login Codex saved, and the Claude Code quota is read by running your installed Claude Code, which talks to Anthropic itself as it always does. Nothing else is sent.
+Everything stays on your Mac: no account, no telemetry, no cloud sync. Rakko makes three kinds of network requests. The update check — shortly after launch and then once a day, Rakko asks this repository's latest GitHub release whether a newer version exists; it sends nothing but the app version in the standard User-Agent header. Turn it off in Settings → General → Check for Updates Automatically; checking by hand from the menu still works. Lyrics — only after you open the lyrics column with the button on the Home player, and only for a song Rakko has no answer for yet, it sends the title, artist, album and length to lrclib.net and, when lrclib.net has nothing or is busy, the title and artist to NetEase Cloud Music (music.163.com); the answer is kept on this Mac, and close the column and nothing more is asked. And, only if you enable the optional AI usage page, its quota lookups: the Codex quota goes to chatgpt.com with the login Codex saved, and the Claude Code quota is read by running your installed Claude Code, which talks to Anthropic itself as it always does. Nothing else is sent.
 
 The Agent Completion switch adds no traffic: those hooks run Rakko's own binary on this Mac, hand it the tool's own event through a local socket in the data folder, and send nothing over the network. They report only that a turn finished and what the task was — never a conversation, never an answer.
 
@@ -325,7 +325,7 @@ Rakko 是住在 Mac 刘海里的工具：它把摄像头周围那块黑色刘海
 **首页与音乐**
 - 放音乐时把鼠标移到刘海上，刘海只向左右各长出一小截：左边是封面，右边是跳动的音频条，不会向下盖住窗口。点这一小截，打开的是搜索条。
 - 有歌在放、或者只是暂停着，首页就是播放器：封面、歌名和歌手，播放时音频条在跳动，可拖动跳转的进度条左边是已经播了多久、右边是还剩多久，中间是上一首 / 播放暂停 / 下一首，左下角是歌词按钮。
-- 点左下角的歌词按钮，播放器右边多出一栏歌词，页面加宽到 640。lrclib.net 的同步歌词在这里滚动，当前一行是粗体；找的时候写「正在找歌词…」，找不到写「没有找到这首歌的歌词」，取不到写「歌词暂时取不到」。全新安装时这一栏是关着的，开关记在 `settings.json` 的 `lyrics` 里；只有打开它才会去问 lrclib.net。
+- 点左下角的歌词按钮，播放器右边多出一栏歌词，页面加宽到 640。同步歌词在这里滚动，当前一行是粗体；先问 lrclib.net，它没有或太忙时再问网易云音乐。找的时候写「正在找歌词…」，找不到写「没有找到这首歌的歌词」，取不到写「歌词暂时取不到」，30 秒后再试。全新安装时这一栏是关着的，开关记在 `settings.json` 的 `lyrics` 里；只有打开它才会去查歌词。
 - 没有歌在放时，首页是海獭陪着你——安静十分钟后它打瞌睡——旁边是今天的日期和星期，下面最多三行：最近一轮 agent 是正在做还是刚做完（只在打开「Agent 完成提醒」时出现）、托盘里有多少个文件、保持唤醒还剩多久；没有开启保持唤醒时，这一行是剩余最少的那个 AI 额度（AI 用量页关着时不显示）。
 - 音乐小组件仍留在工具页：2×2 是完整播放器，带系统默认输出设备的音量条；2×1 显示封面、歌名、歌手和上一首 / 播放暂停 / 下一首；1×1 是最小的样子。点卡片本身（不是卡片上的按钮）打开首页。
 
@@ -502,7 +502,7 @@ macOS 会把 Rakko 当成一个新应用，所以升级后系统权限和「开�
 
 ## 隐私
 
-一切都留在你的 Mac 上：不用注册账号，没有遥测，没有云同步。联网请求只有三类：检查更新（启动后不久一次、之后每天一次，向本仓库 GitHub 上的最新 Release 询问有没有新版本，请求里只带一个标准的 User-Agent 头；「自动检查更新」可以在 设置… → 通用 里关闭，关闭后仍可在菜单里手动检查）；歌词（只有你用首页播放器左下的歌词按钮打开歌词栏后，才把一首没查过的歌的歌名、歌手、专辑和时长发给 lrclib.net，结果存在本机；收起歌词栏就不再联网）；以及可选的 AI 用量页的额度查询——只有打开它才会发生：Codex 的额度用 Codex 保存的登录信息发给 chatgpt.com；Claude Code 的额度通过运行你装好的 Claude Code 读取，由 Claude Code 自己照常联系 Anthropic。除此之外不发送任何内容。
+一切都留在你的 Mac 上：不用注册账号，没有遥测，没有云同步。联网请求只有三类：检查更新（启动后不久一次、之后每天一次，向本仓库 GitHub 上的最新 Release 询问有没有新版本，请求里只带一个标准的 User-Agent 头；「自动检查更新」可以在 设置… → 通用 里关闭，关闭后仍可在菜单里手动检查）；歌词（只有你用首页播放器左下的歌词按钮打开歌词栏后，才把一首还没有结果的歌的歌名、歌手、专辑和时长发给 lrclib.net；lrclib.net 没有或太忙时，再把歌名和歌手发给网易云音乐（music.163.com）；结果存在本机；收起歌词栏就不再联网）；以及可选的 AI 用量页的额度查询——只有打开它才会发生：Codex 的额度用 Codex 保存的登录信息发给 chatgpt.com；Claude Code 的额度通过运行你装好的 Claude Code 读取，由 Claude Code 自己照常联系 Anthropic。除此之外不发送任何内容。
 
 Agent 完成提醒这个开关不增加任何流量：那些 hook 只在本机运行 Rakko 自己的可执行文件，把工具自己的事件通过数据文件夹里的本地 socket 交给它，不经过网络。它们只报告「这一轮做完了」和这一轮在做什么——不读对话，也不回话。
 
