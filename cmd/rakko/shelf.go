@@ -96,6 +96,7 @@ type shelf struct {
 	settingsScroll                                              ui.ScrollState          // the Settings window's scroll position
 	settingsPage                                                settingsPageID          // the sidebar destination shown
 	settingsRecording                                           shortcutKind            // the shortcut row recording keys, shortcutNone when idle
+	shortcutConfirm                                             *shortcutConfirmation   // a bare text key waiting for the user's confirmation
 	shortcutBusy                                                map[shortcutKind]bool   // shortcuts the system refused
 	shortcutReg                                                 map[shortcutKind]string // what the system holds per shortcut, "" for none
 	shortcutsSuspended                                          bool                    // a recording released the shortcuts; restore them after

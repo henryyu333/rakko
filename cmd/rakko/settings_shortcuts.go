@@ -45,6 +45,13 @@ const (
 	shortcutKindCount
 )
 
+// shortcutConfirmation is a recorded combination that would take a typing
+// key from every app: the row asks before it saves.
+type shortcutConfirmation struct {
+	kind shortcutKind
+	acc  string
+}
+
 // errShortcutBusy is what a save reports when the combination is taken: by
 // another of the app's shortcuts, or by the system or another app.
 var errShortcutBusy = errors.New("shortcut is in use")
@@ -268,6 +275,7 @@ func (a *shelf) startShortcutRecording(k shortcutKind) {
 func (a *shelf) cancelShortcutRecording() {
 	active := a.settingsRecording != shortcutNone
 	a.settingsRecording = shortcutNone
+	a.shortcutConfirm = nil
 	a.restoreShortcuts()
 	if active {
 		a.repaintSettings()
@@ -277,6 +285,7 @@ func (a *shelf) cancelShortcutRecording() {
 // endShortcutRecording ends a listening row without repainting: the window
 // is closing or leaving the page, which repaint themselves.
 func (a *shelf) endShortcutRecording() {
+	a.shortcutConfirm = nil
 	if a.settingsRecording == shortcutNone {
 		return
 	}
@@ -368,8 +377,9 @@ func (a *shelf) settingsCaptureLayer(c *ui.Context) {
 }
 
 // shortcutCaptureInput is the recorder: Esc cancels, Delete clears, and a
-// key with Control, Option or Command saves that combination. A bare key is
-// ignored — it would swallow that key everywhere.
+// named key saves its combination — with Control, Option or Command at
+// once, alone or with Shift only after the row asks first for a key that
+// types text.
 func (a *shelf) shortcutCaptureInput(ev ui.InputEvent) bool {
 	if a.settingsRecording == shortcutNone {
 		return false
@@ -397,18 +407,68 @@ func (a *shelf) shortcutCaptureInput(ev ui.InputEvent) bool {
 	if !ok {
 		return true
 	}
+	if shortcutNeedsConfirm(ev.Mods, ev.Key) {
+		a.shortcutConfirm = &shortcutConfirmation{kind: a.settingsRecording, acc: acc}
+		a.repaintSettings()
+		return true
+	}
 	a.finishShortcut(acc)
+	return true
+}
+
+// confirmShortcut saves the combination the row is asking about.
+func (a *shelf) confirmShortcut() {
+	c := a.shortcutConfirm
+	if c == nil {
+		return
+	}
+	a.shortcutConfirm = nil
+	a.finishShortcut(c.acc)
+}
+
+// cancelShortcutConfirm drops the question and returns the rows to their
+// saved combinations; Esc and a click outside do the same.
+func (a *shelf) cancelShortcutConfirm() {
+	if a.shortcutConfirm == nil {
+		return
+	}
+	a.shortcutConfirm = nil
+	a.cancelShortcutRecording()
+	a.repaintSettings()
+}
+
+// shortcutNeedsConfirm reports whether a recorded key could be typed: a
+// bare letter, digit, punctuation key, Space, Tab or Enter would be taken
+// from every app, so it asks first. A real modifier or a key that types
+// nothing — a function key, an arrow, Home/End/PageUp/PageDown/Insert — is
+// saved at once.
+func shortcutNeedsConfirm(mods ui.Modifiers, key ui.Key) bool {
+	return shortcutTypesText(key) && mods&(ui.Ctrl|ui.Alt|ui.Super) == 0
+}
+
+// shortcutTypesText reports whether the key types text, or edits a text
+// field as Space, Tab and Enter do.
+func shortcutTypesText(key ui.Key) bool {
+	switch {
+	case key >= ui.KeyF1 && key <= ui.KeyF12:
+		return false
+	case key >= ui.KeyA && key <= ui.KeyZ, key >= ui.Key0 && key <= ui.Key9:
+		return true
+	}
+	switch key {
+	case ui.KeyUp, ui.KeyDown, ui.KeyLeft, ui.KeyRight,
+		ui.KeyHome, ui.KeyEnd, ui.KeyPageUp, ui.KeyPageDown, ui.KeyInsert:
+		return false
+	}
 	return true
 }
 
 // shortcutAccelerator renders a key press as the accelerator mygo's global
 // shortcuts take ("Ctrl+Alt+Space"), in the order its canonical form uses.
-// ok is false for a bare key and for keys the accelerator grammar has no
-// name for.
+// A named key needs no modifier: mygo registers bare function and arrow
+// keys too. ok is false only for keys the accelerator grammar has no name
+// for.
 func shortcutAccelerator(mods ui.Modifiers, key ui.Key) (string, bool) {
-	if mods&(ui.Ctrl|ui.Alt|ui.Super) == 0 {
-		return "", false
-	}
 	token, ok := acceleratorKey(key)
 	if !ok {
 		return "", false

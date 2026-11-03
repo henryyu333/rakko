@@ -291,16 +291,30 @@ func (a *shelf) settingsView(c *ui.Context) {
 	c.SetTheme(settingsTheme)
 	c.Root().Background(surface)
 	recording := a.settingsRecording != shortcutNone
-	if a.settingsWin != nil {
-		w := a.settingsWin
+	pending := a.shortcutConfirm != nil
+	switch {
+	case pending:
+		// The row asks about a key that types text: Esc drops the
+		// question, as the cancel button does.
+		c.OnShortcut(0, ui.KeyEscape, a.cancelShortcutConfirm)
+	case a.settingsWin != nil && recording:
 		// While a shortcut records, every key belongs to the recorder;
 		// closing on Esc would swallow the cancel.
-		if !recording {
-			c.OnShortcut(0, ui.KeyEscape, w.Close)
-			c.OnShortcut(ui.Cmd, ui.KeyW, w.Close)
-		}
+	case a.settingsWin != nil:
+		c.OnShortcut(0, ui.KeyEscape, a.settingsWin.Close)
+		c.OnShortcut(ui.Cmd, ui.KeyW, a.settingsWin.Close)
 	}
-	ui.Row(c.Key("win")).Fill().Children(func() {
+	win := ui.Row(c.Key("win")).Fill()
+	if pending {
+		// A click anywhere the buttons do not take drops the question.
+		win = win.HandleInput(func(ev ui.InputEvent) bool {
+			if ev.Kind == ui.InputPointerDown {
+				a.cancelShortcutConfirm()
+			}
+			return false
+		})
+	}
+	win.Children(func() {
 		a.settingsSidebar(c)
 		ui.Column(c.Key("panel")).Grow(1).FillHeight().Margin(10, 10, 10, 0).
 			Radius(20).Background(setPanel).Clip().Children(func() {
@@ -313,7 +327,7 @@ func (a *shelf) settingsView(c *ui.Context) {
 				})
 			})
 		})
-		if recording {
+		if recording && !pending {
 			a.settingsCaptureLayer(c)
 		}
 	})

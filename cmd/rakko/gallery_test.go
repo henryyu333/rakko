@@ -1545,6 +1545,10 @@ func galleryGroupK() []galleryItem {
 		{ID: "K10", Group: g, Title: "快捷键", State: "已被占用", Wide: true, Build: page(settingsPageShortcuts, func(t *testing.T, a *shelf) {
 			a.shortcutBusy = map[shortcutKind]bool{shortcutToggle: true}
 		})},
+		{ID: "K9b", Group: g, Title: "快捷键", State: "确认 · 单独按键", Wide: true, Build: page(settingsPageShortcuts, func(t *testing.T, a *shelf) {
+			a.settingsRecording = shortcutToggle
+			a.shortcutConfirm = &shortcutConfirmation{kind: shortcutToggle, acc: "Q"}
+		})},
 		{ID: "K11", Group: g, Title: "系统权限", State: "缺 2 项 · 还差辅助功能与屏幕录制", Wide: true, Build: func(t *testing.T, lang string) galleryRender {
 			stubSettingsSeams(t, false, nil, nil)
 			st, _ := stubPermissions(t)

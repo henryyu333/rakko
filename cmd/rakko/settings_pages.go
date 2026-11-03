@@ -464,9 +464,21 @@ func (a *shelf) settingsShortcutsPage(c *ui.Context) {
 // settingsShortcutRow is one editable shortcut: the label and caption on the
 // left, the keycaps on the right. The row itself starts the recording, as a
 // switch row toggles. A row that could not claim its combination says so in
-// place of its caption.
+// place of its caption. A key that types text waits here as a question with
+// its two answers.
 func (a *shelf) settingsShortcutRow(c *ui.Context, kind shortcutKind, label, caption string) {
 	l := loc(c)
+	if p := a.shortcutConfirm; p != nil && p.kind == kind {
+		ui.Row(c.Key(fmt.Sprintf("sc-confirm-%d", kind))).FillWidth().Radius(0).
+			MinHeight(settingsRowMinHeight).AlignItems(ui.Center).Gap(8).
+			Padding(settingsRowPadY, settingsRowPadX).Children(func() {
+			ui.Text(c, l.SettingsShortcutConfirm(shortcutLabel(p.acc))).FontSize(12).
+				TextColor(ink2).Grow(1).MinWidth(0)
+			settingsConfirmButton(c, fmt.Sprintf("sc-use-%d", kind), l.SettingsShortcutUseAnyway(), true, a.confirmShortcut)
+			settingsConfirmButton(c, fmt.Sprintf("sc-drop-%d", kind), l.SettingsShortcutCancel(), false, a.cancelShortcutConfirm)
+		})
+		return
+	}
 	rowCaption, captionColor := caption, ink3
 	if a.shortcutBusy[kind] {
 		rowCaption, captionColor = l.SettingsShortcutBusy(), danger
@@ -509,6 +521,42 @@ func (a *shelf) settingsShortcutRow(c *ui.Context, kind shortcutKind, label, cap
 	if row.Clicked() {
 		a.startShortcutRecording(kind)
 	}
+}
+
+// settingsConfirmButton is the answer button of the shortcut question. It
+// takes the pointer itself (HandleInput) rather than as a ButtonBase: the
+// window's click-anywhere-else cancel listens on an ancestor, and only an
+// element that handles its own input stands in front of it.
+func settingsConfirmButton(c *ui.Context, key, label string, primary bool, fn func()) ui.Element {
+	b := ui.Row(c.Key("btn-"+key)).Height(28).Radius(8).Padding(0, 12, 0, 12).
+		AlignItems(ui.Center).Label(label)
+	fg := ink
+	if primary {
+		b.Background(ink)
+		fg = ui.RGB(0, 0, 0)
+	} else {
+		b.Background(setCtl)
+		if b.Hovered() {
+			b.Background(setCtlHover)
+		}
+	}
+	b.HandleInput(func(ev ui.InputEvent) bool {
+		switch ev.Kind {
+		case ui.InputPointerDown:
+			return true
+		case ui.InputPointerUp:
+			fn()
+			return true
+		}
+		return false
+	})
+	b.Children(func() {
+		t := ui.Text(c, label).SingleLine().FontSize(12.5).TextColor(fg)
+		if primary {
+			t.FontWeight(600)
+		}
+	})
+	return b
 }
 
 // settingsReadonlyShortcutRow shows a shortcut the panel answers itself.

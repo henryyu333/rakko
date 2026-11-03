@@ -6329,6 +6329,38 @@ func (msgs Messages) SettingsShortcutNoShortcut() string {
 	return Catalog.Format(msgs.locale, "settingsShortcutNoShortcut", nil)
 }
 
+// SettingsShortcutConfirm says "「{keys}」会在所有应用里被截走"
+// in the language the app shows.
+func SettingsShortcutConfirm(keys string) string {
+	return In(i18n.Locale()).SettingsShortcutConfirm(keys)
+}
+
+// SettingsShortcutConfirm says "「{keys}」会在所有应用里被截走"
+// in the language of msgs.
+func (msgs Messages) SettingsShortcutConfirm(keys string) string {
+	return Catalog.Format(msgs.locale, "settingsShortcutConfirm", map[string]any{"keys": keys})
+}
+
+// SettingsShortcutUseAnyway says "仍然使用"
+// in the language the app shows.
+func SettingsShortcutUseAnyway() string { return In(i18n.Locale()).SettingsShortcutUseAnyway() }
+
+// SettingsShortcutUseAnyway says "仍然使用"
+// in the language of msgs.
+func (msgs Messages) SettingsShortcutUseAnyway() string {
+	return Catalog.Format(msgs.locale, "settingsShortcutUseAnyway", nil)
+}
+
+// SettingsShortcutCancel says "取消"
+// in the language the app shows.
+func SettingsShortcutCancel() string { return In(i18n.Locale()).SettingsShortcutCancel() }
+
+// SettingsShortcutCancel says "取消"
+// in the language of msgs.
+func (msgs Messages) SettingsShortcutCancel() string {
+	return Catalog.Format(msgs.locale, "settingsShortcutCancel", nil)
+}
+
 // SettingsShortcutRecording says "按下新的组合键"
 // in the language the app shows.
 func SettingsShortcutRecording() string { return In(i18n.Locale()).SettingsShortcutRecording() }

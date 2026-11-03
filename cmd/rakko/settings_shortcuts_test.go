@@ -188,35 +188,207 @@ func TestShortcutRecordingCancelAndClear(t *testing.T) {
 	}
 }
 
-// A bare key, or a combination without Control, Option or Command, is
-// ignored: a global bare key would swallow that key everywhere.
-func TestShortcutRecordingIgnoresBareKeys(t *testing.T) {
+// A key that types text arrives alone or with Shift only: the row asks
+// before it takes that key from every app. 仍然使用 saves it; 取消, Esc and a
+// click outside keep the previous combination.
+func TestShortcutRecordingAsksForTypingKeys(t *testing.T) {
+	a, view, f := shortcutShelf(t)
+	l := locales.In("")
+	openSettingsPage(t, view, "快捷键")
+	if err := view.Click(l.SettingsShortcutOCR()); err != nil {
+		t.Fatal(err)
+	}
+	view.Frame()
+	view.Key(0, ui.KeyJ)
+	view.Frame()
+	if a.shortcutConfirm == nil || a.shortcutConfirm.acc != "J" {
+		t.Fatalf("a bare letter did not ask: %+v", a.shortcutConfirm)
+	}
+	if a.settings.Shortcuts.Capture != settings.DefaultShortcutCapture || f.has("J") {
+		t.Fatalf("the question saved or registered the key: %q %v", a.settings.Shortcuts.Capture, f.regs)
+	}
+	if !view.HasText(l.SettingsShortcutConfirm("J")) || !view.HasText(l.SettingsShortcutUseAnyway()) {
+		t.Fatalf("the row does not ask: %v", view.Texts())
+	}
+	if err := view.Click(l.SettingsShortcutUseAnyway()); err != nil {
+		t.Fatal(err)
+	}
+	view.Frame()
+	if a.settingsRecording != shortcutNone || a.shortcutConfirm != nil {
+		t.Fatal("the answer did not end the recording")
+	}
+	if got := a.settings.Shortcuts.Capture; got != "J" {
+		t.Fatalf("saved capture = %q, want J; confirm=%+v recording=%v busy=%v", got, a.shortcutConfirm, a.settingsRecording, a.shortcutBusy)
+	}
+	if !f.has("J") {
+		t.Fatalf("the confirmed key is not registered: %v", f.regs)
+	}
+
+	// Shift only counts as bare: ask again, then cancel with the button.
+	if err := view.Click(l.SettingsShortcutOCR()); err != nil {
+		t.Fatal(err)
+	}
+	view.Frame()
+	view.Key(ui.Shift, ui.KeyK)
+	view.Frame()
+	if a.shortcutConfirm == nil || a.shortcutConfirm.acc != "Shift+K" {
+		t.Fatalf("shift with a letter did not ask: %+v", a.shortcutConfirm)
+	}
+	if err := view.Click(l.SettingsShortcutCancel()); err != nil {
+		t.Fatal(err)
+	}
+	view.Frame()
+	if got := a.settings.Shortcuts.Capture; got != "J" {
+		t.Fatalf("cancel changed the shortcut: %q", got)
+	}
+	if f.has("Shift+K") {
+		t.Fatal("cancel registered the key")
+	}
+	// The recording is over, so a new click starts another question.
+	if a.settingsRecording != shortcutNone {
+		t.Fatal("cancel left the row recording")
+	}
+
+	// Esc drops the question too.
+	if err := view.Click(l.SettingsShortcutOCR()); err != nil {
+		t.Fatal(err)
+	}
+	view.Frame()
+	view.Key(0, ui.KeyM)
+	view.Frame()
+	if a.shortcutConfirm == nil {
+		t.Fatal("the letter did not ask")
+	}
+	view.Key(0, ui.KeyEscape)
+	view.Frame()
+	if a.shortcutConfirm != nil || a.settingsRecording != shortcutNone || a.settings.Shortcuts.Capture != "J" {
+		t.Fatalf("Esc did not drop the question: confirm=%+v recording=%v capture=%q",
+			a.shortcutConfirm, a.settingsRecording, a.settings.Shortcuts.Capture)
+	}
+}
+
+// A click outside the confirm row drops the question, like Esc.
+func TestShortcutConfirmClickOutsideCancels(t *testing.T) {
+	a, view, f := shortcutShelf(t)
+	openSettingsPage(t, view, "快捷键")
+	if err := view.Click("显示 / 收起"); err != nil {
+		t.Fatal(err)
+	}
+	view.Frame()
+	view.Key(0, ui.KeyJ)
+	view.Frame()
+	if a.shortcutConfirm == nil {
+		t.Fatal("the letter did not ask")
+	}
+	view.ClickAt(40, settingsHeight-40) // an empty part of the window
+	view.Frame()
+	if a.shortcutConfirm != nil || a.settingsRecording != shortcutNone {
+		t.Fatalf("the click kept the question: %+v %v", a.shortcutConfirm, a.settingsRecording)
+	}
+	if a.settings.Shortcuts.Toggle != settings.DefaultShortcutToggle || f.has("J") {
+		t.Fatalf("the click saved the key: %q %v", a.settings.Shortcuts.Toggle, f.regs)
+	}
+}
+
+// Control, Option or Command saves at once, as before.
+func TestShortcutRecordingModifiersSaveAtOnce(t *testing.T) {
 	a, view, f := shortcutShelf(t)
 	openSettingsPage(t, view, "快捷键")
 	if err := view.Click("框选文字"); err != nil {
 		t.Fatal(err)
 	}
 	view.Frame()
-	view.Key(0, ui.KeyJ)
-	view.Key(ui.Shift, ui.KeyJ)
-	view.Frame()
-	if a.settingsRecording != shortcutCapture {
-		t.Fatal("a bare key ended the recording")
-	}
-	if a.settings.Shortcuts.Capture != settings.DefaultShortcutCapture {
-		t.Fatalf("a bare key changed the shortcut: %q", a.settings.Shortcuts.Capture)
-	}
-	if f.has("Ctrl+Alt+J") || f.has("Shift+J") {
-		t.Fatalf("a bare key registered something: %v", f.regs)
-	}
-	// Shift with a modifier is fine.
 	view.Key(ui.Ctrl|ui.Shift, ui.KeyJ)
 	view.Frame()
+	if a.shortcutConfirm != nil {
+		t.Fatal("a real modifier asked for confirmation")
+	}
 	if got := a.settings.Shortcuts.Capture; got != "Ctrl+Shift+J" {
 		t.Fatalf("saved capture = %q, want Ctrl+Shift+J", got)
 	}
 	if !f.has("Ctrl+Shift+J") || !f.has("Ctrl+Alt+Space") || !f.has("Ctrl+Alt+V") {
 		t.Fatalf("registry after the change: %v", f.regs)
+	}
+}
+
+// Keys that type nothing — function keys and the navigation keys — save
+// alone or with Shift, without a question.
+func TestShortcutRecordingNonTypingKeysSaveAtOnce(t *testing.T) {
+	a, view, f := shortcutShelf(t)
+	openSettingsPage(t, view, "快捷键")
+	if err := view.Click("显示 / 收起"); err != nil {
+		t.Fatal(err)
+	}
+	view.Frame()
+	view.Key(0, ui.KeyF5)
+	view.Frame()
+	if a.shortcutConfirm != nil {
+		t.Fatal("F5 asked for confirmation")
+	}
+	if got := a.settings.Shortcuts.Toggle; got != "F5" || !f.has("F5") {
+		t.Fatalf("bare F5 = %q, registry %v", got, f.regs)
+	}
+	if err := view.Click("显示 / 收起"); err != nil {
+		t.Fatal(err)
+	}
+	view.Frame()
+	view.Key(ui.Shift, ui.KeyF5)
+	view.Frame()
+	if got := a.settings.Shortcuts.Toggle; got != "Shift+F5" || !f.has("Shift+F5") {
+		t.Fatalf("shift F5 = %q, registry %v", got, f.regs)
+	}
+	if err := view.Click("显示 / 收起"); err != nil {
+		t.Fatal(err)
+	}
+	view.Frame()
+	view.Key(0, ui.KeyLeft)
+	view.Frame()
+	if got := a.settings.Shortcuts.Toggle; got != "Left" || !f.has("Left") {
+		t.Fatalf("bare Left = %q, registry %v", got, f.regs)
+	}
+}
+
+// The recorder's grammar and the question's rule: a named key always makes
+// an accelerator; a text key without Control, Option or Command asks.
+func TestShortcutAcceleratorAndConfirmRules(t *testing.T) {
+	cases := []struct {
+		mods ui.Modifiers
+		key  ui.Key
+		acc  string
+		ask  bool
+	}{
+		{0, ui.KeyF1, "F1", false},
+		{ui.Shift, ui.KeyF5, "Shift+F5", false},
+		{0, ui.KeyLeft, "Left", false},
+		{0, ui.KeyPageDown, "PageDown", false},
+		{0, ui.KeyInsert, "Insert", false},
+		{0, ui.KeyA, "A", true},
+		{ui.Shift, ui.KeyA, "Shift+A", true},
+		{ui.Ctrl, ui.KeyA, "Ctrl+A", false},
+		{0, ui.Key0, "0", true},
+		{0, ui.KeySpace, "Space", true},
+		{ui.Alt, ui.KeySpace, "Alt+Space", false},
+		{0, ui.KeyComma, ",", true},
+		{0, ui.KeyEnter, "Enter", true},
+	}
+	for _, tc := range cases {
+		acc, ok := shortcutAccelerator(tc.mods, tc.key)
+		if !ok || acc != tc.acc {
+			t.Errorf("shortcutAccelerator(%v, %v) = %q, %v; want %q", tc.mods, tc.key, acc, ok, tc.acc)
+		}
+		if got := shortcutNeedsConfirm(tc.mods, tc.key); got != tc.ask {
+			t.Errorf("shortcutNeedsConfirm(%v, %v) = %v, want %v", tc.mods, tc.key, got, tc.ask)
+		}
+	}
+	if _, ok := shortcutAccelerator(0, ui.KeyUnknown); ok {
+		t.Fatal("an unnamed key made an accelerator")
+	}
+	// The page shows the new spellings.
+	if tokens, ok := shortcutTokens("Shift+F5"); !ok || !slices.Equal(tokens, []string{"⇧", "F5"}) {
+		t.Fatalf("Shift+F5 tokens = %v, %v", tokens, ok)
+	}
+	if got := shortcutLabel("F5"); got != "F5" {
+		t.Fatalf("shortcutLabel(F5) = %q", got)
 	}
 }
 
