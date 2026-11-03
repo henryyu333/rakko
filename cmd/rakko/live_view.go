@@ -60,7 +60,9 @@ func (a *shelf) powerWings(c *ui.Context, shellW, shellH, k float32, ev liveEven
 			default:
 				ui.Icon(c, liveBoltSym).Size(11, 14).TextColor(ink)
 			}
-			ui.Text(c, ev.label).SingleLine().FontSize(12.5).FontWeight(500).TextColor(ink)
+			if ev.kind != liveCharging {
+				ui.Text(c, ev.label).SingleLine().FontSize(12.5).FontWeight(500).TextColor(ink)
+			}
 		})
 		right := ui.Row(c.Key("live-power-right")).Gap(10).AlignItems(ui.Center)
 		right.Children(func() {
