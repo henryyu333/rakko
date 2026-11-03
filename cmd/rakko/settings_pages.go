@@ -539,9 +539,9 @@ func (a *shelf) settingsPermissionsPage(c *ui.Context) {
 				settingsSep(c, "perm-"+p.id)
 			}
 			granted := p.enabled()
-			row := settingsRowLine(c, "perm-"+p.id)
+			row := settingsRowLine(c, "perm-"+p.id).Tooltip(p.detail)
 			row.Children(func() {
-				settingsRowText(c, p.short, p.detail)
+				settingsRowText(c, p.short, "")
 				ui.Row(c.Key("state")).AlignItems(ui.Center).Gap(6).Children(func() {
 					dot := success
 					text := l.SettingsPermOn()
@@ -556,7 +556,6 @@ func (a *shelf) settingsPermissionsPage(c *ui.Context) {
 		settingsSep(c, "perm-switch")
 		a.settingsPermissionSwitch(c, permissions, missing)
 	})
-	settingsFootnote(c, "perm-foot", l.SettingsPermFoot())
 }
 
 // settingsAboutPage: the big otter, the version, the actions, and the

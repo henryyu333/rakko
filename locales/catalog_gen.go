@@ -6423,16 +6423,6 @@ func (msgs Messages) SettingsPermOff() string {
 	return Catalog.Format(msgs.locale, "settingsPermOff", nil)
 }
 
-// SettingsPermFoot says "第一次使用，或在系统设置里关掉过开关时，在这里重新开启。"
-// in the language the app shows.
-func SettingsPermFoot() string { return In(i18n.Locale()).SettingsPermFoot() }
-
-// SettingsPermFoot says "第一次使用，或在系统设置里关掉过开关时，在这里重新开启。"
-// in the language of msgs.
-func (msgs Messages) SettingsPermFoot() string {
-	return Catalog.Format(msgs.locale, "settingsPermFoot", nil)
-}
-
 // SettingsAboutPage says "关于"
 // in the language the app shows.
 func SettingsAboutPage() string { return In(i18n.Locale()).SettingsAboutPage() }

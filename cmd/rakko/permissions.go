@@ -481,7 +481,10 @@ func (a *shelf) permissionCaption(l locales.Messages, permissions, missing []sys
 func (a *shelf) settingsPermissionSwitch(c *ui.Context, permissions, missing []systemPermission) {
 	l := loc(c)
 	title := l.PermTitle()
-	caption := a.permissionCaption(l, permissions, missing)
+	caption := ""
+	if a.perm.stage != permissionIdle {
+		caption = a.permissionCaption(l, permissions, missing)
+	}
 	if a.perm.stage == permissionRelaunch {
 		ui.Row(c.Key("perm-row")).AlignItems(ui.Center).Gap(10).MinHeight(48).Padding(settingsRowPadY, 12).FillWidth().Children(func() {
 			permissionRowLabel(c, title, caption)
@@ -514,7 +517,9 @@ func (a *shelf) settingsPermissionSwitch(c *ui.Context, permissions, missing []s
 func permissionRowLabel(c *ui.Context, title, caption string) {
 	ui.Column(c.Key("perm-k")).Gap(2).Grow(1).MinWidth(0).Children(func() {
 		settingsLabel(c, title, 13, 0).TextColor(ink)
-		ui.Text(c, caption).FontSize(11).TextColor(ink3)
+		if caption != "" {
+			ui.Text(c, caption).FontSize(11).TextColor(ink3)
+		}
 	})
 }
 

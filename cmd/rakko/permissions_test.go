@@ -133,6 +133,17 @@ func permissionRowCaption(t *testing.T, view *ui.Tester) string {
 	return ""
 }
 
+// clickPermissionSwitch targets the switch row immediately after screen recording.
+func clickPermissionSwitch(t *testing.T, view *ui.Tester) {
+	t.Helper()
+	openSettingsPage(t, view, "系统权限")
+	r, ok := view.Find("屏幕录制")
+	if !ok {
+		t.Fatal("screen recording permission row missing")
+	}
+	view.ClickAt(r.X+10, r.Y+r.H/2+51)
+}
+
 func TestPermissionTrayItemCountsMissing(t *testing.T) {
 	for _, tt := range []struct {
 		name          string
@@ -225,14 +236,13 @@ func TestSettingsPermissionsPageListsEveryPermission(t *testing.T) {
 	}
 	ps := systemPermissionSet(locales.In(""))
 	for _, p := range ps {
-		if !view.HasText(p.short) || !view.HasText(p.detail) {
+		if !view.HasText(p.short) {
 			t.Fatalf("permission %q lacks its row; texts=%v", p.id, view.Texts())
 		}
 	}
 	for _, want := range []string{
 		"系统权限",
 		"未开启",
-		"还差 3 项：完整磁盘访问、辅助功能、屏幕录制",
 	} {
 		if !view.HasText(want) {
 			t.Fatalf("the page lacks %q; texts=%v", want, view.Texts())
@@ -247,12 +257,7 @@ func TestPermissionSwitchStates(t *testing.T) {
 	a, view := newSettingsShelf(t)
 
 	// All missing: off, and turning it on starts the walk.
-	if got := permissionRowCaption(t, view); got != "还差 3 项：完整磁盘访问、辅助功能、屏幕录制" {
-		t.Fatalf("none-granted caption = %q", got)
-	}
-	if err := view.Click(permissionRowCaption(t, view)); err != nil {
-		t.Fatal(err)
-	}
+	clickPermissionSwitch(t, view)
 	view.Frame()
 	if st.fdaRequests != 1 || a.perm.stage != permissionWaiting {
 		t.Fatalf("turning the switch on did not start the walk: stage=%v fda=%d", a.perm.stage, st.fdaRequests)
@@ -266,15 +271,15 @@ func TestPermissionSwitchStates(t *testing.T) {
 	// Two missing: still off, and the caption names them in list order.
 	st.fda, st.ax, st.screen = true, false, false
 	view.Frame()
-	if got := permissionRowCaption(t, view); got != "还差 2 项：辅助功能、屏幕录制" {
-		t.Fatalf("partial caption = %q", got)
+	if view.HasText("还差 2 项：辅助功能、屏幕录制") {
+		t.Fatal("idle switch shows a missing-permissions caption")
 	}
 
 	// All granted: on, and the caption says so.
 	st.ax, st.screen = true, true
 	view.Frame()
-	if got := permissionRowCaption(t, view); got != "已全部开启（3/3）" {
-		t.Fatalf("all-granted caption = %q", got)
+	if view.HasText("已全部开启（3/3）") {
+		t.Fatal("idle switch shows an all-granted caption")
 	}
 }
 
@@ -285,9 +290,7 @@ func TestPermissionSwitchOffOpensPrivacyPane(t *testing.T) {
 	st, _ := stubPermissions(t)
 	st.fda, st.ax, st.screen = true, true, true
 	a, view := newSettingsShelf(t)
-	if err := view.Click(permissionRowCaption(t, view)); err != nil {
-		t.Fatal(err)
-	}
+	clickPermissionSwitch(t, view)
 	view.Frame()
 	if st.paneOpens != 1 {
 		t.Fatalf("turning the switch off opened the pane %d times, want 1", st.paneOpens)
@@ -295,8 +298,8 @@ func TestPermissionSwitchOffOpensPrivacyPane(t *testing.T) {
 	if a.perm.stage != permissionIdle {
 		t.Fatalf("turning the switch off started a walk: %v", a.perm.stage)
 	}
-	if got := permissionRowCaption(t, view); got != "已全部开启（3/3）" {
-		t.Fatalf("the switch did not stay on: caption=%q", got)
+	if !st.fda || !st.ax || !st.screen {
+		t.Fatal("turning the switch off changed granted permissions")
 	}
 	if st.fdaRequests+st.axRequests+st.scRequests != 0 {
 		t.Fatal("turning the switch off requested a permission")
@@ -309,9 +312,7 @@ func TestPermissionFlowOrderSkipsGranted(t *testing.T) {
 	st, clk := stubPermissions(t)
 	st.fda, st.ax = true, false
 	a, view := newSettingsShelf(t)
-	if err := view.Click(permissionRowCaption(t, view)); err != nil {
-		t.Fatal(err)
-	}
+	clickPermissionSwitch(t, view)
 	view.Frame()
 	if st.fdaRequests != 0 {
 		t.Fatalf("a granted Full Disk Access was requested: %d", st.fdaRequests)
@@ -364,9 +365,7 @@ func TestPermissionFlowFullDiskCaption(t *testing.T) {
 	st, clk := stubPermissions(t)
 	st.ax, st.screen = true, true
 	_, view := newSettingsShelf(t)
-	if err := view.Click(permissionRowCaption(t, view)); err != nil {
-		t.Fatal(err)
-	}
+	clickPermissionSwitch(t, view)
 	view.Frame()
 	want := "第 1 项，共 1 项：完整磁盘访问 · 在「系统设置」里打开 Rakko，这里会自动往下走（列表里没有就点 +，或把访达里选中的 Rakko 拖进去）"
 	if got := permissionRowCaption(t, view); got != want {
@@ -390,9 +389,7 @@ func TestPermissionFlowFullDiskGrantReachesRelaunch(t *testing.T) {
 	st, clk := stubPermissions(t)
 	st.fda, st.ax, st.screen = false, false, false
 	a, view := newSettingsShelf(t)
-	if err := view.Click(permissionRowCaption(t, view)); err != nil {
-		t.Fatal(err)
-	}
+	clickPermissionSwitch(t, view)
 	view.Frame()
 	if st.fdaRequests != 1 {
 		t.Fatalf("Full Disk Access was not requested first: %d", st.fdaRequests)
@@ -426,9 +423,7 @@ func TestPermissionFlowFullDiskOnlyEndsOnRelaunch(t *testing.T) {
 	st, clk := stubPermissions(t)
 	st.ax, st.screen = true, true
 	a, view := newSettingsShelf(t)
-	if err := view.Click(permissionRowCaption(t, view)); err != nil {
-		t.Fatal(err)
-	}
+	clickPermissionSwitch(t, view)
 	st.fda = true
 	clk.fireLast(t)
 	if a.perm.stage != permissionRelaunch {
@@ -445,9 +440,7 @@ func TestPermissionFlowFullDiskOnlyEndsOnRelaunch(t *testing.T) {
 func TestPermissionFlowStops(t *testing.T) {
 	st, clk := stubPermissions(t)
 	a, view := newSettingsShelf(t)
-	if err := view.Click(permissionRowCaption(t, view)); err != nil {
-		t.Fatal(err)
-	}
+	clickPermissionSwitch(t, view)
 	view.Frame()
 	if err := view.Click("停止"); err != nil {
 		t.Fatal(err)
@@ -459,8 +452,8 @@ func TestPermissionFlowStops(t *testing.T) {
 		t.Fatalf("停止 left the flow at %v", a.perm.stage)
 	}
 	view.Frame()
-	if got := permissionRowCaption(t, view); got != "还差 3 项：完整磁盘访问、辅助功能、屏幕录制" {
-		t.Fatalf("停止 did not return to the ordinary state: %q", got)
+	if view.HasText("还差 3 项：完整磁盘访问、辅助功能、屏幕录制") {
+		t.Fatal("stopped flow shows an idle caption")
 	}
 	clk.fireLast(t)
 	if a.perm.stage != permissionIdle || st.fdaRequests != 1 {
@@ -473,13 +466,9 @@ func TestPermissionSwitchOffWhileWaitingStops(t *testing.T) {
 	st, clk := stubPermissions(t)
 	a, view := newSettingsShelf(t)
 	openSettingsPage(t, view, "系统权限")
-	if err := view.Click(permissionRowCaption(t, view)); err != nil {
-		t.Fatal(err)
-	}
+	clickPermissionSwitch(t, view)
 	view.Frame()
-	if err := view.Click(permissionRowCaption(t, view)); err != nil {
-		t.Fatal(err)
-	}
+	clickPermissionSwitch(t, view)
 	if a.perm.stage != permissionIdle {
 		t.Fatalf("the pending switch did not stop the walk: %v", a.perm.stage)
 	}
@@ -495,9 +484,7 @@ func TestSettingsCloseStopsPermissionFlow(t *testing.T) {
 	st, clk := stubPermissions(t)
 	a, view := newSettingsShelf(t)
 	openSettingsPage(t, view, "系统权限")
-	if err := view.Click(permissionRowCaption(t, view)); err != nil {
-		t.Fatal(err)
-	}
+	clickPermissionSwitch(t, view)
 	if a.perm.stage != permissionWaiting {
 		t.Fatal("flow did not start")
 	}
@@ -541,9 +528,7 @@ func TestPermissionsSectionWorksWhileSettingsBroken(t *testing.T) {
 	if !view.HasText("settings.json 无法读取") || !view.HasText("还差 3 项") {
 		t.Fatalf("the permission group is not usable while settings are broken; texts=%v", view.Texts())
 	}
-	if err := view.Click(permissionRowCaption(t, view)); err != nil {
-		t.Fatal(err)
-	}
+	clickPermissionSwitch(t, view)
 	if st.fdaRequests != 1 {
 		t.Fatalf("broken settings blocked the permission request: %d", st.fdaRequests)
 	}
