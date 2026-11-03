@@ -1000,3 +1000,99 @@ func TestShortcutPageGroupsTheRows(t *testing.T) {
 		t.Fatalf("an unset row does not say %q; texts %v", l.SettingsShortcutNoShortcut(), view.Texts())
 	}
 }
+
+// A page shortcut is a switch: the second press on the page the panel
+// already shows folds the panel away; any other state opens or switches.
+func TestPageShortcutsToggleTheirPage(t *testing.T) {
+	cases := []struct {
+		name  string
+		kind  shortcutKind
+		page  pageID
+		build func(t *testing.T) *shelf
+	}{
+		{"tray", shortcutOpenTray, pageTray, func(t *testing.T) *shelf {
+			a, _ := levelShelf(t)
+			return a
+		}},
+		{"tools", shortcutTools, pageTools, func(t *testing.T) *shelf {
+			a, _ := levelShelf(t)
+			return a
+		}},
+		{"usage", shortcutUsage, pageUsage, func(t *testing.T) *shelf {
+			fx := newUsageFixture(t, true)
+			return fx.a
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			a := tc.build(t)
+			a.visible, a.level = false, 0
+			run := a.shortcutAction(tc.kind)
+
+			run()
+			if !a.visible || a.currentLevel() != 2 || a.currentPage().id() != tc.page {
+				t.Fatalf("open from closed: visible=%v level=%d page=%v", a.visible, a.currentLevel(), a.currentPage().id())
+			}
+			run()
+			if a.visible {
+				t.Fatalf("the second press did not fold the panel on %v", tc.page)
+			}
+
+			// From another page it switches rather than folds.
+			run()
+			other := pageTray
+			if tc.page == pageTray {
+				other = pageClipboard
+			}
+			a.setTab(other)
+			if a.currentPage().id() != other {
+				t.Fatalf("the test did not switch pages: %v", a.currentPage().id())
+			}
+			run()
+			if !a.visible || a.currentPage().id() != tc.page {
+				t.Fatalf("from %v: visible=%v page=%v", other, a.visible, a.currentPage().id())
+			}
+		})
+	}
+}
+
+// The clipboard search has no window in a headless shelf, so its toggle is
+// driven from the states it changes: the search bar opens it, the page
+// folds it with or without a query, and another page switches to it.
+func TestClipboardShortcutTogglesItsPage(t *testing.T) {
+	a, _ := levelShelf(t)
+	a.visible, a.level, a.tab = true, 1, pageClipboard
+	run := a.shortcutAction(shortcutClipboard)
+	run()
+	if !a.visible || a.currentLevel() != 2 || a.currentPage().id() != pageClipboard {
+		t.Fatalf("the search bar did not open the clipboard page: visible=%v level=%d page=%v",
+			a.visible, a.currentLevel(), a.currentPage().id())
+	}
+	a.search = "报告"
+	run()
+	if a.visible {
+		t.Fatal("a second press on the clipboard page did not fold while searching")
+	}
+	a.visible, a.level, a.tab = true, 2, pageTray
+	run()
+	if !a.visible || a.currentPage().id() != pageClipboard {
+		t.Fatalf("from the tray: visible=%v page=%v", a.visible, a.currentPage().id())
+	}
+}
+
+// While AI 用量 is off the page is not in the panel: both presses open the
+// Settings page that turns it on.
+func TestUsageShortcutStaysOnSettingsWhileDisabled(t *testing.T) {
+	origOpen := settingsOpen
+	opened := 0
+	settingsOpen = func(*shelf) { opened++ }
+	t.Cleanup(func() { settingsOpen = origOpen })
+	a, _ := newSettingsShelf(t)
+	a.visible, a.level, a.tab = true, 2, pageTray
+	run := a.shortcutAction(shortcutUsage)
+	run()
+	run()
+	if opened != 2 || a.settingsPage != settingsPageAIUsage {
+		t.Fatalf("disabled usage: opened=%d page=%v", opened, a.settingsPage)
+	}
+}

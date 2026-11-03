@@ -93,11 +93,11 @@ func (a *shelf) shortcutAction(k shortcutKind) func() {
 	case shortcutToggle:
 		return a.toggle
 	case shortcutClipboard:
-		return a.openClipboardSearch
+		return func() { a.togglePageShortcut(pageClipboard, a.openClipboardSearch) }
 	case shortcutCapture:
 		return a.startScreenOCR
 	case shortcutOpenTray:
-		return a.openTray
+		return func() { a.togglePageShortcut(pageTray, a.openTray) }
 	case shortcutPlayPause:
 		return func() { playerShortcut(a, mac.NPPlayPause) }
 	case shortcutPrevious:
@@ -105,9 +105,9 @@ func (a *shelf) shortcutAction(k shortcutKind) func() {
 	case shortcutNext:
 		return func() { playerShortcut(a, mac.NPNext) }
 	case shortcutTools:
-		return func() { a.showPage(pageTools) }
+		return func() { a.togglePageShortcut(pageTools, func() { a.showPage(pageTools) }) }
 	case shortcutUsage:
-		return a.openUsagePage
+		return func() { a.togglePageShortcut(pageUsage, a.openUsagePage) }
 	case shortcutAwake:
 		return a.toggleAwake
 	case shortcutNote:
@@ -116,6 +116,18 @@ func (a *shelf) shortcutAction(k shortcutKind) func() {
 		return a.togglePet
 	}
 	return func() {}
+}
+
+// togglePageShortcut is a page shortcut's second press: while the panel is
+// open on that page at the sheet level, the same key folds it away through
+// the ordinary hide path; every other state opens or switches to the page,
+// as the key always did.
+func (a *shelf) togglePageShortcut(p pageID, open func()) {
+	if a.visible && a.currentLevel() == 2 && a.currentPage().id() == p {
+		a.hide(hideExplicit)
+		return
+	}
+	open()
 }
 
 // playerShortcut forwards a transport command to the now-playing app; a
