@@ -5983,16 +5983,6 @@ func (msgs Messages) MusicVolumeUnsupported() string {
 	return Catalog.Format(msgs.locale, "musicVolumeUnsupported", nil)
 }
 
-// SettingsGeneralHero says "启动、语言和更新。"
-// in the language the app shows.
-func SettingsGeneralHero() string { return In(i18n.Locale()).SettingsGeneralHero() }
-
-// SettingsGeneralHero says "启动、语言和更新。"
-// in the language of msgs.
-func (msgs Messages) SettingsGeneralHero() string {
-	return Catalog.Format(msgs.locale, "settingsGeneralHero", nil)
-}
-
 // SettingsStartupGroup says "启动"
 // in the language the app shows.
 func SettingsStartupGroup() string { return In(i18n.Locale()).SettingsStartupGroup() }
@@ -6139,16 +6129,6 @@ func (msgs Messages) SettingsNotchPage() string {
 	return Catalog.Format(msgs.locale, "settingsNotchPage", nil)
 }
 
-// SettingsNotchHero says "Rakko 长什么样，以及收起时刘海会告诉你什么。"
-// in the language the app shows.
-func SettingsNotchHero() string { return In(i18n.Locale()).SettingsNotchHero() }
-
-// SettingsNotchHero says "Rakko 长什么样，以及收起时刘海会告诉你什么。"
-// in the language of msgs.
-func (msgs Messages) SettingsNotchHero() string {
-	return Catalog.Format(msgs.locale, "settingsNotchHero", nil)
-}
-
 // SettingsShapeGroup says "外形"
 // in the language the app shows.
 func SettingsShapeGroup() string { return In(i18n.Locale()).SettingsShapeGroup() }
@@ -6179,16 +6159,6 @@ func (msgs Messages) SettingsWindowGroup() string {
 	return Catalog.Format(msgs.locale, "settingsWindowGroup", nil)
 }
 
-// SettingsTrayHero says "拖到刘海的文件和转换结果都放在这里。"
-// in the language the app shows.
-func SettingsTrayHero() string { return In(i18n.Locale()).SettingsTrayHero() }
-
-// SettingsTrayHero says "拖到刘海的文件和转换结果都放在这里。"
-// in the language of msgs.
-func (msgs Messages) SettingsTrayHero() string {
-	return Catalog.Format(msgs.locale, "settingsTrayHero", nil)
-}
-
 // SettingsTidyGroup says "整理"
 // in the language the app shows.
 func SettingsTidyGroup() string { return In(i18n.Locale()).SettingsTidyGroup() }
@@ -6197,16 +6167,6 @@ func SettingsTidyGroup() string { return In(i18n.Locale()).SettingsTidyGroup() }
 // in the language of msgs.
 func (msgs Messages) SettingsTidyGroup() string {
 	return Catalog.Format(msgs.locale, "settingsTidyGroup", nil)
-}
-
-// SettingsClipHero says "复制过的文字、链接和截图，都留在你的 Mac 上。"
-// in the language the app shows.
-func SettingsClipHero() string { return In(i18n.Locale()).SettingsClipHero() }
-
-// SettingsClipHero says "复制过的文字、链接和截图，都留在你的 Mac 上。"
-// in the language of msgs.
-func (msgs Messages) SettingsClipHero() string {
-	return Catalog.Format(msgs.locale, "settingsClipHero", nil)
 }
 
 // SettingsClipGroup says "记录"
@@ -6219,16 +6179,6 @@ func (msgs Messages) SettingsClipGroup() string {
 	return Catalog.Format(msgs.locale, "settingsClipGroup", nil)
 }
 
-// SettingsAIHero says "在刘海里看 Claude Code、Codex 的套餐额度和本机所有 AI 工具的用量。"
-// in the language the app shows.
-func SettingsAIHero() string { return In(i18n.Locale()).SettingsAIHero() }
-
-// SettingsAIHero says "在刘海里看 Claude Code、Codex 的套餐额度和本机所有 AI 工具的用量。"
-// in the language of msgs.
-func (msgs Messages) SettingsAIHero() string {
-	return Catalog.Format(msgs.locale, "settingsAIHero", nil)
-}
-
 // SettingsAIEnableGroup says "显示"
 // in the language the app shows.
 func SettingsAIEnableGroup() string { return In(i18n.Locale()).SettingsAIEnableGroup() }
@@ -6237,16 +6187,6 @@ func SettingsAIEnableGroup() string { return In(i18n.Locale()).SettingsAIEnableG
 // in the language of msgs.
 func (msgs Messages) SettingsAIEnableGroup() string {
 	return Catalog.Format(msgs.locale, "settingsAIEnableGroup", nil)
-}
-
-// SettingsKeysHero says "点一下快捷键，再按新的组合键。按 Delete 清空。"
-// in the language the app shows.
-func SettingsKeysHero() string { return In(i18n.Locale()).SettingsKeysHero() }
-
-// SettingsKeysHero says "点一下快捷键，再按新的组合键。按 Delete 清空。"
-// in the language of msgs.
-func (msgs Messages) SettingsKeysHero() string {
-	return Catalog.Format(msgs.locale, "settingsKeysHero", nil)
 }
 
 // SettingsKeysGlobalGroup says "全局快捷键"
@@ -6359,16 +6299,6 @@ func (msgs Messages) SettingsShortcutSelectRow() string {
 	return Catalog.Format(msgs.locale, "settingsShortcutSelectRow", nil)
 }
 
-// SettingsPermHero says "都在你的 Mac 上处理，不上传。"
-// in the language the app shows.
-func SettingsPermHero() string { return In(i18n.Locale()).SettingsPermHero() }
-
-// SettingsPermHero says "都在你的 Mac 上处理，不上传。"
-// in the language of msgs.
-func (msgs Messages) SettingsPermHero() string {
-	return Catalog.Format(msgs.locale, "settingsPermHero", nil)
-}
-
 // SettingsPermNeeded says "权限"
 // in the language the app shows.
 func SettingsPermNeeded() string { return In(i18n.Locale()).SettingsPermNeeded() }
@@ -6417,16 +6347,6 @@ func SettingsAboutHero() string { return In(i18n.Locale()).SettingsAboutHero() }
 // in the language of msgs.
 func (msgs Messages) SettingsAboutHero() string {
 	return Catalog.Format(msgs.locale, "settingsAboutHero", nil)
-}
-
-// SettingsAboutHeroLine says "住在 Mac 刘海里的工具。"
-// in the language the app shows.
-func SettingsAboutHeroLine() string { return In(i18n.Locale()).SettingsAboutHeroLine() }
-
-// SettingsAboutHeroLine says "住在 Mac 刘海里的工具。"
-// in the language of msgs.
-func (msgs Messages) SettingsAboutHeroLine() string {
-	return Catalog.Format(msgs.locale, "settingsAboutHeroLine", nil)
 }
 
 // SettingsAboutVersion says "版本 {version}（{arch}）"

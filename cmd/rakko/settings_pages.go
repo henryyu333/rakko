@@ -61,7 +61,7 @@ var (
 // broken settings.json; every other row is locked with the file.
 func (a *shelf) settingsGeneralPage(c *ui.Context) {
 	l := loc(c)
-	settingsHero(c, "general", l.General(), l.SettingsGeneralHero(), "neutral",
+	settingsHero(c, "general", l.General(), "neutral",
 		heroGeneralFrom, heroGeneralTo, heroGeneralGlow)
 
 	settingsGroup(c, "startup", l.SettingsStartupGroup(), "", func() {
@@ -107,7 +107,7 @@ func (a *shelf) settingsGeneralPage(c *ui.Context) {
 // desktop otter, the three live activities, and window snapping.
 func (a *shelf) settingsNotchPage(c *ui.Context) {
 	l := loc(c)
-	settingsHero(c, "notch", l.SettingsNotchPage(), l.SettingsNotchHero(), "curious",
+	settingsHero(c, "notch", l.SettingsNotchPage(), "curious",
 		heroNotchFrom, heroNotchTo, heroNotchGlow)
 
 	settingsGroup(c, "shape", l.SettingsShapeGroup(), "", func() {
@@ -186,7 +186,7 @@ func (a *shelf) setLiveActivity(mutate func(*settings.Settings)) {
 // settingsTrayPage: the tray's own two rules.
 func (a *shelf) settingsTrayPage(c *ui.Context) {
 	l := loc(c)
-	settingsHero(c, "tray", l.SettingsTraySection(), l.SettingsTrayHero(), "happy",
+	settingsHero(c, "tray", l.SettingsTraySection(), "happy",
 		heroTrayFrom, heroTrayTo, heroTrayGlow)
 
 	settingsGroupRows(c, "tidy", l.SettingsTidyGroup(), "", a.settingsBroken, func() {
@@ -212,7 +212,7 @@ func (a *shelf) settingsTrayPage(c *ui.Context) {
 // same removal the old list offered.
 func (a *shelf) settingsClipboardPage(c *ui.Context) {
 	l := loc(c)
-	settingsHero(c, "clip", l.SettingsClipboardSection(), l.SettingsClipHero(), "surprised",
+	settingsHero(c, "clip", l.SettingsClipboardSection(), "surprised",
 		heroClipFrom, heroClipTo, heroClipGlow)
 
 	settingsGroupRows(c, "record", l.SettingsClipGroup(), "", a.settingsBroken, func() {
@@ -262,7 +262,7 @@ func (a *shelf) settingsClipboardPage(c *ui.Context) {
 // per-agent list and no source checkbox table.
 func (a *shelf) settingsAIUsagePage(c *ui.Context) {
 	l := loc(c)
-	settingsHero(c, "usage", l.SettingsAISection(), l.SettingsAIHero(), "curious",
+	settingsHero(c, "usage", l.SettingsAISection(), "curious",
 		heroUsageFrom, heroUsageTo, heroUsageGlow)
 
 	settingsGroupRows(c, "ai", l.SettingsAIEnableGroup(), "", a.settingsBroken, func() {
@@ -423,7 +423,7 @@ func (a *shelf) aiQuotaCaption(t aiusage.Tool, l locales.Messages) string {
 // press the new combination) and the two the panel answers, read-only.
 func (a *shelf) settingsShortcutsPage(c *ui.Context) {
 	l := loc(c)
-	settingsHero(c, "keys", l.SettingsShortcutsSection(), l.SettingsKeysHero(), "neutral",
+	settingsHero(c, "keys", l.SettingsShortcutsSection(), "neutral",
 		heroKeysFrom, heroKeysTo, heroKeysGlow)
 
 	settingsGroupRows(c, "keys", l.SettingsKeysGlobalGroup(), "", a.settingsBroken, func() {
@@ -530,7 +530,7 @@ func (a *shelf) settingsPermissionsPage(c *ui.Context) {
 	l := loc(c)
 	permissions := systemPermissionSet(l)
 	missing := missingPermissions(permissions)
-	settingsHero(c, "perm", l.PermTitle(), l.SettingsPermHero(), "neutral",
+	settingsHero(c, "perm", l.PermTitle(), "neutral",
 		heroPermFrom, heroPermTo, heroPermGlow)
 
 	settingsGroup(c, "perm", l.SettingsPermNeeded(), "", func() {
@@ -562,7 +562,7 @@ func (a *shelf) settingsPermissionsPage(c *ui.Context) {
 // privacy and source notes.
 func (a *shelf) settingsAboutPage(c *ui.Context) {
 	l := loc(c)
-	settingsHero(c, "about", l.SettingsAboutHero(), l.SettingsAboutHeroLine(), "",
+	settingsHero(c, "about", l.SettingsAboutHero(), "happy",
 		heroAboutFrom, heroAboutTo, heroAboutGlow)
 
 	ui.Row(c.Key("about")).FillWidth().AlignItems(ui.Center).Gap(18).Padding(4, 4, 4, 4).Children(func() {

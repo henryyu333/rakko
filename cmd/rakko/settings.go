@@ -87,7 +87,7 @@ const (
 // settingsSidebarWidth and the metrics below are the design spec's numbers.
 const (
 	settingsSidebarWidth = 212
-	settingsHeroHeight   = 118
+	settingsHeroHeight   = 96
 	settingsRowMinHeight = 50
 	settingsRowPadX      = 16
 	settingsRowPadY      = 10
@@ -447,11 +447,8 @@ func (a *shelf) settingsPageBody(c *ui.Context) {
 	}
 }
 
-// settingsHero paints one page's title card: a 118pt gradient with a glow
-// and sparse stars, the page's name and a line about it on the left, and
-// the otter in the page's mood standing at the right, cut by the card's
-// bottom edge. A missing otter picture leaves the card as it is.
-func settingsHero(c *ui.Context, key, title, subtitle, mood string, from, to, glow ui.Color) {
+// settingsHero paints a compact page title and its otter illustration.
+func settingsHero(c *ui.Context, key, title, mood string, from, to, glow ui.Color) {
 	box := ui.Box(c.Key("hero-" + key)).Height(settingsHeroHeight).FillWidth().Radius(16).Clip().
 		LinearGradient(ui.LinearGradient{From: from, To: to, Angle: 135})
 	box.Draw(func(p *ui.Painter, r ui.Rect) {
@@ -478,15 +475,13 @@ func settingsHero(c *ui.Context, key, title, subtitle, mood string, from, to, gl
 		})
 	})
 	box.Children(func() {
-		ui.Text(c, title).SingleLine().Absolute().Left(22).Top(24).
+		ui.Text(c, title).SingleLine().Absolute().Left(22).Top(30).
 			FontSize(26).FontWeight(700).TextColor(ink)
-		ui.Text(c, subtitle).Absolute().Left(22).Top(64).MaxWidth(330).
-			FontSize(12.5).TextColor(ink2)
 		if b := otterImage(mood); b != nil {
 			w, h := b.Size()
-			height := float32(96)
+			height := float32(84)
 			width := height * float32(w) / float32(h)
-			ui.Image(c.Key("otter"), b).Absolute().Right(22).Bottom(-6).
+			ui.Image(c.Key("otter"), b).Absolute().Right(22).Bottom(0).
 				Size(width, height).Fit(ui.Contain)
 		}
 	})
