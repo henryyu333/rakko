@@ -247,7 +247,7 @@ func (a *shelf) toolCard(c *ui.Context, spec layout.Card, surf toolCardSurface, 
 	} else if hot {
 		card.Scale(1.03, 1.03).TransformOrigin(0.5, 0.5)
 	}
-	if dragPaint && toolCardDimmed(def, class) {
+	if (dragPaint && toolCardDimmed(def, class)) || (surf == cardPanel && def.kind == cardAction && a.conv != nil && a.conv.busy()) {
 		card.Disabled(true).Opacity(0.38)
 	}
 	if surf == cardEdit {
