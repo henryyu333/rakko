@@ -19,10 +19,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/egoist/mygo/i18n"
-
 	"rakko/internal/mac"
-	"rakko/locales"
 )
 
 const audioPollInterval = time.Second
@@ -32,7 +29,7 @@ type audioModule struct {
 	// list and battery are seams: tests never touch CoreAudio and never run
 	// system_profiler.
 	list    func() []mac.AudioOutput
-	battery func(name string) []string
+	battery func(name string) []batteryLevel
 	// dispatch delivers the battery result to the main thread.
 	dispatch func(func())
 	now      func() time.Time
@@ -150,7 +147,7 @@ func (m *audioModule) lookupBattery(uid, name, token string, gen int) {
 // readBluetoothLevels asks system_profiler for the connected devices'
 // battery percentages and returns the ones it names, in 左 / 右 / 盒 order.
 // An over-ear headset often reports one main level; that is shown as 电量.
-func readBluetoothLevels(name string) []string {
+func readBluetoothLevels(name string) []batteryLevel {
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, "/usr/sbin/system_profiler", "SPBluetoothDataType", "-json").Output()
@@ -161,7 +158,7 @@ func readBluetoothLevels(name string) []string {
 }
 
 // parseBluetoothLevels reads the connected devices out of the report.
-func parseBluetoothLevels(out []byte, name string) []string {
+func parseBluetoothLevels(out []byte, name string) []batteryLevel {
 	var doc struct {
 		Data []map[string]json.RawMessage `json:"SPBluetoothDataType"`
 	}
@@ -198,25 +195,21 @@ func sameDevice(a, b string) bool {
 	return norm(a) == norm(b)
 }
 
-func batteryLevels(props map[string]any) []string {
-	// The levels are words, not numbers: they say 左 / 右 / 盒 / 电量 in the
-	// language the app shows. The poll runs off the main thread, outside a
-	// view, so the catalog's own language is the one to ask.
-	l := locales.In(i18n.Locale())
-	var levels []string
+func batteryLevels(props map[string]any) []batteryLevel {
+	var levels []batteryLevel
 	for _, f := range []struct {
-		key   string
-		label func(locales.Messages, int) string
+		key  string
+		part batteryPart
 	}{
-		{"device_batteryLevelLeft", locales.Messages.AudioLevelLeft},
-		{"device_batteryLevelRight", locales.Messages.AudioLevelRight},
-		{"device_batteryLevelCase", locales.Messages.AudioLevelCase},
-		{"device_batteryLevelMain", locales.Messages.AudioLevelMain},
-		{"device_batteryLevel", locales.Messages.AudioLevelMain},
+		{"device_batteryLevelLeft", batteryLeft},
+		{"device_batteryLevelRight", batteryRight},
+		{"device_batteryLevelCase", batteryCase},
+		{"device_batteryLevelMain", batteryWhole},
+		{"device_batteryLevel", batteryWhole},
 	} {
 		if v, ok := props[f.key]; ok {
 			if pct, ok := percentOf(v); ok {
-				levels = append(levels, f.label(l, pct))
+				levels = append(levels, batteryLevel{part: f.part, pct: pct})
 			}
 		}
 	}

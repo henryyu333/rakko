@@ -128,9 +128,9 @@ func TestLiveSmokeStates(t *testing.T) {
 		host: a, list: func() []mac.AudioOutput { return devs }, now: time.Now,
 		known: map[string]string{}, dispatch: onMain,
 	}
-	am.battery = func(name string) []string {
+	am.battery = func(name string) []batteryLevel {
 		if name == "AirPods Pro" {
-			return []string{"左 80%", "右 78%", "盒 50%"}
+			return []batteryLevel{{part: batteryLeft, pct: 80}, {part: batteryRight, pct: 78}, {part: batteryCase, pct: 50}}
 		}
 		return nil
 	}

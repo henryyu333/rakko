@@ -343,9 +343,8 @@ func galleryGroupA() []galleryItem {
 			return galleryRender{view: galleryPanel(t, lang, a, sheetW, 90)}
 		}},
 		{ID: "A17", Group: g, Title: "实时活动", State: "耳机 · 左 80% 右 78% 盒 50%", Notch: true, Build: galleryLive(func(lang string) liveEvent {
-			l := galleryLoc(lang)
 			return liveEvent{kind: liveHeadset, label: "AirPods Pro",
-				levels: []string{l.AudioLevelLeft(80), l.AudioLevelRight(78), l.AudioLevelCase(50)}}
+				levels: []batteryLevel{{part: batteryLeft, pct: 80}, {part: batteryRight, pct: 78}, {part: batteryCase, pct: 50}}}
 		})},
 		{ID: "A18", Group: g, Title: "实时活动", State: "耳机 · 已连接（没有电量）", Notch: true, Build: galleryLive(func(lang string) liveEvent {
 			return liveEvent{kind: liveHeadset, label: "AirPods Pro"}

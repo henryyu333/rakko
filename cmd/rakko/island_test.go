@@ -461,7 +461,7 @@ func TestIslandLiveShapes(t *testing.T) {
 	if w, h := a.liveShape(done); h != islandCapsuleH || w < 280 || w > fbMaxW {
 		t.Fatalf("island download-done shape = %.0fx%.0f, want a 36pt capsule", w, h)
 	}
-	if w, h := a.liveShape(liveEvent{kind: liveHeadset, label: "AirPods Pro", levels: []string{"左 80%", "右 78%", "盒 50%"}}); h != 36 || w < 330 {
+	if w, h := a.liveShape(liveEvent{kind: liveHeadset, label: "AirPods Pro", levels: []batteryLevel{{part: batteryLeft, pct: 80}, {part: batteryRight, pct: 78}, {part: batteryCase, pct: 50}}}); h != 36 || w < 330 {
 		t.Fatalf("island headphone shape = %.0fx%.0f, want a >=330pt 36pt capsule", w, h)
 	}
 

@@ -379,7 +379,7 @@ func TestIslandLiveSmokeShots(t *testing.T) {
 
 	onMain(func() {
 		a.pushLive(liveEvent{kind: liveHeadset, label: "AirPods Pro",
-			levels: []string{"左 80%", "右 78%", "盒 50%"}}, 6*time.Second, time.Now())
+			levels: []batteryLevel{{part: batteryLeft, pct: 80}, {part: batteryRight, pct: 78}, {part: batteryCase, pct: 50}}}, 6*time.Second, time.Now())
 	})
 	time.Sleep(650 * time.Millisecond)
 	islandShot(t, a, "live-headphones", 80*time.Millisecond)

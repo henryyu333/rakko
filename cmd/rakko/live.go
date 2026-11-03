@@ -108,11 +108,40 @@ func (k liveKind) wings() bool {
 	return k == liveCharging || k == liveCharged || k == liveLow
 }
 
+// batteryPart is one percentage a headset reports.
+type batteryPart int
+
+const (
+	batteryLeft batteryPart = iota
+	batteryRight
+	batteryCase
+	batteryWhole
+)
+
+// batteryLevel is one part of a headset's charge.
+type batteryLevel struct {
+	part batteryPart
+	pct  int
+}
+
+// text is the localized 「左 80%」 line used in accessible names.
+func (b batteryLevel) text(l locales.Messages) string {
+	switch b.part {
+	case batteryLeft:
+		return l.AudioLevelLeft(b.pct)
+	case batteryRight:
+		return l.AudioLevelRight(b.pct)
+	case batteryCase:
+		return l.AudioLevelCase(b.pct)
+	}
+	return l.AudioLevelMain(b.pct)
+}
+
 // liveEvent is one queued activity.
 type liveEvent struct {
 	kind   liveKind
-	label  string   // 正在充电 / 已充满 / 电量低 / device or file name / 3 个文件
-	levels []string // 左 80% / 右 78% / 盒 50%, when the device reports them
+	label  string         // 正在充电 / 已充满 / 电量低 / device or file name / 3 个文件
+	levels []batteryLevel // 左 / 右 / 盒 / 整机, when the device reports them
 	pct    int
 	// paths are the downloaded files, for the completion capsule's click:
 	// one scan's completions share one event.
@@ -314,7 +343,7 @@ func (a *shelf) liveNow(now time.Time, allow bool) (liveEvent, bool) {
 
 // liveEnrich attaches a late battery reading to the event that announced
 // the same device, whether it is on screen or still queued.
-func (a *shelf) liveEnrich(token string, levels []string) {
+func (a *shelf) liveEnrich(token string, levels []batteryLevel) {
 	if token == "" {
 		return
 	}
@@ -371,6 +400,9 @@ func liveCapsuleWidth(l locales.Messages, ev liveEvent, baseW float32) float32 {
 		minW = 250
 	}
 	w := liveIconWidth(ev.kind) + 2*fbPadX
+	if ev.kind == liveHeadset && len(ev.levels) == 0 {
+		w += 18 + fbGap // the model glyph before the connected text
+	}
 	first := false
 	add := func(text string, size float32) {
 		if text == "" {
@@ -385,8 +417,8 @@ func liveCapsuleWidth(l locales.Messages, ev liveEvent, baseW float32) float32 {
 	switch ev.kind {
 	case liveHeadset, liveHeadsetOff:
 		add(ev.label, 12)
-		for _, lv := range ev.levels {
-			add(lv, 12)
+		for range ev.levels {
+			w += fbGap + 20 + 3 + liveTextWidth("100%", 10.5)
 		}
 		if ev.kind == liveHeadsetOff {
 			add(l.LiveDisconnected(), 12)
@@ -423,10 +455,13 @@ func liveTextWidth(s string, size float32) float32 {
 	return w
 }
 
-// liveIconWidth is the leading glyph's width in the capsule.
+// liveIconWidth is the leading glyph's width in the capsule. A headset
+// with battery parts draws no leading glyph: each part's ring is its icon.
 func liveIconWidth(k liveKind) float32 {
 	switch k {
-	case liveHeadset, liveHeadsetOff:
+	case liveHeadset:
+		return 0
+	case liveHeadsetOff:
 		return 18
 	case liveDownloadDone:
 		return 13
@@ -520,7 +555,12 @@ func (ev liveEvent) statusLineIn(l locales.Messages) string {
 	case liveHeadsetOff:
 		return l.LiveStatusOff(ev.label)
 	case liveHeadset:
-		return strings.Join(append([]string{ev.label}, ev.levels...), " ")
+		parts := make([]string, 0, len(ev.levels)+1)
+		parts = append(parts, ev.label)
+		for _, lv := range ev.levels {
+			parts = append(parts, lv.text(l))
+		}
+		return strings.Join(parts, " ")
 	case liveCharging:
 		return l.LiveStatusCharging(ev.pct)
 	case liveCharged:

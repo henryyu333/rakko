@@ -357,11 +357,11 @@ func TestAudioConnectAndDisconnect(t *testing.T) {
 func TestBluetoothLevelParsing(t *testing.T) {
 	report := []byte(`{"SPBluetoothDataType":[{"device_connected":[{"AirPods Pro":{"device_batteryLevelLeft":"80%","device_batteryLevelRight":"78 %","device_batteryLevelCase":"50%"}},{"Sony WH-1000XM5":{"device_batteryLevelMain":"65%"}}]}]}`)
 	levels := parseBluetoothLevels(report, "AirPods Pro")
-	want := []string{"左 80%", "右 78%", "盒 50%"}
+	want := []batteryLevel{{part: batteryLeft, pct: 80}, {part: batteryRight, pct: 78}, {part: batteryCase, pct: 50}}
 	if fmt.Sprint(levels) != fmt.Sprint(want) {
 		t.Fatalf("levels = %v, want %v", levels, want)
 	}
-	if got := parseBluetoothLevels(report, "Sony WH-1000XM5"); fmt.Sprint(got) != "[电量 65%]" {
+	if got := parseBluetoothLevels(report, "Sony WH-1000XM5"); fmt.Sprint(got) != fmt.Sprint([]batteryLevel{{part: batteryWhole, pct: 65}}) {
 		t.Fatalf("single level = %v", got)
 	}
 	if got := parseBluetoothLevels(report, "Unknown"); got != nil {
@@ -496,10 +496,12 @@ func TestLiveViewsDrawTheirWords(t *testing.T) {
 
 	a.clearLive()
 	a.fx.peekKind = peekChevron
-	a.pushLive(liveEvent{kind: liveHeadset, label: "AirPods Pro", levels: []string{"左 80%", "右 78%", "盒 50%"}}, liveHoldHeadset, now.Add(time.Second))
+	a.pushLive(liveEvent{kind: liveHeadset, label: "AirPods Pro", levels: []batteryLevel{
+		{part: batteryLeft, pct: 80}, {part: batteryRight, pct: 78}, {part: batteryCase, pct: 50},
+	}}, liveHoldHeadset, now.Add(time.Second))
 	view2 := ui.NewTester(a.view, sheetW, panelTestH)
 	view2.Frame()
-	for _, want := range []string{"AirPods Pro", "左 80%", "右 78%", "盒 50%"} {
+	for _, want := range []string{"AirPods Pro", "80%", "78%", "50%"} {
 		if !view2.HasText(want) {
 			t.Fatalf("headphone capsule lost %q: %v", want, view2.Texts())
 		}
@@ -581,7 +583,9 @@ func TestLiveShapesFitTheNotchBand(t *testing.T) {
 		t.Fatalf("download shape = %gx%g, want the same wings %gx%g", dw, dh, w, h)
 	}
 	for _, ev := range []liveEvent{
-		{kind: liveHeadset, label: "AirPods Pro", levels: []string{"左 80%", "右 78%", "盒 50%"}},
+		{kind: liveHeadset, label: "AirPods Pro", levels: []batteryLevel{
+			{part: batteryLeft, pct: 80}, {part: batteryRight, pct: 78}, {part: batteryCase, pct: 50},
+		}},
 		{kind: liveHeadset, label: "Sony WH-1000XM5"},
 		{kind: liveHeadsetOff, label: "AirPods Pro"},
 		{kind: liveDownloadDone, label: "设计稿-v3.zip"},
@@ -637,12 +641,12 @@ func TestAudioBatteryPerDevice(t *testing.T) {
 	m.tick(now) // seed
 
 	dispatched := make(chan func(), 4)
-	m.battery = func(name string) []string {
+	m.battery = func(name string) []batteryLevel {
 		switch name {
 		case "AirPods Pro":
-			return []string{"左 80%"}
+			return []batteryLevel{{part: batteryLeft, pct: 80}}
 		case "Sony WH-1000XM5":
-			return []string{"电量 65%"}
+			return []batteryLevel{{part: batteryWhole, pct: 65}}
 		}
 		return nil
 	}
@@ -668,10 +672,10 @@ func TestAudioBatteryPerDevice(t *testing.T) {
 	for _, fn := range pending {
 		fn()
 	}
-	if got := a.live.queued[0].levels; fmt.Sprint(got) != "[左 80%]" {
+	if got := a.live.queued[0].levels; fmt.Sprint(got) != fmt.Sprint([]batteryLevel{{part: batteryLeft, pct: 80}}) {
 		t.Fatalf("AirPods levels = %v, want its own answer", got)
 	}
-	if got := a.live.queued[1].levels; fmt.Sprint(got) != "[电量 65%]" {
+	if got := a.live.queued[1].levels; fmt.Sprint(got) != fmt.Sprint([]batteryLevel{{part: batteryWhole, pct: 65}}) {
 		t.Fatalf("Sony levels = %v, want its own answer", got)
 	}
 }

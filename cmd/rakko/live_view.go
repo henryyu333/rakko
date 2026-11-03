@@ -33,6 +33,11 @@ var (
 	liveBoltSym   = ui.MustParseSVG([]byte(`<svg viewBox="0 0 11 14" xmlns="http://www.w3.org/2000/svg"><path d="M6.5 0 0 8h4.5L3.8 14 11 5.5H6.3z" fill="currentColor"/></svg>`))
 	livePhonesSym = ui.MustParseSVG([]byte(`<svg viewBox="0 0 17 16" xmlns="http://www.w3.org/2000/svg"><path d="M2 10V8.5a6.5 6.5 0 0 1 13 0V10" stroke="currentColor" stroke-width="1.6" fill="none"/><rect x="1" y="9" width="4" height="6" rx="1.5" fill="currentColor"/><rect x="12" y="9" width="4" height="6" rx="1.5" fill="currentColor"/></svg>`))
 	liveFileSym   = ui.MustParseSVG([]byte(`<svg viewBox="0 0 13 16" xmlns="http://www.w3.org/2000/svg"><path d="M1.5 0h6.6L13 4.9v9.6A1.5 1.5 0 0 1 11.5 16h-10A1.5 1.5 0 0 1 0 14.5v-13A1.5 1.5 0 0 1 1.5 0z" fill="#D1D1D6"/><path d="M8 0v5h5" fill="#A1A1A6"/></svg>`))
+	// livePodSym / livePodRightSym are one earbud each, the fallback inside a
+	// battery ring when the system symbol is unavailable (headless
+	// rendering, unusual model).
+	livePodSym      = ui.MustParseSVG([]byte(`<svg viewBox="0 0 10 16" xmlns="http://www.w3.org/2000/svg"><circle cx="4.2" cy="4.4" r="3.2" fill="currentColor"/><rect x="3" y="6.2" width="2.6" height="8.4" rx="1.3" fill="currentColor"/></svg>`))
+	livePodRightSym = ui.MustParseSVG([]byte(`<svg viewBox="0 0 10 16" xmlns="http://www.w3.org/2000/svg"><circle cx="5.8" cy="4.4" r="3.2" fill="currentColor"/><rect x="4.4" y="6.2" width="2.6" height="8.4" rx="1.3" fill="currentColor"/></svg>`))
 )
 
 // liveView draws the event the queue is showing at the shell's final size.
@@ -194,15 +199,12 @@ func headsetSymbol(label string) string {
 
 var headsetSymbols = map[string]*ui.Bitmap{}
 
-// headsetBitmap caches a white template raster; nil keeps the generic fallback.
+// headsetBitmap caches a white template raster of one SF Symbol by name.
 func headsetBitmap(name string) *ui.Bitmap {
 	if b, ok := headsetSymbols[name]; ok {
 		return b
 	}
 	data := mac.SystemSymbol(name, 24)
-	if len(data) == 0 && name != "headphones" {
-		data = mac.SystemSymbol("headphones", 24)
-	}
 	var b *ui.Bitmap
 	if src, err := png.Decode(bytes.NewReader(data)); err == nil {
 		dst := image.NewNRGBA(src.Bounds())
@@ -217,16 +219,80 @@ func headsetBitmap(name string) *ui.Bitmap {
 	headsetSymbols[name] = b
 	return b
 }
+
+// headsetGlyph draws the device's own symbol; the generic headphones is
+// the last resort when the model's symbol or AppKit is unavailable.
 func (a *shelf) headsetGlyph(c *ui.Context, label string) {
 	var glyph *ui.Bitmap
 	if a.win != nil {
 		glyph = headsetBitmap(headsetSymbol(label))
+		if glyph == nil {
+			glyph = headsetBitmap("headphones")
+		}
 	}
 	if glyph != nil {
 		ui.Image(c.Key("headset-symbol"), glyph).Size(18, 18).Fit(ui.Contain)
 	} else {
 		ui.Icon(c, livePhonesSym).Size(17, 16).TextColor(ink)
 	}
+}
+
+// batterySymbol names the part glyph for the device model.
+func batterySymbol(model string, part batteryPart) string {
+	switch part {
+	case batteryLeft:
+		return "airpod.left"
+	case batteryRight:
+		return "airpod.right"
+	case batteryCase:
+		if strings.Contains(strings.ToLower(model), "pro") {
+			return "airpodspro.chargingcase.wireless"
+		}
+		return "airpods.chargingcase"
+	}
+	return headsetSymbol(model)
+}
+
+// batteryBadge is one part: its glyph inside a charge ring, the percentage
+// beside it. The ring tracks fill3 and fills white, turning red at 20% or
+// less; the capsule's height never changes.
+func (a *shelf) batteryBadge(c *ui.Context, model string, lv batteryLevel) {
+	col := ui.RGB(255, 255, 255)
+	if lv.pct <= 20 {
+		col = danger
+	}
+	key := "live-" + strconv.Itoa(int(lv.part))
+	group := ui.Row(c.Key(key)).Gap(3).AlignItems(ui.Center)
+	group.Children(func() {
+		ring := ui.Box(c.Key("ring")).Size(20, 20).Center()
+		ring.Draw(func(p *ui.Painter, r ui.Rect) {
+			cx, cy := r.X+r.W/2, r.Y+r.H/2
+			var track ui.Path
+			track.Circle(cx, cy, 8.5)
+			p.StrokePath(&track, 2, fill3)
+			strokeRingArc(p, cx, cy, 8.5, 2, float32(max(lv.pct, 0))/100, col)
+		})
+		ring.Children(func() {
+			var glyph *ui.Bitmap
+			if a.win != nil {
+				glyph = headsetBitmap(batterySymbol(model, lv.part))
+				if glyph == nil && lv.part == batteryCase {
+					glyph = headsetBitmap("airpods.chargingcase")
+				}
+			}
+			if glyph != nil {
+				ui.Image(c.Key("part"), glyph).Size(11, 11).Fit(ui.Contain)
+			} else if lv.part == batteryCase {
+				ui.Box(c.Key("case")).Width(9).Height(7).Radius(2).Border(1.1, ink)
+			} else if lv.part == batteryRight {
+				ui.Icon(c, livePodRightSym).Size(7, 9).TextColor(ink)
+			} else {
+				ui.Icon(c, livePodSym).Size(7, 9).TextColor(ink)
+			}
+		})
+		ui.Text(c, strconv.Itoa(lv.pct)+"%").SingleLine().FontSize(10.5).
+			TextColor(ink2).FontFeatures("tnum")
+	})
 }
 
 // liveCapsule draws the headphone / download-done notice in the band under
@@ -265,14 +331,14 @@ func (a *shelf) liveCapsule(c *ui.Context, shellW, shellH, k float32, ev liveEve
 		body.Children(func() {
 			switch ev.kind {
 			case liveHeadset:
-				a.headsetGlyph(c, ev.label)
 				ui.Text(c, ev.label).SingleLine().FontSize(12).FontWeight(600).TextColor(ink).
 					Shrink(1).MinWidth(0).Ellipsis("…")
-				for _, lv := range ev.levels {
-					ui.Text(c, lv).SingleLine().FontSize(12).FontWeight(500).TextColor(ink2)
-				}
 				if len(ev.levels) == 0 {
+					a.headsetGlyph(c, ev.label)
 					ui.Text(c, l.LiveConnected()).SingleLine().FontSize(12).FontWeight(500).TextColor(ink2)
+				}
+				for _, lv := range ev.levels {
+					a.batteryBadge(c, ev.label, lv)
 				}
 			case liveHeadsetOff:
 				a.headsetGlyph(c, ev.label)
