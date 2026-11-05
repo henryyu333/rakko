@@ -1065,15 +1065,42 @@ func TestInstalledScanStates(t *testing.T) {
 	if a.apps.installedErr == nil {
 		t.Fatal("a failed scan must surface an error state")
 	}
+	// A failed scan keeps the last successful catalogue — the error
+	// state offers a retry, the pane never pretends the catalogue is
+	// empty. manageRows therefore still lists the installed candidate
+	// (Cand) alongside the running one (X).
 	rows := a.manageRows()
-	if len(rows) != 1 || rows[0].bundleID != "com.t.x" {
-		t.Fatalf("failed scan must keep candidates, got %v", rows)
+	ids := map[string]bool{}
+	for _, r := range rows {
+		ids[r.bundleID] = true
+	}
+	if !ids["com.t.cand"] || !ids["com.t.x"] {
+		t.Fatalf("failed scan dropped the last good catalogue: %v", rows)
+	}
+	if len(a.apps.installed) != 1 || a.apps.installed[0].ID != "com.t.cand" {
+		t.Fatalf("a failed scan overwrote the catalogue: %v", a.apps.installed)
+	}
+
+	// The retry that succeeds replaces the catalogue wholesale.
+	st.installErr = nil
+	st.installedFunc = func() ([]mygo.InstalledApp, error) {
+		return []mygo.InstalledApp{{ID: "com.t.new", Name: "New"}}, nil
+	}
+	a.ensureInstalled()
+	q.pumpUntil(t, func() bool { return !a.apps.installedLoad })
+	if a.apps.installedErr != nil {
+		t.Fatalf("a successful retry must clear the error, got %v", a.apps.installedErr)
+	}
+	if len(a.apps.installed) != 1 || a.apps.installed[0].ID != "com.t.new" {
+		t.Fatalf("retry did not replace the catalogue: %v", a.apps.installed)
 	}
 
 	// Generation: a scan still in flight when the mode ends lands
-	// afterwards as stale — its delivery must change nothing.
+	// afterwards as stale — its delivery must change nothing: the load
+	// flag, the error state and the catalogue all stay as the retry
+	// left them.
 	st.installedFunc = func() ([]mygo.InstalledApp, error) {
-		return []mygo.InstalledApp{{ID: "com.t.new", Name: "New"}}, nil
+		return []mygo.InstalledApp{{ID: "com.t.stale", Name: "Stale"}}, nil
 	}
 	a.ensureInstalled()
 	a.endAppSwitch() // bumps installedGen: the mode the scan served is dead
@@ -1081,10 +1108,10 @@ func TestInstalledScanStates(t *testing.T) {
 	if staleGen := a.apps.installedGen; !a.apps.installedLoad {
 		t.Fatalf("a discarded delivery still touched state (gen %d)", staleGen)
 	}
-	if a.apps.installedErr == nil {
-		t.Fatal("a discarded delivery cleared the error state")
+	if a.apps.installedErr != nil {
+		t.Fatalf("a discarded delivery resurrected an error: %v", a.apps.installedErr)
 	}
-	if len(a.apps.installed) != 1 || a.apps.installed[0].ID != "com.t.cand" {
+	if len(a.apps.installed) != 1 || a.apps.installed[0].ID != "com.t.new" {
 		t.Fatalf("a discarded delivery overwrote the catalogue: %v", a.apps.installed)
 	}
 }
