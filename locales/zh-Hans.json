@@ -531,6 +531,8 @@
   "homeGroupFolders": "文件夹",
   "homeGroupFiles": "文件",
   "homeGroupActions": "动作",
+  "settingsSearchGroup": "搜索",
+  "settingsDefaultSearchMode": "默认搜索模式",
   "searchModeAll": "全部",
   "searchModeApps": "应用",
   "searchModeFiles": "文件",

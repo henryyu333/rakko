@@ -5413,6 +5413,26 @@ func (msgs Messages) HomeGroupActions() string {
 	return Catalog.Format(msgs.locale, "homeGroupActions", nil)
 }
 
+// SettingsSearchGroup says "搜索"
+// in the language the app shows.
+func SettingsSearchGroup() string { return In(i18n.Locale()).SettingsSearchGroup() }
+
+// SettingsSearchGroup says "搜索"
+// in the language of msgs.
+func (msgs Messages) SettingsSearchGroup() string {
+	return Catalog.Format(msgs.locale, "settingsSearchGroup", nil)
+}
+
+// SettingsDefaultSearchMode says "默认搜索模式"
+// in the language the app shows.
+func SettingsDefaultSearchMode() string { return In(i18n.Locale()).SettingsDefaultSearchMode() }
+
+// SettingsDefaultSearchMode says "默认搜索模式"
+// in the language of msgs.
+func (msgs Messages) SettingsDefaultSearchMode() string {
+	return Catalog.Format(msgs.locale, "settingsDefaultSearchMode", nil)
+}
+
 // SearchModeAll says "全部"
 // in the language the app shows.
 func SearchModeAll() string { return In(i18n.Locale()).SearchModeAll() }

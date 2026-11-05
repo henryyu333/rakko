@@ -78,6 +78,18 @@ func (a *shelf) settingsGeneralPage(c *ui.Context) {
 		})
 	})
 
+	settingsGroup(c, "search", l.SettingsSearchGroup(), "", func() {
+		ui.Column(c.Key("search-rows")).FillWidth().Disabled(a.settingsBroken).Children(func() {
+			settingsRow(c, "searchmode", l.SettingsDefaultSearchMode(), "", func() {
+				idx := searchModeIndex(a.settings.SearchMode)
+				if sg := settingsSegmented(c, "searchmode", l.SettingsDefaultSearchMode(), &idx,
+					l.SearchModeAll(), l.SearchModeApps(), l.SearchModeFiles()); sg.Changed() {
+					a.setSearchMode(searchModeAt(idx))
+				}
+			})
+		})
+	})
+
 	settingsGroup(c, "update", l.SettingsUpdateGroup(), "", func() {
 		ui.Column(c.Key("update-rows")).FillWidth().Disabled(a.settingsBroken).Children(func() {
 			settingsToggleRow(c, "autocheck", l.SettingsAutoCheckRow(), "",

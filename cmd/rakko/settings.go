@@ -23,6 +23,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/mac"
+	"rakko/internal/settings"
 )
 
 // Seams around app-level calls so the headless view tests exercise the real
@@ -734,6 +735,29 @@ func languageAt(idx int) string {
 		return "en"
 	}
 	return ""
+}
+
+// searchModeIndex maps a saved mode to the segmented control's segment: 0 is
+// 全部, 1 is 应用, 2 is 文件.
+func searchModeIndex(mode settings.SearchMode) int {
+	switch mode.Normalized() {
+	case settings.SearchModeApps:
+		return 1
+	case settings.SearchModeFiles:
+		return 2
+	}
+	return 0
+}
+
+// searchModeAt maps the segmented control's segment to a saved mode.
+func searchModeAt(idx int) settings.SearchMode {
+	switch idx {
+	case 1:
+		return settings.SearchModeApps
+	case 2:
+		return settings.SearchModeFiles
+	}
+	return settings.SearchModeAll
 }
 
 // setLanguage saves the chosen language and shows it at once: settings.json

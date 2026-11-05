@@ -612,14 +612,15 @@ func (a *shelf) navView(c *ui.Context, r ui.Rect, opacity float32) {
 }
 
 // goHome brings the panel back to the search bar, the keyboard with it; a
-// closed panel opens straight on the bar. The bar always comes back on 全部:
-// a mode belongs to the search it was chosen for, not to the panel.
+// closed panel opens straight on the bar. The bar comes back on the default
+// mode: a mode chosen with Tab belongs to the search it was chosen for, not
+// to the panel.
 func (a *shelf) goHome() {
 	if !a.visible {
 		a.show(false)
 		return
 	}
-	a.setHomeScope(mac.ScopeAll)
+	a.setHomeScope(a.defaultHomeScope())
 	a.setLevel(1)
 	a.takeKeyboard()
 }

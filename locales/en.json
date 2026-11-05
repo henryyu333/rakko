@@ -531,6 +531,8 @@
   "homeGroupFolders": "Folders",
   "homeGroupFiles": "Files",
   "homeGroupActions": "Actions",
+  "settingsSearchGroup": "Search",
+  "settingsDefaultSearchMode": "Default Search Mode",
   "searchModeAll": "All",
   "searchModeApps": "Apps",
   "searchModeFiles": "Files",

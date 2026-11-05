@@ -22,6 +22,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/mac"
+	"rakko/internal/settings"
 )
 
 // homeDebounce is how long typing has to pause before the index is asked.
@@ -253,10 +254,36 @@ func (a *shelf) invalidateHome() {
 	}
 }
 
-// resetHomeSearch clears the bar, its selection, its query and its mode:
-// the next opening always starts on 全部.
+// defaultHomeScope is the mode the bar opens on, from the saved setting:
+// the one place the preference becomes the bar's scope.
+func (a *shelf) defaultHomeScope() mac.SearchScope {
+	switch a.settings.SearchMode.Normalized() {
+	case settings.SearchModeApps:
+		return mac.ScopeApps
+	case settings.SearchModeFiles:
+		return mac.ScopeFiles
+	}
+	return mac.ScopeAll
+}
+
+// setSearchMode saves the mode the bar opens on. The search on screen keeps
+// its own mode until the next opening: Tab and the capsule change one
+// search, the settings row changes the default.
+func (a *shelf) setSearchMode(mode settings.SearchMode) {
+	mode = mode.Normalized()
+	if a.settings.SearchMode.Normalized() == mode {
+		return
+	}
+	next := a.settings
+	next.SearchMode = mode
+	a.applySettings(next)
+}
+
+// resetHomeSearch clears the bar, its selection and its query and puts it
+// on the default mode: every opening starts there.
 func (a *shelf) resetHomeSearch() {
-	a.homeQuery, a.homeSel, a.homeScope = "", 0, mac.ScopeAll
+	a.homeQuery, a.homeSel = "", 0
+	a.homeScope = a.defaultHomeScope()
 	a.stopHomeSpot()
 	a.homeSpot.scope = a.homeScope
 	a.invalidateHome()

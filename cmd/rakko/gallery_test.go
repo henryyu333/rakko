@@ -1560,8 +1560,13 @@ func galleryGroupK() []galleryItem {
 		}
 	}
 	return []galleryItem{
-		{ID: "K1", Group: g, Title: "通用", State: "登录项、语言、自动检查更新", Wide: true, Build: page(settingsPageGeneral, func(t *testing.T, a *shelf) {
+		{ID: "K1", Group: g, Title: "通用", State: "登录项、语言、默认搜索模式、自动更新", Wide: true, Build: page(settingsPageGeneral, func(t *testing.T, a *shelf) {
 			a.settings.AutoCheckUpdates = true
+			a.updateLastCheck = galleryTodayAt(9, 12)
+			a.updateLastResult = updateResultLatest
+		})},
+		{ID: "K16", Group: g, Title: "通用", State: "默认搜索模式 · 应用", Wide: true, Build: page(settingsPageGeneral, func(t *testing.T, a *shelf) {
+			a.settings.SearchMode = settings.SearchModeApps
 			a.updateLastCheck = galleryTodayAt(9, 12)
 			a.updateLastResult = updateResultLatest
 		})},

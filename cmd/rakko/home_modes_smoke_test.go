@@ -3,10 +3,11 @@
 package main
 
 // Real-window evidence for the home bar's search modes: the bar opens on
-// 全部, an empty bar takes a real Tab and cycles 应用 → 文件 → 全部, each
-// mode asks the index for its own scope and draws only its own groups, a
-// typed term gives Tab back to focus, and closing then reopening the panel
-// comes back on 全部. Run with RAKKO_BASKET_SMOKE=1 through the native
+// the saved default mode (全部 unless the user chose another), an empty bar
+// takes a real Tab and cycles 全部 → 应用 → 文件 → 全部 from there, each mode
+// asks the index for its own scope and draws only its own groups, a typed
+// term gives Tab back to focus, and closing then reopening the panel comes
+// back on the default. Run with RAKKO_BASKET_SMOKE=1 through the native
 // gate; the shots land in /tmp/rakko-search/shots.
 
 import (
@@ -94,29 +95,30 @@ func TestSmokeHomeModes(t *testing.T) {
 	a := redesignShelf(t)
 	mac.WarmSpotlight()
 	time.Sleep(1200 * time.Millisecond)
+	var def mac.SearchScope
+	onMain(func() { def = a.defaultHomeScope() })
 	onMain(func() { a.show(false) })
 	time.Sleep(2 * time.Second)
 
-	waitScope(t, a, mac.ScopeAll, "a fresh bar")
+	waitScope(t, a, def, "a fresh bar")
 	spotShot(t, a, "modes-all")
 
-	// An empty bar takes a real Tab: 全部 → 应用 → 文件 → 全部.
-	for _, step := range []struct {
-		want mac.SearchScope
-		shot string
-	}{
-		{mac.ScopeApps, "modes-apps-empty"},
-		{mac.ScopeFiles, "modes-files-empty"},
-		{mac.ScopeAll, "modes-all-cycled"},
-	} {
+	// An empty bar takes a real Tab and walks the cycle from the default:
+	// 全部 → 应用 → 文件 → 全部.
+	next := func(s mac.SearchScope) mac.SearchScope { return (s + 1) % 3 }
+	for _, shot := range []string{"modes-apps-empty", "modes-files-empty", "modes-all-cycled"} {
+		want := next(scopeOf(a))
 		if postTab(t) {
 			time.Sleep(250 * time.Millisecond) // at least one frame
 		} else {
 			t.Log("the test app was not frontmost: cycling the mode directly")
 			onMain(func() { a.cycleHomeScope() })
 		}
-		waitScope(t, a, step.want, "a Tab in the empty bar")
-		spotShot(t, a, step.shot)
+		waitScope(t, a, want, "a Tab in the empty bar")
+		spotShot(t, a, shot)
+	}
+	if got := scopeOf(a); got != def {
+		t.Fatalf("three Tabs from the default %v ended on %v", def, got)
 	}
 
 	// 应用: a term lists the 应用 group alone.
@@ -180,12 +182,12 @@ func TestSmokeHomeModes(t *testing.T) {
 	}
 	spotShot(t, a, "modes-files-term")
 
-	// Closing and reopening comes back on 全部 with an empty bar.
+	// Closing and reopening comes back on the default with an empty bar.
 	onMain(func() { a.hide(hideExplicit) })
 	time.Sleep(600 * time.Millisecond)
 	onMain(func() { a.show(false) })
 	time.Sleep(1200 * time.Millisecond)
-	waitScope(t, a, mac.ScopeAll, "a reopened bar")
+	waitScope(t, a, def, "a reopened bar")
 	var query string
 	onMain(func() { query = a.homeQuery })
 	if query != "" {
