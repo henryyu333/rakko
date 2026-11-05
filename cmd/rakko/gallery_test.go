@@ -564,12 +564,12 @@ func galleryGroupC() []galleryItem {
 
 func galleryGroupB() []galleryItem {
 	const g = "搜索条与结果"
-	bar := func(query string, focus bool) func(t *testing.T, lang string) galleryRender {
+	bar := func(query string, focus bool, scope mac.SearchScope) func(t *testing.T, lang string) galleryRender {
 		return func(t *testing.T, lang string) galleryRender {
 			st := galleryEmptyStore(t)
 			a := galleryShelf(st, t.TempDir())
 			a.level, a.visible, a.progress = 1, true, 1
-			a.homeQuery, a.focusMode = query, focus
+			a.homeQuery, a.focusMode, a.homeScope = query, focus, scope
 			a.locale = lang
 			w := homeW
 			if query != "" {
@@ -659,8 +659,10 @@ func galleryGroupB() []galleryItem {
 		}
 	}
 	return []galleryItem{
-		{ID: "B1", Group: g, Title: "搜索条", State: "空 · 占位「搜索」", Notch: true, Build: bar("", false)},
-		{ID: "B2", Group: g, Title: "搜索条", State: "输入中 · 加宽并显示光标", Notch: true, Build: bar("git merge --ff-only", true)},
+		{ID: "B1", Group: g, Title: "搜索条", State: "空 · 占位「搜索」", Notch: true, Build: bar("", false, mac.ScopeAll)},
+		{ID: "B2", Group: g, Title: "搜索条", State: "输入中 · 加宽并显示光标", Notch: true, Build: bar("git merge --ff-only", true, mac.ScopeAll)},
+		{ID: "B19", Group: g, Title: "搜索条", State: "应用模式 · 空框带 Tab 键帽", Notch: true, Build: bar("", false, mac.ScopeApps)},
+		{ID: "B20", Group: g, Title: "搜索条", State: "文件模式 · 有输入无键帽", Notch: true, Build: bar("git merge --ff-only", true, mac.ScopeFiles)},
 		{ID: "B3", Group: g, Title: "结果表", State: "各分组都有命中 · 选中一行", Build: results(func(t *testing.T, a *shelf, lang string) { a.homeSel = 1 })},
 		{ID: "B4", Group: g, Title: "结果表", State: "悬停一行", Build: func(t *testing.T, lang string) galleryRender {
 			r := results(nil)(t, lang)
