@@ -26,6 +26,7 @@ type smokeWindowInfo struct {
 	Frame     mygo.Rectangle
 	Onscreen  bool
 	Title     string
+	OwnerPID  int
 }
 
 // isDragCardWindow reports whether w is a card-sized drag window: the
@@ -36,7 +37,19 @@ func isDragCardWindow(w smokeWindowInfo) bool {
 	return w.Frame.Height == pinCardH && (w.Frame.Width == pinCardW || w.Frame.Width == pinCardW2)
 }
 
+// ownSmokeWindows inspects WindowServer's list. keepForeignOwners widens
+// the filter past this process to every on-screen entry: the app-switcher
+// HID case must be able to see the controlled fixtures' own windows.
 func ownSmokeWindows(t *testing.T) []smokeWindowInfo {
+	return smokeWindowList(t, false)
+}
+
+// specimenWindows lists EVERY on-screen window: own and others'.
+func smokeWindowList(t *testing.T, keepForeignOwners bool) []smokeWindowInfo {
+	return ownSmokeWindowsFiltered(t, keepForeignOwners)
+}
+
+func ownSmokeWindowsFiltered(t *testing.T, keepForeignOwners bool) []smokeWindowInfo {
 	t.Helper()
 	lib, err := purego.Dlopen("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", purego.RTLD_LAZY)
 	if err != nil {
@@ -55,7 +68,8 @@ func ownSmokeWindows(t *testing.T) []smokeWindowInfo {
 		integer := func(d objc.ID, key string) int { return int(objcSend(get(d, key), "intValue")) }
 		for i, n := 0, int(objcSend(list, "count")); i < n; i++ {
 			d := objcSend(list, "objectAtIndex:", i)
-			if integer(d, "kCGWindowOwnerPID") != os.Getpid() {
+			owner := integer(d, "kCGWindowOwnerPID")
+			if owner != os.Getpid() && !keepForeignOwners {
 				continue
 			}
 			b := get(d, "kCGWindowBounds")
@@ -64,6 +78,7 @@ func ownSmokeWindows(t *testing.T) []smokeWindowInfo {
 				Frame:    mygo.Rectangle{X: integer(b, "X"), Y: integer(b, "Y"), Width: integer(b, "Width"), Height: integer(b, "Height")},
 				Onscreen: objcSend(get(d, "kCGWindowIsOnscreen"), "boolValue") != 0,
 				Title:    objcGoStr(get(d, "kCGWindowName")),
+				OwnerPID: owner,
 			})
 		}
 	})

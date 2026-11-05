@@ -15,9 +15,7 @@ package main
 // 只在 gate runner 准备好的环境跑。
 
 import (
-	"fmt"
 	"os"
-	"os/exec"
 	"testing"
 	"time"
 
@@ -30,8 +28,13 @@ const (
 	// B 提前启动（点它 = 激活运行中应用），一次用例把两条路径都走到。
 	hidTargetA = "local.y3.rakko.switchtest.a"
 	hidTargetB = "local.y3.rakko.switchtest.b"
-	// hidEnv 环境门：真实指针动作只跟随 gate runner。
+	// 夹具的 quit 哨兵与 pid 文件所在：Swift 夹具 250ms 轮询该哨兵。
+	hidFixtures     = "/tmp/rakko-appswitch/fixtures"
+	hidQuitSentinel = hidFixtures + "/quit"
+	// 冒烟装配由 RAKKO_BASKET_SMOKE=1 建（smokeShelf/真主循环/真窗口），
+	// 本用例依赖它，再用自己的门收真实指针动作。父方两个门同时开。
 	hidEnv      = "RAKKO_HID_SMOKE"
+	hidHarness  = "RAKKO_BASKET_SMOKE"
 	hidSettle   = 600 * time.Millisecond
 	hidLaunch   = 20 * time.Second
 	hidFront    = 12 * time.Second
@@ -39,25 +42,41 @@ const (
 	hidTick     = 30 * time.Millisecond
 )
 
-// hidSkip guards machine-level cases the same way the other smoke files gate.
+// hidSkip 把机器级的两道门一起核对：装配门在前，指针门在后。
 func hidSkip(t *testing.T) {
 	t.Helper()
-	if os.Getenv(hidEnv) != "1" {
-		t.Skipf("real-pointer smoke skipped: set %s=1", hidEnv)
+	if os.Getenv(hidHarness) != "1" || os.Getenv(hidEnv) != "1" {
+		t.Skipf("real-pointer smoke skipped: set %s=1 with the smoke harness (%s=1)", hidEnv, hidHarness)
 	}
 }
 
-// hidFrontPID is the frontmost application's PID (0 = none). Main thread only.
-func hidFrontPID() int { return mac.FrontmostPID() }
-
-// hidRunningPID is the fixture's running PID, 0 when not running.
-func hidRunningPID(bundleID string) int {
-	for _, r := range mac.RunningApps() {
-		if r.BundleID == bundleID {
-			return r.PID
-		}
+// hidFrontPID/hidRunningPID 都在主线程读（mac 包的约定）。回调里不断言。
+func hidFrontPID() int {
+	if p := mainValue(func() any { return mac.FrontmostPID() }); p != nil {
+		return p.(int)
 	}
 	return 0
+}
+
+func hidRunningPID(bundleID string) int {
+	if v := mainValue(func() any {
+		for _, r := range mac.RunningApps() {
+			if r.BundleID == bundleID {
+				return r.PID
+			}
+		}
+		return 0
+	}); v != nil {
+		return v.(int)
+	}
+	return 0
+}
+
+// mainValue ships a read onto the main thread and brings the value back.
+func mainValue(fn func() any) any {
+	var out any
+	onMain(func() { out = fn() })
+	return out
 }
 
 // hidWaitFrontPID polls until the frontmost PID is pid or the budget ends.
@@ -100,25 +119,31 @@ func hidLaunchFixture(t *testing.T, bundleID, path string) int {
 	return hidWaitRunning(t, bundleID)
 }
 
-// hidQuit terminates the fixture for its bundle id through osascript:
-// a System Events quit needs no fixture-side watch file and keeps every
-// round clean.
-func hidQuit(t *testing.T, bundleID string) {
+// hidClearSentinel先删掉本 stash 的 quit 哨兵：上一轮遗留的文件会让夹具
+// 一启动就自杀。只碰本哨兵一个文件。
+func hidClearSentinel(t *testing.T) {
 	t.Helper()
-	script := fmt.Sprintf(`tell application "System Events" to repeat with p in (processes whose bundle identifier is %q)
-		if exists p then tell p to quit
-	end repeat`, bundleID)
-	if out, err := exec.Command("osascript", "-e", script).CombinedOutput(); err != nil && hidRunningPID(bundleID) != 0 {
-		t.Fatalf("quitting %s: %s: %s", bundleID, err, out)
+	if err := os.Remove(hidQuitSentinel); err != nil && !os.IsNotExist(err) {
+		t.Fatalf("clearing the quit sentinel: %v", err)
+	}
+}
+
+// hidWriteSentinel 回写哨兵并结合快照等待；这是本轮唯一会结束夹具的
+// 通道（不枚举/杀进程），错杀不到别人的同 id。
+func hidWriteSentinel(t *testing.T) {
+	t.Helper()
+	if err := os.WriteFile(hidQuitSentinel, nil, 0o644); err != nil {
+		t.Fatalf("writing the quit sentinel: %v", err)
 	}
 	deadline := time.Now().Add(hidQuitWait)
 	for time.Now().Before(deadline) {
-		if hidRunningPID(bundleID) == 0 {
+		if hidRunningPID(hidTargetA) == 0 && hidRunningPID(hidTargetB) == 0 {
 			return
 		}
 		time.Sleep(150 * time.Millisecond)
 	}
-	t.Fatalf("%s outlived the case (PID %d)", bundleID, hidRunningPID(bundleID))
+	t.Fatalf("fixture of this stash outlived the case: A=%d B=%d",
+		hidRunningPID(hidTargetA), hidRunningPID(hidTargetB))
 }
 
 // hidFixture resolves the fixture's bundle path through the real
@@ -126,7 +151,7 @@ func hidQuit(t *testing.T, bundleID string) {
 // launch — and fails loudly when fixtures were not built/registered.
 func hidFixture(t *testing.T, bundleID string) string {
 	t.Helper()
-	p := mac.AppPathForBundleID(bundleID)
+	p := mainValue(func() any { return mac.AppPathForBundleID(bundleID) }).(string)
 	if p == "" {
 		t.Fatalf("%s not resolvable through LaunchServices — build the switch fixtures first (dist.noindex/switch-fixtures)", bundleID)
 	}
@@ -140,7 +165,9 @@ func hidFixture(t *testing.T, bundleID string) string {
 func hidTickLoop(t *testing.T, a *shelf) (stop func()) {
 	t.Helper()
 	done := make(chan struct{})
+	finished := make(chan struct{})
 	go func() {
+		defer close(finished)
 		tk := time.NewTicker(hidTick)
 		defer tk.Stop()
 		for {
@@ -157,18 +184,60 @@ func hidTickLoop(t *testing.T, a *shelf) (stop func()) {
 	}()
 	return func() {
 		close(done)
-		hidSettleWait()
+		<-finished // join: the last tick is in or past RunOnMain before we return
 	}
 }
-
-// hidSettleWait gives a RunOnMain in flight room to finish closing.
-func hidSettleWait() { time.Sleep(hidSettle) }
 
 // hidFrontPID stays the same helper as above; the pointer helpers use the
 // shared warpPointerTo (tools_drag_smoke) and mygo's screen API.
 
 // hidPointNow reads the real cursor position through mygo's Screen API.
 func hidPointNow() mygo.Point { return mygo.Screen.CursorScreenPoint() }
+
+// hidWindowVisible reports whether the fixture process pid has any on-screen
+// window: the Dock-style reopen draws windows even when the app activation
+// alone would leave a hidden or minimized process frontmost-none. Normal
+// layer only; no screenshot needed.
+func hidWindowVisible(t *testing.T, pid int) bool {
+	if pid <= 0 {
+		return false
+	}
+	var ok bool
+	onMain(func() { ok = hidEntryVisible(t, pid) })
+	return ok
+}
+
+// hidEntryVisible runs the CGWindowList probe on the main thread: one
+// layer-0 on-screen window of the fixture's pid, at meaningful pixel size.
+func hidEntryVisible(t *testing.T, pid int) bool {
+	for _, w := range probeWindows(t) {
+		if w.OwnerPID == pid && w.Layer == 0 && w.Onscreen {
+			return w.Frame.Width > 40 && w.Frame.Height > 40
+		}
+	}
+	return false
+}
+
+// probeWindows is ownSmokeWindows with the foreign-owner filter on: the
+// fixtures' windows need to be visible to the case's assertions. Run on
+// the main thread only.
+func probeWindows(t *testing.T) []smokeWindowInfo {
+	return smokeWindowList(t, true)
+}
+
+// hidWaitWindow spends the visibility budget waiting for a fixture window
+// that is actually on screen, at reasonable pixel size.
+func hidWaitWindow(t *testing.T, pid int, what string) {
+	t.Helper()
+	deadline := time.Now().Add(hidFront)
+	for time.Now().Before(deadline) {
+		if hidWindowVisible(t, pid) {
+			return
+		}
+		time.Sleep(150 * time.Millisecond)
+	}
+	t.Fatalf("%s: no on-screen window of PID %d reached normal layer within the budget", what, pid)
+}
 
 // TestHIDAppsClickLaunchesTargets covers both branches of the device chain
 // with only production state:
@@ -182,26 +251,36 @@ func hidPointNow() mygo.Point { return mygo.Screen.CursorScreenPoint() }
 //	  frontmost, the wings fold, and nothing hands the focus back.
 func TestHIDAppsClickLaunchesTargets(t *testing.T) {
 	hidSkip(t)
+	// Clear this round's quit sentinel before anything else: a leftover
+	// from an earlier round would self-terminate a fixture on launch.
+	hidClearSentinel(t)
+	// End-of-case: write the sentinel back and wait for both fixtures to
+	// leave — no process enumeration or kill anywhere.
+	t.Cleanup(func() { hidWriteSentinel(t) })
 
-	// Both fixtures resolve through the real LaunchServices.
-	hidFixture(t, hidTargetA)
+	// Both fixtures resolve through the real LaunchServices. A might still
+	// be up from a previous round: writing the sentinel once, then
+	// clearing it again, brings A down before the case starts.
+	if pid := hidRunningPID(hidTargetA); pid != 0 {
+		t.Logf("A already running (PID %d) from a previous round — dropping it first", pid)
+		hidWriteSentinel(t)
+		hidClearSentinel(t)
+	}
 	pathB := hidFixture(t, hidTargetB)
 	pidB := hidLaunchFixture(t, hidTargetB, pathB)
-	t.Cleanup(func() {
-		for _, id := range []string{hidTargetB, hidTargetA} {
-			hidQuit(t, id)
-		}
-	})
-	// A must not be running at start — a leftover from a previous round
-	// would flip seat 0 to the activate branch.
-	if pid := hidRunningPID(hidTargetA); pid != 0 {
-		hidQuit(t, hidTargetA)
-	}
 
 	a := redesignShelf(t)
-	// Pin the two fixtures in order: seat 0 (A, dark) is the launch
-	// branch, seat 1 (B, running) the activate branch. The shelf's own
-	// settings copy is enough — no user settings are touched.
+	// The notch window comes up Hidden; an overlay not on screen gates
+	// nothing. ShowInactive is production's own这条路 (不夺焦)。
+	onMain(func() {
+		a.win.SetOpacity(1)
+		a.win.ShowInactive()
+		a.win.Invalidate()
+	})
+	// Pin the two fixtures in order from the settings DEFAULTS restored by
+	// the harness reset: seat 0 (A, dark) is the launch branch, seat 1
+	// (B, running) the activate branch. Only the two fixture ids are
+	// written; nothing else in settings is touched by the case.
 	onMain(func() {
 		order := []string{hidTargetA, hidTargetB}
 		a.settings.PinnedApps = &order
@@ -246,6 +325,7 @@ func TestHIDAppsClickLaunchesTargets(t *testing.T) {
 	clickOverlayAt(t, a, x, y)
 	pidA := hidWaitRunning(t, hidTargetA)
 	hidWaitFrontPID(t, pidA, "the launched fixture must be frontmost")
+	hidWaitWindow(t, pidA, "the launched fixture must draw a window")
 	var folded bool
 	onMain(func() { folded = !a.apps.on })
 	if !folded {
@@ -276,6 +356,7 @@ func TestHIDAppsClickLaunchesTargets(t *testing.T) {
 	x2, y2 := appSeat(t, a, 1)
 	clickOverlayAt(t, a, x2, y2)
 	hidWaitFrontPID(t, pidB, "the running fixture must be frontmost")
+	hidWaitWindow(t, pidB, "the activated fixture must draw a window")
 	onMain(func() { folded = !a.apps.on })
 	if !folded {
 		t.Fatalf("the wings survived a successful activation (apps.on still true)")

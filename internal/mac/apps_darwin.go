@@ -164,6 +164,36 @@ func AppNameForBundleID(bundleID string) string {
 	return name
 }
 
+// ReopenApp opens a bundle id's application the way the Dock's icon does:
+// NSWorkspace.launchApplicationAtURL with the default options — which
+// launches the app when it is not running and otherwise activates it AND
+// unmutes its own reopen semantics (unhide, deminiaturize, open of the
+// dock click). Plain activate-by-pid only makes a hidden or windowless
+// process frontmost and leaves nothing visible; the Dock action is what
+// the user means by "switch to that app". Existing instances keep their
+// URL→running-app mapping, so this never starts a second copy.
+// Main thread only.
+func ReopenApp(bundleID string) bool {
+	if bundleID == "" {
+		return false
+	}
+	var ok bool
+	withPool(func() {
+		ws := send(class("NSWorkspace"), "sharedWorkspace")
+		url := send(ws, "URLForApplicationWithBundleIdentifier:", uintptr(nsString(bundleID)))
+		if url == 0 {
+			return
+		}
+		// NSWorkspaceLaunchDefault (0) launches-or-activates without the
+		// "new instance" and "error when already running" variants.
+		configuration := send(class("NSDictionary"), "dictionary")
+		launched := send(ws, "launchApplicationAtURL:options:configuration:error:",
+			uintptr(url), uintptr(0), uintptr(configuration), 0)
+		ok = launched != 0
+	})
+	return ok
+}
+
 // RunningApp is one entry of the app switcher's snapshot: a regular GUI
 // application NSWorkspace reports as running.
 type RunningApp struct {

@@ -5,7 +5,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"math"
 	"strings"
 	"time"
 
@@ -1658,24 +1657,13 @@ func (a *shelf) peekView(c *ui.Context, shellW, shellH, openK, peekK, shake floa
 				// 收起态应用入口: 探头带右缘的小按钮, 点击展开两翼;
 				// 带中央的点击仍是搜索（pill.Clicked 处理）。按钮整颗
 				// 都要落在壳有像素的地方: 高度不超过 peekBody（顶边不
-				// 进硬件刘海），右边让出下角圆角在这一列切掉的深度
-				// （botR 的弓形在贴底处最深，自下角向内收 2pt 余量）。
-				_, bandH := a.peekSize()
-				_, baseH := a.anchorSize()
-				bodyH := bandH - baseH // the band below the anchor row
-				botR := min(bodyH/2, homeRadius)
-				// sagitta of the corner arc across a chord d points up:
-				// r·(1−√(d/r))² — 0 at the flank, botR at the very bottom.
-				inset := func(d float32) float32 {
-					if botR <= 0 || d >= botR {
-						return 0
-					}
-					u := float32(math.Sqrt(float64(d / botR)))
-					return botR * (1 - u) * (1 - u)
-				}
-				right := inset(appEntryBand) + 2
+				// 进硬件刘海），右边留足整块壳的下角圆角 + 2pt——真实
+				// botR 是壳高一半与面板半径取小，不是带高的一半，按
+				// 它保守内缩，弓形在任何带高下都切不进按钮。
+				_, shellH := a.peekSize()
+				botR := min(shellH/2, homeRadius)
 				e := a.appsEntryButton(c, "apps-band-entry", appEntryBand)
-				e.Absolute().Right(right).Bottom(1)
+				e.Absolute().Right(botR + 2).Bottom(1)
 			}
 		})
 	})

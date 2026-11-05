@@ -80,6 +80,7 @@ var (
 	appRunning    = mac.RunningApps
 	appPathFor    = mac.AppPathForBundleID
 	appNameFor    = mac.AppNameForBundleID
+	appReopen     = mac.ReopenApp
 	appsInstalled = func() ([]mygo.InstalledApp, error) { return mygo.Shell.InstalledApps() }
 )
 
@@ -318,18 +319,29 @@ func (a *shelf) activateAppSel() {
 
 // switchToApp activates a running app or launches a pinned-but-not-running
 // one. A missing entry can only be removed (the view never calls this for
-// it). On any failure the error is surfaced and the wings stay closed —
-// the user can reopen and retry; a fake "switched" state is never shown.
+// it). A running entry goes through the Dock-style reopen, not plain
+// activate-by-pid: NSRunningApplication.activate makes a hidden, windowless
+// or minimized process frontmost without ever showing anything, and the
+// user is left on a desktop that "did not react". launchApplicationAtURL
+// with the default options is the Dock icon's own action — launch or,
+// for the running app, activate + unhide/deminiaturize/reopen — so every
+// switch ends with something the user can see. On any failure the error is
+// surfaced and the wings stay closed — the user can reopen and retry; a
+// fake "switched" state is never shown.
 func (a *shelf) switchToApp(e appEntry) {
 	if e.missing {
 		return
 	}
-	// A process that ended after the snapshot fails activate and falls to
-	// launch-by-bundle; a path that vanished fails the launch and reports.
-	if e.pid > 0 && activateApp(e.pid) {
+	// A process that ended after the snapshot fails its reopen (no URL
+	// success) and falls to launch-by-bundle below; a path that vanished
+	// fails the launch and reports.
+	if appReopen(e.bundleID) {
 		a.endAppSwitch()
 		return
 	}
+	// A running app whose process died after the snapshot, or an installed
+	// app that failed to open: launch by path once, then its error paths
+	// are the snack bar.
 	path := appPathFor(e.bundleID)
 	if path == "" {
 		a.endAppSwitch()

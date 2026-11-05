@@ -808,7 +808,9 @@ func (a *shelf) appsEntryButton(c *ui.Context, key string, size float32) ui.Elem
 	if b.Hovered() {
 		b.Background(fill2)
 	}
-	glyph := size * 0.53
+	// 图标下限 12pt：8.5pt 的网格在菜栏带里太小辨认不清，可视与命中
+	// 同源（noteAppEntry 记录按钮自身 bounds）。
+	glyph := max(12, size*0.53)
 	b.Children(func() { ui.Icon(c, appsSymbol).Size(glyph, glyph).TextColor(ink2) })
 	if b.Clicked() {
 		a.openAppSwitch()
