@@ -110,6 +110,28 @@ func appsSmokeShelf(t *testing.T, running []mac.RunningApp) *shelf {
 	}
 	reset()
 	t.Cleanup(reset)
+	// The smoke harness has no monitor loop: drive the production tick
+	// like pin_smoke does — an async ticker animating and polling the
+	// drag path on the real main thread, never held by the test
+	// goroutine. Stopped before the reset so a tick can't re-dirty
+	// state a cleanup just cleared.
+	stop := make(chan struct{})
+	t.Cleanup(func() { close(stop) })
+	go func() {
+		tk := time.NewTicker(pointerInterval)
+		defer tk.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case now := <-tk.C:
+				mygo.RunOnMain(func() {
+					a.animate(now)
+					a.monitorDrag(now)
+				})
+			}
+		}
+	}()
 	onMain(func() { a.place(mygo.Screen.CursorScreenPoint()) })
 	return a
 }
@@ -122,19 +144,7 @@ func appsSmokeShelf(t *testing.T, running []mac.RunningApp) *shelf {
 // Failure dumps the drawn state so a real defect is still loud.
 func waitApps(t *testing.T, a *shelf, what string, cond func() bool) {
 	t.Helper()
-	ok := waitMain(4*time.Second, func() bool {
-		done := cond()
-		if a.win != nil {
-			// The fixture has no monitor tick: advance the springs the
-			// way shelf.startMonitoring does (and pin_smoke's ticker
-			// does), then present the frame — real animation progress,
-			// not a faked resting state.
-			a.animate(time.Now())
-			a.syncWindowFrame()
-			a.win.Invalidate()
-		}
-		return done
-	})
+	ok := waitMain(4*time.Second, cond)
 	if ok {
 		return
 	}
