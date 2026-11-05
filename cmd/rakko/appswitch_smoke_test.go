@@ -26,6 +26,7 @@ import (
 	"github.com/egoist/mygo"
 
 	"rakko/internal/mac"
+	"rakko/internal/settings"
 )
 
 const appsShotDir = "/tmp/rakko-appswitch/native"
@@ -70,13 +71,29 @@ func appsSmokeShelf(t *testing.T, running []mac.RunningApp) *shelf {
 		names: map[string]string{"com.smoke.pin1": "Pin One", "com.smoke.pin2": "Pin Two"},
 		actOK: map[int]bool{},
 	})
+	// reset returns the shared shelf to a known closed state: settings
+	// back to Default (LiveActivities on — a zero Settings left over
+	// from an older run silently disabled every notice), feedback
+	// capsule, live queue, drag flags, panel, fold animation and the
+	// drawn-shell motion state all cleared. Runs on entry and on
+	// cleanup so no test inherits or leaks state.
+	pinned := []string{"com.smoke.pin1", "com.smoke.pin2"}
 	reset := func() {
 		onMain(func() {
 			a.endAppSwitch()
 			a.island, a.islandDX = false, 0
+			a.settings = settings.Default()
+			a.settings.PinnedApps = &pinned
+			a.fb = feedback{}
+			a.fx = shellMotion{}
 			a.live = liveQueue{}
-			a.dragging, a.dropHot = false, false
-			a.visible = false
+			a.snap = snapState{}
+			a.bandBox, a.bandHits = mygo.Rectangle{}, nil
+			a.islandPress = islandPress{}
+			a.dragging, a.dropHot, a.ownDrag = false, false, false
+			a.search, a.focusMode = "", false
+			a.visible, a.edgeOpened = false, false
+			a.closeAt = time.Time{}
 			a.peeking, a.peekProgress, a.peekFrom, a.peekAnimStart = false, 0, 0, time.Time{}
 			a.progress, a.animationFrom, a.animationStart = 0, 0, time.Time{}
 			a.syncMousePassThrough()
@@ -86,12 +103,25 @@ func appsSmokeShelf(t *testing.T, running []mac.RunningApp) *shelf {
 	}
 	reset()
 	t.Cleanup(reset)
-	onMain(func() {
-		saved := []string{"com.smoke.pin1", "com.smoke.pin2"}
-		a.settings.PinnedApps = &saved
-		a.place(mygo.Screen.CursorScreenPoint())
-	})
+	onMain(func() { a.place(mygo.Screen.CursorScreenPoint()) })
 	return a
+}
+
+// waitApps waits for cond on the main thread through the shared
+// waitMain and fails with the test's current state when it never holds.
+// snap reports the diagnostics fields the caller wants in the message.
+func waitApps(t *testing.T, a *shelf, what string, cond func() bool) {
+	t.Helper()
+	if waitMain(3*time.Second, cond) {
+		return
+	}
+	var st string
+	onMain(func() {
+		st = fmt.Sprintf("visible=%v progress=%.2f openK=%.2f peekKind=%d peek=%.2f entry=%+v pop=%+v fb.drawn=%v live.shown=%v liveAllow=%v apps.on=%v",
+			a.visible, a.progress, a.fx.openK, a.fx.peekKind, a.peekProgress,
+			a.apps.entryRect, a.apps.popRect, a.fb.drawn, a.live.shown, a.liveAllow(), a.apps.on)
+	})
+	t.Fatalf("timed out waiting for %s: %s", what, st)
 }
 
 // clickOverlayAt posts a real click inside this test's own overlay window
@@ -158,21 +188,16 @@ func openAppsWings(t *testing.T, a *shelf) {
 		a.syncWindowFrame()
 		a.win.Invalidate()
 	})
-	time.Sleep(450 * time.Millisecond)
-	var on bool
-	onMain(func() { on = a.apps.on })
-	if !on {
-		t.Fatal("the wings did not stay open")
-	}
+	waitApps(t, a, "the wings open", func() bool { return a.apps.on })
 }
 
-// closeAppsWings folds the wings and lets the fold settle.
-func closeAppsWings(a *shelf) {
+// closeAppsWings folds the wings and waits for the fold to land.
+func closeAppsWings(t *testing.T, a *shelf) {
 	onMain(func() {
 		a.endAppSwitch()
 		a.win.Invalidate()
 	})
-	time.Sleep(300 * time.Millisecond)
+	waitApps(t, a, "the wings closed", func() bool { return !a.apps.on })
 }
 
 var smokeApps = []mac.RunningApp{
@@ -225,12 +250,11 @@ func TestSmokeAppsWingsOpenFromEntry(t *testing.T) {
 		a.syncWindowFrame()
 		a.win.Invalidate()
 	})
-	time.Sleep(400 * time.Millisecond)
 	var er mygo.Rectangle
-	onMain(func() { er = a.apps.entryRect })
-	if er.Width <= 0 {
-		t.Fatal("no collapsed-state entry was drawn")
-	}
+	waitApps(t, a, "the collapsed-state entry", func() bool {
+		er = a.apps.entryRect
+		return er.Width > 0
+	})
 	clickOverlayAt(t, a, float64(er.X+er.Width/2), float64(er.Y+er.Height/2))
 	onMain(func() {
 		if !a.apps.on {
@@ -248,7 +272,7 @@ func TestSmokeAppsWingsOpenFromEntry(t *testing.T) {
 			t.Fatal("the wings must fold after a successful switch")
 		}
 	})
-	closeAppsWings(a)
+	closeAppsWings(t, a)
 }
 
 // The 更多 seat opens the glass popover under the wings at a real box the
@@ -263,12 +287,7 @@ func TestSmokeAppsPopoverAndManage(t *testing.T) {
 	}
 	x, y := appSeat(t, a, ls+rs-1) // the last right-wing seat: 更多
 	clickOverlayAt(t, a, x, y)
-	var more bool
-	onMain(func() { more = a.apps.more })
-	if !more {
-		t.Fatal("更多 seat did not open the popover")
-	}
-	time.Sleep(300 * time.Millisecond)
+	waitApps(t, a, "the 更多 popover", func() bool { return a.apps.more })
 	shotAppsWindow(t, a.win, "wings-more")
 
 	var pop, fr mygo.Rectangle
@@ -284,48 +303,46 @@ func TestSmokeAppsPopoverAndManage(t *testing.T) {
 	}
 	// 编辑常用应用 is the pane's footer row.
 	clickOverlayAt(t, a, float64(pop.X+pop.Width/2), float64(pop.Y+pop.Height-appPopFoot/2))
-	var manage bool
-	onMain(func() { manage = a.apps.manage })
-	if !manage {
-		t.Fatal("编辑常用应用 did not open the manage list")
-	}
-	time.Sleep(600 * time.Millisecond) // the installed scan is real here
+	waitApps(t, a, "the manage list", func() bool { return a.apps.manage })
+	// The installed scan lands through the real loop; rows exist only
+	// once it clears.
+	waitApps(t, a, "the installed scan", func() bool { return !a.apps.installedLoad })
 	shotAppsWindow(t, a.win, "wings-manage")
 
-	// The second pinned row's 上移 (first control from the right edge)
-	// reorders the persisted list through a real click.
-	onMain(func() { pop = a.apps.popRect })
-	rowY := float64(pop.Y + appPopHead + appPopRowH + appPopRowH/2)
+	// Pinned rows: index 0 is the first row, index 1 the last. Controls
+	// sit 73/47/21 DIP from the pane's right padding edge (up/down/rm).
+	rowY := func(i int) float64 {
+		onMain(func() { pop = a.apps.popRect })
+		return float64(pop.Y+appPopHead) + float64(i)*float64(appPopRowH) + float64(appPopRowH)/2
+	}
 	upX := float64(pop.X + pop.Width - 8 - 73)
-	clickOverlayAt(t, a, upX, rowY)
-	var order []string
-	onMain(func() { order = pinned(a) })
-	if len(order) != 2 || order[0] != "com.smoke.pin2" {
-		t.Fatalf("上移 did not reorder the real list: %v", order)
-	}
-	// The same row is now first: its 上移 is dimmed, so the same click
-	// does nothing — the persisted order must not move.
-	clickOverlayAt(t, a, upX, rowY)
-	onMain(func() { order = pinned(a) })
-	if order[0] != "com.smoke.pin2" {
-		t.Fatalf("first row's 上移 must be inert, got %v", order)
-	}
-	// And the last pinned row's 下移 is dimmed the same way.
 	downX := float64(pop.X + pop.Width - 8 - 47)
-	row2Y := float64(pop.Y + appPopHead + 2*appPopRowH + appPopRowH/2)
-	clickOverlayAt(t, a, downX, row2Y)
-	onMain(func() { order = pinned(a) })
-	if order[1] != "com.smoke.pin1" {
-		t.Fatalf("last row's 下移 must be inert, got %v", order)
-	}
-	// 取消固定 on the first row removes it for real.
 	rmX := float64(pop.X + pop.Width - 8 - 21)
-	clickOverlayAt(t, a, rmX, rowY)
-	onMain(func() { order = pinned(a) })
-	if len(order) != 1 || order[0] != "com.smoke.pin1" {
-		t.Fatalf("取消固定 did not remove: %v", order)
+	var order []string
+	pin := func() []string { onMain(func() { order = pinned(a) }); return order }
+
+	// Row i=1's 前移 swaps pin2 in front of pin1.
+	clickOverlayAt(t, a, upX, rowY(1))
+	if pin := pin(); len(pin) != 2 || pin[0] != "com.smoke.pin2" {
+		t.Fatalf("前移 did not reorder the real list: %v", pin)
 	}
-	closeAppsWings(a)
+	// pin2 is now row i=0: its 上移 is dimmed — the same control is inert.
+	clickOverlayAt(t, a, upX, rowY(0))
+	if pin := pin(); pin[0] != "com.smoke.pin2" {
+		t.Fatalf("first row's 上移 must be inert, got %v", pin)
+	}
+	// pin1 is the last row (i=1): its 下移 is dimmed — inert the same way.
+	clickOverlayAt(t, a, downX, rowY(1))
+	if pin := pin(); pin[1] != "com.smoke.pin1" {
+		t.Fatalf("last row's 下移 must be inert, got %v", pin)
+	}
+	// 取消固定 on the current first row (pin2) removes it for real,
+	// leaving pin1.
+	clickOverlayAt(t, a, rmX, rowY(0))
+	if pin := pin(); len(pin) != 1 || pin[0] != "com.smoke.pin1" {
+		t.Fatalf("取消固定 did not remove: %v", pin)
+	}
+	closeAppsWings(t, a)
 }
 
 // The anchor stays the search path while the wings are open: a real click
@@ -338,15 +355,22 @@ func TestSmokeAppsCenterSearchAndCancel(t *testing.T) {
 	// bottom band, left of the collapse chevron's 38pt box — is the
 	// search press; the chevron keeps its own target. Below the hardware
 	// band, inside our drawn shell, never on another app's surface.
-	_, baseH := a.anchorSize()
-	clickOverlayAt(t, a, float64(a.stripCenter()-30), float64(a.frameTop()+a.sheetTop())+float64(baseH)+18)
+	var baseH float32
+	var cx, top int
+	onMain(func() {
+		_, baseH = a.anchorSize()
+		cx, top = a.stripCenter(), a.frameTop()+a.sheetTop()
+	})
+	clickOverlayAt(t, a, float64(cx-30), float64(top)+float64(baseH)+18)
 	var visible, on bool
 	onMain(func() { visible, on = a.visible, a.apps.on })
 	if !visible || on {
 		t.Fatalf("anchor click must fold wings into search: visible=%v on=%v", visible, on)
 	}
 	onMain(func() { a.hide(hideExplicit) })
-	time.Sleep(350 * time.Millisecond)
+	waitApps(t, a, "the panel closed", func() bool {
+		return !a.visible && a.progress <= 0.01
+	})
 
 	openAppsWings(t, a)
 	onMain(func() { a.escape() })
@@ -364,7 +388,7 @@ func TestSmokeAppsCenterSearchAndCancel(t *testing.T) {
 	if on || visible {
 		t.Fatalf("Esc must fold only the wings: visible=%v on=%v", visible, on)
 	}
-	closeAppsWings(a)
+	closeAppsWings(t, a)
 }
 
 // While a track is loaded the right wing keeps its own app entry — the
@@ -374,12 +398,13 @@ func TestSmokeAppsEntryOnMusicWings(t *testing.T) {
 	a := appsSmokeShelf(t, smokeApps)
 	onMain(func() { fakeTrack(a, true) })
 	peekShelf(a)
-	time.Sleep(300 * time.Millisecond)
+	// The entry is drawn only once the real loop renders the wings:
+	// wait for its recorded box, not a fixed sleep.
 	var er mygo.Rectangle
-	onMain(func() { er = a.apps.entryRect })
-	if er.Width <= 0 {
-		t.Fatal("music wings drew no app entry")
-	}
+	waitApps(t, a, "the music wings' app entry", func() bool {
+		er = a.apps.entryRect
+		return er.Width > 0 && er.Height > 0
+	})
 	shotAppsWindow(t, a.win, "music-wings-entry")
 	clickOverlayAt(t, a, float64(er.X+er.Width/2), float64(er.Y+er.Height/2))
 	var on bool
@@ -388,12 +413,14 @@ func TestSmokeAppsEntryOnMusicWings(t *testing.T) {
 		t.Fatal("the music wings' app entry did not open the mode")
 	}
 	shotAppsWindow(t, a.win, "music-to-apps")
-	closeAppsWings(a)
-	var pw, mw float32
-	onMain(func() { pw, _ = a.peekSize(); mw, _ = a.wingsSize() })
-	if pw != mw {
-		t.Fatalf("wings did not return after the mode: %.0f != %.0f", pw, mw)
-	}
+	closeAppsWings(t, a)
+	// The fold hands the shell back to the track's wings — wait for the
+	// real transition, then compare the live sizes.
+	waitApps(t, a, "the music wings back", func() bool {
+		pw, _ := a.peekSize()
+		mw, _ := a.wingsSize()
+		return pw == mw
+	})
 	onMain(func() { a.np = nil })
 }
 
@@ -408,7 +435,12 @@ func TestSmokeAppsPausesLiveNotice(t *testing.T) {
 		a.syncWindowFrame()
 		a.win.Invalidate()
 	})
-	time.Sleep(350 * time.Millisecond)
+	// The queue must actually show the notice — a fixed sleep once hid
+	// settings left over from an earlier run that disabled it entirely.
+	waitApps(t, a, "the charging notice", func() bool {
+		ev, ok := a.liveNow(time.Now(), a.liveAllow())
+		return ok && ev.kind == liveCharging
+	})
 	shotAppsWindow(t, a.win, "notice-showing")
 	openAppsWings(t, a)
 	var ok bool
@@ -417,11 +449,11 @@ func TestSmokeAppsPausesLiveNotice(t *testing.T) {
 		t.Fatal("notice must hide while the wings are up")
 	}
 	shotAppsWindow(t, a.win, "notice-paused")
-	closeAppsWings(a)
-	onMain(func() { _, ok = a.liveNow(time.Now(), a.liveAllow()) })
-	if !ok {
-		t.Fatal("notice must resume after the wings close")
-	}
+	closeAppsWings(t, a)
+	waitApps(t, a, "the notice back", func() bool {
+		_, ok := a.liveNow(time.Now(), a.liveAllow())
+		return ok
+	})
 	onMain(func() { a.live = liveQueue{} })
 }
 
@@ -481,5 +513,5 @@ func TestSmokeAppsReduceMotionState(t *testing.T) {
 		t.Fatal("wings did not open")
 	}
 	shotAppsWindow(t, a.win, "open-settled")
-	closeAppsWings(a)
+	closeAppsWings(t, a)
 }
