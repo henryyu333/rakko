@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -277,4 +278,70 @@ func serveSOCKS5Conn(conn net.Conn, dialAddr string, onHost func(string)) {
 	conn.SetDeadline(time.Time{})
 	go func() { io.Copy(upstream, conn); upstream.Close() }()
 	io.Copy(conn, upstream)
+}
+
+// TestSystemDictionaryDrivesRequest is the whole chain in one test: a proxy
+// dictionary with the documented CFNumber switches is parsed into System, the
+// resolver is driven from that System (not from a hand-built struct), and a
+// real request goes through the local proxy it names.
+func TestSystemDictionaryDrivesRequest(t *testing.T) {
+	if err := loadSystem(); err != nil {
+		t.Fatalf("system setup: %v", err)
+	}
+	clearProxyEnv(t)
+	seen := make(chan string, 1)
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case seen <- r.Host + r.URL.Path:
+		default:
+		}
+		io.WriteString(w, "answered through the dict's proxy")
+	}))
+	defer proxy.Close()
+	u, _ := url.Parse(proxy.URL)
+	host, port := u.Hostname(), u.Port()
+
+	dict := cfDict(t, map[string]any{
+		"HTTPEnable":  1,
+		"HTTPProxy":   host,
+		"HTTPPort":    atoi(t, port),
+		"HTTPSEnable": 0,
+	})
+	defer cfReleaseSys(dict)
+	parsed := parseProxies(dict)
+	if parsed.HTTP != u.Host {
+		t.Fatalf("parsed HTTP proxy %q, want %q", parsed.HTTP, u.Host)
+	}
+
+	defer swapSystem(func() (System, error) { return parsed, nil })()
+	defer swapTTL(0)()
+
+	body, err := getThrough(t, "http://api.example.test/quota")
+	if err != nil {
+		t.Fatalf("request through the dictionary's proxy: %v", err)
+	}
+	if body != "answered through the dict's proxy" {
+		t.Fatalf("body %q: the request did not reach the proxy", body)
+	}
+	select {
+	case got := <-seen:
+		if got != "api.example.test/quota" {
+			t.Fatalf("the proxy saw %q, want the request's host and path", got)
+		}
+	default:
+		t.Fatal("the proxy saw no request")
+	}
+	// HTTPS is not proxied: the dictionary switches HTTPS off.
+	if proxy := resolve(t, "https://api.example.test/quota"); proxy != nil {
+		t.Fatalf("HTTPS used %s although only HTTP is enabled in the dictionary", proxy)
+	}
+}
+
+func atoi(t *testing.T, s string) int {
+	t.Helper()
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		t.Fatalf("port %q: %v", s, err)
+	}
+	return n
 }

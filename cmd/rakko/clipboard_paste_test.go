@@ -14,6 +14,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"rakko/internal/mac"
 	"rakko/internal/store"
 )
 
@@ -257,17 +258,42 @@ func TestPasteWithoutAccessibilityCopies(t *testing.T) {
 	}
 }
 
-// 目标应用没接回前台（用户已经切走）：不按键，提示内容已复制。
-func TestPasteMissesWhenTargetDoesNotComeFront(t *testing.T) {
+// 用户切去第三个应用：不补激活、不按键，提示内容已复制。焦点不能被抢回原目标。
+func TestPasteMustNotReactivateAfterUserSwitch(t *testing.T) {
 	h := newPasteHooks(t)
-	h.front = 777 // 另一个应用
-	a, _, rec := pasteShelf(t, "stay copied")
+	h.front = 777 // 用户已经切到的第三个应用
+	a, _, rec := pasteShelf(t, "must stay copied")
+	a.pasteClipSelection()
+	h.runWork()
+	if len(h.activated) != 0 {
+		t.Fatalf("user switched to PID 777, but pending paste requested activation of %v", h.activated)
+	}
+	if len(h.pastes.sent) != 0 {
+		t.Fatalf("paste was sent after user switched away: %v", h.pastes.sent)
+	}
+	if rec.text != "must stay copied" {
+		t.Fatal("the content was not left on the clipboard")
+	}
+	if !containsAll(a.status, "已复制", "⌘V") {
+		t.Fatalf("status %q does not report a copy without a paste", a.status)
+	}
+}
+
+// 目标应用迟迟不接回前台但本进程仍握着键盘：补激活一次之后放弃，仍然不发键。
+func TestPasteGivesUpWhenFocusNeverArrives(t *testing.T) {
+	h := newPasteHooks(t)
+	pasteFocusWait, pastePollInterval = 80*time.Millisecond, 5*time.Millisecond
+	a, _, rec := pasteShelf(t, "never front")
+	pasteFrontmost = func() int { return mac.OwnPID() }
 	a.pasteClipSelection()
 	h.runWork()
 	if len(h.pastes.sent) != 0 {
-		t.Fatal("pasted into an app that was not the target")
+		t.Fatalf("pasted although the target never came front: %v", h.pastes.sent)
 	}
-	if rec.text != "stay copied" {
+	if len(h.activated) != 1 || h.activated[0] != 4242 {
+		t.Fatalf("activation retries %v, want exactly one at 4242", h.activated)
+	}
+	if rec.text != "never front" {
 		t.Fatal("the content was not left on the clipboard")
 	}
 	if !containsAll(a.status, "已复制", "⌘V") {
@@ -360,19 +386,18 @@ func TestPasteContent(t *testing.T) {
 	}
 }
 
-// 目标迟迟没有接回前台时补请求一次激活，然后粘贴；只补一次。
+// 目标迟迟没有接回前台、但键盘仍在本进程手里（合法的交接）：补请求一次激活，
+// 目标到前台后才粘贴；只补一次。
 func TestPasteRetriesActivationOnce(t *testing.T) {
 	h := newPasteHooks(t)
 	pasteFocusWait, pastePollInterval = 300*time.Millisecond, 5*time.Millisecond
 	a, _, _ := pasteShelf(t, "slow target")
-	// 第一次读到的仍是别的应用：目标是收到补发的激活之后才回到前台的。
-	reads := 0
+	// 补发的激活之前，键盘仍在我们手里；激活之后目标才回到前台。
 	pasteFrontmost = func() int {
-		reads++
 		if len(h.activated) > 0 {
 			return 4242
 		}
-		return 777
+		return mac.OwnPID()
 	}
 	a.pasteClipSelection()
 	h.runWork()
@@ -381,6 +406,39 @@ func TestPasteRetriesActivationOnce(t *testing.T) {
 	}
 	if len(h.pastes.sent) != 1 || h.pastes.sent[0] != 4242 {
 		t.Fatalf("pasted %v, want the target once it came front", h.pastes.sent)
+	}
+}
+
+// 超时反馈必须回到主线程：后台等待结束时 UI 状态一个字节都不变，只有主线程
+// 回调真正跑过之后才出现「已复制 · 按 ⌘V 粘贴」。
+func TestPasteTimeoutReportsOnMainThread(t *testing.T) {
+	h := newPasteHooks(t)
+	pasteFocusWait, pastePollInterval = 40*time.Millisecond, 5*time.Millisecond
+	a, _, _ := pasteShelf(t, "timeout item")
+	pasteFrontmost = func() int { return mac.OwnPID() } // 交接仍属于我们，但目标一直不来
+	// 主线程回调先排队，不就地执行：这样能证明后台路径没有直接改 UI。
+	var queued []func()
+	dispatchMain = func(fn func()) { queued = append(queued, fn) }
+
+	a.pasteClipSelection()
+	copiedStatus := a.status // copyText 在主线程写的「已复制」
+	h.runWork()              // 后台等待跑完（包括超时）
+	if a.status != copiedStatus {
+		t.Fatalf("the background wait changed the status to %q before the main thread ran", a.status)
+	}
+	if len(queued) == 0 {
+		t.Fatal("the timeout path never asked the main thread to report")
+	}
+	for len(queued) > 0 {
+		fn := queued[0]
+		queued = queued[1:]
+		fn()
+	}
+	if !containsAll(a.status, "已复制", "⌘V") {
+		t.Fatalf("status %q does not report a copy without a paste", a.status)
+	}
+	if len(h.pastes.sent) != 0 {
+		t.Fatalf("pasted %v without the target in front", h.pastes.sent)
 	}
 }
 

@@ -283,7 +283,7 @@ macOS 会把 Rakko 当成一个新应用（应用标识变了），所以升级�
 这三类请求都按同一个代理规则走：
 
 - 启动 Rakko 时带了 `HTTP_PROXY`、`HTTPS_PROXY` 或 `NO_PROXY` 就完全按它们走，与 Go 的标准行为一致（小写变量优先，`NO_PROXY` 支持域名后缀、IP、CIDR 和 `*`）。只设了 `NO_PROXY` 也算设置了：它只表示绕开哪些地址，不会退回系统代理。
-- 没有这些变量时用 系统设置 → 网络 → 代理 里的 HTTP、HTTPS、SOCKS 代理，HTTPS 走 HTTPS 代理（没有就用 HTTP 代理的 CONNECT），其余的走 SOCKS；系统例外列表与本地地址（127.0.0.1、localhost）不走代理。系统设置最多每两秒读一次，改完不用重开 Rakko。
+- 没有这些变量时按 系统设置 → 网络 → 代理 里配置的那一份来，规则与 macOS 自己的 CFNetwork 一致：http 请求走 HTTP 代理，https 走 HTTPS 代理，两者都没有时才走 SOCKS；**不会**拿 HTTP 代理去代 https（反之亦然）——系统没配的代理不会被发明出来。例外列表（`*.local`、CIDR、主机名等）、`ExcludeSimpleHostnames`（不带点的主机名不走代理）与系统完全一致；本机回环地址不算例外，系统代理开着时代理也会看到它们（与 CFNetwork 相同）。系统设置最多每两秒读一次，改完不用重开 Rakko。
 - 自动代理配置脚本（PAC）和自动发现不解析：只配了 PAC 时按直连处理，日志里会写明一次。需要 PAC 的场景请改用系统级 VPN，或者显式设置上面三个环境变量。
 
 Agent 完成提醒不增加任何流量：那些 hook 只在本机运行 Rakko 自己的可执行文件，把工具自己的事件通过 `agent.sock` 交给它；它们只报告「这一轮做完了」和这一轮在做什么，不读对话，也不回话。

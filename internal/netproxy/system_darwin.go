@@ -132,15 +132,16 @@ func parseProxies(dict uintptr) System {
 	s.HTTPS = proxyAt(dict, "HTTPSEnable", "HTTPSProxy", "HTTPSPort")
 	s.SOCKS = proxyAt(dict, "SOCKSEnable", "SOCKSProxy", "SOCKSPort")
 	s.Bypass = strings.Join(exceptionList(dict), ",")
-	s.AutoConfig = dictBool(dict, "ProxyAutoConfigEnable") && dictString(dict, "ProxyAutoConfigURLString") != ""
-	s.AutoDiscover = dictBool(dict, "ProxyAutoDiscoveryEnable")
+	s.ExcludeSimple = dictFlag(dict, "ExcludeSimpleHostnames")
+	s.AutoConfig = dictFlag(dict, "ProxyAutoConfigEnable") && dictString(dict, "ProxyAutoConfigURLString") != ""
+	s.AutoDiscover = dictFlag(dict, "ProxyAutoDiscoveryEnable")
 	return s
 }
 
 // proxyAt is one enabled proxy as "host:port"; an entry that is switched off,
 // has no host or no port uses no proxy.
 func proxyAt(dict uintptr, enable, host, port string) string {
-	if !dictBool(dict, enable) {
+	if !dictFlag(dict, enable) {
 		return ""
 	}
 	h := dictString(dict, host)
@@ -179,8 +180,8 @@ func dictString(dict uintptr, key string) string { return valueString(dictValue(
 
 func dictInt(dict uintptr, key string) int { return valueInt(dictValue(dict, key)) }
 
-func dictBool(dict uintptr, key string) bool {
-	return valueBool(dictValue(dict, key))
+func dictFlag(dict uintptr, key string) bool {
+	return valueFlag(dictValue(dict, key))
 }
 
 func isType(v uintptr, name string) bool {
@@ -223,11 +224,20 @@ func valueInt(v uintptr) int {
 	return int(n)
 }
 
-func valueBool(v uintptr) bool {
-	if !isType(v, cfTypeBoolean) {
-		return false
+// valueFlag reads a SystemConfiguration switch. SCSchemaDefinitions documents
+// them as CFNumber 0/1 (HTTPEnable, HTTPSEnable, SOCKSEnable,
+// ProxyAutoConfigEnable, ProxyAutoDiscoveryEnable, ExcludeSimpleHostnames), so
+// a number is the contract; a CFBoolean is accepted too because CFNetwork
+// itself honors one in the same dictionary. Any other type is off, never
+// guessed at.
+func valueFlag(v uintptr) bool {
+	switch {
+	case isType(v, cfTypeNumber):
+		return valueInt(v) != 0
+	case isType(v, cfTypeBoolean):
+		return cfBoolGetValue(v)
 	}
-	return cfBoolGetValue(v)
+	return false
 }
 
 // cfString makes a CoreFoundation string from s; the caller releases it.

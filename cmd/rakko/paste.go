@@ -124,9 +124,12 @@ func (a *shelf) pasteTarget() int {
 }
 
 // finishPaste 在后台等待目标应用拿回键盘，然后向它发 ⌘V。代号变了（新的选择、
-// 收起、重新打开）就放弃；目标没有接回前台就只保留复制，绝不把按键发给别的
-// 应用。macOS 会忽略间隔极短的两次激活请求，所以等不到前台时在窗口过半时
-// 再请求一次——有界、只一次，不加重试框架。
+// 收起、重新打开）就放弃。全部 UI 状态都在主线程改：每次读前台、补激活、发键和
+// 失败提示都经 dispatchMain，后台只负责计时。
+//
+// 用户切去第三个应用时立即放弃——既不发键，也不把焦点抢回原目标。macOS 会忽略
+// 间隔极短的激活请求，所以只有在本进程仍然握着键盘（这次交接仍属于我们）时，
+// 才在等待窗口过半补请求一次激活；有界、只一次。
 func (a *shelf) finishPaste(target int, gen int64) {
 	start := time.Now()
 	deadline := start.Add(pasteFocusWait)
@@ -135,22 +138,27 @@ func (a *shelf) finishPaste(target int, gen int64) {
 		if a.pasteSeq.Load() != gen {
 			return
 		}
-		front := false
-		dispatchMain(func() { front = pasteFrontmost() == target })
-		if front {
+		front, ours := 0, 0
+		dispatchMain(func() { front, ours = pasteFrontmost(), mac.OwnPID() })
+		if front == target {
 			break
+		}
+		if front != ours {
+			// 别人（用户新选的应用）已经在前台：这一次交接不再属于我们。
+			a.failPaste(gen)
+			return
 		}
 		now := time.Now()
 		if !retried && now.After(start.Add(pasteFocusWait/2)) {
 			retried = true
 			dispatchMain(func() {
-				if a.pasteSeq.Load() == gen {
+				if a.pasteSeq.Load() == gen && pasteFrontmost() == mac.OwnPID() {
 					pasteActivate(target)
 				}
 			})
 		}
 		if now.After(deadline) {
-			a.pasteMissed(gen)
+			a.failPaste(gen)
 			return
 		}
 		time.Sleep(pastePollInterval)
@@ -168,7 +176,12 @@ func (a *shelf) finishPaste(target int, gen int64) {
 	})
 }
 
-// pasteMissed 说明内容在剪贴板上、但这一次没有粘贴。
+// failPaste 把「只复制了」的提示交回主线程：后台 goroutine 不碰 UI 状态。
+func (a *shelf) failPaste(gen int64) {
+	dispatchMain(func() { a.pasteMissed(gen) })
+}
+
+// pasteMissed 说明内容在剪贴板上、但这一次没有粘贴。主线程调用。
 func (a *shelf) pasteMissed(gen int64) {
 	if a.pasteSeq.Load() != gen {
 		return

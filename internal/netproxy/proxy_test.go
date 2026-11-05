@@ -140,7 +140,8 @@ func TestEnvironmentBypass(t *testing.T) {
 	wantProxy(t, "https://elsewhere.test/", "http://env-proxy.test:8443")
 }
 
-// Without a proxy in the environment the system settings decide each scheme.
+// Without a proxy in the environment the system settings decide each scheme,
+// exactly as CFNetworkCopyProxiesForURL answers for the same dictionary.
 func TestSystemProxyPerScheme(t *testing.T) {
 	clearProxyEnv(t)
 
@@ -150,36 +151,47 @@ func TestSystemProxyPerScheme(t *testing.T) {
 	wantProxy(t, "http://example.test/", "http://10.0.0.9:3128")
 	wantProxy(t, "https://example.test/", "http://10.0.0.9:3129")
 
-	// No HTTPS proxy: HTTPS goes through the HTTP proxy as a CONNECT.
+	// Only an HTTP proxy: HTTPS is not proxied. CFNetwork answers
+	// kCFProxyTypeNone here, so a CONNECT through the HTTP proxy would be a
+	// policy the Mac was never given.
 	defer swapSystem(func() (System, error) {
 		return System{HTTP: "10.0.0.9:3128"}, nil
 	})()
-	wantProxy(t, "https://example.test/", "http://10.0.0.9:3128")
+	wantProxy(t, "http://example.test/", "http://10.0.0.9:3128")
+	wantProxy(t, "https://example.test/", "")
 
-	// SOCKS covers what the HTTP proxies do not.
+	// Only an HTTPS proxy: HTTP is not proxied either.
+	defer swapSystem(func() (System, error) {
+		return System{HTTPS: "10.0.0.9:3129"}, nil
+	})()
+	wantProxy(t, "https://example.test/", "http://10.0.0.9:3129")
+	wantProxy(t, "http://example.test/", "")
+
+	// SOCKS is the one proxy CFNetwork offers for both schemes.
 	defer swapSystem(func() (System, error) {
 		return System{SOCKS: "10.0.0.9:1080"}, nil
 	})()
 	wantProxy(t, "https://example.test/", "socks5://10.0.0.9:1080")
 	wantProxy(t, "http://example.test/", "socks5://10.0.0.9:1080")
 
-	// The HTTP proxy wins over SOCKS for both schemes when no HTTPS proxy
-	// is set: HTTPS is a CONNECT through it.
+	// With both, CFNetwork lists the scheme's proxy first and SOCKS after:
+	// HTTP goes through the HTTP proxy (and would fall back to SOCKS).
 	defer swapSystem(func() (System, error) {
 		return System{HTTP: "10.0.0.9:3128", SOCKS: "10.0.0.9:1080"}, nil
 	})()
 	wantProxy(t, "http://example.test/", "http://10.0.0.9:3128")
-	wantProxy(t, "https://example.test/", "http://10.0.0.9:3128")
+	wantProxy(t, "https://example.test/", "socks5://10.0.0.9:1080")
 }
 
-// The system exception list bypasses the system proxy, and loopback is
-// always direct.
+// The system's own bypass rules apply: the exception list, and
+// ExcludeSimpleHostnames for a name with no dot. Loopback is not special —
+// CFNetwork proxies 127.0.0.1 and localhost when the system proxy is on.
 func TestSystemBypass(t *testing.T) {
 	clearProxyEnv(t)
 	defer swapSystem(func() (System, error) {
 		return System{
-			HTTP: "10.0.0.9:3128", HTTPS: "10.0.0.9:3128",
-			Bypass: "*.local,169.254/16,intranet.example.com,192.168.0.0/16",
+			HTTP: "10.0.0.9:3128", HTTPS: "10.0.0.9:3129",
+			Bypass: "*.local,169.254/16,intranet.example.com,192.168.0.0/16,10.0.0.1:8080",
 		}, nil
 	})()
 	for _, raw := range []string{
@@ -189,13 +201,23 @@ func TestSystemBypass(t *testing.T) {
 		"https://intranet.example.com/",
 		"https://files.intranet.example.com/",
 		"https://192.168.3.4/",
-		"https://127.0.0.1:8443/",
-		"https://localhost:8443/",
+		"https://10.0.0.1:8080/",
 	} {
 		wantProxy(t, raw, "")
 	}
-	wantProxy(t, "https://example.com/", "http://10.0.0.9:3128")
-	wantProxy(t, "https://intranet.example.com.evil.test/", "http://10.0.0.9:3128")
+	wantProxy(t, "https://example.com/", "http://10.0.0.9:3129")
+	wantProxy(t, "https://local/", "http://10.0.0.9:3129") // "*.local" is subdomains only
+	wantProxy(t, "https://intranet.example.com.evil.test/", "http://10.0.0.9:3129")
+	wantProxy(t, "https://127.0.0.1:8443/", "http://10.0.0.9:3129")
+	wantProxy(t, "https://localhost:8443/", "http://10.0.0.9:3129")
+
+	// ExcludeSimpleHostnames bypasses names without a dot, never an address.
+	defer swapSystem(func() (System, error) {
+		return System{HTTP: "10.0.0.9:3128", ExcludeSimple: true}, nil
+	})()
+	wantProxy(t, "http://printer/", "")
+	wantProxy(t, "http://has.dot.test/", "http://10.0.0.9:3128")
+	wantProxy(t, "http://127.0.0.1:8080/", "http://10.0.0.9:3128")
 }
 
 // A changed system setting is read again: a cached read is never the
@@ -278,11 +300,35 @@ func TestSharedTransport(t *testing.T) {
 	}
 }
 
-func TestBypassWords(t *testing.T) {
-	got := bypassWords([]string{" 169.254/16 ", "", "*.local", "192.168.0.0/16", "10/8", "weird/thing"})
-	want := "169.254.0.0/16,*.local,192.168.0.0/16,10.0.0.0/8,weird/thing"
-	if got != want {
-		t.Fatalf("bypass words %q, want %q", got, want)
+// One ExceptionsList entry covers the host and its subdomains; a leading
+// "*." only subdomains; addresses, CIDR (Apple's shorthand included), ports
+// and "*" as written.
+func TestBypassMatches(t *testing.T) {
+	for _, tc := range []struct {
+		rule, host string
+		want       bool
+	}{
+		{"169.254/16", "169.254.10.2", true},
+		{"169.254/16", "169.255.10.2", false},
+		{"192.168.0.0/16", "192.168.3.4", true},
+		{"10/8", "10.1.2.3", true},
+		{"*.example.test", "api.example.test", true},
+		{"*.example.test", "example.test", false},
+		{".example.test", "api.example.test", true},
+		{".example.test", "example.test", false},
+		{"intranet.example.com", "intranet.example.com", true},
+		{"intranet.example.com", "files.intranet.example.com", true},
+		{"intranet.example.com", "intranet.example.com.evil.test", false},
+		{"host.test:8080", "host.test", true},
+		{"10.0.0.1", "10.0.0.1", true},
+		{"10.0.0.1", "10.0.0.2", false},
+		{"*", "anything.test", true},
+		{"", "anything.test", false},
+		{"weird/thing", "weird.test", false},
+	} {
+		if got := bypassMatches(tc.rule, tc.host); got != tc.want {
+			t.Fatalf("bypassMatches(%q, %q) = %v, want %v", tc.rule, tc.host, got, tc.want)
+		}
 	}
 }
 

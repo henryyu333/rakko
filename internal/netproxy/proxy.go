@@ -11,10 +11,10 @@
 //     bypass, the loopback rule, the CGI guard. An environment that only
 //     carries NO_PROXY still counts — it is a bypass decision, not a missing
 //     configuration, and never falls through to the system settings.
-//  2. Otherwise the system proxy settings apply: the HTTPS proxy for HTTPS
-//     (an HTTP CONNECT), the HTTP proxy for both schemes when no HTTPS proxy
-//     is set, SOCKS for anything else, minus the system's exception list and
-//     the loopback rule.
+//  2. Otherwise the system proxy settings apply exactly as CFNetwork reads
+//     them: HTTP for http, HTTPS for https (a CONNECT through the HTTPS
+//     proxy), SOCKS after either — never the other scheme's proxy — minus the
+//     system's own bypass rules (ExceptionsList and ExcludeSimpleHostnames).
 //  3. Proxy auto-configuration (PAC) and auto-discovery are not evaluated:
 //     while only a PAC script is configured the app connects directly, and
 //     says so once in the log rather than pretending the setting works.
@@ -28,6 +28,7 @@ package netproxy
 
 import (
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -44,8 +45,11 @@ type System struct {
 	// empty one is switched off.
 	HTTP, HTTPS, SOCKS string
 	// Bypass is the system exception list as written ("*.local,
-	// 169.254/16"), matched after bypassWords.
+	// 169.254/16").
 	Bypass string
+	// ExcludeSimple is ExcludeSimpleHostnames: a host name with no dot (an
+	// intranet name, not an address) bypasses the proxy.
+	ExcludeSimple bool
 	// AutoConfig and AutoDiscover report a proxy auto-configuration (PAC)
 	// script or auto-discovery; neither is evaluated (package doc).
 	AutoConfig, AutoDiscover bool
@@ -106,36 +110,89 @@ func systemNow() System {
 	return systemValue
 }
 
-// proxyFor picks the system proxy for one request. The exception list and
-// the loopback rule are applied with the matcher NO_PROXY uses, so there is
-// one set of bypass rules in the package.
+// proxyFor picks the system proxy for one request the way CFNetwork answers
+// CFNetworkCopyProxiesForURL for the same dictionary: the scheme's own proxy,
+// else SOCKS, and the system's own bypass rules. No proxy is invented across
+// schemes — a Mac with only an HTTP proxy configured does not proxy HTTPS.
 func (s System) proxyFor(reqURL *url.URL) (*url.URL, error) {
 	addr := s.address(reqURL.Scheme)
 	if addr == "" {
 		s.noteAutoConfig()
 		return nil, nil
 	}
-	cfg := httpproxy.Config{NoProxy: bypassWords(strings.Split(s.Bypass, ","))}
-	if reqURL.Scheme == "https" {
-		cfg.HTTPSProxy = addr
-	} else {
-		cfg.HTTPProxy = addr
+	if s.bypassed(reqURL.Hostname()) {
+		return nil, nil
 	}
-	return cfg.ProxyFunc()(reqURL)
+	return url.Parse(addr)
 }
 
-// address is the proxy the scheme goes through: HTTPS through the HTTPS
-// proxy, falling back to the HTTP proxy (an HTTP CONNECT), then SOCKS; HTTP
-// through the HTTP proxy, then SOCKS. An HTTP proxy URL means "an HTTP
-// CONNECT"; a SOCKS proxy is socks5, the scheme net/http dials itself.
+// address is the proxy the scheme goes through, in the order CFNetwork
+// returns it: HTTP for http, HTTPS for https (a CONNECT through the HTTPS
+// proxy), and SOCKS after either — for both schemes. The other scheme's HTTP
+// proxy is never a fallback.
 func (s System) address(scheme string) string {
 	switch scheme {
 	case "https":
-		return firstNonEmpty(httpURL(s.HTTPS), httpURL(s.HTTP), socksURL(s.SOCKS))
+		return firstNonEmpty(httpURL(s.HTTPS), socksURL(s.SOCKS))
 	case "http":
 		return firstNonEmpty(httpURL(s.HTTP), socksURL(s.SOCKS))
 	}
 	return socksURL(s.SOCKS)
+}
+
+// bypassed reports whether the system sends this request direct:
+// ExcludeSimpleHostnames for a name with no dot, else an ExceptionsList entry.
+// The rules match CFNetwork's (an entry matches the host and its subdomains; a
+// leading "*." or "." matches subdomains only; an address, CIDR or "*" as
+// written). Unlike Go's environment rule there is no implicit loopback
+// bypass: CFNetwork proxies 127.0.0.1 and localhost when the system proxy is
+// on, and this follows it.
+func (s System) bypassed(host string) bool {
+	host = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(host), "."))
+	if host == "" {
+		return false
+	}
+	if s.ExcludeSimple && net.ParseIP(host) == nil && !strings.Contains(host, ".") {
+		return true
+	}
+	for _, rule := range strings.Split(s.Bypass, ",") {
+		if bypassMatches(rule, host) {
+			return true
+		}
+	}
+	return false
+}
+
+// bypassMatches reports whether one ExceptionsList entry covers host.
+func bypassMatches(rule, host string) bool {
+	rule = strings.ToLower(strings.TrimSpace(rule))
+	if rule == "" {
+		return false
+	}
+	if rule == "*" {
+		return true
+	}
+	if strings.Contains(rule, "/") {
+		_, network, err := net.ParseCIDR(expandPrefix(rule))
+		ip := net.ParseIP(host)
+		return err == nil && ip != nil && network.Contains(ip)
+	}
+	if ip := net.ParseIP(rule); ip != nil {
+		other := net.ParseIP(host)
+		return other != nil && ip.Equal(other)
+	}
+	if h, _, err := net.SplitHostPort(rule); err == nil {
+		rule = h
+	} else if i := strings.LastIndexByte(rule, ':'); i > 0 && allDigits(rule[i+1:]) {
+		rule = rule[:i] // "host:port" without brackets
+	}
+	switch {
+	case strings.HasPrefix(rule, "*."):
+		return strings.HasSuffix(host, rule[1:]) // ".example.test"
+	case strings.HasPrefix(rule, "."):
+		return strings.HasSuffix(host, rule)
+	}
+	return host == rule || strings.HasSuffix(host, "."+rule)
 }
 
 func httpURL(addr string) string {
@@ -167,21 +224,9 @@ func (s System) noteAutoConfig() {
 	}
 }
 
-// bypassWords turns the system exception list into the words NO_PROXY takes.
-// macOS writes an address prefix such as "169.254/16" where the matcher wants
-// the whole address, so the missing octets are filled with zeros.
-func bypassWords(entries []string) string {
-	out := make([]string, 0, len(entries))
-	for _, e := range entries {
-		if e = strings.TrimSpace(e); e != "" {
-			out = append(out, expandPrefix(e))
-		}
-	}
-	return strings.Join(out, ",")
-}
-
 // expandPrefix fills the missing octets of an IPv4 prefix ("169.254/16" →
-// "169.254.0.0/16"). Anything else is returned unchanged.
+// "169.254.0.0/16"), the shorthand Apple's ExceptionsList uses. Anything else
+// is returned unchanged.
 func expandPrefix(entry string) string {
 	addr, bits, ok := strings.Cut(entry, "/")
 	if !ok {
