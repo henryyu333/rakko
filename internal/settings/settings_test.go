@@ -168,7 +168,8 @@ func TestSaveRoundTrips(t *testing.T) {
 	// The pet's size is normalized on load, so the literal spells out
 	// medium rather than the empty string.
 	want := Settings{RetentionDays: 7, ClipboardLimit: 12, ExcludedApps: []string{"com.example.one", "com.example.two"},
-		ShellStyle: ShellStyleIsland, Pet: PetSettings{Size: PetSizeMedium}, Lyrics: Default().Lyrics}
+		ShellStyle: ShellStyleIsland, SearchMode: SearchModeApps,
+		Pet: PetSettings{Size: PetSizeMedium}, Lyrics: Default().Lyrics}
 	if err := Save(dir, want); err != nil {
 		t.Fatal(err)
 	}
@@ -214,6 +215,70 @@ func TestInvalidFileIsNeverRewritten(t *testing.T) {
 	got, _ := os.ReadFile(path)
 	if string(got) != string(bad) {
 		t.Fatalf("invalid settings.json was overwritten: %q", got)
+	}
+}
+
+// searchMode is new in this version: a file without it keeps 全部, only the
+// exact "apps" and "files" values choose another mode, and a hand-edited
+// value the app cannot draw falls back to 全部.
+func TestSearchModeLoad(t *testing.T) {
+	for _, tt := range []struct {
+		raw  string
+		want SearchMode
+	}{
+		{`{}`, SearchModeAll},
+		{`{"searchMode": "all"}`, SearchModeAll},
+		{`{"searchMode": "apps"}`, SearchModeApps},
+		{`{"searchMode": "files"}`, SearchModeFiles},
+		{`{"searchMode": "APPS"}`, SearchModeAll},
+		{`{"searchMode": ""}`, SearchModeAll},
+		{`{"searchMode": "everything"}`, SearchModeAll},
+	} {
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, FileName), []byte(tt.raw), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		s, err := Load(dir)
+		if err != nil {
+			t.Fatalf("%s: %v", tt.raw, err)
+		}
+		if s.SearchMode != tt.want {
+			t.Fatalf("%s loaded searchMode %q, want %q", tt.raw, s.SearchMode, tt.want)
+		}
+	}
+}
+
+// A chosen mode survives a save and the next load; saving 全部 writes the
+// explicit value, and a file without the key reads as 全部 too.
+func TestSearchModeSaveAndReload(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.SearchMode = SearchModeFiles
+	if err := Save(dir, s); err != nil {
+		t.Fatal(err)
+	}
+	back, err := Load(dir)
+	if err != nil || back.SearchMode != SearchModeFiles {
+		t.Fatalf("saved searchMode reloaded as %q, %v", back.SearchMode, err)
+	}
+
+	s.SearchMode = SearchModeAll
+	if err := Save(dir, s); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, FileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"searchMode": "all"`) {
+		t.Fatalf("saving 全部 wrote no mode: %s", data)
+	}
+	back, err = Load(dir)
+	if err != nil || back.SearchMode != SearchModeAll {
+		t.Fatalf("a saved 全部 loaded %q, %v", back.SearchMode, err)
 	}
 }
 

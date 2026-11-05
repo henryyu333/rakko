@@ -80,6 +80,11 @@ type Settings struct {
 	// in the Settings window, and every one is an Electron-style
 	// accelerator ("Ctrl+Alt+Space").
 	Shortcuts ShortcutSettings `json:"shortcuts"`
+	// SearchMode is the mode the home search bar opens on: 全部, 应用 or
+	// 文件. It is the default for the next opening, not a memory of the
+	// last search: Tab changes one search without saving here. A file
+	// without the key (an older version, a hand edit) keeps 全部.
+	SearchMode SearchMode `json:"searchMode"`
 	// PinnedApps is the app switcher's 固定常用 list of bundle identifiers,
 	// in the order the wings show them. nil means the user never edited it
 	// and the switcher shows its defaults; an explicit empty list (the
@@ -265,6 +270,27 @@ func (s ShellStyle) Normalized() ShellStyle {
 	return ShellStyleNotch
 }
 
+// SearchMode is the mode the home search bar opens on. It is a default,
+// not a memory of the last search: every opening starts here, and Tab
+// changes only the search on screen.
+type SearchMode string
+
+const (
+	SearchModeAll   SearchMode = "all"
+	SearchModeApps  SearchMode = "apps"
+	SearchModeFiles SearchMode = "files"
+)
+
+// Normalized maps an unknown or empty value (an older settings.json, a
+// hand edit) to the default, all.
+func (m SearchMode) Normalized() SearchMode {
+	switch m {
+	case SearchModeApps, SearchModeFiles:
+		return m
+	}
+	return SearchModeAll
+}
+
 // AIUsageSettings is the aiUsage object in settings.json. Enabled turns
 // the AI 用量 page on; QuotaCodex and QuotaClaude pick which subscription
 // cards it shows; QuotaLeft picks the quota display. Local usage is read
@@ -290,6 +316,7 @@ func Default() Settings {
 		RemoveAfterDrag:  false,
 		SnapWindows:      true,
 		ShellStyle:       ShellStyleNotch,
+		SearchMode:       SearchModeAll,
 		LiveActivities: LiveActivitySettings{
 			Charging:   true,
 			Headphones: true,
@@ -345,6 +372,7 @@ func Load(dir string) (Settings, error) {
 		s.ClipboardLimit = defaultClipboardLimit
 	}
 	s.ShellStyle = s.ShellStyle.Normalized()
+	s.SearchMode = s.SearchMode.Normalized()
 	s.Pet.Size = s.Pet.Size.Normalized()
 	s.AgentNotify.pruneOff()
 	s.PinnedApps = normalizePinnedApps(s.PinnedApps)
