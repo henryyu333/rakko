@@ -453,3 +453,54 @@ func TestGeminiNeedsItsOwnFiles(t *testing.T) {
 		t.Fatal("Gemini CLI's installation_id did not count as installed")
 	}
 }
+
+// TestCodexHomeDefault: without $CODEX_HOME the Codex surface is the
+// usual ~/.codex — detection, the file Rakko writes and the path the row
+// shows.
+func TestCodexHomeDefault(t *testing.T) {
+	t.Setenv("CODEX_HOME", "")
+	home := testHome(t)
+	if got, want := codexHome(home), filepath.Join(home, ".codex"); got != want {
+		t.Fatalf("codexHome = %q, want %q", got, want)
+	}
+	if got, want := ConfigPath(home, ToolCodex), filepath.Join(home, ".codex", "hooks.json"); got != want {
+		t.Fatalf("ConfigPath = %q, want %q", got, want)
+	}
+	if got, want := DisplayPath(home, ToolCodex), "~/.codex/hooks.json"; got != want {
+		t.Fatalf("DisplayPath = %q, want %q", got, want)
+	}
+	writeFile(t, filepath.Join(home, ".codex", "auth.json"), "{}")
+	if !Installed(home, ToolCodex) {
+		t.Fatal("~/.codex/auth.json did not count as Codex installed")
+	}
+}
+
+// TestCodexHomeEnv: with $CODEX_HOME everything Codex moves under it —
+// detection looks there and not at ~/.codex, and hooks.json is written
+// inside it. A leading "~/" expands against the user's home.
+func TestCodexHomeEnv(t *testing.T) {
+	home := testHome(t)
+
+	t.Setenv("CODEX_HOME", "~/cx")
+	if got, want := codexHome(home), filepath.Join(home, "cx"); got != want {
+		t.Fatalf("codexHome = %q, want %q", got, want)
+	}
+
+	dir := t.TempDir()
+	t.Setenv("CODEX_HOME", dir)
+	if got, want := ConfigPath(home, ToolCodex), filepath.Join(dir, "hooks.json"); got != want {
+		t.Fatalf("ConfigPath = %q, want %q", got, want)
+	}
+	if got := DisplayPath(home, ToolCodex); got != filepath.Join(dir, "hooks.json") {
+		t.Fatalf("DisplayPath = %q, want the real path outside home", got)
+	}
+	// The default root's markers no longer count: only $CODEX_HOME's do.
+	writeFile(t, filepath.Join(home, ".codex", "auth.json"), "{}")
+	if Installed(home, ToolCodex) {
+		t.Fatal("~/.codex counted as installed while CODEX_HOME points elsewhere")
+	}
+	writeFile(t, filepath.Join(dir, "auth.json"), "{}")
+	if !Installed(home, ToolCodex) {
+		t.Fatal("$CODEX_HOME/auth.json did not count as Codex installed")
+	}
+}

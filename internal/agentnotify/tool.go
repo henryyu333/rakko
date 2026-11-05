@@ -130,6 +130,23 @@ func paths(home string, rel ...string) []string {
 	return out
 }
 
+// codexHome is the directory Codex keeps its sessions and configuration
+// in: $CODEX_HOME when the environment names one (a leading "~/" expands
+// against home), else the default ~/.codex.
+func codexHome(home string) string {
+	dir := os.Getenv("CODEX_HOME")
+	if dir == "" {
+		return join(home, ".codex")
+	}
+	if dir == "~" {
+		return home
+	}
+	if strings.HasPrefix(dir, "~/") {
+		return join(home, dir[2:])
+	}
+	return dir
+}
+
 // specs lists every supported tool. Order is the order the settings rows
 // show, most used first. Event names, files and units follow each tool's
 // own hook documentation as of 2026-11.
@@ -149,9 +166,9 @@ var specs = []spec{
 		name: "Codex",
 		kind: KindHooks,
 		detect: func(home string) []string {
-			return paths(home, ".codex/sessions", ".codex/auth.json", ".codex/config.toml", ".codex/.codex-global-state.json")
+			return paths(codexHome(home), "sessions", "auth.json", "config.toml", ".codex-global-state.json")
 		},
-		config: func(home string) string { return join(home, ".codex", "hooks.json") },
+		config: func(home string) string { return join(codexHome(home), "hooks.json") },
 		events: []string{"UserPromptSubmit", "Stop"},
 	},
 	{
