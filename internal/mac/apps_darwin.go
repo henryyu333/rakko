@@ -97,26 +97,6 @@ func ActivateApp(pid int) bool {
 	return ok
 }
 
-// TerminateApp asks the application with the process identifier pid to
-// quit (NSRunningApplication.terminate) and reports whether the message
-// reached a live process. Test helpers use it to clean up apps they
-// launched themselves. Main thread only.
-func TerminateApp(pid int) bool {
-	if pid <= 0 {
-		return false
-	}
-	var ok bool
-	withPool(func() {
-		app := send(class("NSRunningApplication"), "runningApplicationWithProcessIdentifier:", uintptr(pid))
-		if app == 0 {
-			return
-		}
-		send(app, "terminate")
-		ok = true
-	})
-	return ok
-}
-
 // DeactivateSelf resigns this application's active status by hiding it
 // (NSApplication.hide:), used when the app to hand focus back to is gone.
 // The shelf only activates for the keyboard-driven search flow; hiding

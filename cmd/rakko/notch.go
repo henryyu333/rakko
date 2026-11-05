@@ -232,14 +232,20 @@ func (a *shelf) desiredFrame() mygo.Rectangle {
 // covers two app-switcher boxes: the wings' shell when asymmetric seats
 // lean it off the anchor axis (a cornered island), and the popover pane
 // that hangs under — or above — the shell. ph is the peek height the
-// caller resolved.
+// caller resolved. The wings union keys on appsDrawOff — the drawn
+// state, not apps.on — so a mid-fold frame still widened by the wings
+// never re-clips the shell it is folding from.
 func (a *shelf) frameCoverAppsPop(r mygo.Rectangle, ph float32) mygo.Rectangle {
-	if a.appsModeOn() {
-		off := a.appsDrawOff()
+	if off := a.appsDrawOff(); off != 0 {
+		// The drawn shell sits off the anchor axis by off: extend the
+		// frame's left edge into the lean for a negative offset, its
+		// right edge for a positive one.
 		if off < 0 {
-			r.Width -= int(off)
+			ext := int(math.Ceil(float64(-off)))
+			r.X -= ext
+			r.Width += ext
 		} else {
-			r.Width += int(off + 0.5)
+			r.Width += int(math.Ceil(float64(off)))
 		}
 	}
 	if !a.apps.more {

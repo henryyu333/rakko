@@ -1006,3 +1006,78 @@ func TestSwitchIconCacheBound(t *testing.T) {
 		t.Fatalf("cap must be catalogue+16=136, got %d", got)
 	}
 }
+
+// TestFrameCoversShiftedWings is the permanent form of the gate probe that
+// caught a real clip: an island dragged to either edge leans the drawn
+// wings off the anchor axis by off, and desiredFrame must union that drawn
+// range — a negative offset grows the frame's LEFT edge, not just its
+// width. Covers both sides, both offset signs, the popover open and shut,
+// and a mid-fold frame where apps.on already ended but peekApps is still
+// the drawn kind.
+func TestFrameCoversShiftedWings(t *testing.T) {
+	stubApps(t, &appsStub{paths: map[string]string{}})
+	edge := []struct {
+		name string
+		dx   func(a *shelf) int
+		sign float32 // expected appsDrawOff sign: −1 left-lean, +1 right-lean
+	}{
+		// Island pinned to the left edge: room is on the right, the right
+		// wing outgrows the left — the drawn shell leans RIGHT (off > 0),
+		// so the frame must extend its right edge.
+		{"left edge, off>0", func(a *shelf) int {
+			return a.dispWork.X + islandIdleW/2 + 8 - a.anchorCenterX()
+		}, 1},
+		// Right edge mirrors it: the left wing outgrows, the shell leans
+		// LEFT (off < 0) — the geometry the gate clipped — and the frame
+		// must move its left edge out.
+		{"right edge, off<0", func(a *shelf) int {
+			return a.dispWork.X + a.dispWork.Width - islandIdleW/2 - 8 - a.anchorCenterX()
+		}, -1},
+	}
+	for _, e := range edge {
+		for _, more := range []bool{false, true} {
+			for _, folded := range []bool{false, true} {
+				name := e.name
+				if more {
+					name += " +popover"
+				}
+				if folded {
+					name += " mid-fold"
+				}
+				t.Run(name, func(t *testing.T) {
+					a := appSwitchShelf(t)
+					a.island = true
+					a.islandDX = e.dx(a)
+					a.win = &mygo.Window{}
+					a.apps.on = !folded      // mid-fold: mode ended…
+					a.fx.peekKind = peekApps // …but the wings still draw
+					a.fx.peek = true
+					a.apps.more = more
+					w, h := a.appsSize()
+					a.fx.w, a.fx.h = w, h
+					f := a.desiredFrame()
+					off := a.appsDrawOff()
+					if folded && off == 0 {
+						t.Skip("mid-fold draws no lean on this geometry")
+					}
+					if !folded && off*e.sign <= 0 {
+						t.Fatalf("edge case produced off %.1f, want sign %.0f", off, e.sign)
+					}
+					cx := float32(a.stripCenter()) + off
+					l, r := cx-w/2, cx+w/2
+					if l < float32(f.X) || r > float32(f.X+f.Width) {
+						t.Fatalf("drawn wings %.1f..%.1f clipped by frame %d..%d (off %.1f)",
+							l, r, f.X, f.X+f.Width, off)
+					}
+					if more {
+						pop := a.appsPopSpot(h)
+						if pop.X < f.X || pop.X+pop.Width > f.X+f.Width ||
+							pop.Y < f.Y || pop.Y+pop.Height > f.Y+f.Height {
+							t.Fatalf("popover %v escapes frame %v (off %.1f)", pop, f, off)
+						}
+					}
+				})
+			}
+		}
+	}
+}

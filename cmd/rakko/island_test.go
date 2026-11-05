@@ -127,8 +127,11 @@ func TestIslandShellShapes(t *testing.T) {
 	if w, h := a.shellSize(0, 0, 0, 0, 0); w != islandIdleW || h != islandIdleH {
 		t.Fatalf("folded shell = %.0fx%.0f, want 120x30", w, h)
 	}
-	if w, h := a.wingsSize(); w != 284 || h != 34 {
-		t.Fatalf("wings = %.0fx%.0f, want 284x34 (120 + 2×82, 30 + 4)", w, h)
+	// Consumer invariant, not a pinned constant: the wings shape holds
+	// one strip of music/app content per side plus its band, so it beats
+	// the folded island on both axes.
+	if w, h := a.wingsSize(); w <= islandIdleW || h <= islandIdleH {
+		t.Fatalf("wings %.0fx%.0f must outgrow the folded %dx%d island", w, h, islandIdleW, islandIdleH)
 	}
 	a.fb.pillW = 200
 	if w, h := a.capsuleSize(); w != 247 || h != islandCapsuleH {

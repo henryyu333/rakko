@@ -5,11 +5,12 @@ package main
 // Native smoke coverage for the app switcher, gated behind
 // RAKKO_BASKET_SMOKE=1 like every other *_smoke_test.go: real window,
 // real HID clicks through clickAt, real screencapture shots into
-// /tmp/rakko-appswitch/native/. Seat clicks prove the shell's hit paths
-// without touching the user's apps — switchToApp's seams stay stubbed.
-// The one real launch proof (TestSmokeAppsRealLaunch) uses the bundled
-// Calculator through the genuine bundle→path→openPath chain and
-// terminates exactly what it launched, so no user app is ever activated.
+// /tmp/rakko-appswitch/native/. Every click lands inside this test's own
+// window: seat clicks prove the shell's hit paths without touching the
+// user's apps — the switchToApp seams stay stubbed, and no HID event is
+// ever sent to another app's surface or the bare desktop. Real
+// launch/activate proof lives in the gate's controlled blank fixtures
+// (/tmp/rakko-appswitch/native-check.sh), not here.
 //
 // Run through the gate:  bash .scratch/native-gate.sh /tmp/rakko-appswitch/native/log.txt \
 //   env RAKKO_BASKET_SMOKE=1 go test -count=1 -run 'TestSmokeApps' ./cmd/rakko
@@ -58,8 +59,10 @@ func appsSmokeShelf(t *testing.T, running []mac.RunningApp) *shelf {
 	stubApps(t, &appsStub{
 		running: running,
 		paths: map[string]string{
-			"com.smoke.pin1": "/System/Applications/Utilities/Terminal.app",
-			"com.smoke.pin2": "/System/Applications/Calculator.app",
+			// Fake install paths: only the stubbed openPath ever sees
+			// them, so a mistake can never launch a real application.
+			"com.smoke.pin1": "/tmp/com.smoke.pin1.app",
+			"com.smoke.pin2": "/tmp/com.smoke.pin2.app",
 		},
 		names: map[string]string{"com.smoke.pin1": "Pin One", "com.smoke.pin2": "Pin Two"},
 		actOK: map[int]bool{},
@@ -131,7 +134,7 @@ func appSeat(t *testing.T, a *shelf, i int) (x, y float64) {
 		right := left + float64(g.sideL) + float64(baseW) + float64(g.sideR) - float64(appPadX)
 		x = right - float64(j)*float64(appBtn+appGap) - float64(appBtn/2)
 	}
-	y = float64(a.frameTop() + a.sheetTop()) + float64(a.fx.h)/2
+	y = float64(a.frameTop()+a.sheetTop()) + float64(a.fx.h)/2
 	return x, y
 }
 
@@ -249,8 +252,8 @@ func TestSmokeAppsPopoverAndManage(t *testing.T) {
 }
 
 // The anchor stays the search path while the wings are open: a real click
-// on the anchor column folds the wings into the panel, Esc folds to the
-// closed shelf, and an outside click folds without stealing focus.
+// on the anchor column folds the wings into the panel, and Esc folds the
+// wings then the panel — all clicks inside this test's own window.
 func TestSmokeAppsCenterSearchAndCancel(t *testing.T) {
 	a := appsSmokeShelf(t, smokeApps)
 	openAppsWings(t, a)
@@ -271,12 +274,15 @@ func TestSmokeAppsCenterSearchAndCancel(t *testing.T) {
 	if on || visible {
 		t.Fatalf("Esc must fold only the wings: visible=%v on=%v", visible, on)
 	}
+	// Esc a second time folds the panel it opened — still inside our own
+	// window; the outside-press cancel (a click on another app's surface)
+	// is covered by the headless outside-routing tests instead of an HID
+	// event aimed at the bare desktop.
 	openAppsWings(t, a)
-	// A press far from shell and popover is the outside cancel.
-	clickAt(t, 40, float64(a.dispWork.Y+a.dispWork.Height)-120)
+	onMain(func() { a.escape() })
 	onMain(func() { visible, on = a.visible, a.apps.on })
 	if on || visible {
-		t.Fatalf("outside press must fold the wings: visible=%v on=%v", visible, on)
+		t.Fatalf("Esc must fold only the wings: visible=%v on=%v", visible, on)
 	}
 	closeAppsWings(a)
 }
@@ -381,57 +387,4 @@ func TestSmokeAppsReduceMotionState(t *testing.T) {
 	}
 	shotAppsWindow(t, a.win, "open-settled")
 	closeAppsWings(a)
-}
-
-// Real launch proof: a pinned-but-stopped seat resolves its path through
-// the real LaunchServices lookup and opens it through the real shell —
-// Calculator, which we then terminate ourselves. This is the only test
-// that reaches the genuine chain; the seam-based tests cannot prove it.
-func TestSmokeAppsRealLaunch(t *testing.T) {
-	a := appsSmokeShelf(t, nil)
-	// Swap back the real seams for this test only.
-	oldRun, oldPath, oldName, oldInst := appRunning, appPathFor, appNameFor, appsInstalled
-	oldAct, oldOpen := activateApp, openPath
-	appRunning = mac.RunningApps
-	appPathFor = mac.AppPathForBundleID
-	appNameFor = mac.AppNameForBundleID
-	activateApp = mac.ActivateApp
-	openPath = mygo.Shell.OpenPath
-	t.Cleanup(func() {
-		appRunning, appPathFor, appNameFor, appsInstalled = oldRun, oldPath, oldName, oldInst
-		activateApp, openPath = oldAct, oldOpen
-	})
-	if path := appPathFor("com.apple.calculator"); path == "" {
-		t.Skip("Calculator.app not resolvable on this system")
-	}
-	var launched bool
-	onMain(func() {
-		a.switchToApp(appEntry{bundleID: "com.apple.calculator", name: "Calculator", pinned: true})
-		launched = true
-	})
-	if !launched {
-		t.Fatal("switchToApp did not run")
-	}
-	// Poll the real running-applications list: LaunchServices needs a beat.
-	deadline := time.Now().Add(8 * time.Second)
-	pid := 0
-	for time.Now().Before(deadline) && pid == 0 {
-		for _, r := range mac.RunningApps() {
-			if r.BundleID == "com.apple.calculator" {
-				pid = r.PID
-			}
-		}
-		if pid == 0 {
-			time.Sleep(200 * time.Millisecond)
-		}
-	}
-	if pid == 0 {
-		t.Fatal("Calculator never appeared in runningApplications — the launch failed silently")
-	}
-	// Terminate exactly what we launched through NSRunningApplication.
-	onMain(func() {
-		if !mac.TerminateApp(pid) {
-			t.Logf("warning: could not terminate Calculator (pid %d)", pid)
-		}
-	})
 }
