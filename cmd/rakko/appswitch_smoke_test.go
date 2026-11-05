@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/ebitengine/purego"
 
 	"rakko/internal/mac"
 	"rakko/internal/settings"
@@ -249,6 +250,43 @@ func openAppsWings(t *testing.T, a *shelf) {
 	})
 }
 
+// hidMoveTo moves the real pointer and posts a real mouseMoved through
+// the HID tap — warpPointerTo only warps; a window that gates its hover
+// on the pointer position has to see the event those gates follow. Used
+// by the white-edge evidence frames so hover state is really drawn.
+func hidMoveTo(t *testing.T, x, y float64) {
+	t.Helper()
+	warpPointerTo(t, x, y)
+	lib, err := purego.Dlopen("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", purego.RTLD_LAZY)
+	if err != nil {
+		t.Fatalf("CoreGraphics: %v", err)
+	}
+	var (
+		create  func(source uintptr, typ uint32, p mac.CGPoint, button uint32) uintptr
+		post    func(tap uint32, ev uintptr)
+		release func(cf uintptr)
+	)
+	purego.RegisterLibFunc(&create, lib, "CGEventCreateMouseEvent")
+	purego.RegisterLibFunc(&post, lib, "CGEventPost")
+	purego.RegisterLibFunc(&release, libCFOrDie(lib), "CFRelease")
+	ev := create(0, 5 /* kCGEventMouseMoved */, mac.CGPoint{X: x, Y: y}, 0)
+	if ev == 0 {
+		t.Fatal("CGEventCreateMouseEvent returned nil")
+	}
+	post(0, ev)
+	release(ev)
+	time.Sleep(120 * time.Millisecond)
+}
+
+// libCFOrDie is CoreFoundation for the one CFRelease call above.
+func libCFOrDie(cg uintptr) uintptr {
+	lib, err := purego.Dlopen("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation", purego.RTLD_LAZY)
+	if err != nil {
+		panic(err)
+	}
+	return lib
+}
+
 // closeAppsWings folds the wings and waits for the fold to land.
 func closeAppsWings(t *testing.T, a *shelf) {
 	onMain(func() {
@@ -330,14 +368,20 @@ func TestSmokeAppsWingsOpenFromEntry(t *testing.T) {
 	// The first pinned seat is a real button in the real window.
 	x, y := appSeat(t, a, 0)
 
-	// Three-frame evidence for the white-edge question, same desktop, same
-	// place: no hover, hover on seat 0, seat 0 selected by the mode's own
-	// key route. A drawn hairline living in all three frames is ours; a
-	// difference across them is the hover/selection's own paint.
+	// White-edge evidence, same desktop, same place, with a hover state
+	// that is actually painted: hover needs the pointer to have landed via
+	// a real mouseMoved the window sees (the same CGEvent path a click
+	// posts), a frame on the monitor tick to read Hovered, and — because
+	// the button's tooltip only shows after the SDK's 600ms delay — the
+	// capture waits 900ms. The tip itself is the white-edge suspect: a
+	// light fill anchored above an anchor whose window has no room above
+	// either draws as a line at the window's top edge or is laid-out
+	// below; both variants must be captured pixel-worthy.
 	saved := mygo.Screen.CursorScreenPoint()
 	t.Cleanup(func() { warpPointerTo(t, float64(saved.X), float64(saved.Y)) })
-	warpPointerTo(t, x, y)
-	time.Sleep(200 * time.Millisecond) // the monitor tick paints hover
+	hidMoveTo(t, float64(x), float64(y)) // real event, not only a warp
+	// hold the hover through the tooltip's delay and one settled frame
+	time.Sleep(900 * time.Millisecond)
 	shotAppsWindow(t, a.win, "wings-hover")
 	onMain(func() {
 		a.moveAppSel(1) // first selectable = seat 0 selected
