@@ -126,6 +126,9 @@ func (q *appsMain) drain(t *testing.T) {
 // It returns the test's main-thread queue: tests that wait on the
 // installed scan pump it explicitly, everyone else can ignore it.
 type appsStub struct {
+	// headless mirrors the caller's shelf: true when the scan delivery
+	// must ride the test's pump queue instead of the smoke run's loop.
+	headless      bool
 	running       []mac.RunningApp
 	paths         map[string]string
 	names         map[string]string
@@ -136,6 +139,8 @@ type appsStub struct {
 	opened        []string
 	actOK         map[int]bool
 	openErr       error
+	reopened      []string
+	reopenErr     map[string]bool // true => reopen fails for this bundle
 	reg           map[string]func()
 	regErr        map[string]error
 }
@@ -144,13 +149,20 @@ func stubApps(t *testing.T, s *appsStub) *appsMain {
 	t.Helper()
 	oldRun, oldPath, oldName, oldInst := appRunning, appPathFor, appNameFor, appsInstalled
 	oldReg, oldUnreg := registerKey, unregisterKey
-	oldAct, oldOpen := activateApp, openPath
+	oldAct, oldOpen, oldReopen := activateApp, openPath, appReopen
 	oldOnMain := mygoRunOnMain
+	// The delivery mode follows the shelf, not the harness: a headless
+	// shelf's scans must always pump on the test goroutine (their
+	// ensureInstalled posts through mygoRunOnMain), so the cases that
+	// pump force the queue even when the smoke run keeps the real loop
+	// alive for the shared shelf next door. A smoke-shelf caller keeps
+	// its real-loop path — nothing here pumps.
+	headlessShelf := s.headless
 	q := &appsMain{
 		posts:    make(chan func(), 256),
 		entered:  make(chan struct{}, 256),
 		posted:   make(chan struct{}, 256),
-		queueing: smokeShelf == nil, // smoke has the real loop on the real main thread
+		queueing: smokeShelf == nil || headlessShelf,
 	}
 	if q.queueing {
 		mygoRunOnMain = func(fn func()) {
@@ -176,6 +188,10 @@ func stubApps(t *testing.T, s *appsStub) *appsMain {
 		s.opened = append(s.opened, path)
 		return s.openErr
 	}
+	appReopen = func(bundleID string) bool {
+		s.reopened = append(s.reopened, bundleID)
+		return !s.reopenErr[bundleID]
+	}
 	if s.reg == nil {
 		s.reg = map[string]func(){}
 	}
@@ -191,7 +207,7 @@ func stubApps(t *testing.T, s *appsStub) *appsMain {
 		q.drain(t) // settle in-flight scans before the seams go back
 		appRunning, appPathFor, appNameFor, appsInstalled = oldRun, oldPath, oldName, oldInst
 		registerKey, unregisterKey = oldReg, oldUnreg
-		activateApp, openPath = oldAct, oldOpen
+		activateApp, openPath, appReopen = oldAct, oldOpen, oldReopen
 		mygoRunOnMain = oldOnMain
 	})
 	return q
@@ -351,31 +367,52 @@ func TestPinnedAppsDefaultsEmptyAndPersist(t *testing.T) {
 	}
 }
 
-// Activation races: a process that ended after the snapshot fails activate
-// and falls back to launch-by-path; a path that vanished reports instead of
-// faking a switch. Whatever the outcome, the wings fold.
+// Activation races: a running entry reopens through the Dock-style bundle
+// open (activate + unhide/deminiaturize — plain activate-by-pid can make a
+// hidden process frontmost while the screen shows nothing); a pid that has
+// died after the snapshot fails that reopen and falls to launch-by-path; a
+// path that vanished reports instead of faking a switch. Whatever the
+// outcome, the wings fold.
 func TestSwitchToAppRaces(t *testing.T) {
-	t.Run("activate succeeds", func(t *testing.T) {
+	t.Run("running seat reopens by bundle", func(t *testing.T) {
 		a := appSwitchShelf(t)
-		st := &appsStub{actOK: map[int]bool{42: true}}
+		st := &appsStub{}
 		stubApps(t, st)
 		a.openAppSwitch()
 		a.switchToApp(appEntry{bundleID: "com.test.x", name: "X", pid: 42})
 		if a.apps.on {
 			t.Fatal("wings stayed open after a successful switch")
 		}
-		if len(st.activated) != 1 || st.activated[0] != 42 {
-			t.Fatalf("activate called with %v", st.activated)
+		if len(st.reopened) != 1 || st.reopened[0] != "com.test.x" {
+			t.Fatalf("reopen called with %v", st.reopened)
 		}
-		if len(st.opened) != 0 {
-			t.Fatalf("launch called after activation: %v", st.opened)
+		if len(st.opened) != 0 || len(st.activated) != 0 {
+			t.Fatalf("pid activate/launch leaked past the reopen: %v/%v", st.activated, st.opened)
+		}
+	})
+	t.Run("reopen failure falls to launch-by-path", func(t *testing.T) {
+		a := appSwitchShelf(t)
+		st := &appsStub{
+			reopenErr: map[string]bool{"com.test.x": true},
+			paths:     map[string]string{"com.test.x": "/Applications/X.app"},
+		}
+		stubApps(t, st)
+		a.switchToApp(appEntry{bundleID: "com.test.x", name: "X", pid: 42})
+		if len(st.reopened) != 1 {
+			t.Fatalf("the reopen must be attempted once: %v", st.reopened)
+		}
+		if len(st.opened) != 1 || st.opened[0] != "/Applications/X.app" {
+			t.Fatalf("fallback launch %v", st.opened)
+		}
+		if a.apps.on {
+			t.Fatal("wings stayed open after the fallback launch")
 		}
 	})
 	t.Run("pid died after snapshot, launch recovers", func(t *testing.T) {
 		a := appSwitchShelf(t)
 		st := &appsStub{
-			actOK: map[int]bool{},
-			paths: map[string]string{"com.test.x": "/Applications/X.app"},
+			reopenErr: map[string]bool{"com.test.x": true},
+			paths:     map[string]string{"com.test.x": "/Applications/X.app"},
 		}
 		stubApps(t, st)
 		a.switchToApp(appEntry{bundleID: "com.test.x", name: "X", pid: 42})
@@ -447,8 +484,11 @@ func TestAppSelectionWalkAndEnter(t *testing.T) {
 		t.Fatalf("Left from the start must wrap, sel=%d", a.apps.sel)
 	}
 	a.activateAppSel()
-	if len(st.activated) != 1 || st.activated[0] != 8 {
-		t.Fatalf("Enter activated %v, want pid 8", st.activated)
+	if len(st.reopened) != 1 || st.reopened[0] != "com.test.run" {
+		t.Fatalf("Enter reopened %v, want the running seat's bundle", st.reopened)
+	}
+	if len(st.activated) != 0 || len(st.opened) != 0 {
+		t.Fatalf("Enter on a running seat went the old ways: pid %v, launch %v", st.activated, st.opened)
 	}
 	if a.apps.on {
 		t.Fatal("wings stayed open after Enter")
@@ -745,6 +785,7 @@ func TestManageRowsModel(t *testing.T) {
 func TestEnsureInstalledDegrades(t *testing.T) {
 	a := appSwitchShelf(t)
 	st := &appsStub{
+		headless:   true, // pump-driven scan delivery
 		running:    []mac.RunningApp{{BundleID: "com.t.x", Name: "X", PID: 1}},
 		paths:      map[string]string{},
 		installErr: errors.New("ls boom"),
@@ -917,8 +958,11 @@ func TestAppsPopoverClicks(t *testing.T) {
 	if a.apps.on {
 		t.Fatal("clicking an overflow row must switch and fold")
 	}
-	if len(st.activated) != 1 || st.activated[0] != 4 {
-		t.Fatalf("popover row activated %v, want pid 4", st.activated)
+	if len(st.reopened) != 1 || st.reopened[0] != "com.t.z" {
+		t.Fatalf("popover row reopened %v, want zulu's bundle", st.reopened)
+	}
+	if len(st.activated) != 0 {
+		t.Fatalf("pid activate leaked past the reopen: %v", st.activated)
 	}
 }
 
@@ -1021,9 +1065,11 @@ func TestAppsGeomCramped(t *testing.T) {
 // The installed scan runs once per manage open and reports failure as a
 // retryable state — the candidates (pinned + running) keep drawing, and a
 // stale result landing after a newer request is discarded by generation.
+
 func TestInstalledScanStates(t *testing.T) {
 	a := appSwitchShelf(t)
 	st := &appsStub{
+		headless:  true, // the scan delivery must ride the test's pump queue
 		running:   []mac.RunningApp{{BundleID: "com.t.x", Name: "X", PID: 1}},
 		paths:     map[string]string{},
 		installed: []mygo.InstalledApp{{ID: "com.t.cand", Name: "Cand"}},

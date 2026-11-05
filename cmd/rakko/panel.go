@@ -562,7 +562,7 @@ func (a *shelf) view(c *ui.Context) {
 			if frameW < baseW+appEntryW {
 				frameW = baseW + 40
 			}
-			e := a.appsEntryButton(c, "apps-island-entry")
+			e := a.appsEntryButton(c, "apps-island-entry", appEntryW)
 			e.Absolute().Right((frameW-baseW)/2 + 4).Top(float32(a.islandTop + (islandIdleH-appEntryW)/2))
 		} else {
 			a.syncMousePassThrough()
@@ -1662,9 +1662,15 @@ func (a *shelf) peekView(c *ui.Context, shellW, shellH, openK, peekK, shake floa
 			})
 			if kind == peekChevron {
 				// 收起态应用入口: 探头带右缘的小按钮, 点击展开两翼;
-				// 带中央的点击仍是搜索（pill.Clicked 处理）。
-				e := a.appsEntryButton(c, "apps-band-entry")
-				e.Absolute().Right(6).Bottom(1)
+				// 带中央的点击仍是搜索（pill.Clicked 处理）。按钮整颗
+				// 都要落在壳有像素的地方: 高度不超过 peekBody（顶边不
+				// 进硬件刘海），右边留足整块壳的下角圆角 + 2pt——真实
+				// botR 是壳高一半与面板半径取小，不是带高的一半，按
+				// 它保守内缩，弓形在任何带高下都切不进按钮。
+				_, shellH := a.peekSize()
+				botR := min(shellH/2, homeRadius)
+				e := a.appsEntryButton(c, "apps-band-entry", appEntryBand)
+				e.Absolute().Right(botR + 2).Bottom(1)
 			}
 		})
 	})

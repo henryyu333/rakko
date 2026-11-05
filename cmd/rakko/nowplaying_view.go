@@ -88,7 +88,7 @@ func (m *nowPlayingModule) peekWings(c *ui.Context, host *shelf, w, h, k float32
 		// 按压落在它身上不会冒泡成「展开搜索」。
 		ui.Row(c.Key("np-right")).Gap(6).AlignItems(ui.Center).Children(func() {
 			m.eqBars(c, st.Playing)
-			host.appsEntryButton(c, "np-apps-entry")
+			host.appsEntryButton(c, "np-apps-entry", appEntryW)
 		})
 	})
 	if wings.Clicked() {

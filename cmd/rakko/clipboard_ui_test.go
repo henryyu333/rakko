@@ -428,6 +428,18 @@ func TestEnterPastesImageAsPNG(t *testing.T) {
 
 // hide() 的键盘模式清理：内容淡出（120 ms）后回到总览并交还焦点标记。
 func TestHideLeavesKeyboardMode(t *testing.T) {
+	// The keyboard hand-back must never reach the real activation seams
+	// from a UI test: settings_window_test.go's stub pattern, and — after
+	// the HID case's own ActivateSelf rounds in this binary — a real
+	// ActivateApp/DeactivateSelf on a fake pid would crash the run
+	// (SIGTRAP inside NSApp hide:).
+	var act []int
+	oldActive, oldActivate, oldResign := appIsActive, activateApp, resignSelf
+	appIsActive = func() bool { return true }
+	activateApp = func(pid int) bool { act = append(act, pid); return false }
+	resignSelf = func() {}
+	t.Cleanup(func() { appIsActive, activateApp, resignSelf = oldActive, oldActivate, oldResign })
+
 	a, view, _ := clipShelf(t, "x")
 	a.tab, a.search, a.focusMode, a.prevAppPID = pageClipboard, "q", true, 999999
 	a.hide(hideExplicit)

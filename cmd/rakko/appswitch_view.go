@@ -39,7 +39,11 @@ const (
 	appPopFoot = 40  // 浮层尾行
 	appPopGap  = 10  // 壳 → 浮层间距
 	appPopR    = 16  // 浮层圆角
-	appEntryW  = 30  // 收起态应用入口按钮的宽
+	appEntryW  = 30  // 收起态应用入口按钮的宽（音乐翼 / 空闲小岛）
+	// appEntryBand 收起态 chevron 带里的入口: 带只有 peekBody 高、圆角
+	// 从两下角收进去，按钮必须整颗落在有像素的带队里，不能压硬件刘海
+	// 或伸出圆角。
+	appEntryBand = 16
 
 	// switchIconFloor is the icon cache's floor: wings + overflow + a
 	// working set of manage rows. The real cap grows with the installed
@@ -400,7 +404,15 @@ func (a *shelf) appButton(c *ui.Context, e appEntry, selected bool) {
 	if e.missing {
 		label = l.AppsUninstalledLabel(e.name)
 	}
-	b.Label(label).Tooltip(label)
+	// The tip leans beside the button, not above it: the shelf hangs from
+	// the screen's top edge, and a tip the theme lays over the anchor is
+	// either clipped to a hairline at the window's top corner (the white
+	// edge photos show) or pushed below across the ⤢ the tip hides. The
+	// side lay assumes the button's own look for a11y; a Label keeps the
+	// name, a Description tells what it does, and the tooltip carries
+	// nothing else.
+	b.Label(label).Description(label)
+	sidebarTip(c, b, label)
 	switch {
 	case selected:
 		b.Background(fill3)
@@ -428,6 +440,24 @@ func (a *shelf) appButton(c *ui.Context, e appEntry, selected bool) {
 	if !e.missing && b.Clicked() {
 		a.switchToApp(e)
 	}
+}
+
+// sidebarTip draws one tooltip the way the sidebar rows do: anchored to
+// the element's side, never hanging off the window's top edge where the
+// shelf leaves no room above the anchor. Same theme inverse look as
+// Element.Tooltip, minus the up placement.
+func sidebarTip(c *ui.Context, b ui.Element, text string) {
+	if text == "" {
+		return
+	}
+	t := c.Theme()
+	ui.TooltipBase(c, b, func(tip ui.Element) {
+		tip.AttachTo(b, ui.AnchorEnd, ui.AnchorStart).MarginStart(6)
+		tip.MaxWidth(160).Padding(t.Space(1.25), t.Space(2)).Radius(t.Space(1.25)).
+			Background(t.Inverse).TextColor(t.InverseText).FontSize(t.FontSize-1).
+			Shadow(0, 2, 8, 0, ui.RGBA(0, 0, 0, 0.2))
+		tip.Children(func() { ui.Text(c, text) })
+	})
 }
 
 // appsAddSeat is the left wing's 添加入口: a plus seat that opens the
@@ -791,15 +821,23 @@ func (a *shelf) noteAppEntry(e ui.Element) {
 }
 
 // appsEntryButton is the small dedicated entry drawn in the collapsed
-// state: it opens the wings directly instead of the search bar.
-func (a *shelf) appsEntryButton(c *ui.Context, key string) ui.Element {
+// state: it opens the wings directly instead of the search bar. size is
+// the drawn box (and the hit box — noteAppEntry records the button's own
+// bounds): 30 in the music wings and the idle island capsule, the compact
+// 16 in the chevron band whose 18pt body sits mostly behind the bottom
+// corner cuts. Same key kinds, hover fill and tap action at every size so
+// every drawn entry stays the one button.
+func (a *shelf) appsEntryButton(c *ui.Context, key string, size float32) ui.Element {
 	l := loc(c)
-	b := ui.ButtonBase(c.Key(key)).Size(appEntryW, appEntryW).Radius(7).Center().
+	b := ui.ButtonBase(c.Key(key)).Size(size, size).Radius(min(7, size/2-1)).Center().
 		Label(l.AppsSwitch()).Tooltip(l.AppsSwitch())
 	if b.Hovered() {
 		b.Background(fill2)
 	}
-	b.Children(func() { ui.Icon(c, appsSymbol).Size(16, 16).TextColor(ink2) })
+	// 图标下限 12pt：8.5pt 的网格在菜栏带里太小辨认不清，可视与命中
+	// 同源（noteAppEntry 记录按钮自身 bounds）。
+	glyph := max(12, size*0.53)
+	b.Children(func() { ui.Icon(c, appsSymbol).Size(glyph, glyph).TextColor(ink2) })
 	if b.Clicked() {
 		a.openAppSwitch()
 	}

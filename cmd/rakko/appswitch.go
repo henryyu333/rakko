@@ -59,13 +59,13 @@ type appSwitcher struct {
 	entryRect     mygo.Rectangle        // 收起态应用入口按钮的盒子（命中测试用）
 	keys          map[string]bool       // 模式持有的全局键（Left/Right/Enter，可能含 Escape）
 
-	shownL, shownR []appEntry           // 两翼当前画出的座位（由快照 + 位宽重建）
-	selV           []appEntry           // 可选中座位（shown 顺序，missing 固定位除外）
-	moreV          []appEntry           // 「更多」浮层的行
-	manageV        []manageRow          // 「编辑常用应用」的行
-	shownSlots     [2]int               // 重建 shown 时的 (left, right) 位宽
-	rowsDirty      bool                 // 快照或固定列表变了：下一帧重建 shown/more
-	manageDirty    bool                 // 快照 / 固定 / 安装目录变了：重建 manage 行
+	shownL, shownR []appEntry  // 两翼当前画出的座位（由快照 + 位宽重建）
+	selV           []appEntry  // 可选中座位（shown 顺序，missing 固定位除外）
+	moreV          []appEntry  // 「更多」浮层的行
+	manageV        []manageRow // 「编辑常用应用」的行
+	shownSlots     [2]int      // 重建 shown 时的 (left, right) 位宽
+	rowsDirty      bool        // 快照或固定列表变了：下一帧重建 shown/more
+	manageDirty    bool        // 快照 / 固定 / 安装目录变了：重建 manage 行
 
 	installedErr error // 最近一次安装目录扫描的错误（nil = 成功或未扫过）
 	installedGen int   // 扫描代次：旧请求的结果落地时代次不符即丢弃
@@ -80,6 +80,7 @@ var (
 	appRunning    = mac.RunningApps
 	appPathFor    = mac.AppPathForBundleID
 	appNameFor    = mac.AppNameForBundleID
+	appReopen     = mac.ReopenApp
 	appsInstalled = func() ([]mygo.InstalledApp, error) { return mygo.Shell.InstalledApps() }
 )
 
@@ -318,18 +319,30 @@ func (a *shelf) activateAppSel() {
 
 // switchToApp activates a running app or launches a pinned-but-not-running
 // one. A missing entry can only be removed (the view never calls this for
-// it). On any failure the error is surfaced and the wings stay closed —
+// it). A running entry goes through the Dock-style reopen rather than
+// plain activate-by-pid: activation alone makes an app that shows nothing
+// — one whose user hid it, say — frontmost, and the desktop looks like it
+// did not react. launchApplicationAtURL with the default options is the
+// Dock icon's own action, launch-or-activate, followed here by an explicit
+// unhide for the running instance (NSRunningApplication.unhide). The
+// hidden case is the one the acceptance run exercises against a controlled
+// fixture; minimization is not claimed by this path and has no test of its
+// own. On any failure the error is surfaced and the wings stay closed —
 // the user can reopen and retry; a fake "switched" state is never shown.
 func (a *shelf) switchToApp(e appEntry) {
 	if e.missing {
 		return
 	}
-	// A process that ended after the snapshot fails activate and falls to
-	// launch-by-bundle; a path that vanished fails the launch and reports.
-	if e.pid > 0 && activateApp(e.pid) {
+	// A process that ended after the snapshot fails its reopen (no URL
+	// success) and falls to launch-by-bundle below; a path that vanished
+	// fails the launch and reports.
+	if appReopen(e.bundleID) {
 		a.endAppSwitch()
 		return
 	}
+	// A running app whose process died after the snapshot, or an installed
+	// app that failed to open: launch by path once, then its error paths
+	// are the snack bar.
 	path := appPathFor(e.bundleID)
 	if path == "" {
 		a.endAppSwitch()

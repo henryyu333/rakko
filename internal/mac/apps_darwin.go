@@ -164,6 +164,55 @@ func AppNameForBundleID(bundleID string) string {
 	return name
 }
 
+// ReopenApp opens a bundle id's application the way the Dock's icon does:
+// NSWorkspace.launchApplicationAtURL with the default options — it
+// launches the app when it is not running, and for a running one it hands
+// the request to the app itself, which is why a Dock click brings back
+// what the Dock click shows. The explicit unhide after it covers an app
+// the user hid with NSApp.hide (the hidden round's controlled fixture,
+// which stands in for that state). Minimization is not exercised here and
+// is not promised by this call's own tests. Existing instances keep their
+// URL→running-app mapping, so this never starts a second copy.
+// Main thread only.
+func ReopenApp(bundleID string) bool {
+	if bundleID == "" {
+		return false
+	}
+	var ok bool
+	withPool(func() {
+		ws := send(class("NSWorkspace"), "sharedWorkspace")
+		url := send(ws, "URLForApplicationWithBundleIdentifier:", uintptr(nsString(bundleID)))
+		if url == 0 {
+			return
+		}
+		// NSWorkspaceLaunchDefault == NSWorkspaceLaunchAsync (AppKit's
+		// own header aliases it): the Dock-style launch-or-activate
+		// without the "new instance"/"not running" variants, and the
+		// workspace hands the work off instead of blocking this thread
+		// until the app is up — a click on the UI must not stall on the
+		// target's own launch time.
+		configuration := send(class("NSDictionary"), "dictionary")
+		launched := send(ws, "launchApplicationAtURL:options:configuration:error:",
+			uintptr(url), uintptr(nsWorkspaceLaunchDefault), uintptr(configuration), 0)
+		ok = launched != 0
+		if !ok {
+			return
+		}
+		// The launch options do not promise unhide for an app the user
+		// hid themselves (Job 11.4's own Dock icon does, its open call
+		// does not). A hidden app hidden this way stays frontmost
+		// nothing-to-see unless the receiver unhides: AppKit's own
+		// explicit "-unhide" seal for the running instance this URL
+		// describes. Main thread only, read-only besides the request.
+		apps := send(class("NSRunningApplication"),
+			"runningApplicationsWithBundleIdentifier:", uintptr(nsString(bundleID)))
+		if sendInt(apps, "count") > 0 {
+			send(send(apps, "objectAtIndex:", 0), "unhide")
+		}
+	})
+	return ok
+}
+
 // RunningApp is one entry of the app switcher's snapshot: a regular GUI
 // application NSWorkspace reports as running.
 type RunningApp struct {
@@ -175,6 +224,11 @@ type RunningApp struct {
 	// PID is valid for this snapshot only; the process may exit any time.
 	PID int
 }
+
+// nsWorkspaceLaunchDefault is AppKit's NSWorkspaceLaunchDefault, which its
+// header aliases to NSWorkspaceLaunchAsync (1<<16) — an asynchronous,
+// Dock-equivalent open. The raw constant: purego has no enum table.
+const nsWorkspaceLaunchDefault = 1 << 16
 
 // nsApplicationActivationPolicyRegular selects the ordinary foreground
 // applications: LaunchServices agents and accessories (menu-bar helpers

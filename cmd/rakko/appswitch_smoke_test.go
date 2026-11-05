@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ebitengine/purego"
 	"github.com/egoist/mygo"
 
 	"rakko/internal/mac"
@@ -249,6 +250,43 @@ func openAppsWings(t *testing.T, a *shelf) {
 	})
 }
 
+// hidMoveTo moves the real pointer and posts a real mouseMoved through
+// the HID tap — warpPointerTo only warps; a window that gates its hover
+// on the pointer position has to see the event those gates follow. Used
+// by the white-edge evidence frames so hover state is really drawn.
+func hidMoveTo(t *testing.T, x, y float64) {
+	t.Helper()
+	warpPointerTo(t, x, y)
+	lib, err := purego.Dlopen("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", purego.RTLD_LAZY)
+	if err != nil {
+		t.Fatalf("CoreGraphics: %v", err)
+	}
+	var (
+		create  func(source uintptr, typ uint32, p mac.CGPoint, button uint32) uintptr
+		post    func(tap uint32, ev uintptr)
+		release func(cf uintptr)
+	)
+	purego.RegisterLibFunc(&create, lib, "CGEventCreateMouseEvent")
+	purego.RegisterLibFunc(&post, lib, "CGEventPost")
+	purego.RegisterLibFunc(&release, libCFOrDie(lib), "CFRelease")
+	ev := create(0, 5 /* kCGEventMouseMoved */, mac.CGPoint{X: x, Y: y}, 0)
+	if ev == 0 {
+		t.Fatal("CGEventCreateMouseEvent returned nil")
+	}
+	post(0, ev)
+	release(ev)
+	time.Sleep(120 * time.Millisecond)
+}
+
+// libCFOrDie is CoreFoundation for the one CFRelease call above.
+func libCFOrDie(cg uintptr) uintptr {
+	lib, err := purego.Dlopen("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation", purego.RTLD_LAZY)
+	if err != nil {
+		panic(err)
+	}
+	return lib
+}
+
 // closeAppsWings folds the wings and waits for the fold to land.
 func closeAppsWings(t *testing.T, a *shelf) {
 	onMain(func() {
@@ -314,27 +352,67 @@ func TestSmokeAppsWingsOpenFromEntry(t *testing.T) {
 		a.win.Invalidate()
 	})
 	var er mygo.Rectangle
+	var on bool
 	waitApps(t, a, "the collapsed-state entry", func() bool {
 		er = a.apps.entryRect
 		return er.Width > 0 && a.fx.peekKind == peekChevron
 	})
 	clickOverlayAt(t, a, float64(er.X+er.Width/2), float64(er.Y+er.Height/2))
-	onMain(func() {
-		if !a.apps.on {
-			t.Fatal("clicking the entry did not open the wings")
-		}
-	})
+	onMain(func() { on = a.apps.on })
+	if !on {
+		t.Fatal("clicking the entry did not open the wings")
+	}
 	openAppsWings(t, a)
 	shotAppsWindow(t, a.win, "wings-open")
 
 	// The first pinned seat is a real button in the real window.
 	x, y := appSeat(t, a, 0)
-	clickOverlayAt(t, a, x, y)
+
+	// White-edge evidence, same desktop, same place, with a hover state
+	// that is actually painted: hover needs the pointer to have landed via
+	// a real mouseMoved the window sees (the same CGEvent path a click
+	// posts), a frame on the monitor tick to read Hovered, and — because
+	// the button's tooltip only shows after the SDK's 600ms delay — the
+	// capture waits 900ms. The tip itself is the white-edge suspect: a
+	// light fill anchored above an anchor whose window has no room above
+	// either draws as a line at the window's top edge or is laid-out
+	// below; both variants must be captured pixel-worthy.
+	saved := mygo.Screen.CursorScreenPoint()
+	t.Cleanup(func() { warpPointerTo(t, float64(saved.X), float64(saved.Y)) })
+	hidMoveTo(t, float64(x), float64(y)) // real event, not only a warp
+	// hold the hover through the tooltip's delay and one settled frame
+	time.Sleep(900 * time.Millisecond)
+	shotAppsWindow(t, a.win, "wings-hover")
+	// Second pass with THIS process active: the SDK's tracking area set
+	// answers mouseMoved only for NSAppActiveWindow (ActiveAlways not in
+	// the surface's bits), and a shelf whose app is background never gets
+	// hover events to paint. ActivateSelf proves that mechanism from this
+	// same fixture; the first shot above documented the idle state.
+	// The engine's hover needs the app active — the surface's tracking
+	// bits answer mouseMoved only while the app can accept them. With the
+	// app raised, the same hover paints for one more frame pair: this is
+	// the state a real user who just clicked the launch/switch target
+	// sees, and it is the one worth shipping screenshots of.
+	mac.ActivateSelf()
+	time.Sleep(250 * time.Millisecond) // activation takes a beat
+	hidMoveTo(t, float64(x), float64(y))
+	time.Sleep(900 * time.Millisecond)
+	shotAppsWindow(t, a.win, "wings-hover-active")
 	onMain(func() {
-		if a.apps.on {
-			t.Fatal("the wings must fold after a successful switch")
-		}
+		a.moveAppSel(1) // first selectable = seat 0 selected
+		a.win.Invalidate()
 	})
+	time.Sleep(150 * time.Millisecond)
+	shotAppsWindow(t, a.win, "wings-selected")
+	// The click below goes through postRealClick, which warps and restores
+	// on its own; move the pointer out of the button first so the resumed
+	// click does not open from a pre-hover.
+	warpPointerTo(t, float64(saved.X), float64(saved.Y))
+	clickOverlayAt(t, a, x, y)
+	onMain(func() { on = a.apps.on })
+	if on {
+		t.Fatal("the wings must fold after a successful switch")
+	}
 	closeAppsWings(t, a)
 }
 
