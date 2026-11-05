@@ -69,8 +69,13 @@ It lives in the menu bar, has no Dock icon, keeps everything on your Mac, and ne
 - The card follows the note: 1 × 1 is the glyph and the name, 2 × 1 is the heading over the first three lines. The window's top row has Show in Finder, Keep on Top and Close.
 - The note is searchable: type in the notch's search bar and the Sticky Notes group lists the notes whose text matches; ⏎ brings that note up in its window. A hit in the heading comes before a hit in the body.
 
+**App switching**
+- Click the dedicated App Switcher button on the collapsed notch or its navigation capsule. The left wing holds up to four pinned apps; the right holds other running apps and More. Click to activate an app, or launch a pinned app that is not running. The notch's centre still opens Search.
+- More → Edit Pinned Apps lets you add installed apps, unpin them and change their order. Your pinned order is saved on this Mac. Left/Right selects, Return switches, and Esc steps out of the editor, More, then the wings. A separate App Switcher shortcut is available in Settings → Shortcuts, unset by default.
+- Switching is app-level, not window or tab switching. It needs no Accessibility or Screen Recording permission and records no app history or usage duration.
+
 **Home and music**
-- Hover the notch while music plays and it grows two small wings: the cover on the left, a moving equalizer on the right. Nothing drops down over your windows. Click anywhere on the wings and the search bar opens.
+- Hover the notch while music plays and it grows two small wings: the cover on the left, a moving equalizer and App Switcher button on the right. Nothing drops down over your windows. The cover and equalizer open Search; the App Switcher button opens the app wings.
 - Home is the player while something plays or stays paused: the cover, the title and artist, an equalizer that moves while the track plays, a progress bar you drag to skip with the elapsed time on its left and what is left on its right, previous, play-pause and next, and the lyrics button at the bottom left.
 - The lyrics button opens a column beside the player and the page widens to 640. Synced lyrics scroll there with the current line bold; Rakko asks lrclib.net first and NetEase Cloud Music when lrclib.net has none or is busy. While the lookup runs the column says Finding lyrics…, a finished lookup with nothing to show says No lyrics found for this song, and a failed one says Lyrics are unavailable right now and tries again after 30 seconds. The column is closed on a fresh install and the choice is remembered; only an open column asks for lyrics.
 - With nothing playing Home shows the otter — asleep after ten quiet minutes — with today's date and weekday, and up to three lines: the newest agent turn running or just finished (only while Agent Completion notices are on), how many files the Tray holds, and either how much Keep Awake time is left or the tightest AI quota.
@@ -158,7 +163,7 @@ A tool counts as installed only by files it writes itself, so a stray `~/.claude
 - Reduce Transparency draws the panel pure black; Reduce Motion keeps the fades and drops the travel and bounce. Secondary text — times, counts, captions — is drawn brighter than before, so it stays readable on black.
 - Every page switch is one fade: the page you leave fades out while the new page fades in. Over the open panel the pointer stays a plain arrow.
 - Settings… is a normal window with a sidebar: General (Open at Login, Language, automatic updates with Check Now), Appearance (notch style, island position, desktop otter, live activities, snap windows), Tray, Clipboard, AI Usage (display, quota, Agent Completion), Shortcuts, System Permissions and About. The sidebar's footer says whether every permission is on; About holds the version, Check Now, the source link and the data folder. Every control applies at once.
-- Twelve global shortcuts live in Settings → Shortcuts, in three groups: Global Shortcuts (Show / Hide `⌃⌥Space`, Clipboard Search `⌃⌥V`, Open Tray), Playback (Play / Pause, Previous Track, Next Track) and Tools (Capture Text `⌃⌥O`, Open Tools, Open AI Usage, Toggle Keep Awake, New Note, Show or Hide the Otter). Only the three with defaults start set; every other row says Not Set. Click a row and press the new keys: a key with ⌃, ⌥ or ⌘ saves at once; F1–F12, the arrows, Home, End, PageUp, PageDown and Insert work alone or with ⇧; a key that types text asks first — "X" will be taken from every app — with Use Anyway or Cancel. Delete clears the row, Esc cancels, and a combination another app already holds leaves the previous one in place.
+- Thirteen global shortcuts live in Settings → Shortcuts, in three groups: Global Shortcuts (Show / Hide `⌃⌥Space`, Clipboard Search `⌃⌥V`, Open Tray, App Switcher), Playback (Play / Pause, Previous Track, Next Track) and Tools (Capture Text `⌃⌥O`, Open Tools, Open AI Usage, Toggle Keep Awake, New Note, Show or Hide the Otter). Only the three with defaults start set; every other row says Not Set. Click a row and press the new keys: a key with ⌃, ⌥ or ⌘ saves at once; F1–F12, the arrows, Home, End, PageUp, PageDown and Insert work alone or with ⇧; a key that types text asks first — "X" will be taken from every app — with Use Anyway or Cancel. Delete clears the row, Esc cancels, and a combination another app already holds leaves the previous one in place.
 - Pressing Clipboard Search, Open Tray, Open Tools or Open AI Usage while that page is already showing closes the panel. With AI Usage off, its shortcut opens Settings → AI Usage.
 - Updates are checked against this repository's GitHub releases. Rakko tells you when one is out and installs it only when you say so. Settings → General → Updates is where it lives: the last check's time and result, Check Now, and — once a version is downloaded — a Restart button; the pill at the bottom of the panel offers the same restart.
 
@@ -328,8 +333,13 @@ Rakko 是住在 Mac 刘海里的工具：它把摄像头周围那块黑色刘海
 - 卡片跟着便利贴走：1×1 是图标和名字，2×1 是标题加前三行。窗口顶栏有「在访达中显示」「置顶」「关闭」。
 - 便利贴能被搜到：在刘海搜索条里输入，「便利贴」一组列出文字相符的便利贴，回车把它在窗口里打开；标题命中的排在正文命中之前。
 
+**应用切换**
+- 点收起态刘海或导航胶囊里的独立「应用切换」按钮，左翼放最多四个固定常用应用，右翼放其他运行中应用和「更多」。点应用就切过去，固定应用没运行时会启动；刘海中央仍打开搜索。
+- 「更多 → 编辑常用应用」可以添加已安装应用、取消固定、调整顺序，固定顺序保存在本机。左右键选择、回车切换，Esc 依次退出编辑、「更多」和两翼。设置… → 快捷键 里可设置独立的「应用切换」快捷键，默认未设置。
+- 只切应用，不切具体窗口或标签页；不需要辅助功能或屏幕录制权限，也不记录应用使用历史或时长。
+
 **首页与音乐**
-- 放音乐时把鼠标移到刘海上，刘海只向左右各长出一小截：左边是封面，右边是跳动的音频条，不会向下盖住窗口。点这一小截，打开的是搜索条。
+- 放音乐时把鼠标移到刘海上，左边是封面，右边是跳动的音频条和独立的应用切换按钮，不会向下盖住窗口。点封面、音频条打开搜索条；点应用按钮展开应用两翼。
 - 有歌在放、或者只是暂停着，首页就是播放器：封面、歌名和歌手，播放时音频条在跳动，可拖动跳转的进度条左边是已经播了多久、右边是还剩多久，中间是上一首 / 播放暂停 / 下一首，左下角是歌词按钮。
 - 点左下角的歌词按钮，播放器右边多出一栏歌词，页面加宽到 640。同步歌词在这里滚动，当前一行是粗体；先问 lrclib.net，它没有或太忙时再问网易云音乐。找的时候写「正在找歌词…」，找不到写「没有找到这首歌的歌词」，取不到写「歌词暂时取不到」，30 秒后再试。全新安装时这一栏是关着的，开关记在 `settings.json` 的 `lyrics` 里；只有打开它才会去查歌词。
 - 没有歌在放时，首页是海獭陪着你——安静十分钟后它打瞌睡——旁边是今天的日期和星期，下面最多三行：最近一轮 agent 是正在做还是刚做完（只在打开「Agent 完成提醒」时出现）、托盘里有多少个文件、保持唤醒还剩多久；没有开启保持唤醒时，这一行是剩余最少的那个 AI 额度（AI 用量页关着时不显示）。
@@ -417,7 +427,7 @@ Rakko 是住在 Mac 刘海里的工具：它把摄像头周围那块黑色刘海
 - 打开「减少透明度」时面板画成纯黑；「减少动态效果」时只保留淡入淡出。时间、计数、说明这类次要文字在纯黑上更容易看清。
 - 页面之间用同一种切换：旧页淡出，新页淡入。指针在展开的面板上始终是普通箭头。
 - 设置… 是一个带侧栏的普通窗口：通用（开机时自动启动、语言、自动更新和「现在检查」）、外形与提示（刘海样式、灵动岛位置、桌宠、实时活动、拖窗口分屏）、托盘、剪贴板、AI 用量（显示、额度、Agent 完成提醒）、快捷键、系统权限和关于。侧栏底部显示权限状态；关于页有版本号、「现在检查」、源代码链接和数据文件夹。改完立即生效。
-- 设置… → 快捷键 里有十二个全局快捷键，分三组：「全局快捷键」（显示 / 收起 `⌃⌥Space`、剪贴板搜索 `⌃⌥V`、打开托盘）、「播放」（播放 / 暂停、上一首、下一首）、「工具」（框选文字 `⌃⌥O`、打开工具页、打开 AI 用量、保持唤醒开 / 关、新建便利贴、放出 / 收回海獭）。除显示 / 收起、剪贴板搜索、框选文字外，其余初始都是「未设置」。点一下那一行，按新的组合键：带 ⌃、⌥ 或 ⌘ 的立即保存；F1–F12、方向键、Home、End、PageUp、PageDown、Insert 可以单用，也可以加 ⇧；会打字的键先问一句「X」会在所有应用里被截走，再选「仍然使用」或「取消」。Delete 清空，Esc 取消；组合被其他应用占用时，保留原来的组合并提示。
+- 设置… → 快捷键 里有十三个全局快捷键，分三组：「全局快捷键」（显示 / 收起 `⌃⌥Space`、剪贴板搜索 `⌃⌥V`、打开托盘、应用切换）、「播放」（播放 / 暂停、上一首、下一首）、「工具」（框选文字 `⌃⌥O`、打开工具页、打开 AI 用量、保持唤醒开 / 关、新建便利贴、放出 / 收回海獭）。除显示 / 收起、剪贴板搜索、框选文字外，其余初始都是「未设置」。点一下那一行，按新的组合键：带 ⌃、⌥ 或 ⌘ 的立即保存；F1–F12、方向键、Home、End、PageUp、PageDown、Insert 可以单用，也可以加 ⇧；会打字的键先问一句「X」会在所有应用里被截走，再选「仍然使用」或「取消」。Delete 清空，Esc 取消；组合被其他应用占用时，保留原来的组合并提示。
 - 页面已经打开时，再按剪贴板搜索、打开托盘、打开工具页或打开 AI 用量，就收起面板；AI 用量页关着时，「打开 AI 用量」打开 设置… →「AI 用量」。
 - 新版本从本仓库的 GitHub Releases 检查；有更新时会提示你，你点了才会安装。更新的信息都在 设置… → 通用 →「更新」里：上次检查的时间和结果、「现在检查」，下载好后还有「重新启动」按钮；面板底部的小胶囊也会提示，并给出同样的重新启动。
 
