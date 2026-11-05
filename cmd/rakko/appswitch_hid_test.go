@@ -392,6 +392,12 @@ func TestHIDAppsClickLaunchesTargets(t *testing.T) {
 	if visible := hidWindowOn(t, pidB2); visible {
 		t.Fatalf("the hidden round's fixture still shows a window in WindowServer")
 	}
+	// Checkable precondition, logged for the acceptance record: the same
+	// live PID, the fixture's own two confirmations on disk, and no
+	// window of that PID in WindowServer's list.
+	t.Logf("hidden precondition: pid=%d shown=%v hiddenConfirm=%v windowVisible=false",
+		pidB2, hidFileExists(filepath.Join(hidFixtures, hidName(hidTargetB)+".shown")),
+		hidFileExists(hiddenDoneFile))
 	// The same real click path the user owns: the entry then seat 1.
 	waitApps(t, a, "the entry after hide", func() bool {
 		return a.apps.entryRect.Width > 0 && a.fx.peekKind == peekChevron
@@ -490,6 +496,13 @@ func hidAwaitRunningGone(t *testing.T, bundleID, what string) {
 		time.Sleep(150 * time.Millisecond)
 	}
 	t.Fatalf("%s: PID %d never left", what, hidRunningPID(bundleID))
+}
+
+// hidFileExists reports whether the named control/confirmation file is
+// there; a pure read of the fixture's own sentinel.
+func hidFileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 // hidWaitFile waits for a state marker the fixture itself writes only
