@@ -341,9 +341,12 @@ func appSeat(t *testing.T, a *shelf, i int) (x, y float64) {
 	return x, y
 }
 
-// The collapsed-state entry opens the wings through a real click; the
-// left wing's pinned seat launches through the recorded stub, proving the
-// button is a real target inside the real window.
+// The wings open through a real click on the collapsed-state entry the
+// music wings carry; the left wing's pinned seat switches through the
+// recorded stub, proving the button is a real target inside the real
+// window. The chevron probe is deliberately bare now — its right corner
+// no longer holds a second, smaller button — and this case keeps that
+// promise as a regression: with no track loaded, no entry is recorded.
 func TestSmokeAppsWingsOpenFromEntry(t *testing.T) {
 	a := appsSmokeShelf(t, smokeApps)
 	onMain(func() {
@@ -353,9 +356,15 @@ func TestSmokeAppsWingsOpenFromEntry(t *testing.T) {
 	})
 	var er mygo.Rectangle
 	var on bool
-	waitApps(t, a, "the collapsed-state entry", func() bool {
+	waitApps(t, a, "the bare chevron", func() bool { return a.fx.peekKind == peekChevron })
+	onMain(func() { er = a.apps.entryRect })
+	if er.Width != 0 {
+		t.Fatalf("the chevron band must not draw an entry, got %+v", er)
+	}
+	onMain(func() { fakeTrack(a, true) })
+	waitApps(t, a, "the music wings' entry", func() bool {
 		er = a.apps.entryRect
-		return er.Width > 0 && a.fx.peekKind == peekChevron
+		return er.Width > 0 && a.fx.peekKind == peekWings
 	})
 	clickOverlayAt(t, a, float64(er.X+er.Width/2), float64(er.Y+er.Height/2))
 	onMain(func() { on = a.apps.on })
@@ -617,6 +626,14 @@ func TestSmokeAppsCorneredIsland(t *testing.T) {
 		a.island = true
 		a.islandDX = a.dispWork.Width/2 - 100 // near the right edge
 	})
+	// The idle island capsule is one of the entry points the mode keeps:
+	// its real window draws the button at the capsule's right end and
+	// records the box the gate clicks. The probe's chevron band, by
+	// contrast, draws none.
+	waitApps(t, a, "the island's folded capsule", func() bool {
+		return a.apps.entryRect.Width > 0
+	})
+	onMain(func() { a.apps.entryRect = mygo.Rectangle{} })
 	openAppsWings(t, a)
 	var g appGeom
 	var fr mygo.Rectangle

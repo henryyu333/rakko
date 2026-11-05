@@ -291,6 +291,10 @@ func TestHIDAppsClickLaunchesTargets(t *testing.T) {
 	stop := hidTickLoop(t, a)
 	defer stop()
 	onMain(func() { a.place(hidPointNow()) })
+	// A track keeps the music wings — and their app entry — on the closed
+	// shell: that entry is what this case clicks now that the chevron
+	// probe draws only its own arrow.
+	onMain(func() { fakeTrack(a, true) })
 
 	// Park the real pointer on the anchor's hover pad and hold it there:
 	// monitorDrag's overAnchor holds the peek on its own.
@@ -304,13 +308,9 @@ func TestHIDAppsClickLaunchesTargets(t *testing.T) {
 	waitApps(t, a, "the pointer to wake the peek", func() bool {
 		return a.peeking && a.peekProgress > 0.5
 	})
-	// The collapsed band entry is drawn where the frame says.
-	var er mygo.Rectangle
-	waitApps(t, a, "the band entry", func() bool {
-		er = a.apps.entryRect
-		return er.Width > 0 && a.fx.peekKind == peekChevron
-	})
-	shotAppsWindow(t, a.win, "hid-chev-entry")
+	// The music wings' entry is drawn where the frame says.
+	er := hidEntryRect(t, a)
+	shotAppsWindow(t, a.win, "hid-np-entry")
 
 	// Real HID click on the entry: nothing in this path bypasses the gate.
 	clickOverlayAt(t, a, float64(er.X+er.Width/2), float64(er.Y+er.Height/2))
@@ -341,11 +341,7 @@ func TestHIDAppsClickLaunchesTargets(t *testing.T) {
 
 	// Reopen and take the activate branch. The pointer is still parked on
 	// the anchor; the band entry draws again.
-	waitApps(t, a, "the entry after fold", func() bool {
-		return a.apps.entryRect.Width > 0 && a.fx.peekKind == peekChevron
-	})
-	var er2 mygo.Rectangle
-	onMain(func() { er2 = a.apps.entryRect })
+	er2 := hidEntryRect(t, a)
 	clickOverlayAt(t, a, float64(er2.X+er2.Width/2), float64(er2.Y+er2.Height/2))
 	waitApps(t, a, "the reopen wings", func() bool {
 		onMain(func() { on = a.apps.on })
@@ -399,11 +395,7 @@ func TestHIDAppsClickLaunchesTargets(t *testing.T) {
 		pidB2, hidFileExists(filepath.Join(hidFixtures, hidName(hidTargetB)+".shown")),
 		hidFileExists(hiddenDoneFile))
 	// The same real click path the user owns: the entry then seat 1.
-	waitApps(t, a, "the entry after hide", func() bool {
-		return a.apps.entryRect.Width > 0 && a.fx.peekKind == peekChevron
-	})
-	var er3 mygo.Rectangle
-	onMain(func() { er3 = a.apps.entryRect })
+	er3 := hidEntryRect(t, a)
 	clickOverlayAt(t, a, float64(er3.X+er3.Width/2), float64(er3.Y+er3.Height/2))
 	waitApps(t, a, "the third-round wings", func() bool {
 		onMain(func() { on = a.apps.on })
@@ -547,6 +539,20 @@ func waitAppsBecomes(t *testing.T, cond func() bool, what string, d time.Duratio
 
 // hidWindowOn reports the probe's answer without wanting a budget.
 func hidWindowOn(t *testing.T, pid int) bool { return hidWindowVisible(t, pid) }
+
+// hidEntryRect waits for the collapsed shell's app entry — the music
+// wings' right-hand button — and returns its box. The chevron probe draws
+// no entry of its own any more, so this is the entry a user has while a
+// track plays.
+func hidEntryRect(t *testing.T, a *shelf) mygo.Rectangle {
+	t.Helper()
+	var er mygo.Rectangle
+	waitApps(t, a, "the music wings' app entry", func() bool {
+		er = a.apps.entryRect
+		return er.Width > 0 && a.fx.peekKind == peekWings
+	})
+	return er
+}
 
 // hidAnchorPoint is the screen point at the centre of the anchor's hover
 // zone — the notch for the notched shelf (island smoke uses its own).

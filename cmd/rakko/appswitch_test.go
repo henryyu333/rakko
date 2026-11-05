@@ -8,6 +8,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"math"
 	"testing"
 	"time"
 
@@ -1059,6 +1060,146 @@ func TestAppsGeomCramped(t *testing.T) {
 	}
 	if r.Y < a.dispWork.Y || r.Y+r.Height > a.dispWork.Y+a.dispWork.Height {
 		t.Fatalf("popover %v escapes %v vertically", r, a.dispWork)
+	}
+}
+
+// The chevron probe is a bare arrow now: it draws no app entry of its own.
+// The music wings still carry theirs and record the box the gate clicks.
+func TestChevronProbeCarriesNoAppEntry(t *testing.T) {
+	a := appSwitchShelf(t)
+	stubApps(t, &appsStub{paths: map[string]string{}})
+	a.peeking, a.peekProgress, a.peekFrom = true, 1, 1
+	v := ui.NewTester(a.view, 1000, 200)
+	v.Frame()
+	if a.fx.peekKind != peekChevron {
+		t.Fatalf("probe drew kind %d, want the chevron", a.fx.peekKind)
+	}
+	if a.apps.entryRect.Width != 0 {
+		t.Fatalf("the chevron probe must not draw an app entry: %+v", a.apps.entryRect)
+	}
+
+	fakeTrack(a, true)
+	v.Frame()
+	v.Frame()
+	if a.fx.peekKind != peekWings {
+		t.Fatalf("a track must turn the probe into the music wings, got %d", a.fx.peekKind)
+	}
+	if a.apps.entryRect.Width <= 0 {
+		t.Fatal("the music wings must record their app entry")
+	}
+}
+
+// The wings' frame keeps a strip under the drawn shell for the hover tips:
+// tall enough for one, and outside the shell the gate hits.
+func TestWingsFrameReservesTipRoom(t *testing.T) {
+	a := appSwitchShelf(t)
+	stubApps(t, &appsStub{paths: map[string]string{}})
+	a.apps.on = true
+	a.peeking, a.peekProgress, a.peekFrom = true, 1, 1
+	_, shellH := a.appsSize()
+	frame := a.desiredFrame()
+	want := a.y + a.sheetTop() + int(math.Ceil(float64(shellH))) + appsTipRoom
+	if frame.Y+frame.Height < want {
+		t.Fatalf("frame %+v leaves no tip strip: its bottom must reach %d", frame, want)
+	}
+	// The strip stays transparent for clicks: no wing hit shape covers it.
+	below := mygo.Point{X: frame.X + frame.Width/2, Y: a.y + a.sheetTop() + int(shellH) + appsTipRoom/2}
+	if a.overShell(below) {
+		t.Fatalf("the tip strip must not belong to the shell: %v", below)
+	}
+	if a.overPeekPill(below) {
+		t.Fatalf("the tip strip must not belong to the peek pill: %v", below)
+	}
+}
+
+// The wing hover tip hangs below its icon, outside the black shell: its
+// pixels start under the shell's bottom edge, and none of them reach the
+// hardware notch's rows at the top of the window.
+func TestWingTipHangsBelowTheShell(t *testing.T) {
+	a := appSwitchShelf(t)
+	pins := []string{"com.t.one", "com.t.two", "com.t.three", "com.t.four"}
+	stubApps(t, &appsStub{
+		running: []mac.RunningApp{
+			{BundleID: "com.t.one", Name: "One", PID: 1},
+			{BundleID: "com.t.two", Name: "Two", PID: 2},
+			{BundleID: "com.t.three", Name: "Three", PID: 3},
+			{BundleID: "com.t.four", Name: "Four", PID: 4},
+		},
+		paths: map[string]string{},
+	})
+	a.settings.PinnedApps = &pins
+	a.apps.on = true
+	a.refreshAppList()
+	a.peeking, a.peekProgress, a.peekFrom = true, 1, 1
+	a.frame = a.desiredFrame()
+	_, appsH := a.appsSize()
+	shellH := int(math.Ceil(float64(appsH)))
+	_, baseH := a.anchorSize()
+	v := ui.NewTester(a.view, a.frame.Width, a.frame.Height)
+	v.Frame()
+	v.Frame()
+	// Seat 3 is the pinned seat nearest the anchor — the one whose side-
+	// hung tip used to reach into the camera housing. Its centre in window
+	// coordinates comes from the same wing math the view lays out with.
+	g := a.appGeom()
+	baseW, _ := a.anchorSize()
+	centre := float64(a.stripCenter()) + float64(g.off)
+	left := centre - float64(baseW+g.sideL+g.sideR)/2
+	seatX := left + float64(appPadX+appBtn/2) + 3*float64(appBtn+appGap) - float64(a.frame.X)
+	seatY := float64(a.frameTop()+a.sheetTop()) + float64(a.fx.h)/2 - float64(a.frame.Y)
+	v.Move(float32(seatX), float32(seatY))
+	v.Frame()
+	v.Advance(700 * time.Millisecond) // past the SDK's 600ms tip delay
+	v.Frame()
+
+	img := v.Image()
+	if img == nil {
+		t.Fatal("the tester drew no frame")
+	}
+	// The tip's own fill (#2C2C2E, the theme's Inverse) is unique on the
+	// wings: black shell, white-ish icons, 10% hover fill. Its bounding
+	// box is the tip's box.
+	minY, maxY := img.Bounds().Max.Y, -1
+	minX, maxX := img.Bounds().Max.X, -1
+	top := 0
+	seen := false
+	for py := img.Bounds().Min.Y; py < img.Bounds().Max.Y; py++ {
+		for px := img.Bounds().Min.X; px < img.Bounds().Max.X; px++ {
+			r, g, b, _ := img.At(px, py).RGBA()
+			if r>>8 != 44 || g>>8 != 44 || b>>8 != 46 {
+				continue
+			}
+			seen = true
+			if py < minY {
+				minY = py
+			}
+			if py > maxY {
+				maxY = py
+			}
+			if px < minX {
+				minX = px
+			}
+			if px > maxX {
+				maxX = px
+			}
+			if py < int(math.Ceil(float64(baseH))) {
+				top++
+			}
+		}
+	}
+	if !seen {
+		t.Fatal("no tooltip painted under the hovered seat")
+	}
+	if top != 0 {
+		t.Fatalf("%d tooltip pixels sit in the hardware notch's rows (%d high)", top, int(math.Ceil(float64(baseH))))
+	}
+	if minY < shellH {
+		t.Fatalf("tooltip starts at y=%d, above the shell's bottom edge (%d): it must hang below", minY, shellH)
+	}
+	// And it is this seat's tip, centred under the button it belongs to,
+	// not a stray pixel somewhere else in the window.
+	if centre := float64(minX + (maxX-minX)/2); math.Abs(centre-seatX) > 60 {
+		t.Fatalf("the tip sits at x≈%.0f, not under seat 3 at x≈%.0f", centre, seatX)
 	}
 }
 

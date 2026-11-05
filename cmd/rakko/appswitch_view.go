@@ -40,10 +40,11 @@ const (
 	appPopGap  = 10  // 壳 → 浮层间距
 	appPopR    = 16  // 浮层圆角
 	appEntryW  = 30  // 收起态应用入口按钮的宽（音乐翼 / 空闲小岛）
-	// appEntryBand 收起态 chevron 带里的入口: 带只有 peekBody 高、圆角
-	// 从两下角收进去，按钮必须整颗落在有像素的带队里，不能压硬件刘海
-	// 或伸出圆角。
-	appEntryBand = 16
+	// appsTipRoom is the strip below the wings the window keeps for the
+	// hover tips: a tip hangs under its button, outside the drawn shell,
+	// and needs that height plus the shell→tip gap, its shadow and the
+	// overlay's own edge margin. Nothing is drawn there but the tip.
+	appsTipRoom = 40
 
 	// switchIconFloor is the icon cache's floor: wings + overflow + a
 	// working set of manage rows. The real cap grows with the installed
@@ -358,7 +359,8 @@ func (a *shelf) appsView(c *ui.Context, shellW, shellH, k float32) {
 			row := ui.Row(c.Key("apps-midrow")).Gap(4).AlignItems(ui.Center)
 			row.Children(func() {
 				b := ui.ButtonBase(c.Key("apps-close")).Size(38, 22).Radius(7).Center().
-					Label(l.AppsCollapse()).Tooltip(l.AppsCollapse())
+					Label(l.AppsCollapse()).Description(l.AppsCollapse())
+				wingTip(c, b, l.AppsCollapse())
 				if b.Hovered() {
 					b.Background(fill2)
 				}
@@ -404,15 +406,15 @@ func (a *shelf) appButton(c *ui.Context, e appEntry, selected bool) {
 	if e.missing {
 		label = l.AppsUninstalledLabel(e.name)
 	}
-	// The tip leans beside the button, not above it: the shelf hangs from
-	// the screen's top edge, and a tip the theme lays over the anchor is
-	// either clipped to a hairline at the window's top corner (the white
-	// edge photos show) or pushed below across the ⤢ the tip hides. The
-	// side lay assumes the button's own look for a11y; a Label keeps the
-	// name, a Description tells what it does, and the tooltip carries
-	// nothing else.
+	// The tip hangs under the button, outside the drawn shell, in the
+	// strip the wings' frame reserves for it (appsTipRoom). Above or beside
+	// the button is wrong here: the shelf hangs from the screen's top edge,
+	// so a tip over the anchor clips to a hairline at the window's corner,
+	// and one beside it reaches into the hardware notch's columns where the
+	// camera housing hides it. A Label keeps the a11y name, a Description
+	// tells what the button does, and the tip carries nothing else.
 	b.Label(label).Description(label)
-	sidebarTip(c, b, label)
+	wingTip(c, b, label)
 	switch {
 	case selected:
 		b.Background(fill3)
@@ -442,21 +444,28 @@ func (a *shelf) appButton(c *ui.Context, e appEntry, selected bool) {
 	}
 }
 
-// sidebarTip draws one tooltip the way the sidebar rows do: anchored to
-// the element's side, never hanging off the window's top edge where the
-// shelf leaves no room above the anchor. Same theme inverse look as
-// Element.Tooltip, minus the up placement.
-func sidebarTip(c *ui.Context, b ui.Element, text string) {
+// wingTip draws a wing button's tooltip under the button, outside the
+// shell: the frame reserves appsTipRoom below the drawn shell for exactly
+// this, so the tip sits fully below the black body — never over the
+// anchor's top edge (the white hairline) and never in the hardware
+// notch's columns (the camera housing). The look is the theme's own
+// tooltip (Inverse fill, InverseText, a soft shadow); the placement is the
+// only difference from Element.Tooltip, which would go above the anchor.
+func wingTip(c *ui.Context, b ui.Element, text string) {
 	if text == "" {
 		return
 	}
 	t := c.Theme()
 	ui.TooltipBase(c, b, func(tip ui.Element) {
-		tip.AttachTo(b, ui.AnchorEnd, ui.AnchorStart).MarginStart(6)
-		tip.MaxWidth(160).Padding(t.Space(1.25), t.Space(2)).Radius(t.Space(1.25)).
+		// AnchorBottom→AnchorTop puts the tip's top edge at the button's
+		// bottom; the top margin is the gap under the shell the design's
+		// label spacing asks for (buttons end ~7pt above the shell's
+		// bottom edge, so 10pt lands the tip just clear of it).
+		tip.AttachTo(b, ui.AnchorBottom, ui.AnchorTop).Margin(10, 0, 0, 0)
+		tip.Padding(t.Space(1.25), t.Space(2)).Radius(t.Space(1.25)).
 			Background(t.Inverse).TextColor(t.InverseText).FontSize(t.FontSize-1).
 			Shadow(0, 2, 8, 0, ui.RGBA(0, 0, 0, 0.2))
-		tip.Children(func() { ui.Text(c, text) })
+		tip.Children(func() { ui.Text(c, text).SingleLine() })
 	})
 }
 
@@ -465,7 +474,8 @@ func sidebarTip(c *ui.Context, b ui.Element, text string) {
 func (a *shelf) appsAddSeat(c *ui.Context) ui.Element {
 	l := loc(c)
 	b := ui.ButtonBase(c.Key("apps-add")).Size(appBtn, appBtn).Radius(10).Center().
-		Label(l.AppsEdit()).Tooltip(l.AppsEdit())
+		Label(l.AppsEdit()).Description(l.AppsEdit())
+	wingTip(c, b, l.AppsEdit())
 	if b.Hovered() {
 		b.Background(fill2)
 	}
@@ -481,7 +491,8 @@ func (a *shelf) appsAddSeat(c *ui.Context) ui.Element {
 func (a *shelf) appsMoreButton(c *ui.Context) {
 	l := loc(c)
 	b := ui.ButtonBase(c.Key("apps-more")).Size(appBtn, appBtn).Radius(10).Center().
-		Label(l.AppsMore()).Tooltip(l.AppsMore())
+		Label(l.AppsMore()).Description(l.AppsMore())
+	wingTip(c, b, l.AppsMore())
 	switch {
 	case a.apps.more:
 		b.Background(fill3)

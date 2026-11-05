@@ -248,6 +248,22 @@ func (a *shelf) frameCoverAppsPop(r mygo.Rectangle, ph float32) mygo.Rectangle {
 			r.Width += int(math.Ceil(float64(off)))
 		}
 	}
+	// The wings' hover tips hang under their buttons, outside the drawn
+	// shell: reserve the strip below the shell for them so the frame holds
+	// the tip the way it holds the shell. The strip is transparent and the
+	// tip itself passes the pointer through, so clicks below the shell are
+	// unaffected. Which shell counts is the drawn one, like the width
+	// above: a fold leaves it in place until the wings are gone.
+	if a.apps.on || a.fx.peekKind == peekApps {
+		h := ph
+		if a.fx.h > h {
+			h = a.fx.h
+		}
+		bot := a.y + a.sheetTop() + int(math.Ceil(float64(h))) + appsTipRoom
+		if bot > r.Y+r.Height {
+			r.Height = bot - r.Y
+		}
+	}
 	if !a.apps.more {
 		return r
 	}
