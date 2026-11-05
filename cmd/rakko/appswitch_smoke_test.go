@@ -165,9 +165,26 @@ func clickOverlayAt(t *testing.T, a *shelf, x, y float64) {
 				p.X >= a.notchX && p.X <= a.notchX+a.notchW {
 				return // the hardware camera band itself
 			}
-			drawable = insideRect(p, a.frame) &&
-				(a.overPeekPill(p) || a.overAppsPop(p) || a.overAppEntry(p) ||
-					(a.island && a.overAnchor(p)))
+			if a.fx.peekKind == peekApps {
+				// The wings are the drawn shape now: the pill box tracks
+				// the stale chevron, so verify against the wings' real
+				// extent — anchor + both side wings, leaning by off.
+				g := a.appGeom()
+				baseW, baseH := a.anchorSize()
+				w := baseW + g.sideL + g.sideR
+				cx := float32(a.stripCenter()) + a.appsDrawOff()
+				top := a.frameTop() + a.sheetTop()
+				drawable = float64(p.X) >= float64(cx-w/2)-0.5 &&
+					float64(p.X) <= float64(cx+w/2)+0.5 &&
+					p.Y >= top && float64(p.Y) <= float64(top)+float64(baseH+appsBody)+0.5
+			} else {
+				drawable = insideRect(p, a.frame) &&
+					(a.overPeekPill(p) || a.overAppsPop(p) || a.overAppEntry(p) ||
+						(a.island && a.overAnchor(p)))
+			}
+			// The popover hangs below the wings' own box; its rows are
+			// still this window's drawn content.
+			drawable = drawable || a.overAppsPop(p) || a.overAppEntry(p)
 		})
 		if !drawable {
 			var diag string
@@ -222,8 +239,11 @@ func closeAppsWings(t *testing.T, a *shelf) {
 		a.endAppSwitch()
 		a.win.Invalidate()
 	})
+	// fx.peekKind keeps its last drawn kind once the shell stops
+	// peeking — it is a display cache, not a state flag — so the fold is
+	// only observable as: mode off, no peek target, spring at rest.
 	waitApps(t, a, "the wings folded", func() bool {
-		return !a.apps.on && a.fx.peekKind != peekApps
+		return !a.apps.on && !a.peeking && a.peekProgress <= 0.01
 	})
 }
 
