@@ -33,6 +33,28 @@ type SpotlightHit struct {
 	LastUsed time.Time
 }
 
+// SearchScope is what a Spotlight search looks at.
+type SearchScope int
+
+const (
+	ScopeAll   SearchScope = iota // names and text content, everything
+	ScopeApps                     // application bundles, by name only
+	ScopeFiles                    // names and text content, bundles left out
+)
+
+// wants reports whether a hit belongs to the scope's results. The sheet
+// shows the groups its scope names, so a hit of another kind would only
+// take a row from one that belongs.
+func (s SearchScope) wants(h SpotlightHit) bool {
+	switch s {
+	case ScopeApps:
+		return h.App
+	case ScopeFiles:
+		return !h.App
+	}
+	return true
+}
+
 // SpotlightQueries builds the MDQuery expressions for term: one asks the
 // name index (case- and diacritic-insensitive), the other the text
 // content index. They run side by side because the text index answers
@@ -41,13 +63,25 @@ type SpotlightHit struct {
 // the term is literal; Spotlight's text matcher does not honour those
 // escapes (an escaped wildcard there matches everything), so a term
 // carrying one searches names only. An empty term has no query.
-func SpotlightQueries(term string) []string {
+//
+// scope narrows the query itself rather than the hits it returns: ScopeApps
+// asks one name query constrained to application bundles and never asks the
+// text index, and ScopeFiles keeps bundles out of its name query the same
+// way. The restriction is part of the expression because the index can
+// then stop at its match limit with rows the sheet keeps.
+func SpotlightQueries(term string, scope SearchScope) []string {
 	term = strings.TrimSpace(term)
 	if term == "" {
 		return nil
 	}
 	e := spotlightEscape(term)
 	name := `(kMDItemFSName == "*` + e + `*"cd) || (kMDItemDisplayName == "*` + e + `*"cd)`
+	switch scope {
+	case ScopeApps:
+		return []string{`(kMDItemContentTypeTree == "com.apple.application-bundle"c) && (` + name + `)`}
+	case ScopeFiles:
+		name = `(kMDItemContentType != "com.apple.application-bundle") && (` + name + `)`
+	}
 	if strings.ContainsAny(term, `"\\*?`) {
 		return []string{name}
 	}
@@ -112,7 +146,7 @@ func spotHome() string { return spotHomeDir() }
 func WarmSpotlight() {
 	go func() {
 		done := make(chan struct{})
-		run := spotWarmStart("zzz-rakko-warmup-zzz", 1, func([]SpotlightHit) {}, func() { close(done) })
+		run := spotWarmStart("zzz-rakko-warmup-zzz", ScopeAll, 1, func([]SpotlightHit) {}, func() { close(done) })
 		select {
 		case <-done:
 		case <-time.After(spotWarmTimeout):
@@ -150,15 +184,16 @@ func (r *SpotlightRun) Cancel() {
 	r.mu.Unlock()
 }
 
-// StartSpotlight runs term against the Spotlight index. The name and the
-// text queries run side by side; emit receives each batch of new hits on
-// the query goroutines (never two at once), and done runs once both have
-// finished gathering (or immediately for an empty term). limit caps how
-// many hits each query collects. The returned run is never nil, so a
-// caller can always cancel it.
-func StartSpotlight(term string, limit int, emit func([]SpotlightHit), done func()) *SpotlightRun {
+// StartSpotlight runs term against the Spotlight index, in scope. The name
+// and the text queries run side by side; emit receives each batch of new
+// hits on the query goroutines (never two at once), and done runs once both
+// have finished gathering (or immediately for an empty term). limit caps how
+// many hits each query collects. Only the scope's own kind of hit is
+// emitted, so a caller never filters what the index already narrowed. The
+// returned run is never nil, so a caller can always cancel it.
+func StartSpotlight(term string, scope SearchScope, limit int, emit func([]SpotlightHit), done func()) *SpotlightRun {
 	run := &SpotlightRun{}
-	exprs := SpotlightQueries(term)
+	exprs := SpotlightQueries(term, scope)
 	if len(exprs) == 0 {
 		if done != nil {
 			done()
@@ -174,7 +209,7 @@ func StartSpotlight(term string, limit int, emit func([]SpotlightHit), done func
 		expr := expr
 		go func() {
 			defer wg.Done()
-			run.query(expr, limit, emit)
+			run.query(expr, scope, limit, emit)
 		}()
 	}
 	go func() {
@@ -188,7 +223,7 @@ func StartSpotlight(term string, limit int, emit func([]SpotlightHit), done func
 
 // query runs one expression to completion, emitting its batches as they
 // arrive. The run's emit lock keeps the two queries' batches apart.
-func (r *SpotlightRun) query(expr string, limit int, emit func([]SpotlightHit)) {
+func (r *SpotlightRun) query(expr string, scope SearchScope, limit int, emit func([]SpotlightHit)) {
 	// MDQuery is a CoreFoundation object with a run-loop ancestry: keep the
 	// goroutine on one thread for the query's whole life, even though the
 	// dispatch queue, not a run loop, delivers its results.
@@ -269,7 +304,7 @@ func (r *SpotlightRun) query(expr string, limit int, emit func([]SpotlightHit)) 
 			if item == 0 {
 				continue
 			}
-			if hit, ok := spotHit(item); ok {
+			if hit, ok := spotHit(item, scope); ok {
 				pending = append(pending, hit)
 			}
 		}
@@ -292,7 +327,7 @@ func (r *SpotlightRun) query(expr string, limit int, emit func([]SpotlightHit)) 
 	spotQueryDisable(q)
 	for n := spotQueryCount(q); seen < n; seen++ {
 		if item := spotQueryResult(q, seen); item != 0 {
-			if hit, ok := spotHit(item); ok {
+			if hit, ok := spotHit(item, scope); ok {
 				pending = append(pending, hit)
 			}
 		}
@@ -310,8 +345,10 @@ const (
 )
 
 // spotHit reads one MDItem into a hit, or reports false when the item has
-// no usable path or lives where the results never show.
-func spotHit(item uintptr) (SpotlightHit, bool) {
+// no usable path, lives where the results never show, or is another kind
+// than the scope's: the query already narrowed the index, and the sheet
+// keeps the same rule on what arrives.
+func spotHit(item uintptr, scope SearchScope) (SpotlightHit, bool) {
 	path := spotAttrString(item, spotAttrPath())
 	if !SpotlightPathWanted(path) {
 		return SpotlightHit{}, false
@@ -332,6 +369,9 @@ func spotHit(item uintptr) (SpotlightHit, bool) {
 		hit.Folder = false
 	}
 	hit.LastUsed = spotAttrDate(item, spotAttrUsed())
+	if !scope.wants(hit) {
+		return SpotlightHit{}, false
+	}
 	return hit, true
 }
 

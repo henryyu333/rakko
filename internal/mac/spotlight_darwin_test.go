@@ -12,7 +12,7 @@ import (
 // TestSpotlightQueriesSearchesNamesAndText: a plain term asks the name
 // index and the text index, case- and diacritic-insensitive.
 func TestSpotlightQueriesSearchesNamesAndText(t *testing.T) {
-	queries := SpotlightQueries("  Rakko ")
+	queries := SpotlightQueries("  Rakko ", ScopeAll)
 	if len(queries) != 2 {
 		t.Fatalf("queries = %q, want a name and a text query", queries)
 	}
@@ -27,7 +27,7 @@ func TestSpotlightQueriesSearchesNamesAndText(t *testing.T) {
 	if !strings.Contains(queries[1], `kMDItemTextContent == "*Rakko*"cd`) {
 		t.Fatalf("text query = %q", queries[1])
 	}
-	if got := SpotlightQueries("   "); len(got) != 0 {
+	if got := SpotlightQueries("   ", ScopeAll); len(got) != 0 {
 		t.Fatalf("a blank term ran %q", got)
 	}
 }
@@ -43,12 +43,104 @@ func TestSpotlightQueryEscapesLiterals(t *testing.T) {
 		{"a?b", `a\?b`},
 	}
 	for _, c := range cases {
-		queries := SpotlightQueries(c.term)
+		queries := SpotlightQueries(c.term, ScopeAll)
 		if len(queries) != 1 {
 			t.Fatalf("term %q ran %q, want names only", c.term, queries)
 		}
 		if !strings.Contains(queries[0], `"*`+c.escaped+`*"cd`) {
 			t.Errorf("term %q produced %q, want the literal %q", c.term, queries[0], c.escaped)
+		}
+	}
+}
+
+// TestSpotlightQueriesAppsAskOneBundleNameQuery: the app mode narrows the
+// index to application bundles and asks their names, never their text.
+func TestSpotlightQueriesAppsAskOneBundleNameQuery(t *testing.T) {
+	queries := SpotlightQueries(" Rakko ", ScopeApps)
+	if len(queries) != 1 {
+		t.Fatalf("queries = %q, want one name query", queries)
+	}
+	q := queries[0]
+	for _, want := range []string{
+		`kMDItemContentTypeTree == "com.apple.application-bundle"c`,
+		`kMDItemFSName == "*Rakko*"cd`,
+		`kMDItemDisplayName == "*Rakko*"cd`,
+	} {
+		if !strings.Contains(q, want) {
+			t.Fatalf("app query %q lacks %q", q, want)
+		}
+	}
+	if strings.Contains(q, "kMDItemTextContent") {
+		t.Fatalf("app query asks the text index: %q", q)
+	}
+}
+
+// TestSpotlightQueriesFilesExcludeBundles: the file mode keeps application
+// bundles out of its name query and still asks the text index.
+func TestSpotlightQueriesFilesExcludeBundles(t *testing.T) {
+	queries := SpotlightQueries("Rakko", ScopeFiles)
+	if len(queries) != 2 {
+		t.Fatalf("queries = %q, want a name and a text query", queries)
+	}
+	name := queries[0]
+	for _, want := range []string{
+		`kMDItemContentType != "com.apple.application-bundle"`,
+		`kMDItemFSName == "*Rakko*"cd`,
+		`kMDItemDisplayName == "*Rakko*"cd`,
+	} {
+		if !strings.Contains(name, want) {
+			t.Fatalf("file name query %q lacks %q", name, want)
+		}
+	}
+	if !strings.Contains(queries[1], `kMDItemTextContent == "*Rakko*"cd`) {
+		t.Fatalf("file text query = %q", queries[1])
+	}
+}
+
+// TestSpotlightQueriesEscapeInEveryScope: a term carrying a quote,
+// backslash or wildcard asks names only in every mode, and a blank term
+// asks nothing.
+func TestSpotlightQueriesEscapeInEveryScope(t *testing.T) {
+	for _, scope := range []SearchScope{ScopeAll, ScopeApps, ScopeFiles} {
+		queries := SpotlightQueries("a*b", scope)
+		if len(queries) != 1 {
+			t.Fatalf("scope %d: term a*b ran %q, want names only", scope, queries)
+		}
+		if !strings.Contains(queries[0], `"*a\*b*"cd`) {
+			t.Errorf("scope %d: query %q lost the escaped literal", scope, queries[0])
+		}
+		if strings.Contains(queries[0], "kMDItemTextContent") {
+			t.Errorf("scope %d: an escaped term asked the text index: %q", scope, queries[0])
+		}
+		if got := SpotlightQueries("   ", scope); len(got) != 0 {
+			t.Errorf("scope %d: a blank term ran %q", scope, got)
+		}
+	}
+}
+
+// TestSearchScopeWantsItsOwnHits: the sheet keeps the query's own kind of
+// hit, so an app never lands among files and a file never among apps.
+func TestSearchScopeWantsItsOwnHits(t *testing.T) {
+	app := SpotlightHit{Path: "/Applications/Rakko.app", Name: "Rakko", App: true}
+	file := SpotlightHit{Path: "/Users/x/rakko.txt", Name: "rakko.txt"}
+	folder := SpotlightHit{Path: "/Users/x/rakko", Name: "rakko", Folder: true}
+	for _, c := range []struct {
+		scope SearchScope
+		hit   SpotlightHit
+		want  bool
+	}{
+		{ScopeAll, app, true},
+		{ScopeAll, file, true},
+		{ScopeAll, folder, true},
+		{ScopeApps, app, true},
+		{ScopeApps, file, false},
+		{ScopeApps, folder, false},
+		{ScopeFiles, app, false},
+		{ScopeFiles, file, true},
+		{ScopeFiles, folder, true},
+	} {
+		if got := c.scope.wants(c.hit); got != c.want {
+			t.Errorf("scope %d wants %+v = %v, want %v", c.scope, c.hit, got, c.want)
 		}
 	}
 }
@@ -98,7 +190,7 @@ func TestSpotlightCancelIsSafe(t *testing.T) {
 		t.Skip("real Spotlight queries")
 	}
 	for i := 0; i < 10; i++ {
-		run := StartSpotlight("a", 50, func([]SpotlightHit) {}, nil)
+		run := StartSpotlight("a", ScopeAll, 50, func([]SpotlightHit) {}, nil)
 		if i%2 == 1 {
 			time.Sleep(5 * time.Millisecond) // land mid-delivery
 		}
@@ -106,7 +198,7 @@ func TestSpotlightCancelIsSafe(t *testing.T) {
 	}
 	// The shared queue must still answer after those cancels.
 	done := make(chan struct{})
-	StartSpotlight("zzz-rakko-cancel-probe", 5, func([]SpotlightHit) {}, func() { close(done) })
+	StartSpotlight("zzz-rakko-cancel-probe", ScopeFiles, 5, func([]SpotlightHit) {}, func() { close(done) })
 	select {
 	case <-done:
 	case <-time.After(10 * time.Second):
@@ -120,7 +212,7 @@ func TestWarmSpotlightCancelsWhenTheIndexIsSlow(t *testing.T) {
 	oldStart, oldTimeout := spotWarmStart, spotWarmTimeout
 	t.Cleanup(func() { spotWarmStart, spotWarmTimeout = oldStart, oldTimeout })
 	run := &SpotlightRun{}
-	spotWarmStart = func(string, int, func([]SpotlightHit), func()) *SpotlightRun { return run }
+	spotWarmStart = func(string, SearchScope, int, func([]SpotlightHit), func()) *SpotlightRun { return run }
 	spotWarmTimeout = time.Millisecond
 	WarmSpotlight()
 	deadline := time.Now().Add(2 * time.Second)
