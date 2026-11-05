@@ -636,6 +636,8 @@
   "appsManageTitle": "Pinned Apps",
   "appsManageEmpty": "No apps to pin",
   "appsManageLoading": "Loading app list…",
+  "appsManageFailed": "App list failed to load",
+  "appsRetry": "Retry",
   "appsPin": "Pin {name}",
   "appsPinFull": "Pinned apps full",
   "appsUnpin": "Unpin {name}",

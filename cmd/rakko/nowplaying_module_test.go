@@ -212,13 +212,14 @@ func TestPeekGrowsIntoTheWingsForATrack(t *testing.T) {
 		t.Fatalf("idle peek = %.0fx%.0f, want 220x%d (notch +40/+%d)", w, h, 32+peekBody, peekBody)
 	}
 	a.np = &nowPlayingModule{host: a, have: true, last: mac.NowPlayingState{Title: "T"}}
-	// 180 + 52 + 52 wide, and only 4pt below the notch band.
-	if w, h := a.peekSize(); w != 284 || h != 36 {
-		t.Fatalf("with a track the notch must grow two 52pt wings, got %.0fx%.0f, want 284x36", w, h)
+	// 180 + 82 + 82 wide (each wing now carries an app entry too),
+	// and only 4pt below the notch band.
+	if w, h := a.peekSize(); w != 344 || h != 36 {
+		t.Fatalf("with a track the notch must grow two 82pt wings, got %.0fx%.0f, want 344x36", w, h)
 	}
 	// The resident strip already holds the wings, so hovering never
 	// resizes the native window.
-	if f := a.desiredFrame(); f.Width < 284+2*earR || f.Height < 36 {
+	if f := a.desiredFrame(); f.Width < 344+2*earR || f.Height < 36 {
 		t.Fatalf("idle strip %dx%d cannot hold the wings", f.Width, f.Height)
 	}
 	// A file drag inside the notch band needs the drop pill — its
@@ -234,7 +235,7 @@ func TestPeekGrowsIntoTheWingsForATrack(t *testing.T) {
 		t.Fatalf("a drag inside the band must show the drop pill, got %.0fx%.0f", w, h)
 	}
 	a.dragging = false
-	if w, _ := a.peekSize(); w != 284 {
+	if w, _ := a.peekSize(); w != 344 {
 		t.Fatalf("the wings must return after the drag, got %.0f", w)
 	}
 }
@@ -280,6 +281,7 @@ func TestPeekWingsShowCoverAndBarsOnly(t *testing.T) {
 	s.mod.host = a
 	a.np = s.mod
 	a.modules = []module{s.mod}
+	stubApps(t, &appsStub{}) // a stray press on the entry can never block on Register
 	view := ui.NewTester(a.view, sheetW, panelTestH)
 	// The wings carry no title, artist, clock or transport: the only
 	// label is the accessibility one, which opens the shelf.
@@ -314,7 +316,7 @@ func TestPeekWingsShowCoverAndBarsOnly(t *testing.T) {
 		x, y float32
 	}{
 		{"cover", r.X + npWingsPad + npWingsArt/2, r.Y + r.H/2 - 2},
-		{"bars", r.X + r.W - npWingsPad - eqBars*eqBarW/2 - (eqBars-1)*eqBarGap/2, r.Y + r.H/2 - 2},
+		{"bars", r.X + r.W - npWingsPad - appEntryW - 6 - eqBars*eqBarW - (eqBars-1)*eqBarGap + 2, r.Y + r.H/2 - 2},
 	} {
 		// A closed panel: the previous click took the keyboard, and hide()
 		// would have given it back (headless tests skip the hide).

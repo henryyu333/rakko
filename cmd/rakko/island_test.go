@@ -127,8 +127,8 @@ func TestIslandShellShapes(t *testing.T) {
 	if w, h := a.shellSize(0, 0, 0, 0, 0); w != islandIdleW || h != islandIdleH {
 		t.Fatalf("folded shell = %.0fx%.0f, want 120x30", w, h)
 	}
-	if w, h := a.wingsSize(); w != 224 || h != 34 {
-		t.Fatalf("wings = %.0fx%.0f, want 224x34 (120 + 2×52, 30 + 4)", w, h)
+	if w, h := a.wingsSize(); w != 284 || h != 34 {
+		t.Fatalf("wings = %.0fx%.0f, want 284x34 (120 + 2×82, 30 + 4)", w, h)
 	}
 	a.fb.pillW = 200
 	if w, h := a.capsuleSize(); w != 247 || h != islandCapsuleH {

@@ -636,6 +636,8 @@
   "appsManageTitle": "常用应用",
   "appsManageEmpty": "没有可固定的应用",
   "appsManageLoading": "正在加载应用列表…",
+  "appsManageFailed": "应用列表加载失败",
+  "appsRetry": "重试",
   "appsPin": "固定 {name}",
   "appsPinFull": "常用应用已满",
   "appsUnpin": "取消固定 {name}",

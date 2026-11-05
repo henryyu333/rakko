@@ -549,6 +549,15 @@ func (a *shelf) view(c *ui.Context) {
 		a.fb.clearExpired(now, true)
 		if a.island {
 			zone.Label(loc(c).PanelExpand())
+			// 空闲胶囊右端的应用入口：与探头带、音乐两翼同一颗按钮。窗
+			// 口比胶囊宽（给探头留位），按钮要钉在胶囊右缘而不是窗口右缘。
+			baseW, _ := a.anchorSize()
+			frameW := float32(a.frame.Width)
+			if frameW < baseW+appEntryW {
+				frameW = baseW + 40
+			}
+			e := a.appsEntryButton(c, "apps-island-entry")
+			e.Absolute().Right((frameW-baseW)/2 + 4).Top(float32(a.islandTop + (islandIdleH-appEntryW)/2))
 		} else {
 			a.syncMousePassThrough()
 			if accepts {
@@ -745,7 +754,7 @@ func (a *shelf) view(c *ui.Context) {
 	}
 	shift := float32(a.shellCentreX(openK) - a.stripCenter())
 	zone.Draw(func(p *ui.Painter, r ui.Rect) {
-		x0 := (r.W-shellW)/2 + shift
+		x0 := (r.W-shellW)/2 + shift + a.appsDrawOff()
 		x1 := x0 + shellW
 		y0 := top
 		y1 := top + shellH
@@ -1547,9 +1556,10 @@ func (a *shelf) peekView(c *ui.Context, shellW, shellH, openK, peekK, shake floa
 		}
 		a.fx.peekKind = kind
 	}
-	if !folding && kind != peekChevron {
-		// The entry lives only on the chevron band and the idle island
-		// capsule; a stale box must never claim presses.
+	if !folding {
+		// The entry lives only where it is drawn — the chevron band, the
+		// music wings' right end, the idle island capsule; a stale box
+		// must never claim presses. Drawn entries refill it this frame.
 		a.apps.entryRect = mygo.Rectangle{}
 	}
 	switch kind {
@@ -1583,7 +1593,7 @@ func (a *shelf) peekView(c *ui.Context, shellW, shellH, openK, peekK, shake floa
 	case peekApps:
 		pw, ph := a.appsSize()
 		clip := ui.Column(c.Key("apps-clip")).Width(shellW).Height(shellH).Clip().AlignItems(ui.Center).
-			Margin(float32(a.sheetTop()), 0, 0, 0)
+			Margin(float32(a.sheetTop()), 0, 0, 0).Translate(a.appsDrawOff(), 0)
 		clip.Children(func() { a.appsView(c, pw, ph, peekK) })
 		// The popover lives outside the shell's clip: it hangs under the
 		// wings (or above them on an island near the work area's bottom).
@@ -1597,7 +1607,7 @@ func (a *shelf) peekView(c *ui.Context, shellW, shellH, openK, peekK, shake floa
 			clip := ui.Column(c.Key("peek-clip")).Width(shellW).Height(shellH).Clip().AlignItems(ui.Center).
 				Margin(float32(a.sheetTop()), 0, 0, 0)
 			drew := false
-			clip.Children(func() { drew = a.np.peekWings(c, pw, ph, peekK) })
+			clip.Children(func() { drew = a.np.peekWings(c, a, pw, ph, peekK) })
 			if drew {
 				return
 			}

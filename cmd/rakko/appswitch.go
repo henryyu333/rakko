@@ -55,9 +55,20 @@ type appSwitcher struct {
 	installed     []mygo.InstalledApp   // 已安装应用缓存（管理浮层懒加载）
 	installedLoad bool                  // 后台取数在途
 	icons         map[string]*ui.Bitmap // bundle → 64pt 图标缓存（跨开关复用）
-	keys          map[string]bool       // 模式持有的全局键（Left/Right/Enter，可能含 Escape）
 	popRect       mygo.Rectangle        // 浮层在屏幕上的盒子（命中测试用）
 	entryRect     mygo.Rectangle        // 收起态应用入口按钮的盒子（命中测试用）
+	keys          map[string]bool       // 模式持有的全局键（Left/Right/Enter，可能含 Escape）
+
+	shownL, shownR []appEntry           // 两翼当前画出的座位（由快照 + 位宽重建）
+	selV           []appEntry           // 可选中座位（shown 顺序，missing 固定位除外）
+	moreV          []appEntry           // 「更多」浮层的行
+	manageV        []manageRow          // 「编辑常用应用」的行
+	shownSlots     [2]int               // 重建 shown 时的 (left, right) 位宽
+	rowsDirty      bool                 // 快照或固定列表变了：下一帧重建 shown/more
+	manageDirty    bool                 // 快照 / 固定 / 安装目录变了：重建 manage 行
+
+	installedErr error // 最近一次安装目录扫描的错误（nil = 成功或未扫过）
+	installedGen int   // 扫描代次：旧请求的结果落地时代次不符即丢弃
 }
 
 // appsModeOn reports whether the switcher owns the closed shell right now.
@@ -80,7 +91,12 @@ func (a *shelf) pinnedIDs() []string {
 	if a.settings.PinnedApps == nil {
 		return nil
 	}
-	return append([]string(nil), (*a.settings.PinnedApps)...)
+	// make+copy, never append-to-nil: an explicit empty saved list must
+	// stay a non-nil empty slice so effectivePinnedIDs keeps it — it is
+	// the third state, not "never edited".
+	cp := make([]string, len(*a.settings.PinnedApps))
+	copy(cp, *a.settings.PinnedApps)
+	return cp
 }
 
 // effectivePinnedIDs is what the wings pin: the saved list, or the
@@ -179,8 +195,19 @@ func (a *shelf) openAppSwitch() {
 		a.hide(hideExplicit)
 	}
 	a.endAppSwitch() // 保险：清空残留（理论上已不在模式里）
-	a.apps = appSwitcher{on: true, sel: -1, icons: a.apps.icons, missingNames: a.apps.missingNames, installed: a.apps.installed}
+	a.apps = appSwitcher{
+		on:           true,
+		sel:          -1,
+		icons:        a.apps.icons,
+		missingNames: a.apps.missingNames,
+		installed:    a.apps.installed,
+		// 新模式作废一切在途扫描：旧结果落地时按代次丢弃。
+		installedGen: a.apps.installedGen + 1,
+		rowsDirty:    true,
+		manageDirty:  true,
+	}
 	a.apps.list = a.appSnapshot()
+	a.refreshAppsDerived()
 	a.holdAppsKeys()
 	a.setPeek(true)
 	a.syncMousePassThrough()
@@ -199,6 +226,8 @@ func (a *shelf) endAppSwitch() {
 	a.apps.on = false
 	a.apps.more, a.apps.manage = false, false
 	a.apps.popRect, a.apps.entryRect = mygo.Rectangle{}, mygo.Rectangle{}
+	// 模式结束同样作废在途扫描：结果落地时已无人需要它。
+	a.apps.installedGen++
 	a.releaseAppsKeys()
 	a.setPeek(false)
 	a.syncMousePassThrough()
@@ -265,7 +294,7 @@ func (a *shelf) appsKey(key string) {
 // running apps the wings draw. 「更多」 is not in this list — the design's
 // left/right walk only visits app buttons. The list is the same shown set
 // the view draws, so a seat hidden by a narrow screen is never selected.
-func (a *shelf) selApps() []appEntry { return a.shownSelectable() }
+func (a *shelf) selApps() []appEntry { return a.appSelRows() }
 
 // moveAppSel walks the selection across the selectable buttons, left wing
 // first then right, wrapping at both ends.
@@ -338,7 +367,7 @@ func (a *shelf) pinApp(bundleID string) {
 		return
 	}
 	a.setPinnedApps(append(ids, bundleID))
-	a.apps.list = a.appSnapshot()
+	a.refreshAppList()
 }
 
 // unpinApp removes a bundle id from the pinned list.
@@ -357,7 +386,7 @@ func (a *shelf) unpinApp(bundleID string) {
 		return
 	}
 	a.setPinnedApps(out)
-	a.apps.list = a.appSnapshot()
+	a.refreshAppList()
 }
 
 // movePinned shifts a pinned entry by d seats; out-of-range requests are a
@@ -377,26 +406,49 @@ func (a *shelf) movePinned(bundleID string, d int) {
 	}
 	ids[i], ids[to] = ids[to], ids[i]
 	a.setPinnedApps(ids)
-	a.apps.list = a.appSnapshot()
+	a.refreshAppList()
 }
 
-// ensureInstalled fills the installed-apps cache for the manage popover,
-// once per open of the mode: the disk scan runs off the main thread.
+// refreshAppList retakes the snapshot after a persisted pin mutation and
+// rebuilds everything derived from it.
+func (a *shelf) refreshAppList() {
+	a.apps.list = a.appSnapshot()
+	a.refreshAppsDerived()
+}
+
+// refreshAppsDerived marks the shown/more rows and the manage list stale:
+// the view rebuilds them once, not per frame.
+func (a *shelf) refreshAppsDerived() {
+	a.apps.rowsDirty = true
+	a.apps.manageDirty = true
+}
+
+// ensureInstalled scans the installed-apps catalogue for the manage
+// popover, off the main thread. Every manage open asks for a fresh scan —
+// apps installed or removed since the last one must appear — while the
+// previous result keeps drawing rows underneath. A generation counter
+// drops results that land after a newer request or a closed mode, so a
+// stale scan can never overwrite the state the user is looking at. On
+// failure the pane keeps its pinned + running candidates and offers 重试;
+// it never pretends the catalogue is empty.
 func (a *shelf) ensureInstalled() {
-	if a.apps.installed != nil || a.apps.installedLoad {
+	if a.apps.installedLoad {
 		return
 	}
 	a.apps.installedLoad = true
+	a.apps.installedErr = nil
+	gen := a.apps.installedGen
 	go func() {
 		list, err := appsInstalled()
-		mygo.RunOnMain(func() {
+		mygoRunOnMain(func() {
+			if gen != a.apps.installedGen {
+				return // 旧请求：关闭/重开之后落地，丢弃
+			}
 			a.apps.installedLoad = false
-			if err != nil {
-				// 取不到已安装清单时管理浮层退化为只列固定项 + 运行中应用，
-				// 仍能取消固定和排序，不假装安装列表为空。
-				a.apps.installed = nil
-			} else {
+			a.apps.installedErr = err
+			if err == nil {
 				a.apps.installed = list
+				a.apps.manageDirty = true // 新目录内容：行集重建
 			}
 			if a.win != nil {
 				a.win.Invalidate()

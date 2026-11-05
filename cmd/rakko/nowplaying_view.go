@@ -25,7 +25,7 @@ import (
 // npWingsBody below it. The hardware notch hides the middle, so both
 // pieces sit in the notch's own band and never grow down into the screen.
 const (
-	npWingsW    = 52 // each wing beyond the notch
+	npWingsW    = 82 // each wing beyond the notch: eq bars + the app entry sit in it
 	npWingsBody = 4  // height below the notch: barely more than the band
 	npWingsPad  = 14 // content inset from the shell's outer edge
 	npWingsArt  = 22
@@ -68,7 +68,7 @@ func (m *nowPlayingModule) showsPlayer() bool {
 // caller clips the layout to the growing shell and passes the peek
 // progress as k, so nothing squeezes while the notch opens. It reports
 // whether it drew anything.
-func (m *nowPlayingModule) peekWings(c *ui.Context, w, h, k float32) bool {
+func (m *nowPlayingModule) peekWings(c *ui.Context, host *shelf, w, h, k float32) bool {
 	st, ok := m.track()
 	if !ok || !m.showsPlayer() {
 		return false
@@ -83,7 +83,13 @@ func (m *nowPlayingModule) peekWings(c *ui.Context, w, h, k float32) bool {
 		Justify(ui.SpaceBetween).Opacity(min(max(k*k, 0), 1)).Label(label)
 	wings.Children(func() {
 		m.coverArt(c, "np-wings-art", npWingsArt, npWingsArtR)
-		m.eqBars(c, st.Playing)
+		// 设计稿 idle-right：均衡器右边再放一颗独立应用入口——正常播放
+		// 期间入口一直在，只有短时通知的两翼会让位。入口是最内层按钮，
+		// 按压落在它身上不会冒泡成「展开搜索」。
+		ui.Row(c.Key("np-right")).Gap(6).AlignItems(ui.Center).Children(func() {
+			m.eqBars(c, st.Playing)
+			host.appsEntryButton(c, "np-apps-entry")
+		})
 	})
 	if wings.Clicked() {
 		// Expanding the notch always opens the search bar, music or not.

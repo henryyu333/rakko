@@ -496,6 +496,10 @@ func (a *shelf) applySettings(next settings.Settings) bool {
 		return false
 	}
 	a.settings = next
+	// The pinned list may have changed anywhere (settings window, a
+	// reload): the wings' derived rows follow it, not just the snapshot.
+	a.apps.rowsDirty = true
+	a.apps.manageDirty = true
 	if a.win != nil {
 		a.win.Invalidate()
 	}

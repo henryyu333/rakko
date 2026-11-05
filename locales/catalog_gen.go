@@ -6479,6 +6479,26 @@ func (msgs Messages) AppsManageLoading() string {
 	return Catalog.Format(msgs.locale, "appsManageLoading", nil)
 }
 
+// AppsManageFailed says "应用列表加载失败"
+// in the language the app shows.
+func AppsManageFailed() string { return In(i18n.Locale()).AppsManageFailed() }
+
+// AppsManageFailed says "应用列表加载失败"
+// in the language of msgs.
+func (msgs Messages) AppsManageFailed() string {
+	return Catalog.Format(msgs.locale, "appsManageFailed", nil)
+}
+
+// AppsRetry says "重试"
+// in the language the app shows.
+func AppsRetry() string { return In(i18n.Locale()).AppsRetry() }
+
+// AppsRetry says "重试"
+// in the language of msgs.
+func (msgs Messages) AppsRetry() string {
+	return Catalog.Format(msgs.locale, "appsRetry", nil)
+}
+
 // AppsPin says "固定 {name}"
 // in the language the app shows.
 func AppsPin(name string) string { return In(i18n.Locale()).AppsPin(name) }

@@ -229,10 +229,19 @@ func (a *shelf) desiredFrame() mygo.Rectangle {
 }
 
 // frameCoverAppsPop grows the resident frame r (top edge at a.y) so it
-// also covers the app switcher's popover: the pane hangs below the shell
-// — or above it on an island near the work area's bottom — and clicks on
-// it must reach the window. ph is the peek height the caller resolved.
+// covers two app-switcher boxes: the wings' shell when asymmetric seats
+// lean it off the anchor axis (a cornered island), and the popover pane
+// that hangs under — or above — the shell. ph is the peek height the
+// caller resolved.
 func (a *shelf) frameCoverAppsPop(r mygo.Rectangle, ph float32) mygo.Rectangle {
+	if a.appsModeOn() {
+		off := a.appsDrawOff()
+		if off < 0 {
+			r.Width -= int(off)
+		} else {
+			r.Width += int(off + 0.5)
+		}
+	}
 	if !a.apps.more {
 		return r
 	}
@@ -429,7 +438,7 @@ func (a *shelf) peekPillRect() mygo.Rectangle {
 		y = a.frameTop() + int(math.Round(float64(a.shellTopLocal(h, a.fx.openK))))
 		cx = a.shellCentreX(a.fx.openK)
 	}
-	x := cx - int(w/2) + int(a.fx.shakeX)
+	x := cx - int(w/2) + int(a.fx.shakeX+a.appsDrawOff())
 	return mygo.Rectangle{X: x, Y: y, Width: int(w + 0.5), Height: int(h + 0.5)}
 }
 
@@ -513,6 +522,11 @@ func (a *shelf) mouseDown(inside bool, button int, p mygo.Point) {
 			return
 		}
 		if a.apps.on {
+			// 中央仍是搜索：外路由按压落在锚带就走原展开路径（与带内
+			// 点击同义），翼内空白才真的空掉。
+			if !inside && a.overAnchor(p) {
+				a.show(false)
+			}
 			return // wing buttons take the press; blank wing space is inert
 		}
 		a.show(false)
@@ -548,6 +562,12 @@ func (a *shelf) mouseDown(inside bool, button int, p mygo.Point) {
 		inMenuBar = inMenuBar || insideRect(p, a.islandRect())
 	}
 	if a.apps.on && !a.overAppsPop(p) && !a.overAppEntry(p) {
+		// 锚点（刘海 / 灵动岛胶囊）上的外路由按压仍是搜索——和带内
+		// UI 一样先收两翼再展开，不在激活后把焦点切回去。
+		if a.overAnchor(p) {
+			a.show(false)
+			return
+		}
 		// 点外面取消应用切换：浮层与自己的收起态入口不算外面。
 		// Apps mode never opened the panel or took another app's focus,
 		// so there is nothing to hand back — endAppSwitch only folds.
@@ -815,7 +835,7 @@ func (a *shelf) overShellShapeAt(p mygo.Point, w, h, levelK, shakeX, openK float
 	if y < 0 || y >= float64(h) {
 		return false
 	}
-	cx := float64(a.shellCentreX(openK)) + float64(shakeX)
+	cx := float64(a.shellCentreX(openK)) + float64(shakeX+a.appsDrawOff())
 	x0, x1 := cx-float64(w)/2, cx+float64(w)/2
 	corner := float64(homeRadius) + float64(sheetRadius-homeRadius)*float64(levelK)
 	if a.island {

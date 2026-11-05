@@ -387,6 +387,7 @@ func galleryGroupA() []galleryItem {
 			a.dispBounds = a.dispWork
 			a.apps.on = true
 			a.apps.list = a.appSnapshot()
+			a.refreshAppsDerived()
 			a.apps.sel = 1
 			a.peeking, a.peekProgress, a.peekFrom = true, 1, 1
 			return galleryRender{view: galleryPanel(t, lang, a, 800, 110)}
@@ -420,7 +421,9 @@ func galleryGroupA() []galleryItem {
 			a.dispBounds = a.dispWork
 			a.apps.on = true
 			a.apps.list = a.appSnapshot()
+			a.refreshAppsDerived()
 			a.apps.installed = inst
+			a.apps.manageDirty = true
 			a.apps.more, a.apps.manage = true, true
 			a.peeking, a.peekProgress, a.peekFrom = true, 1, 1
 			return galleryRender{view: galleryPanel(t, lang, a, 800, 560)}

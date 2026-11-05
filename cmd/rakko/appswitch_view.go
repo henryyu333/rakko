@@ -4,12 +4,16 @@ package main
 
 // 应用切换的绘制：两翼是收起态内容（peek 家族的一员），壳按 appsSize
 // 长成；「更多 / 编辑常用应用」浮层是挂在壳下的玻璃窗格，与搜索结果
-// 面板、小岛导航同一套材质。几何规则：左翼最多 4 个固定位，右翼运行
-// 中位 + 固定保留的「更多」位；屏幕放不下时按位收窄，溢出的应用只进
-// 「更多」浮层，壳本身永远不截断按钮、不长出屏幕。
+// 面板、小岛导航同一套材质。几何规则：每翼的位宽由锚点该侧到工作区
+// 边缘的真实距离决定——灵动岛靠边时拥挤侧自然让位，壳整体平移夹进
+// 屏幕（锚点不动，壳不对称伸展），而不是对称加宽冲出屏幕。屏幕放不下
+// 的座位只进「更多」浮层，壳本身永远不截断按钮、不长出屏幕。
+//
+// 行集派生一次、按代重建：快照（appSnapshot）或固定列表变化时
+// rowsDirty/manageDirty 置位，appShownRows/moreRows/manageRows 各取各的
+// 缓存——视图里没有任何逐帧的排序、map 或系统查询。
 
 import (
-	"fmt"
 	"sort"
 
 	"github.com/egoist/mygo"
@@ -36,6 +40,12 @@ const (
 	appPopGap  = 10  // 壳 → 浮层间距
 	appPopR    = 16  // 浮层圆角
 	appEntryW  = 30  // 收起态应用入口按钮的宽
+
+	// switchIconFloor is the icon cache's floor: wings + overflow + a
+	// working set of manage rows. The real cap grows with the installed
+	// catalogue this mode scanned, so scrolling the full list never
+	// re-decodes icons that fell out of a too-small cache.
+	switchIconFloor = 48
 )
 
 var (
@@ -44,104 +54,146 @@ var (
 	moreSymbol = fillSymbol(`<circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/>`)
 )
 
-// appsSlots is how many buttons each wing can hold on this display: the
-// distance from the anchor's flank to the screen's edge, minus margins and
-// the wing's own padding, divided by the button pitch. Both wings always
-// keep at least one seat — the rest overflows into 更多, never clipped.
-// Pure apart from dispWork/anchorSize reads; unit-tested.
-func (a *shelf) appsSlots() (left, right int) {
+// appGeom is the wings' placement for the current display: how many seats
+// each wing can draw beside the anchor, their widths, and how far the drawn
+// shell's centre sits off the anchor's axis (sideR−sideL)/2 — an island at
+// the screen edge gets a wider wing on the roomy side while the anchor keeps
+// its saved spot. Everything that reads the shell's X — drawing, hit test,
+// frame, popover — shares this one value.
+type appGeom struct {
+	ls, rs       int     // seats per wing (0 allowed: that side draws no buttons)
+	sideL, sideR float32 // drawn wing widths
+	off          float32 // shell centre offset from stripCenter
+}
+
+// appGeom resolves the wings' geometry from the anchor's real position
+// against the work area. Each side fits what the distance from the
+// anchor's flank to the edge allows: a cornered island keeps full seats
+// on the roomy side and few or none on the pinned side — the shell leans
+// into the room it has instead of symmetric overflow past the edge.
+func (a *shelf) appGeom() appGeom {
 	baseW, _ := a.anchorSize()
 	work := a.dispWork
 	if work.Width <= 0 {
 		work = a.dispBounds
 	}
-	half := float64(work.Width)/2 - float64(baseW)/2 - appPadX - 8
-	fit := int((half + appGap) / (appBtn + appGap))
-	left, right = min(fit, appsSlots), min(fit, appsSlots)
-	if left < 1 {
-		left = 1
+	cx := float32(a.stripCenter())
+	// room on each side of the anchor: flank → work-area edge, minus the
+	// screen margin the shell keeps.
+	roomL := cx - baseW/2 - float32(work.X) - 8
+	roomR := float32(work.X+work.Width) - (cx + baseW/2) - 8
+	fit := func(room float32) int {
+		if room < 2*appPadX+appBtn {
+			return 0
+		}
+		return min(int((room-2*appPadX+appGap)/(appBtn+appGap)), appsSlots)
 	}
-	if right < 2 {
-		right = 2 // 「更多」永远在末位之外至少留一个应用位
+	g := appGeom{ls: fit(roomL), rs: fit(roomR)}
+	g.sideL, g.sideR = appsWingW(g.ls), appsWingW(g.rs)
+	g.off = (g.sideR - g.sideL) / 2
+	return g
+}
+
+// appsSlots is how many button seats each wing draws on this display.
+// Either side may be 0 on a pinned-corner island; the rest overflow into
+// 更多, never clipped. Kept as the seats accessor for tests.
+func (a *shelf) appsSlots() (left, right int) {
+	g := a.appGeom()
+	return g.ls, g.rs
+}
+
+// appsDrawOff is the drawn shell's offset from the anchor axis while the
+// wings are the peek content: (sideR−sideL)/2, folded to 0 in every other
+// state so only the wings' own frames — open or mid-fold — carry it.
+func (a *shelf) appsDrawOff() float32 {
+	if a.fx.peekKind == peekApps {
+		return a.appGeom().off
 	}
-	return left, right
+	return 0
 }
 
 // appsWingW is one wing's share of the shell width for n button seats.
 func appsWingW(n int) float32 {
+	if n <= 0 {
+		return 0
+	}
 	return float32(appPadX + n*appBtn + (n-1)*appGap + appPadX)
 }
 
-// appsSize is the switcher's peek shape: the anchor plus one wing per side,
+// appsSize is the switcher's peek shape: the anchor plus the two wings,
 // the band below it tall enough for the buttons and the collapse affordance.
 func (a *shelf) appsSize() (w, h float32) {
 	baseW, baseH := a.anchorSize()
-	l, r := a.appsSlots()
-	side := appsWingW(max(l, r))
-	return baseW + 2*side, baseH + appsBody
+	g := a.appGeom()
+	return baseW + g.sideL + g.sideR, baseH + appsBody
 }
 
-// appsSplit splits the snapshot into the pinned zone and the running zone.
+// appsSplit splits the snapshot into the pinned prefix and the running
+// tail — zero-copy: appSnapshot keeps all pinned entries first.
 func (a *shelf) appsSplit() (pinned, running []appEntry) {
-	for _, e := range a.apps.list {
-		if e.pinned {
-			pinned = append(pinned, e)
-		} else {
-			running = append(running, e)
-		}
+	list := a.apps.list
+	i := 0
+	for i < len(list) && list[i].pinned {
+		i++
 	}
-	return pinned, running
+	return list[:i], list[i:]
 }
 
-// appsShown are the buttons the wings draw now: up to the left wing's seats
-// of pinned, then up to the right wing's seats minus the 「更多」 seat of
-// other running apps. Overflow is only ever in 更多 / manage, never dropped.
-func (a *shelf) appsShown() (left, right []appEntry) {
+// rebuildAppRows recomputes the derived row sets from the snapshot and the
+// current slot counts: the seats each wing draws (left pinned, right
+// running minus the 更多 seat), the selectable subset (missing pinned
+// entries drawn but never selected), and the 更多 popover's rows (pinned
+// overflow then running overflow). All slices share the snapshot's backing
+// array — nothing is copied per frame.
+func (a *shelf) rebuildAppRows() {
+	as := &a.apps
 	pinned, running := a.appsSplit()
 	ls, rs := a.appsSlots()
-	if len(pinned) > ls {
-		pinned = pinned[:ls]
-	}
-	seats := rs - 1
-	if len(running) > seats {
-		running = running[:seats]
-	}
-	return pinned, running
-}
-
-// selApps overrides the definition in appswitch.go only conceptually: it is
-// the same shown order the wings draw — selectable entries in left-then-
-// right order, missing pinned entries excluded.
-func (a *shelf) shownSelectable() []appEntry {
-	left, right := a.appsShown()
-	out := make([]appEntry, 0, len(left)+len(right))
-	for _, e := range left {
+	as.shownL = pinned[:min(len(pinned), ls)]
+	seats := max(rs-1, 0) // 右翼末位永远是「更多」
+	as.shownR = running[:min(len(running), seats)]
+	as.selV = as.selV[:0]
+	for _, e := range as.shownL {
 		if !e.missing {
-			out = append(out, e)
+			as.selV = append(as.selV, e)
 		}
 	}
-	return append(out, right...)
+	as.selV = append(as.selV, as.shownR...)
+	as.moreV = as.moreV[:0]
+	for _, e := range pinned[min(len(pinned), ls):] {
+		if !e.missing {
+			as.moreV = append(as.moreV, e)
+		}
+	}
+	as.moreV = append(as.moreV, running[min(len(running), seats):]...)
+	as.shownSlots = [2]int{ls, rs}
+	as.rowsDirty = false
+}
+
+// appShownRows are the buttons the wings draw now. Rebuilt only when the
+// snapshot changed or the slot counts moved (display/geometry change), so
+// a frame never re-splits or re-sorts.
+func (a *shelf) appShownRows() (left, right []appEntry) {
+	ls, rs := a.appsSlots()
+	if a.apps.rowsDirty || a.apps.shownSlots != [2]int{ls, rs} {
+		a.rebuildAppRows()
+	}
+	return a.apps.shownL, a.apps.shownR
+}
+
+// appSelRows are the selectable seats in shown order — missing pinned
+// entries skipped. Cached with the shown rows.
+func (a *shelf) appSelRows() []appEntry {
+	a.appShownRows()
+	return a.apps.selV
 }
 
 // moreRows is what the 更多 popover lists: pinned seats that did not fit
 // the left wing (still switchable — missing ones are manage-only), then
-// every other running app past the right wing's seats.
+// every other running app past the right wing's seats. Cached.
 func (a *shelf) moreRows() []appEntry {
-	pinned, running := a.appsSplit()
-	ls, rs := a.appsSlots()
-	var out []appEntry
-	if len(pinned) > ls {
-		for _, e := range pinned[ls:] {
-			if !e.missing {
-				out = append(out, e)
-			}
-		}
-	}
-	seats := rs - 1
-	if len(running) > seats {
-		out = append(out, running[seats:]...)
-	}
-	return out
+	a.appShownRows()
+	return a.apps.moreV
 }
 
 // manageRow is one row of the 编辑常用应用 popover: a pinned entry first
@@ -150,12 +202,26 @@ func (a *shelf) moreRows() []appEntry {
 type manageRow struct {
 	appEntry
 	order int  // position inside the pinned list; -1 for unpinned
+	last  bool // last pinned row: 下移 is disabled
 	full  bool // the pinned list is full: a pin click would be dropped
 }
 
-// manageRows builds the manage list: pinned in saved order, then unpinned
-// candidates (installed ∪ running by bundle id) sorted by name.
+// manageRows builds the manage list once per rebuild: pinned in saved
+// order, then unpinned candidates (installed ∪ running by bundle id)
+// sorted by name. Rebuilt only when the snapshot, the pinned list or the
+// installed catalogue changed — never per frame.
 func (a *shelf) manageRows() []manageRow {
+	if !a.apps.manageDirty {
+		return a.apps.manageV
+	}
+	a.apps.manageV = a.buildManageRows()
+	a.apps.manageDirty = false
+	return a.apps.manageV
+}
+
+// buildManageRows does the actual manage-list construction: saved pinned
+// order first, then installed ∪ running candidates sorted by name.
+func (a *shelf) buildManageRows() []manageRow {
 	pinnedIDs := a.effectivePinnedIDs()
 	pinSet := make(map[string]bool, len(pinnedIDs))
 	byID := make(map[string]appEntry, len(a.apps.list))
@@ -173,7 +239,11 @@ func (a *shelf) manageRows() []manageRow {
 		if !e.missing && appPathFor(id) == "" && e.pid == 0 {
 			e.missing = true
 		}
-		out = append(out, manageRow{appEntry: e, order: i, full: len(pinnedIDs) >= settings.PinnedAppsMax})
+		out = append(out, manageRow{
+			appEntry: e, order: i,
+			last: i == len(pinnedIDs)-1,
+			full: len(pinnedIDs) >= settings.PinnedAppsMax,
+		})
 	}
 	type cand struct {
 		id   string
@@ -216,9 +286,12 @@ func (a *shelf) manageRows() []manageRow {
 	return out
 }
 
-// switchIcon returns the 64pt icon for a bundle id, cached across opens of
-// the mode. A nil bitmap means the app has no resolvable icon — the caller
-// falls back to the app grid glyph.
+// switchIcon returns the 64pt icon for a bundle id. The cache is bounded
+// by this open's working set — the installed catalogue's size plus the
+// wings' and overflow's seats — so it neither thrashes (a fixed 64 would
+// evict-and-redecode forever while a 200-app manage list scrolls) nor
+// grows without bound. Misses are cached as nil; over the cap an app
+// falls back to the grid glyph instead of decoding every frame.
 func (a *shelf) switchIcon(bundleID string) *ui.Bitmap {
 	if a.apps.icons == nil {
 		a.apps.icons = map[string]*ui.Bitmap{}
@@ -226,8 +299,8 @@ func (a *shelf) switchIcon(bundleID string) *ui.Bitmap {
 	if b, ok := a.apps.icons[bundleID]; ok {
 		return b
 	}
-	if len(a.apps.icons) >= appIconCacheLimit {
-		a.apps.icons = map[string]*ui.Bitmap{}
+	if cap := max(switchIconFloor, len(a.apps.installed)+16); len(a.apps.icons) >= cap {
+		return nil
 	}
 	var b *ui.Bitmap
 	if png := mac.AppIcon(bundleID, 64); len(png) > 0 {
@@ -242,18 +315,16 @@ func (a *shelf) switchIcon(bundleID string) *ui.Bitmap {
 // appsView draws the switcher inside the peek shell: the left wing's pinned
 // buttons, the right wing's running buttons and the 「更多」 seat, and the
 // collapse chevron under the anchor. shellW/shellH are the drawn shell this
-// frame; k is the peek reveal. Layout is at the final wing size inside a
-// clip, the same contract the hover wings use.
+// frame; k is the peek reveal. The row lays out at the final wing sizes —
+// possibly asymmetric on a cornered island — so the anchor column always
+// lands on the strip's axis while the shell shifts around it.
 func (a *shelf) appsView(c *ui.Context, shellW, shellH, k float32) {
 	l := loc(c)
 	baseW, _ := a.anchorSize()
-	left, right := a.appsShown()
-	ls, rs := a.appsSlots()
-	side := appsWingW(max(ls, rs))
-	sel := a.selApps()
-	body := ui.Row(c.Key("apps-wings")).Width(shellW).Height(shellH).
-		Opacity(min(max(k*k, 0), 1)).AlignItems(ui.Center)
-	selIx := make(map[string]int, len(sel))
+	g := a.appGeom()
+	left, right := a.appShownRows()
+	sel := a.appSelRows()
+	selIx := map[string]int{}
 	for i, e := range sel {
 		selIx[e.bundleID] = i
 	}
@@ -261,19 +332,22 @@ func (a *shelf) appsView(c *ui.Context, shellW, shellH, k float32) {
 		i, ok := selIx[e.bundleID]
 		return ok && a.apps.sel == i
 	}
+	body := ui.Row(c.Key("apps-wings")).Width(shellW).Height(shellH).
+		Opacity(min(max(k*k, 0), 1)).AlignItems(ui.Center)
 	body.Children(func() {
-		// 左翼：固定位，左对齐贴翼外缘。
-		lw := ui.Row(c.Key("apps-left")).Width(side).Height(shellH).
+		// 左翼：固定位，左对齐贴翼外缘；固定没占满时留一个添加入口。
+		lw := ui.Row(c.Key("apps-left")).Width(g.sideL).Height(shellH).
 			Padding(0, appPadX, 0, appPadX).Gap(appGap).AlignItems(ui.Center).Justify(ui.Start)
 		lw.Children(func() {
 			for _, e := range left {
 				a.appButton(c, e, picked(e))
 			}
-			for n := len(left); n < ls; n++ {
-				a.appsAddSeat(c, n)
+			if len(left) < g.ls && len(left) < settings.PinnedAppsMax {
+				a.appsAddSeat(c)
 			}
 		})
-		// 中央锚带：刘海或灵动岛本身，底部一个收起箭头。
+		// 中央锚带：刘海或灵动岛本身，底部一个收起箭头。锚带其余位置
+		// 的点击仍是搜索——中央路径不变。
 		mid := ui.Column(c.Key("apps-mid")).Width(baseW).Height(shellH).
 			Justify(ui.End).AlignItems(ui.Center)
 		mid.Children(func() {
@@ -287,18 +361,21 @@ func (a *shelf) appsView(c *ui.Context, shellW, shellH, k float32) {
 				a.endAppSwitch()
 			}
 		})
+		if mid.Clicked() {
+			a.show(false) // 中央即搜索：收起两翼走原展开路径
+		}
 		// 右翼：其他运行中应用右对齐，末位固定是「更多」。
-		rw := ui.Row(c.Key("apps-right")).Width(side).Height(shellH).
+		rw := ui.Row(c.Key("apps-right")).Width(g.sideR).Height(shellH).
 			Padding(0, appPadX, 0, appPadX).Gap(appGap).AlignItems(ui.Center).Justify(ui.End)
 		rw.Children(func() {
 			for _, e := range right {
 				a.appButton(c, e, picked(e))
 			}
-			a.appsMoreButton(c)
+			if g.rs > 0 {
+				a.appsMoreButton(c)
+			}
 		})
 	})
-	// 选中态：selApps 与两翼同一顺序，sel 下标直接对上按钮位置。
-	// 浮层在壳外单独画（见 appsPopView），这里只管翼内。
 }
 
 // appButton is one wing seat: the 46pt hover target with the 32pt app
@@ -347,9 +424,9 @@ func (a *shelf) appButton(c *ui.Context, e appEntry, selected bool) {
 
 // appsAddSeat is the left wing's 添加入口: a plus seat that opens the
 // manage popover. It only appears while a pinned seat is unused.
-func (a *shelf) appsAddSeat(c *ui.Context, seat int) ui.Element {
+func (a *shelf) appsAddSeat(c *ui.Context) ui.Element {
 	l := loc(c)
-	b := ui.ButtonBase(c.Key(fmt.Sprintf("apps-add-%d", seat))).Size(appBtn, appBtn).Radius(10).Center().
+	b := ui.ButtonBase(c.Key("apps-add")).Size(appBtn, appBtn).Radius(10).Center().
 		Label(l.AppsEdit()).Tooltip(l.AppsEdit())
 	if b.Hovered() {
 		b.Background(fill2)
@@ -385,15 +462,16 @@ func (a *shelf) appsMoreButton(c *ui.Context) {
 func (a *shelf) toggleAppsMore() {
 	a.apps.more = !a.apps.more
 	if a.apps.more {
-		a.apps.list = a.appSnapshot()
+		a.refreshAppList()
 		a.apps.manage = false
 		a.apps.appsScroll = ui.ScrollState{}
 	}
 	a.winInvalidate()
 }
 
-// appsManageOpen swaps 更多 for the manage list and starts the installed
-// scan. The pinned list is persisted already; the manage popover writes it
+// appsManageOpen swaps 更多 for the manage list and starts a fresh
+// installed scan — the catalogue may have changed since the mode opened.
+// The pinned list is persisted already; the manage popover writes it
 // through setPinnedApps so a broken settings.json keeps it read-only.
 func (a *shelf) appsManageOpen() {
 	a.apps.more, a.apps.manage = true, true
@@ -403,14 +481,14 @@ func (a *shelf) appsManageOpen() {
 }
 
 // appsPopSpot is the popover's box on screen, computed from the shell's
-// drawn top and the wings' width. It prefers hanging under the shell on the
-// right wing's centre; without room below (an island near the bottom, a
+// drawn top and the wings' geometry. It prefers hanging under the shell on
+// the right wing's centre; without room below (an island near the bottom, a
 // Dock that lifted the work area) it hangs above instead. Horizontally it
-// clamps inside the work area. Pure apart from geometry reads; unit-tested.
+// clamps inside the work area, and its height is capped by whichever side
+// it lands on — the list scrolls inside the box it gets.
 func (a *shelf) appsPopSpot(shellH float32) mygo.Rectangle {
 	baseW, _ := a.anchorSize()
-	ls, rs := a.appsSlots()
-	side := appsWingW(max(ls, rs))
+	g := a.appGeom()
 	rows := len(a.moreRows())
 	if a.apps.manage {
 		rows = len(a.manageRows())
@@ -422,16 +500,22 @@ func (a *shelf) appsPopSpot(shellH float32) mygo.Rectangle {
 	if work.Width <= 0 {
 		work = a.dispBounds
 	}
-	cx := float32(a.stripCenter()) + baseW/2 + side/2 // 右翼中心的屏幕 X
+	workBot := float32(work.Y + work.Height)
+	// 右翼中心（壳内坐标）：锚点右缘 + 右翼一半。右翼为 0 时退到锚带右缘。
+	cx := float32(a.stripCenter()) + baseW/2 + g.sideR/2
 	x := cx - w/2
 	x = min(max(x, float32(work.X)+8), float32(work.X+work.Width)-8-w)
 	top := float32(a.frameTop() + a.sheetTop())
 	y := top + shellH + appPopGap
-	if y+h > float32(work.Y+work.Height)-4 {
+	if y+h > workBot-4 {
 		y = top - appPopGap - h // 下方放不下就挂到壳上沿（灵动岛在屏幕底部时）
 	}
 	if y < float32(work.Y)+4 {
 		y = float32(work.Y) + 4
+	}
+	// 高度跟着落点收窄：浮层永远完整落在工作区内，内容靠滚动。
+	if y+h > workBot-4 {
+		h = max(workBot-4-y, appPopHead+appPopRowH)
 	}
 	return mygo.Rectangle{X: int(x + 0.5), Y: int(y + 0.5), Width: int(w), Height: int(h)}
 }
@@ -448,7 +532,6 @@ func (a *shelf) appsPopView(c *ui.Context, shellH float32) {
 	a.apps.popRect = r
 	l := loc(c)
 	lr := ui.Rect{X: float32(r.X - a.frame.X), Y: float32(r.Y - a.frame.Y), W: float32(r.Width), H: float32(r.Height)}
-	// window-local: the shell's top-left is (frameTop, stripCenter-shellW/2) at openK=0
 	glassBase(c, "apps-pop-base", lr, appPopR, 1)
 	pane := ui.Column(c.Key("apps-pop")).Absolute().Left(lr.X).Top(lr.Y).Width(lr.W).Height(lr.H).
 		Radius(appPopR).Draw(glassPaneDraw(appPopR)).Border(0.5, paneRim).Clip()
@@ -477,7 +560,7 @@ func popHead(c *ui.Context, key, title string, icon *ui.SVG, onTap func()) {
 	})
 }
 
-// popRow is one app line in a popover: icon, name, and trailing controls
+// appPopRow is one app line in a popover: icon, name, and trailing controls
 // supplied by the caller. Returns the row so the caller can add a click.
 func (a *shelf) appPopRow(c *ui.Context, e appEntry, controls func()) ui.Element {
 	row := ui.Row(c.Key("row-"+e.bundleID)).Height(appPopRowH).FillWidth().
@@ -554,21 +637,36 @@ func (a *shelf) appsMorePane(c *ui.Context, l locales.Messages) {
 
 // appsManagePane is the pinned-list editor: pinned entries in saved order
 // with move/remove controls, then every other installed or running app
-// with a pin toggle. A full list keeps its pin buttons visible but marked,
-// never silently swallowing the tap.
+// with a pin toggle. The installed scan's state is a real status row —
+// loading, a retryable failure, or nothing when the catalogue is in —
+// while the pinned and running candidates stay usable underneath.
 func (a *shelf) appsManagePane(c *ui.Context, l locales.Messages) {
 	popHead(c, "apps-manage", l.AppsManageTitle(), chevronDownSym, func() {
 		a.apps.manage = false
 		a.apps.appsScroll = ui.ScrollState{}
 		a.winInvalidate()
 	})
+	switch {
+	case a.apps.installedLoad:
+		ui.Text(c, l.AppsManageLoading()).FontSize(11).TextColor(ink3).Height(appPopRowH).Padding(0, 12, 0, 12)
+	case a.apps.installedErr != nil:
+		ui.Row(c.Key("apps-scan-err")).Height(appPopRowH).FillWidth().Padding(0, 8, 0, 12).Gap(8).
+			AlignItems(ui.Center).Children(func() {
+			ui.Text(c, l.AppsManageFailed()).SingleLine().FontSize(11).TextColor(ink3).Grow(1).MinWidth(0)
+			b := ui.ButtonBase(c.Key("apps-scan-retry")).Size(26, 26).Radius(7).Center().
+				Label(l.AppsRetry()).Tooltip(l.AppsRetry())
+			if b.Hovered() {
+				b.Background(fill1)
+			}
+			b.Children(func() { ui.Icon(c, refreshSymbol).Size(14, 14).TextColor(ink2) })
+			if b.Clicked() {
+				a.ensureInstalled()
+			}
+		})
+	}
 	rows := a.manageRows()
 	if len(rows) == 0 {
-		msg := l.AppsManageLoading()
-		if a.apps.installed != nil {
-			msg = l.AppsManageEmpty()
-		}
-		ui.Text(c, msg).FontSize(11).TextColor(ink3).Height(appPopRowH).Padding(0, 12, 0, 12)
+		ui.Text(c, l.AppsManageEmpty()).FontSize(11).TextColor(ink3).Height(appPopRowH).Padding(0, 12, 0, 12)
 		return
 	}
 	ui.Scroll(c.Key("apps-manage-scroll")).Grow(1).MinHeight(0).TrackScroll(&a.apps.appsScroll).Children(func() {
@@ -596,17 +694,19 @@ func (a *shelf) appsManagePane(c *ui.Context, l locales.Messages) {
 	})
 }
 
-// appManageRow draws one manage row: pinned rows get up/down/remove; other
-// candidates get a pin toggle that's visibly full when the list is.
+// appManageRow draws one manage row: pinned rows get up/down/remove — the
+// first row's 上移 and the last row's 下移 stay visible but dimmed — and
+// other candidates get a pin toggle that's visibly full when the list is.
+// A broken settings.json dims every control: the list stays read-only.
 func (a *shelf) appManageRow(c *ui.Context, r manageRow) {
 	l := loc(c)
 	a.appPopRow(c, r.appEntry, func() {
 		if r.order >= 0 {
-			up := a.appRowBtn(c, "up-"+r.bundleID, chevronUpSymbol, l.AppsMoveUp(), r.order > 0)
-			if up && r.order > 0 {
+			up := a.appRowBtn(c, "up-"+r.bundleID, chevronUpSymbol, l.AppsMoveUp(), r.order == 0)
+			if up {
 				a.movePinned(r.bundleID, -1)
 			}
-			down := a.appRowBtn(c, "down-"+r.bundleID, chevronDownSym, l.AppsMoveDown(), false)
+			down := a.appRowBtn(c, "down-"+r.bundleID, chevronDownSym, l.AppsMoveDown(), r.last)
 			if down {
 				a.movePinned(r.bundleID, 1)
 			}
@@ -622,8 +722,8 @@ func (a *shelf) appManageRow(c *ui.Context, r manageRow) {
 		}
 		pin := ui.ButtonBase(c.Key("pin-"+r.bundleID)).Size(26, 26).Radius(7).Center().
 			Label(label).Tooltip(label)
-		if r.full {
-			pin.Opacity(0.35) // 满额：按钮仍在但暗下去，点击不悄悄丢弃
+		if r.full || a.settingsBroken {
+			pin.Opacity(0.35) // 满额/设置损坏：按钮仍在但暗下去，点击不悄悄丢弃
 		} else if pin.Hovered() {
 			pin.Background(fill1)
 		}
@@ -635,8 +735,10 @@ func (a *shelf) appManageRow(c *ui.Context, r manageRow) {
 }
 
 // appRowBtn is one 26pt control at a manage row's right edge; disabled rows
-// still draw dimmed and report clicked=false.
+// — first/last seats, or a broken settings.json — still draw dimmed and
+// report clicked=false.
 func (a *shelf) appRowBtn(c *ui.Context, key string, icon *ui.SVG, label string, dim bool) (clicked bool) {
+	dim = dim || a.settingsBroken
 	b := ui.ButtonBase(c.Key(key)).Size(26, 26).Radius(7).Center().Label(label).Tooltip(label)
 	if dim {
 		b.Opacity(0.35)
@@ -644,7 +746,7 @@ func (a *shelf) appRowBtn(c *ui.Context, key string, icon *ui.SVG, label string,
 		b.Background(fill1)
 	}
 	b.Children(func() { ui.Icon(c, icon).Size(14, 14).TextColor(ink2) })
-	if !dim && !a.settingsBroken && b.Clicked() {
+	if !dim && b.Clicked() {
 		return true
 	}
 	return false
@@ -657,7 +759,8 @@ func (a *shelf) overAppsPop(p mygo.Point) bool {
 }
 
 // overAppEntry reports whether p is on the collapsed state's app-entry
-// button — the one drawn into the hover band or the idle island capsule.
+// button — the one drawn into the hover band, the music wings' right end,
+// or the idle island capsule.
 func (a *shelf) overAppEntry(p mygo.Point) bool {
 	r := a.apps.entryRect
 	return r.Width > 0 && insideRect(p, r)
@@ -680,8 +783,7 @@ func (a *shelf) noteAppEntry(e ui.Element) {
 }
 
 // appsEntryButton is the small dedicated entry drawn in the collapsed
-// state's hover band (and on the idle island capsule): it opens the wings
-// directly instead of the search bar.
+// state: it opens the wings directly instead of the search bar.
 func (a *shelf) appsEntryButton(c *ui.Context, key string) ui.Element {
 	l := loc(c)
 	b := ui.ButtonBase(c.Key(key)).Size(appEntryW, appEntryW).Radius(7).Center().
