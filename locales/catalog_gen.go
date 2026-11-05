@@ -709,6 +709,26 @@ func (msgs Messages) SettingsAgentNeedsApp() string {
 	return Catalog.Format(msgs.locale, "settingsAgentNeedsApp", nil)
 }
 
+// SettingsAgentCodexTrust says "已注入 · 需在 Codex /hooks 信任一次"
+// in the language the app shows.
+func SettingsAgentCodexTrust() string { return In(i18n.Locale()).SettingsAgentCodexTrust() }
+
+// SettingsAgentCodexTrust says "已注入 · 需在 Codex /hooks 信任一次"
+// in the language of msgs.
+func (msgs Messages) SettingsAgentCodexTrust() string {
+	return Catalog.Format(msgs.locale, "settingsAgentCodexTrust", nil)
+}
+
+// SettingsAgentRewritten says "配置被工具改写 · 请关闭再开启"
+// in the language the app shows.
+func SettingsAgentRewritten() string { return In(i18n.Locale()).SettingsAgentRewritten() }
+
+// SettingsAgentRewritten says "配置被工具改写 · 请关闭再开启"
+// in the language of msgs.
+func (msgs Messages) SettingsAgentRewritten() string {
+	return Catalog.Format(msgs.locale, "settingsAgentRewritten", nil)
+}
+
 // SettingsTraySection says "托盘"
 // in the language the app shows.
 func SettingsTraySection() string { return In(i18n.Locale()).SettingsTraySection() }

@@ -67,6 +67,8 @@
   "settingsAgentError": "Failed",
   "settingsAgentNone": "No supported agent found",
   "settingsAgentNeedsApp": "Run Rakko from an installed app",
+  "settingsAgentCodexTrust": "Installed · trust once in Codex (/hooks)",
+  "settingsAgentRewritten": "Rewritten by the tool — switch the row off and on",
   "settingsTraySection": "Tray",
   "settingsRetentionRow": "Remove Old Items",
   "settingsRetentionNever": "Never",

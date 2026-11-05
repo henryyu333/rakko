@@ -67,6 +67,8 @@
   "settingsAgentError": "出错",
   "settingsAgentNone": "没有检测到支持的 agent",
   "settingsAgentNeedsApp": "需要从安装的 Rakko.app 运行",
+  "settingsAgentCodexTrust": "已注入 · 需在 Codex /hooks 信任一次",
+  "settingsAgentRewritten": "配置被工具改写 · 请关闭再开启",
   "settingsTraySection": "托盘",
   "settingsRetentionRow": "自动清理旧内容",
   "settingsRetentionNever": "从不",

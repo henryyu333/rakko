@@ -336,14 +336,25 @@ func (a *shelf) settingsAgentGroup(c *ui.Context) {
 		for _, tool := range tools {
 			settingsSep(c, "agent-"+string(tool))
 			state, note, _ := f.settingRow(tool)
+			toolOn := !a.settings.AgentNotify.ToolOff(string(tool))
 			status, color := l.SettingsAgentNotInjected(), ink3
 			switch state {
 			case agentnotify.StateInjected:
 				status = l.SettingsAgentInjected()
+				if tool == agentnotify.ToolCodex {
+					// Codex runs a hook only after the user trusted it once.
+					status = l.SettingsAgentCodexTrust()
+				}
 			case agentnotify.StateUnsupported:
 				status = l.SettingsAgentUnsupported()
 			case agentnotify.StateError:
 				status, color = l.SettingsAgentError(), danger
+			}
+			if state == agentnotify.StateNotInjected && a.settings.AgentNotify.Enabled && toolOn {
+				// The switches say the entry should be there: the tool
+				// rewrote its configuration and dropped it (Gemini's
+				// settings.json). Flipping the row writes it again.
+				status, color = l.SettingsAgentRewritten(), warning
 			}
 			caption := agentnotify.DisplayPath(f.home, tool)
 			if state == agentnotify.StateError && note != "" {
@@ -354,7 +365,7 @@ func (a *shelf) settingsAgentGroup(c *ui.Context) {
 				}
 			}
 			a.settingsAgentToolRow(c, tool, caption, status, color,
-				!a.settings.AgentNotify.ToolOff(string(tool)), !a.settings.AgentNotify.Enabled)
+				toolOn, !a.settings.AgentNotify.Enabled)
 		}
 	})
 }
