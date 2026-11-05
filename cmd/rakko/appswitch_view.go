@@ -39,7 +39,11 @@ const (
 	appPopFoot = 40  // 浮层尾行
 	appPopGap  = 10  // 壳 → 浮层间距
 	appPopR    = 16  // 浮层圆角
-	appEntryW  = 30  // 收起态应用入口按钮的宽
+	appEntryW  = 30  // 收起态应用入口按钮的宽（音乐翼 / 空闲小岛）
+	// appEntryBand 收起态 chevron 带里的入口: 带只有 peekBody 高、圆角
+	// 从两下角收进去，按钮必须整颗落在有像素的带队里，不能压硬件刘海
+	// 或伸出圆角。
+	appEntryBand = 16
 
 	// switchIconFloor is the icon cache's floor: wings + overflow + a
 	// working set of manage rows. The real cap grows with the installed
@@ -791,15 +795,21 @@ func (a *shelf) noteAppEntry(e ui.Element) {
 }
 
 // appsEntryButton is the small dedicated entry drawn in the collapsed
-// state: it opens the wings directly instead of the search bar.
-func (a *shelf) appsEntryButton(c *ui.Context, key string) ui.Element {
+// state: it opens the wings directly instead of the search bar. size is
+// the drawn box (and the hit box — noteAppEntry records the button's own
+// bounds): 30 in the music wings and the idle island capsule, the compact
+// 16 in the chevron band whose 18pt body sits mostly behind the bottom
+// corner cuts. Same key kinds, hover fill and tap action at every size so
+// every drawn entry stays the one button.
+func (a *shelf) appsEntryButton(c *ui.Context, key string, size float32) ui.Element {
 	l := loc(c)
-	b := ui.ButtonBase(c.Key(key)).Size(appEntryW, appEntryW).Radius(7).Center().
+	b := ui.ButtonBase(c.Key(key)).Size(size, size).Radius(min(7, size/2-1)).Center().
 		Label(l.AppsSwitch()).Tooltip(l.AppsSwitch())
 	if b.Hovered() {
 		b.Background(fill2)
 	}
-	b.Children(func() { ui.Icon(c, appsSymbol).Size(16, 16).TextColor(ink2) })
+	glyph := size * 0.53
+	b.Children(func() { ui.Icon(c, appsSymbol).Size(glyph, glyph).TextColor(ink2) })
 	if b.Clicked() {
 		a.openAppSwitch()
 	}

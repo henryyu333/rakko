@@ -314,27 +314,26 @@ func TestSmokeAppsWingsOpenFromEntry(t *testing.T) {
 		a.win.Invalidate()
 	})
 	var er mygo.Rectangle
+	var on bool
 	waitApps(t, a, "the collapsed-state entry", func() bool {
 		er = a.apps.entryRect
 		return er.Width > 0 && a.fx.peekKind == peekChevron
 	})
 	clickOverlayAt(t, a, float64(er.X+er.Width/2), float64(er.Y+er.Height/2))
-	onMain(func() {
-		if !a.apps.on {
-			t.Fatal("clicking the entry did not open the wings")
-		}
-	})
+	onMain(func() { on = a.apps.on })
+	if !on {
+		t.Fatal("clicking the entry did not open the wings")
+	}
 	openAppsWings(t, a)
 	shotAppsWindow(t, a.win, "wings-open")
 
 	// The first pinned seat is a real button in the real window.
 	x, y := appSeat(t, a, 0)
 	clickOverlayAt(t, a, x, y)
-	onMain(func() {
-		if a.apps.on {
-			t.Fatal("the wings must fold after a successful switch")
-		}
-	})
+	onMain(func() { on = a.apps.on })
+	if on {
+		t.Fatal("the wings must fold after a successful switch")
+	}
 	closeAppsWings(t, a)
 }
 

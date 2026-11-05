@@ -5,6 +5,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -556,7 +557,7 @@ func (a *shelf) view(c *ui.Context) {
 			if frameW < baseW+appEntryW {
 				frameW = baseW + 40
 			}
-			e := a.appsEntryButton(c, "apps-island-entry")
+			e := a.appsEntryButton(c, "apps-island-entry", appEntryW)
 			e.Absolute().Right((frameW-baseW)/2 + 4).Top(float32(a.islandTop + (islandIdleH-appEntryW)/2))
 		} else {
 			a.syncMousePassThrough()
@@ -1655,9 +1656,26 @@ func (a *shelf) peekView(c *ui.Context, shellW, shellH, openK, peekK, shake floa
 			})
 			if kind == peekChevron {
 				// 收起态应用入口: 探头带右缘的小按钮, 点击展开两翼;
-				// 带中央的点击仍是搜索（pill.Clicked 处理）。
-				e := a.appsEntryButton(c, "apps-band-entry")
-				e.Absolute().Right(6).Bottom(1)
+				// 带中央的点击仍是搜索（pill.Clicked 处理）。按钮整颗
+				// 都要落在壳有像素的地方: 高度不超过 peekBody（顶边不
+				// 进硬件刘海），右边让出下角圆角在这一列切掉的深度
+				// （botR 的弓形在贴底处最深，自下角向内收 2pt 余量）。
+				_, bandH := a.peekSize()
+				_, baseH := a.anchorSize()
+				bodyH := bandH - baseH // the band below the anchor row
+				botR := min(bodyH/2, homeRadius)
+				// sagitta of the corner arc across a chord d points up:
+				// r·(1−√(d/r))² — 0 at the flank, botR at the very bottom.
+				inset := func(d float32) float32 {
+					if botR <= 0 || d >= botR {
+						return 0
+					}
+					u := float32(math.Sqrt(float64(d / botR)))
+					return botR * (1 - u) * (1 - u)
+				}
+				right := inset(appEntryBand) + 2
+				e := a.appsEntryButton(c, "apps-band-entry", appEntryBand)
+				e.Absolute().Right(right).Bottom(1)
 			}
 		})
 	})
