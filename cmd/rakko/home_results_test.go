@@ -143,3 +143,72 @@ func TestResultsActionBarInsideTheSheet(t *testing.T) {
 		t.Fatalf("a clipboard selection offers 在 Finder 中显示: %v", v.Texts())
 	}
 }
+
+// TestResultsSheetFadeFactors: the sheet's paint follows its drawn height —
+// nothing at 0, half a row at 22 and all of it from one row up, so the
+// retracting sheet never reads as an opaque empty plate.
+func TestResultsSheetFadeFactors(t *testing.T) {
+	for _, tc := range []struct {
+		h    float32
+		want float32
+	}{
+		{0, 0},
+		{1, 1.0 / resultsRowH},
+		{22, 0.5},
+		{resultsRowH, 1},
+		{300, 1},
+	} {
+		if got := resultsFade(tc.h); got != tc.want {
+			t.Fatalf("resultsFade(%v) = %v, want %v", tc.h, got, tc.want)
+		}
+	}
+}
+
+// TestResultsSheetFadesWithHeight: a sheet drawn at half a row paints its
+// base and glass at half the reveal opacity — over the window's backdrop
+// it stays closer to that backdrop than the full-height sheet, so no
+// opaque plate shows while the height is still in flight.
+func TestResultsSheetFadesWithHeight(t *testing.T) {
+	paint := func(h float32) uint8 {
+		a := &shelf{homeQuery: "x"} // still gathering: the sheet has no rows
+		v := ui.NewTester(func(c *ui.Context) {
+			a.resultsView(c, ui.Rect{X: 0, Y: 0, W: 200, H: h}, 1)
+		}, 200, int(h)+1)
+		v.SetLocale("zh-Hans")
+		v.Frame()
+		return v.Image().RGBAAt(100, int(h)/2).R
+	}
+	full, half := paint(resultsRowH), paint(resultsRowH/2)
+	if full >= 200 {
+		t.Fatalf("a full-height sheet paints nothing at its centre: %v", full)
+	}
+	if half <= full {
+		t.Fatalf("a half-height sheet is not closer to the backdrop: %v vs %v at full height", half, full)
+	}
+}
+
+// TestResultsSheetEmptyQueryPaintsNothing: a sheet box with no query
+// behind it draws nothing — while the height spring is still retracting
+// (or a frozen value leaks into an open) the empty plate must not show
+// under the bar. A live query's sheet still paints.
+func TestResultsSheetEmptyQueryPaintsNothing(t *testing.T) {
+	pixel := func(view func(c *ui.Context)) uint8 {
+		v := ui.NewTester(view, 200, 200)
+		v.SetLocale("zh-Hans")
+		v.Frame()
+		return v.Image().RGBAAt(100, 100).R
+	}
+	blank := pixel(func(*ui.Context) {})
+	empty := pixel(func(c *ui.Context) {
+		(&shelf{}).resultsView(c, ui.Rect{X: 0, Y: 0, W: 200, H: 200}, 1)
+	})
+	live := pixel(func(c *ui.Context) {
+		(&shelf{homeQuery: "x"}).resultsView(c, ui.Rect{X: 0, Y: 0, W: 200, H: 200}, 1)
+	})
+	if empty != blank {
+		t.Fatalf("a query-less sheet paints: centre pixel %v vs the backdrop's %v", empty, blank)
+	}
+	if live == blank {
+		t.Fatalf("the guard took a live sheet with it: pixel %v", live)
+	}
+}

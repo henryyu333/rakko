@@ -689,7 +689,10 @@ func (a *shelf) view(c *ui.Context) {
 		} else {
 			homeWd = zone.AnimateTo("home-w", homeTarget, levelSpring)
 		}
-		if reduceMotion(c) {
+		if reduceMotion(c) || a.fx.openK == 0 {
+			// Just opening (the last frame was still folded): the channels
+			// start at their targets instead of a spring a hidden window
+			// froze mid-flight leaking into this open.
 			resultsH = zone.Jump("results-h", resultsTarget)
 			navK = zone.Jump("nav", navTarget)
 		} else {
@@ -882,7 +885,10 @@ func (a *shelf) view(c *ui.Context) {
 			box := ui.Box(c.Key("hang-box")).Width(shellW).Height(nav.Y + nav.H).PassThrough()
 			box.Translate(shift, 0)
 			box.Children(func() {
-				if results.H > 0.5 {
+				// No query, no sheet: while its height spring is still
+				// retracting (or a frozen value leaked into an open) the
+				// pane has nothing to show, so not even its base paints.
+				if results.H > 0.5 && strings.TrimSpace(a.homeQuery) != "" {
 					a.resultsView(c, results, reveal)
 				}
 				if navK > 0.01 {

@@ -353,13 +353,33 @@ func (a *shelf) revealHomeHit() {
 	hit.run()
 }
 
+// resultsFade is how far the drawn sheet height h is into its first row.
+// The sheet's paint follows it: while the height spring animates an empty
+// stretch of the sheet reads as a black bar under the search bar, so the
+// base and the content fade in with the height instead — and the retraction
+// fades out the same way, until the glass renders nothing at all. At one
+// full row or taller the factor is 1: the settled sheet is unchanged.
+func resultsFade(h float32) float32 {
+	return max(0, min(h/resultsRowH, 1))
+}
+
 // resultsView draws the hits inside the sheet's box r (window-local).
+// A box with no query behind it paints nothing: the sheet only exists for
+// a query, and a still-positive spring height after the query is gone
+// would otherwise leave an empty opaque plate under the bar.
 func (a *shelf) resultsView(c *ui.Context, r ui.Rect, opacity float32) {
+	if strings.TrimSpace(a.homeQuery) == "" {
+		return
+	}
 	l := loc(c)
 	hits := a.homeHits()
 	a.homeSel = min(a.homeSel, max(len(hits)-1, 0))
 	a.noteHomePainted(hits)
 	radius := min(resultsRadius, r.H/2)
+	// The opaque base and everything over it take the height's fade with
+	// the content's opacity: an opaque plate at a spring's mid-height is
+	// exactly the empty black bar this keeps from showing.
+	opacity *= resultsFade(r.H)
 	glassBase(c, "results-base", r, radius, opacity)
 	box := ui.Column(c.Key("results")).Absolute().Left(r.X).Top(r.Y).Width(r.W).Height(r.H).
 		Padding(resultsPad, resultsPad, resultsPad, resultsPad).Clip().Opacity(opacity).
@@ -563,4 +583,3 @@ type rowKey struct {
 	name string
 	i    int
 }
-
