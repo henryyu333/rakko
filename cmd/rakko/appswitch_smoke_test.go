@@ -23,8 +23,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo"
 	"github.com/ebitengine/purego"
+	"github.com/egoist/mygo"
 
 	"rakko/internal/mac"
 	"rakko/internal/settings"
@@ -383,6 +383,21 @@ func TestSmokeAppsWingsOpenFromEntry(t *testing.T) {
 	// hold the hover through the tooltip's delay and one settled frame
 	time.Sleep(900 * time.Millisecond)
 	shotAppsWindow(t, a.win, "wings-hover")
+	// Second pass with THIS process active: the SDK's tracking area set
+	// answers mouseMoved only for NSAppActiveWindow (ActiveAlways not in
+	// the surface's bits), and a shelf whose app is background never gets
+	// hover events to paint. ActivateSelf proves that mechanism from this
+	// same fixture; the first shot above documented the idle state.
+	// The engine's hover needs the app active — the surface's tracking
+	// bits answer mouseMoved only while the app can accept them. With the
+	// app raised, the same hover paints for one more frame pair: this is
+	// the state a real user who just clicked the launch/switch target
+	// sees, and it is the one worth shipping screenshots of.
+	mac.ActivateSelf()
+	time.Sleep(250 * time.Millisecond) // activation takes a beat
+	hidMoveTo(t, float64(x), float64(y))
+	time.Sleep(900 * time.Millisecond)
+	shotAppsWindow(t, a.win, "wings-hover-active")
 	onMain(func() {
 		a.moveAppSel(1) // first selectable = seat 0 selected
 		a.win.Invalidate()
