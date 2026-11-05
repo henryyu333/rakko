@@ -41,33 +41,133 @@ func appSwitchShelf(t *testing.T) *shelf {
 	return a
 }
 
-// stubApps swaps the seams for f's duration. Register keys are recorded,
-// never really taken; activation and open only count what they were asked.
-type appsStub struct {
-	running    []mac.RunningApp
-	paths      map[string]string
-	names      map[string]string
-	installed  []mygo.InstalledApp
-	installErr error
-	activated  []int
-	opened     []string
-	actOK      map[int]bool
-	openErr    error
-	reg        map[string]func()
-	regErr     map[string]error
+// appsMain is the test stand-in for the main thread's delivery: the
+// background scan posts its callback here instead of running it inline,
+// so every write to a.apps happens on the test goroutine that pumps the
+// queue — the same goroutine all test reads and state changes already
+// use. appsInstalled records every entered call and the poster records
+// every delivered post, so cleanup can prove each in-flight scan handed
+// its work over before the seams go back.
+type appsMain struct {
+	posts    chan func()   // deliveries waiting for the test goroutine
+	entered  chan struct{} // a token per appsInstalled call
+	posted   chan struct{} // a token per completed post
+	queueing bool          // false on the smoke path (real loop delivers)
 }
 
-func stubApps(t *testing.T, s *appsStub) {
+// pumpUntil runs queued deliveries until done reports the awaited state —
+// a finished scan clearing installedLoad, an error landing — and fails
+// the test on a bounded wait. Deliveries run here, on the test goroutine.
+func (q *appsMain) pumpUntil(t *testing.T, done func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for !done() {
+		select {
+		case fn := <-q.posts:
+			fn()
+		case <-time.After(10 * time.Millisecond):
+			if done() {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("pumpUntil: no delivery arrived within 5s")
+			}
+		}
+	}
+}
+
+// pumpOnce runs exactly one queued delivery — the stale-generation test
+// lands a scan whose mode already ended.
+func (q *appsMain) pumpOnce(t *testing.T) {
+	t.Helper()
+	select {
+	case fn := <-q.posts:
+		fn()
+	case <-time.After(5 * time.Second):
+		t.Fatal("pumpOnce: no delivery reached the queue")
+	}
+}
+
+// drain hands over in-flight scans before cleanup restores the seams: a
+// post's token proves its goroutine already read the globals being
+// restored, so once posts balance entered calls nothing background-side
+// can still touch them. Bounded — a scan still in flight is a test bug,
+// reported (Errorf so the restores still run) rather than slept through.
+func (q *appsMain) drain(t *testing.T) {
+	t.Helper()
+	if !q.queueing {
+		return // smoke: deliveries ride the real event loop, nothing queued
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	entered, posted := 0, 0
+	for {
+		select {
+		case <-q.entered:
+			entered++
+		case <-q.posted:
+			posted++
+		case <-q.posts:
+			// A delivery nobody pumped: the test is over; dropping it is
+			// safe, its posted token still counts the handover.
+		case <-time.After(10 * time.Millisecond):
+			if posted >= entered {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Errorf("cleanup: %d entered scan(s) never delivered", entered-posted)
+				return
+			}
+		}
+	}
+}
+
+// stubApps swaps the seams for f's duration. Register keys are recorded,
+// never really taken; activation and open only count what they were asked.
+// It returns the test's main-thread queue: tests that wait on the
+// installed scan pump it explicitly, everyone else can ignore it.
+type appsStub struct {
+	running       []mac.RunningApp
+	paths         map[string]string
+	names         map[string]string
+	installed     []mygo.InstalledApp
+	installErr    error
+	installedFunc func() ([]mygo.InstalledApp, error) // overrides installed/installErr when set
+	activated     []int
+	opened        []string
+	actOK         map[int]bool
+	openErr       error
+	reg           map[string]func()
+	regErr        map[string]error
+}
+
+func stubApps(t *testing.T, s *appsStub) *appsMain {
 	t.Helper()
 	oldRun, oldPath, oldName, oldInst := appRunning, appPathFor, appNameFor, appsInstalled
 	oldReg, oldUnreg := registerKey, unregisterKey
 	oldAct, oldOpen := activateApp, openPath
 	oldOnMain := mygoRunOnMain
-	mygoRunOnMain = func(fn func()) { fn() } // tests have no event loop
+	q := &appsMain{
+		posts:    make(chan func(), 256),
+		entered:  make(chan struct{}, 256),
+		posted:   make(chan struct{}, 256),
+		queueing: smokeShelf == nil, // smoke has the real loop on the real main thread
+	}
+	if q.queueing {
+		mygoRunOnMain = func(fn func()) {
+			q.posts <- fn
+			q.posted <- struct{}{}
+		}
+	}
 	appRunning = func() []mac.RunningApp { return s.running }
 	appPathFor = func(id string) string { return s.paths[id] }
 	appNameFor = func(id string) string { return s.names[id] }
-	appsInstalled = func() ([]mygo.InstalledApp, error) { return s.installed, s.installErr }
+	appsInstalled = func() ([]mygo.InstalledApp, error) {
+		q.entered <- struct{}{}
+		if s.installedFunc != nil {
+			return s.installedFunc()
+		}
+		return s.installed, s.installErr
+	}
 	activateApp = func(pid int) bool {
 		s.activated = append(s.activated, pid)
 		return s.actOK[pid]
@@ -88,11 +188,13 @@ func stubApps(t *testing.T, s *appsStub) {
 	}
 	unregisterKey = func(acc string) { delete(s.reg, acc) }
 	t.Cleanup(func() {
+		q.drain(t) // settle in-flight scans before the seams go back
 		appRunning, appPathFor, appNameFor, appsInstalled = oldRun, oldPath, oldName, oldInst
 		registerKey, unregisterKey = oldReg, oldUnreg
 		activateApp, openPath = oldAct, oldOpen
 		mygoRunOnMain = oldOnMain
 	})
+	return q
 }
 
 func pinned(s *shelf) []string {
@@ -647,15 +749,14 @@ func TestEnsureInstalledDegrades(t *testing.T) {
 		paths:      map[string]string{},
 		installErr: errors.New("ls boom"),
 	}
-	stubApps(t, st)
+	q := stubApps(t, st)
 	a.apps.on = true
 	a.apps.list = a.appSnapshot()
 	a.refreshAppsDerived()
 	a.ensureInstalled()
-	deadline := time.Now().Add(2 * time.Second)
-	for a.apps.installedLoad && time.Now().Before(deadline) {
-		time.Sleep(5 * time.Millisecond)
-	}
+	// The scan's delivery lands on this goroutine through the pump — no
+	// polling shared state, no sleep.
+	q.pumpUntil(t, func() bool { return !a.apps.installedLoad })
 	if a.apps.installed != nil {
 		t.Fatal("a failed scan must stay nil, not an empty list")
 	}
@@ -923,16 +1024,18 @@ func TestAppsGeomCramped(t *testing.T) {
 func TestInstalledScanStates(t *testing.T) {
 	a := appSwitchShelf(t)
 	st := &appsStub{
-		running: []mac.RunningApp{{BundleID: "com.t.x", Name: "X", PID: 1}},
-		paths:   map[string]string{},
+		running:   []mac.RunningApp{{BundleID: "com.t.x", Name: "X", PID: 1}},
+		paths:     map[string]string{},
+		installed: []mygo.InstalledApp{{ID: "com.t.cand", Name: "Cand"}},
 	}
-	stubApps(t, st)
+	q := stubApps(t, st)
 	a.apps.on = true
 	a.apps.list = a.appSnapshot()
 	a.refreshAppsDerived()
+
 	// Slow stub: block until released so the load state is observable.
 	release := make(chan struct{})
-	appsInstalled = func() ([]mygo.InstalledApp, error) {
+	st.installedFunc = func() ([]mygo.InstalledApp, error) {
 		<-release
 		return st.installed, st.installErr
 	}
@@ -941,25 +1044,24 @@ func TestInstalledScanStates(t *testing.T) {
 		t.Fatal("scan must mark loading")
 	}
 	close(release)
-	deadline := time.Now().Add(2 * time.Second)
-	for a.apps.installedLoad && time.Now().Before(deadline) {
-		time.Sleep(5 * time.Millisecond)
+	q.pumpUntil(t, func() bool { return !a.apps.installedLoad })
+	if len(a.apps.installed) != 1 || a.apps.installed[0].ID != "com.t.cand" {
+		t.Fatalf("scan result %v, want the Cand catalogue", a.apps.installed)
 	}
-	if a.apps.installedLoad {
-		t.Fatal("scan never finished")
-	}
+
 	// Failure: error state, candidates still there, retry re-scans.
 	st.installErr = errors.New("ls boom")
-	a.ensureInstalled()
 	release2 := make(chan struct{})
-	appsInstalled = func() ([]mygo.InstalledApp, error) {
+	st.installedFunc = func() ([]mygo.InstalledApp, error) {
 		<-release2
 		return nil, st.installErr
 	}
-	close(release2)
-	for a.apps.installedLoad && time.Now().Before(deadline) {
-		time.Sleep(5 * time.Millisecond)
+	a.ensureInstalled()
+	if !a.apps.installedLoad {
+		t.Fatal("the retry scan must mark loading again")
 	}
+	close(release2)
+	q.pumpUntil(t, func() bool { return !a.apps.installedLoad })
 	if a.apps.installedErr == nil {
 		t.Fatal("a failed scan must surface an error state")
 	}
@@ -967,17 +1069,23 @@ func TestInstalledScanStates(t *testing.T) {
 	if len(rows) != 1 || rows[0].bundleID != "com.t.x" {
 		t.Fatalf("failed scan must keep candidates, got %v", rows)
 	}
-	// Generation: a stale landing after a newer request is discarded.
+
+	// Generation: a scan still in flight when the mode ends lands
+	// afterwards as stale — its delivery must change nothing.
+	st.installedFunc = func() ([]mygo.InstalledApp, error) {
+		return []mygo.InstalledApp{{ID: "com.t.new", Name: "New"}}, nil
+	}
 	a.ensureInstalled()
-	staleGen := a.apps.installedGen
-	a.apps.installedLoad = false
-	a.apps.installedGen++ // a newer request began meanwhile
-	done := make(chan []mygo.InstalledApp, 1)
-	go func() { done <- st.installed }()
-	_ = <-done // the stale scan returns…
-	// …and its landing would hit the gen check — simulate it directly:
-	if staleGen == a.apps.installedGen {
-		t.Fatal("generation must differ")
+	a.endAppSwitch() // bumps installedGen: the mode the scan served is dead
+	q.pumpOnce(t)    // land the stale delivery on this goroutine
+	if staleGen := a.apps.installedGen; !a.apps.installedLoad {
+		t.Fatalf("a discarded delivery still touched state (gen %d)", staleGen)
+	}
+	if a.apps.installedErr == nil {
+		t.Fatal("a discarded delivery cleared the error state")
+	}
+	if len(a.apps.installed) != 1 || a.apps.installed[0].ID != "com.t.cand" {
+		t.Fatalf("a discarded delivery overwrote the catalogue: %v", a.apps.installed)
 	}
 }
 
