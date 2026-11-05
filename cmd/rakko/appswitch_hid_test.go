@@ -270,6 +270,13 @@ func TestHIDAppsClickLaunchesTargets(t *testing.T) {
 	pathB := hidFixture(t, hidTargetB)
 	pidB := hidLaunchFixture(t, hidTargetB, pathB)
 
+	// The hidden-window branch: a second seat that is running but whose
+	// window the fixture itself orders out (the runner drops a "hidden"
+	// token the fixture honors once), so the Dock-style reopen's
+	// unhide-by-bundle is what brings the pane back. Asserts the window
+	// returns without any pid-activation shortcut.
+	hiddenToken := "/tmp/rakko-appswitch/fixtures/hidden"
+
 	a := redesignShelf(t)
 	// The notch window comes up Hidden; an overlay not on screen gates
 	// nothing. ShowInactive is production's own这条路 (不夺焦)。
@@ -366,7 +373,58 @@ func TestHIDAppsClickLaunchesTargets(t *testing.T) {
 	if still := hidFrontPID(); still != pidB {
 		t.Fatalf("the frontmost PID slipped back to %d after activation", still)
 	}
+
+	// The hidden-window branch: B hides its own window once (the token
+	// file tells the fixture to order it out after launch), the mode
+	// reopens, and the same seat click must bring the window back — the
+	// Dock-style reopen un-hides what plain pid activation would leave
+	// frontmost-nothing.
+	os.Remove(hiddenToken) // fresh round: the token was written? no — write now
+	if err := os.WriteFile(hiddenToken, nil, 0o644); err != nil {
+		t.Fatalf("writing the hidden token: %v", err)
+	}
+	// Replacing B means the fixture re-opens: quit via the sentinel and
+	// clear it before relaunch, so B's window actually hides this time.
+	hidWriteSentinel(t)
+	hidClearSentinel(t)
+	pidB2 := hidLaunchFixture(t, hidTargetB, pathB)
+	waitAppsBecomes(t, func() bool {
+		return hidRunningPID(hidTargetB) == pidB2 && !hidWindowOn(t, pidB2)
+	}, "the hidden fixture to stop showing its window", 8*time.Second)
+	// The fix: driven through one more full entry→seat-1 click.
+	waitApps(t, a, "the entry after hide", func() bool {
+		return a.apps.entryRect.Width > 0 && a.fx.peekKind == peekChevron
+	})
+	var er3 mygo.Rectangle
+	onMain(func() { er3 = a.apps.entryRect })
+	clickOverlayAt(t, a, float64(er3.X+er3.Width/3), float64(er3.Y+er3.Height/2))
+	waitApps(t, a, "the third-round wings", func() bool {
+		onMain(func() { on = a.apps.on })
+		return on
+	})
+	waitApps(t, a, "the third-round wings to settle", func() bool { return a.peekProgress >= 0.99 })
+	x3, y3 := appSeat(t, a, 1)
+	clickOverlayAt(t, a, x3, y3)
+	hidWaitFrontPID(t, pidB2, "the hidden fixture must be frontmost again")
+	hidWaitWindow(t, pidB2, "the reopen must un-hide the fixture's window")
+	os.Remove(hiddenToken)
 }
+
+// waitAppsBecomes polls cond for d, timing the budget on the test side.
+func waitAppsBecomes(t *testing.T, cond func() bool, what string, d time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(d)
+	for time.Now().Before(deadline) {
+		if cond() {
+			return
+		}
+		time.Sleep(150 * time.Millisecond)
+	}
+	t.Fatalf("waiting for %s timed out", what)
+}
+
+// hidWindowOn reports the probe's answer without wanting a budget.
+func hidWindowOn(t *testing.T, pid int) bool { return hidWindowVisible(t, pid) }
 
 // hidAnchorPoint is the screen point at the centre of the anchor's hover
 // zone — the notch for the notched shelf (island smoke uses its own).

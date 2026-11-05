@@ -194,6 +194,20 @@ func ReopenApp(bundleID string) bool {
 		launched := send(ws, "launchApplicationAtURL:options:configuration:error:",
 			uintptr(url), uintptr(nsWorkspaceLaunchDefault), uintptr(configuration), 0)
 		ok = launched != 0
+		if !ok {
+			return
+		}
+		// The launch options do not promise unhide for an app the user
+		// hid themselves (Job 11.4's own Dock icon does, its open call
+		// does not). A hidden app hidden this way stays frontmost
+		// nothing-to-see unless the receiver unhides: AppKit's own
+		// explicit "-unhide" seal for the running instance this URL
+		// describes. Main thread only, read-only besides the request.
+		apps := send(class("NSRunningApplication"),
+			"runningApplicationsWithBundleIdentifier:", uintptr(nsString(bundleID)))
+		if sendInt(apps, "count") > 0 {
+			send(send(apps, "objectAtIndex:", 0), "unhide")
+		}
 	})
 	return ok
 }
