@@ -329,6 +329,26 @@ func TestSmokeAppsWingsOpenFromEntry(t *testing.T) {
 
 	// The first pinned seat is a real button in the real window.
 	x, y := appSeat(t, a, 0)
+
+	// Three-frame evidence for the white-edge question, same desktop, same
+	// place: no hover, hover on seat 0, seat 0 selected by the mode's own
+	// key route. A drawn hairline living in all three frames is ours; a
+	// difference across them is the hover/selection's own paint.
+	saved := mygo.Screen.CursorScreenPoint()
+	t.Cleanup(func() { warpPointerTo(t, float64(saved.X), float64(saved.Y)) })
+	warpPointerTo(t, x, y)
+	time.Sleep(200 * time.Millisecond) // the monitor tick paints hover
+	shotAppsWindow(t, a.win, "wings-hover")
+	onMain(func() {
+		a.moveAppSel(1) // first selectable = seat 0 selected
+		a.win.Invalidate()
+	})
+	time.Sleep(150 * time.Millisecond)
+	shotAppsWindow(t, a.win, "wings-selected")
+	// The click below goes through postRealClick, which warps and restores
+	// on its own; move the pointer out of the button first so the resumed
+	// click does not open from a pre-hover.
+	warpPointerTo(t, float64(saved.X), float64(saved.Y))
 	clickOverlayAt(t, a, x, y)
 	onMain(func() { on = a.apps.on })
 	if on {
