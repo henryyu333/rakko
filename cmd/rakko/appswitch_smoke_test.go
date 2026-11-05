@@ -145,25 +145,25 @@ func clickOverlayAt(t *testing.T, a *shelf, x, y float64) {
 // open is retried once before failing.
 func openAppsWings(t *testing.T, a *shelf) {
 	t.Helper()
-	for try := 0; try < 2; try++ {
-		onMain(func() {
-			if !a.apps.on {
-				a.openAppSwitch()
-			}
-			a.peekProgress, a.peekFrom = 1, 1
-			a.peekAnimStart = time.Time{}
-			a.syncMousePassThrough()
-			a.syncWindowFrame()
-			a.win.Invalidate()
-		})
-		time.Sleep(450 * time.Millisecond)
-		var on bool
-		onMain(func() { on = a.apps.on })
-		if on {
-			return
+	// Idempotent setup only: an already-open mode is settled, never
+	// toggled shut. After the settle wait the wings must still be open —
+	// a folded mode is a real defect, not noise to open past.
+	onMain(func() {
+		if !a.apps.on {
+			a.openAppSwitch()
 		}
+		a.peekProgress, a.peekFrom = 1, 1
+		a.peekAnimStart = time.Time{}
+		a.syncMousePassThrough()
+		a.syncWindowFrame()
+		a.win.Invalidate()
+	})
+	time.Sleep(450 * time.Millisecond)
+	var on bool
+	onMain(func() { on = a.apps.on })
+	if !on {
+		t.Fatal("the wings did not stay open")
 	}
-	t.Fatal("the wings would not stay open")
 }
 
 // closeAppsWings folds the wings and lets the fold settle.
@@ -189,29 +189,29 @@ var smokeApps = []mac.RunningApp{
 // wing's (last is always 更多 when a right wing exists).
 func appSeat(t *testing.T, a *shelf, i int) (x, y float64) {
 	t.Helper()
-	g := a.appGeom()
-	cx := float64(a.stripCenter()) + float64(g.off)
-	baseW, _ := a.anchorSize()
+	var g appGeom
+	var cx float64
+	var baseW float32
+	var ls, rs int
+	onMain(func() {
+		g = a.appGeom()
+		cx = float64(a.stripCenter()) + float64(g.off)
+		baseW, _ = a.anchorSize()
+		ls, rs = a.appsSlots()
+	})
 	left := cx - float64(baseW+g.sideL+g.sideR)/2
-	ls, rs := a.appsSlots()
 	if i < ls {
 		x = left + float64(appPadX+appBtn/2) + float64(i*(appBtn+appGap))
 	} else if i < ls+rs {
-		j := i - ls
-		x = left + float64(g.sideL) + float64(baseW) + float64(g.sideR) -
-			float64(appPadX) - float64((rs-j)*appBtn) + float64(appBtn/2) +
-			float64(j)*float64(appGap) + float64(j)*(float64(appBtn)+float64(appGap)) - float64(j)*float64(appBtn)
-	} else {
-		t.Fatalf("seat %d out of range %d/%d", i, ls, rs)
-	}
-	// Right wing seats are right-aligned inside the wing: recompute
-	// simply — the j-th seat's centre from the wing's right edge.
-	if i >= ls {
+		// Right wing seats are right-aligned inside the wing: the j-th
+		// seat's centre from the wing's right edge.
 		j := rs - 1 - (i - ls) // distance from the rightmost seat inward
 		right := left + float64(g.sideL) + float64(baseW) + float64(g.sideR) - float64(appPadX)
 		x = right - float64(j)*float64(appBtn+appGap) - float64(appBtn/2)
+	} else {
+		t.Fatalf("seat %d out of range %d/%d", i, ls, rs)
 	}
-	y = float64(a.frameTop()+a.sheetTop()) + float64(a.fx.h)/2
+	onMain(func() { y = float64(a.frameTop()+a.sheetTop()) + float64(a.fx.h)/2 })
 	return x, y
 }
 
