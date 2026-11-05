@@ -126,6 +126,9 @@ func (q *appsMain) drain(t *testing.T) {
 // It returns the test's main-thread queue: tests that wait on the
 // installed scan pump it explicitly, everyone else can ignore it.
 type appsStub struct {
+	// headless mirrors the caller's shelf: true when the scan delivery
+	// must ride the test's pump queue instead of the smoke run's loop.
+	headless      bool
 	running       []mac.RunningApp
 	paths         map[string]string
 	names         map[string]string
@@ -148,11 +151,18 @@ func stubApps(t *testing.T, s *appsStub) *appsMain {
 	oldReg, oldUnreg := registerKey, unregisterKey
 	oldAct, oldOpen, oldReopen := activateApp, openPath, appReopen
 	oldOnMain := mygoRunOnMain
+	// The delivery mode follows the shelf, not the harness: a headless
+	// shelf's scans must always pump on the test goroutine (their
+	// ensureInstalled posts through mygoRunOnMain), so the cases that
+	// pump force the queue even when the smoke run keeps the real loop
+	// alive for the shared shelf next door. A smoke-shelf caller keeps
+	// its real-loop path — nothing here pumps.
+	headlessShelf := s.headless
 	q := &appsMain{
 		posts:    make(chan func(), 256),
 		entered:  make(chan struct{}, 256),
 		posted:   make(chan struct{}, 256),
-		queueing: smokeShelf == nil, // smoke has the real loop on the real main thread
+		queueing: smokeShelf == nil || headlessShelf,
 	}
 	if q.queueing {
 		mygoRunOnMain = func(fn func()) {
@@ -775,6 +785,7 @@ func TestManageRowsModel(t *testing.T) {
 func TestEnsureInstalledDegrades(t *testing.T) {
 	a := appSwitchShelf(t)
 	st := &appsStub{
+		headless:   true, // pump-driven scan delivery
 		running:    []mac.RunningApp{{BundleID: "com.t.x", Name: "X", PID: 1}},
 		paths:      map[string]string{},
 		installErr: errors.New("ls boom"),
@@ -1054,9 +1065,11 @@ func TestAppsGeomCramped(t *testing.T) {
 // The installed scan runs once per manage open and reports failure as a
 // retryable state — the candidates (pinned + running) keep drawing, and a
 // stale result landing after a newer request is discarded by generation.
+
 func TestInstalledScanStates(t *testing.T) {
 	a := appSwitchShelf(t)
 	st := &appsStub{
+		headless:  true, // the scan delivery must ride the test's pump queue
 		running:   []mac.RunningApp{{BundleID: "com.t.x", Name: "X", PID: 1}},
 		paths:     map[string]string{},
 		installed: []mygo.InstalledApp{{ID: "com.t.cand", Name: "Cand"}},
