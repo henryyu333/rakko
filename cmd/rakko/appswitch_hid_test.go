@@ -119,12 +119,15 @@ func hidLaunchFixture(t *testing.T, bundleID, path string) int {
 	return hidWaitRunning(t, bundleID)
 }
 
-// hidClearSentinel先删掉本 stash 的 quit 哨兵：上一轮遗留的文件会让夹具
-// 一启动就自杀。只碰本哨兵一个文件。
-func hidClearSentinel(t *testing.T) {
+// hidClearFiles先删掉本 stash 的两个控制文件：上一轮遗留的 quit 哨兵会让
+// 夹具一启动就自杀；遗留的 hidden 令牌会让新启动的夹具把窗口藏起来。
+// 两份都只属于本测试。
+func hidClearFiles(t *testing.T) {
 	t.Helper()
-	if err := os.Remove(hidQuitSentinel); err != nil && !os.IsNotExist(err) {
-		t.Fatalf("clearing the quit sentinel: %v", err)
+	for _, path := range []string{hidQuitSentinel, hidFixtures + "/hidden"} {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			t.Fatalf("clearing %s: %v", path, err)
+		}
 	}
 }
 
@@ -254,7 +257,7 @@ func TestHIDAppsClickLaunchesTargets(t *testing.T) {
 	hidSkip(t)
 	// Clear this round's quit sentinel before anything else: a leftover
 	// from an earlier round would self-terminate a fixture on launch.
-	hidClearSentinel(t)
+	hidClearFiles(t)
 	// End-of-case: write the sentinel back and wait for both fixtures to
 	// leave — no process enumeration or kill anywhere.
 	t.Cleanup(func() { hidWriteSentinel(t) })
@@ -265,7 +268,7 @@ func TestHIDAppsClickLaunchesTargets(t *testing.T) {
 	if pid := hidRunningPID(hidTargetA); pid != 0 {
 		t.Logf("A already running (PID %d) from a previous round — dropping it first", pid)
 		hidWriteSentinel(t)
-		hidClearSentinel(t)
+		hidClearFiles(t)
 	}
 	pathB := hidFixture(t, hidTargetB)
 	pidB := hidLaunchFixture(t, hidTargetB, pathB)
@@ -386,7 +389,7 @@ func TestHIDAppsClickLaunchesTargets(t *testing.T) {
 	// Replacing B means the fixture re-opens: quit via the sentinel and
 	// clear it before relaunch, so B's window actually hides this time.
 	hidWriteSentinel(t)
-	hidClearSentinel(t)
+	hidClearFiles(t)
 	pidB2 := hidLaunchFixture(t, hidTargetB, pathB)
 	waitAppsBecomes(t, func() bool {
 		return hidRunningPID(hidTargetB) == pidB2 && !hidWindowOn(t, pidB2)
