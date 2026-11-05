@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"rakko/internal/netproxy"
 )
 
 // Env injects every machine dependency the quota fetchers touch: the user's
@@ -52,13 +54,15 @@ const (
 )
 
 // DefaultEnv returns the production environment: real home directory, a 15s
-// HTTP timeout, the macOS `security` tool for Keychain reads, the vendor's
-// real endpoint and the user's own Claude Code.
+// HTTP timeout over the app's proxy rules (environment, else the macOS system
+// proxy: quota requests are the outbound path a Finder-launched process has no
+// proxy variables for), the macOS `security` tool for Keychain reads, the
+// vendor's real endpoint and the user's own Claude Code.
 func DefaultEnv() Env {
 	home, _ := os.UserHomeDir()
 	return Env{
 		Home:            home,
-		HTTP:            &http.Client{Timeout: quotaHTTPTimeout},
+		HTTP:            netproxy.NewClient(quotaHTTPTimeout),
 		Keychain:        keychainPassword,
 		CodexBaseURL:    codexDefaultBase,
 		Now:             time.Now,
@@ -98,11 +102,13 @@ func (e Env) now() time.Time {
 	return time.Now()
 }
 
+// client is the injected client, or the production one over the app's proxy
+// rules: a nil HTTP field must not mean "no system proxy".
 func (e Env) client() *http.Client {
 	if e.HTTP != nil {
 		return e.HTTP
 	}
-	return &http.Client{Timeout: quotaHTTPTimeout}
+	return netproxy.NewClient(quotaHTTPTimeout)
 }
 
 func (e Env) codexBase() string {

@@ -17,12 +17,19 @@ import (
 	"rakko/internal/agentnotify"
 	"rakko/internal/aiusage"
 	"rakko/internal/mac"
+	"rakko/internal/netproxy"
 	"rakko/internal/settings"
 	"rakko/internal/store"
 	"rakko/locales"
 )
 
 func main() {
+	// The mygo updater takes no client: it calls http.DefaultClient directly
+	// for its manifest and its download. Route that through the same proxy
+	// rules as everything else, before any request can be issued and before
+	// any goroutine starts (a GUI launch from Finder has no proxy variables,
+	// so the system settings decide).
+	netproxy.InstallDefaultClient()
 	// mygo starts this same binary with MYGO_GENERATE set to write the
 	// TypeScript client, on every `mygo build` and `mygo dev`. That run must
 	// not touch the data directory (it would create an empty one and block

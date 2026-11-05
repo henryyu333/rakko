@@ -12,10 +12,15 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"rakko/internal/netproxy"
 )
 
 // DefaultBaseURL is LRCLIB's public API.
 const DefaultBaseURL = "https://lrclib.net"
+
+// lyricsHTTPTimeout bounds one lookup when Fetcher.Client is nil.
+const lyricsHTTPTimeout = 5 * time.Second
 
 // Track identifies one song for a lyrics lookup. Duration is in seconds;
 // LRCLIB matches on it, so a rounded value is expected.
@@ -218,7 +223,10 @@ func (f Fetcher) readUA(ctx context.Context, u, userAgent string) ([]byte, int, 
 	}
 	client := f.Client
 	if client == nil {
-		client = &http.Client{Timeout: 5 * time.Second}
+		// The production path: one client over the app's proxy rules, so a
+		// Finder-launched app with no proxy variables still reaches LRCLIB
+		// through the macOS system proxy.
+		client = netproxy.NewClient(lyricsHTTPTimeout)
 	}
 	resp, err := client.Do(req)
 	if err != nil {
