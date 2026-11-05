@@ -36,11 +36,12 @@ var homeAfterFunc = time.AfterFunc
 const homeGroupMax = 3
 
 // homeSpotState is the bar's Spotlight query and what it found so far.
-// query names the text the items answer: a batch that arrives after the
-// field moved on is dropped by the sequence number, and hits whose query
-// no longer matches are never shown.
+// query names the text the items answer and scope the mode they answer it
+// in: a batch that arrives after the field or the mode moved on is dropped
+// by the sequence number, and hits of another mode are never shown.
 type homeSpotState struct {
 	query   string
+	scope   mac.SearchScope
 	items   []mac.SpotlightHit
 	done    bool
 	seq     int
@@ -65,10 +66,10 @@ func (a *shelf) warmSpotlight() {
 	spotWarmed.Do(spotlightWarm)
 }
 
-// spotlightStart runs one query; tests replace it with a fake that records
-// the term and delivers batches by hand.
-var spotlightStart = func(term string, limit int, emit func([]mac.SpotlightHit), done func()) func() {
-	return mac.StartSpotlight(term, limit, emit, done).Cancel
+// spotlightStart runs one query in a mode; tests replace it with a fake
+// that records the term and scope and delivers batches by hand.
+var spotlightStart = func(term string, scope mac.SearchScope, limit int, emit func([]mac.SpotlightHit), done func()) func() {
+	return mac.StartSpotlight(term, scope, limit, emit, done).Cancel
 }
 
 // spotDebug logs the first batch's latency when RAKKO_SPOTLIGHT_DEBUG is
@@ -105,12 +106,14 @@ func (a *shelf) homeQueryChanged() {
 // UI thread and redraw, so the sheet grows while the index is still
 // gathering.
 func (a *shelf) startHomeSpot(q string, seq int) {
+	scope := a.homeScope
 	started := time.Now()
 	if spotDebug {
 		log.Printf("spotlight %q: query started %v after the last keystroke",
 			q, time.Since(a.homeSpot.typedAt).Round(time.Millisecond))
 	}
-	a.homeSpot.cancel = spotlightStart(q, 0, func(batch []mac.SpotlightHit) {
+	a.homeSpot.scope = scope
+	a.homeSpot.cancel = spotlightStart(q, scope, 0, func(batch []mac.SpotlightHit) {
 		if spotDebug {
 			log.Printf("spotlight %q: %d hits arrived %v after the query started",
 				q, len(batch), time.Since(started).Round(time.Millisecond))
@@ -139,6 +142,40 @@ func (a *shelf) startHomeSpot(q string, seq int) {
 			a.invalidateHome()
 		})
 	})
+}
+
+// setHomeScope moves the bar to another mode: 全部 / 应用 / 文件. The rows on
+// screen answer the old mode and go at once; a typed term is asked of the
+// new mode without waiting for the next keystroke, and the selection
+// returns to the first row.
+func (a *shelf) setHomeScope(scope mac.SearchScope) {
+	if a.homeScope == scope {
+		return
+	}
+	a.homeScope = scope
+	a.homeSel = 0
+	q := strings.TrimSpace(a.homeQuery)
+	a.stopHomeSpot()
+	a.homeSpot.query, a.homeSpot.typedAt = q, time.Now()
+	a.homeSpot.painted = time.Time{}
+	if q != "" {
+		a.startHomeSpot(q, a.homeSpot.seq)
+	}
+	a.invalidateHome()
+}
+
+// cycleHomeScope is a Tab in the empty bar and a click on the mode capsule:
+// 全部 → 应用 → 文件 → 全部. The mode lives in memory only: closing the
+// panel and opening it again always starts from 全部 (resetHomeSearch).
+func (a *shelf) cycleHomeScope() {
+	switch a.homeScope {
+	case mac.ScopeAll:
+		a.setHomeScope(mac.ScopeApps)
+	case mac.ScopeApps:
+		a.setHomeScope(mac.ScopeFiles)
+	default:
+		a.setHomeScope(mac.ScopeAll)
+	}
 }
 
 // cancelHomeSpot stops the timer and the query in flight; a later batch
@@ -186,12 +223,12 @@ func (a *shelf) homeSearching() bool {
 	if q == "" {
 		return false
 	}
-	return !a.homeSpot.done || !strings.EqualFold(strings.TrimSpace(a.homeSpot.query), q)
+	return a.homeSpot.scope != a.homeScope || !a.homeSpot.done || !strings.EqualFold(strings.TrimSpace(a.homeSpot.query), q)
 }
 
-// homeSpotItems are the hits that answer the bar's current text.
+// homeSpotItems are the hits that answer the bar's current text and mode.
 func (a *shelf) homeSpotItems() []mac.SpotlightHit {
-	if len(a.homeSpot.items) == 0 {
+	if len(a.homeSpot.items) == 0 || a.homeSpot.scope != a.homeScope {
 		return nil
 	}
 	if !strings.EqualFold(strings.TrimSpace(a.homeSpot.query), strings.TrimSpace(a.homeQuery)) {
@@ -216,10 +253,12 @@ func (a *shelf) invalidateHome() {
 	}
 }
 
-// resetHomeSearch clears the bar, its selection and its query.
+// resetHomeSearch clears the bar, its selection, its query and its mode:
+// the next opening always starts on 全部.
 func (a *shelf) resetHomeSearch() {
-	a.homeQuery, a.homeSel = "", 0
+	a.homeQuery, a.homeSel, a.homeScope = "", 0, mac.ScopeAll
 	a.stopHomeSpot()
+	a.homeSpot.scope = a.homeScope
 	a.invalidateHome()
 }
 

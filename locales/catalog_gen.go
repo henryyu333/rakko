@@ -5413,6 +5413,46 @@ func (msgs Messages) HomeGroupActions() string {
 	return Catalog.Format(msgs.locale, "homeGroupActions", nil)
 }
 
+// SearchModeAll says "全部"
+// in the language the app shows.
+func SearchModeAll() string { return In(i18n.Locale()).SearchModeAll() }
+
+// SearchModeAll says "全部"
+// in the language of msgs.
+func (msgs Messages) SearchModeAll() string {
+	return Catalog.Format(msgs.locale, "searchModeAll", nil)
+}
+
+// SearchModeApps says "应用"
+// in the language the app shows.
+func SearchModeApps() string { return In(i18n.Locale()).SearchModeApps() }
+
+// SearchModeApps says "应用"
+// in the language of msgs.
+func (msgs Messages) SearchModeApps() string {
+	return Catalog.Format(msgs.locale, "searchModeApps", nil)
+}
+
+// SearchModeFiles says "文件"
+// in the language the app shows.
+func SearchModeFiles() string { return In(i18n.Locale()).SearchModeFiles() }
+
+// SearchModeFiles says "文件"
+// in the language of msgs.
+func (msgs Messages) SearchModeFiles() string {
+	return Catalog.Format(msgs.locale, "searchModeFiles", nil)
+}
+
+// SearchModeSwitchTip says "当前 {mode} · 按 Tab 切换"
+// in the language the app shows.
+func SearchModeSwitchTip(mode string) string { return In(i18n.Locale()).SearchModeSwitchTip(mode) }
+
+// SearchModeSwitchTip says "当前 {mode} · 按 Tab 切换"
+// in the language of msgs.
+func (msgs Messages) SearchModeSwitchTip(mode string) string {
+	return Catalog.Format(msgs.locale, "searchModeSwitchTip", map[string]any{"mode": mode})
+}
+
 // PanelExpand says "展开 Rakko"
 // in the language the app shows.
 func PanelExpand() string { return In(i18n.Locale()).PanelExpand() }

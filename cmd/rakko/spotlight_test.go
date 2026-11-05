@@ -22,6 +22,7 @@ import (
 type fakeSpot struct {
 	mu      sync.Mutex
 	terms   []string
+	scopes  []mac.SearchScope
 	cancels int
 	emit    func([]mac.SpotlightHit)
 	done    func()
@@ -31,9 +32,10 @@ func withFakeSpot(t *testing.T) *fakeSpot {
 	t.Helper()
 	f := &fakeSpot{}
 	old := spotlightStart
-	spotlightStart = func(term string, _ int, emit func([]mac.SpotlightHit), done func()) func() {
+	spotlightStart = func(term string, scope mac.SearchScope, _ int, emit func([]mac.SpotlightHit), done func()) func() {
 		f.mu.Lock()
 		f.terms = append(f.terms, term)
+		f.scopes = append(f.scopes, scope)
 		f.emit, f.done = emit, done
 		f.mu.Unlock()
 		return func() {

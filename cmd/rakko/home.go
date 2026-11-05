@@ -79,87 +79,114 @@ func (h homeHit) bitmap(a *shelf) *ui.Bitmap {
 // action rows run the tool; each closes the panel like the page's own ⏎
 // does. The notes come from the in-memory index (see notesearch.go), so
 // their group is there with the clipboard's on the first keystroke.
+//
+// The mode narrows the groups: 应用 is the 应用 group alone, and 文件 is
+// everything else but the apps and the actions. The index rows behind them
+// are asked for the same mode, so the sheet never hides a row it paid to
+// fetch.
 func (a *shelf) homeHits() []homeHit {
 	q := strings.ToLower(strings.TrimSpace(a.homeQuery))
 	if q == "" {
 		return nil
 	}
+	scope := a.homeScope
 	l := a.appLoc()
 	now := time.Now()
-	var tray, clip, acts []homeHit
+	var tray, clip, notes, acts []homeHit
 	var trayPaths []string
-	if a.store != nil {
-		for _, it := range a.store.Items {
-			title := itemTitleIn(l, it)
-			hay := strings.ToLower(title + " " + it.Text + " " + it.OCRText)
-			if !strings.Contains(hay, q) {
-				continue
-			}
-			it := it
-			switch {
-			case it.Source == store.SourceClipboard && it.Kind == store.KindText && !it.OffClip:
-				clip = append(clip, homeHit{group: l.HomeGroupClipboard(), icon: clipNavSymbol, title: title,
-					sub: a.clipRowMeta(l, it), run: func() {
-						if a.copyItem(it) {
+	shown := map[string]bool{}
+	if scope != mac.ScopeApps {
+		if a.store != nil {
+			for _, it := range a.store.Items {
+				title := itemTitleIn(l, it)
+				hay := strings.ToLower(title + " " + it.Text + " " + it.OCRText)
+				if !strings.Contains(hay, q) {
+					continue
+				}
+				it := it
+				switch {
+				case it.Source == store.SourceClipboard && it.Kind == store.KindText && !it.OffClip:
+					clip = append(clip, homeHit{group: l.HomeGroupClipboard(), icon: clipNavSymbol, title: title,
+						sub: a.clipRowMeta(l, it), run: func() {
+							if a.copyItem(it) {
+								a.hide(hideExplicit)
+							}
+						}})
+				case it.Kind != store.KindText && !it.OffTray && !it.Missing:
+					trayPaths = append(trayPaths, it.Path)
+					tray = append(tray, homeHit{group: l.HomeGroupTray(), icon: fileSymbol, path: it.Path, title: title,
+						sub: relativeTime(l, it.CreatedAt, now), run: func() {
+							if err := mygo.Shell.OpenPath(it.Path); err != nil {
+								a.report(err)
+								return
+							}
 							a.hide(hideExplicit)
-						}
-					}})
-			case it.Kind != store.KindText && !it.OffTray && !it.Missing:
-				trayPaths = append(trayPaths, it.Path)
-				tray = append(tray, homeHit{group: l.HomeGroupTray(), icon: fileSymbol, path: it.Path, title: title,
-					sub: relativeTime(l, it.CreatedAt, now), run: func() {
-						if err := mygo.Shell.OpenPath(it.Path); err != nil {
-							a.report(err)
-							return
-						}
-						a.hide(hideExplicit)
-					}})
+						}})
+				}
 			}
 		}
-	}
-	// The notes' text is indexed in memory: no file is read while typing.
-	docs := a.noteDocs()
-	notes := a.noteHits(docs, q)
-	// The index repeats what the tray already shows: those rows stay in
-	// the tray group only — and a note file never shows twice, once as a
-	// 便利贴 row and once as a Spotlight file.
-	shown := make(map[string]bool, len(tray)+len(docs))
-	for i, path := range trayPaths {
-		if i == homeGroupMax {
-			break
+		// The notes' text is indexed in memory: no file is read while typing.
+		docs := a.noteDocs()
+		notes = a.noteHits(docs, q)
+		// The index repeats what the tray already shows: those rows stay in
+		// the tray group only — and a note file never shows twice, once as a
+		// 便利贴 row and once as a Spotlight file.
+		for i, path := range trayPaths {
+			if i == homeGroupMax {
+				break
+			}
+			shown[path] = true
 		}
-		shown[path] = true
-	}
-	for _, d := range docs {
-		shown[filepath.Join(a.dataDir, note.DirName, d.ID+note.FileExt)] = true
+		for _, d := range docs {
+			shown[filepath.Join(a.dataDir, note.DirName, d.ID+note.FileExt)] = true
+		}
 	}
 	var apps, folders, files []homeHit
 	if items := a.homeSpotItems(); len(items) > 0 {
 		ag, fg, fh := spotGroupHits(q, items, shown)
-		for _, hit := range ag {
-			apps = append(apps, a.spotHitRow(l.HomeGroupApps(), hit))
+		if scope != mac.ScopeFiles {
+			for _, hit := range ag {
+				apps = append(apps, a.spotHitRow(l.HomeGroupApps(), hit))
+			}
 		}
-		for _, hit := range fg {
-			folders = append(folders, a.spotHitRow(l.HomeGroupFolders(), hit))
-		}
-		for _, hit := range fh {
-			files = append(files, a.spotHitRow(l.HomeGroupFiles(), hit))
+		if scope != mac.ScopeApps {
+			for _, hit := range fg {
+				folders = append(folders, a.spotHitRow(l.HomeGroupFolders(), hit))
+			}
+			for _, hit := range fh {
+				files = append(files, a.spotHitRow(l.HomeGroupFiles(), hit))
+			}
 		}
 	}
-	for _, act := range []struct {
-		name string
-		icon *ui.SVG
-		run  func()
-	}{
-		{l.CardOcr(), ocrSymbol, func() { a.hide(hideExplicit); a.startScreenOCR() }},
-		{l.PanelSettings(), gearSymbol, func() { a.hide(hideExplicit); a.openSettings() }},
-	} {
-		if strings.Contains(strings.ToLower(act.name), q) {
-			acts = append(acts, homeHit{group: l.HomeGroupActions(), icon: act.icon, title: act.name, run: act.run})
+	if scope == mac.ScopeAll {
+		for _, act := range []struct {
+			name string
+			icon *ui.SVG
+			run  func()
+		}{
+			{l.CardOcr(), ocrSymbol, func() { a.hide(hideExplicit); a.startScreenOCR() }},
+			{l.PanelSettings(), gearSymbol, func() { a.hide(hideExplicit); a.openSettings() }},
+		} {
+			if strings.Contains(strings.ToLower(act.name), q) {
+				acts = append(acts, homeHit{group: l.HomeGroupActions(), icon: act.icon, title: act.name, run: act.run})
+			}
 		}
+	}
+	var groups [][]homeHit
+	if scope != mac.ScopeApps {
+		groups = append(groups, tray, clip, notes)
+	}
+	if scope != mac.ScopeFiles {
+		groups = append(groups, apps)
+	}
+	if scope != mac.ScopeApps {
+		groups = append(groups, folders, files)
+	}
+	if scope == mac.ScopeAll {
+		groups = append(groups, acts)
 	}
 	var out []homeHit
-	for _, g := range [][]homeHit{tray, clip, notes, apps, folders, files, acts} {
+	for _, g := range groups {
 		for i, h := range g {
 			if i == homeGroupMax {
 				break
@@ -296,6 +323,15 @@ func (a *shelf) homeBar(c *ui.Context, w float32) {
 				in.Focus()
 			}
 			in.OnTextKey(func(k ui.TextKey) bool {
+				// An empty bar takes Tab for the modes; with text in it Tab
+				// stays the focus key it is everywhere else.
+				if k.Key == ui.KeyTab {
+					if k.Mods != 0 || strings.TrimSpace(a.homeQuery) != "" {
+						return false
+					}
+					a.cycleHomeScope()
+					return true
+				}
 				switch k.Key {
 				case ui.KeyUp:
 					a.homeSel = max(a.homeSel-1, 0)
@@ -317,6 +353,31 @@ func (a *shelf) homeBar(c *ui.Context, w float32) {
 				}
 				return true
 			})
+			// The mode capsule hangs right of the field, left of the clear
+			// button: 全部 draws none, and the empty bar carries the Tab hint
+			// because that is when Tab switches modes.
+			if a.homeScope != mac.ScopeAll {
+				icon, name := fileSymbol, l.SearchModeFiles()
+				if a.homeScope == mac.ScopeApps {
+					icon, name = appsSymbol, l.SearchModeApps()
+				}
+				mode := ui.ButtonBase(c.Key("home-mode")).Height(24).Radius(7).Background(fill2).
+					Padding(0, 7, 0, 7).Gap(5).AlignItems(ui.Center).
+					Label(name).Description(l.SearchModeSwitchTip(name))
+				mode.Children(func() {
+					ui.Icon(c, icon).Size(13, 13).TextColor(ink2)
+					ui.Text(c, name).FontSize(12).TextColor(ink)
+					if strings.TrimSpace(a.homeQuery) == "" {
+						ui.Box(c.Key("home-mode-tab")).Padding(2, 4, 2, 4).Radius(4).
+							Background(ui.RGBA(255, 255, 255, 0.12)).Center().Children(func() {
+							ui.Text(c, "Tab").FontSize(10).TextColor(ink3)
+						})
+					}
+				})
+				if mode.Clicked() {
+					a.cycleHomeScope()
+				}
+			}
 			if a.homeQuery != "" {
 				clr := ui.ButtonBase(c.Key("home-clear")).Size(18, 18).Radius(9).Center().
 					Background(ui.RGBA(255, 255, 255, 0.22)).Label(l.HomeClear())
@@ -551,12 +612,14 @@ func (a *shelf) navView(c *ui.Context, r ui.Rect, opacity float32) {
 }
 
 // goHome brings the panel back to the search bar, the keyboard with it; a
-// closed panel opens straight on the bar.
+// closed panel opens straight on the bar. The bar always comes back on 全部:
+// a mode belongs to the search it was chosen for, not to the panel.
 func (a *shelf) goHome() {
 	if !a.visible {
 		a.show(false)
 		return
 	}
+	a.setHomeScope(mac.ScopeAll)
 	a.setLevel(1)
 	a.takeKeyboard()
 }

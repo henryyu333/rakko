@@ -71,6 +71,7 @@ type shelf struct {
 	warming                                                     pageID                // page queued for that warm draw
 	search                                                      string                // clipboard page's search text
 	homeQuery                                                   string                // the home search bar's text
+	homeScope                                                   mac.SearchScope       // what the bar searches: 全部 / 应用 / 文件, never saved
 	homeSel                                                     int                   // the selected result row
 	homeSpot                                                    homeSpotState         // the bar's Spotlight query and hits
 	spotIcons                                                   map[string]*ui.Bitmap // result path → Finder icon, cached for the sheet
