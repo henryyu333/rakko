@@ -367,6 +367,64 @@ func galleryGroupA() []galleryItem {
 			a.peeking, a.peekProgress, a.peekFrom = true, 1, 1
 			return galleryRender{view: galleryPanel(t, lang, a, sheetW, 130)}
 		}},
+		{ID: "A22", Group: g, Title: "应用两翼", State: "固定 4 + 运行中 3 + 更多", Notch: true, Build: func(t *testing.T, lang string) galleryRender {
+			a := motionShelf()
+			a.settings = settings.Default()
+			saved := []string{"com.apple.finder", "com.apple.Safari", "com.apple.Terminal", "com.apple.Notes"}
+			a.settings.PinnedApps = &saved
+			stubApps(t, &appsStub{
+				running: []mac.RunningApp{
+					{BundleID: "com.apple.finder", Name: "访达", PID: 101},
+					{BundleID: "com.apple.Terminal", Name: "终端", PID: 103},
+					{BundleID: "com.apple.dt.Xcode", Name: "Xcode", PID: 105},
+					{BundleID: "com.tinyspeck.slackmacgap", Name: "Slack", PID: 106},
+					{BundleID: "us.zoom.xos", Name: "zoom.us", PID: 107},
+				},
+				paths: map[string]string{"com.apple.Safari": "/Safari.app", "com.apple.Notes": "/Notes.app"},
+				names: map[string]string{"com.apple.Safari": "Safari", "com.apple.Notes": "备忘录"},
+			})
+			a.dispWork = mygo.Rectangle{X: 0, Y: 0, Width: 2560, Height: 1415}
+			a.dispBounds = a.dispWork
+			a.apps.on = true
+			a.apps.list = a.appSnapshot()
+			a.apps.sel = 1
+			a.peeking, a.peekProgress, a.peekFrom = true, 1, 1
+			return galleryRender{view: galleryPanel(t, lang, a, 800, 110)}
+		}},
+		{ID: "A23", Group: g, Title: "编辑常用应用", State: "更多浮层 · 管理列表", Notch: true, Build: func(t *testing.T, lang string) galleryRender {
+			a := motionShelf()
+			a.settings = settings.Default()
+			saved := []string{"com.apple.finder", "com.apple.Safari"}
+			a.settings.PinnedApps = &saved
+			inst := []mygo.InstalledApp{
+				{ID: "com.apple.finder", Name: "访达"},
+				{ID: "com.apple.Safari", Name: "Safari"},
+				{ID: "com.apple.dt.Xcode", Name: "Xcode"},
+				{ID: "com.tinyspeck.slackmacgap", Name: "Slack"},
+				{ID: "com.apple.Preview", Name: "预览"},
+			}
+			stubApps(t, &appsStub{
+				running: []mac.RunningApp{
+					{BundleID: "com.apple.finder", Name: "访达", PID: 101},
+					{BundleID: "com.apple.Terminal", Name: "终端", PID: 103},
+					{BundleID: "com.apple.dt.Xcode", Name: "Xcode", PID: 105},
+					{BundleID: "com.tinyspeck.slackmacgap", Name: "Slack", PID: 106},
+				},
+				paths:     map[string]string{"com.apple.Safari": "/Safari.app"},
+				names:     map[string]string{"com.apple.Safari": "Safari"},
+				installed: inst,
+			})
+			a.notchX = 400 // the clamp pulls the popover inside the tester
+			a.frame = mygo.Rectangle{X: 0, Y: 0, Width: 800, Height: 560}
+			a.dispWork = mygo.Rectangle{X: 0, Y: 0, Width: 750, Height: 1415}
+			a.dispBounds = a.dispWork
+			a.apps.on = true
+			a.apps.list = a.appSnapshot()
+			a.apps.installed = inst
+			a.apps.more, a.apps.manage = true, true
+			a.peeking, a.peekProgress, a.peekFrom = true, 1, 1
+			return galleryRender{view: galleryPanel(t, lang, a, 800, 560)}
+		}},
 	}
 }
 

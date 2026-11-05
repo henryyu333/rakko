@@ -780,6 +780,7 @@ func TestRegisterShortcutsCoversNewKinds(t *testing.T) {
 		shortcutNext: "Ctrl+Alt+Right", shortcutTools: "Ctrl+Alt+G",
 		shortcutUsage: "Ctrl+Alt+U", shortcutAwake: "Ctrl+Alt+W",
 		shortcutNote: "Ctrl+Alt+N", shortcutPet: "Ctrl+Alt+E",
+		shortcutAppSwitch: "Ctrl+Alt+J",
 	}
 	for k, acc := range accs {
 		*k.field(&a.settings.Shortcuts) = acc
