@@ -199,6 +199,14 @@ func TestHIDAppsClickLaunchesTargets(t *testing.T) {
 	}
 
 	a := redesignShelf(t)
+	// Pin the two fixtures in order: seat 0 (A, dark) is the launch
+	// branch, seat 1 (B, running) the activate branch. The shelf's own
+	// settings copy is enough — no user settings are touched.
+	onMain(func() {
+		order := []string{hidTargetA, hidTargetB}
+		a.settings.PinnedApps = &order
+		a.refreshAppList()
+	})
 	// The full production monitor loop: animate + monitorDrag on the real
 	// main thread. No stub anywhere from here on.
 	stop := hidTickLoop(t, a)
