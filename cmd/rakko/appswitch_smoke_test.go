@@ -111,10 +111,11 @@ func appsSmokeShelf(t *testing.T, running []mac.RunningApp) *shelf {
 	reset()
 	t.Cleanup(reset)
 	// The smoke harness has no monitor loop: drive the production tick
-	// like pin_smoke does — an async ticker animating and polling the
-	// drag path on the real main thread, never held by the test
-	// goroutine. Stopped before the reset so a tick can't re-dirty
-	// state a cleanup just cleared.
+	// like pin_smoke does — an async ticker animating on the real main
+	// thread, never held by the test goroutine. monitorDrag stays out:
+	// it follows the REAL pointer, and with no cursor over the notch it
+	// would veto the hover these tests set by hand. Stopped before the
+	// reset so a tick can't re-dirty state a cleanup just cleared.
 	stop := make(chan struct{})
 	t.Cleanup(func() { close(stop) })
 	go func() {
@@ -127,7 +128,6 @@ func appsSmokeShelf(t *testing.T, running []mac.RunningApp) *shelf {
 			case now := <-tk.C:
 				mygo.RunOnMain(func() {
 					a.animate(now)
-					a.monitorDrag(now)
 				})
 			}
 		}
