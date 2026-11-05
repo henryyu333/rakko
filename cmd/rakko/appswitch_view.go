@@ -404,7 +404,15 @@ func (a *shelf) appButton(c *ui.Context, e appEntry, selected bool) {
 	if e.missing {
 		label = l.AppsUninstalledLabel(e.name)
 	}
-	b.Label(label).Tooltip(label)
+	// The tip leans beside the button, not above it: the shelf hangs from
+	// the screen's top edge, and a tip the theme lays over the anchor is
+	// either clipped to a hairline at the window's top corner (the white
+	// edge photos show) or pushed below across the ⤢ the tip hides. The
+	// side lay assumes the button's own look for a11y; a Label keeps the
+	// name, a Description tells what it does, and the tooltip carries
+	// nothing else.
+	b.Label(label).Description(label)
+	sidebarTip(c, b, label)
 	switch {
 	case selected:
 		b.Background(fill3)
@@ -432,6 +440,24 @@ func (a *shelf) appButton(c *ui.Context, e appEntry, selected bool) {
 	if !e.missing && b.Clicked() {
 		a.switchToApp(e)
 	}
+}
+
+// sidebarTip draws one tooltip the way the sidebar rows do: anchored to
+// the element's side, never hanging off the window's top edge where the
+// shelf leaves no room above the anchor. Same theme inverse look as
+// Element.Tooltip, minus the up placement.
+func sidebarTip(c *ui.Context, b ui.Element, text string) {
+	if text == "" {
+		return
+	}
+	t := c.Theme()
+	ui.TooltipBase(c, b, func(tip ui.Element) {
+		tip.AttachTo(b, ui.AnchorEnd, ui.AnchorStart).MarginStart(6)
+		tip.MaxWidth(160).Padding(t.Space(1.25), t.Space(2)).Radius(t.Space(1.25)).
+			Background(t.Inverse).TextColor(t.InverseText).FontSize(t.FontSize-1).
+			Shadow(0, 2, 8, 0, ui.RGBA(0, 0, 0, 0.2))
+		tip.Children(func() { ui.Text(c, text) })
+	})
 }
 
 // appsAddSeat is the left wing's 添加入口: a plus seat that opens the
