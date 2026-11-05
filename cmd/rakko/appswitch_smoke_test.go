@@ -98,6 +98,13 @@ func appsSmokeShelf(t *testing.T, running []mac.RunningApp) *shelf {
 			a.progress, a.animationFrom, a.animationStart = 0, 0, time.Time{}
 			a.syncMousePassThrough()
 			a.syncWindowFrame()
+			// The window is created Hidden: without this no frame ever
+			// presents — the GPU keeps an old picture while fx.peekKind,
+			// the entry/pop boxes and appsDrawOff stay stale (exactly
+			// what the native round showed). Idempotent like every
+			// sibling smoke suite.
+			a.win.SetOpacity(1)
+			a.win.ShowInactive()
 			a.win.Invalidate()
 		})
 	}
@@ -188,7 +195,9 @@ func openAppsWings(t *testing.T, a *shelf) {
 		a.syncWindowFrame()
 		a.win.Invalidate()
 	})
-	waitApps(t, a, "the wings open", func() bool { return a.apps.on })
+	waitApps(t, a, "the drawn wings", func() bool {
+		return a.apps.on && a.fx.peekKind == peekApps
+	})
 }
 
 // closeAppsWings folds the wings and waits for the fold to land.
@@ -197,7 +206,9 @@ func closeAppsWings(t *testing.T, a *shelf) {
 		a.endAppSwitch()
 		a.win.Invalidate()
 	})
-	waitApps(t, a, "the wings closed", func() bool { return !a.apps.on })
+	waitApps(t, a, "the wings folded", func() bool {
+		return !a.apps.on && a.fx.peekKind != peekApps
+	})
 }
 
 var smokeApps = []mac.RunningApp{
@@ -253,7 +264,7 @@ func TestSmokeAppsWingsOpenFromEntry(t *testing.T) {
 	var er mygo.Rectangle
 	waitApps(t, a, "the collapsed-state entry", func() bool {
 		er = a.apps.entryRect
-		return er.Width > 0
+		return er.Width > 0 && a.fx.peekKind == peekChevron
 	})
 	clickOverlayAt(t, a, float64(er.X+er.Width/2), float64(er.Y+er.Height/2))
 	onMain(func() {
@@ -287,7 +298,9 @@ func TestSmokeAppsPopoverAndManage(t *testing.T) {
 	}
 	x, y := appSeat(t, a, ls+rs-1) // the last right-wing seat: 更多
 	clickOverlayAt(t, a, x, y)
-	waitApps(t, a, "the 更多 popover", func() bool { return a.apps.more })
+	waitApps(t, a, "the 更多 popover", func() bool {
+		return a.apps.more && a.apps.popRect.Width > 0
+	})
 	shotAppsWindow(t, a.win, "wings-more")
 
 	var pop, fr mygo.Rectangle
@@ -303,10 +316,9 @@ func TestSmokeAppsPopoverAndManage(t *testing.T) {
 	}
 	// 编辑常用应用 is the pane's footer row.
 	clickOverlayAt(t, a, float64(pop.X+pop.Width/2), float64(pop.Y+pop.Height-appPopFoot/2))
-	waitApps(t, a, "the manage list", func() bool { return a.apps.manage })
-	// The installed scan lands through the real loop; rows exist only
-	// once it clears.
-	waitApps(t, a, "the installed scan", func() bool { return !a.apps.installedLoad })
+	waitApps(t, a, "the manage list", func() bool {
+		return a.apps.manage && !a.apps.installedLoad
+	})
 	shotAppsWindow(t, a.win, "wings-manage")
 
 	// Pinned rows: index 0 is the first row, index 1 the last. Controls
@@ -403,7 +415,7 @@ func TestSmokeAppsEntryOnMusicWings(t *testing.T) {
 	var er mygo.Rectangle
 	waitApps(t, a, "the music wings' app entry", func() bool {
 		er = a.apps.entryRect
-		return er.Width > 0 && er.Height > 0
+		return er.Width > 0 && a.fx.peekKind == peekWings
 	})
 	shotAppsWindow(t, a.win, "music-wings-entry")
 	clickOverlayAt(t, a, float64(er.X+er.Width/2), float64(er.Y+er.Height/2))
@@ -417,10 +429,13 @@ func TestSmokeAppsEntryOnMusicWings(t *testing.T) {
 	// The fold hands the shell back to the track's wings — wait for the
 	// real transition, then compare the live sizes.
 	waitApps(t, a, "the music wings back", func() bool {
-		pw, _ := a.peekSize()
-		mw, _ := a.wingsSize()
-		return pw == mw
+		return a.fx.peekKind == peekWings
 	})
+	var pw, mw float32
+	onMain(func() { pw, _ = a.peekSize(); mw, _ = a.wingsSize() })
+	if pw != mw {
+		t.Fatalf("wings did not return after the mode: %.0f != %.0f", pw, mw)
+	}
 	onMain(func() { a.np = nil })
 }
 
@@ -438,8 +453,7 @@ func TestSmokeAppsPausesLiveNotice(t *testing.T) {
 	// The queue must actually show the notice — a fixed sleep once hid
 	// settings left over from an earlier run that disabled it entirely.
 	waitApps(t, a, "the charging notice", func() bool {
-		ev, ok := a.liveNow(time.Now(), a.liveAllow())
-		return ok && ev.kind == liveCharging
+		return a.live.shown && a.fx.peekKind == peekLiveWings
 	})
 	shotAppsWindow(t, a.win, "notice-showing")
 	openAppsWings(t, a)
@@ -451,8 +465,7 @@ func TestSmokeAppsPausesLiveNotice(t *testing.T) {
 	shotAppsWindow(t, a.win, "notice-paused")
 	closeAppsWings(t, a)
 	waitApps(t, a, "the notice back", func() bool {
-		_, ok := a.liveNow(time.Now(), a.liveAllow())
-		return ok
+		return a.live.shown && a.fx.peekKind == peekLiveWings
 	})
 	onMain(func() { a.live = liveQueue{} })
 }
