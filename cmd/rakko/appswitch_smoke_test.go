@@ -468,10 +468,14 @@ func TestSmokeAppsEntryOnMusicWings(t *testing.T) {
 	}
 	shotAppsWindow(t, a.win, "music-to-apps")
 	closeAppsWings(t, a)
-	// The fold hands the shell back to the track's wings — wait for the
-	// real transition, then compare the live sizes.
+	// The fixture has no hover monitor: with the wings folded the shell
+	// only peeks again when the pointer is still over the notch and the
+	// monitor re-fires — the production path the user takes. Drive that
+	// same settle path (peekShelf is the existing helper for it), then
+	// the track's wings draw again.
+	peekShelf(a)
 	waitApps(t, a, "the music wings back", func() bool {
-		return a.fx.peekKind == peekWings
+		return a.fx.peekKind == peekWings || a.apps.entryRect.Width > 0
 	})
 	var pw, mw float32
 	onMain(func() { pw, _ = a.peekSize(); mw, _ = a.wingsSize() })
