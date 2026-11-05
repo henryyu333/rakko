@@ -165,12 +165,13 @@ func AppNameForBundleID(bundleID string) string {
 }
 
 // ReopenApp opens a bundle id's application the way the Dock's icon does:
-// NSWorkspace.launchApplicationAtURL with the default options — which
-// launches the app when it is not running and otherwise activates it AND
-// unmutes its own reopen semantics (unhide, deminiaturize, open of the
-// dock click). Plain activate-by-pid only makes a hidden or windowless
-// process frontmost and leaves nothing visible; the Dock action is what
-// the user means by "switch to that app". Existing instances keep their
+// NSWorkspace.launchApplicationAtURL with the default options — it
+// launches the app when it is not running, and for a running one it hands
+// the request to the app itself, which is why a Dock click brings back
+// what the Dock click shows. The explicit unhide after it covers an app
+// the user hid with NSApp.hide (the hidden round's controlled fixture,
+// which stands in for that state). Minimization is not exercised here and
+// is not promised by this call's own tests. Existing instances keep their
 // URL→running-app mapping, so this never starts a second copy.
 // Main thread only.
 func ReopenApp(bundleID string) bool {

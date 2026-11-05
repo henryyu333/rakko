@@ -16,6 +16,7 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -117,18 +118,6 @@ func hidLaunchFixture(t *testing.T, bundleID, path string) int {
 		t.Fatalf("opening %s: %v", bundleID, err)
 	}
 	return hidWaitRunning(t, bundleID)
-}
-
-// hidClearFiles先删掉本 stash 的两个控制文件：上一轮遗留的 quit 哨兵会让
-// 夹具一启动就自杀；遗留的 hidden 令牌会让新启动的夹具把窗口藏起来。
-// 两份都只属于本测试。
-func hidClearFiles(t *testing.T) {
-	t.Helper()
-	for _, path := range []string{hidQuitSentinel, hidFixtures + "/hidden"} {
-		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-			t.Fatalf("clearing %s: %v", path, err)
-		}
-	}
 }
 
 // hidWriteSentinel 回写哨兵并结合快照等待；这是本轮唯一会结束夹具的
@@ -377,30 +366,39 @@ func TestHIDAppsClickLaunchesTargets(t *testing.T) {
 		t.Fatalf("the frontmost PID slipped back to %d after activation", still)
 	}
 
-	// The hidden-window branch: B hides its own window once (the token
-	// file tells the fixture to order it out after launch), the mode
-	// reopens, and the same seat click must bring the window back — the
-	// Dock-style reopen un-hides what plain pid activation would leave
-	// frontmost-nothing.
-	os.Remove(hiddenToken) // fresh round: the token was written? no — write now
+	// The hidden-window branch: B relaunches with the fixture's own
+	// control files demanding a real NSApp.hide — showing its window
+	// first, verifying itself against AppKit, and answering "hidden" with
+	// the hidden.done file — so the precondition is read, not assumed:
+	// the same PID, its window gone from WindowServer, confirmed hidden.
+	// The fixture's round-trip .active/.shown sentinels must be gone
+	// before this branch since the fresh instance writes them again.
+	hidClearFixturesFiles(t)
 	if err := os.WriteFile(hiddenToken, nil, 0o644); err != nil {
 		t.Fatalf("writing the hidden token: %v", err)
 	}
-	// Replacing B means the fixture re-opens: quit via the sentinel and
-	// clear it before relaunch, so B's window actually hides this time.
-	hidWriteSentinel(t)
-	hidClearFiles(t)
+	hidWriteSentinel(t) // stop the old instance, then WAIT for it
+	hidAwaitRunningGone(t, hidTargetB, "the old instance to end")
+	hidClearSentinelFile(t) // THEN the fresh launch starts clean
 	pidB2 := hidLaunchFixture(t, hidTargetB, pathB)
-	waitAppsBecomes(t, func() bool {
-		return hidRunningPID(hidTargetB) == pidB2 && !hidWindowOn(t, pidB2)
-	}, "the hidden fixture to stop showing its window", 8*time.Second)
-	// The fix: driven through one more full entry→seat-1 click.
+	// The hidden precondition: the fresh instance signed .shown (a drawn
+	// window), then signed hidden.done (AppKit reports it hidden). Both
+	// files are written by the fixture itself.
+	hidWaitFile(t, filepath.Join(hidFixtures, hidName(hidTargetB)+".shown"), hidShownSignal)
+	hidWaitFile(t, hiddenDoneFile, hidHiddenSignal)
+	if gone := hidRunningPID(hidTargetB); gone != pidB2 {
+		t.Fatalf("the hidden instance's PID changed: %d != %d", gone, pidB2)
+	}
+	if visible := hidWindowOn(t, pidB2); visible {
+		t.Fatalf("the hidden round's fixture still shows a window in WindowServer")
+	}
+	// The same real click path the user owns: the entry then seat 1.
 	waitApps(t, a, "the entry after hide", func() bool {
 		return a.apps.entryRect.Width > 0 && a.fx.peekKind == peekChevron
 	})
 	var er3 mygo.Rectangle
 	onMain(func() { er3 = a.apps.entryRect })
-	clickOverlayAt(t, a, float64(er3.X+er3.Width/3), float64(er3.Y+er3.Height/2))
+	clickOverlayAt(t, a, float64(er3.X+er3.Width/2), float64(er3.Y+er3.Height/2))
 	waitApps(t, a, "the third-round wings", func() bool {
 		onMain(func() { on = a.apps.on })
 		return on
@@ -408,10 +406,118 @@ func TestHIDAppsClickLaunchesTargets(t *testing.T) {
 	waitApps(t, a, "the third-round wings to settle", func() bool { return a.peekProgress >= 0.99 })
 	x3, y3 := appSeat(t, a, 1)
 	clickOverlayAt(t, a, x3, y3)
-	hidWaitFrontPID(t, pidB2, "the hidden fixture must be frontmost again")
-	hidWaitWindow(t, pidB2, "the reopen must un-hide the fixture's window")
+	hidWaitFrontPID(t, pidB2, "the hidden instance must be frontmost again")
+	hidWaitWindow(t, pidB2, "the reopen must bring the fixture's window back")
+	// The mode must have folded by now, nothing reverting the takeover.
+	onMain(func() { folded = !a.apps.on })
+	if !folded {
+		t.Fatalf("the wings survived the hidden-instance unwrap (apps.on still true)")
+	}
+	time.Sleep(hidSettle)
+	if still := hidFrontPID(); still != pidB2 {
+		t.Fatalf("the frontmost PID slipped back to %d after the hidden unwrap", still)
+	}
 	os.Remove(hiddenToken)
+	os.Remove(hiddenDoneFile)
 }
+
+// hidName is the fixture-side name a bundle's sentinel files use.
+func hidName(bundleID string) string {
+	switch bundleID {
+	case hidTargetA:
+		return "RakkoSwitchTargetA"
+	case hidTargetB:
+		return "RakkoSwitchTargetB"
+	}
+	return ""
+}
+
+// hidClearFiles clears this round's control files in one step: the quit
+// sentinel, the hidden request and its confirmation, and the fixture-side
+// round sentinels the fresh instance rewrites when it reaches its state.
+// No stale file of this stash can steer a round that did not write it.
+func hidClearFiles(t *testing.T) {
+	t.Helper()
+	hidClearSentinelFile(t)
+	if err := os.Remove(hidFixtures + "/hidden"); err != nil && !os.IsNotExist(err) {
+		t.Fatalf("clearing the hidden request: %v", err)
+	}
+	hidClearFixturesFiles(t)
+}
+
+// hidClearFixturesFiles removes both fixture-side sentinels the "next"
+// round's fresh instance writes (.active/.shown) so stale-content reads
+// cannot satisfy a precondition the fresh launch has not reached yet.
+func hidClearFixturesFiles(t *testing.T) {
+	t.Helper()
+	for _, bundleID := range []string{hidTargetA, hidTargetB} {
+		name := hidName(bundleID)
+		if name == "" {
+			continue
+		}
+		for _, suffix := range []string{".active", ".shown"} {
+			path := filepath.Join(hidFixtures, name+suffix)
+			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+				t.Fatalf("clearing %s: %v", path, err)
+			}
+		}
+	}
+	if err := os.Remove(hiddenDoneFile); err != nil && !os.IsNotExist(err) {
+		t.Fatalf("clearing the hidden confirmation: %v", err)
+	}
+}
+
+// hidClearSentinelFile is the single quit sentinel; fixture launch paths
+// that must start without a self-terminate order call this — keep both
+// control files apart from each other; none is a fixture-content marker.
+func hidClearSentinelFile(t *testing.T) {
+	t.Helper()
+	if err := os.Remove(hidQuitSentinel); err != nil && !os.IsNotExist(err) {
+		t.Fatalf("clearing the quit sentinel: %v", err)
+	}
+}
+
+// hidAwaitRunningGone polls the running snapshot until the bundle's PID
+// is gone; the same channel as the rest of the case but driven by the
+// tested model, never the OS.
+func hidAwaitRunningGone(t *testing.T, bundleID, what string) {
+	t.Helper()
+	deadline := time.Now().Add(hidQuitWait)
+	for time.Now().Before(deadline) {
+		if hidRunningPID(bundleID) == 0 {
+			return
+		}
+		time.Sleep(150 * time.Millisecond)
+	}
+	t.Fatalf("%s: PID %d never left", what, hidRunningPID(bundleID))
+}
+
+// hidWaitFile waits for a state marker the fixture itself writes only
+// after its own AppKit state is what the marker says, so the caller reads
+// a confirmed precondition instead of a race with the first frame.
+func hidWaitFile(t *testing.T, path, purpose string) {
+	t.Helper()
+	deadline := time.Now().Add(hidLaunch)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(path); err == nil {
+			return
+		}
+		time.Sleep(150 * time.Millisecond)
+	}
+	t.Fatalf("%s: %s never appeared", purpose, path)
+}
+
+// hidShownSignal / hidHiddenSignal name the two fixture-side sentinels
+// the hidden round must see in order: window drawn first (the same
+// instance), then the REAL AppKit hidden state, then the reopen.
+const (
+	hidShownSignal  = "the fresh instance's window shown"
+	hidHiddenSignal = "the fixture's NSApp.hide confirmed"
+)
+
+// hiddenDoneFile is the confirm file the fixture writes after NSApp.hide
+// acceptance — AppKit verified the state, not the ordering of windows.
+var hiddenDoneFile = filepath.Join(hidFixtures, "hidden.done")
 
 // waitAppsBecomes polls cond for d, timing the budget on the test side.
 func waitAppsBecomes(t *testing.T, cond func() bool, what string, d time.Duration) {

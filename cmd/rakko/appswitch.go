@@ -319,15 +319,16 @@ func (a *shelf) activateAppSel() {
 
 // switchToApp activates a running app or launches a pinned-but-not-running
 // one. A missing entry can only be removed (the view never calls this for
-// it). A running entry goes through the Dock-style reopen, not plain
-// activate-by-pid: NSRunningApplication.activate makes a hidden, windowless
-// or minimized process frontmost without ever showing anything, and the
-// user is left on a desktop that "did not react". launchApplicationAtURL
-// with the default options is the Dock icon's own action — launch or,
-// for the running app, activate + unhide/deminiaturize/reopen — so every
-// switch ends with something the user can see. On any failure the error is
-// surfaced and the wings stay closed — the user can reopen and retry; a
-// fake "switched" state is never shown.
+// it). A running entry goes through the Dock-style reopen rather than
+// plain activate-by-pid: activation alone makes an app that shows nothing
+// — one whose user hid it, say — frontmost, and the desktop looks like it
+// did not react. launchApplicationAtURL with the default options is the
+// Dock icon's own action, launch-or-activate, followed here by an explicit
+// unhide for the running instance (NSRunningApplication.unhide). The
+// hidden case is the one the acceptance run exercises against a controlled
+// fixture; minimization is not claimed by this path and has no test of its
+// own. On any failure the error is surfaced and the wings stay closed —
+// the user can reopen and retry; a fake "switched" state is never shown.
 func (a *shelf) switchToApp(e appEntry) {
 	if e.missing {
 		return
