@@ -83,6 +83,9 @@ const (
 	peekLiveWings
 	peekLiveCapsule
 	peekDownload
+	// peekApps is the app switcher: pinned seats on the left wing, other
+	// running apps and 「更多」 on the right, with its own popover below.
+	peekApps
 )
 
 // shellMotion is what view() drew last: the drawn shell's size, for the
@@ -354,7 +357,7 @@ func (a *shelf) capsuleUp(now time.Time) bool {
 	if !up && a.fb.armed && a.fb.text != "" {
 		a.fb.played = a.fb.text
 	}
-	return !a.visible && a.progress <= 0.01 && !a.peeking &&
+	return !a.visible && a.progress <= 0.01 && !a.peeking && !a.appsModeOn() &&
 		!(a.dragging && !a.ownDrag) && up
 }
 func (f *feedback) schedule(c *ui.Context, now time.Time) {

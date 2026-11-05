@@ -322,8 +322,9 @@ func (a *shelf) monitorDrag(now time.Time) {
 	// The peek wings reach past the notch on both sides: the pointer must
 	// be able to rest on them without the shell folding shut under it.
 	// pinReturning and petReturning hold the pill for the whole put-back
-	// zone, which reaches past the pill's own body.
-	holdPeek := overAnchor || a.pinReturning || a.petReturning || (a.peeking && a.overPeekPill(p))
+	// zone, which reaches past the pill's own body. The app switcher holds
+	// the shell for its mode, not for the pointer.
+	holdPeek := overAnchor || a.pinReturning || a.petReturning || a.apps.on || (a.peeking && a.overPeekPill(p))
 	// Dragging or hovering reveals the pill; only a click or a real incoming
 	// drag in the trigger zone can open the full panel.
 	if active || holdPeek {

@@ -461,6 +461,8 @@ func (a *shelf) settingsShortcutsPage(c *ui.Context) {
 		a.settingsShortcutRow(c, shortcutNote, l.SettingsShortcutNewNote(), "")
 		settingsSep(c, "sc-note")
 		a.settingsShortcutRow(c, shortcutPet, l.SettingsShortcutPet(), "")
+		settingsSep(c, "sc-pet")
+		a.settingsShortcutRow(c, shortcutAppSwitch, l.SettingsShortcutAppSwitch(), "")
 	})
 
 	settingsGroup(c, "keys-notch", l.SettingsKeysNotchGroup(), "", func() {

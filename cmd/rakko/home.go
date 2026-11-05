@@ -225,7 +225,7 @@ func (a *shelf) resultsTargetH() float32 {
 
 // navW is the page capsule's width for its buttons.
 func (a *shelf) navW() float32 {
-	n := len(a.navPages()) + 2 // the pages, then settings and collapse
+	n := len(a.navPages()) + 3 // the pages, then 应用切换, settings and collapse
 	return 2*navPadX + float32(n)*navBtnW + float32(n)*navBtnGap + navSepW
 }
 
@@ -530,6 +530,13 @@ func (a *shelf) navView(c *ui.Context, r ui.Rect, opacity float32) {
 			}
 		}
 		ui.Box(c.Key("nav-sep")).Width(1).Height(18).Margin(0, 4, 0, 4).Background(ui.RGBA(255, 255, 255, 0.18))
+		// 应用入口: 面板内打开应用切换的两翼, 与收起态入口同一路径。
+		if b := button("apps", l.AppsSwitch(), false, func() {
+			ui.Icon(c, appsSymbol).Size(16, 16).TextColor(ink2)
+		}); b.Clicked() {
+			a.hide(hideExplicit)
+			a.openAppSwitch()
+		}
 		if b := button("settings", l.PanelSettings(), false, func() {
 			ui.Icon(c, gearSymbol).Size(16, 16).TextColor(ink2)
 		}); b.Clicked() {

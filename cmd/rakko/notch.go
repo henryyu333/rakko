@@ -190,7 +190,8 @@ func (a *shelf) desiredFrame() mygo.Rectangle {
 			_, baseH := a.anchorSize()
 			h = max(h, top+dropBandH(int(baseH)))
 		}
-		return mygo.Rectangle{X: a.stripCenter() - w/2, Y: a.y, Width: w, Height: h}
+		r := mygo.Rectangle{X: a.stripCenter() - w/2, Y: a.y, Width: w, Height: h}
+		return a.frameCoverAppsPop(r, ph)
 	}
 	// The resident strip holds the largest peek shape for the current
 	// state, so hovering only redraws; it resizes when a track comes or
@@ -223,7 +224,38 @@ func (a *shelf) desiredFrame() mygo.Rectangle {
 		w = max(w, a.capsuleFrameW())
 		h = max(h, top+a.capsuleBodyH()+2)
 	}
-	return mygo.Rectangle{X: a.stripCenter() - w/2, Y: a.y, Width: w, Height: h}
+	r := mygo.Rectangle{X: a.stripCenter() - w/2, Y: a.y, Width: w, Height: h}
+	return a.frameCoverAppsPop(r, ph)
+}
+
+// frameCoverAppsPop grows the resident frame r (top edge at a.y) so it
+// also covers the app switcher's popover: the pane hangs below the shell
+// — or above it on an island near the work area's bottom — and clicks on
+// it must reach the window. ph is the peek height the caller resolved.
+func (a *shelf) frameCoverAppsPop(r mygo.Rectangle, ph float32) mygo.Rectangle {
+	if !a.apps.more {
+		return r
+	}
+	h := ph
+	if a.fx.h > h {
+		h = a.fx.h
+	}
+	pop := a.appsPopSpot(h)
+	if pop.X < r.X {
+		r.Width += r.X - pop.X
+		r.X = pop.X
+	}
+	if right := pop.X + pop.Width; right > r.X+r.Width {
+		r.Width = right - r.X
+	}
+	if pop.Y < r.Y {
+		r.Height += r.Y - pop.Y
+		r.Y = pop.Y
+	}
+	if bot := pop.Y + pop.Height; bot > r.Y+r.Height {
+		r.Height = bot - r.Y
+	}
+	return r
 }
 
 func (a *shelf) syncWindowFrame() {
@@ -304,6 +336,11 @@ func (a *shelf) peekSize() (w, h float32) {
 		// Drag hint: the anchor's own height, a little wider — visible in
 		// the menu bar, never over the windows below it.
 		return baseW + dropHintExtraW, baseH
+	}
+	if a.appsModeOn() {
+		// The app switcher owns the closed shell until it ends: the wings
+		// it draws are the shape the frame and the gate read.
+		return a.appsSize()
 	}
 	// Charging, headphones and a finished download take the notch while
 	// their words are up; a running download holds the wings below them.
@@ -433,6 +470,15 @@ func (a *shelf) mouseDown(inside bool, button int, p mygo.Point) {
 		a.beginIslandPress(p)
 		return
 	}
+	// A press on the app entry that slipped to another surface still opens
+	// the switcher — the entry's drawn box is the click target, and an
+	// inside press already reached the button itself through the window.
+	if a.overAppEntry(p) && !a.visible {
+		if !inside {
+			a.openAppSwitch()
+		}
+		return
+	}
 	// The capsule is drawn over the menu bar's empty centre. WindowServer
 	// often gives that press to the menu bar or the app underneath, so the
 	// overlay paints a "click to expand" pill that never receives the click.
@@ -448,20 +494,26 @@ func (a *shelf) mouseDown(inside bool, button int, p mygo.Point) {
 	// press only arms the move; the release either drops the panel open (a
 	// tap) or ends the drag where it stopped. A finished download's capsule
 	// is a button of its own; its view must receive the press, so it is
-	// never swallowed here.
-	if a.island && !a.visible && !a.liveClickable(time.Now()) && a.overShell(p) {
+	// never swallowed here. The app switcher's wings are the shell while
+	// the mode is open: they carry real buttons, so no press on them arms
+	// the island move or expands the panel.
+	if a.island && !a.visible && !a.appsModeOn() && !a.liveClickable(time.Now()) && a.overShell(p) {
 		a.beginIslandPress(p)
 		return
 	}
-	if (a.peeking || a.fb.drawn || a.fb.retracting || a.peekProgress > 0.01) && !a.visible && a.overPeekPill(p) {
+	if (a.peeking || a.fb.drawn || a.fb.retracting || a.peekProgress > 0.01 || a.appsModeOn()) && !a.visible && a.overPeekPill(p) {
 		// The completion capsule is a button of its own: its view adds the
 		// file and opens the tray page. The shell must not swallow that
-		// press by expanding first.
+		// press by expanding first. The switcher's buttons likewise take
+		// their own presses.
 		if inside && a.liveClickable(time.Now()) {
 			return
 		}
 		if inside && a.peeking && a.np != nil && a.np.showsPlayer() {
 			return
+		}
+		if a.apps.on {
+			return // wing buttons take the press; blank wing space is inert
 		}
 		a.show(false)
 		return
@@ -494,6 +546,13 @@ func (a *shelf) mouseDown(inside bool, button int, p mygo.Point) {
 		// are the desktop's. A panel that grew upward sits above the
 		// island, so its box counts too.
 		inMenuBar = inMenuBar || insideRect(p, a.islandRect())
+	}
+	if a.apps.on && !a.overAppsPop(p) && !a.overAppEntry(p) {
+		// 点外面取消应用切换：浮层与自己的收起态入口不算外面。
+		// Apps mode never opened the panel or took another app's focus,
+		// so there is nothing to hand back — endAppSwitch only folds.
+		a.endAppSwitch()
+		return
 	}
 	if a.visible && !a.dragging && !inMenuBar && !insideRect(p, a.panelDropRect()) {
 		if a.drop.catchOn(time.Now()) {
@@ -555,7 +614,7 @@ func (a *shelf) syncMousePassThrough() {
 func (a *shelf) overlayWanted() bool {
 	return a.visible || a.fx.openK > 0.02 || a.dragging || a.pointerDrag || a.islandDrag ||
 		a.peeking || a.peekProgress > 0.01 || a.fb.drawn || a.fb.retracting ||
-		a.liveUp()
+		a.appsModeOn() || a.liveUp()
 }
 
 // overlayAcceptsMouse answers whether the overlay takes the mouse at the
@@ -578,7 +637,7 @@ func (a *shelf) overlayAcceptsMouse() bool {
 		// real, visible target and takes presses on its own shape.
 		return a.island && a.overShell(p)
 	}
-	if a.overShell(p) || a.overBelow(p) {
+	if a.overShell(p) || a.overBelow(p) || a.overAppsPop(p) {
 		return true
 	}
 	// The drawn shell is not the only shape a press can belong to. An
@@ -605,7 +664,7 @@ func (a *shelf) settledShell() (w, h, levelK, openK float32) {
 	if a.level >= 2 {
 		levelK = 1
 	}
-	if a.peeking || a.peekProgress > 0.01 || a.fb.drawn || a.fb.retracting {
+	if a.peeking || a.peekProgress > 0.01 || a.fb.drawn || a.fb.retracting || a.appsModeOn() {
 		peekK = 1
 	}
 	pw, ph := a.peekSize()
@@ -881,6 +940,8 @@ func (a *shelf) panelContentH(levelK float32) float32 {
 }
 
 func (a *shelf) show(edge bool) {
+	a.endAppSwitch() // 面板与应用切换互斥: 展开前两翼先退场
+	a.apps.entryRect = mygo.Rectangle{}
 	if a.visible {
 		return
 	}
@@ -1045,6 +1106,21 @@ func (a *shelf) releaseKeys() {
 // search while it holds text; a sheet backs out to the island and the
 // island folds away.
 func (a *shelf) escape() {
+	if a.apps.on {
+		// Esc 先退管理浮层和「更多」, 再收两翼——逐层退出, 不一次全关。
+		switch {
+		case a.apps.manage:
+			a.apps.manage = false
+		case a.apps.more:
+			a.apps.more = false
+		default:
+			a.endAppSwitch()
+		}
+		if a.win != nil {
+			a.win.Invalidate()
+		}
+		return
+	}
 	if mac.QuickLookVisible() {
 		mac.CloseQuickLook()
 		return
@@ -1125,6 +1201,8 @@ func (a *shelf) leaveFocusMode() {
 // content fade ends, so the closing panel fades the page it was showing
 // instead of flashing the default one; finishClose retires it.
 func (a *shelf) hide(exit hideExit) {
+	a.endAppSwitch() // 收起同样结束应用切换(保险路径; 通常已经不在)
+	a.apps.entryRect = mygo.Rectangle{}
 	if !a.visible && !a.peeking {
 		return
 	}

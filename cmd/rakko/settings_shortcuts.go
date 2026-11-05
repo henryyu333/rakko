@@ -42,6 +42,7 @@ const (
 	shortcutAwake
 	shortcutNote
 	shortcutPet
+	shortcutAppSwitch
 	shortcutKindCount
 )
 
@@ -83,6 +84,8 @@ func (k shortcutKind) field(s *settings.ShortcutSettings) *string {
 		return &s.Note
 	case shortcutPet:
 		return &s.Pet
+	case shortcutAppSwitch:
+		return &s.AppSwitch
 	}
 	return nil
 }
@@ -114,6 +117,8 @@ func (a *shelf) shortcutAction(k shortcutKind) func() {
 		return a.newNote
 	case shortcutPet:
 		return a.togglePet
+	case shortcutAppSwitch:
+		return a.toggleAppSwitch
 	}
 	return func() {}
 }

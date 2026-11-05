@@ -293,8 +293,11 @@ func (a *shelf) clearLive() {
 // download result a 已复制 covers is still on screen when the capsule ends.
 func (a *shelf) liveNow(now time.Time, allow bool) (liveEvent, bool) {
 	q := &a.live
+	// The completion capsule covers a showing notice; so does the app
+	// switcher — its wings must not eat the reminder it pauses for.
+	covered := a.capsuleUp(now) || a.appsModeOn()
 	switch {
-	case q.shown && a.capsuleUp(now) && (!q.coveredAt.IsZero() || now.Before(q.until)):
+	case q.shown && covered && (!q.coveredAt.IsZero() || now.Before(q.until)):
 		// Covered: the clock rests until the capsule is gone. Once the
 		// notice is already covered it stays paused even past its frozen
 		// deadline: the capsule outlasting the hold must not hand the
@@ -317,7 +320,7 @@ func (a *shelf) liveNow(now time.Time, allow bool) (liveEvent, bool) {
 			q.cur = liveEvent{}
 		}
 	}
-	if !allow || a.capsuleUp(now) {
+	if !allow || covered {
 		return liveEvent{}, false
 	}
 	for len(q.queued) > 0 {
@@ -491,9 +494,10 @@ func (a *shelf) openDownloaded(ev liveEvent) {
 }
 
 // liveAllow is when the notch may show a transient activity: the panel is
-// closed (or fully folded) and no incoming file drag owns the shape.
+// closed (or fully folded), no incoming file drag owns the shape, and the
+// app switcher is not holding the wings.
 func (a *shelf) liveAllow() bool {
-	return !a.visible && a.progress <= 0.01 && !(a.dragging && !a.ownDrag)
+	return !a.visible && a.progress <= 0.01 && !a.appsModeOn() && !(a.dragging && !a.ownDrag)
 }
 
 // liveUp reports whether a live activity currently occupies the peek

@@ -394,7 +394,7 @@ func (a *shelf) view(c *ui.Context) {
 	// 滑动（含没画过的新提示——它的时钟本来就从第一帧算起），回来后按
 	// 剩余时间继续，绝不会被静默吃掉。
 	if f := &a.fb; f.text != "" && !f.live {
-		yielded := !a.visible && a.progress <= 0.01 && (a.peeking || (a.dragging && !a.ownDrag))
+		yielded := !a.visible && a.progress <= 0.01 && (a.peeking || a.apps.on || (a.dragging && !a.ownDrag))
 		switch {
 		case yielded && f.pausedAt.IsZero():
 			f.pausedAt = now
@@ -426,7 +426,7 @@ func (a *shelf) view(c *ui.Context) {
 	if a.visible {
 		openTarget = 1
 	}
-	if a.peeking || capsule || liveUp || downloadUp {
+	if a.peeking || a.apps.on || capsule || liveUp || downloadUp {
 		peekTarget = 1
 	}
 	// Keep one native drop target across all states. The transparent root does
@@ -526,7 +526,7 @@ func (a *shelf) view(c *ui.Context) {
 	// 真实窗口的彻底空闲态：刘海样式什么都不画，常驻窗口完全不可见；
 	// 灵动岛空闲时一直画那颗 120 × 30 的胶囊，让用户知道往哪儿移鼠标。
 	// 阈值与上面的静止吸附一致（亚点级），收起最后一段平滑落位、看不出跳变。
-	idle := a.win != nil && !a.visible && a.progress <= 0.01 && openK <= 0.002 && !a.peeking && peekK <= 0.002
+	idle := a.win != nil && !a.visible && a.progress <= 0.01 && openK <= 0.002 && !a.peeking && !a.apps.on && peekK <= 0.002
 	// ShelfU's own drag-out never lands back on the shelf: the drop would
 	// add a second item pointing at the same file. Without a target the
 	// drag ends as if cancelled — nothing is added, the panel stays open
@@ -782,6 +782,7 @@ func (a *shelf) view(c *ui.Context) {
 		if !expanded {
 			if closing || !peeked {
 				// 收起途中只有壳缩回刘海，不画内容。
+				a.apps.entryRect = mygo.Rectangle{}
 				return
 			}
 			a.peekView(c, shellW, shellH, openK, peekK, shake, over, peekTarget == 0)
@@ -1523,13 +1524,11 @@ func (a *shelf) peekView(c *ui.Context, shellW, shellH, openK, peekK, shake floa
 			} else {
 				kind = peekLiveCapsule
 			}
-		case a.downloadRunning():
-			kind = peekDownload
-		case !over && a.np != nil && a.np.showsPlayer():
-			kind = peekWings
 		case a.dragging && !a.ownDrag:
 			// Inside the notch band the drop pill invites the release;
-			// outside it only the widened hint shows — never a glyph.
+			// outside it only the widened hint shows — never a glyph. A
+			// file drag outranks the wings and the app switcher: the same
+			// shape peekSize() reports.
 			if over || a.dropHot {
 				kind = peekDrop
 			} else {
@@ -1537,10 +1536,21 @@ func (a *shelf) peekView(c *ui.Context, shellW, shellH, openK, peekK, shake floa
 			}
 		case over:
 			kind = peekDrop
+		case a.apps.on:
+			kind = peekApps
+		case a.downloadRunning():
+			kind = peekDownload
+		case a.np != nil && a.np.showsPlayer():
+			kind = peekWings
 		default:
 			kind = peekChevron
 		}
 		a.fx.peekKind = kind
+	}
+	if !folding && kind != peekChevron {
+		// The entry lives only on the chevron band and the idle island
+		// capsule; a stale box must never claim presses.
+		a.apps.entryRect = mygo.Rectangle{}
 	}
 	switch kind {
 	case peekCapsule:
@@ -1569,6 +1579,15 @@ func (a *shelf) peekView(c *ui.Context, shellW, shellH, openK, peekK, shake floa
 		clip := ui.Column(c.Key("dl-clip")).Width(shellW).Height(shellH).Clip().AlignItems(ui.Center).
 			Margin(float32(a.sheetTop()), 0, 0, 0)
 		clip.Children(func() { a.downloadWings(c, pw, ph, peekK, a.dl.progress()) })
+		return
+	case peekApps:
+		pw, ph := a.appsSize()
+		clip := ui.Column(c.Key("apps-clip")).Width(shellW).Height(shellH).Clip().AlignItems(ui.Center).
+			Margin(float32(a.sheetTop()), 0, 0, 0)
+		clip.Children(func() { a.appsView(c, pw, ph, peekK) })
+		// The popover lives outside the shell's clip: it hangs under the
+		// wings (or above them on an island near the work area's bottom).
+		a.appsPopView(c, ph)
 		return
 	case peekWings:
 		if a.np != nil {
@@ -1624,6 +1643,12 @@ func (a *shelf) peekView(c *ui.Context, shellW, shellH, openK, peekK, shake floa
 					ui.Icon(c, chevronDownSym).Size(12, 12).TextColor(ink2)
 				}
 			})
+			if kind == peekChevron {
+				// 收起态应用入口: 探头带右缘的小按钮, 点击展开两翼;
+				// 带中央的点击仍是搜索（pill.Clicked 处理）。
+				e := a.appsEntryButton(c, "apps-band-entry")
+				e.Absolute().Right(6).Bottom(1)
+			}
 		})
 	})
 	if pill.Clicked() {

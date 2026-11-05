@@ -6339,6 +6339,216 @@ func (msgs Messages) SettingsShortcutPet() string {
 	return Catalog.Format(msgs.locale, "settingsShortcutPet", nil)
 }
 
+// SettingsShortcutAppSwitch says "应用切换"
+// in the language the app shows.
+func SettingsShortcutAppSwitch() string { return In(i18n.Locale()).SettingsShortcutAppSwitch() }
+
+// SettingsShortcutAppSwitch says "应用切换"
+// in the language of msgs.
+func (msgs Messages) SettingsShortcutAppSwitch() string {
+	return Catalog.Format(msgs.locale, "settingsShortcutAppSwitch", nil)
+}
+
+// AppsSwitch says "应用切换"
+// in the language the app shows.
+func AppsSwitch() string { return In(i18n.Locale()).AppsSwitch() }
+
+// AppsSwitch says "应用切换"
+// in the language of msgs.
+func (msgs Messages) AppsSwitch() string {
+	return Catalog.Format(msgs.locale, "appsSwitch", nil)
+}
+
+// AppsMore says "更多"
+// in the language the app shows.
+func AppsMore() string { return In(i18n.Locale()).AppsMore() }
+
+// AppsMore says "更多"
+// in the language of msgs.
+func (msgs Messages) AppsMore() string {
+	return Catalog.Format(msgs.locale, "appsMore", nil)
+}
+
+// AppsCollapse says "收起应用切换"
+// in the language the app shows.
+func AppsCollapse() string { return In(i18n.Locale()).AppsCollapse() }
+
+// AppsCollapse says "收起应用切换"
+// in the language of msgs.
+func (msgs Messages) AppsCollapse() string {
+	return Catalog.Format(msgs.locale, "appsCollapse", nil)
+}
+
+// AppsSwitchTo says "切换到 {name}"
+// in the language the app shows.
+func AppsSwitchTo(name string) string { return In(i18n.Locale()).AppsSwitchTo(name) }
+
+// AppsSwitchTo says "切换到 {name}"
+// in the language of msgs.
+func (msgs Messages) AppsSwitchTo(name string) string {
+	return Catalog.Format(msgs.locale, "appsSwitchTo", map[string]any{"name": name})
+}
+
+// AppsLaunch says "启动 {name}"
+// in the language the app shows.
+func AppsLaunch(name string) string { return In(i18n.Locale()).AppsLaunch(name) }
+
+// AppsLaunch says "启动 {name}"
+// in the language of msgs.
+func (msgs Messages) AppsLaunch(name string) string {
+	return Catalog.Format(msgs.locale, "appsLaunch", map[string]any{"name": name})
+}
+
+// AppsUninstalledLabel says "{name}（未安装）"
+// in the language the app shows.
+func AppsUninstalledLabel(name string) string { return In(i18n.Locale()).AppsUninstalledLabel(name) }
+
+// AppsUninstalledLabel says "{name}（未安装）"
+// in the language of msgs.
+func (msgs Messages) AppsUninstalledLabel(name string) string {
+	return Catalog.Format(msgs.locale, "appsUninstalledLabel", map[string]any{"name": name})
+}
+
+// AppsUnavailable says "无法切换或启动"
+// in the language the app shows.
+func AppsUnavailable() string { return In(i18n.Locale()).AppsUnavailable() }
+
+// AppsUnavailable says "无法切换或启动"
+// in the language of msgs.
+func (msgs Messages) AppsUnavailable() string {
+	return Catalog.Format(msgs.locale, "appsUnavailable", nil)
+}
+
+// AppsOtherRunning says "运行中"
+// in the language the app shows.
+func AppsOtherRunning() string { return In(i18n.Locale()).AppsOtherRunning() }
+
+// AppsOtherRunning says "运行中"
+// in the language of msgs.
+func (msgs Messages) AppsOtherRunning() string {
+	return Catalog.Format(msgs.locale, "appsOtherRunning", nil)
+}
+
+// AppsNoOtherRunning says "没有其他运行中的应用"
+// in the language the app shows.
+func AppsNoOtherRunning() string { return In(i18n.Locale()).AppsNoOtherRunning() }
+
+// AppsNoOtherRunning says "没有其他运行中的应用"
+// in the language of msgs.
+func (msgs Messages) AppsNoOtherRunning() string {
+	return Catalog.Format(msgs.locale, "appsNoOtherRunning", nil)
+}
+
+// AppsEdit says "编辑常用应用"
+// in the language the app shows.
+func AppsEdit() string { return In(i18n.Locale()).AppsEdit() }
+
+// AppsEdit says "编辑常用应用"
+// in the language of msgs.
+func (msgs Messages) AppsEdit() string {
+	return Catalog.Format(msgs.locale, "appsEdit", nil)
+}
+
+// AppsManageTitle says "常用应用"
+// in the language the app shows.
+func AppsManageTitle() string { return In(i18n.Locale()).AppsManageTitle() }
+
+// AppsManageTitle says "常用应用"
+// in the language of msgs.
+func (msgs Messages) AppsManageTitle() string {
+	return Catalog.Format(msgs.locale, "appsManageTitle", nil)
+}
+
+// AppsManageEmpty says "没有可固定的应用"
+// in the language the app shows.
+func AppsManageEmpty() string { return In(i18n.Locale()).AppsManageEmpty() }
+
+// AppsManageEmpty says "没有可固定的应用"
+// in the language of msgs.
+func (msgs Messages) AppsManageEmpty() string {
+	return Catalog.Format(msgs.locale, "appsManageEmpty", nil)
+}
+
+// AppsManageLoading says "正在加载应用列表…"
+// in the language the app shows.
+func AppsManageLoading() string { return In(i18n.Locale()).AppsManageLoading() }
+
+// AppsManageLoading says "正在加载应用列表…"
+// in the language of msgs.
+func (msgs Messages) AppsManageLoading() string {
+	return Catalog.Format(msgs.locale, "appsManageLoading", nil)
+}
+
+// AppsPin says "固定 {name}"
+// in the language the app shows.
+func AppsPin(name string) string { return In(i18n.Locale()).AppsPin(name) }
+
+// AppsPin says "固定 {name}"
+// in the language of msgs.
+func (msgs Messages) AppsPin(name string) string {
+	return Catalog.Format(msgs.locale, "appsPin", map[string]any{"name": name})
+}
+
+// AppsPinFull says "常用应用已满"
+// in the language the app shows.
+func AppsPinFull() string { return In(i18n.Locale()).AppsPinFull() }
+
+// AppsPinFull says "常用应用已满"
+// in the language of msgs.
+func (msgs Messages) AppsPinFull() string {
+	return Catalog.Format(msgs.locale, "appsPinFull", nil)
+}
+
+// AppsUnpin says "取消固定 {name}"
+// in the language the app shows.
+func AppsUnpin(name string) string { return In(i18n.Locale()).AppsUnpin(name) }
+
+// AppsUnpin says "取消固定 {name}"
+// in the language of msgs.
+func (msgs Messages) AppsUnpin(name string) string {
+	return Catalog.Format(msgs.locale, "appsUnpin", map[string]any{"name": name})
+}
+
+// AppsMoveUp says "前移"
+// in the language the app shows.
+func AppsMoveUp() string { return In(i18n.Locale()).AppsMoveUp() }
+
+// AppsMoveUp says "前移"
+// in the language of msgs.
+func (msgs Messages) AppsMoveUp() string {
+	return Catalog.Format(msgs.locale, "appsMoveUp", nil)
+}
+
+// AppsMoveDown says "后移"
+// in the language the app shows.
+func AppsMoveDown() string { return In(i18n.Locale()).AppsMoveDown() }
+
+// AppsMoveDown says "后移"
+// in the language of msgs.
+func (msgs Messages) AppsMoveDown() string {
+	return Catalog.Format(msgs.locale, "appsMoveDown", nil)
+}
+
+// AppsDone says "完成"
+// in the language the app shows.
+func AppsDone() string { return In(i18n.Locale()).AppsDone() }
+
+// AppsDone says "完成"
+// in the language of msgs.
+func (msgs Messages) AppsDone() string {
+	return Catalog.Format(msgs.locale, "appsDone", nil)
+}
+
+// AppsUninstalled says "未安装"
+// in the language the app shows.
+func AppsUninstalled() string { return In(i18n.Locale()).AppsUninstalled() }
+
+// AppsUninstalled says "未安装"
+// in the language of msgs.
+func (msgs Messages) AppsUninstalled() string {
+	return Catalog.Format(msgs.locale, "appsUninstalled", nil)
+}
+
 // SettingsShortcutNoShortcut says "未设置"
 // in the language the app shows.
 func SettingsShortcutNoShortcut() string { return In(i18n.Locale()).SettingsShortcutNoShortcut() }
