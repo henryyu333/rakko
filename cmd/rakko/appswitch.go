@@ -59,13 +59,13 @@ type appSwitcher struct {
 	entryRect     mygo.Rectangle        // 收起态应用入口按钮的盒子（命中测试用）
 	keys          map[string]bool       // 模式持有的全局键（Left/Right/Enter，可能含 Escape）
 
-	shownL, shownR []appEntry           // 两翼当前画出的座位（由快照 + 位宽重建）
-	selV           []appEntry           // 可选中座位（shown 顺序，missing 固定位除外）
-	moreV          []appEntry           // 「更多」浮层的行
-	manageV        []manageRow          // 「编辑常用应用」的行
-	shownSlots     [2]int               // 重建 shown 时的 (left, right) 位宽
-	rowsDirty      bool                 // 快照或固定列表变了：下一帧重建 shown/more
-	manageDirty    bool                 // 快照 / 固定 / 安装目录变了：重建 manage 行
+	shownL, shownR []appEntry  // 两翼当前画出的座位（由快照 + 位宽重建）
+	selV           []appEntry  // 可选中座位（shown 顺序，missing 固定位除外）
+	moreV          []appEntry  // 「更多」浮层的行
+	manageV        []manageRow // 「编辑常用应用」的行
+	shownSlots     [2]int      // 重建 shown 时的 (left, right) 位宽
+	rowsDirty      bool        // 快照或固定列表变了：下一帧重建 shown/more
+	manageDirty    bool        // 快照 / 固定 / 安装目录变了：重建 manage 行
 
 	installedErr error // 最近一次安装目录扫描的错误（nil = 成功或未扫过）
 	installedGen int   // 扫描代次：旧请求的结果落地时代次不符即丢弃
