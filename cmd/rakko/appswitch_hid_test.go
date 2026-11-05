@@ -546,12 +546,12 @@ func hidWindowOn(t *testing.T, pid int) bool { return hidWindowVisible(t, pid) }
 // track plays.
 func hidEntryRect(t *testing.T, a *shelf) mygo.Rectangle {
 	t.Helper()
-	var er mygo.Rectangle
 	waitApps(t, a, "the music wings' app entry", func() bool {
-		er = a.apps.entryRect
-		return er.Width > 0 && a.fx.peekKind == peekWings
+		return a.apps.entryRect.Width > 0 && a.fx.peekKind == peekWings
 	})
-	return er
+	// Read the box once it stops moving: an earlier frame's box is a
+	// different place, and a click aimed there lands beside the button.
+	return settledAppsEntry(t, a)
 }
 
 // hidAnchorPoint is the screen point at the centre of the anchor's hover

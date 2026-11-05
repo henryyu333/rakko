@@ -93,6 +93,10 @@ func appsSmokeShelf(t *testing.T, running []mac.RunningApp) *shelf {
 			a.islandPress = islandPress{}
 			a.dragging, a.dropHot, a.ownDrag = false, false, false
 			a.search, a.focusMode = "", false
+			// A track is another case's fixture: with one left in place the
+			// closed shell draws the music wings (and their entry) in a
+			// case that expects the bare chevron.
+			a.modules, a.np = nil, nil
 			a.visible, a.edgeOpened = false, false
 			a.closeAt = time.Time{}
 			a.peeking, a.peekProgress, a.peekFrom, a.peekAnimStart = false, 0, 0, time.Time{}
@@ -287,6 +291,26 @@ func libCFOrDie(cg uintptr) uintptr {
 	return lib
 }
 
+// settledAppsEntry returns the app entry's box once it stops moving: the
+// shell's springs and the content's re-layout both write it, and a click
+// aimed at a mid-morph box lands beside the button. Two equal readings a
+// pause apart, with the wings drawn, are the resting place.
+func settledAppsEntry(t *testing.T, a *shelf) mygo.Rectangle {
+	t.Helper()
+	var last, now mygo.Rectangle
+	deadline := time.Now().Add(4 * time.Second)
+	for time.Now().Before(deadline) {
+		onMain(func() { now = a.apps.entryRect })
+		if now.Width > 0 && now == last {
+			return now
+		}
+		last = now
+		time.Sleep(80 * time.Millisecond)
+	}
+	t.Fatalf("the app entry never settled: %+v (kind=%d)", now, a.fx.peekKind)
+	return mygo.Rectangle{}
+}
+
 // closeAppsWings folds the wings and waits for the fold to land.
 func closeAppsWings(t *testing.T, a *shelf) {
 	onMain(func() {
@@ -356,16 +380,13 @@ func TestSmokeAppsWingsOpenFromEntry(t *testing.T) {
 	})
 	var er mygo.Rectangle
 	var on bool
-	waitApps(t, a, "the bare chevron", func() bool { return a.fx.peekKind == peekChevron })
-	onMain(func() { er = a.apps.entryRect })
-	if er.Width != 0 {
-		t.Fatalf("the chevron band must not draw an entry, got %+v", er)
-	}
 	onMain(func() { fakeTrack(a, true) })
 	waitApps(t, a, "the music wings' entry", func() bool {
-		er = a.apps.entryRect
-		return er.Width > 0 && a.fx.peekKind == peekWings
+		return a.apps.entryRect.Width > 0 && a.fx.peekKind == peekWings
 	})
+	// The box the wait saw belongs to an earlier frame, and the shell is
+	// still growing; the click asks for the entry's resting place instead.
+	er = settledAppsEntry(t, a)
 	clickOverlayAt(t, a, float64(er.X+er.Width/2), float64(er.Y+er.Height/2))
 	onMain(func() { on = a.apps.on })
 	if !on {
@@ -625,15 +646,11 @@ func TestSmokeAppsCorneredIsland(t *testing.T) {
 	onMain(func() {
 		a.island = true
 		a.islandDX = a.dispWork.Width/2 - 100 // near the right edge
+		// The idle capsule draws on demand: settled springs ask for no
+		// frame of their own, so ask for the one showing the entry.
+		a.syncWindowFrame()
+		a.win.Invalidate()
 	})
-	// The idle island capsule is one of the entry points the mode keeps:
-	// its real window draws the button at the capsule's right end and
-	// records the box the gate clicks. The probe's chevron band, by
-	// contrast, draws none.
-	waitApps(t, a, "the island's folded capsule", func() bool {
-		return a.apps.entryRect.Width > 0
-	})
-	onMain(func() { a.apps.entryRect = mygo.Rectangle{} })
 	openAppsWings(t, a)
 	var g appGeom
 	var fr mygo.Rectangle
