@@ -197,7 +197,8 @@ func hidPointNow() mygo.Point { return mygo.Screen.CursorScreenPoint() }
 // hidWindowVisible reports whether the fixture process pid has any on-screen
 // window: the Dock-style reopen draws windows even when the app activation
 // alone would leave a hidden or minimized process frontmost-none. Normal
-// layer only; no screenshot needed.
+// layer only; no screenshot needed. The pid is passed down so the window
+// probe keeps only this pid besides our own — no other user windows enter.
 func hidWindowVisible(t *testing.T, pid int) bool {
 	if pid <= 0 {
 		return false
@@ -210,7 +211,7 @@ func hidWindowVisible(t *testing.T, pid int) bool {
 // hidEntryVisible runs the CGWindowList probe on the main thread: one
 // layer-0 on-screen window of the fixture's pid, at meaningful pixel size.
 func hidEntryVisible(t *testing.T, pid int) bool {
-	for _, w := range probeWindows(t) {
+	for _, w := range probeWindows(t, pid) {
 		if w.OwnerPID == pid && w.Layer == 0 && w.Onscreen {
 			return w.Frame.Width > 40 && w.Frame.Height > 40
 		}
@@ -218,11 +219,11 @@ func hidEntryVisible(t *testing.T, pid int) bool {
 	return false
 }
 
-// probeWindows is ownSmokeWindows with the foreign-owner filter on: the
-// fixtures' windows need to be visible to the case's assertions. Run on
-// the main thread only.
-func probeWindows(t *testing.T) []smokeWindowInfo {
-	return smokeWindowList(t, true)
+// probeWindows lists this process's windows plus exactly the controlled
+// fixture pids the case is watching — owner/bounds/onscreen only for the
+// fixtures, titles only for our own. Run on the main thread only.
+func probeWindows(t *testing.T, fixturePIDs ...int) []smokeWindowInfo {
+	return smokeWindowList(t, fixturePIDs)
 }
 
 // hidWaitWindow spends the visibility budget waiting for a fixture window

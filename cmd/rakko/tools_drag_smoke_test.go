@@ -37,19 +37,18 @@ func isDragCardWindow(w smokeWindowInfo) bool {
 	return w.Frame.Height == pinCardH && (w.Frame.Width == pinCardW || w.Frame.Width == pinCardW2)
 }
 
-// ownSmokeWindows inspects WindowServer's list. keepForeignOwners widens
-// the filter past this process to every on-screen entry: the app-switcher
-// HID case must be able to see the controlled fixtures' own windows.
+// ownSmokeWindows inspects WindowServer's list for this process only, with
+// the diagnostic titles.
 func ownSmokeWindows(t *testing.T) []smokeWindowInfo {
-	return smokeWindowList(t, false)
+	return smokeWindowList(t, nil)
 }
 
-// specimenWindows lists EVERY on-screen window: own and others'.
-func smokeWindowList(t *testing.T, keepForeignOwners bool) []smokeWindowInfo {
-	return ownSmokeWindowsFiltered(t, keepForeignOwners)
-}
-
-func ownSmokeWindowsFiltered(t *testing.T, keepForeignOwners bool) []smokeWindowInfo {
+// smokeWindowList enumerates WindowServer's on-screen entries. allowedNils
+// are read only for OUR OWN process (the smoke fixture diagnostics) — the
+// caller may additionally pass controlled fixture pids, whose windows are
+// held only as owner number, bounds, layer and onscreen flag: their titles
+// are never read, and nobody else's windows enter the list at all.
+func smokeWindowList(t *testing.T, fixturePIDs []int) []smokeWindowInfo {
 	t.Helper()
 	lib, err := purego.Dlopen("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", purego.RTLD_LAZY)
 	if err != nil {
@@ -66,20 +65,29 @@ func ownSmokeWindowsFiltered(t *testing.T, keepForeignOwners bool) []smokeWindow
 		defer objcSend(list, "release")
 		get := func(d objc.ID, key string) objc.ID { return objcSend(d, "objectForKey:", objcStr(key)) }
 		integer := func(d objc.ID, key string) int { return int(objcSend(get(d, key), "intValue")) }
+		fixtures := make(map[int]bool, len(fixturePIDs))
+		for _, p := range fixturePIDs {
+			fixtures[p] = true
+		}
 		for i, n := 0, int(objcSend(list, "count")); i < n; i++ {
 			d := objcSend(list, "objectAtIndex:", i)
 			owner := integer(d, "kCGWindowOwnerPID")
-			if owner != os.Getpid() && !keepForeignOwners {
+			own := owner == os.Getpid()
+			if !own && !fixtures[owner] {
 				continue
 			}
 			b := get(d, "kCGWindowBounds")
-			out = append(out, smokeWindowInfo{
+			w := smokeWindowInfo{
 				ID: integer(d, "kCGWindowNumber"), Layer: integer(d, "kCGWindowLayer"),
 				Frame:    mygo.Rectangle{X: integer(b, "X"), Y: integer(b, "Y"), Width: integer(b, "Width"), Height: integer(b, "Height")},
 				Onscreen: objcSend(get(d, "kCGWindowIsOnscreen"), "boolValue") != 0,
-				Title:    objcGoStr(get(d, "kCGWindowName")),
 				OwnerPID: owner,
-			})
+			}
+			if own {
+				// Diagnostic titles for our own surfaces only.
+				w.Title = objcGoStr(get(d, "kCGWindowName"))
+			}
+			out = append(out, w)
 		}
 	})
 	return out
