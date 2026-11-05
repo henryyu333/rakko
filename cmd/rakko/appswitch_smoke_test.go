@@ -114,12 +114,22 @@ func appsSmokeShelf(t *testing.T, running []mac.RunningApp) *shelf {
 	return a
 }
 
-// waitApps waits for cond on the main thread through the shared
-// waitMain and fails with the test's current state when it never holds.
-// snap reports the diagnostics fields the caller wants in the message.
+// waitApps polls cond on the main thread through the shared waitMain.
+// Every poll also invalidates the window: the peek/flip springs only
+// advance while frames render, and a wait that never draws would sit
+// forever at the state it started from — the native round showed
+// peekKind stuck on peekApps long after apps.on had already folded.
+// Failure dumps the drawn state so a real defect is still loud.
 func waitApps(t *testing.T, a *shelf, what string, cond func() bool) {
 	t.Helper()
-	if waitMain(3*time.Second, cond) {
+	ok := waitMain(4*time.Second, func() bool {
+		done := cond()
+		if a.win != nil {
+			a.win.Invalidate() // pump the springs the wait is watching
+		}
+		return done
+	})
+	if ok {
 		return
 	}
 	var st string
@@ -160,7 +170,13 @@ func clickOverlayAt(t *testing.T, a *shelf, x, y float64) {
 					(a.island && a.overAnchor(p)))
 		})
 		if !drawable {
-			t.Fatalf("refusing click at (%.0f,%.0f): outside the test window's drawn shape", x, y)
+			var diag string
+			onMain(func() {
+				diag = fmt.Sprintf("frame=%+v pill=%+v pop=%+v entry=%+v peekKind=%d off=%.1f island=%v",
+					a.frame, a.peekPillRect(), a.apps.popRect, a.apps.entryRect,
+					a.fx.peekKind, a.appsDrawOff(), a.island)
+			})
+			t.Fatalf("refusing click at (%.0f,%.0f): outside the test window's drawn shape — %s", x, y, diag)
 		}
 		time.Sleep(150 * time.Millisecond) // let the pointer gate re-ask
 		var hit, num int
