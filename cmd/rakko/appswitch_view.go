@@ -351,15 +351,23 @@ func (a *shelf) appsView(c *ui.Context, shellW, shellH, k float32) {
 		mid := ui.Column(c.Key("apps-mid")).Width(baseW).Height(shellH).
 			Justify(ui.End).AlignItems(ui.Center)
 		mid.Children(func() {
-			b := ui.ButtonBase(c.Key("apps-close")).Size(38, 22).Radius(7).Center().
-				Label(l.AppsCollapse()).Tooltip(l.AppsCollapse())
-			if b.Hovered() {
-				b.Background(fill2)
-			}
-			b.Children(func() { ui.Icon(c, chevronUpSymbol).Size(12, 12).TextColor(ink2) })
-			if b.Clicked() {
-				a.endAppSwitch()
-			}
+			row := ui.Row(c.Key("apps-midrow")).Gap(4).AlignItems(ui.Center)
+			row.Children(func() {
+				b := ui.ButtonBase(c.Key("apps-close")).Size(38, 22).Radius(7).Center().
+					Label(l.AppsCollapse()).Tooltip(l.AppsCollapse())
+				if b.Hovered() {
+					b.Background(fill2)
+				}
+				b.Children(func() { ui.Icon(c, chevronUpSymbol).Size(12, 12).TextColor(ink2) })
+				if b.Clicked() {
+					a.endAppSwitch()
+				}
+				if g.rs == 0 {
+					// 屏幕挤掉右翼时「更多」退到锚点下沿、收起箭头旁——
+					// 壳体带内、硬件刘海之下，溢出座位始终可达。
+					a.appsMoreButton(c)
+				}
+			})
 		})
 		if mid.Clicked() {
 			a.show(false) // 中央即搜索：收起两翼走原展开路径

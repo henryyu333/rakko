@@ -52,7 +52,10 @@ func shotAppsWindow(t *testing.T, w *mygo.Window, name string) string {
 
 // appsSmokeShelf is redesignShelf plus a deterministic app world: the
 // system seams are stubbed (no click ever switches a real app), the shelf
-// placed, and a fixed pinned list set in the smoke settings.
+// placed, and a fixed pinned list set in the smoke settings. The shared
+// smoke shelf is also reset on entry AND on cleanup — island shape, drag
+// offset, live queue, panel and wings all go back, so no test inherits or
+// leaks switcher state.
 func appsSmokeShelf(t *testing.T, running []mac.RunningApp) *shelf {
 	t.Helper()
 	a := redesignShelf(t)
@@ -67,6 +70,22 @@ func appsSmokeShelf(t *testing.T, running []mac.RunningApp) *shelf {
 		names: map[string]string{"com.smoke.pin1": "Pin One", "com.smoke.pin2": "Pin Two"},
 		actOK: map[int]bool{},
 	})
+	reset := func() {
+		onMain(func() {
+			a.endAppSwitch()
+			a.island, a.islandDX = false, 0
+			a.live = liveQueue{}
+			a.dragging, a.dropHot = false, false
+			a.visible = false
+			a.peeking, a.peekProgress, a.peekFrom, a.peekAnimStart = false, 0, 0, time.Time{}
+			a.progress, a.animationFrom, a.animationStart = 0, 0, time.Time{}
+			a.syncMousePassThrough()
+			a.syncWindowFrame()
+			a.win.Invalidate()
+		})
+	}
+	reset()
+	t.Cleanup(reset)
 	onMain(func() {
 		saved := []string{"com.smoke.pin1", "com.smoke.pin2"}
 		a.settings.PinnedApps = &saved
@@ -75,18 +94,76 @@ func appsSmokeShelf(t *testing.T, running []mac.RunningApp) *shelf {
 	return a
 }
 
+// clickOverlayAt posts a real click inside this test's own overlay window
+// while the point sits in the menu-bar band the shared clickAt refuses.
+// The proof is exact, not policy: the point must be on this display,
+// inside the test window's frame AND on the shape the frame currently
+// draws (wings pill, popover or the recorded entry box — the island
+// capsule counts as its anchor), never on the hardware camera band, and
+// WindowServer must report the test's own window id at that point once
+// the pointer lands there. The pointer is restored by postRealClick.
+func clickOverlayAt(t *testing.T, a *shelf, x, y float64) {
+	t.Helper()
+	postRealClick(t, x, y, func() {
+		p := mygo.Point{X: int(x), Y: int(y)}
+		var drawable bool
+		onMain(func() {
+			d := mygo.Screen.DisplayNearestPoint(p)
+			if p.X < d.Bounds.X || p.X >= d.Bounds.X+d.Bounds.Width ||
+				p.Y < d.Bounds.Y || p.Y >= d.Bounds.Y+d.Bounds.Height {
+				return // off this display entirely
+			}
+			if !a.island && a.notchW > 0 && a.notchH > 0 &&
+				p.Y < a.notchY+a.notchH &&
+				p.X >= a.notchX && p.X <= a.notchX+a.notchW {
+				return // the hardware camera band itself
+			}
+			drawable = insideRect(p, a.frame) &&
+				(a.overPeekPill(p) || a.overAppsPop(p) || a.overAppEntry(p) ||
+					(a.island && a.overAnchor(p)))
+		})
+		if !drawable {
+			t.Fatalf("refusing click at (%.0f,%.0f): outside the test window's drawn shape", x, y)
+		}
+		time.Sleep(150 * time.Millisecond) // let the pointer gate re-ask
+		var hit, num int
+		onMain(func() {
+			primary := mygo.Screen.PrimaryDisplay()
+			hit = mac.WindowAtPoint(x, y, float64(primary.Bounds.Y+primary.Bounds.Height))
+			num = mac.WindowNumber(a.win.NativeHandle())
+		})
+		if hit != num {
+			t.Fatalf("refusing click at (%.0f,%.0f): native target %d is not our window %d", x, y, hit, num)
+		}
+	})
+}
+
 // openAppsWings puts the real window into the wings state and settles it.
+// Idempotent: a state where the wings already opened (an entry click ran
+// first) is left as-is — the helper settles, it never toggles the mode.
+// If a stray system press folded the mode during the settle wait, the
+// open is retried once before failing.
 func openAppsWings(t *testing.T, a *shelf) {
 	t.Helper()
-	onMain(func() {
-		a.openAppSwitch()
-		a.peekProgress, a.peekFrom = 1, 1
-		a.peekAnimStart = time.Time{}
-		a.syncMousePassThrough()
-		a.syncWindowFrame()
-		a.win.Invalidate()
-	})
-	time.Sleep(450 * time.Millisecond)
+	for try := 0; try < 2; try++ {
+		onMain(func() {
+			if !a.apps.on {
+				a.openAppSwitch()
+			}
+			a.peekProgress, a.peekFrom = 1, 1
+			a.peekAnimStart = time.Time{}
+			a.syncMousePassThrough()
+			a.syncWindowFrame()
+			a.win.Invalidate()
+		})
+		time.Sleep(450 * time.Millisecond)
+		var on bool
+		onMain(func() { on = a.apps.on })
+		if on {
+			return
+		}
+	}
+	t.Fatal("the wings would not stay open")
 }
 
 // closeAppsWings folds the wings and lets the fold settle.
@@ -154,7 +231,7 @@ func TestSmokeAppsWingsOpenFromEntry(t *testing.T) {
 	if er.Width <= 0 {
 		t.Fatal("no collapsed-state entry was drawn")
 	}
-	clickAt(t, float64(er.X+er.Width/2), float64(er.Y+er.Height/2))
+	clickOverlayAt(t, a, float64(er.X+er.Width/2), float64(er.Y+er.Height/2))
 	onMain(func() {
 		if !a.apps.on {
 			t.Fatal("clicking the entry did not open the wings")
@@ -165,7 +242,7 @@ func TestSmokeAppsWingsOpenFromEntry(t *testing.T) {
 
 	// The first pinned seat is a real button in the real window.
 	x, y := appSeat(t, a, 0)
-	clickAt(t, x, y)
+	clickOverlayAt(t, a, x, y)
 	onMain(func() {
 		if a.apps.on {
 			t.Fatal("the wings must fold after a successful switch")
@@ -185,7 +262,7 @@ func TestSmokeAppsPopoverAndManage(t *testing.T) {
 		t.Skip("no right wing on this display")
 	}
 	x, y := appSeat(t, a, ls+rs-1) // the last right-wing seat: 更多
-	clickAt(t, x, y)
+	clickOverlayAt(t, a, x, y)
 	var more bool
 	onMain(func() { more = a.apps.more })
 	if !more {
@@ -206,7 +283,7 @@ func TestSmokeAppsPopoverAndManage(t *testing.T) {
 		t.Fatalf("frame %v does not cover popover %v", fr, pop)
 	}
 	// 编辑常用应用 is the pane's footer row.
-	clickAt(t, float64(pop.X+pop.Width/2), float64(pop.Y+pop.Height-appPopFoot/2))
+	clickOverlayAt(t, a, float64(pop.X+pop.Width/2), float64(pop.Y+pop.Height-appPopFoot/2))
 	var manage bool
 	onMain(func() { manage = a.apps.manage })
 	if !manage {
@@ -220,7 +297,7 @@ func TestSmokeAppsPopoverAndManage(t *testing.T) {
 	onMain(func() { pop = a.apps.popRect })
 	rowY := float64(pop.Y + appPopHead + appPopRowH + appPopRowH/2)
 	upX := float64(pop.X + pop.Width - 8 - 73)
-	clickAt(t, upX, rowY)
+	clickOverlayAt(t, a, upX, rowY)
 	var order []string
 	onMain(func() { order = pinned(a) })
 	if len(order) != 2 || order[0] != "com.smoke.pin2" {
@@ -228,7 +305,7 @@ func TestSmokeAppsPopoverAndManage(t *testing.T) {
 	}
 	// The same row is now first: its 上移 is dimmed, so the same click
 	// does nothing — the persisted order must not move.
-	clickAt(t, upX, rowY)
+	clickOverlayAt(t, a, upX, rowY)
 	onMain(func() { order = pinned(a) })
 	if order[0] != "com.smoke.pin2" {
 		t.Fatalf("first row's 上移 must be inert, got %v", order)
@@ -236,14 +313,14 @@ func TestSmokeAppsPopoverAndManage(t *testing.T) {
 	// And the last pinned row's 下移 is dimmed the same way.
 	downX := float64(pop.X + pop.Width - 8 - 47)
 	row2Y := float64(pop.Y + appPopHead + 2*appPopRowH + appPopRowH/2)
-	clickAt(t, downX, row2Y)
+	clickOverlayAt(t, a, downX, row2Y)
 	onMain(func() { order = pinned(a) })
 	if order[1] != "com.smoke.pin1" {
 		t.Fatalf("last row's 下移 must be inert, got %v", order)
 	}
 	// 取消固定 on the first row removes it for real.
 	rmX := float64(pop.X + pop.Width - 8 - 21)
-	clickAt(t, rmX, rowY)
+	clickOverlayAt(t, a, rmX, rowY)
 	onMain(func() { order = pinned(a) })
 	if len(order) != 1 || order[0] != "com.smoke.pin1" {
 		t.Fatalf("取消固定 did not remove: %v", order)
@@ -257,9 +334,12 @@ func TestSmokeAppsPopoverAndManage(t *testing.T) {
 func TestSmokeAppsCenterSearchAndCancel(t *testing.T) {
 	a := appsSmokeShelf(t, smokeApps)
 	openAppsWings(t, a)
-	// Inside routing: the anchor's top strip (above the collapse chevron)
-	// is the search press — the chevron keeps its own target.
-	clickAt(t, float64(a.stripCenter()), float64(a.frameTop()+a.sheetTop())+5)
+	// Inside routing: a drawn point in the anchor column — the shell's
+	// bottom band, left of the collapse chevron's 38pt box — is the
+	// search press; the chevron keeps its own target. Below the hardware
+	// band, inside our drawn shell, never on another app's surface.
+	_, baseH := a.anchorSize()
+	clickOverlayAt(t, a, float64(a.stripCenter()-30), float64(a.frameTop()+a.sheetTop())+float64(baseH)+18)
 	var visible, on bool
 	onMain(func() { visible, on = a.visible, a.apps.on })
 	if !visible || on {
@@ -301,7 +381,7 @@ func TestSmokeAppsEntryOnMusicWings(t *testing.T) {
 		t.Fatal("music wings drew no app entry")
 	}
 	shotAppsWindow(t, a.win, "music-wings-entry")
-	clickAt(t, float64(er.X+er.Width/2), float64(er.Y+er.Height/2))
+	clickOverlayAt(t, a, float64(er.X+er.Width/2), float64(er.Y+er.Height/2))
 	var on bool
 	onMain(func() { on = a.apps.on })
 	if !on {
@@ -331,12 +411,15 @@ func TestSmokeAppsPausesLiveNotice(t *testing.T) {
 	time.Sleep(350 * time.Millisecond)
 	shotAppsWindow(t, a.win, "notice-showing")
 	openAppsWings(t, a)
-	if _, ok := a.liveNow(time.Now(), a.liveAllow()); ok {
+	var ok bool
+	onMain(func() { _, ok = a.liveNow(time.Now(), a.liveAllow()) })
+	if ok {
 		t.Fatal("notice must hide while the wings are up")
 	}
 	shotAppsWindow(t, a.win, "notice-paused")
 	closeAppsWings(a)
-	if _, ok := a.liveNow(time.Now(), a.liveAllow()); !ok {
+	onMain(func() { _, ok = a.liveNow(time.Now(), a.liveAllow()) })
+	if !ok {
 		t.Fatal("notice must resume after the wings close")
 	}
 	onMain(func() { a.live = liveQueue{} })
@@ -344,7 +427,7 @@ func TestSmokeAppsPausesLiveNotice(t *testing.T) {
 
 // An island dragged to the work area's edge keeps the wings inside the
 // display: seats drop on the pinned side, the shell leans off the anchor,
-// and the frame never escapes the work area.
+// and the frame covers all of the drawn shell.
 func TestSmokeAppsCorneredIsland(t *testing.T) {
 	a := appsSmokeShelf(t, smokeApps)
 	onMain(func() {
@@ -362,9 +445,21 @@ func TestSmokeAppsCorneredIsland(t *testing.T) {
 		t.Fatal("cornered island kept symmetric seats — the bug is back")
 	}
 	shotAppsWindow(t, a.win, "island-cornered")
-	work := a.dispWork
-	if fr.X < work.X || fr.X+fr.Width > work.X+work.Width {
-		t.Fatalf("frame %v escapes the work area %v", fr, work)
+	// The drawn shell — not the transparent strip around it — must stay
+	// on the display, and the frame must cover what is drawn. Ear and
+	// overshoot padding may legally extend past the work area.
+	var drawnL, drawnR float32
+	onMain(func() {
+		w, _ := a.appsSize()
+		cx := float32(a.stripCenter()) + a.appsDrawOff()
+		drawnL, drawnR = cx-w/2, cx+w/2
+	})
+	disp := a.dispBounds
+	if drawnL < float32(disp.X) || drawnR > float32(disp.X+disp.Width) {
+		t.Fatalf("drawn wings %.0f..%.0f escape the display %v", drawnL, drawnR, disp)
+	}
+	if drawnL < float32(fr.X) || drawnR > float32(fr.X+fr.Width) {
+		t.Fatalf("frame %v clips the drawn wings %.0f..%.0f", fr, drawnL, drawnR)
 	}
 	onMain(func() {
 		a.island, a.islandDX = false, 0

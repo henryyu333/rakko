@@ -1189,3 +1189,41 @@ func TestFrameCoversShiftedWings(t *testing.T) {
 		}
 	}
 }
+
+// 右翼无位时「更多」退到锚点下沿：一颗真实可达的按钮打开浮层，溢出座位
+// 与管理入口照常工作——不只是 moreRows 返回列表。
+func TestAppsMoreSeatWithoutRightWing(t *testing.T) {
+	a := appSwitchShelf(t)
+	a.island = true
+	a.dispWork = mygo.Rectangle{X: 0, Y: 0, Width: 800, Height: 600}
+	a.dispBounds = a.dispWork
+	a.islandDX = a.dispWork.X + a.dispWork.Width - islandIdleW/2 - 8 - a.anchorCenterX()
+	saved := []string{"com.t.pin"}
+	a.settings.PinnedApps = &saved
+	stubApps(t, &appsStub{
+		running: []mac.RunningApp{
+			{BundleID: "com.t.pin", Name: "Pin", PID: 1},
+			{BundleID: "com.t.a", Name: "Alpha", PID: 2},
+		},
+		paths: map[string]string{"com.t.pin": "/P"},
+	})
+	a.apps.on = true
+	a.refreshAppList()
+	if _, rs := a.appsSlots(); rs != 0 {
+		t.Skip("this display still fits a right wing")
+	}
+	v := appsTester(a, 800, 200)
+	if err := v.Click("更多"); err != nil {
+		t.Fatalf("fallback 更多 seat must be a real button: %v", err)
+	}
+	v.Frame()
+	if !a.apps.more {
+		t.Fatal("clicking the fallback 更多 seat did not open the popover")
+	}
+	if a.apps.popRect.Width <= 0 {
+		t.Fatal("popover did not record a drawn box")
+	}
+	if !v.HasText("Alpha") {
+		t.Fatal("overflow rows must still be reachable without a right wing")
+	}
+}

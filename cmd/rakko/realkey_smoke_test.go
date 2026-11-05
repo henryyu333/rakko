@@ -180,7 +180,13 @@ func writePrivateClipboard(format string, data []byte) error {
 // clickAt posts a real left click at screen point (x, y) through the HID
 // tap — the same path a physical mouse takes, so AppKit routes it to the
 // topmost window. The pointer is put back afterwards.
-func clickAt(t *testing.T, x, y float64) {
+// postRealClick posts a real left click at screen point (x, y) through the
+// HID tap — the same path a physical mouse takes. The pointer warps to the
+// point first so pointer-gated surfaces open before the press; guard runs
+// after the warp+move settle and must fail the test (t.Fatal) when the
+// target is unsafe. The pointer is restored on return, even when the
+// guard fails.
+func postRealClick(t *testing.T, x, y float64, guard func()) {
 	t.Helper()
 	lib, err := purego.Dlopen("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", purego.RTLD_LAZY)
 	if err != nil {
@@ -218,18 +224,15 @@ func clickAt(t *testing.T, x, y float64) {
 		old = getLoc(ev)
 		release(ev)
 	}
-	// The notch overlay takes the mouse only over the shell it drew, and
-	// its gate follows the pointer: a press sent while the pointer still
-	// sits elsewhere reaches the window underneath and makes WindowAtPoint
-	// answer that window. Move the pointer there first and give the move
-	// monitor a beat to open the gate (the same precondition the pin tests
-	// use), then check the target and press.
+	defer func() {
+		warp(old) // the user's pointer goes home no matter how the click ended
+		time.Sleep(50 * time.Millisecond)
+	}()
 	warp(mac.CGPoint{X: x, Y: y})
 	move := create(0, moved, mac.CGPoint{X: x, Y: y}, 0)
 	post(hidTap, move)
 	release(move)
-	time.Sleep(150 * time.Millisecond)
-	requireOwnMouseTarget(t, x, y)
+	guard()
 	for _, typ := range []uint32{leftDown, leftUp} {
 		ev := create(0, typ, mac.CGPoint{X: x, Y: y}, 0)
 		if ev == 0 {
@@ -240,8 +243,24 @@ func clickAt(t *testing.T, x, y float64) {
 		release(ev)
 		time.Sleep(60 * time.Millisecond)
 	}
-	warp(old)
-	time.Sleep(600 * time.Millisecond) // let the click, refresh and toast land
+	time.Sleep(550 * time.Millisecond) // let the click, refresh and toast land
+}
+
+// clickAt posts a real left click at screen point (x, y) through the HID
+// tap — the same path a physical mouse takes, so AppKit routes it to the
+// topmost window. The pointer is put back afterwards. The guard keeps the
+// strict work-area policy: clicks must land on an onscreen test window
+// inside the work area — no menu-bar, no foreign window targets.
+func clickAt(t *testing.T, x, y float64) {
+	t.Helper()
+	postRealClick(t, x, y, func() {
+		// The notch overlay takes the mouse only over the shell it drew,
+		// and its gate follows the pointer: the warp above already moved
+		// it there — give the move monitor a beat to open the gate (the
+		// same precondition the pin tests use), then check the target.
+		time.Sleep(150 * time.Millisecond)
+		requireOwnMouseTarget(t, x, y)
+	})
 }
 
 // postCmdC sends a real ⌘C through System Events, exactly what the user
