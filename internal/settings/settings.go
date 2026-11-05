@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"rakko/internal/agentnotify"
 )
@@ -79,6 +80,12 @@ type Settings struct {
 	// in the Settings window, and every one is an Electron-style
 	// accelerator ("Ctrl+Alt+Space").
 	Shortcuts ShortcutSettings `json:"shortcuts"`
+	// PinnedApps is the app switcher's 固定常用 list of bundle identifiers,
+	// in the order the wings show them. nil means the user never edited it
+	// and the switcher shows its defaults; an explicit empty list (the
+	// user unpinned everything or saved none) stays empty — a missing key
+	// and "none" are different states, like Lyrics's pointer.
+	PinnedApps *[]string `json:"pinnedApps,omitempty"`
 }
 
 // ShortcutSettings are the global keyboard shortcuts. A missing key keeps
@@ -101,6 +108,8 @@ type ShortcutSettings struct {
 	Awake string `json:"awake"`
 	Note  string `json:"note"`
 	Pet   string `json:"pet"`
+	// AppSwitch opens the app switcher wings on the notch; empty by default.
+	AppSwitch string `json:"appSwitch"`
 }
 
 // The shortcut defaults: the tray toggle, clipboard search and text
@@ -338,7 +347,34 @@ func Load(dir string) (Settings, error) {
 	s.ShellStyle = s.ShellStyle.Normalized()
 	s.Pet.Size = s.Pet.Size.Normalized()
 	s.AgentNotify.pruneOff()
+	s.PinnedApps = normalizePinnedApps(s.PinnedApps)
 	return s, nil
+}
+
+// PinnedAppsMax is the app switcher's 固定常用 cap: the wings have four seats.
+const PinnedAppsMax = 4
+
+// normalizePinnedApps drops blank and repeated bundle ids and applies the
+// wing cap, keeping the saved order. nil stays nil: an untouched setting is
+// not the same as a saved empty list.
+func normalizePinnedApps(apps *[]string) *[]string {
+	if apps == nil {
+		return nil
+	}
+	seen := make(map[string]bool, len(*apps))
+	out := make([]string, 0, len(*apps))
+	for _, id := range *apps {
+		id = strings.TrimSpace(id)
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, id)
+	}
+	if len(out) > PinnedAppsMax {
+		out = out[:PinnedAppsMax]
+	}
+	return &out
 }
 
 // LanguageOf reads the language dir/settings.json names, without creating,

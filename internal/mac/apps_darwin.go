@@ -163,3 +163,78 @@ func AppNameForBundleID(bundleID string) string {
 	})
 	return name
 }
+
+// RunningApp is one entry of the app switcher's snapshot: a regular GUI
+// application NSWorkspace reports as running.
+type RunningApp struct {
+	// BundleID is the stable identity: activation is by pid, but pinning
+	// and re-launching resolve the bundle id again.
+	BundleID string
+	// Name is the app's localized name, "" when the system reports none.
+	Name string
+	// PID is valid for this snapshot only; the process may exit any time.
+	PID int
+}
+
+// nsApplicationActivationPolicyRegular selects the ordinary foreground
+// applications: LaunchServices agents and accessories (menu-bar helpers
+// like ShelfU itself) do not belong in an app switcher.
+const nsApplicationActivationPolicyRegular = 0
+
+// RunningApps lists the regular GUI applications running now, through
+// NSWorkspace.runningApplications. Agents and accessory processes are
+// left out, and so is ShelfU itself. Apps without a bundle identifier
+// cannot be pinned or relaunched, so they are skipped too. Read-only, no
+// permission needed. Main thread only.
+func RunningApps() []RunningApp {
+	var out []RunningApp
+	own := OwnPID()
+	withPool(func() {
+		apps := send(send(class("NSWorkspace"), "sharedWorkspace"), "runningApplications")
+		n := sendInt(apps, "count")
+		out = make([]RunningApp, 0, n)
+		for i := range n {
+			app := send(apps, "objectAtIndex:", uintptr(i))
+			if app == 0 {
+				continue
+			}
+			if sendInt(app, "activationPolicy") != nsApplicationActivationPolicyRegular {
+				continue
+			}
+			if sendInt(app, "isTerminated") != 0 {
+				continue
+			}
+			bundleID := goString(send(app, "bundleIdentifier"))
+			pid := sendInt(app, "processIdentifier")
+			if bundleID == "" || pid == own {
+				continue
+			}
+			out = append(out, RunningApp{
+				BundleID: bundleID,
+				Name:     goString(send(app, "localizedName")),
+				PID:      pid,
+			})
+		}
+	})
+	return out
+}
+
+// AppPathForBundleID resolves a bundle identifier to its application
+// bundle path through NSWorkspace.URLForApplicationWithBundleIdentifier,
+// or "" when nothing installed answers for it — the app was uninstalled,
+// or the id was never an application. Read-only, no permission needed.
+// Main thread only.
+func AppPathForBundleID(bundleID string) string {
+	if bundleID == "" {
+		return ""
+	}
+	var path string
+	withPool(func() {
+		url := send(send(class("NSWorkspace"), "sharedWorkspace"),
+			"URLForApplicationWithBundleIdentifier:", uintptr(nsString(bundleID)))
+		if url != 0 {
+			path = goString(send(url, "path"))
+		}
+	})
+	return path
+}
