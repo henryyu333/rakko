@@ -125,7 +125,13 @@ func waitApps(t *testing.T, a *shelf, what string, cond func() bool) {
 	ok := waitMain(4*time.Second, func() bool {
 		done := cond()
 		if a.win != nil {
-			a.win.Invalidate() // pump the springs the wait is watching
+			// The fixture has no monitor tick: advance the springs the
+			// way shelf.startMonitoring does (and pin_smoke's ticker
+			// does), then present the frame — real animation progress,
+			// not a faked resting state.
+			a.animate(time.Now())
+			a.syncWindowFrame()
+			a.win.Invalidate()
 		}
 		return done
 	})
@@ -239,11 +245,11 @@ func closeAppsWings(t *testing.T, a *shelf) {
 		a.endAppSwitch()
 		a.win.Invalidate()
 	})
-	// fx.peekKind keeps its last drawn kind once the shell stops
-	// peeking — it is a display cache, not a state flag — so the fold is
-	// only observable as: mode off, no peek target, spring at rest.
+	// The product postcondition: the mode ended and its popover is
+	// gone. Whether the shell then peeks for a resumed notice is that
+	// test's own assertion, not the fold's.
 	waitApps(t, a, "the wings folded", func() bool {
-		return !a.apps.on && !a.peeking && a.peekProgress <= 0.01
+		return !a.apps.on && a.apps.popRect.Width == 0
 	})
 }
 
