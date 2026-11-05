@@ -184,11 +184,15 @@ func ReopenApp(bundleID string) bool {
 		if url == 0 {
 			return
 		}
-		// NSWorkspaceLaunchDefault (0) launches-or-activates without the
-		// "new instance" and "error when already running" variants.
+		// NSWorkspaceLaunchDefault == NSWorkspaceLaunchAsync (AppKit's
+		// own header aliases it): the Dock-style launch-or-activate
+		// without the "new instance"/"not running" variants, and the
+		// workspace hands the work off instead of blocking this thread
+		// until the app is up — a click on the UI must not stall on the
+		// target's own launch time.
 		configuration := send(class("NSDictionary"), "dictionary")
 		launched := send(ws, "launchApplicationAtURL:options:configuration:error:",
-			uintptr(url), uintptr(0), uintptr(configuration), 0)
+			uintptr(url), uintptr(nsWorkspaceLaunchDefault), uintptr(configuration), 0)
 		ok = launched != 0
 	})
 	return ok
@@ -205,6 +209,11 @@ type RunningApp struct {
 	// PID is valid for this snapshot only; the process may exit any time.
 	PID int
 }
+
+// nsWorkspaceLaunchDefault is AppKit's NSWorkspaceLaunchDefault, which its
+// header aliases to NSWorkspaceLaunchAsync (1<<16) — an asynchronous,
+// Dock-equivalent open. The raw constant: purego has no enum table.
+const nsWorkspaceLaunchDefault = 1 << 16
 
 // nsApplicationActivationPolicyRegular selects the ordinary foreground
 // applications: LaunchServices agents and accessories (menu-bar helpers
