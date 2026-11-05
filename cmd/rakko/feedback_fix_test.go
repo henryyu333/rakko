@@ -139,7 +139,7 @@ func TestCapsuleFoldsBackOnTheRetractSpring(t *testing.T) {
 	}
 }
 
-// #4: 回车复制 posts the confirmation and hides at once — the capsule must
+// #4: 回车粘贴 posts the confirmation and hides at once — the capsule must
 // take it over and show it for its remaining time.
 func TestHideHandsTheFreshToastToTheCapsule(t *testing.T) {
 	a := motionWindow()

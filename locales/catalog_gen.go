@@ -1565,6 +1565,16 @@ func (msgs Messages) ItemCopied() string {
 	return Catalog.Format(msgs.locale, "itemCopied", nil)
 }
 
+// ItemPasted says "已粘贴"
+// in the language the app shows.
+func ItemPasted() string { return In(i18n.Locale()).ItemPasted() }
+
+// ItemPasted says "已粘贴"
+// in the language of msgs.
+func (msgs Messages) ItemPasted() string {
+	return Catalog.Format(msgs.locale, "itemPasted", nil)
+}
+
 // ItemCopiedImage says "已复制图片 · 在其他应用按 ⌘V 粘贴"
 // in the language the app shows.
 func ItemCopiedImage() string { return In(i18n.Locale()).ItemCopiedImage() }
@@ -5143,14 +5153,44 @@ func (msgs Messages) ClipPinned() string {
 	return Catalog.Format(msgs.locale, "clipPinned", nil)
 }
 
-// ClipCopyHint says "↩ 复制"
+// ClipPasteHint says "↩ 粘贴"
 // in the language the app shows.
-func ClipCopyHint() string { return In(i18n.Locale()).ClipCopyHint() }
+func ClipPasteHint() string { return In(i18n.Locale()).ClipPasteHint() }
 
-// ClipCopyHint says "↩ 复制"
+// ClipPasteHint says "↩ 粘贴"
 // in the language of msgs.
-func (msgs Messages) ClipCopyHint() string {
-	return Catalog.Format(msgs.locale, "clipCopyHint", nil)
+func (msgs Messages) ClipPasteHint() string {
+	return Catalog.Format(msgs.locale, "clipPasteHint", nil)
+}
+
+// ClipShortcut says "⌘{n} 粘贴"
+// in the language the app shows.
+func ClipShortcut(n string) string { return In(i18n.Locale()).ClipShortcut(n) }
+
+// ClipShortcut says "⌘{n} 粘贴"
+// in the language of msgs.
+func (msgs Messages) ClipShortcut(n string) string {
+	return Catalog.Format(msgs.locale, "clipShortcut", map[string]any{"n": n})
+}
+
+// ClipPasteManual says "已复制 · 按 ⌘V 粘贴"
+// in the language the app shows.
+func ClipPasteManual() string { return In(i18n.Locale()).ClipPasteManual() }
+
+// ClipPasteManual says "已复制 · 按 ⌘V 粘贴"
+// in the language of msgs.
+func (msgs Messages) ClipPasteManual() string {
+	return Catalog.Format(msgs.locale, "clipPasteManual", nil)
+}
+
+// ClipPasteNeedsAccessibility says "已复制 · 开启辅助功能后可直接粘贴"
+// in the language the app shows.
+func ClipPasteNeedsAccessibility() string { return In(i18n.Locale()).ClipPasteNeedsAccessibility() }
+
+// ClipPasteNeedsAccessibility says "已复制 · 开启辅助功能后可直接粘贴"
+// in the language of msgs.
+func (msgs Messages) ClipPasteNeedsAccessibility() string {
+	return Catalog.Format(msgs.locale, "clipPasteNeedsAccessibility", nil)
 }
 
 // ClipMovedName says "{name} · 已移动"

@@ -3,7 +3,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -369,13 +368,20 @@ func (a *shelf) view(c *ui.Context) {
 	if c.Shortcut(0, ui.KeyEscape) {
 		a.escape()
 	}
+	// 剪贴板标签的粘贴：⏎ 粘贴选中项，⌘1..⌘9 粘贴当前显示顺序的第 1..9 项。
+	// 只在面板开着、且停在这一页时注册，别的页、收起的面板和其他应用都收不到。
 	c.OnShortcut(ui.Cmd, ui.KeyQ, mygo.App.Quit)
-	// 剪贴板标签的回车：焦点在搜索框时由输入框的 OnTextKey 处理（输入框先
-	// 拿到方向键和回车），焦点在别处时在这里兜底。Esc 无此需要：输入框不
-	// 消费它，窗口顶部注册的 Shortcut 已经覆盖所有焦点位置。
 	if a.visible && a.tab == pageClipboard {
+		// 焦点在搜索框时回车由输入框的 OnTextKey 处理（输入框先拿到方向键和
+		// 回车），焦点在别处时在这里兜底。⌘1..⌘9 输入框不注册，按键一律
+		// 路由到这里。Esc 无此需要：输入框不消费它，窗口顶部注册的 Shortcut
+		// 已经覆盖所有焦点位置。
 		if c.Shortcut(0, ui.KeyEnter) {
-			a.copyClipSelection()
+			a.pasteClipSelection()
+		}
+		for i, key := range clipShortcutKeys {
+			n := i + 1
+			c.OnShortcut(ui.Cmd, key, func() { a.pasteClipIndex(n) })
 		}
 	}
 	// 托盘页选中一张图片时，⌘C 复制图片数据（文件项保持原有行为）。
@@ -1314,10 +1320,11 @@ func (a *shelf) clearable(list []store.Item, id pageID) []store.Item {
 // searchField is the clipboard page's search box in the back row: a 150 ×
 // 22 fill1 capsule with a magnifier, ink text and an accent caret. Typing
 // filters the list as it goes; while the shelf was opened for search the
-// box keeps the keyboard focus, so ↑/↓ walk the list and ⏎ copies and
-// collapses without reaching for the mouse. Esc clears the search first,
-// then closes the panel outright: the ⌃⌥V flow opens straight on the sheet,
-// so there is no island state to back out to (see shelf.escape).
+// box keeps the keyboard focus, so ↑/↓ walk the list and ⏎ pastes (⌘1..⌘9
+// paste a numbered row directly, see paste.go) without reaching for the
+// mouse. Esc clears the search first, then closes the panel outright: the
+// ⌃⌥V flow opens straight on the sheet, so there is no island state to back
+// out to (see shelf.escape).
 func (a *shelf) searchField(c *ui.Context, live bool) ui.Element {
 	placeholder := loc(c).PanelSearch()
 	wrap := ui.Row(c.Key("clip-search")).Width(clipSearchW).Height(clipSearchH).Padding(0, 8, 0, 8).Gap(5).
@@ -1359,7 +1366,7 @@ func (a *shelf) searchField(c *ui.Context, live bool) ui.Element {
 			case ui.KeyDown:
 				a.moveClipSelection(1)
 			case ui.KeyEnter:
-				a.copyClipSelection()
+				a.pasteClipSelection()
 			case ui.KeyEscape:
 				a.escape()
 			default:
@@ -1947,6 +1954,12 @@ func (a *shelf) setTab(id pageID) {
 	a.syncCopyKey()
 }
 
+// clipShortcutKeys are the digits ⌘1..⌘9 paste by, in the order the panel
+// numbers its rows.
+var clipShortcutKeys = []ui.Key{
+	ui.Key1, ui.Key2, ui.Key3, ui.Key4, ui.Key5, ui.Key6, ui.Key7, ui.Key8, ui.Key9,
+}
+
 // moveClipSelection moves the clipboard tab's selection by delta rows
 // (↑/↓ in the search field). With nothing selected yet, ↓ starts at the
 // first row and ↑ at the last; the row is scrolled into view.
@@ -1968,30 +1981,5 @@ func (a *shelf) moveClipSelection(delta int) {
 	}
 }
 
-// copyClipSelection is ⏎ on the clipboard tab: the selected item goes on
-// the clipboard — text as text, an image as PNG — and the shelf collapses,
-// so ⌘V pastes it into the app the user came from. Several selected texts
-// are copied one per line.
-func (a *shelf) copyClipSelection() {
-	items := a.selection.chosen(a.visibleItems())
-	if len(items) == 0 {
-		return
-	}
-	if len(items) == 1 {
-		if a.copyItem(items[0]) {
-			a.hide(hideExplicit)
-		}
-		return
-	}
-	var texts []string
-	for _, it := range items {
-		if it.Kind != store.KindText {
-			a.report(errors.New(a.appLoc().PanelCopyManyFailed()))
-			return
-		}
-		texts = append(texts, it.Text)
-	}
-	if a.copyText(strings.Join(texts, "\n")) {
-		a.hide(hideExplicit)
-	}
-}
+// pasteClipSelection (⏎) and pasteClipIndex (⌘1..⌘9) live in paste.go: both
+// paste into the app the picker was opened over, and fall back to a copy.

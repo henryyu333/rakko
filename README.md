@@ -61,7 +61,7 @@ It lives in the menu bar, has no Dock icon, keeps everything on your Mac, and ne
 
 **Clipboard history**
 - Text you copy is kept automatically, along with the app it came from. Screenshots and copied images land on the shelf too.
-- Press `⌃⌥V` to search: type to filter — the first match is already selected and marked ↩ Copy — ↑/↓ to choose, ⏎ copies it and takes you back to the app you were in. Text inside screenshots and copied pictures is recognized on this Mac and searchable too; right-click a picture → Copy Recognized Text to copy what it says.
+- Press `⌃⌥V` to paste: type to filter — rows are numbered; `⌘1`…`⌘9` paste the first nine of the list as shown, and ↑/↓ then ⏎ pastes the selected one. The panel folds away, the app you were in takes the keyboard back, and the item is pasted there. Without Accessibility permission Rakko only copies and says so — press `⌘V` yourself. Text inside screenshots and copied pictures is recognized on this Mac and searchable too; right-click a picture → Copy Recognized Text to copy what it says.
 - Pin what matters. Exclude apps you never want recorded. Passwords that password managers mark as private are skipped.
 
 **Sticky notes**
@@ -233,7 +233,7 @@ Coming from the older Shelf app? Rakko copies from `Application Support/Shelf/` 
 | Take something out | Drag it from the shelf into any app; ⌘/⇧-click to take several at once |
 | Copy text back | Click a text item, then paste with `⌘V` |
 | Copy image data | Select one picture and press `⌘C`, or right-click it → Copy Image — the clipboard gets PNG data, not the path |
-| Search what you copied | Press `⌃⌥V` — the Clipboard page opens with the search field ready; type, pick with ↑/↓, press ⏎ |
+| Paste what you copied | Press `⌃⌥V` — the Clipboard page opens with the search field ready; type, then `⌘1`…`⌘9` paste that row, or pick with ↑/↓ and press ⏎ |
 | Switch pages | Click a page in the capsule under the search bar; the current page's button returns to the bar, and the panel keeps its size (Home is the one page that widens, while its lyrics column is open) |
 | Control music | On Home: previous, play-pause and next, or drag the progress bar to skip; the lyrics button is at its bottom left, and the 2 × 2 music card on Tools keeps the volume bar |
 | Pin, remove, Quick Look, AirDrop | Right-click an item (Space also opens Quick Look) |
@@ -325,7 +325,7 @@ Rakko 是住在 Mac 刘海里的工具：它把摄像头周围那块黑色刘海
 
 **剪贴板记录**
 - 复制过的文字会自动收好，并记住来自哪个应用；截图和复制的图片也会进托盘。
-- 按 `⌃⌥V` 搜索：输入即筛选，第一条自动选中，选中行右侧写「↩ 复制」；`↑`/`↓` 选择，回车复制并回到你原来的应用。截图和复制的图片里的文字会在本机识别，也能搜到；右键图片 →「识别文字并复制」可以直接复制图中文字。
+- 按 `⌃⌥V` 粘贴：输入即筛选，行首带编号，`⌘1`…`⌘9` 直接粘贴当前显示顺序的前九项；`↑`/`↓` 选择后回车粘贴选中项。面板收起、键盘回到你原来的应用，内容直接贴在光标处。没有辅助功能权限时只复制并明确提示，自己按 `⌘V` 即可。截图和复制的图片里的文字会在本机识别，也能搜到；右键图片 →「识别文字并复制」可以直接复制图中文字。
 - 重要的内容可以置顶；不想被记录的应用可以排除；密码管理器标记为隐私的密码不会被记录。
 
 **便利贴**
@@ -497,7 +497,7 @@ macOS 会把 Rakko 当成一个新应用，所以升级后系统权限和「开�
 | 拿东西出去 | 从托盘拖到任意应用；按住 `⌘` 或 `⇧` 可以一次拖多个 |
 | 把文字复制回来 | 单击文字项，再在任意地方 `⌘V` 粘贴 |
 | 复制图片数据 | 选中一张图片后按 `⌘C`，或右键图片 →「复制图片」，再在目标应用 `⌘V` 粘贴（复制的是图片，不是路径） |
-| 搜索复制过的内容 | 按 `⌃⌥V`，「剪贴板」页直接打开、搜索框已就位；输入关键词，`↑`/`↓` 选择，回车 |
+| 粘贴复制过的内容 | 按 `⌃⌥V`，「剪贴板」页直接打开、搜索框已就位；输入关键词，`⌘1`…`⌘9` 直接粘贴该行，或 `↑`/`↓` 选择后回车 |
 | 切换页面 | 点搜索条下方胶囊里的页面（点当前页面的按钮回到搜索条）；面板尺寸不变（只有首页在歌词栏打开时加宽） |
 | 控制音乐 | 在首页：上一首 / 播放暂停 / 下一首，拖动进度条跳转；歌词按钮在左下角，音量条在工具页 2×2 的音乐卡片上 |
 | 置顶、移除、快速查看、隔空投送 | 右键项目（快速查看也可以直接按空格） |

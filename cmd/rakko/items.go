@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -159,9 +160,10 @@ func formatBadge(c *ui.Context, item store.Item) {
 
 // clipRow is one clipboard-tab list row: 30pt, the source app's icon (or
 // a text glyph), the captured text single-line, 「应用 · 相对时间」 on the
-// right, the pin mark on pinned rows and 「↩ 复制」 on the selected one
-// while searching.
-func (a *shelf) clipRow(c *ui.Context, item store.Item) {
+// right, the pin mark on pinned rows and 「↩ 粘贴」 on the selected one
+// while searching. number is the row's ⌘N shortcut (1..9) or 0; it is drawn
+// as a muted digit so the shortcut needs no explaining.
+func (a *shelf) clipRow(c *ui.Context, item store.Item, number int) {
 	l := tloc(c)
 	title := itemTitleIn(l, item)
 	row := ui.Row(c.Key(item.ID)).Height(clipRowH).Padding(0, 8, 0, 8).Gap(8).Radius(8).
@@ -189,6 +191,10 @@ func (a *shelf) clipRow(c *ui.Context, item store.Item) {
 	}
 	row.ContextMenu(func(m *ui.Menu) { a.itemMenu(m, item) })
 	row.Children(func() {
+		if number > 0 {
+			ui.Text(c, strconv.Itoa(number)).SingleLine().FontSize(10).TextColor(ink3).
+				Width(9).TextAlign(ui.Center).Label(a.appLoc().ClipShortcut(strconv.Itoa(number)))
+		}
 		a.clipRowIcon(c, item)
 		text := title
 		if item.Kind == store.KindImage {
@@ -196,7 +202,7 @@ func (a *shelf) clipRow(c *ui.Context, item store.Item) {
 		}
 		ui.Text(c, text).SingleLine().FontSize(12).TextColor(ink).Grow(1).MinWidth(0)
 		if selected && a.focusMode {
-			ui.Text(c, l.ClipCopyHint()).SingleLine().FontSize(10.5).TextColor(ink3)
+			ui.Text(c, l.ClipPasteHint()).SingleLine().FontSize(10.5).TextColor(ink3)
 		}
 		if item.Pinned {
 			ui.Icon(c.Key("pin"), pinFill).Size(10, 10).TextColor(ink.Alpha(0.5)).Label(l.ClipPinned())

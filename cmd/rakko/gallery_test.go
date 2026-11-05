@@ -896,7 +896,7 @@ func galleryGroupE() []galleryItem {
 		}, "")},
 		{ID: "E4", Group: g, Title: "剪贴板", State: "搜索中 · 命中并选中", Build: filtered("git", true)},
 		{ID: "E5", Group: g, Title: "剪贴板", State: "搜索无结果", Build: filtered("没有这段文字", true)},
-		{ID: "E6", Group: g, Title: "剪贴板", State: "键盘提示条 · ↑↓ 选择 ⏎ 复制", Build: func(t *testing.T, lang string) galleryRender {
+		{ID: "E6", Group: g, Title: "剪贴板", State: "键盘提示条 · ↑↓ 选择 ⏎ 粘贴", Build: func(t *testing.T, lang string) galleryRender {
 			r := filtered(galleryText(lang, "改成", "Change"), true)(t, lang)
 			if len(r.view.Texts()) > 0 {
 				r.view.Frame()

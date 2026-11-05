@@ -327,8 +327,13 @@ func (p *clipboardPage) body(c *ui.Context, _ bool, _ bool) ui.Element {
 			ui.Column(c.Key("clip-list")).Gap(clipRowGap).FillWidth().Children(func() {
 				for i, item := range list {
 					rowTop := float32(i*(clipRowH+clipRowGap)) - p.scroll.Y
+					// 前 9 行带 ⌘N 编号（只有活着的那一页才提示，退场画面不抢戏）。
+					number := 0
+					if i < len(clipShortcutKeys) && a.tab == pageClipboard {
+						number = i + 1
+					}
 					a.fadedRow(c, item.ID, rowTop, clipRowH, viewH, top, bottom, band, func() {
-						a.clipRow(c, item)
+						a.clipRow(c, item, number)
 					})
 				}
 			})

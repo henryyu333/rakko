@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -182,6 +183,11 @@ type shelf struct {
 	// 文件读不通时界面用默认布局，但禁止任何写回以免覆盖可恢复原件。
 	toolsLay       *layout.Layout
 	toolsLayBroken bool
+
+	// pasteSeq 是剪贴板粘贴尝试的代号（paste.go）：每次新选择、收起或重新
+	// 打开都会加一，旧尝试看到代号变了就不再按键，快速连按也不会双重粘贴。
+	// 后台 goroutine 读它，因此用原子量而不是普通字段。
+	pasteSeq atomic.Int64
 }
 
 func (a *shelf) toggle() {
@@ -334,7 +340,7 @@ func (a *shelf) showStatusFeedback(now time.Time) {
 }
 
 // handoffStatus moves a live status to the notch capsule when the panel
-// folds: a toast posted moments before a collapse (回车复制即收起) would
+// folds: a toast posted moments before a collapse (回车粘贴即收起) would
 // otherwise die with the pill after a single frame. A toast the panel or
 // the capsule already showed long enough (its kind's floor) is not
 // replayed — an armed capsule that ran its span stays done, and a capsule
@@ -566,6 +572,8 @@ func (a *shelf) openClipboardSearch() {
 	// This open takes the panel over: a queued services flash or a
 	// drag-edge auto-collapse must never hide the search underneath.
 	a.takeServiceOwnership()
+	// 重新打开是新一轮：上一次还在等焦点的粘贴立即作废。
+	a.cancelPaste()
 	a.edgeOpened = false
 	if a.win != nil && !a.focusMode {
 		if pid := mac.FrontmostPID(); pid > 0 && pid != mac.OwnPID() {

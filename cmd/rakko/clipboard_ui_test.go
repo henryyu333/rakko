@@ -397,8 +397,8 @@ func TestSelectionFollowsTheVisibleList(t *testing.T) {
 	}
 }
 
-// 剪贴板图片可以经 ⏎ 以 PNG 形式复制。
-func TestEnterCopiesImageAsPNG(t *testing.T) {
+// 剪贴板图片经 ⏎ 以 PNG 形式写入剪贴板；没有可回到的应用时只复制并收起。
+func TestEnterPastesImageAsPNG(t *testing.T) {
 	a, _, _ := clipShelf(t)
 	img := image.NewRGBA(image.Rect(0, 0, 4, 4))
 	var buf bytes.Buffer
@@ -410,7 +410,7 @@ func TestEnterCopiesImageAsPNG(t *testing.T) {
 	}
 	a.setTab(pageClipboard)
 	a.selection.only(a.visibleItems()[0].ID)
-	a.copyClipSelection()
+	a.pasteClipSelection()
 	got := a.write.(*recordClip).png
 	if len(got) == 0 {
 		t.Fatal("⏎ on an image wrote no PNG")
@@ -419,7 +419,10 @@ func TestEnterCopiesImageAsPNG(t *testing.T) {
 		t.Fatalf("⏎ on an image did not write a PNG: %v", err)
 	}
 	if a.visible {
-		t.Fatal("copying an image did not collapse the shelf")
+		t.Fatal("the paste flow did not collapse the shelf")
+	}
+	if !strings.Contains(a.status, "⌘V") {
+		t.Fatalf("status %q does not say how to paste without a target app", a.status)
 	}
 }
 
@@ -510,15 +513,15 @@ func TestClearKeepsPinnedItems(t *testing.T) {
 	}
 }
 
-// 复制写不进剪贴板时托盘不收起，让用户看到失败提示。
-func TestCopyFailureKeepsShelfOpen(t *testing.T) {
+// 写不进剪贴板时面板不收起，让用户看到失败提示。
+func TestPasteWriteFailureKeepsShelfOpen(t *testing.T) {
 	a, view, _ := clipShelf(t, "won't paste")
 	a.write = failClip{}
 	a.tab = pageClipboard
 	a.focusMode = true
 	a.selection.only(a.store.Items[0].ID)
 	view.Frame()
-	a.copyClipSelection()
+	a.pasteClipSelection()
 	if !a.visible {
 		t.Fatal("shelf hid although the copy failed")
 	}

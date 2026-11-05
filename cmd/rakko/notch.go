@@ -1265,6 +1265,8 @@ func (a *shelf) hide(exit hideExit) {
 	a.animationFrom, a.animationStart = a.progress, time.Now()
 	a.peekFrom, a.peekAnimStart = a.peekProgress, time.Now()
 	a.prevAppPID = 0
+	// 收起即作废在途粘贴（paste.go）：代号变了，等待焦点的尝试不再按键。
+	a.cancelPaste()
 	// The keyboard went back with the close: a reopen before the fade ends
 	// must open the search bar, not the clipboard search it was left on.
 	a.focusMode = false
