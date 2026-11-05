@@ -460,6 +460,10 @@ func TestSmokeAppsEntryOnMusicWings(t *testing.T) {
 		return er.Width > 0 && a.fx.peekKind == peekWings
 	})
 	shotAppsWindow(t, a.win, "music-wings-entry")
+	// The box the wait captured belongs to an earlier frame: re-read the
+	// entry's current drawn position right before the click — the wings
+	// may have re-laid out since (real shot: 689 stale vs 864 drawn).
+	onMain(func() { er = a.apps.entryRect })
 	clickOverlayAt(t, a, float64(er.X+er.Width/2), float64(er.Y+er.Height/2))
 	var on bool
 	onMain(func() { on = a.apps.on })
