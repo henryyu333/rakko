@@ -19,6 +19,10 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          # TestReleaseVersion compares mygo.json with every v* tag and the
+          # commit each one points at; a shallow clone has no tags.
+          fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
