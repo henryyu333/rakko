@@ -10,6 +10,11 @@
 </p>
 
 <p align="center">
+  <strong>Early development · 早期开发中</strong><br>
+  Features and stability are still being improved. · 功能与稳定性仍在持续完善。
+</p>
+
+<p align="center">
   <a href="https://github.com/henryyu333/rakko/releases/latest/download/Rakko.dmg"><img src="https://img.shields.io/badge/Download_for_macOS-Rakko.dmg-007AFF?style=for-the-badge&logo=apple&logoColor=white" alt="Download Rakko.dmg for macOS"></a>
 </p>
 
