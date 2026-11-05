@@ -120,6 +120,7 @@ A tool counts as installed only by files it writes itself, so a stray `~/.claude
 
 **Search bar and pages**
 - A click on the notch (or `⌃⌥Space`) grows a black search bar out of it and puts the keyboard in its field. Type to search this Mac: the sheet under the bar lists the Tray, the Clipboard and your sticky notes first, then apps, folders, files and actions. A row is two lines — the name (pictures show a thumbnail), then the folder it lives in, the app it came from and the time, or the time. ↑/↓ chooses a row, ⏎ opens it (or copies the text, brings up the note, or runs the action), and ⌘⏎ shows a file in the Finder. The action bar inside the sheet's last row names both keys: Open ↩, and Show in Finder ⌘↩ for files, folders and apps.
+- The bar searches everything (全部) unless you say otherwise: before typing, press Tab to switch to 应用 (applications only) or 文件 (files and your own content, no applications) — a small capsule right of the field names the mode and carries the Tab hint. The mode belongs to that one search: a fresh bar always starts on 全部, and nothing is saved. In 应用 mode the index is only asked for application bundles, never for document text.
 - The capsule hanging under the bar carries the pages — Home, Tray, Clipboard, Tools, and AI Usage when it is on — beside Settings and Collapse. A page grows out of the notch in the bar's place; the current page's button takes you back to the bar.
 - Esc steps back: a page returns to the search bar, a typed query clears first, and the next Esc folds the panel into the notch.
 
@@ -384,6 +385,7 @@ Rakko 是住在 Mac 刘海里的工具：它把摄像头周围那块黑色刘海
 
 **搜索条与页面**
 - 点刘海（或按 `⌃⌥Space`）从刘海里长出一条黑色搜索条，键盘直接进输入框。输入就能搜整台 Mac：下方结果面板先列托盘、剪贴板、便利贴，再列应用、文件夹、文件和动作；每一行是两行字——名字（图片在最左边显示缩略图），下面是所在文件夹 / 来源应用 · 时间 / 时间。`↑`/`↓` 选择，回车打开（文字则复制，便利贴则打开它的窗口，动作则执行），`⌘回车` 在 Finder 中显示。面板最后一行的动作条把两个键写出来：「打开 ↩」，文件和文件夹、应用还有「在 Finder 中显示 ⌘↩」。
+- 搜索默认搜「全部」；还没输入时按 `Tab` 可切到「应用」（只搜应用）或「文件」（文件、文件夹和你自己的内容，不含应用），搜索框右侧的小胶囊会写明当前模式，空框时还带 `Tab` 键帽提示。模式只属于这一次搜索：重新打开搜索条一定回到「全部」，也不会保存。选「应用」时只向系统索引要应用包，不再查文档正文。
 - 搜索条下方挂着页面胶囊：首页、托盘、剪贴板、工具，打开 AI 用量后还有 AI 用量，旁边是设置和收起。点一个页面，它在搜索条原来的位置长出来；点当前页面的按钮回到搜索条。
 - Esc 一级一级往回退：页面回到搜索条，有输入时先清空输入，再按一次收回刘海。
 
