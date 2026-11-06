@@ -487,7 +487,9 @@ func (f *weeklyFeature) aiNote(c *ui.Context, w float32, text string) {
 	ui.Text(c, text).FontSize(10.5).TextColor(ink3).MaxWidth(w).Margin(8, 0, 0, 0)
 }
 
-// aiMetrics is the token total beside the estimated cost.
+// aiMetrics is the token total beside the estimated cost. Both are one
+// number with one inline label, so the two sit on the same baseline; the
+// estimate's caveat stays in the section note below.
 func (f *weeklyFeature) aiMetrics(c *ui.Context, w float32, sum aiusage.Summary) {
 	l := tloc(c)
 	tokens := weeklyTokens(sum.Total)
@@ -496,13 +498,13 @@ func (f *weeklyFeature) aiMetrics(c *ui.Context, w float32, sum aiusage.Summary)
 			panelLabel(c, nil, tokens, 23, 620).TextColor(ink)
 			panelLabel(c, nil, "Token", 11, 0).TextColor(ink2).Margin(0, 0, 2, 0)
 		})
-		ui.Column(c.Key("cost")).Gap(2).Children(func() {
+		ui.Row(c.Key("cost")).AlignItems(ui.End).Gap(4).Children(func() {
 			value := "—"
 			if sum.Total.Cost > 0 {
 				value = fmt.Sprintf("≈$%.2f", sum.Total.Cost)
 			}
 			panelLabel(c, nil, value, 23, 620).TextColor(ink)
-			panelLabel(c, nil, l.WeeklyAiCost(), 10, 0).TextColor(ink3)
+			panelLabel(c, nil, l.WeeklyAiCost(), 11, 0).TextColor(ink2).Margin(0, 0, 2, 0)
 		})
 	})
 }
@@ -534,27 +536,35 @@ func (f *weeklyFeature) aiTrack(c *ui.Context, w float32, sum aiusage.Summary) {
 		}
 		return parts[i].tool < parts[j].tool
 	})
-	ui.Row(c.Key("weekly-ai-track")).Width(w).Height(5).Margin(16, 0, 0, 0).Gap(3).Radius(3).Children(func() {
-		usable := w - 3*float32(len(parts)-1)
-		used := float32(0)
-		for i, p := range parts {
-			width := float32(0)
-			if i == len(parts)-1 {
-				width = usable - used
-			} else {
-				width = max(2, usable*float32(p.value)/float32(total))
-				used += width
+	// One source is the whole bar: a full-width stripe would only read as a
+	// divider. The legend below still names it and its tokens.
+	if len(parts) > 1 {
+		ui.Row(c.Key("weekly-ai-track")).Width(w).Height(5).Margin(16, 0, 0, 0).Gap(3).Radius(3).Children(func() {
+			usable := w - 3*float32(len(parts)-1)
+			used := float32(0)
+			for i, p := range parts {
+				width := float32(0)
+				if i == len(parts)-1 {
+					width = usable - used
+				} else {
+					width = max(2, usable*float32(p.value)/float32(total))
+					used += width
+				}
+				if width <= 0 {
+					continue
+				}
+				ui.Box(c.Key("seg-"+string(p.tool))).Height(5).Radius(2).Width(width).
+					Background(weeklyToolTint(i)).Label(weeklyToolName(p.tool))
 			}
-			if width <= 0 {
-				continue
-			}
-			ui.Box(c.Key("seg-"+string(p.tool))).Height(5).Radius(2).Width(width).
-				Background(weeklyToolTint(i)).Label(weeklyToolName(p.tool))
-		}
-	})
+		})
+	}
+	legendTop := float32(9)
+	if len(parts) == 1 {
+		legendTop = 12
+	}
 	for i := 0; i < len(parts); i += 3 {
 		end := min(i+3, len(parts))
-		ui.Row(c.Key("weekly-ai-legend-"+strconv.Itoa(i))).Width(w).Margin(9, 0, 0, 0).
+		ui.Row(c.Key("weekly-ai-legend-"+strconv.Itoa(i))).Width(w).Margin(legendTop, 0, 0, 0).
 			Gap(16).AlignItems(ui.Center).Children(func() {
 			for j := i; j < end; j++ {
 				p := parts[j]
