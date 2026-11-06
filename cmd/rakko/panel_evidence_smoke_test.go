@@ -322,11 +322,32 @@ func compareWithPrototype(t *testing.T, page string, w, h, ox, oy int) {
 	t.Logf("compare %s -> %s", page, path)
 }
 
+// prototypeDir walks up from the test working directory to the repo root and
+// returns design/prototype-panel, so the test does not depend on an absolute
+// checkout path.
+func prototypeDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "design", "prototype-panel", "index.html")); err == nil {
+			return filepath.Join(dir, "design", "prototype-panel")
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatalf("design/prototype-panel not found above %s", dir)
+		}
+		dir = parent
+	}
+}
+
 // prototypeShot opens a copy of the prototype with one state preloaded and
 // captures the 1470 × 956 screen with headless Chrome.
 func prototypeShot(t *testing.T, name, tab string, island, music bool, extra string) (string, error) {
 	t.Helper()
-	src := "/Users/y3u/AIProjects/test/y3/design/prototype-panel/index.html"
+	src := filepath.Join(prototypeDir(t), "index.html")
 	body, err := os.ReadFile(src)
 	if err != nil {
 		return "", err
