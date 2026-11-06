@@ -119,6 +119,9 @@ const (
 	Range7d
 	Range30d
 	RangeAll
+	// RangeSpan marks a Summary built by SummarySpan: an arbitrary [from,
+	// to) span that none of the fixed ranges names.
+	RangeSpan
 )
 
 // Totals sums records over a range; Unpriced counts records without a

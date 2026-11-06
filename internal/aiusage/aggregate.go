@@ -1,6 +1,7 @@
 package aiusage
 
 import (
+	"math"
 	"sort"
 	"time"
 )
@@ -23,8 +24,8 @@ func (s *Scanner) Summary(r Range, now time.Time) Summary {
 	loc := now.Location()
 	midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
 
-	var bounds []time.Time // nb+1 civil boundaries
-	var fromMs, toMs int64 // non-All pre-filter (toMs exclusive)
+	var bounds []time.Time
+	fromMs, toMs := int64(math.MinInt64), int64(math.MaxInt64) // toMs exclusive
 
 	switch r {
 	case RangeToday:
@@ -94,6 +95,50 @@ func (s *Scanner) Summary(r Range, now time.Time) Summary {
 		}
 	}
 
+	return s.summarize(r, loc, bounds, fromMs, toMs)
+}
+
+// SummarySpan aggregates the records inside [from, to) into one daily bucket
+// per civil day that touches the span, in the calendar of from's location.
+// It is the arbitrary-range sibling of Summary: the 每周简报 asks for one
+// Monday-to-Monday week, which none of the fixed ranges names. A bucket
+// always starts at its day's local midnight; totals cover only the records
+// inside the span, so a span that starts mid-day leaves the earlier part of
+// that first day out. The range is empty when to is not after from.
+//
+// Records from sources this Scanner was not built to read never appear, the
+// same dedupe rule as Summary applies, and the call is safe to make
+// concurrently with Scan.
+func (s *Scanner) SummarySpan(from, to time.Time) Summary {
+	if !to.After(from) {
+		return Summary{Range: RangeSpan, ByTool: map[Tool]Totals{}}
+	}
+	loc := from.Location()
+	start := time.Date(from.In(loc).Year(), from.In(loc).Month(), from.In(loc).Day(), 0, 0, 0, 0, loc)
+	end := time.Date(to.In(loc).Year(), to.In(loc).Month(), to.In(loc).Day(), 0, 0, 0, 0, loc)
+	if !end.After(start) {
+		// A span inside one civil day still gets that day's bucket.
+		end = start.AddDate(0, 0, 1)
+	} else if !end.Equal(to) {
+		// A span that ends mid-day needs the bucket for that last day.
+		end = end.AddDate(0, 0, 1)
+	}
+
+	bounds := make([]time.Time, 0, 8)
+	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
+		bounds = append(bounds, d)
+	}
+	bounds = append(bounds, end)
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.summarize(RangeSpan, loc, bounds, from.UnixMilli(), to.UnixMilli())
+}
+
+// summarize aggregates the snapshot's records into the given civil
+// boundaries, keeping totals and per-tool totals over [fromMs, toMs) while
+// bucket starts stay the boundaries' local midnights. Callers hold mu.
+func (s *Scanner) summarize(r Range, loc *time.Location, bounds []time.Time, fromMs, toMs int64) Summary {
 	summary := Summary{
 		Range:   r,
 		ByTool:  map[Tool]Totals{},
@@ -130,7 +175,7 @@ func (s *Scanner) Summary(r Range, now time.Time) Summary {
 				}
 				keys[rc.key] = true
 			}
-			if r != RangeAll && (rc.at < fromMs || rc.at >= toMs) {
+			if rc.at < fromMs || rc.at >= toMs {
 				continue
 			}
 			addRecord(&summary.Total, rc)

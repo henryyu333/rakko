@@ -290,7 +290,22 @@ func (p *homePage) player(c *ui.Context, w float32, st mac.NowPlayingState) {
 			m.controlButton(c, "home-toggle", toggleSymbol(st.Playing), playPauseText(l, st.Playing), mac.NPPlayPause, 38, 22)
 			m.controlButton(c, "home-next", nextFill, l.NextTrack(), mac.NPNext, 30, 17)
 		})
-		ui.Box(c.Key("home-ctrl-pad")).Size(homeLyricsBtn, homeLyricsBtn)
+		if p.host.weekly != nil {
+			// The report keeps a door on the playing home too: the idle
+			// entry is not on screen while music is.
+			lw := l.WeeklyPageTitle()
+			rb := ui.ButtonBase(c.Key("home-weekly-btn")).Size(homeLyricsBtn, homeLyricsBtn).
+				Radius(homeLyricsBtn / 2).Center().Label(lw).Tooltip(lw)
+			if rb.Hovered() {
+				rb.Background(fill1)
+			}
+			rb.Children(func() { ui.Icon(c, weeklySymbol).Size(16, 16).TextColor(ink2) })
+			if rb.Clicked() {
+				p.host.weekly.openLastWeekPage()
+			}
+		} else {
+			ui.Box(c.Key("home-ctrl-pad")).Size(homeLyricsBtn, homeLyricsBtn)
+		}
 	})
 	if st.Playing {
 		c.After(time.Second) // the clock and the lyric line move on
@@ -456,6 +471,9 @@ func (p *homePage) idleBody(c *ui.Context, w float32) ui.Element {
 				ui.Text(c, l.HomeWeekday(now)).SingleLine().FontSize(13).TextColor(ink2)
 			})
 			p.statusLines(c, now)
+			if p.host.weekly != nil {
+				p.host.weekly.homeEntry(c)
+			}
 		})
 	})
 	c.After(time.Minute) // the date, the otter's pose and the times move on

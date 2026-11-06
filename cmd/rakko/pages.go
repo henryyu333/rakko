@@ -22,15 +22,16 @@ const (
 	pageTray      pageID = "tray"      // 托盘：全部内容
 	pageClipboard pageID = "clipboard" // 剪贴板：只显示剪贴板收录的文字与图片
 	pageUsage     pageID = "usage"     // AI 用量（由 AI 用量切片实现并登记）
+	pageWeekly    pageID = "weekly"    // 每周简报（由周报切片实现并登记）
 )
 
-// panelPage is one page of the expanded sheet. Every page draws into the
-// same fixed 416 × 174 content box and scrolls inside it when it has more
-// to show; the shell never changes size for a page. live is false while
-// the page is only the outgoing picture of a fade — drawn, but never
-// taking the pointer or the keyboard; over is true while a drag hovers the
-// panel. icon's active means the button is highlighted (the current page
-// or a hovered icon).
+// panelPage is one page of the expanded sheet. A page draws inside the
+// shell's page area and scrolls there when it has more to show; a page
+// without pageWidth/pageHeight uses the shared 416 × 174 content box at
+// 440 × 250. live is false while the page is only the outgoing picture of
+// a fade — drawn, but never taking the pointer or the keyboard; over is
+// true while a drag hovers the panel. icon's active means the button is
+// highlighted (the current page or a hovered icon).
 type panelPage interface {
 	id() pageID
 	label() string // tooltip and accessible name of the page icon
@@ -48,6 +49,14 @@ type panelPage interface {
 // the 416 × 174 content box every other page shares.
 type pageWidth interface {
 	width() float32
+}
+
+// pageHeight is a page whose shell is taller than the sheet's 250: the
+// 每周简报 reads at 560 × 600, as its prototype does. A page without it
+// keeps sheetH; a page with it must be fullBleed (it owns the whole page
+// area, since the shared 174pt content box cannot grow).
+type pageHeight interface {
+	height() float32
 }
 
 // pageBleed is a page that owns its whole 200pt page area: no action row

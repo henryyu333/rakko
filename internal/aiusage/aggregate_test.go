@@ -215,3 +215,85 @@ func TestSummaryConcurrentWithScan(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestSummaryRangeAllKeepsRecordsOutsideFixedWindows(t *testing.T) {
+	s := scanOne(t,
+		claudeLine("old", "2025-01-02T10:00:00.000Z", 7, 1),
+		claudeLine("now", "2026-10-19T10:00:00.000Z", 9, 1),
+	)
+	now := time.Date(2026, 10, 19, 18, 0, 0, 0, time.UTC)
+	sum := s.Summary(RangeAll, now)
+	if sum.Total.Requests != 2 || sum.Total.Input != 16 {
+		t.Fatalf("all-range totals = %+v, want both records", sum.Total)
+	}
+	if len(sum.Buckets) < 2 {
+		t.Fatalf("all-range buckets = %d, want the old and the new day", len(sum.Buckets))
+	}
+}
+
+func TestSummarySpanWeek(t *testing.T) {
+	s := scanOne(t,
+		claudeLine("sun-late", "2026-10-25T15:59:59.999Z", 100, 1), // just before the week
+		claudeLine("mon-start", "2026-10-25T16:00:00.000Z", 10, 1), // Monday 00:00 UTC+8
+		claudeLine("wed", "2026-10-28T02:00:00.000Z", 20, 2),       // Wednesday 10:00
+		claudeLine("next-mon", "2026-11-01T16:00:00.000Z", 40, 4),  // next Monday 00:00
+	)
+	loc := time.FixedZone("UTC+8", 8*3600)
+	from := time.Date(2026, 10, 26, 0, 0, 0, 0, loc)
+	to := from.AddDate(0, 0, 7)
+
+	sum := s.SummarySpan(from, to)
+	if sum.Range != RangeSpan {
+		t.Fatalf("range = %v", sum.Range)
+	}
+	if len(sum.Buckets) != 7 {
+		t.Fatalf("buckets = %d, want 7", len(sum.Buckets))
+	}
+	if !sum.Buckets[0].Start.Equal(from) || sum.Buckets[0].Start.Weekday() != time.Monday {
+		t.Fatalf("first bucket = %v", sum.Buckets[0].Start)
+	}
+	if !sum.Buckets[6].Start.Equal(from.AddDate(0, 0, 6)) {
+		t.Fatalf("last bucket = %v", sum.Buckets[6].Start)
+	}
+	if sum.Total.Requests != 2 || sum.Total.Input != 30 {
+		t.Fatalf("span totals = %+v, want only the Monday and Wednesday records", sum.Total)
+	}
+	if got := sum.Buckets[0].Tokens[ToolClaude]; got != 11 {
+		t.Fatalf("Monday bucket = %d", got)
+	}
+	if got := sum.Buckets[2].Tokens[ToolClaude]; got != 22 {
+		t.Fatalf("Wednesday bucket = %d", got)
+	}
+	if sum.Buckets[6].Tokens[ToolClaude] != 0 {
+		t.Fatal("the next Monday's record must stay out of this week")
+	}
+	if sum.ByTool[ToolClaude].Requests != 2 {
+		t.Fatalf("by tool = %+v", sum.ByTool)
+	}
+}
+
+func TestSummarySpanEdges(t *testing.T) {
+	s := scanOne(t, claudeLine("m", "2026-10-19T10:00:00.000Z", 5, 1))
+	now := time.Date(2026, 10, 19, 18, 0, 0, 0, time.UTC)
+
+	empty := s.SummarySpan(now, now)
+	if len(empty.Buckets) != 0 || empty.Total.Requests != 0 {
+		t.Fatalf("empty span = %+v", empty)
+	}
+	// A span inside one civil day still gets that day's bucket, and the
+	// record inside it counts.
+	from := time.Date(2026, 10, 19, 9, 30, 0, 0, time.UTC)
+	to := time.Date(2026, 10, 19, 11, 30, 0, 0, time.UTC)
+	day := s.SummarySpan(from, to)
+	if len(day.Buckets) != 1 || day.Total.Requests != 1 {
+		t.Fatalf("same-day span = %+v", day)
+	}
+	if got := day.Buckets[0].Start; !got.Equal(time.Date(2026, 10, 19, 0, 0, 0, 0, time.UTC)) {
+		t.Fatalf("bucket start = %v", got)
+	}
+	// A record outside a narrower span is excluded even inside the day.
+	none := s.SummarySpan(time.Date(2026, 10, 19, 11, 0, 0, 0, time.UTC), time.Date(2026, 10, 19, 12, 0, 0, 0, time.UTC))
+	if none.Total.Requests != 0 {
+		t.Fatalf("narrow span included a record outside it: %+v", none.Total)
+	}
+}

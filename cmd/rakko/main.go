@@ -20,6 +20,7 @@ import (
 	"rakko/internal/netproxy"
 	"rakko/internal/settings"
 	"rakko/internal/store"
+	"rakko/internal/weekly"
 	"rakko/locales"
 )
 
@@ -152,6 +153,9 @@ func main() {
 			a.tray.Destroy()
 		}
 		a.flushLeaving(time.Now().Add(time.Second)) // dragged-out items leave for good
+		if a.weekly != nil {
+			a.weekly.flush()
+		}
 		a.closeIdleIslands()
 		a.store.Close()
 	})
@@ -317,6 +321,29 @@ func (a *shelf) ready(show bool) {
 	usage := newUsageFeature(a, deps)
 	a.registerPage(usage)
 	a.modules = append(a.modules, usage)
+
+	// 每周简报：应用时长须用户在本页明确开启才采样；AI 部分只读本机
+	// 日志；Rakko 完成事件由各成功回调计数。历史与设置分文件，读取失败
+	// 时保留原文件并只在页内提示。
+	weeklyStore, weeklyErr := weekly.Open(a.dataDir)
+	wdeps := weeklyDeps{
+		now:           time.Now,
+		frontApp:      mac.FrontmostApp,
+		idleSeconds:   mac.IdleSeconds,
+		sessionActive: mac.SessionActive,
+		displayAsleep: mac.MainDisplayAsleep,
+		newScanner: func() weeklyScanner {
+			if usageEnv.Home == "" {
+				return nil
+			}
+			return aiusage.NewScanner(usageEnv.Home, filepath.Join(a.dataDir, "usage-cache"))
+		},
+		goWork: goWork,
+		onMain: dispatchMain,
+	}
+	a.weekly = newWeeklyFeature(a, wdeps, weeklyStore, weeklyErr)
+	a.registerPage(a.weekly)
+	a.modules = append(a.modules, a.weekly)
 	_, a.dragSerial = mac.DragState()
 	mygo.Screen.OnDisplaysChanged(func() {
 		// 常驻窗口跟随光标所在显示器重新定位（收起态无感）。

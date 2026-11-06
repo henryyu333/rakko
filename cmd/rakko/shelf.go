@@ -18,6 +18,7 @@ import (
 	"rakko/internal/mac"
 	"rakko/internal/settings"
 	"rakko/internal/store"
+	"rakko/internal/weekly"
 )
 
 // UI、历史与本机 API 由 mygo 主线程串行拥有。
@@ -55,6 +56,7 @@ type shelf struct {
 	live                                                        liveQueue             // transient charging / headphone / download-done events
 	conv                                                        *converter            // image conversion jobs; nil until the app starts
 	usage                                                       *usageFeature         // nil until the AI usage page registers itself
+	weekly                                                      *weeklyFeature        // nil until the 每周简报 page registers itself
 	agent                                                       *agentNotifyFeature   // nil until the Agent 完成提醒 switch or a hook event needs it
 	lyrCache                                                    *lyrics.Cache         // synced lyrics for the home page; nil until first used
 	clip                                                        *clipboardModule      // nil until monitoring starts
@@ -481,6 +483,12 @@ func (a *shelf) completed(r transfer.Result) {
 		return
 	}
 	if !r.Canceled && r.Operation != transfer.None {
+		// A drag that carried tray items and landed is one 托盘取出 for the
+		// 每周简报. The clipboard page and widget cards leave ids nil: they
+		// copy history, they do not take from the tray.
+		if ids != nil {
+			a.weeklyEvent(weekly.EventTrayTake)
+		}
 		a.leaveTray(ids, time.Now())
 		a.hide(hidePassive)
 	}

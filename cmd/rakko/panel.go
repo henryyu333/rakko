@@ -833,7 +833,7 @@ func (a *shelf) view(c *ui.Context) {
 			scale = 0.96 + 0.04*contentK
 		}
 		up := a.shellUp()
-		contentH := float32(sheetH)
+		contentH := a.pageShellH()
 		if up {
 			contentH = a.panelContentH(levelK)
 		}
@@ -868,7 +868,7 @@ func (a *shelf) view(c *ui.Context) {
 				if levelK <= 0.001 {
 					return
 				}
-				inner := ui.Column(c.Key("panel")).Width(a.pageShellW()).Height(sheetH).Opacity(levelK)
+				inner := ui.Column(c.Key("panel")).Width(a.pageShellW()).Height(a.pageShellH()).Opacity(levelK)
 				if levelK < 0.5 {
 					inner.PassThrough()
 				}
@@ -883,7 +883,7 @@ func (a *shelf) view(c *ui.Context) {
 					if up {
 						// Unfold from the island edge: the block's bottom
 						// edge, contentH into the fixed layout.
-						originY = contentH / float32(sheetH)
+						originY = contentH / a.pageShellH()
 					}
 					inner.TransformOrigin(0.5, originY).Scale(scale, scale)
 				}
@@ -1020,7 +1020,7 @@ func pageTitle(c *ui.Context, p panelPage) string {
 // screen-recording card replace the page whole — they are live gestures;
 // everything else switches through the page transition (see pageBody).
 func (a *shelf) tabBody(c *ui.Context, over bool) {
-	ui.Column(c.Key("sheet-body")).Width(a.pageShellW()).Height(sheetH-bandH).
+	ui.Column(c.Key("sheet-body")).Width(a.pageShellW()).Height(a.pageShellH()-bandH).
 		Padding(0, sheetPadX, sheetPadBottom, sheetPadX).Children(func() {
 		switch {
 		case a.drop.on && len(a.drop.files) > 0:
@@ -1063,14 +1063,14 @@ func (a *shelf) pageBody(c *ui.Context, over bool) {
 			out = p
 		}
 	}
-	box := ui.Column(c.Key("page-switch")).Width(pageBoxW(a.currentPage())).Height(pageBodyH)
+	box := ui.Column(c.Key("page-switch")).Width(pageBoxW(a.currentPage())).Height(pageBodyHeight(a.currentPage()))
 	box.Children(func() {
 		if !(a.snap.panel || a.snap.drawn) {
 			a.warmPage(c)
 		}
 		if out != nil && outAlpha > 0.001 {
 			old := ui.Column(c.Key("frame-out")).Absolute().Top(0).Left(outLeft).
-				Width(pageBoxW(out)).Height(pageBodyH).PassThrough().Opacity(outAlpha)
+				Width(pageBoxW(out)).Height(pageBodyHeight(out)).PassThrough().Opacity(outAlpha)
 			old.Children(func() { a.pageBlock(c, out, over, false, outAlpha, outLeft) })
 		}
 		// The arrival offset is a layout offset, not a paint transform: a
@@ -1088,7 +1088,7 @@ func (a *shelf) pageBody(c *ui.Context, over bool) {
 		cur := a.currentPage()
 		shift := tabShift * dir * (1 - inK)
 		frame := ui.Column(c.Key("frame")).Absolute().Top(0).Left(shift).
-			Width(pageBoxW(cur)).Height(pageBodyH).Opacity(op)
+			Width(pageBoxW(cur)).Height(pageBodyHeight(cur)).Opacity(op)
 		frame.Children(func() { a.pageBlock(c, cur, over, true, op, shift) })
 		if t < tabInShare {
 			// Neither page is a target in a switch's first phase: the old
@@ -1112,18 +1112,18 @@ func (a *shelf) pageBlock(c *ui.Context, p panelPage, over, live bool, opacity, 
 		onPageBlock(a, p.id(), live, opacity, left)
 	}
 	w := pageBoxW(p)
-	ui.Column(c.Key("block")).Width(w).Height(pageBodyH).Children(func() {
+	ui.Column(c.Key("block")).Width(w).Height(pageBodyHeight(p)).Children(func() {
 		if pageBleeds(p) {
-			// The home page owns the whole area: no action row, no shared
-			// 174pt box.
-			ui.Column(c.Key("page-content")).Width(w).Height(pageBodyH).Clip().Children(func() {
+			// A full bleed page owns the whole area: no action row, no
+			// shared content box.
+			ui.Column(c.Key("page-content")).Width(w).Height(pageBodyHeight(p)).Clip().Children(func() {
 				p.body(c, over, live)
 			})
 			return
 		}
 		a.pageActions(c, p)
 		ui.Box(c.Key("page-gap")).Height(pageActionsGap)
-		ui.Column(c.Key("page-content")).Width(w).Height(contentH).Clip().Children(func() {
+		ui.Column(c.Key("page-content")).Width(w).Height(pageContentHeight(p)).Clip().Children(func() {
 			p.body(c, over, live)
 		})
 	})
@@ -1174,9 +1174,9 @@ func (a *shelf) warmPage(c *ui.Context) {
 	// The same box the page's own content draws in: below its action row
 	// and gap, so the hidden page's rows sit exactly where the real ones
 	// will and a pointer over it still reaches the page above.
-	top, h := float32(pageActionH+pageActionsGap), float32(contentH)
+	top, h := float32(pageActionH+pageActionsGap), pageContentHeight(p)
 	if pageBleeds(p) {
-		top, h = 0, pageBodyH
+		top, h = 0, pageBodyHeight(p)
 	}
 	hidden := ui.Column(c.Key("warm-" + string(id))).Absolute().Left(0).
 		Top(top).Width(pageBoxW(p)).Height(h).
@@ -1938,6 +1938,9 @@ func (a *shelf) setTab(id pageID) {
 	}
 	if cur == pageUsage && a.usage != nil { // 离开用量页即取消其后台工作
 		a.usage.stopWork()
+	}
+	if cur == pageWeekly && a.weekly != nil { // 离开简报页即取消其日志扫描
+		a.weekly.leavingPage()
 	}
 	if cur == pageTools { // 离开工具页即退出编辑与目录
 		a.resetToolsEdit()

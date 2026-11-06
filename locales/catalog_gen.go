@@ -4949,6 +4949,466 @@ func (msgs Messages) DropRecognizeSub() string {
 	return Catalog.Format(msgs.locale, "dropRecognizeSub", nil)
 }
 
+// WeeklyPageTitle says "每周简报"
+// in the language the app shows.
+func WeeklyPageTitle() string { return In(i18n.Locale()).WeeklyPageTitle() }
+
+// WeeklyPageTitle says "每周简报"
+// in the language of msgs.
+func (msgs Messages) WeeklyPageTitle() string {
+	return Catalog.Format(msgs.locale, "weeklyPageTitle", nil)
+}
+
+// WeeklyEntryTitle says "上周简报"
+// in the language the app shows.
+func WeeklyEntryTitle() string { return In(i18n.Locale()).WeeklyEntryTitle() }
+
+// WeeklyEntryTitle says "上周简报"
+// in the language of msgs.
+func (msgs Messages) WeeklyEntryTitle() string {
+	return Catalog.Format(msgs.locale, "weeklyEntryTitle", nil)
+}
+
+// WeeklyPrevWeek says "查看前一周"
+// in the language the app shows.
+func WeeklyPrevWeek() string { return In(i18n.Locale()).WeeklyPrevWeek() }
+
+// WeeklyPrevWeek says "查看前一周"
+// in the language of msgs.
+func (msgs Messages) WeeklyPrevWeek() string {
+	return Catalog.Format(msgs.locale, "weeklyPrevWeek", nil)
+}
+
+// WeeklyNextWeek says "查看后一周"
+// in the language the app shows.
+func WeeklyNextWeek() string { return In(i18n.Locale()).WeeklyNextWeek() }
+
+// WeeklyNextWeek says "查看后一周"
+// in the language of msgs.
+func (msgs Messages) WeeklyNextWeek() string {
+	return Catalog.Format(msgs.locale, "weeklyNextWeek", nil)
+}
+
+// WeeklyMacSection says "Mac 使用"
+// in the language the app shows.
+func WeeklyMacSection() string { return In(i18n.Locale()).WeeklyMacSection() }
+
+// WeeklyMacSection says "Mac 使用"
+// in the language of msgs.
+func (msgs Messages) WeeklyMacSection() string {
+	return Catalog.Format(msgs.locale, "weeklyMacSection", nil)
+}
+
+// WeeklyModeActive says "活跃"
+// in the language the app shows.
+func WeeklyModeActive() string { return In(i18n.Locale()).WeeklyModeActive() }
+
+// WeeklyModeActive says "活跃"
+// in the language of msgs.
+func (msgs Messages) WeeklyModeActive() string {
+	return Catalog.Format(msgs.locale, "weeklyModeActive", nil)
+}
+
+// WeeklyModeResident says "停留"
+// in the language the app shows.
+func WeeklyModeResident() string { return In(i18n.Locale()).WeeklyModeResident() }
+
+// WeeklyModeResident says "停留"
+// in the language of msgs.
+func (msgs Messages) WeeklyModeResident() string {
+	return Catalog.Format(msgs.locale, "weeklyModeResident", nil)
+}
+
+// WeeklyEmptyTitle says "这周还没有记录"
+// in the language the app shows.
+func WeeklyEmptyTitle() string { return In(i18n.Locale()).WeeklyEmptyTitle() }
+
+// WeeklyEmptyTitle says "这周还没有记录"
+// in the language of msgs.
+func (msgs Messages) WeeklyEmptyTitle() string {
+	return Catalog.Format(msgs.locale, "weeklyEmptyTitle", nil)
+}
+
+// WeeklyEmptyBody says "开启统计后的记录会从这里开始。未采集的时间不会计为零，也不会补造历史。"
+// in the language the app shows.
+func WeeklyEmptyBody() string { return In(i18n.Locale()).WeeklyEmptyBody() }
+
+// WeeklyEmptyBody says "开启统计后的记录会从这里开始。未采集的时间不会计为零，也不会补造历史。"
+// in the language of msgs.
+func (msgs Messages) WeeklyEmptyBody() string {
+	return Catalog.Format(msgs.locale, "weeklyEmptyBody", nil)
+}
+
+// WeeklySamplingNote says "活跃：前台且最近 60 秒有输入；停留：在前台即计入，含未操作时段。Rakko …"
+// in the language the app shows.
+func WeeklySamplingNote() string { return In(i18n.Locale()).WeeklySamplingNote() }
+
+// WeeklySamplingNote says "活跃：前台且最近 60 秒有输入；停留：在前台即计入，含未操作时段。Rakko …"
+// in the language of msgs.
+func (msgs Messages) WeeklySamplingNote() string {
+	return Catalog.Format(msgs.locale, "weeklySamplingNote", nil)
+}
+
+// WeeklyCoverageNote says "每秒采样一次；只覆盖 Rakko …"
+// in the language the app shows.
+func WeeklyCoverageNote() string { return In(i18n.Locale()).WeeklyCoverageNote() }
+
+// WeeklyCoverageNote says "每秒采样一次；只覆盖 Rakko …"
+// in the language of msgs.
+func (msgs Messages) WeeklyCoverageNote() string {
+	return Catalog.Format(msgs.locale, "weeklyCoverageNote", nil)
+}
+
+// WeeklyConsentTitle says "应用统计未开启"
+// in the language the app shows.
+func WeeklyConsentTitle() string { return In(i18n.Locale()).WeeklyConsentTitle() }
+
+// WeeklyConsentTitle says "应用统计未开启"
+// in the language of msgs.
+func (msgs Messages) WeeklyConsentTitle() string {
+	return Catalog.Format(msgs.locale, "weeklyConsentTitle", nil)
+}
+
+// WeeklyConsentBody says "开启后，Rakko 每秒记录当前前台应用的名称与累计时长。\n…"
+// in the language the app shows.
+func WeeklyConsentBody() string { return In(i18n.Locale()).WeeklyConsentBody() }
+
+// WeeklyConsentBody says "开启后，Rakko 每秒记录当前前台应用的名称与累计时长。\n…"
+// in the language of msgs.
+func (msgs Messages) WeeklyConsentBody() string {
+	return Catalog.Format(msgs.locale, "weeklyConsentBody", nil)
+}
+
+// WeeklyConsentEnable says "开启应用统计"
+// in the language the app shows.
+func WeeklyConsentEnable() string { return In(i18n.Locale()).WeeklyConsentEnable() }
+
+// WeeklyConsentEnable says "开启应用统计"
+// in the language of msgs.
+func (msgs Messages) WeeklyConsentEnable() string {
+	return Catalog.Format(msgs.locale, "weeklyConsentEnable", nil)
+}
+
+// WeeklyStoreCorrupt says "统计文件无法读取，原文件已保留；本页只显示本次会话的临时统计。"
+// in the language the app shows.
+func WeeklyStoreCorrupt() string { return In(i18n.Locale()).WeeklyStoreCorrupt() }
+
+// WeeklyStoreCorrupt says "统计文件无法读取，原文件已保留；本页只显示本次会话的临时统计。"
+// in the language of msgs.
+func (msgs Messages) WeeklyStoreCorrupt() string {
+	return Catalog.Format(msgs.locale, "weeklyStoreCorrupt", nil)
+}
+
+// WeeklyStoreSaveFailed says "统计暂时写不进磁盘；本次数据仍保留在内存中。"
+// in the language the app shows.
+func WeeklyStoreSaveFailed() string { return In(i18n.Locale()).WeeklyStoreSaveFailed() }
+
+// WeeklyStoreSaveFailed says "统计暂时写不进磁盘；本次数据仍保留在内存中。"
+// in the language of msgs.
+func (msgs Messages) WeeklyStoreSaveFailed() string {
+	return Catalog.Format(msgs.locale, "weeklyStoreSaveFailed", nil)
+}
+
+// WeeklyAiSection says "AI 使用"
+// in the language the app shows.
+func WeeklyAiSection() string { return In(i18n.Locale()).WeeklyAiSection() }
+
+// WeeklyAiSection says "AI 使用"
+// in the language of msgs.
+func (msgs Messages) WeeklyAiSection() string {
+	return Catalog.Format(msgs.locale, "weeklyAiSection", nil)
+}
+
+// WeeklyAiLocal says "本机日志"
+// in the language the app shows.
+func WeeklyAiLocal() string { return In(i18n.Locale()).WeeklyAiLocal() }
+
+// WeeklyAiLocal says "本机日志"
+// in the language of msgs.
+func (msgs Messages) WeeklyAiLocal() string {
+	return Catalog.Format(msgs.locale, "weeklyAiLocal", nil)
+}
+
+// WeeklyAiScanning says "正在读取本机日志…"
+// in the language the app shows.
+func WeeklyAiScanning() string { return In(i18n.Locale()).WeeklyAiScanning() }
+
+// WeeklyAiScanning says "正在读取本机日志…"
+// in the language of msgs.
+func (msgs Messages) WeeklyAiScanning() string {
+	return Catalog.Format(msgs.locale, "weeklyAiScanning", nil)
+}
+
+// WeeklyAiScanFailed says "读取本机日志失败。"
+// in the language the app shows.
+func WeeklyAiScanFailed() string { return In(i18n.Locale()).WeeklyAiScanFailed() }
+
+// WeeklyAiScanFailed says "读取本机日志失败。"
+// in the language of msgs.
+func (msgs Messages) WeeklyAiScanFailed() string {
+	return Catalog.Format(msgs.locale, "weeklyAiScanFailed", nil)
+}
+
+// WeeklyAiSourcesUnreadable says "有 {n, number, ::group-off} 个来源的日志无法读取，无法判断这周是否有使用。"
+// in the language the app shows.
+func WeeklyAiSourcesUnreadable(n int) string { return In(i18n.Locale()).WeeklyAiSourcesUnreadable(n) }
+
+// WeeklyAiSourcesUnreadable says "有 {n, number, ::group-off} 个来源的日志无法读取，无法判断这周是否有使用。"
+// in the language of msgs.
+func (msgs Messages) WeeklyAiSourcesUnreadable(n int) string {
+	return Catalog.Format(msgs.locale, "weeklyAiSourcesUnreadable", map[string]any{"n": n})
+}
+
+// WeeklyAiNote says "只汇总仍可读取的本机日志；费用按模型价格估算，不代表订阅账单。"
+// in the language the app shows.
+func WeeklyAiNote() string { return In(i18n.Locale()).WeeklyAiNote() }
+
+// WeeklyAiNote says "只汇总仍可读取的本机日志；费用按模型价格估算，不代表订阅账单。"
+// in the language of msgs.
+func (msgs Messages) WeeklyAiNote() string {
+	return Catalog.Format(msgs.locale, "weeklyAiNote", nil)
+}
+
+// WeeklyAiNoData says "这周没有可读取的 AI 使用记录。"
+// in the language the app shows.
+func WeeklyAiNoData() string { return In(i18n.Locale()).WeeklyAiNoData() }
+
+// WeeklyAiNoData says "这周没有可读取的 AI 使用记录。"
+// in the language of msgs.
+func (msgs Messages) WeeklyAiNoData() string {
+	return Catalog.Format(msgs.locale, "weeklyAiNoData", nil)
+}
+
+// WeeklyAiSourcesPartial says "另有 {n, number, ::group-off} 个来源无法读取，合计可能偏低。"
+// in the language the app shows.
+func WeeklyAiSourcesPartial(n int) string { return In(i18n.Locale()).WeeklyAiSourcesPartial(n) }
+
+// WeeklyAiSourcesPartial says "另有 {n, number, ::group-off} 个来源无法读取，合计可能偏低。"
+// in the language of msgs.
+func (msgs Messages) WeeklyAiSourcesPartial(n int) string {
+	return Catalog.Format(msgs.locale, "weeklyAiSourcesPartial", map[string]any{"n": n})
+}
+
+// WeeklyAiCost says "费用估算"
+// in the language the app shows.
+func WeeklyAiCost() string { return In(i18n.Locale()).WeeklyAiCost() }
+
+// WeeklyAiCost says "费用估算"
+// in the language of msgs.
+func (msgs Messages) WeeklyAiCost() string {
+	return Catalog.Format(msgs.locale, "weeklyAiCost", nil)
+}
+
+// WeeklyAiUnpriced says "{n} 条记录没有价格，未计入费用。"
+// in the language the app shows.
+func WeeklyAiUnpriced(n string) string { return In(i18n.Locale()).WeeklyAiUnpriced(n) }
+
+// WeeklyAiUnpriced says "{n} 条记录没有价格，未计入费用。"
+// in the language of msgs.
+func (msgs Messages) WeeklyAiUnpriced(n string) string {
+	return Catalog.Format(msgs.locale, "weeklyAiUnpriced", map[string]any{"n": n})
+}
+
+// WeeklyRakkoSection says "用 Rakko 完成"
+// in the language the app shows.
+func WeeklyRakkoSection() string { return In(i18n.Locale()).WeeklyRakkoSection() }
+
+// WeeklyRakkoSection says "用 Rakko 完成"
+// in the language of msgs.
+func (msgs Messages) WeeklyRakkoSection() string {
+	return Catalog.Format(msgs.locale, "weeklyRakkoSection", nil)
+}
+
+// WeeklyRakkoConvert says "文件转换"
+// in the language the app shows.
+func WeeklyRakkoConvert() string { return In(i18n.Locale()).WeeklyRakkoConvert() }
+
+// WeeklyRakkoConvert says "文件转换"
+// in the language of msgs.
+func (msgs Messages) WeeklyRakkoConvert() string {
+	return Catalog.Format(msgs.locale, "weeklyRakkoConvert", nil)
+}
+
+// WeeklyRakkoText says "框选文字"
+// in the language the app shows.
+func WeeklyRakkoText() string { return In(i18n.Locale()).WeeklyRakkoText() }
+
+// WeeklyRakkoText says "框选文字"
+// in the language of msgs.
+func (msgs Messages) WeeklyRakkoText() string {
+	return Catalog.Format(msgs.locale, "weeklyRakkoText", nil)
+}
+
+// WeeklyRakkoTray says "托盘取出"
+// in the language the app shows.
+func WeeklyRakkoTray() string { return In(i18n.Locale()).WeeklyRakkoTray() }
+
+// WeeklyRakkoTray says "托盘取出"
+// in the language of msgs.
+func (msgs Messages) WeeklyRakkoTray() string {
+	return Catalog.Format(msgs.locale, "weeklyRakkoTray", nil)
+}
+
+// WeeklyRakkoNote says "只统计此版本启用后成功的操作；此前的周显示 —，无法回溯。"
+// in the language the app shows.
+func WeeklyRakkoNote() string { return In(i18n.Locale()).WeeklyRakkoNote() }
+
+// WeeklyRakkoNote says "只统计此版本启用后成功的操作；此前的周显示 —，无法回溯。"
+// in the language of msgs.
+func (msgs Messages) WeeklyRakkoNote() string {
+	return Catalog.Format(msgs.locale, "weeklyRakkoNote", nil)
+}
+
+// WeeklyLocalOnly says "仅保存在这台 Mac"
+// in the language the app shows.
+func WeeklyLocalOnly() string { return In(i18n.Locale()).WeeklyLocalOnly() }
+
+// WeeklyLocalOnly says "仅保存在这台 Mac"
+// in the language of msgs.
+func (msgs Messages) WeeklyLocalOnly() string {
+	return Catalog.Format(msgs.locale, "weeklyLocalOnly", nil)
+}
+
+// WeeklyResume says "恢复应用统计"
+// in the language the app shows.
+func WeeklyResume() string { return In(i18n.Locale()).WeeklyResume() }
+
+// WeeklyResume says "恢复应用统计"
+// in the language of msgs.
+func (msgs Messages) WeeklyResume() string {
+	return Catalog.Format(msgs.locale, "weeklyResume", nil)
+}
+
+// WeeklyPause says "暂停应用统计"
+// in the language the app shows.
+func WeeklyPause() string { return In(i18n.Locale()).WeeklyPause() }
+
+// WeeklyPause says "暂停应用统计"
+// in the language of msgs.
+func (msgs Messages) WeeklyPause() string {
+	return Catalog.Format(msgs.locale, "weeklyPause", nil)
+}
+
+// WeeklyUnitSeconds says "秒"
+// in the language the app shows.
+func WeeklyUnitSeconds() string { return In(i18n.Locale()).WeeklyUnitSeconds() }
+
+// WeeklyUnitSeconds says "秒"
+// in the language of msgs.
+func (msgs Messages) WeeklyUnitSeconds() string {
+	return Catalog.Format(msgs.locale, "weeklyUnitSeconds", nil)
+}
+
+// WeeklyUnitMinutes says "分钟"
+// in the language the app shows.
+func WeeklyUnitMinutes() string { return In(i18n.Locale()).WeeklyUnitMinutes() }
+
+// WeeklyUnitMinutes says "分钟"
+// in the language of msgs.
+func (msgs Messages) WeeklyUnitMinutes() string {
+	return Catalog.Format(msgs.locale, "weeklyUnitMinutes", nil)
+}
+
+// WeeklyUnitHours says "小时"
+// in the language the app shows.
+func WeeklyUnitHours() string { return In(i18n.Locale()).WeeklyUnitHours() }
+
+// WeeklyUnitHours says "小时"
+// in the language of msgs.
+func (msgs Messages) WeeklyUnitHours() string {
+	return Catalog.Format(msgs.locale, "weeklyUnitHours", nil)
+}
+
+// WeeklySecond says "{n} 秒"
+// in the language the app shows.
+func WeeklySecond(n string) string { return In(i18n.Locale()).WeeklySecond(n) }
+
+// WeeklySecond says "{n} 秒"
+// in the language of msgs.
+func (msgs Messages) WeeklySecond(n string) string {
+	return Catalog.Format(msgs.locale, "weeklySecond", map[string]any{"n": n})
+}
+
+// WeeklyMinute says "{n} 分钟"
+// in the language the app shows.
+func WeeklyMinute(n string) string { return In(i18n.Locale()).WeeklyMinute(n) }
+
+// WeeklyMinute says "{n} 分钟"
+// in the language of msgs.
+func (msgs Messages) WeeklyMinute(n string) string {
+	return Catalog.Format(msgs.locale, "weeklyMinute", map[string]any{"n": n})
+}
+
+// WeeklyHour says "{n} 小时"
+// in the language the app shows.
+func WeeklyHour(n string) string { return In(i18n.Locale()).WeeklyHour(n) }
+
+// WeeklyHour says "{n} 小时"
+// in the language of msgs.
+func (msgs Messages) WeeklyHour(n string) string {
+	return Catalog.Format(msgs.locale, "weeklyHour", map[string]any{"n": n})
+}
+
+// WeeklyHourMin says "{h} 小时 {m} 分"
+// in the language the app shows.
+func WeeklyHourMin(h string, m string) string { return In(i18n.Locale()).WeeklyHourMin(h, m) }
+
+// WeeklyHourMin says "{h} 小时 {m} 分"
+// in the language of msgs.
+func (msgs Messages) WeeklyHourMin(h string, m string) string {
+	return Catalog.Format(msgs.locale, "weeklyHourMin", map[string]any{"h": h, "m": m})
+}
+
+// WeeklyCompareSame says "与前周持平"
+// in the language the app shows.
+func WeeklyCompareSame() string { return In(i18n.Locale()).WeeklyCompareSame() }
+
+// WeeklyCompareSame says "与前周持平"
+// in the language of msgs.
+func (msgs Messages) WeeklyCompareSame() string {
+	return Catalog.Format(msgs.locale, "weeklyCompareSame", nil)
+}
+
+// WeeklyCompare says "较前周 {delta}"
+// in the language the app shows.
+func WeeklyCompare(delta string) string { return In(i18n.Locale()).WeeklyCompare(delta) }
+
+// WeeklyCompare says "较前周 {delta}"
+// in the language of msgs.
+func (msgs Messages) WeeklyCompare(delta string) string {
+	return Catalog.Format(msgs.locale, "weeklyCompare", map[string]any{"delta": delta})
+}
+
+// WeeklyDayUnrecorded says "未记录"
+// in the language the app shows.
+func WeeklyDayUnrecorded() string { return In(i18n.Locale()).WeeklyDayUnrecorded() }
+
+// WeeklyDayUnrecorded says "未记录"
+// in the language of msgs.
+func (msgs Messages) WeeklyDayUnrecorded() string {
+	return Catalog.Format(msgs.locale, "weeklyDayUnrecorded", nil)
+}
+
+// WeeklyAppsOther says "其他应用"
+// in the language the app shows.
+func WeeklyAppsOther() string { return In(i18n.Locale()).WeeklyAppsOther() }
+
+// WeeklyAppsOther says "其他应用"
+// in the language of msgs.
+func (msgs Messages) WeeklyAppsOther() string {
+	return Catalog.Format(msgs.locale, "weeklyAppsOther", nil)
+}
+
+// WeeklyScrollLabel says "简报内容，可滚动"
+// in the language the app shows.
+func WeeklyScrollLabel() string { return In(i18n.Locale()).WeeklyScrollLabel() }
+
+// WeeklyScrollLabel says "简报内容，可滚动"
+// in the language of msgs.
+func (msgs Messages) WeeklyScrollLabel() string {
+	return Catalog.Format(msgs.locale, "weeklyScrollLabel", nil)
+}
+
 // PageTray says "托盘"
 // in the language the app shows.
 func PageTray() string { return In(i18n.Locale()).PageTray() }

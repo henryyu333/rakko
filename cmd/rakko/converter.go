@@ -19,6 +19,7 @@ import (
 	"rakko/internal/docx"
 	"rakko/internal/mac"
 	"rakko/internal/store"
+	"rakko/internal/weekly"
 	"rakko/locales"
 )
 
@@ -699,6 +700,12 @@ func (a *shelf) finishConvert(job *convertJob, outs []convertOut) {
 		}
 		if a.tab != pageTray {
 			a.setTab(pageTray)
+		}
+		// One completed, uncancelled job with at least one output is one
+		// conversion for the 每周简报; a job that failed whole never
+		// reaches here, and a cancel is not a completed action.
+		if !job.cancel.Load() {
+			a.weeklyEvent(weekly.EventConvert)
 		}
 		a.selection.onlyAll(ids)
 	}

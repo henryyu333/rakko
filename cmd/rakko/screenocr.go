@@ -24,6 +24,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/mac"
+	"rakko/internal/weekly"
 )
 
 // ocrProgressDelay 是识别（含在后台索引后排队）能安静跑完的窗口：超过它
@@ -130,7 +131,14 @@ func (a *shelf) finishScreenOCR(timer *time.Timer, text string, produced bool, e
 	case text == "":
 		a.toastStatus(a.appLoc().OcrNoText(), time.Now().Add(3*time.Second), statusInfo)
 	default:
-		a.toastOCRCopy(text, a.copyOCRText(text))
+		// A capture whose text reached the pasteboard is one completed
+		// 框选文字 for the 每周简报; Esc, a refusal, an empty capture and a
+		// failed copy never count.
+		r := a.copyOCRText(text)
+		if r.copied {
+			a.weeklyEvent(weekly.EventScreenText)
+		}
+		a.toastOCRCopy(text, r)
 	}
 }
 

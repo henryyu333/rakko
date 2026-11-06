@@ -91,6 +91,18 @@ type Settings struct {
 	// user unpinned everything or saved none) stays empty — a missing key
 	// and "none" are different states, like Lyrics's pointer.
 	PinnedApps *[]string `json:"pinnedApps,omitempty"`
+	// Weekly is the 每周简报. AppStats is the explicit consent to collect
+	// frontmost-app time; it is off until the user turns it on in the
+	// report and nothing turns it on for them.
+	Weekly WeeklySettings `json:"weekly"`
+}
+
+// WeeklySettings is the 每周简报's preferences. AppStats is the user's
+// consent to sample the frontmost app and the idle clock; without it the
+// report still shows AI usage and Rakko completions, and the app section
+// asks to be turned on instead of drawing an empty chart.
+type WeeklySettings struct {
+	AppStats bool `json:"appStats"`
 }
 
 // ShortcutSettings are the global keyboard shortcuts. A missing key keeps
@@ -329,6 +341,7 @@ func Default() Settings {
 		},
 		AgentNotify: AgentNotifySettings{Enabled: false},
 		Pet:         PetSettings{Shown: true, Size: PetSizeMedium},
+		Weekly:      WeeklySettings{AppStats: false},
 		Shortcuts: ShortcutSettings{
 			Toggle:    DefaultShortcutToggle,
 			Clipboard: DefaultShortcutClipboard,

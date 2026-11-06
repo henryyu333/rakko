@@ -75,6 +75,12 @@ type Scanner struct {
 
 	mu    sync.RWMutex
 	files map[string]*fileState
+
+	// lastFailed names the readers the last finished pass could not read
+	// (a vanished root, an unreadable log, a failed database). The page
+	// needs it to tell "no usage" from "usage it could not see": a zero
+	// total with failed sources is not a zero week.
+	lastFailed []Tool
 }
 
 // NewScanner makes a Scanner for the given home directory (the parent of
@@ -127,6 +133,7 @@ func (s *Scanner) Scan(ctx context.Context, progress func(done, total int64)) er
 	if s.home == "" {
 		s.mu.Lock()
 		s.files = map[string]*fileState{}
+		s.lastFailed = nil
 		s.mu.Unlock()
 		return nil
 	}
@@ -321,12 +328,27 @@ loop:
 
 	s.mu.Lock()
 	s.files = files
+	failedTools := make([]Tool, 0, len(failed))
+	for t := range failed {
+		failedTools = append(failedTools, t)
+	}
+	sort.Slice(failedTools, func(i, j int) bool { return failedTools[i] < failedTools[j] })
+	s.lastFailed = failedTools
 	s.mu.Unlock()
 	// A cancelled pass commits its in-memory progress but must not touch
 	// the disk: saveCache re-checks ctx through serialization and again
 	// before it writes, so the previous cache survives any cancellation.
 	s.saveCache(ctx, files)
 	return scanErr
+}
+
+// FailedTools lists the readers the last Scan could not read, in tool order.
+// A non-empty answer alongside a zero Summary means the usage is unknown,
+// not zero. Safe to call concurrently.
+func (s *Scanner) FailedTools() []Tool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return append([]Tool(nil), s.lastFailed...)
 }
 
 // dbSignature reports the opencode database's size and newest modification

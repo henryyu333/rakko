@@ -420,7 +420,7 @@ func (a *shelf) shellSize(openK, levelK, peekK, peekW, peekH float32) (w, h floa
 		barW = a.homeBoxW()
 	}
 	lvlW := barW + (a.pageShellW()-barW)*levelK
-	lvlH := float32(homeShellH) + (sheetH-homeShellH)*levelK
+	lvlH := float32(homeShellH) + (a.pageShellH()-float32(homeShellH))*levelK
 	if a.snap.panel || a.snap.drawn {
 		// The arrangement panel is its own box; it never morphs through
 		// the sheet's size.
@@ -923,7 +923,7 @@ func (a *shelf) panelH() int {
 	if a.snap.panel || a.snap.drawn {
 		return snapH
 	}
-	return sheetH
+	return int(a.pageShellH())
 }
 
 // pageShellW is the open panel's width for the page on screen: 440 for
@@ -932,6 +932,11 @@ func (a *shelf) panelH() int {
 // number, so a track gaining lyrics cannot leave the shell and its content
 // on different widths.
 func (a *shelf) pageShellW() float32 { return pageShellWidth(a.currentPage()) }
+
+// pageShellH is the open panel's height for the page on screen: the sheet's
+// 250 for every page but a reading page (the 每周简报 asks for 600). The
+// shell path, the window frame and the page layout all read this number.
+func (a *shelf) pageShellH() float32 { return pageShellHeight(a.currentPage()) }
 
 // pageShellWidth is pageShellW for a page that may not be current: the
 // outgoing picture of a switch keeps its own width while it fades.
@@ -943,6 +948,29 @@ func pageShellWidth(p panelPage) float32 {
 		return max(sheetW, w.width())
 	}
 	return sheetW
+}
+
+// pageShellHeight is pageShellH for a page that may not be current.
+func pageShellHeight(p panelPage) float32 {
+	if p == nil {
+		return sheetH
+	}
+	if h, ok := p.(pageHeight); ok {
+		return max(sheetH, h.height())
+	}
+	return sheetH
+}
+
+// pageBodyHeight is the page area a page draws in: the shell minus the band
+// above it and the shell's bottom padding (200 at 250, 550 at 600).
+func pageBodyHeight(p panelPage) float32 {
+	return pageShellHeight(p) - bandH - bodyGap - padBottom
+}
+
+// pageContentHeight is the content box below a page's action row. A full
+// bleed page owns the whole page area instead.
+func pageContentHeight(p panelPage) float32 {
+	return pageBodyHeight(p) - pageActionH - pageActionsGap
 }
 
 // pageBoxW is the width a page draws in inside the shell's horizontal
@@ -964,7 +992,7 @@ func (a *shelf) panelBox() (w, h float32) {
 		return snapW, snapH
 	}
 	if a.currentLevel() == 2 {
-		return sheetW, sheetH
+		return a.pageShellW(), a.pageShellH()
 	}
 	return a.homeBoxW(), homeShellH
 }
@@ -978,7 +1006,7 @@ func (a *shelf) panelContentH(levelK float32) float32 {
 	if a.snap.panel || a.snap.drawn {
 		return snapH
 	}
-	return float32(homeShellH) + float32(sheetH-homeShellH)*levelK
+	return float32(homeShellH) + (a.pageShellH()-float32(homeShellH))*levelK
 }
 
 func (a *shelf) show(edge bool) {
@@ -1277,6 +1305,9 @@ func (a *shelf) hide(exit hideExit) {
 	a.jumpLevel = true
 	if a.usage != nil { // 隐藏即取消 AI 用量在途取数和扫描
 		a.usage.stopWork()
+	}
+	if a.weekly != nil { // 隐藏即取消简报的日志扫描；应用采样继续
+		a.weekly.leavingPage()
 	}
 	a.animationFrom, a.animationStart = a.progress, time.Now()
 	a.peekFrom, a.peekAnimStart = a.peekProgress, time.Now()

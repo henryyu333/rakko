@@ -185,10 +185,10 @@ func (a *shelf) panelPlacement() panelPlacement {
 		return panelSpotSide(centre, top, islandIdleH, work, int(w), int(h), a.islandPress.up)
 	}
 	// The side is decided by the tallest box the panel takes — a page's
-	// 250 — not by the level drawn now: the search bar and a page must
-	// never sit on different sides; a level change would jump the shell
-	// across the island.
-	up := top+sheetH > work.Y+work.Height
+	// pageShellH, up to the 每周简报's 600 — not by the level drawn now: the
+	// search bar and a page must never sit on different sides; a level
+	// change would jump the shell across the island.
+	up := top+int(a.pageShellH()) > work.Y+work.Height
 	return panelSpotSide(centre, top, islandIdleH, work, int(w), int(h), up)
 }
 
