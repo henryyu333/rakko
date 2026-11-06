@@ -3,8 +3,10 @@ package main
 import (
 	"slices"
 	"testing"
+	"time"
 
 	"rakko/internal/settings"
+	"rakko/internal/weekly"
 )
 
 // weeklyNavShelf registers the built-in pages plus the AI usage page and
@@ -85,6 +87,29 @@ func TestWeeklyReportHasNoNavigationSeat(t *testing.T) {
 			assertPageIDs(t, "band after the next page", a.tabPages(), want)
 			assertPageIDs(t, "capsule after the next page", a.navPages(), want)
 		})
+	}
+}
+
+// TestWeeklyReportStaysOnItsWeekAcrossMidnight: the page pins the Monday it
+// opened on. Recomputing an offset from "this week" would turn last week's
+// report into this week's at Monday 00:00 while it is being read.
+func TestWeeklyReportStaysOnItsWeekAcrossMidnight(t *testing.T) {
+	store, err := weekly.Open("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sunday := time.Date(2026, 11, 8, 23, 50, 0, 0, time.Local)
+	now := sunday
+	a := &shelf{settings: settings.Default()}
+	f := newWeeklyFeature(a, weeklyDeps{now: func() time.Time { return now }}, store, nil)
+	f.openLastWeek()
+	want := weekly.WeekStart(sunday).AddDate(0, 0, -7)
+	if got := f.weekFor(now); !got.Equal(want) {
+		t.Fatalf("opened on %s, want %s", got, want)
+	}
+	now = time.Date(2026, 11, 9, 0, 1, 0, 0, time.Local) // Monday, past midnight
+	if got := f.weekFor(now); !got.Equal(want) {
+		t.Fatalf("midnight moved the report to %s, want %s", got, want)
 	}
 }
 

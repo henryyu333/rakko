@@ -208,7 +208,7 @@ From then on Rakko opens normally. If macOS ever says the app **is damaged**, do
 ### Optional
 
 - **Start at login**: right-click the menu-bar icon → Settings → General → Open at Login.
-- **System permissions**: Settings → System Permissions shows the three permissions and a switch that starts the guided walk; the menu-bar icon also offers Turn On System Permissions. Turn Rakko on in each System Settings page. For Full Disk Access, use + to select Rakko or drag the app from Finder into the list. The screen-recording step offers to reopen Rakko; check the system switch before reopening. Official releases keep grants across later updates; a self-built app may require new grants.
+- **System permissions**: Settings → System Permissions lists the three permissions with their state, and its last row is one switch; you can also right-click the menu-bar icon → Turn On System Permissions (3 missing)… — the number is how many are still off. Turning it on walks you through three System Settings pages in turn: Full Disk Access, Accessibility, then Screen Recording. Turn Rakko on in each (on the Full Disk Access page, press + and choose Rakko, or drag in the Rakko that Finder shows), and Rakko moves to the next one by itself; at the end, click Reopen Rakko. macOS requires you to switch on each one yourself. Coming from the app's earlier name asks for them once more (see below). Official Rakko releases keep the grants across later updates; a build you compile yourself is signed afresh each time and may ask again.
 - **Full Disk Access**: files dragged in from Downloads, Desktop, Documents or iCloud Drive no longer bring up a "Rakko would like to access files…" dialog.
 - **Accessibility** (notch drop protection): while you drag toward the notch, the pointer stays in the drop area instead of hitting the very top edge of the screen.
 - **Screen Recording** (Capture Text): only the area you select is captured, text is recognized on this Mac, and the shot is not kept.
@@ -478,7 +478,7 @@ Rakko 是免费软件，没有经过 Apple 公证，所以 macOS 会让你确认
 ### 可选
 
 - **开机自动启动**：右键菜单栏图标 → 设置… → 通用 →「开机时自动启动」。
-- **系统权限**：设置… → 系统权限 显示三项权限状态，底部开关可启动逐项引导；也可从菜单栏图标进入。在系统设置中由你打开 Rakko 的开关。完整磁盘访问列表没有 Rakko 时，用 + 选择应用，或把访达选中的 Rakko 拖入列表。屏幕录制步骤会提供重新打开按钮；重新打开前请先确认系统开关。正式发布版更新通常保留授权，自己编译的构建可能需要重新授权。
+- **系统权限**：设置… → 系统权限 里列出三项权限的状态，最后一行是一个开关；也可以右键菜单栏图标 →「开启系统权限」。打开开关后，Rakko 依次打开系统设置里的三页：「完整磁盘访问」「辅助功能」「屏幕录制」。在每页打开 Rakko 的开关（「完整磁盘访问」这一页要点 + 选 Rakko，或把访达里选中的 Rakko 拖进列表），Rakko 会自动走到下一项；最后点「重新打开 Rakko」。macOS 要求每一项都由你自己打开。从旧名字换过来时要再开一次（见下）；Rakko 的正式发布版在之后更新时保留授权，自己编译的构建每次签名都会变，可能要重新开启。
 - **完整磁盘访问**：从「下载」「桌面」「文稿」或 iCloud 云盘拖文件进来时，不再弹出「Rakko 想要取用……中的文件」。
 - **辅助功能**（刘海拖放保护）：拖着东西靠近刘海时，指针会停在托盘的接收区里，不会顶到屏幕最上沿。
 - **屏幕录制**（框选文字）：只截取你框选的那一块，文字在本机识别，不保存截图。

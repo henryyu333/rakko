@@ -74,11 +74,8 @@ func (f *weeklyFeature) actions(c *ui.Context) []ui.Element { return nil }
 // in a scroll box, and the local-only footer.
 func (f *weeklyFeature) body(c *ui.Context, _ bool, live bool) ui.Element {
 	now := c.Now()
-	if live {
-		f.setWeekOffset(now, f.weekOffset) // history may have grown
-		if f.visible(now) {
-			f.maybeScan(now)
-		}
+	if live && f.visible(now) {
+		f.maybeScan(now)
 	}
 	w := pageBoxW(f)
 	h := pageBodyHeight(f)
@@ -97,18 +94,18 @@ func (f *weeklyFeature) body(c *ui.Context, _ bool, live bool) ui.Element {
 // header is the 每周简报 title and the week stepper.
 func (f *weeklyFeature) header(c *ui.Context, w float32, now time.Time) {
 	l := tloc(c)
-	start := f.weekStart(now, f.weekOffset)
+	start := f.weekFor(now)
 	ui.Row(c.Key("weekly-head")).Width(w).Height(weeklyHeadH).
 		Padding(0, weeklyInnerX, 0, weeklyInnerX).AlignItems(ui.Center).Gap(8).Children(func() {
 		panelLabel(c, "weekly-title", l.WeeklyPageTitle(), 15, 650).TextColor(ink)
 		ui.Box(c.Key("weekly-head-gap")).Grow(1)
-		f.navButton(c, "weekly-prev", weeklyLeft, l.WeeklyPrevWeek(), f.weekOffset > f.minOffset(now), func() {
-			f.setWeekOffset(now, f.weekOffset-1)
+		f.navButton(c, "weekly-prev", weeklyLeft, l.WeeklyPrevWeek(), start.After(f.oldestWeek(now)), func() {
+			f.setWeek(now, start.AddDate(0, 0, -7))
 		})
 		panelLabel(c, "weekly-range", weeklyWeekLabel(c.Locale(), start, now), 11, 0).
 			TextColor(ink2).Width(200).TextAlign(ui.Center)
-		f.navButton(c, "weekly-next", weeklyRight, l.WeeklyNextWeek(), f.weekOffset < 0, func() {
-			f.setWeekOffset(now, f.weekOffset+1)
+		f.navButton(c, "weekly-next", weeklyRight, l.WeeklyNextWeek(), start.Before(weekly.WeekStart(now)), func() {
+			f.setWeek(now, start.AddDate(0, 0, 7))
 		})
 	})
 }
@@ -136,7 +133,7 @@ func (f *weeklyFeature) navButton(c *ui.Context, key string, icon *ui.SVG, label
 // completions. Every section draws its own heading and rule so the scroll
 // stays one column.
 func (f *weeklyFeature) report(c *ui.Context, w, h float32, now time.Time) {
-	start := f.weekStart(now, f.weekOffset)
+	start := f.weekFor(now)
 	wk := weekly.Week{Start: start}
 	if f.store != nil {
 		wk = f.store.Week(start)
@@ -283,7 +280,7 @@ func (f *weeklyFeature) macMetric(c *ui.Context, w float32, wk weekly.Week, now 
 	ui.Row(c.Key("weekly-metric")).Width(w).Margin(12, 0, 0, 0).AlignItems(ui.End).Gap(12).Children(func() {
 		panelLabel(c, "weekly-metric-value", value, 29, 620).TextColor(ink)
 		panelLabel(c, nil, unit, 12, 0).TextColor(ink2).Margin(0, 0, 4, 0)
-		if f.weekOffset < 0 {
+		if wk.Start.Before(weekly.WeekStart(now)) {
 			if prev, ok := f.previousWeek(now); ok {
 				before := weekly.WeekTotal(prev, f.metric)
 				panelLabel(c, nil, weeklyCompare(before, total, l), 10, 0).TextColor(ink3).Margin(0, 0, 5, 0)
@@ -298,7 +295,7 @@ func (f *weeklyFeature) previousWeek(now time.Time) (weekly.Week, bool) {
 	if f.store == nil {
 		return weekly.Week{}, false
 	}
-	prev := f.store.Week(f.weekStart(now, f.weekOffset).AddDate(0, 0, -7))
+	prev := f.store.Week(f.weekFor(now).AddDate(0, 0, -7))
 	return prev, prev.Sampled
 }
 
@@ -323,7 +320,7 @@ func (f *weeklyFeature) barChart(c *ui.Context, w float32, wk weekly.Week) {
 		for i := range wk.Days {
 			day := wk.Days[i]
 			label := weeklyDayLabel(c.Locale(), l, day, values[i])
-			col := ui.Column(c.Key("weekly-day-"+strconv.Itoa(i))).Grow(1).FillHeight().
+			col := ui.Column(c.Key("weekly-day-" + strconv.Itoa(i))).Grow(1).FillHeight().
 				Justify(ui.End).AlignItems(ui.Center).Gap(5).Label(label)
 			col.Tooltip(label)
 			col.Children(func() {
@@ -405,7 +402,7 @@ func (f *weeklyFeature) appRow(c *ui.Context, w float32, bundle, name string, va
 		frac = float32(float64(value) / float64(maxV))
 	}
 	frac = min(1, max(0, frac))
-	ui.Row(c.Key("weekly-app-"+bundle+name)).Width(w).Height(20).Gap(9).AlignItems(ui.Center).
+	ui.Row(c.Key("weekly-app-" + bundle + name)).Width(w).Height(20).Gap(9).AlignItems(ui.Center).
 		Label(name + " · " + weeklyHM(value, l)).Children(func() {
 		if bundle != "" {
 			if bmp := f.host.clipAppIcon(bundle); bmp != nil {
@@ -438,7 +435,7 @@ func (f *weeklyFeature) appRow(c *ui.Context, w float32, bundle, name string, va
 // missing source is said out loud instead of drawn as zero.
 func (f *weeklyFeature) aiSection(c *ui.Context, w float32, now time.Time) {
 	l := tloc(c)
-	start := f.weekStart(now, f.weekOffset)
+	start := f.weekFor(now)
 	same := f.aiHave && f.aiWeek.Equal(start)
 	ui.Column(c.Key("weekly-ai")).Width(w).Children(func() {
 		ui.Row(c.Key("weekly-ai-head")).Width(w).Height(20).AlignItems(ui.Center).Children(func() {
@@ -553,7 +550,7 @@ func (f *weeklyFeature) aiTrack(c *ui.Context, w float32, sum aiusage.Summary) {
 				if width <= 0 {
 					continue
 				}
-				ui.Box(c.Key("seg-"+string(p.tool))).Height(5).Radius(2).Width(width).
+				ui.Box(c.Key("seg-" + string(p.tool))).Height(5).Radius(2).Width(width).
 					Background(weeklyToolTint(i)).Label(weeklyToolName(p.tool))
 			}
 		})
@@ -568,7 +565,7 @@ func (f *weeklyFeature) aiTrack(c *ui.Context, w float32, sum aiusage.Summary) {
 			Gap(16).AlignItems(ui.Center).Children(func() {
 			for j := i; j < end; j++ {
 				p := parts[j]
-				row := ui.Row(c.Key("leg-"+string(p.tool))).Gap(5).AlignItems(ui.Center)
+				row := ui.Row(c.Key("leg-" + string(p.tool))).Gap(5).AlignItems(ui.Center)
 				row.Children(func() {
 					ui.Box(c.Key("dot")).Size(5, 5).Radius(3).Background(weeklyToolTint(j))
 					panelLabel(c, nil, weeklyToolName(p.tool)+" "+weeklyTokensValue(p.value), 10, 0).TextColor(ink2)
@@ -629,7 +626,7 @@ func (f *weeklyFeature) count(c *ui.Context, key string, icon *ui.SVG, n int, la
 	if unknown {
 		value = "—"
 	}
-	ui.Row(c.Key("weekly-count-"+key)).Gap(9).AlignItems(ui.Center).
+	ui.Row(c.Key("weekly-count-" + key)).Gap(9).AlignItems(ui.Center).
 		Label(label + " · " + value).Children(func() {
 		ui.Icon(c, icon).Size(16, 16).TextColor(ink3)
 		ui.Column(c.Key("num")).Gap(1).Children(func() {
@@ -678,7 +675,7 @@ func (f *weeklyFeature) footer(c *ui.Context, w float32) {
 func (f *weeklyFeature) homeEntry(c *ui.Context) {
 	l := tloc(c)
 	now := c.Now()
-	start := f.weekStart(now, -1)
+	start := weekly.WeekStart(now).AddDate(0, 0, -7)
 	ui.Box(c.Key("home-weekly-rule")).FillWidth().Height(1).Background(fill1).Margin(4, 0, 0, 0)
 	b := ui.ButtonBase(c.Key("home-weekly")).FillWidth().Height(28).Radius(6).
 		Label(l.WeeklyEntryTitle()).Description(l.WeeklyEntryTitle())

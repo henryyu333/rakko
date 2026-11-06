@@ -293,7 +293,7 @@ func (p *homePage) player(c *ui.Context, w float32, st mac.NowPlayingState) {
 		if p.host.weekly != nil {
 			// The report keeps a door on the playing home too: the idle
 			// entry is not on screen while music is.
-			lw := l.WeeklyPageTitle()
+			lw := l.WeeklyEntryTitle()
 			rb := ui.ButtonBase(c.Key("home-weekly-btn")).Size(homeLyricsBtn, homeLyricsBtn).
 				Radius(homeLyricsBtn / 2).Center().Label(lw).Tooltip(lw)
 			if rb.Hovered() {

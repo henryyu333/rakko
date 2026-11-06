@@ -75,8 +75,11 @@ type weeklyFeature struct {
 	lastSample time.Time
 	lastFlush  time.Time
 
-	metric     weekly.Metric
-	weekOffset int // 0 = this week, negative counts back; never > 0
+	metric weekly.Metric
+	// week is the shown Monday, pinned when the page opens and moved only
+	// by a step: recomputing an offset from "this week" would change the
+	// page under the reader at Monday's midnight.
+	week time.Time
 
 	// AI summary for one week. scanWeek is the week of the last attempt
 	// (successful or not); a different visible week starts a new scan.
@@ -120,28 +123,27 @@ func (f *weeklyFeature) unwrap() *weekly.Store { return f.store }
 // consent is the user's explicit choice to collect app time.
 func (f *weeklyFeature) consent() bool { return f.host.settings.Weekly.AppStats }
 
-// weekStart is offset weeks from this week's Monday, in local time.
-func (f *weeklyFeature) weekStart(now time.Time, offset int) time.Time {
-	return weekly.WeekStart(now).AddDate(0, 0, 7*offset)
+// weekFor is the week the page shows, pinned on first use so a midnight
+// crossing cannot move it. Steps call setWeek.
+func (f *weeklyFeature) weekFor(now time.Time) time.Time {
+	if f.week.IsZero() {
+		f.week = weekly.WeekStart(now)
+	}
+	return f.week
 }
 
-// minOffset is the oldest week the picker may show: at least the previous
-// week, and further back when the history reaches there. The previous week
-// stays reachable even before anything was recorded, so the home entry's
-// 上周简报 never lands on a different week than its label.
-func (f *weeklyFeature) minOffset(now time.Time) int {
-	minOff := -weeklyWeekOptions
-	earliest, ok := f.earliest()
-	if !ok {
-		return minOff
-	}
-	first := weekly.WeekStart(earliest)
-	for off := 0; off > -520; off-- {
-		if !f.weekStart(now, off).After(first) {
-			return min(off, minOff)
+// oldestWeek is the earliest week the picker may show: a year before this
+// week, or the week holding the first recorded day when that is older. The
+// previous week stays reachable even before anything was recorded, so the
+// home entry's 上周简报 always lands on the week its label names.
+func (f *weeklyFeature) oldestWeek(now time.Time) time.Time {
+	limit := weekly.WeekStart(now).AddDate(0, 0, -7*weeklyWeekOptions)
+	if earliest, ok := f.earliest(); ok {
+		if first := weekly.WeekStart(earliest); first.Before(limit) {
+			limit = first
 		}
 	}
-	return -520
+	return limit
 }
 
 // earliest is the first recorded day, the nav's oldest anchor.
@@ -152,26 +154,28 @@ func (f *weeklyFeature) earliest() (time.Time, bool) {
 	return f.store.Earliest()
 }
 
-// setWeekOffset clamps the picker to [minOffset, 0].
-func (f *weeklyFeature) setWeekOffset(now time.Time, off int) {
-	minOff := f.minOffset(now)
-	if off > 0 {
-		off = 0
+// setWeek shows start's week, clamped to [oldestWeek, this week]. A change
+// clears the scroll and drops an in-flight scan for the week left behind.
+func (f *weeklyFeature) setWeek(now, start time.Time) {
+	start = weekly.WeekStart(start)
+	if this := weekly.WeekStart(now); start.After(this) {
+		start = this
 	}
-	if off < minOff {
-		off = minOff
+	if oldest := f.oldestWeek(now); start.Before(oldest) {
+		start = oldest
 	}
-	if off != f.weekOffset {
+	if !start.Equal(f.week) {
 		f.scroll = ui.ScrollState{}
 		f.cancelScan()
 	}
-	f.weekOffset = off
+	f.week = start
 }
 
 // openLastWeek opens the report on the previous calendar week, as the home
 // entry says.
 func (f *weeklyFeature) openLastWeek() {
-	f.setWeekOffset(f.deps.now(), -1)
+	now := f.deps.now()
+	f.setWeek(now, weekly.WeekStart(now).AddDate(0, 0, -7))
 }
 
 // openLastWeekPage is the home surfaces' tap: show the previous week's
@@ -262,7 +266,7 @@ func (f *weeklyFeature) maybeScan(now time.Time) {
 	if f.scanBusy.Load() {
 		return
 	}
-	start := f.weekStart(now, f.weekOffset)
+	start := f.weekFor(now)
 	if f.deps.newScanner == nil {
 		f.aiErr = errors.New("no local home directory")
 		f.aiHave = false
@@ -324,7 +328,7 @@ func (f *weeklyFeature) gotScan(start time.Time, sum aiusage.Summary, failed []a
 	f.scanCancel = nil
 	now := f.deps.now()
 	f.scanWeek, f.scanAt = start, now
-	if !start.Equal(f.weekStart(now, f.weekOffset)) {
+	if !start.Equal(f.weekFor(now)) {
 		// The picker moved while this scan ran. Keep no answer for the
 		// wrong week; the next tick starts the right one.
 		f.aiErr, f.aiHave, f.aiWeek = nil, false, time.Time{}

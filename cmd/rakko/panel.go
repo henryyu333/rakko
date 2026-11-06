@@ -1935,6 +1935,14 @@ func (a *shelf) setTab(id pageID) {
 		a.tab = id // a.tab was stale; nothing to fade from
 		return
 	}
+	// A taller page (the 每周简报) can need the other side of the island.
+	// Capture the side before the switch and fly the box there afterwards,
+	// instead of teleporting across the anchor.
+	flipFrom := panelPlacement{}
+	flipCheck := a.island && a.visible && a.currentLevel() == 2 && !a.flip.active
+	if flipCheck {
+		flipFrom = a.panelPlacement()
+	}
 	a.startPageSwitch(cur, id)
 	// A page is not a search: leaving the clipboard page for another one
 	// gives the keyboard back, so the new page's band takes presses.
@@ -1960,6 +1968,11 @@ func (a *shelf) setTab(id pageID) {
 	}
 	a.reveal = ""
 	a.selection.keepExisting(a.visibleItems())
+	if flipCheck {
+		if to := a.panelPlacement(); to.Up != flipFrom.Up {
+			a.startPanelFlip(flipFrom, to)
+		}
+	}
 	a.syncWindowFrame()
 	if a.win != nil {
 		a.win.Invalidate()
