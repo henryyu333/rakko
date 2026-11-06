@@ -5239,11 +5239,11 @@ func (msgs Messages) WeeklyRakkoTray() string {
 	return Catalog.Format(msgs.locale, "weeklyRakkoTray", nil)
 }
 
-// WeeklyRakkoNote says "只统计此版本启用后成功的操作；此前的周显示 —，无法回溯。"
+// WeeklyRakkoNote says "只统计开始记录后成功的操作；此前的周显示 —，无法回溯；首周只含开始后的部分。"
 // in the language the app shows.
 func WeeklyRakkoNote() string { return In(i18n.Locale()).WeeklyRakkoNote() }
 
-// WeeklyRakkoNote says "只统计此版本启用后成功的操作；此前的周显示 —，无法回溯。"
+// WeeklyRakkoNote says "只统计开始记录后成功的操作；此前的周显示 —，无法回溯；首周只含开始后的部分。"
 // in the language of msgs.
 func (msgs Messages) WeeklyRakkoNote() string {
 	return Catalog.Format(msgs.locale, "weeklyRakkoNote", nil)
