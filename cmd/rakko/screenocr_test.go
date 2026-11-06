@@ -19,19 +19,12 @@ import (
 func ocrSeams(t *testing.T) {
 	t.Helper()
 	p, g, c, w, d, r, af, inv := ocrPreflight, ocrGrant, ocrCapture, ocrWork, ocrDispatch, ocrRecognize, ocrAfterFunc, ocrInvalidate
-	proven := ocrGrantProven
-	observed := screenGrantObserved.Load()
 	t.Cleanup(func() {
 		ocrPreflight, ocrGrant, ocrCapture, ocrWork, ocrDispatch, ocrRecognize, ocrAfterFunc, ocrInvalidate = p, g, c, w, d, r, af, inv
-		ocrGrantProven = proven
-		screenGrantObserved.Store(observed)
 	})
 	ocrWork = func(fn func()) { fn() }
 	ocrDispatch = func(fn func()) { fn() }
 	ocrAfterFunc = func(d time.Duration, fn func()) *time.Timer { return time.NewTimer(time.Hour) }
-	// No test reads the real WindowServer or carries a grant from another.
-	ocrGrantProven = func() bool { return false }
-	screenGrantObserved.Store(false)
 }
 
 func writePixelPNG(t *testing.T, path string) {
@@ -107,60 +100,6 @@ func TestScreenOCRSheetGrantButton(t *testing.T) {
 	}
 	if !a.ocrSheet {
 		t.Fatal("card dismissed before the grant actually landed")
-	}
-}
-
-// A grant proven by window titles while the cached preflight still says no
-// must not send the user back to a switch that is already on: the card asks
-// for the relaunch that applies it.
-func TestScreenOCRProvenGrantOffersRelaunch(t *testing.T) {
-	ocrSeams(t)
-	ocrPreflight = func() bool { return false }
-	ocrGrantProven = func() bool { return true }
-	asked, quit := false, false
-	ocrGrant = func() bool { asked = true; return false }
-	origExe, origStart, origQuit := relaunchExecutable, relaunchStart, relaunchQuit
-	relaunchExecutable = func() (string, error) { return "/tmp/Rakko", nil }
-	relaunchStart = func(relaunchPlan) error { return nil }
-	relaunchQuit = func() { quit = true }
-	t.Cleanup(func() { relaunchExecutable, relaunchStart, relaunchQuit = origExe, origStart, origQuit })
-
-	a := &shelf{}
-	a.startScreenOCR()
-	view := ui.NewTester(a.view, sheetW, panelTestH)
-	if !view.HasText("已开启，重新打开 Rakko 后生效") {
-		t.Fatalf("the proven card does not say the grant is on; texts=%v", view.Texts())
-	}
-	if err := view.Click("重新打开 Rakko"); err != nil {
-		t.Fatalf("relaunch click: %v", err)
-	}
-	if !quit {
-		t.Fatal("the proven card did not relaunch Rakko")
-	}
-	if asked {
-		t.Fatal("the proven card requested the permission again")
-	}
-}
-
-// When the request itself reports the grant, the card records the same
-// evidence the permission page reads and repaints into the reopen state.
-func TestScreenOCRGrantReportRecordsEvidence(t *testing.T) {
-	ocrSeams(t)
-	ocrPreflight = func() bool { return false }
-	ocrGrant = func() bool { return true }
-	invalidated := false
-	ocrInvalidate = func(*shelf) { invalidated = true }
-	a := &shelf{}
-	a.startScreenOCR()
-	view := ui.NewTester(a.view, sheetW, panelTestH)
-	if err := view.Click("打开系统设置"); err != nil {
-		t.Fatalf("grant click: %v", err)
-	}
-	if !screenGrantObserved.Load() {
-		t.Fatal("a request that reported the grant left no evidence")
-	}
-	if !invalidated {
-		t.Fatal("the card did not repaint after the recorded grant")
 	}
 }
 

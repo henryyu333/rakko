@@ -5,6 +5,7 @@ package mac
 import (
 	"errors"
 	"fmt"
+	"os/exec"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -143,17 +144,21 @@ func AccessibilityTrusted() bool {
 }
 
 // RequestAccessibility is the user-initiated path to grant the permission.
-// It asks macOS to show its own prompt; the Settings UI also offers the
-// 辅助功能 pane and the app icon as a drag source, so a stale entry can be
-// replaced by the user. It never resets a TCC record: a reset could delete
-// a grant the user just made, and clearing records is the user's decision
-// in System Settings, not a side effect of asking.
+// macOS ties an ad-hoc signed app's grant to its exact build, so an update
+// leaves a stale, switched-on entry that no longer applies and suppresses the
+// system prompt. When untrusted, the app's own entry is cleared first (it
+// grants nothing to this build) and macOS is then asked to prompt again.
 func RequestAccessibility() bool {
 	if err := loadDragGuard(); err != nil {
 		return false
 	}
 	if axIsProcessTrusted() {
 		return true
+	}
+	if id := bundleIdentifier(); id != "" {
+		// Fails harmlessly when there is no record yet (first grant);
+		// the prompt below covers that case.
+		_ = exec.Command("/usr/bin/tccutil", "reset", "Accessibility", id).Run()
 	}
 	trusted := false
 	withPool(func() {
@@ -165,13 +170,15 @@ func RequestAccessibility() bool {
 	return trusted
 }
 
-// OpenAccessibilityPane opens 系统设置 → 隐私与安全性 → 辅助功能, the list
-// the user drags the app icon into or uses + in.
-func OpenAccessibilityPane() {
-	openURL(accessibilityPane)
+// bundleIdentifier is empty when running outside an app bundle (go run/test),
+// which keeps development runs from touching any permission record.
+func bundleIdentifier() string {
+	var out string
+	withPool(func() {
+		out = goString(send(send(class("NSBundle"), "mainBundle"), "bundleIdentifier"))
+	})
+	return out
 }
-
-const accessibilityPane = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
 
 func clampDragPoint(p CGPoint, r DragGuardRegion) CGPoint {
 	if r.Width <= 0 || r.Height <= 0 || p.X < float64(r.X) || p.X >= float64(r.X+r.Width) ||

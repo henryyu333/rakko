@@ -55,15 +55,3 @@ func TestInvalidDragGuardRegionDoesNotAlterInput(t *testing.T) {
 		}
 	}
 }
-
-// The permission row's direct entry opens exactly the 辅助功能 pane.
-func TestOpenAccessibilityPane(t *testing.T) {
-	oldOpen := openURL
-	var got string
-	openURL = func(url string) { got = url }
-	t.Cleanup(func() { openURL = oldOpen })
-	OpenAccessibilityPane()
-	if got != "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility" {
-		t.Fatalf("accessibility pane = %q", got)
-	}
-}

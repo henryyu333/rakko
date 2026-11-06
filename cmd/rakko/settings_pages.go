@@ -618,37 +618,27 @@ func (a *shelf) settingsPermissionsPage(c *ui.Context) {
 	l := loc(c)
 	permissions := systemPermissionSet(l)
 	missing := missingPermissions(permissions)
-	bundle, draggable := permissionBundlePath()
-	foot := l.PermDragHint()
-	if !draggable {
-		foot = l.PermNoBundleHint()
-	}
 	settingsHero(c, "perm", l.PermTitle(), "neutral",
 		heroPermFrom, heroPermTo, heroPermGlow)
 
-	settingsGroup(c, "perm", l.SettingsPermNeeded(), foot, func() {
+	settingsGroup(c, "perm", l.SettingsPermNeeded(), "", func() {
 		for i, p := range permissions {
 			if i > 0 {
 				settingsSep(c, "perm-"+p.id)
 			}
-			stateDot, stateText := success, l.SettingsPermOn()
-			if !p.enabled() {
-				stateDot, stateText = warning, l.SettingsPermOff()
-				if p.isGranted() {
-					stateText = l.PermStateRelaunch()
-				}
-			}
+			granted := p.enabled()
 			row := settingsRowLine(c, "perm-"+p.id).Tooltip(p.detail)
 			row.Children(func() {
-				a.permissionAppIcon(c, l, p, bundle, draggable)
 				settingsRowText(c, p.short, "")
 				ui.Row(c.Key("state")).AlignItems(ui.Center).Gap(6).Children(func() {
-					ui.Box(c.Key("dot")).Size(7, 7).Radius(4).Background(stateDot)
-					ui.Text(c, stateText).SingleLine().FontSize(12).TextColor(ink2)
+					dot := success
+					text := l.SettingsPermOn()
+					if !granted {
+						dot, text = warning, l.SettingsPermOff()
+					}
+					ui.Box(c.Key("dot")).Size(7, 7).Radius(4).Background(dot)
+					ui.Text(c, text).SingleLine().FontSize(12).TextColor(ink2)
 				})
-				settingsButton(c, "open-"+p.id, l.PermOpenSettings(), false, func() {
-					p.pane()
-				}).Label(l.PermOpenSettingsFor(p.short)).Tooltip(l.PermOpenSettingsFor(p.short))
 			})
 		}
 		settingsSep(c, "perm-switch")

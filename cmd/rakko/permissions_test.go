@@ -24,15 +24,10 @@ import (
 
 type permStubs struct {
 	fda, ax, screen bool
-	screenProof     bool
-	bundle          string
-	icon            *ui.Bitmap
 	fdaRequests     int
 	axRequests      int
 	scRequests      int
-	scRequestOK     bool
 	paneOpens       int
-	paneByID        map[string]int
 }
 
 type fakePermissionTimer struct{ stopped bool }
@@ -74,39 +69,24 @@ func (c *permissionClock) last() *fakePermissionTimer {
 
 func stubPermissions(t *testing.T) (*permStubs, *permissionClock) {
 	t.Helper()
-	st := &permStubs{bundle: "/Applications/Rakko.app", paneByID: map[string]int{}}
+	st := &permStubs{}
 	clk := &permissionClock{}
 	origFDAProbe, origAXProbe, origSCProbe := fullDiskAccessProbe, accessibilityProbe, screenCaptureProbe
-	origSCProof := screenCaptureGrantProbe
 	origFDAReq, origAXReq, origSCReq := fullDiskAccessRequest, accessibilityRequest, screenCaptureRequest
 	origPane, origAfter, origDispatch := openPrivacyPane, permissionAfterFunc, permissionDispatch
-	origFDAPane, origAXPane, origSCPane := openFullDiskAccessPane, openAccessibilityPane, openScreenCapturePane
-	origBundle, origIcon := permissionBundlePath, permissionIcon
-	origObserved := screenGrantObserved.Load()
-	screenGrantObserved.Store(false)
 	fullDiskAccessProbe = func() bool { return st.fda }
 	accessibilityProbe = func() bool { return st.ax }
 	screenCaptureProbe = func() bool { return st.screen }
-	screenCaptureGrantProbe = func() bool { return st.screenProof }
 	fullDiskAccessRequest = func() bool { st.fdaRequests++; return st.fda }
 	accessibilityRequest = func() bool { st.axRequests++; return st.ax }
-	screenCaptureRequest = func() bool { st.scRequests++; return st.screen || st.scRequestOK }
+	screenCaptureRequest = func() bool { st.scRequests++; return st.screen }
 	openPrivacyPane = func() { st.paneOpens++ }
-	openFullDiskAccessPane = func() { st.paneByID[fullDiskPermissionID]++ }
-	openAccessibilityPane = func() { st.paneByID[accessibilityPermissionID]++ }
-	openScreenCapturePane = func() { st.paneByID[screenCapturePermissionID]++ }
-	permissionBundlePath = func() (string, bool) { return st.bundle, st.bundle != "" }
-	permissionIcon = func(string) *ui.Bitmap { return st.icon }
 	permissionAfterFunc = clk.after
 	permissionDispatch = func(fn func()) { fn() }
 	t.Cleanup(func() {
 		fullDiskAccessProbe, accessibilityProbe, screenCaptureProbe = origFDAProbe, origAXProbe, origSCProbe
-		screenCaptureGrantProbe = origSCProof
 		fullDiskAccessRequest, accessibilityRequest, screenCaptureRequest = origFDAReq, origAXReq, origSCReq
 		openPrivacyPane = origPane
-		openFullDiskAccessPane, openAccessibilityPane, openScreenCapturePane = origFDAPane, origAXPane, origSCPane
-		permissionBundlePath, permissionIcon = origBundle, origIcon
-		screenGrantObserved.Store(origObserved)
 		permissionAfterFunc, permissionDispatch = origAfter, origDispatch
 	})
 	return st, clk
@@ -132,11 +112,8 @@ func permissionRowCaption(t *testing.T, view *ui.Tester) string {
 			// the permissions after 项：.
 			return strings.Contains(s, "项：")
 		}
-		// The reopen button and the sidebar's 「重新打开 Rakko 以启用权限…」
-		// also start with 重新打开 Rakko; only the caption has its comma.
 		return strings.HasPrefix(s, "已全部开启（") || strings.HasPrefix(s, "第 ") ||
-			strings.HasPrefix(s, "已开启，重新打开 Rakko") ||
-			strings.HasPrefix(s, "重新打开 Rakko，")
+			strings.HasPrefix(s, "还差最后一步")
 	}
 	found := false
 	for _, text := range view.Texts() {
@@ -171,21 +148,18 @@ func TestPermissionTrayItemCountsMissing(t *testing.T) {
 	for _, tt := range []struct {
 		name          string
 		fda, ax, scre bool
-		proof         bool
 		want          string
 		wantDisable   bool
 	}{
-		{"all missing", false, false, false, false, "开启系统权限（还差 3 项）…", false},
-		{"screen missing", true, true, false, false, "开启系统权限（还差 1 项）…", false},
-		{"full disk missing", false, true, true, false, "开启系统权限（还差 1 项）…", false},
-		{"two missing", true, false, false, false, "开启系统权限（还差 2 项）…", false},
-		{"all granted", true, true, true, false, "系统权限已全部开启", true},
-		{"screen granted, needs reopen", true, true, false, true, "重新打开 Rakko 以启用权限…", false},
+		{"all missing", false, false, false, "开启系统权限（还差 3 项）…", false},
+		{"screen missing", true, true, false, "开启系统权限（还差 1 项）…", false},
+		{"full disk missing", false, true, true, "开启系统权限（还差 1 项）…", false},
+		{"two missing", true, false, false, "开启系统权限（还差 2 项）…", false},
+		{"all granted", true, true, true, "系统权限已全部开启", true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			st, _ := stubPermissions(t)
 			st.fda, st.ax, st.screen = tt.fda, tt.ax, tt.scre
-			st.screenProof = tt.proof
 			a := &shelf{settings: settings.Default()}
 			item := a.permissionMenuItem()
 			if item.Label != tt.want {
@@ -269,70 +243,10 @@ func TestSettingsPermissionsPageListsEveryPermission(t *testing.T) {
 	for _, want := range []string{
 		"系统权限",
 		"未开启",
-		"打开设置",
-		"把 Rakko 图标拖进列表",
 	} {
 		if !view.HasText(want) {
 			t.Fatalf("the page lacks %q; texts=%v", want, view.Texts())
 		}
-	}
-}
-
-// Every row offers the real app bundle as a drag source, so the user can
-// drop the icon into the System Settings list the pane shows.
-func TestPermissionRowsDragTheAppBundle(t *testing.T) {
-	st, _ := stubPermissions(t)
-	st.bundle = "/Applications/Rakko.app"
-	files, err := permissionAppDragData().Files()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(files) != 1 || files[0] != "/Applications/Rakko.app" {
-		t.Fatalf("the permission drag offers %v, want the app bundle", files)
-	}
-	// Outside a bundle there is nothing draggable; the page says so and the
-	// per-row Settings entry remains.
-	st.bundle = ""
-	if _, err := permissionAppDragData().Files(); err == nil {
-		t.Fatal("the drag source still carries data without a bundle")
-	}
-	_, view := newSettingsShelf(t)
-	openSettingsPage(t, view, "系统权限")
-	if !view.HasText("从「应用程序」里的 Rakko 打开") {
-		t.Fatalf("the no-bundle fallback is missing; texts=%v", view.Texts())
-	}
-	if !view.HasText("打开设置") {
-		t.Fatalf("the no-bundle page lost its Settings entry; texts=%v", view.Texts())
-	}
-}
-
-// Each row's direct entry opens that permission's own pane, and clicking
-// the icon opens the same pane.
-func TestPermissionRowsOpenTheirOwnPanes(t *testing.T) {
-	st, _ := stubPermissions(t)
-	for _, p := range systemPermissionSet(locales.In("")) {
-		p.pane()
-	}
-	for _, id := range []string{fullDiskPermissionID, accessibilityPermissionID, screenCapturePermissionID} {
-		if st.paneByID[id] != 1 {
-			t.Fatalf("pane %q opened %d times, want 1", id, st.paneByID[id])
-		}
-	}
-	_, view := newSettingsShelf(t)
-	openSettingsPage(t, view, "系统权限")
-	before := 0
-	for _, n := range st.paneByID {
-		before += n
-	}
-	if err := view.Click("打开设置"); err != nil {
-		t.Fatalf("the row's Settings entry is not clickable: %v", err)
-	}
-	after := 0
-	for _, n := range st.paneByID {
-		after += n
-	}
-	if after != before+1 {
-		t.Fatalf("a row click opened %d panes, want 1", after-before)
 	}
 }
 
@@ -357,18 +271,15 @@ func TestPermissionSwitchStates(t *testing.T) {
 	// Two missing: still off, and the caption names them in list order.
 	st.fda, st.ax, st.screen = true, false, false
 	view.Frame()
-	if !view.HasText("还差 2 项：辅助功能、屏幕录制") {
-		t.Fatalf("the idle switch does not name the missing permissions; texts=%v", view.Texts())
+	if view.HasText("还差 2 项：辅助功能、屏幕录制") {
+		t.Fatal("idle switch shows a missing-permissions caption")
 	}
 
-	// All granted: on, and the row does not repeat the sidebar's status.
+	// All granted: on, and the caption says so.
 	st.ax, st.screen = true, true
 	view.Frame()
 	if view.HasText("已全部开启（3/3）") {
-		t.Fatalf("the idle all-granted row repeats the caption; texts=%v", view.Texts())
-	}
-	if !view.HasText("系统权限已全部开启") {
-		t.Fatalf("the sidebar does not say everything is on; texts=%v", view.Texts())
+		t.Fatal("idle switch shows an all-granted caption")
 	}
 }
 
@@ -437,7 +348,7 @@ func TestPermissionFlowOrderSkipsGranted(t *testing.T) {
 		t.Fatalf("the screen step did not reach the relaunch stage: %v", a.perm.stage)
 	}
 	view.Frame()
-	if got := permissionRowCaption(t, view); got != "重新打开 Rakko，确认屏幕录制是否生效" {
+	if got := permissionRowCaption(t, view); got != "还差最后一步：重新打开 Rakko 才生效" {
 		t.Fatalf("relaunch caption = %q", got)
 	}
 	if !view.HasText("重新打开 Rakko") {
@@ -463,7 +374,7 @@ func TestPermissionFlowFullDiskCaption(t *testing.T) {
 	st.fda = true
 	clk.fireLast(t)
 	view.Frame()
-	if !view.HasText("已开启，重新打开 Rakko 后生效") {
+	if !view.HasText("还差最后一步：重新打开 Rakko 才生效") {
 		t.Fatalf("a Full Disk Access grant must end on the relaunch stage; texts=%v", view.Texts())
 	}
 	if strings.Contains(permissionRowCaption(t, view), "访达") {
@@ -500,7 +411,7 @@ func TestPermissionFlowFullDiskGrantReachesRelaunch(t *testing.T) {
 		t.Fatalf("the walk ended at %v, want the relaunch stage", a.perm.stage)
 	}
 	view.Frame()
-	if !view.HasText("已开启，重新打开 Rakko 后生效") {
+	if !view.HasText("还差最后一步：重新打开 Rakko 才生效") {
 		t.Fatalf("the relaunch stage is not shown; texts=%v", view.Texts())
 	}
 }
@@ -523,113 +434,6 @@ func TestPermissionFlowFullDiskOnlyEndsOnRelaunch(t *testing.T) {
 	}
 }
 
-// The screen step cannot prove a grant made after this process's cached
-// preflight. It must not announce success: it hands over to a relaunch with
-// an explicit "check after reopening" caption.
-func TestScreenStepNeverClaimsSuccessWithoutGrant(t *testing.T) {
-	st, clk := stubPermissions(t)
-	st.fda, st.ax, st.screen = false, false, false
-	a, view := newSettingsShelf(t)
-	clickPermissionSwitch(t, view)
-	st.fda = true
-	clk.fireLast(t)
-	st.ax = true
-	clk.fireLast(t)
-	if st.scRequests != 1 {
-		t.Fatalf("screen recording was not requested: %d", st.scRequests)
-	}
-	clk.fireLast(t) // the handoff: no grant was made and none can be proven
-	if a.perm.stage != permissionRelaunch || !a.perm.unconfirmed {
-		t.Fatalf("screen handoff = stage %v unconfirmed %v, want an unconfirmed relaunch",
-			a.perm.stage, a.perm.unconfirmed)
-	}
-	view.Frame()
-	if !view.HasText("重新打开 Rakko，确认屏幕录制是否生效") {
-		t.Fatalf("the unconfirmed screen step does not say it is unconfirmed; texts=%v", view.Texts())
-	}
-	for _, falseClaim := range []string{"已全部开启", "还差最后一步", "已开启，重新打开"} {
-		if view.HasText(falseClaim) {
-			t.Fatalf("the screen step claims %q without a confirmed grant", falseClaim)
-		}
-	}
-}
-
-// A proven screen grant is on in System Settings but unusable until the app
-// is reopened. The page says so, offers the reopen button, and the sidebar
-// does not claim every permission is on.
-func TestScreenGrantProvenNeedsReopen(t *testing.T) {
-	st, _ := stubPermissions(t)
-	st.fda, st.ax, st.screen, st.screenProof = true, true, false, true
-	a, view := newSettingsShelf(t)
-	openSettingsPage(t, view, "系统权限")
-	view.Frame()
-	for _, want := range []string{
-		"重启后生效",
-		"已开启，重新打开 Rakko 后生效",
-		"重新打开 Rakko",
-		"1 项权限需重新打开",
-	} {
-		if !view.HasText(want) {
-			t.Fatalf("the proven-grant state lacks %q; texts=%v", want, view.Texts())
-		}
-	}
-	if view.HasText("系统权限已全部开启") {
-		t.Fatal("the sidebar claims every permission is on while screen recording is unusable")
-	}
-	// Starting the flow has nothing to ask for; it goes straight to the
-	// reopen step without touching a TCC record.
-	before := st.scRequests
-	a.startPermissionFlow()
-	if a.perm.stage != permissionRelaunch || st.scRequests != before {
-		t.Fatalf("a pending reopen started a request: stage=%v screen=%d", a.perm.stage, st.scRequests)
-	}
-}
-
-// The request itself can report the grant (a re-ask for a permission that is
-// already on): the handoff then says the switch is on instead of guessing.
-func TestScreenRequestReportsGrant(t *testing.T) {
-	st, clk := stubPermissions(t)
-	st.fda, st.ax, st.screen = true, true, false
-	st.scRequestOK = true
-	a, view := newSettingsShelf(t)
-	clickPermissionSwitch(t, view)
-	if st.scRequests != 1 {
-		t.Fatalf("screen recording was not requested: %d", st.scRequests)
-	}
-	clk.fireLast(t) // the handoff
-	if a.perm.stage != permissionRelaunch || a.perm.unconfirmed {
-		t.Fatalf("a reported grant = stage %v unconfirmed %v, want a confirmed relaunch",
-			a.perm.stage, a.perm.unconfirmed)
-	}
-	view.Frame()
-	if !view.HasText("已开启，重新打开 Rakko 后生效") {
-		t.Fatalf("the confirmed handoff does not say the switch is on; texts=%v", view.Texts())
-	}
-	if !view.HasText("1 项权限需重新打开") {
-		t.Fatalf("the sidebar does not carry the reported grant; texts=%v", view.Texts())
-	}
-}
-
-// A grant that needs a reopen must not take the switch away while another
-// permission is still missing: the walk that asks for it starts here.
-func TestPendingRelaunchKeepsTheSwitchWhileSomethingIsMissing(t *testing.T) {
-	st, _ := stubPermissions(t)
-	st.fda, st.ax, st.screen, st.screenProof = false, true, false, true
-	a, view := newSettingsShelf(t)
-	openSettingsPage(t, view, "系统权限")
-	view.Frame()
-	if !view.HasText("还差 1 项：完整磁盘访问") {
-		t.Fatalf("the idle caption does not name the missing permission; texts=%v", view.Texts())
-	}
-	clickPermissionSwitch(t, view)
-	if st.fdaRequests != 1 || a.perm.stage != permissionWaiting {
-		t.Fatalf("the pending reopen blocked the walk: stage=%v fda=%d", a.perm.stage, st.fdaRequests)
-	}
-	if st.scRequests != 0 {
-		t.Fatalf("a proven screen grant was requested again: %d", st.scRequests)
-	}
-}
-
 // 停止 ends the walk and leaves no timer behind; a callback already in
 // flight must do nothing.
 func TestPermissionFlowStops(t *testing.T) {
@@ -647,8 +451,8 @@ func TestPermissionFlowStops(t *testing.T) {
 		t.Fatalf("停止 left the flow at %v", a.perm.stage)
 	}
 	view.Frame()
-	if !view.HasText("还差 3 项：完整磁盘访问、辅助功能、屏幕录制") {
-		t.Fatalf("stopped flow does not show the idle caption; texts=%v", view.Texts())
+	if view.HasText("还差 3 项：完整磁盘访问、辅助功能、屏幕录制") {
+		t.Fatal("stopped flow shows an idle caption")
 	}
 	clk.fireLast(t)
 	if a.perm.stage != permissionIdle || st.fdaRequests != 1 {

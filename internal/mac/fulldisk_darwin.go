@@ -82,7 +82,7 @@ func RequestFullDiskAccess() bool {
 	if FullDiskAccessGranted() {
 		return true
 	}
-	OpenFullDiskAccessPane()
+	openURL(fullDiskAccessPane)
 	exe, err := fullDiskAccessExe()
 	if err != nil {
 		return false
@@ -91,13 +91,6 @@ func RequestFullDiskAccess() bool {
 		revealBundleInFinder(bundle)
 	}
 	return false
-}
-
-// OpenFullDiskAccessPane is the per-row entry: it opens the 完整磁盘访问
-// pane and leaves Finder alone, so a user who already has the app icon in
-// the Settings window can drag it in without a second window appearing.
-func OpenFullDiskAccessPane() {
-	openURL(fullDiskAccessPane)
 }
 
 // OpenPrivacySecurityPane opens 系统设置 → 隐私与安全性. macOS gives no app

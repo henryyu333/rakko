@@ -89,19 +89,6 @@ func TestFullDiskAccessDefaultPaths(t *testing.T) {
 	}
 }
 
-// The row's direct entry opens the pane alone; the Finder reveal belongs to
-// the guided request, not to the per-row shortcut.
-func TestOpenFullDiskAccessPaneDoesNotReveal(t *testing.T) {
-	opens, reveals := stubFullDisk(t, "/nonexistent/TCC.db")
-	OpenFullDiskAccessPane()
-	if len(*opens) != 1 || (*opens)[0] != "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles" {
-		t.Fatalf("the 完整磁盘访问 pane was not opened: %v", *opens)
-	}
-	if len(*reveals) != 0 {
-		t.Fatalf("the per-row entry revealed Finder: %v", *reveals)
-	}
-}
-
 func TestRequestFullDiskAccessOpensPaneAndRevealsBundle(t *testing.T) {
 	opens, reveals := stubFullDisk(t, "/nonexistent/TCC.db")
 	if RequestFullDiskAccess() {

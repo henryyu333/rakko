@@ -9,24 +9,20 @@ package main
 //
 // Nothing here changes a permission by itself: the enabled probes are
 // read-only (a TCC.db open for Full Disk Access, AXIsProcessTrusted,
-// CGPreflightScreenCaptureAccess), and only user-initiated paths open
-// System Settings or ask macOS to prompt. No path runs tccutil: clearing a
-// TCC record is the user's decision in System Settings, never a side effect
-// of asking. Each row shows the real app icon as a drag source for the
-// pane's list and its own direct Settings entry.
+// CGPreflightScreenCaptureAccess), and only the user-initiated request
+// functions open System Settings, reveal the app in Finder or reach the
+// existing paths that clear a stale ad-hoc record while the grant is
+// absent.
 
 import (
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/egoist/mygo"
-	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/mac"
@@ -43,7 +39,7 @@ const (
 	// System Settings.
 	permissionPollInterval = time.Second
 	// permissionScreenHandoff is how long the screen-recording step keeps
-	// its 「第 n 项」 caption before it hands over to the reopen step. The
+	// its 「第 n 项」 caption before it turns into 「还差最后一步」. The
 	// request opens the pane first; the pause lets the user see which step
 	// they are on while the pane comes forward.
 	permissionScreenHandoff = 1500 * time.Millisecond
@@ -57,105 +53,19 @@ var (
 	fullDiskAccessProbe   = mac.FullDiskAccessGranted
 	fullDiskAccessRequest = mac.RequestFullDiskAccess
 	accessibilityProbe    = mac.AccessibilityTrusted
-	// The preflight is read-only and never prompts. Its answer is cached
-	// for the process's lifetime, so showing state uses it alone; the
-	// uncached grant proof below covers a grant made after that answer.
+	// ScreenCapturePreflight, not ScreenCaptureAllowed: showing state must
+	// never run the stale-record reset that belongs to the request path.
 	screenCaptureProbe   = mac.ScreenCapturePreflight
 	screenCaptureRequest = mac.RequestScreenCapture
 	// openPrivacyPane is all a switched-off permission can do: macOS gives
 	// no app the power to revoke a grant, only the user in System Settings.
 	openPrivacyPane = mac.OpenPrivacySecurityPane
-	// One direct entry per row: the pane that holds that permission. The
-	// rows also offer the real app bundle as a drag source, so the user can
-	// drag the icon into the pane's list instead of pressing +.
-	openFullDiskAccessPane = mac.OpenFullDiskAccessPane
-	openAccessibilityPane  = mac.OpenAccessibilityPane
-	openScreenCapturePane  = mac.OpenScreenCapturePane
-	// Screen recording's preflight answer is cached for the process's
-	// lifetime. Window titles are the read-only evidence that the grant
-	// exists; false only means "not proven" (a screen with no other titled
-	// windows looks the same). The status display never treats the cached
-	// false as a denial. The evidence is memoized for a moment: the Settings
-	// window repaints many times a second and every answer enumerates the
-	// on-screen windows. A second of lag cannot show a state the system does
-	// not hold, and a grant made now stays "unproven" rather than claimed.
-	screenCaptureGrantProbe = memoizedProbe(mac.ScreenCaptureGrantedByWindowTitles, time.Second)
 
 	permissionAfterFunc = func(d time.Duration, fn func()) permissionTimer {
 		return time.AfterFunc(d, fn)
 	}
 	permissionDispatch = mygo.RunOnMain
 )
-
-// The real app bundle and its icon are what the user drags into System
-// Settings. Both are seams: a headless test must not touch AppKit, and a
-// development run outside a bundle has neither.
-var (
-	permissionBundlePath = defaultPermissionBundlePath
-	permissionIcon       = permissionIconFor
-)
-
-// defaultPermissionBundlePath is the running app's .app, when it has one.
-func defaultPermissionBundlePath() (string, bool) {
-	exe, err := os.Executable()
-	if err != nil {
-		return "", false
-	}
-	return appBundleForExecutable(exe)
-}
-
-// permissionIcons caches each bundle's icon for the window's lifetime.
-var permissionIcons = map[string]*ui.Bitmap{}
-
-func permissionIconFor(bundle string) *ui.Bitmap {
-	if bundle == "" {
-		return nil
-	}
-	if icon, ok := permissionIcons[bundle]; ok {
-		return icon
-	}
-	var icon *ui.Bitmap
-	if png := mac.FileIcon(bundle, 32); len(png) > 0 {
-		if decoded, err := ui.DecodeBitmap(png); err == nil {
-			icon = decoded
-		}
-	}
-	permissionIcons[bundle] = icon
-	return icon
-}
-
-// screenGrantObserved is a grant that CGRequestScreenCaptureAccess itself
-// reported in this process. It is direct evidence that outlives the cached
-// preflight and needs no other app's titled window; only a request that
-// returned true sets it, never an inference.
-var screenGrantObserved atomic.Bool
-
-// screenCaptureGranted is the one evidence chain for "the system's list
-// holds the screen-recording grant": the live preflight first, then a grant
-// a request reported, then the WindowServer proof. False only means "not
-// proven"; callers must not read it as a denial.
-func screenCaptureGranted() bool {
-	return screenCaptureProbe() || screenGrantObserved.Load() || screenCaptureGrantProbe()
-}
-
-// memoizedProbe repeats probe's answer for ttl: a probe that walks every
-// on-screen window is too heavy to run on each repaint of a window that
-// shows the same state. Callers still read a real answer within ttl.
-func memoizedProbe(probe func() bool, ttl time.Duration) func() bool {
-	var mu sync.Mutex
-	var at time.Time
-	var answer bool
-	return func() bool {
-		mu.Lock()
-		defer mu.Unlock()
-		if !at.IsZero() && time.Since(at) < ttl {
-			return answer
-		}
-		answer = probe()
-		at = time.Now()
-		return answer
-	}
-}
 
 type permissionTimer interface {
 	Stop() bool
@@ -175,27 +85,7 @@ type systemPermission struct {
 	detail  string
 	l       locales.Messages
 	enabled func() bool
-	// granted reports that the system's list already holds the grant, even
-	// when this process cannot use it until it is reopened. nil means the
-	// live probe is also the grant's answer (Full Disk Access, Accessibility).
-	granted func() bool
 	request func() bool
-	pane    func()
-}
-
-// isGranted is the state the system's list shows: the live probe, or the
-// uncached evidence of a grant this process is too old to use.
-func (p systemPermission) isGranted() bool {
-	if p.granted != nil {
-		return p.granted()
-	}
-	return p.enabled()
-}
-
-// needsRelaunch is true for a grant that exists but that this process still
-// answers no to (screen recording's cached preflight).
-func (p systemPermission) needsRelaunch() bool {
-	return p.isGranted() && !p.enabled()
 }
 
 // systemPermissions is the single source of the list, in the order the
@@ -223,7 +113,6 @@ func systemPermissionSet(l locales.Messages) []systemPermission {
 			request: func() bool {
 				return fullDiskAccessRequest()
 			},
-			pane: func() { openFullDiskAccessPane() },
 		},
 		{
 			id:     accessibilityPermissionID,
@@ -238,7 +127,6 @@ func systemPermissionSet(l locales.Messages) []systemPermission {
 			request: func() bool {
 				return accessibilityRequest()
 			},
-			pane: func() { openAccessibilityPane() },
 		},
 		{
 			id:     screenCapturePermissionID,
@@ -250,13 +138,9 @@ func systemPermissionSet(l locales.Messages) []systemPermission {
 			enabled: func() bool {
 				return screenCaptureProbe()
 			},
-			granted: func() bool {
-				return screenCaptureGranted()
-			},
 			request: func() bool {
 				return screenCaptureRequest()
 			},
-			pane: func() { openScreenCapturePane() },
 		},
 	}
 }
@@ -279,33 +163,16 @@ func missingSystemPermissions() []systemPermission {
 	return missingPermissions(systemPermissions())
 }
 
-// missingPermissions filters list to the permissions the system's list does
-// not hold: a grant proven but not yet usable by this process is not
-// missing, it only needs a relaunch.
+// missingPermissions filters list to the permissions the system has not
+// granted.
 func missingPermissions(list []systemPermission) []systemPermission {
 	var missing []systemPermission
 	for _, p := range list {
-		if !p.isGranted() {
+		if !p.enabled() {
 			missing = append(missing, p)
 		}
 	}
 	return missing
-}
-
-// restartPendingPermissions filters list to the grants that exist in
-// System Settings but that this process still answers no to.
-func restartPendingPermissions(list []systemPermission) []systemPermission {
-	var pending []systemPermission
-	for _, p := range list {
-		if p.needsRelaunch() {
-			pending = append(pending, p)
-		}
-	}
-	return pending
-}
-
-func restartPendingSystemPermissions() []systemPermission {
-	return restartPendingPermissions(systemPermissions())
 }
 
 // permissionShortNames joins the given permissions' short names the way a
@@ -330,12 +197,6 @@ func (a *shelf) permissionMenuItem() *mygo.MenuItem {
 	l := a.appLoc()
 	missing := missingSystemPermissions()
 	if len(missing) == 0 {
-		if pending := restartPendingSystemPermissions(); len(pending) > 0 {
-			return &mygo.MenuItem{
-				Label: l.PermMenuRelaunch(),
-				Click: func(*mygo.MenuItem, *mygo.Window) { a.showPermissions() },
-			}
-		}
 		return &mygo.MenuItem{Label: l.PermMenuAllOn(), Disabled: true}
 	}
 	return &mygo.MenuItem{
@@ -375,21 +236,16 @@ const (
 
 // permissionFlow is the state of the guided walk. ids is the snapshot of
 // what was missing when the flow started, so a grant landing mid-flow
-// cannot shift the step index. relaunch remembers that a permission whose
-// answer this process keeps stale (Full Disk Access, screen recording)
-// landed while the walk was running: the remaining items are still walked,
-// and the walk then ends on the reopen stage instead of the ordinary
-// all-granted one.
+// cannot shift the step index. relaunch remembers that a Full Disk Access
+// grant landed while the walk was running: the remaining items are still
+// walked, and the walk then ends on the relaunch stage instead of the
+// ordinary all-granted one.
 type permissionFlow struct {
 	stage    permissionStage
 	ids      []string
 	step     int
 	relaunch bool
-	// unconfirmed marks the screen-recording handoff where no grant could
-	// be proven before the relaunch: the walk must not claim the permission
-	// is on. The relaunch is what re-reads the answer.
-	unconfirmed bool
-	timer       permissionTimer
+	timer    permissionTimer
 }
 
 // stopPermissionFlow ends the walk and leaves no timer behind. Closing the
@@ -404,17 +260,12 @@ func (a *shelf) stopPermissionFlow() {
 
 // startPermissionFlow begins (or restarts) the walk over the permissions
 // that are missing right now. Already-granted permissions are skipped by
-// beginPermissionStep and never requested, so the user is never asked for a
-// permission that is already on; no path resets a TCC record.
+// beginPermissionStep and never requested, so their TCC record is never
+// cleared.
 func (a *shelf) startPermissionFlow() {
 	a.stopPermissionFlow()
 	missing := missingSystemPermissions()
 	if len(missing) == 0 {
-		// Nothing is left to ask for. A grant that exists but this process
-		// cannot use yet still needs the reopen step, not silence.
-		if len(restartPendingSystemPermissions()) > 0 {
-			a.perm = permissionFlow{stage: permissionRelaunch}
-		}
 		a.repaintSettings()
 		return
 	}
@@ -443,17 +294,11 @@ func (a *shelf) beginPermissionStep() {
 			a.perm.step++
 			continue
 		}
-		if p.isGranted() {
-			if p.needsRelaunch() {
-				a.perm.relaunch = true
-			}
+		if p.enabled() {
 			a.perm.step++
 			continue
 		}
-		granted := p.request()
-		if p.id == screenCapturePermissionID && granted {
-			screenGrantObserved.Store(true)
-		}
+		p.request()
 		a.repaintSettings()
 		if p.id == screenCapturePermissionID {
 			a.armPermissionTimer(permissionScreenHandoff)
@@ -497,18 +342,13 @@ func (a *shelf) permissionTimerFired() {
 		return
 	}
 	if p.id == screenCapturePermissionID {
-		// The pane is open, but this process's cached preflight cannot
-		// prove a grant made after its first answer. Window titles are the
-		// uncached evidence; when even they cannot prove it, the step ends
-		// as unconfirmed rather than claiming success. Either way the next
-		// launch re-reads the real answer.
-		a.perm.relaunch = true
-		a.perm.unconfirmed = !p.isGranted()
+		// The request opened the pane; the grant itself is invisible to this
+		// process's cached preflight, so the walk ends here either way.
 		a.perm.stage = permissionRelaunch
 		a.repaintSettings()
 		return
 	}
-	if !p.isGranted() {
+	if !p.enabled() {
 		a.armPermissionTimer(permissionPollInterval)
 		return
 	}
@@ -614,15 +454,9 @@ func (a *shelf) permissionCaption(l locales.Messages, permissions, missing []sys
 		}
 		return l.PermStep(a.perm.step+1, len(a.perm.ids))
 	case permissionRelaunch:
-		if a.perm.unconfirmed {
-			return l.PermRelaunchUnconfirmed()
-		}
-		return l.PermRelaunchGranted()
+		return l.PermRelaunchStep()
 	}
 	if len(missing) == 0 {
-		if len(restartPendingPermissions(permissions)) > 0 {
-			return l.PermRelaunchGranted()
-		}
 		return l.PermAllGranted(len(permissions), len(permissions))
 	}
 	return l.PermMissing(len(missing), permissionShortNames(missing))
@@ -631,26 +465,17 @@ func (a *shelf) permissionCaption(l locales.Messages, permissions, missing []sys
 // settingsPermissionSwitch is the group's one row: the title and the state
 // caption on the left, one switch on the right. The switch is on only when
 // every permission is granted; while the walk waits it shows on, because the
-// walk is what is running, and a quiet 停止 sits next to it. When nothing is
-// missing and a grant still needs a relaunch, the accent button replaces the
-// switch: nothing is left to switch until the app has restarted.
+// walk is what is running, and a quiet 停止 sits next to it. The relaunch
+// stage replaces the switch with the accent button: nothing is left to
+// switch until the app has restarted.
 func (a *shelf) settingsPermissionSwitch(c *ui.Context, permissions, missing []systemPermission) {
 	l := loc(c)
 	title := l.PermTitle()
-	// The caption says what is missing, which step the walk is on, or what a
-	// pending reopen affects. With everything on and no walk running, it
-	// would only repeat the sidebar's status.
 	caption := ""
-	if a.perm.stage != permissionIdle || len(missing) > 0 || len(restartPendingPermissions(permissions)) > 0 {
+	if a.perm.stage != permissionIdle {
 		caption = a.permissionCaption(l, permissions, missing)
 	}
-	// A pending reopen replaces the switch only when nothing is left to ask
-	// for: with a missing permission too, the switch must stay usable or the
-	// walk could not be started from this row.
-	relaunch := a.perm.stage == permissionRelaunch ||
-		(a.perm.stage == permissionIdle && len(missing) == 0 &&
-			len(restartPendingPermissions(permissions)) > 0)
-	if relaunch {
+	if a.perm.stage == permissionRelaunch {
 		ui.Row(c.Key("perm-row")).AlignItems(ui.Center).Gap(10).MinHeight(48).Padding(settingsRowPadY, 12).FillWidth().Children(func() {
 			permissionRowLabel(c, title, caption)
 			settingsAccentButton(c, "relaunch", l.PermRelaunchButton(), func() { a.relaunchShelf() })
@@ -675,53 +500,6 @@ func (a *shelf) settingsPermissionSwitch(c *ui.Context, permissions, missing []s
 	})
 	if row.Changed() || sw.Changed() {
 		a.applyPermissionSwitch(on)
-	}
-}
-
-// permissionAppDragData offers the running app bundle as a file URL. That
-// is what System Settings accepts: dropped on a privacy list it adds Rakko
-// to the list, so the user never has to find the app through +.
-func permissionAppDragData() transfer.Data {
-	bundle, ok := permissionBundlePath()
-	if !ok {
-		return transfer.Data{}
-	}
-	data, err := transfer.FileData(bundle)
-	if err != nil {
-		return transfer.Data{}
-	}
-	return data
-}
-
-// permissionAppIcon is one row's real app icon. When the app runs from a
-// bundle the icon is also the drag source; a click always opens the row's
-// pane, and outside a bundle (go run, go test) the generic mark stands in
-// and the row still offers 「打开设置」 and the group's fallback note.
-func (a *shelf) permissionAppIcon(c *ui.Context, l locales.Messages, p systemPermission, bundle string, draggable bool) {
-	label := l.PermIconLabelFallback(p.short)
-	if draggable {
-		label = l.PermIconLabel(p.short)
-	}
-	btn := ui.ButtonBase(c.Key("perm-app-"+p.id)).Size(30, 30).Radius(7).
-		AlignItems(ui.Center).Label(label)
-	if draggable {
-		btn.Tooltip(l.PermDragTooltip())
-		btn.DragDataFrom(permissionAppDragData)
-	} else {
-		btn.Tooltip(l.PermNoBundleHint())
-	}
-	if btn.Hovered() {
-		btn.Background(setCtlHover)
-	}
-	btn.Children(func() {
-		if icon := permissionIcon(bundle); icon != nil {
-			ui.Image(c.Key("img"), icon).Size(28, 28).Radius(7).Fit(ui.Contain)
-			return
-		}
-		ui.Icon(c, appGlyph).Size(24, 24).TextColor(ink2)
-	})
-	if btn.Clicked() {
-		p.pane()
 	}
 }
 
