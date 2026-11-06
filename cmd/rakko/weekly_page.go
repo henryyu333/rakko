@@ -44,16 +44,10 @@ var (
 	weeklyDots   = symbol(`<circle cx="6" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="18" cy="12" r="1.5"/>`)
 )
 
-// The report's own palette: the prototype's soft blue bars on the black
-// shell, and the three tool tints.
-var (
-	weeklyBar       = ui.Hex("#A7BBD3")
-	weeklyBarWeek   = ui.Hex("#6C7889")
-	weeklyToolTints = []ui.Color{
-		ui.Hex("#B5C2D6"), ui.Hex("#B59B89"), ui.Hex("#858193"),
-		ui.Hex("#8FA6A0"), ui.Hex("#B0A7C4"), ui.Hex("#9AA6B5"),
-	}
-)
+// The report draws its data in the panel's neutral inks, as the prototype
+// does: one series in ink2, a ranking in the same ink, and a tool's share
+// stepped down from it. The page keeps the accent for its one action.
+var weeklyToolSteps = []float32{0.88, 0.62, 0.44, 0.3, 0.2, 0.14}
 
 // --- panelPage ----------------------------------------------------------
 
@@ -112,7 +106,7 @@ func (f *weeklyFeature) header(c *ui.Context, w float32, now time.Time) {
 			f.setWeekOffset(now, f.weekOffset-1)
 		})
 		panelLabel(c, "weekly-range", weeklyWeekLabel(c.Locale(), start, now), 11, 0).
-			TextColor(ink2).Width(260).TextAlign(ui.Center)
+			TextColor(ink2).Width(200).TextAlign(ui.Center)
 		f.navButton(c, "weekly-next", weeklyRight, l.WeeklyNextWeek(), f.weekOffset < 0, func() {
 			f.setWeekOffset(now, f.weekOffset+1)
 		})
@@ -149,8 +143,8 @@ func (f *weeklyFeature) report(c *ui.Context, w, h float32, now time.Time) {
 	}
 	ui.Scroll(c.Key("weekly-scroll")).Width(w).Height(h).TrackScroll(&f.scroll).
 		Label(tloc(c).WeeklyScrollLabel()).Children(func() {
-		inner := w - 2*weeklyInnerX - 4
-		ui.Column(c.Key("weekly-body")).Width(w - weeklyInnerX).Padding(4, weeklyInnerX, 12, 0).Children(func() {
+		inner := w - 2*weeklyInnerX
+		ui.Column(c.Key("weekly-body")).Width(w).Padding(8, weeklyInnerX, 16, weeklyInnerX).Children(func() {
 			if note := f.storageNote(c); note != "" {
 				ui.Row(c.Key("weekly-storage")).Width(inner).Gap(7).AlignItems(ui.Start).Margin(0, 0, 10, 0).Children(func() {
 					ui.Icon(c, warnSymbol).Size(13, 13).TextColor(warning).Margin(1, 0, 0, 0)
@@ -206,27 +200,29 @@ func (f *weeklyFeature) macSection(c *ui.Context, w float32, wk weekly.Week, now
 			return
 		}
 		if !wk.Sampled {
-			ui.Column(c.Key("weekly-mac-empty")).Width(w).Margin(14, 0, 0, 0).Gap(5).Children(func() {
-				panelLabel(c, nil, l.WeeklyEmptyTitle(), 12, 550).TextColor(ink)
-				ui.Text(c, l.WeeklyEmptyBody()).FontSize(11).TextColor(ink3).MaxWidth(w).Margin(2, 0, 0, 0)
+			ui.Column(c.Key("weekly-mac-empty")).Width(w).Margin(40, 0, 0, 0).Gap(7).
+				AlignItems(ui.Center).Children(func() {
+				ui.Icon(c, weeklySymbol).Size(24, 24).TextColor(ink3)
+				panelLabel(c, nil, l.WeeklyEmptyTitle(), 13, 550).TextColor(ink)
+				ui.Text(c, l.WeeklyEmptyBody()).FontSize(11).TextColor(ink3).
+					MaxWidth(420).TextAlign(ui.Center)
 			})
 			return
 		}
 		f.macMetric(c, w, wk, now)
 		f.barChart(c, w, wk)
 		f.appRows(c, w, wk)
-		ui.Text(c, l.WeeklySamplingNote()).FontSize(10).TextColor(ink3).
-			MaxWidth(w).Margin(10, 0, 0, 0)
 		ui.Text(c, l.WeeklyCoverageNote()).FontSize(10).TextColor(ink3).
-			MaxWidth(w).Margin(4, 0, 0, 0)
+			MaxWidth(w).Margin(12, 0, 0, 0)
 	})
 }
 
-// modeSeg is the 活跃 / 停留 picker: the same segmented track the AI 用量
-// page uses for its ranges.
+// modeSeg is the 活跃 / 停留 picker, drawn with the same segmented track as
+// the AI 用量 page's range picker. Each half explains its measure on hover,
+// so the definition stays off the page itself.
 func (f *weeklyFeature) modeSeg(c *ui.Context) {
 	l := tloc(c)
-	ui.Row(c.Key("weekly-mode")).Background(fill1).Radius(6).Padding(2, 2, 2, 2).Gap(2).Children(func() {
+	ui.Row(c.Key("weekly-mode")).Background(fill1).Radius(6).Padding(1, 1, 1, 1).Gap(1).Children(func() {
 		for _, m := range []weekly.Metric{weekly.MetricActive, weekly.MetricResident} {
 			name := l.WeeklyModeActive()
 			key := "active"
@@ -235,7 +231,8 @@ func (f *weeklyFeature) modeSeg(c *ui.Context) {
 				key = "resident"
 			}
 			on := f.metric == m
-			b := ui.ButtonBase(c.Key("weekly-mode-"+key)).Radius(4).Padding(2, 8, 2, 8).Label(name)
+			b := ui.ButtonBase(c.Key("weekly-mode-"+key)).Radius(4).Padding(1, 4, 1, 4).
+				Label(name).Description(l.WeeklySamplingNote())
 			if on {
 				b.Background(fill2)
 			}
@@ -244,7 +241,7 @@ func (f *weeklyFeature) modeSeg(c *ui.Context) {
 				if on {
 					col = ink
 				}
-				panelLabel(c, nil, name, 10, 600).TextColor(col)
+				panelLabel(c, nil, name, 9.5, 600).TextColor(col)
 			})
 			if b.Clicked() && f.metric != m {
 				f.metric = m
@@ -264,14 +261,16 @@ func (f *weeklyFeature) consentBlock(c *ui.Context, w float32) {
 			panelLabel(c, nil, l.WeeklyConsentTitle(), 12, 600).TextColor(ink)
 		})
 		panelLines(c, l.WeeklyConsentBody(), 11, 0).TextColor(ink2).MaxWidth(w)
-		b := ui.ButtonBase(c.Key("weekly-enable")).Height(24).Radius(12).Padding(0, 12, 0, 12).
-			Background(accent).Center().Label(l.WeeklyConsentEnable())
-		b.Children(func() {
-			ui.Text(c, l.WeeklyConsentEnable()).SingleLine().FontSize(11).FontWeight(600).TextColor(ink)
+		ui.Row(c.Key("weekly-consent-actions")).Children(func() {
+			b := ui.ButtonBase(c.Key("weekly-enable")).Height(24).Radius(12).Padding(0, 12, 0, 12).
+				Background(accent).Center().Label(l.WeeklyConsentEnable())
+			b.Children(func() {
+				ui.Text(c, l.WeeklyConsentEnable()).SingleLine().FontSize(11).FontWeight(600).TextColor(ink)
+			})
+			if b.Clicked() {
+				f.setStats(true)
+			}
 		})
-		if b.Clicked() {
-			f.setStats(true)
-		}
 	})
 }
 
@@ -328,22 +327,20 @@ func (f *weeklyFeature) barChart(c *ui.Context, w float32, wk weekly.Week) {
 				Justify(ui.End).AlignItems(ui.Center).Gap(5).Label(label)
 			col.Tooltip(label)
 			col.Children(func() {
-				area := ui.Box(c.Key("area")).Width(26).Height(70).AlignItems(ui.End).Justify(ui.End)
+				area := ui.Column(c.Key("area")).Width(26).Height(70).
+					Justify(ui.End).AlignItems(ui.Center).Gap(2)
 				area.Children(func() {
-					if !day.Sampled {
-						ui.Box(c.Key("dash")).Width(26).Height(2).Radius(1).Background(fill3)
-						return
+					switch {
+					case !day.Sampled:
+						ui.Box(c.Key("dash")).Width(12).Height(2).Radius(1).Background(fill3)
+					case values[i] > 0:
+						barH := float32(float64(values[i])/float64(maxV)) * 64
+						barH = max(2, barH)
+						ui.Box(c.Key("bar")).Width(24).Height(barH).Radius(3).Background(ink2)
 					}
-					if values[i] <= 0 {
-						return // measured zero draws no bar
-					}
-					barH := float32(float64(values[i])/float64(maxV)) * 68
-					barH = max(2, barH)
-					tint := weeklyBar
-					if i >= 5 {
-						tint = weeklyBarWeek
-					}
-					ui.Box(c.Key("bar")).Width(24).Height(barH).Radius(3).Background(tint)
+					// One hairline under each day grounds the bars, as the
+					// AI usage chart's baseline does.
+					ui.Box(c.Key("base")).Width(26).Height(1).Background(fill2)
 				})
 				panelLabel(c, nil, weeklyWeekday(c.Locale(), day.Date), 9, 0).TextColor(ink3)
 			})
@@ -414,7 +411,9 @@ func (f *weeklyFeature) appRow(c *ui.Context, w float32, bundle, name string, va
 			if bmp := f.host.clipAppIcon(bundle); bmp != nil {
 				ui.Image(c.Key("icon"), bmp).Width(18).Height(18).Radius(4)
 			} else {
-				ui.Box(c.Key("icon")).Size(18, 18).Radius(4).Background(fill1)
+				ui.Row(c.Key("icon")).Size(18, 18).Radius(4).Center().Background(fill1).Children(func() {
+					ui.Icon(c, appGlyph).Size(11, 11).TextColor(ink3)
+				})
 			}
 		} else {
 			ui.Row(c.Key("icon")).Size(18, 18).Center().Children(func() {
@@ -425,7 +424,7 @@ func (f *weeklyFeature) appRow(c *ui.Context, w float32, bundle, name string, va
 		ui.Box(c.Key("track")).Grow(1).MinWidth(0).Height(3).Radius(2).Background(fill3).
 			Draw(func(p *ui.Painter, r ui.Rect) {
 				if frac > 0 {
-					p.Fill(ui.Rect{X: r.X, Y: r.Y, W: r.W * frac, H: r.H}, weeklyBar, 2)
+					p.Fill(ui.Rect{X: r.X, Y: r.Y, W: r.W * frac, H: r.H}, ink2, 2)
 				}
 			})
 		panelLabel(c, nil, weeklyHM(value, l), 10, 0).TextColor(ink3).Width(64).TextAlign(ui.End)
@@ -569,14 +568,15 @@ func (f *weeklyFeature) aiTrack(c *ui.Context, w float32, sum aiusage.Summary) {
 	}
 }
 
-// weeklyToolTint is one source's bar and dot color. The palette stays in
-// the panel's muted family; a source beyond the list reuses it.
+// weeklyToolTint is one source's bar and dot color: white stepped down by
+// rank, so the split stays one neutral family. A source beyond the list
+// reuses it.
 func weeklyToolTint(i int) ui.Color {
-	i %= len(weeklyToolTints)
+	i %= len(weeklyToolSteps)
 	if i < 0 {
-		i += len(weeklyToolTints)
+		i += len(weeklyToolSteps)
 	}
-	return weeklyToolTints[i]
+	return ui.RGBA(255, 255, 255, weeklyToolSteps[i])
 }
 
 // --- Rakko completions --------------------------------------------------
@@ -606,8 +606,10 @@ func (f *weeklyFeature) rakkoSection(c *ui.Context, w float32, wk weekly.Week) {
 			f.count(c, "ocr", ocrSymbol, wk.Rakko.OCR, l.WeeklyRakkoText(), unknown)
 			f.count(c, "tray", trayNavSymbol, wk.Rakko.Tray, l.WeeklyRakkoTray(), unknown)
 		})
-		ui.Text(c, l.WeeklyRakkoNote()).FontSize(10).TextColor(ink3).
-			MaxWidth(w).Margin(10, 0, 0, 0)
+		if unknown {
+			ui.Text(c, l.WeeklyRakkoNote()).FontSize(10).TextColor(ink3).
+				MaxWidth(w).Margin(10, 0, 0, 0)
+		}
 	})
 }
 
@@ -637,11 +639,13 @@ func (f *weeklyFeature) footer(c *ui.Context, w float32) {
 		Padding(0, weeklyInnerX, 0, weeklyInnerX).AlignItems(ui.Center).Gap(6).Children(func() {
 		ui.Icon(c, weeklyShield).Size(11, 11).TextColor(ink3)
 		panelLabel(c, nil, l.WeeklyLocalOnly(), 10, 0).TextColor(ink3)
-		ui.Box(c.Key("gap")).Grow(1)
-		text := l.WeeklyResume()
-		if f.consent() {
-			text = l.WeeklyPause()
+		if !f.consent() {
+			// The Mac section's ask owns turning tracking on; two switches
+			// for one choice would only compete.
+			return
 		}
+		ui.Box(c.Key("gap")).Grow(1)
+		text := l.WeeklyPause()
 		b := ui.ButtonBase(c.Key("weekly-toggle")).Height(22).Radius(11).Padding(0, 9, 0, 9).
 			Label(text).Description(text)
 		if b.Hovered() {
@@ -715,13 +719,18 @@ func weeklyDate(locale string, t time.Time, skeleton string) string {
 	return i18n.FormatDate(tag, t, i18n.DateOptions{Skeleton: skeleton})
 }
 
-// weeklyWeekday is the narrow weekday for a chart label.
+// weeklyWeekday is the chart label: the narrow form in Chinese, three
+// letters in English so the two Tuesdays (and two Sundays) stay distinct.
 func weeklyWeekday(locale string, t time.Time) string {
 	tag := locale
 	if tag == "" {
 		tag = "zh-Hans"
 	}
-	return i18n.FormatDate(tag, t, i18n.DateOptions{Skeleton: "EEEEE"})
+	skeleton := "EEEEE"
+	if !strings.HasPrefix(tag, "zh") {
+		skeleton = "EEE"
+	}
+	return i18n.FormatDate(tag, t, i18n.DateOptions{Skeleton: skeleton})
 }
 
 // weeklyDayLabel is one bar's hover text; an unsampled day says so rather

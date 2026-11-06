@@ -87,3 +87,20 @@ func TestWeeklyReportHasNoNavigationSeat(t *testing.T) {
 		})
 	}
 }
+
+// TestWeeklyReportEscapeReturnsHome: the report is Home's detail view, so
+// Esc steps back to Home instead of dropping out to the search bar.
+func TestWeeklyReportEscapeReturnsHome(t *testing.T) {
+	a := weeklyNavShelf(t, false)
+	a.showPage(pageWeekly)
+	if got := a.currentPage().id(); got != pageWeekly {
+		t.Fatalf("report did not open: %q", got)
+	}
+	a.escape()
+	if got := a.currentPage().id(); got != pageHome {
+		t.Fatalf("Esc from the report landed on %q, want home", got)
+	}
+	if lvl := a.currentLevel(); lvl != 2 {
+		t.Fatalf("Esc should keep the page level, got %d", lvl)
+	}
+}

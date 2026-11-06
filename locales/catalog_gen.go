@@ -5049,11 +5049,11 @@ func (msgs Messages) WeeklySamplingNote() string {
 	return Catalog.Format(msgs.locale, "weeklySamplingNote", nil)
 }
 
-// WeeklyCoverageNote says "每秒采样一次；只覆盖 Rakko …"
+// WeeklyCoverageNote says "只覆盖 Rakko 运行且统计开启的时段；锁屏、休眠和切换用户不计入。"
 // in the language the app shows.
 func WeeklyCoverageNote() string { return In(i18n.Locale()).WeeklyCoverageNote() }
 
-// WeeklyCoverageNote says "每秒采样一次；只覆盖 Rakko …"
+// WeeklyCoverageNote says "只覆盖 Rakko 运行且统计开启的时段；锁屏、休眠和切换用户不计入。"
 // in the language of msgs.
 func (msgs Messages) WeeklyCoverageNote() string {
 	return Catalog.Format(msgs.locale, "weeklyCoverageNote", nil)
@@ -5069,11 +5069,11 @@ func (msgs Messages) WeeklyConsentTitle() string {
 	return Catalog.Format(msgs.locale, "weeklyConsentTitle", nil)
 }
 
-// WeeklyConsentBody says "开启后，Rakko 每秒记录当前前台应用的名称与累计时长。\n…"
+// WeeklyConsentBody says "开启后，只在本机记录前台应用与累计时长，不记录窗口标题、网址或输入内容。\n…"
 // in the language the app shows.
 func WeeklyConsentBody() string { return In(i18n.Locale()).WeeklyConsentBody() }
 
-// WeeklyConsentBody says "开启后，Rakko 每秒记录当前前台应用的名称与累计时长。\n…"
+// WeeklyConsentBody says "开启后，只在本机记录前台应用与累计时长，不记录窗口标题、网址或输入内容。\n…"
 // in the language of msgs.
 func (msgs Messages) WeeklyConsentBody() string {
 	return Catalog.Format(msgs.locale, "weeklyConsentBody", nil)
@@ -5267,16 +5267,6 @@ func WeeklyLocalOnly() string { return In(i18n.Locale()).WeeklyLocalOnly() }
 // in the language of msgs.
 func (msgs Messages) WeeklyLocalOnly() string {
 	return Catalog.Format(msgs.locale, "weeklyLocalOnly", nil)
-}
-
-// WeeklyResume says "恢复应用统计"
-// in the language the app shows.
-func WeeklyResume() string { return In(i18n.Locale()).WeeklyResume() }
-
-// WeeklyResume says "恢复应用统计"
-// in the language of msgs.
-func (msgs Messages) WeeklyResume() string {
-	return Catalog.Format(msgs.locale, "weeklyResume", nil)
 }
 
 // WeeklyPause says "暂停应用统计"

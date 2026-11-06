@@ -1223,6 +1223,12 @@ func (a *shelf) escape() {
 			return
 		}
 	}
+	// The report opens from Home, so its Esc step is back to Home rather than
+	// out to the search bar. Every other page backs out to the search bar.
+	if a.currentLevel() == 2 && a.currentPage().id() == pageWeekly {
+		a.showPage(pageHome)
+		return
+	}
 	// Any page backs out to the search bar first, which takes the
 	// keyboard; a query there is cleared before the next Esc closes.
 	if a.currentLevel() == 2 {
