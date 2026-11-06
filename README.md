@@ -72,7 +72,7 @@ It lives in the menu bar, has no Dock icon, keeps everything on your Mac, and ne
 **App switching**
 - Click the dedicated App Switcher button on the collapsed notch or its navigation capsule. The left wing holds up to four pinned apps; the right holds other running apps and More. Click to activate an app, or launch a pinned app that is not running. The notch's centre still opens Search.
 - More → Edit Pinned Apps lets you add installed apps, unpin them and change their order. Your pinned order is saved on this Mac. Left/Right selects, Return switches, and Esc steps out of the editor, More, then the wings. A separate App Switcher shortcut is available in Settings → Shortcuts, unset by default.
-- Switching is app-level, not window or tab switching. It needs no Accessibility or Screen Recording permission and records no app history or usage duration.
+- Switching is app-level, not window or tab switching. It needs no Accessibility or Screen Recording permission. Optional app usage tracking for the weekly report is separate and off by default.
 
 **Home and music**
 - Hover the notch while music plays and it grows two small wings: the cover on the left, a moving equalizer and App Switcher button on the right. Nothing drops down over your windows. The cover and equalizer open Search; the App Switcher button opens the app wings.
@@ -81,12 +81,17 @@ It lives in the menu bar, has no Dock icon, keeps everything on your Mac, and ne
 - With nothing playing Home shows the otter — asleep after ten quiet minutes — with today's date and weekday, and up to three lines: the newest agent turn running or just finished (only while Agent Completion notices are on), how many files the Tray holds, and either how much Keep Awake time is left or the tightest AI quota.
 - The music widget is still a card on the Tools page: at 2 × 2 it is the full player with the volume bar for your default output device, at 2 × 1 the cover, title, artist and the transport buttons, at 1 × 1 the cover with a play/pause button on it. A tap on the card itself, beside its own buttons, opens Home.
 
+**Weekly report**
+- Open Last Week's Report from Home to review Mac use, local AI usage and Rakko actions by calendar week. Switch between active and resident time; move between weeks with the arrows.
+- App usage tracking is off until you opt in. It keeps app names, bundle identifiers and daily totals only on this Mac, not window titles, URLs or input. Tracking covers only periods when Rakko is running and tracking is enabled; unavailable periods cannot be recovered. Pause it from the report.
+- AI totals come from locally readable logs and estimated cost is not your subscription bill. Rakko counts successful conversions, Capture Text and items taken from the Tray from when recording began.
+
 **AI usage** (optional, off by default)
 - Turn it on in Settings → AI Usage → Show AI Usage in the Notch and the panel gains one more page icon. The page fits one screen and never scrolls: the left column holds a double-ring card per tool — outer ring weekly, inner ring 5-hour — and the right column holds this Mac's total token usage over Today / 7D / 30D / All, as four numbers (tokens, requests, cost, cache hits) and one chart. Hover a card for its plan, reset times, the even-pace mark and any per-model weekly limits; hover a number for its parts.
 - Quotas show how much is used by default; switch to what is left in Settings → AI Usage → Quota Shown. The same page has one switch per quota source — Claude Code and Codex. The AI Usage card on Tools reads the same quotas: at 1 × 1 it draws one double ring — outer weekly, inner 5-hour — around the mark of the tool with the least left; hover it for the numbers. At 2 × 1 it keeps the ring beside its name.
 - The Claude Code quota comes from Claude Code itself: Rakko runs your installed Claude Code's `/usage` command, so the numbers match what Claude Code reports. Claude Code must be installed; Rakko never downloads it. The Codex quota reads the login Codex already saved on this Mac and sends it only to chatgpt.com.
 - Opening the page or pressing refresh reads the quota (Claude Code at most once every 30 seconds); while the page stays open, Claude Code is read again every 5–15 minutes, and only after you used it. The last reading is kept, so the page shows it right after a restart.
-- Local usage is found on its own: the session records of omp, Claude Code, Codex, pi, opencode and Grok are read where those tools keep them, and everything is summed into one total. There is no per-tool split and no switch per tool; the numbers are only ever drawn on this page.
+- Local usage is found on its own: the session records of omp, Claude Code, Codex, pi, opencode and Grok are read where those tools keep them. The AI Usage page shows a combined total; the weekly report also shows the available sources.
 
 **Agent completion notices** (optional, off by default)
 - Settings → AI Usage → Agent Completion → Notify When a Turn Finishes. While it is on, Rakko writes a hook entry into the configuration file of each agent it finds installed, so a finished turn reaches the notch. Turning it off removes every entry it wrote, whole; a file it cannot parse is never rewritten.
@@ -203,7 +208,7 @@ From then on Rakko opens normally. If macOS ever says the app **is damaged**, do
 ### Optional
 
 - **Start at login**: right-click the menu-bar icon → Settings → General → Open at Login.
-- **System permissions**: Settings → System Permissions lists the three permissions with their state, and its last row is one switch; you can also right-click the menu-bar icon → Turn On System Permissions (3 missing)… — the number is how many are still off. Turning it on walks you through three System Settings pages in turn: Full Disk Access, Accessibility, then Screen Recording. Turn Rakko on in each (on the Full Disk Access page, press + and choose Rakko, or drag in the Rakko that Finder shows), and Rakko moves to the next one by itself; at the end, click Reopen Rakko. macOS requires you to switch on each one yourself. Coming from the app's earlier name asks for them once more (see below). Official Rakko releases keep the grants across later updates; a build you compile yourself is signed afresh each time and may ask again.
+- **System permissions**: Settings → System Permissions shows each permission's state. Open its System Settings page and drag the Rakko app icon from its row into the list, then turn on Rakko's switch yourself; use the system's + button if dragging is unavailable. The bottom switch also starts a guided walk. Rakko does not reset permission records; remove a stale entry yourself if necessary. If the screen-recording state cannot yet be confirmed, reopen Rakko and check it again. Official releases keep grants across later updates; a self-built app may require new grants.
 - **Full Disk Access**: files dragged in from Downloads, Desktop, Documents or iCloud Drive no longer bring up a "Rakko would like to access files…" dialog.
 - **Accessibility** (notch drop protection): while you drag toward the notch, the pointer stays in the drop area instead of hitting the very top edge of the screen.
 - **Screen Recording** (Capture Text): only the area you select is captured, text is recognized on this Mac, and the shot is not kept.
@@ -235,7 +240,7 @@ Coming from the older Shelf app? Rakko copies from `Application Support/Shelf/` 
 | Copy text back | Click a text item, then paste with `⌘V` |
 | Copy image data | Select one picture and press `⌘C`, or right-click it → Copy Image — the clipboard gets PNG data, not the path |
 | Paste what you copied | Press `⌃⌥V` — the Clipboard page opens with the search field ready; type, then `⌘1`…`⌘9` paste that row, or pick with ↑/↓ and press ⏎ |
-| Switch pages | Click a page in the capsule under the search bar; the current page's button returns to the bar, and the panel keeps its size (Home is the one page that widens, while its lyrics column is open) |
+| Switch pages | Click a page in the capsule under the search bar; the current page's button returns to the bar. Home widens for lyrics; the weekly report opens a taller reading view |
 | Control music | On Home: previous, play-pause and next, or drag the progress bar to skip; the lyrics button is at its bottom left, and the 2 × 2 music card on Tools keeps the volume bar |
 | Pin, remove, Quick Look, AirDrop | Right-click an item (Space also opens Quick Look) |
 | Copy text from the screen | Press `⌃⌥O` and drag over the text |
@@ -337,7 +342,7 @@ Rakko 是住在 Mac 刘海里的工具：它把摄像头周围那块黑色刘海
 **应用切换**
 - 点播放中音乐两翼右侧的独立「应用切换」按钮、灵动岛收起胶囊右端的按钮，或展开面板导航胶囊里的「应用切换」，左翼放最多四个固定常用应用，右翼放其他运行中应用和「更多」。点应用就切过去，固定应用没运行时会启动；悬停刘海只露出下箭头，点它仍打开搜索。
 - 「更多 → 编辑常用应用」可以添加已安装应用、取消固定、调整顺序，固定顺序保存在本机。左右键选择、回车切换，Esc 依次退出编辑、「更多」和两翼。设置… → 快捷键 里可设置独立的「应用切换」快捷键，默认未设置。
-- 只切应用，不切具体窗口或标签页；不需要辅助功能或屏幕录制权限，也不记录应用使用历史或时长。
+- 只切应用，不切具体窗口或标签页；不需要辅助功能或屏幕录制权限。周报里的应用使用统计是独立功能，默认关闭。
 
 **首页与音乐**
 - 放音乐时把鼠标移到刘海上，左边是封面，右边是跳动的音频条和独立的应用切换按钮，不会向下盖住窗口。点封面、音频条打开搜索条；点应用按钮展开应用两翼。
@@ -346,12 +351,17 @@ Rakko 是住在 Mac 刘海里的工具：它把摄像头周围那块黑色刘海
 - 没有歌在放时，首页是海獭陪着你——安静十分钟后它打瞌睡——旁边是今天的日期和星期，下面最多三行：最近一轮 agent 是正在做还是刚做完（只在打开「Agent 完成提醒」时出现）、托盘里有多少个文件、保持唤醒还剩多久；没有开启保持唤醒时，这一行是剩余最少的那个 AI 额度（AI 用量页关着时不显示）。
 - 音乐小组件仍留在工具页：2×2 是完整播放器，带系统默认输出设备的音量条；2×1 显示封面、歌名、歌手和上一首 / 播放暂停 / 下一首；1×1 只有封面，上面盖着播放 / 暂停按钮。点卡片本身（不是卡片上的按钮）打开首页。
 
+**每周简报**
+- 从首页打开「上周简报」，按自然周查看 Mac 使用、AI 本机用量和 Rakko 完成的操作；用箭头切换周，Mac 时长可切换「活跃 / 停留」。
+- 应用统计默认关闭，明确同意后才开始；只在本机保存应用名、标识和每日累计时长，不记录窗口标题、网址或输入内容。只覆盖 Rakko 运行且统计开启的时段，缺失时间无法补回；可在简报底部暂停。
+- AI 数据来自仍可读取的本机日志，费用为估算，不代表订阅账单。Rakko 统计开始记录后的成功转换、框选文字和托盘取出次数。
+
 **AI 用量**（可选，默认关闭）
 - 在 设置… →「AI 用量」→「在刘海里显示 AI 用量」打开后，顶栏会多出一个页面图标。整页一屏看全，不用滚动：左栏是 Claude Code、Codex 的套餐额度卡（每张卡内外双圈：外圈每周、内圈 5 小时），右栏是这台电脑上的 token 用量总量——今天 / 7 天 / 30 天 / 全部，四个数字（Token、请求、费用、缓存命中）和一根柱图。悬停额度卡可以看到套餐名、重置时间、均匀消耗标记和按模型的每周额度；悬停数字可以看到它的组成部分。
 - 额度默认显示「已用」；可以在 设置… →「AI 用量」→「额度显示」改成「剩余」。同一页里每个额度来源各有一个开关（Claude Code、Codex）。工具页的 AI 用量卡用同一份额度数据：1×1 只画一个双圈——外圈每周、内圈 5 小时——中间是剩余额度最少的那个工具的标志，鼠标悬停看具体数字；2×1 仍是圈在左、名字在右。
 - Claude Code 的额度由 Claude Code 自己给出：Rakko 运行你装好的 Claude Code 的 `/usage` 命令，所以数字和 Claude Code 显示的一致。需要先装好 Claude Code，Rakko 不会替你下载。Codex 的额度读取 Codex 保存在本机的登录信息，只发给 chatgpt.com。
 - 打开这一页或点刷新时会查询额度（Claude Code 最多 30 秒查一次）；页面一直开着时，只有你用过 Claude Code 才会每 5–15 分钟再查一次。上次的结果会保存，重启后打开就能看到。
-- 本机用量自己去找：omp、Claude Code、Codex、pi、opencode、Grok 各自的会话记录在它们自己的位置被读取，再加成一个总数。没有按工具拆分，也没有逐个工具的开关；这些数字只画在这一页上。
+- 本机用量自己去找：omp、Claude Code、Codex、pi、opencode、Grok 各自的会话记录在它们自己的位置被读取。AI 用量页显示合计；每周简报也会显示可读取的来源。
 
 **Agent 完成提醒**（可选，默认关闭）
 - 设置… →「AI 用量」→「Agent 完成提醒」→「完成时在刘海提醒」。打开后，Rakko 会在它找到的每个 agent 的配置文件里写入一条 hook，让「这一轮做完了」传到刘海。关掉时，它写进去的条目会整条移除；解析不了的文件绝不会被改写。
@@ -468,7 +478,7 @@ Rakko 是免费软件，没有经过 Apple 公证，所以 macOS 会让你确认
 ### 可选
 
 - **开机自动启动**：右键菜单栏图标 → 设置… → 通用 →「开机时自动启动」。
-- **系统权限**：设置… → 系统权限 里列出三项权限的状态，最后一行是一个开关；也可以右键菜单栏图标 →「开启系统权限」。打开开关后，Rakko 依次打开系统设置里的三页：「完整磁盘访问」「辅助功能」「屏幕录制」。在每页打开 Rakko 的开关（「完整磁盘访问」这一页要点 + 选 Rakko，或把访达里选中的 Rakko 拖进列表），Rakko 会自动走到下一项；最后点「重新打开 Rakko」。macOS 要求每一项都由你自己打开。从旧名字换过来时要再开一次（见下）；Rakko 的正式发布版在之后更新时保留授权，自己编译的构建每次签名都会变，可能要重新开启。
+- **系统权限**：设置… → 系统权限 显示三项权限状态。点每一行的「打开设置」，把该行的 Rakko 应用图标拖进系统列表，再由你打开 Rakko 的开关；不能拖放时可用系统的 + 按钮。底部开关也可启动逐项引导。Rakko 不会重置权限记录；旧条目失效时由你自行移除。屏幕录制状态暂时无法确认时，重新打开 Rakko 后再检查。正式发布版更新通常保留授权，自己编译的构建可能需要重新授权。
 - **完整磁盘访问**：从「下载」「桌面」「文稿」或 iCloud 云盘拖文件进来时，不再弹出「Rakko 想要取用……中的文件」。
 - **辅助功能**（刘海拖放保护）：拖着东西靠近刘海时，指针会停在托盘的接收区里，不会顶到屏幕最上沿。
 - **屏幕录制**（框选文字）：只截取你框选的那一块，文字在本机识别，不保存截图。
@@ -500,7 +510,7 @@ macOS 会把 Rakko 当成一个新应用，所以升级后系统权限和「开�
 | 把文字复制回来 | 单击文字项，再在任意地方 `⌘V` 粘贴 |
 | 复制图片数据 | 选中一张图片后按 `⌘C`，或右键图片 →「复制图片」，再在目标应用 `⌘V` 粘贴（复制的是图片，不是路径） |
 | 粘贴复制过的内容 | 按 `⌃⌥V`，「剪贴板」页直接打开、搜索框已就位；输入关键词，`⌘1`…`⌘9` 直接粘贴该行，或 `↑`/`↓` 选择后回车 |
-| 切换页面 | 点搜索条下方胶囊里的页面（点当前页面的按钮回到搜索条）；面板尺寸不变（只有首页在歌词栏打开时加宽） |
+| 切换页面 | 点搜索条下方胶囊里的页面（点当前页面的按钮回到搜索条）；首页歌词会加宽，周报打开较高的阅读页面 |
 | 控制音乐 | 在首页：上一首 / 播放暂停 / 下一首，拖动进度条跳转；歌词按钮在左下角，音量条在工具页 2×2 的音乐卡片上 |
 | 置顶、移除、快速查看、隔空投送 | 右键项目（快速查看也可以直接按空格） |
 | 框选屏幕文字 | 按 `⌃⌥O`，框住要复制的文字 |
