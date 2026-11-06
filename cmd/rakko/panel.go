@@ -958,12 +958,25 @@ func (a *shelf) bandRow(c *ui.Context) {
 }
 
 // tabPages are the page icons the band draws: five at most, in the
-// registry's order, with the current page always among them.
+// registry's order. A navless page (the 每周简报) never takes a seat and a
+// non-navless current page is always among them.
 func (a *shelf) tabPages() []panelPage {
 	// 正在播放 is a detail page: it takes one of the five seats only while
 	// it is the page on screen, never in place of an ordinary page.
-	pages := a.enabledPages()
+	enabled := a.enabledPages()
+	pages := make([]panelPage, 0, len(enabled))
+	for _, p := range enabled {
+		if pageHasNavSeat(p) {
+			pages = append(pages, p)
+		}
+	}
 	cur := a.currentPage()
+	if !pageHasNavSeat(cur) {
+		if len(pages) > tabMaxPages {
+			return pages[:tabMaxPages]
+		}
+		return pages
+	}
 	if len(pages) <= tabMaxPages {
 		return pages
 	}

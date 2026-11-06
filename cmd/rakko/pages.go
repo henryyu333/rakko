@@ -66,6 +66,23 @@ type pageBleed interface {
 	fullBleed() bool
 }
 
+// pageNavless is a page opened from a surface of its own rather than from a
+// seat in the band or the page capsule. The 每周简报 is reached from the home
+// page; it still registers, becomes current, animates and warms like any
+// other page.
+type pageNavless interface {
+	navless() bool
+}
+
+// pageHasNavSeat reports whether p offers a seat in the band and the page
+// capsule. A page without the interface keeps a seat.
+func pageHasNavSeat(p panelPage) bool {
+	if n, ok := p.(pageNavless); ok {
+		return !n.navless()
+	}
+	return true
+}
+
 // pageText is a page whose name it says in a given language. label and
 // title carry no context, so the panel asks for the name in the language
 // of its window here; a page without it falls back to its own label and

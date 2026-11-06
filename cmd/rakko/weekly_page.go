@@ -68,6 +68,7 @@ func (f *weeklyFeature) titleIn(l locales.Messages) string {
 }
 func (f *weeklyFeature) enabled() bool   { return true }
 func (f *weeklyFeature) fullBleed() bool { return true }
+func (f *weeklyFeature) navless() bool   { return true }
 func (f *weeklyFeature) width() float32  { return weeklyPageW }
 func (f *weeklyFeature) height() float32 { return weeklyPageH }
 func (f *weeklyFeature) icon(c *ui.Context, _ bool) ui.Element {

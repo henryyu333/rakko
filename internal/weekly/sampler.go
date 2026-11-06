@@ -106,6 +106,7 @@ func (s *Sampler) Tick(now time.Time, enabled bool) {
 		return
 	}
 	delta := now.Sub(s.last)
+	prevAt := s.last
 	prevID, prevName, prevOK := s.lastID, s.lastName, s.lastOK
 	s.remember(now, id, name, sessionOK)
 
@@ -114,21 +115,52 @@ func (s *Sampler) Tick(now time.Time, enabled bool) {
 		// the interval is unknown on at least one end.
 		return
 	}
+	if prevID != id {
+		// The front app changed somewhere inside the interval. Polling
+		// cannot say when, so neither app gets the time; the new baseline
+		// starts from this sample.
+		return
+	}
 	if delta <= 0 || delta > MaxGap {
 		return // sleep, a stalled tick or a clock jump: not measured time
 	}
 	idle, err := s.probe.IdleSeconds()
 	active := err == nil && idle >= 0 && idle < IdleLimit.Seconds()
-	// The interval is stored on now's local day. At the one-second cadence
-	// an interval that crosses midnight can move at most one second, which
-	// is below the measurement's own resolution.
-	if !active {
-		// Resident time still counts; active time for this interval is
-		// unknown, so it is left out.
-		s.store.AddApp(now, prevID, prevName, 0, delta)
+	s.addInterval(prevAt, now, prevID, prevName, delta, active)
+}
+
+// addInterval records one measured interval for the app observed at both
+// ends. A crossing of local midnight is split at midnight so each day gets
+// its own part; the whole interval uses the activity observed at its end.
+func (s *Sampler) addInterval(from, to time.Time, id, name string, d time.Duration, active bool) {
+	if d <= 0 || id == "" {
 		return
 	}
-	s.store.AddApp(now, prevID, prevName, delta, delta)
+	add := func(at time.Time, part time.Duration) {
+		if part <= 0 {
+			return
+		}
+		if active {
+			s.store.AddApp(at, id, name, part, part)
+			return
+		}
+		// Resident time still counts; active time for this interval is
+		// unknown, so it is left out.
+		s.store.AddApp(at, id, name, 0, part)
+	}
+	if dayKey(from) == dayKey(to) {
+		add(to, d)
+		return
+	}
+	midnight := time.Date(to.Year(), to.Month(), to.Day(), 0, 0, 0, 0, to.Location())
+	before, after := midnight.Sub(from), to.Sub(midnight)
+	if before > 0 && after > 0 && before+after == d {
+		add(from, before)
+		add(to, after)
+		return
+	}
+	// A DST shift at midnight can make the split fail arithmetic; one
+	// sample's interval is not enough evidence to invent a boundary.
 }
 
 // remember stores the observation the next interval attributes to.

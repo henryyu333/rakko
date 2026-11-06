@@ -32,6 +32,9 @@ var (
 	cgMainDisplayID                        func() uint32
 	cfDictionaryGetValue                   func(dict, key uintptr) uintptr
 	cfBooleanGetValue                      func(b uintptr) uint8
+	cfGetTypeID                            func(ref uintptr) uintptr
+	cfBooleanGetTypeID                     func() uintptr
+	cfNumberGetTypeID                      func() uintptr
 	cfReleaseSession                       func(ref uintptr)
 )
 
@@ -62,6 +65,9 @@ func loadSession() error {
 		// CoreFoundation, which the Objective-C runtime already links.
 		resolve(purego.RTLD_DEFAULT, "CFDictionaryGetValue", &cfDictionaryGetValue)
 		resolve(purego.RTLD_DEFAULT, "CFBooleanGetValue", &cfBooleanGetValue)
+		resolve(purego.RTLD_DEFAULT, "CFGetTypeID", &cfGetTypeID)
+		resolve(purego.RTLD_DEFAULT, "CFBooleanGetTypeID", &cfBooleanGetTypeID)
+		resolve(purego.RTLD_DEFAULT, "CFNumberGetTypeID", &cfNumberGetTypeID)
 		resolve(purego.RTLD_DEFAULT, "CFRelease", &cfReleaseSession)
 	})
 	return sessionErr
@@ -82,6 +88,35 @@ func IdleSeconds() (float64, error) {
 	return s, nil
 }
 
+// sessionEvidence is what the session dictionary said about one sample.
+// present/valid distinguish an absent key (normal while unlocked) from a
+// key that is there but not a boolean (unknown).
+type sessionEvidence struct {
+	onConsole, onConsoleValid bool
+	locked, lockPresent, lockValid bool
+}
+
+// usable reports whether a console session may be sampled.
+//
+// CGSession omits CGSSessionScreenIsLocked while the screen is unlocked and
+// carries it as true while locked; absence is therefore the unlocked shape,
+// not a positive "unlocked" value. Treating absence as locked would stop
+// every normal session, so it counts only when the documented console key
+// is present and true. A lock key that is present but not a boolean is
+// unknown, and unknown locks stop the count.
+func (e sessionEvidence) usable() bool {
+	if !e.onConsoleValid || !e.onConsole {
+		return false
+	}
+	if !e.lockPresent {
+		return true
+	}
+	if !e.lockValid {
+		return false
+	}
+	return !e.locked
+}
+
 // SessionActive reports whether this process runs in a console login
 // session whose screen is not locked. The sampling must not count a locked
 // screen or a switched-away user as time in an app. A missing session
@@ -96,20 +131,32 @@ func SessionActive() bool {
 		return false
 	}
 	defer cfReleaseSession(dict)
-	// Only a positively observed console session and an unlocked screen
-	// count. A missing key is unknown, and unknown time is not measured.
-	active := false
+	var e sessionEvidence
 	withPool(func() {
-		if v := cfDictionaryGetValue(dict, uintptr(nsString("kCGSSessionOnConsoleKey"))); v != 0 {
-			active = cfBooleanGetValue(v) != 0
-		}
-		// The lock key is the undocumented-but-stable spelling the session
-		// dictionary carries.
-		if v := cfDictionaryGetValue(dict, uintptr(nsString("CGSSessionScreenIsLocked"))); v != 0 && cfBooleanGetValue(v) != 0 {
-			active = false
-		}
+		e.onConsole, _, e.onConsoleValid = sessionBool(dict, "kCGSSessionOnConsoleKey")
+		e.locked, e.lockPresent, e.lockValid = sessionBool(dict, "CGSSessionScreenIsLocked")
 	})
-	return active
+	return e.usable()
+}
+
+// sessionBool reads one boolean key from the session dictionary. present
+// says the key was there; valid says it was a CFBoolean or a CFNumber.
+// macOS has carried CGSSessionScreenIsLocked as both across releases; an
+// NSNumber is toll-free bridged and answers boolValue. A null value is
+// treated as absent.
+func sessionBool(dict uintptr, key string) (value, present, valid bool) {
+	v := cfDictionaryGetValue(dict, uintptr(nsString(key)))
+	if v == 0 {
+		return false, false, false
+	}
+	switch cfGetTypeID(v) {
+	case cfBooleanGetTypeID():
+		return cfBooleanGetValue(v) != 0, true, true
+	case cfNumberGetTypeID():
+		return sendInt(id(v), "boolValue") != 0, true, true
+	default:
+		return false, true, false
+	}
 }
 
 // MainDisplayAsleep reports whether the main display is dark: the lid

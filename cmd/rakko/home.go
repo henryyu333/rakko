@@ -256,11 +256,15 @@ func (a *shelf) navW() float32 {
 	return 2*navPadX + float32(n)*navBtnW + float32(n)*navBtnGap + navSepW
 }
 
-// navPages are the pages the capsule offers, in the registry's order: the
-// now-playing detail page has no seat.
+// navPages are the pages the capsule offers, in the registry's order:
+// navless pages and the now-playing detail page have no seat.
 func (a *shelf) navPages() []panelPage {
 	var out []panelPage
-	out = append(out, a.enabledPages()...)
+	for _, p := range a.enabledPages() {
+		if pageHasNavSeat(p) {
+			out = append(out, p)
+		}
+	}
 	return out
 }
 

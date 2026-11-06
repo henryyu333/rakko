@@ -177,11 +177,65 @@ func TestSamplerSwitchesApps(t *testing.T) {
 	for _, a := range w.Apps {
 		byID[a.BundleID] = a
 	}
-	if got := byID["com.apple.Safari"].Resident; got != 4*time.Second {
-		t.Fatalf("Safari = %v, want 4s (the switch second belongs to the app observed)", got)
+	if got := byID["com.apple.Safari"].Resident; got != 3*time.Second {
+		t.Fatalf("Safari = %v, want 3s; the switch interval is unknown", got)
 	}
 	if got := byID["com.apple.dt.Xcode"].Resident; got != 3*time.Second {
-		t.Fatalf("Xcode = %v, want 3s", got)
+		t.Fatalf("Xcode = %v, want 3s; the switch interval is unknown", got)
+	}
+}
+
+func TestSamplerSwitchIntervalIsUnknown(t *testing.T) {
+	st := &Store{days: map[string]*Day{}}
+	m := newFake()
+	s := NewSampler(st, m.probe())
+	s.Tick(m.now, true)
+	run(t, s, m, 2, nil) // Safari stays front for two measured seconds
+	m.bundle, m.name = "com.apple.dt.Xcode", "Xcode"
+	run(t, s, m, 1, nil) // the switch itself measures nothing
+	w := st.Week(m.now)
+	sawXcode := false
+	for _, a := range w.Apps {
+		if a.BundleID == "com.apple.dt.Xcode" {
+			sawXcode = true
+			if a.Resident != 0 {
+				t.Fatalf("Xcode got %v from the unknown switch interval", a.Resident)
+			}
+		}
+		if a.BundleID == "com.apple.Safari" && a.Resident != 2*time.Second {
+			t.Fatalf("Safari = %v, want 2s", a.Resident)
+		}
+	}
+	if sawXcode {
+		t.Fatal("the switch interval created an Xcode sample")
+	}
+	run(t, s, m, 1, nil) // a stable Xcode second counts
+	w = st.Week(m.now)
+	for _, a := range w.Apps {
+		if a.BundleID == "com.apple.dt.Xcode" && a.Resident != time.Second {
+			t.Fatalf("Xcode after the switch = %v, want 1s", a.Resident)
+		}
+	}
+}
+
+func TestSamplerSplitsMeasuredIntervalAtMidnight(t *testing.T) {
+	st := &Store{days: map[string]*Day{}}
+	m := newFake()
+	m.now = time.Date(2026, 11, 4, 23, 59, 59, 500_000_000, m.now.Location())
+	s := NewSampler(st, m.probe())
+	s.Tick(m.now, true)
+	m.now = m.now.Add(time.Second)
+	s.Tick(m.now, true)
+
+	w := st.Week(m.now)
+	if got := w.Days[2].Active; got != 500*time.Millisecond {
+		t.Fatalf("before midnight = %v, want 500ms", got)
+	}
+	if got := w.Days[3].Active; got != 500*time.Millisecond {
+		t.Fatalf("after midnight = %v, want 500ms", got)
+	}
+	if got := w.Days[2].Resident + w.Days[3].Resident; got != time.Second {
+		t.Fatalf("resident across midnight = %v, want 1s", got)
 	}
 }
 
