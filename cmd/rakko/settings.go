@@ -415,13 +415,16 @@ func (a *shelf) settingsNavItem(c *ui.Context, page settingsPageID, icon *ui.SVG
 func (a *shelf) settingsPermissionStatus(c *ui.Context) {
 	l := loc(c)
 	missing := len(missingSystemPermissions())
+	pending := len(restartPendingSystemPermissions())
 	dot := success
-	if missing > 0 {
-		dot = warning
-	}
 	text := l.SettingsPermStatusOn()
-	if missing > 0 {
+	switch {
+	case missing > 0:
+		dot = warning
 		text = l.SettingsPermStatusMissing(missing)
+	case pending > 0:
+		dot = warning
+		text = l.PermStatusRestart(pending)
 	}
 	row := ui.ButtonBase(c.Key("perm-status")).Height(30).FillWidth().Radius(9).
 		Padding(0, 10, 0, 10).Background(setStatus).AlignItems(ui.Center).Gap(7).Label(text)

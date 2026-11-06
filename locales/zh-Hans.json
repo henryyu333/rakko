@@ -97,7 +97,6 @@
   "permMissing": "还差 {count, number, ::group-off} 项：{names}",
   "permAllGranted": "已全部开启（{granted, number, ::group-off}/{total, number, ::group-off}）",
   "permStep": "第 {step, number, ::group-off}/{total, number, ::group-off} 项：在「系统设置」里打开 Rakko",
-  "permRelaunchStep": "还差最后一步：重新打开 Rakko 才生效",
   "permRelaunchButton": "重新打开 Rakko",
   "permStop": "停止",
   "permMenuAllOn": "系统权限已全部开启",
@@ -728,5 +727,17 @@
   "settingsRetentionCaption": "置顶的项目不会清理",
   "settingsNotchNav": "外形与提示",
   "settingsPermStatusOn": "系统权限已全部开启",
-  "settingsPermStatusMissing": "还差 {count, number, ::group-off} 项权限"
+  "settingsPermStatusMissing": "还差 {count, number, ::group-off} 项权限",
+  "permDragHint": "把 Rakko 图标拖进列表，在列表里打开 Rakko 的开关；也可以点「打开设置」。列表里已有旧条目时，先移除再拖入。",
+  "permNoBundleHint": "从「应用程序」里的 Rakko 打开后才能拖动图标；也可以点「打开设置」，在列表里用 + 添加。",
+  "permOpenSettings": "打开设置",
+  "permOpenSettingsFor": "打开系统设置：{name}",
+  "permIconLabel": "把 Rakko 拖进「{name}」列表，或点按打开系统设置",
+  "permIconLabelFallback": "打开「{name}」的系统设置页面",
+  "permDragTooltip": "拖进系统设置列表即可添加 Rakko",
+  "permStateRelaunch": "重启后生效",
+  "permRelaunchUnconfirmed": "重新打开 Rakko，确认屏幕录制是否生效",
+  "permRelaunchGranted": "已开启，重新打开 Rakko 后生效",
+  "permMenuRelaunch": "重新打开 Rakko 以启用权限…",
+  "permStatusRestart": "{count, plural, other {{count, number, ::group-off} 项权限需重新打开}}"
 }

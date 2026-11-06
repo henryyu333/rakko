@@ -10,7 +10,9 @@ package main
 //
 // 屏幕录制权限只读预检（CGPreflightScreenCaptureAccess）不会弹框：没有
 // 权限时先展开面板出说明卡，「打开系统设置」才是用户主动发起的申请。
-// 启动时不检查、不申请。
+// 预检在本进程内被缓存：本进程运行期间才给的授权，预检仍答 false；此时
+// 以 WindowServer 是否交出别的 app 的窗口标题为只读证据，卡片改为提示
+// 重新打开 Rakko，而不是把用户送回已经打开的开关。启动时不检查、不申请。
 
 import (
 	"fmt"
@@ -35,7 +37,7 @@ const ocrProgressDelay = 250 * time.Millisecond
 // capture and the permission request are replaced; the worker goroutine and
 // the main-thread dispatch mirror convertWork/convertDispatch.
 var (
-	ocrPreflight  = mac.ScreenCaptureAllowed
+	ocrPreflight  = mac.ScreenCapturePreflight
 	ocrGrant      = mac.RequestScreenCapture
 	ocrCapture    = captureRegion
 	ocrWork       = func(fn func()) { go fn() }
@@ -48,6 +50,11 @@ var (
 		}
 	}
 )
+
+// ocrGrantProven is the same evidence the 系统权限 page reads: the live
+// preflight, a grant a request reported, or WindowServer's window titles —
+// all true while this process's cached preflight may still answer no.
+var ocrGrantProven = screenCaptureGranted
 
 // captureRegion runs the system's own region picker (screencapture -i):
 // crosshair, Esc to cancel, Space for the window mode. -x keeps the shutter
@@ -196,11 +203,20 @@ func (a *shelf) ocrLiveStatus(now time.Time) (string, any, bool) {
 }
 
 // ocrSheetStage is the permission card that replaces the current page's
-// stage while ocrSheet is up (design §5): icon, title, the privacy line
-// (only the picked region, on-device, no screenshot kept) plus the
-// relaunch note — a grant only reaches CGPreflightScreenCaptureAccess on
-// the next launch — and the two actions.
+// stage while ocrSheet is up (design §5): icon, the state title and the two
+// actions.
+//
+// When the grant is already in System Settings but this process's cached
+// preflight still answers no, window titles prove it is on: the card then
+// asks for the relaunch that applies it instead of sending the user back to
+// a switch that is already on.
 func (a *shelf) ocrSheetStage(c *ui.Context) {
+	l := loc(c)
+	proven := ocrGrantProven()
+	title, action := l.OcrPermissionTitle(), l.OcrOpenSettings()
+	if proven {
+		title, action = l.PermRelaunchGranted(), l.PermRelaunchButton()
+	}
 	card := ui.Row(c.Key("ocr-sheet")).Margin(0, 0, 6, 0).Radius(14).Background(fill1).
 		Padding(16, 16, 16, 16).Gap(14).AlignItems(ui.Start)
 	card.Children(func() {
@@ -209,18 +225,27 @@ func (a *shelf) ocrSheetStage(c *ui.Context) {
 			ui.Icon(c, ocrSymbol).Size(18, 18).TextColor(ink)
 		})
 		ui.Column(c.Key("txt")).Grow(1).MinWidth(0).Children(func() {
-			ui.Text(c, loc(c).OcrPermissionTitle()).FontSize(13).FontWeight(600).TextColor(ink)
+			ui.Text(c, title).FontSize(13).FontWeight(600).TextColor(ink)
 			ui.Row(c.Key("acts")).Gap(8).Margin(10, 0, 0, 0).Children(func() {
 				primary := ui.ButtonBase(c.Key("grant")).Height(24).Radius(12).Padding(0, 10, 0, 10).
-					Background(accent).Center().Label(loc(c).OcrOpenSettings())
+					Background(accent).Center().Label(action)
 				primary.Children(func() {
-					ui.Text(c, loc(c).OcrOpenSettings()).SingleLine().FontSize(11).FontWeight(600).TextColor(ink)
+					ui.Text(c, action).SingleLine().FontSize(11).FontWeight(600).TextColor(ink)
 				})
 				if primary.Clicked() {
-					ocrGrant()
+					switch {
+					case proven:
+						a.relaunchShelf()
+					case ocrGrant():
+						// The request itself reported the grant: the same
+						// evidence the permission page reads, so the card
+						// says the switch is on on the next frame.
+						screenGrantObserved.Store(true)
+						ocrInvalidate(a)
+					}
 				}
 				cancel := ui.ButtonBase(c.Key("cancel")).Height(24).Radius(12).Padding(0, 10, 0, 10).
-					Center().Label(loc(c).Cancel())
+					Center().Label(l.Cancel())
 				if cancel.Hovered() {
 					cancel.Background(fill2)
 				} else {

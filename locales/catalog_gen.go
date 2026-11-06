@@ -1011,16 +1011,6 @@ func (msgs Messages) PermStep(step int, total int) string {
 	return Catalog.Format(msgs.locale, "permStep", map[string]any{"step": step, "total": total})
 }
 
-// PermRelaunchStep says "还差最后一步：重新打开 Rakko 才生效"
-// in the language the app shows.
-func PermRelaunchStep() string { return In(i18n.Locale()).PermRelaunchStep() }
-
-// PermRelaunchStep says "还差最后一步：重新打开 Rakko 才生效"
-// in the language of msgs.
-func (msgs Messages) PermRelaunchStep() string {
-	return Catalog.Format(msgs.locale, "permRelaunchStep", nil)
-}
-
 // PermRelaunchButton says "重新打开 Rakko"
 // in the language the app shows.
 func PermRelaunchButton() string { return In(i18n.Locale()).PermRelaunchButton() }
@@ -7413,4 +7403,124 @@ func SettingsPermStatusMissing(count int) string {
 // in the language of msgs.
 func (msgs Messages) SettingsPermStatusMissing(count int) string {
 	return Catalog.Format(msgs.locale, "settingsPermStatusMissing", map[string]any{"count": count})
+}
+
+// PermDragHint says "把 Rakko 图标拖进列表，在列表里打开 Rakko …"
+// in the language the app shows.
+func PermDragHint() string { return In(i18n.Locale()).PermDragHint() }
+
+// PermDragHint says "把 Rakko 图标拖进列表，在列表里打开 Rakko …"
+// in the language of msgs.
+func (msgs Messages) PermDragHint() string {
+	return Catalog.Format(msgs.locale, "permDragHint", nil)
+}
+
+// PermNoBundleHint says "从「应用程序」里的 Rakko 打开后才能拖动图标；也可以点「打开设置」，在列表里用 + …"
+// in the language the app shows.
+func PermNoBundleHint() string { return In(i18n.Locale()).PermNoBundleHint() }
+
+// PermNoBundleHint says "从「应用程序」里的 Rakko 打开后才能拖动图标；也可以点「打开设置」，在列表里用 + …"
+// in the language of msgs.
+func (msgs Messages) PermNoBundleHint() string {
+	return Catalog.Format(msgs.locale, "permNoBundleHint", nil)
+}
+
+// PermOpenSettings says "打开设置"
+// in the language the app shows.
+func PermOpenSettings() string { return In(i18n.Locale()).PermOpenSettings() }
+
+// PermOpenSettings says "打开设置"
+// in the language of msgs.
+func (msgs Messages) PermOpenSettings() string {
+	return Catalog.Format(msgs.locale, "permOpenSettings", nil)
+}
+
+// PermOpenSettingsFor says "打开系统设置：{name}"
+// in the language the app shows.
+func PermOpenSettingsFor(name string) string { return In(i18n.Locale()).PermOpenSettingsFor(name) }
+
+// PermOpenSettingsFor says "打开系统设置：{name}"
+// in the language of msgs.
+func (msgs Messages) PermOpenSettingsFor(name string) string {
+	return Catalog.Format(msgs.locale, "permOpenSettingsFor", map[string]any{"name": name})
+}
+
+// PermIconLabel says "把 Rakko 拖进「{name}」列表，或点按打开系统设置"
+// in the language the app shows.
+func PermIconLabel(name string) string { return In(i18n.Locale()).PermIconLabel(name) }
+
+// PermIconLabel says "把 Rakko 拖进「{name}」列表，或点按打开系统设置"
+// in the language of msgs.
+func (msgs Messages) PermIconLabel(name string) string {
+	return Catalog.Format(msgs.locale, "permIconLabel", map[string]any{"name": name})
+}
+
+// PermIconLabelFallback says "打开「{name}」的系统设置页面"
+// in the language the app shows.
+func PermIconLabelFallback(name string) string { return In(i18n.Locale()).PermIconLabelFallback(name) }
+
+// PermIconLabelFallback says "打开「{name}」的系统设置页面"
+// in the language of msgs.
+func (msgs Messages) PermIconLabelFallback(name string) string {
+	return Catalog.Format(msgs.locale, "permIconLabelFallback", map[string]any{"name": name})
+}
+
+// PermDragTooltip says "拖进系统设置列表即可添加 Rakko"
+// in the language the app shows.
+func PermDragTooltip() string { return In(i18n.Locale()).PermDragTooltip() }
+
+// PermDragTooltip says "拖进系统设置列表即可添加 Rakko"
+// in the language of msgs.
+func (msgs Messages) PermDragTooltip() string {
+	return Catalog.Format(msgs.locale, "permDragTooltip", nil)
+}
+
+// PermStateRelaunch says "重启后生效"
+// in the language the app shows.
+func PermStateRelaunch() string { return In(i18n.Locale()).PermStateRelaunch() }
+
+// PermStateRelaunch says "重启后生效"
+// in the language of msgs.
+func (msgs Messages) PermStateRelaunch() string {
+	return Catalog.Format(msgs.locale, "permStateRelaunch", nil)
+}
+
+// PermRelaunchUnconfirmed says "重新打开 Rakko，确认屏幕录制是否生效"
+// in the language the app shows.
+func PermRelaunchUnconfirmed() string { return In(i18n.Locale()).PermRelaunchUnconfirmed() }
+
+// PermRelaunchUnconfirmed says "重新打开 Rakko，确认屏幕录制是否生效"
+// in the language of msgs.
+func (msgs Messages) PermRelaunchUnconfirmed() string {
+	return Catalog.Format(msgs.locale, "permRelaunchUnconfirmed", nil)
+}
+
+// PermRelaunchGranted says "已开启，重新打开 Rakko 后生效"
+// in the language the app shows.
+func PermRelaunchGranted() string { return In(i18n.Locale()).PermRelaunchGranted() }
+
+// PermRelaunchGranted says "已开启，重新打开 Rakko 后生效"
+// in the language of msgs.
+func (msgs Messages) PermRelaunchGranted() string {
+	return Catalog.Format(msgs.locale, "permRelaunchGranted", nil)
+}
+
+// PermMenuRelaunch says "重新打开 Rakko 以启用权限…"
+// in the language the app shows.
+func PermMenuRelaunch() string { return In(i18n.Locale()).PermMenuRelaunch() }
+
+// PermMenuRelaunch says "重新打开 Rakko 以启用权限…"
+// in the language of msgs.
+func (msgs Messages) PermMenuRelaunch() string {
+	return Catalog.Format(msgs.locale, "permMenuRelaunch", nil)
+}
+
+// PermStatusRestart says "{count, plural, other {{count, number, ::group-off} 项权限需重新打开}}"
+// in the language the app shows.
+func PermStatusRestart(count int) string { return In(i18n.Locale()).PermStatusRestart(count) }
+
+// PermStatusRestart says "{count, plural, other {{count, number, ::group-off} 项权限需重新打开}}"
+// in the language of msgs.
+func (msgs Messages) PermStatusRestart(count int) string {
+	return Catalog.Format(msgs.locale, "permStatusRestart", map[string]any{"count": count})
 }

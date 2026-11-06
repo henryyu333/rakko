@@ -97,7 +97,6 @@
   "permMissing": "{count, plural, one {{count, number, ::group-off} permission missing: {names}} other {{count, number, ::group-off} permissions missing: {names}}}",
   "permAllGranted": "All on ({granted, number, ::group-off}/{total, number, ::group-off})",
   "permStep": "Step {step, number, ::group-off}/{total, number, ::group-off}: Turn on Rakko in System Settings",
-  "permRelaunchStep": "One last step: reopen Rakko to apply it",
   "permRelaunchButton": "Reopen Rakko",
   "permStop": "Stop",
   "permMenuAllOn": "All System Permissions Are On",
@@ -728,5 +727,17 @@
   "settingsRetentionCaption": "Pinned items are never removed",
   "settingsNotchNav": "Appearance",
   "settingsPermStatusOn": "All Permissions On",
-  "settingsPermStatusMissing": "{count, plural, one {One Permission Missing} other {{count, number, ::group-off} Permissions Missing}}"
+  "settingsPermStatusMissing": "{count, plural, one {One Permission Missing} other {{count, number, ::group-off} Permissions Missing}}",
+  "permDragHint": "Drag the Rakko icon into the list and turn Rakko on there, or use Open Settings. Remove an old entry first if one is already there.",
+  "permNoBundleHint": "Open Rakko from Applications to drag its icon, or use Open Settings and add it with +.",
+  "permOpenSettings": "Open Settings",
+  "permOpenSettingsFor": "Open System Settings: {name}",
+  "permIconLabel": "Drag Rakko into the {name} list, or click to open System Settings",
+  "permIconLabelFallback": "Open System Settings for {name}",
+  "permDragTooltip": "Drag into the System Settings list to add Rakko",
+  "permStateRelaunch": "After Reopen",
+  "permRelaunchUnconfirmed": "Reopen Rakko to check whether Screen Recording took effect",
+  "permRelaunchGranted": "On — reopen Rakko to apply it",
+  "permMenuRelaunch": "Reopen Rakko to Apply Permissions…",
+  "permStatusRestart": "{count, plural, one {One permission needs reopening} other {{count, number, ::group-off} permissions need reopening}}"
 }
