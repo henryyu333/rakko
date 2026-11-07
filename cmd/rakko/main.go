@@ -425,6 +425,7 @@ func (a *shelf) trayMenu() *mygo.Menu {
 	}
 	items = append(items,
 		&mygo.MenuItem{Label: l.AwakeTitle(), Type: mygo.MenuItemSubmenu, Submenu: a.awakeMenu()},
+		&mygo.MenuItem{Label: l.ItemScreenshot(), Click: func(*mygo.MenuItem, *mygo.Window) { a.startScreenshot() }},
 		&mygo.MenuItem{Label: l.ItemCaptureText(), Click: func(*mygo.MenuItem, *mygo.Window) { a.startScreenOCR() }},
 		mygo.Separator(),
 		&mygo.MenuItem{Label: l.TraySettings(), Click: func(*mygo.MenuItem, *mygo.Window) { a.openSettings() }},

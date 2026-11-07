@@ -132,7 +132,7 @@ func (a *shelf) itemMenu(m *ui.Menu, item store.Item) {
 	}
 	// 剪贴板来源：一键把这个应用加入不再记录列表。ShelfU 自己识别出的
 	// 文字没有可排除的应用（clipSourceOCR 不是 bundle id）。
-	if item.Source == store.SourceClipboard && item.SourceApp != "" && item.SourceApp != clipSourceOCR {
+	if item.Source == store.SourceClipboard && item.SourceApp != "" && item.SourceApp != clipSourceOCR && item.SourceApp != clipSourceShot {
 		if m.Item(l.ItemExcludeApp(a.appName(item.SourceApp))).Disabled(a.settingsBroken).Chosen() {
 			a.excludeClipboardApp(item.SourceApp)
 		}
@@ -327,6 +327,9 @@ func (a *shelf) setPinned(items []store.Item, pinned bool) {
 func (a *shelf) appName(bundleID string) string {
 	if bundleID == clipSourceOCR {
 		return a.ocrClipLabel()
+	}
+	if bundleID == clipSourceShot {
+		return a.appLoc().ShotSource()
 	}
 	if name, ok := a.appNames[bundleID]; ok {
 		return name

@@ -464,6 +464,8 @@ func (a *shelf) settingsShortcutsPage(c *ui.Context) {
 	settingsGroupRows(c, "keys-tools", l.SettingsShortcutToolsGroup(), "", a.settingsBroken, func() {
 		a.settingsShortcutRow(c, shortcutCapture, l.SettingsShortcutOCR(), "")
 		settingsSep(c, "sc-capture")
+		a.settingsShortcutRow(c, shortcutScreenshot, l.SettingsShortcutScreenshot(), "")
+		settingsSep(c, "sc-shot")
 		a.settingsShortcutRow(c, shortcutTools, l.SettingsShortcutTools(), "")
 		settingsSep(c, "sc-tools")
 		a.settingsShortcutRow(c, shortcutUsage, l.SettingsShortcutUsage(), "")

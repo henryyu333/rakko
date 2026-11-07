@@ -74,6 +74,7 @@ func (a *shelf) startScreenOCR() {
 			// No prompt from us: the panel opens on the current page's
 			// stage with the permission card instead (design §5).
 			a.ocrSheet = true
+			a.ocrSheetShot = false
 			if !a.visible {
 				a.show(false)
 			} else if a.win != nil {
@@ -201,15 +202,21 @@ func (a *shelf) ocrLiveStatus(now time.Time) (string, any, bool) {
 // relaunch note — a grant only reaches CGPreflightScreenCaptureAccess on
 // the next launch — and the two actions.
 func (a *shelf) ocrSheetStage(c *ui.Context) {
+	title := loc(c).OcrPermissionTitle()
+	var glyph *ui.SVG = ocrSymbol
+	if a.ocrSheetShot {
+		title = loc(c).ShotPermissionTitle()
+		glyph = shotSymbol
+	}
 	card := ui.Row(c.Key("ocr-sheet")).Margin(0, 0, 6, 0).Radius(14).Background(fill1).
 		Padding(16, 16, 16, 16).Gap(14).AlignItems(ui.Start)
 	card.Children(func() {
 		chip := ui.Column(c.Key("ic")).Size(36, 36).Radius(10).Background(fill2).Center()
 		chip.Children(func() {
-			ui.Icon(c, ocrSymbol).Size(18, 18).TextColor(ink)
+			ui.Icon(c, glyph).Size(18, 18).TextColor(ink)
 		})
 		ui.Column(c.Key("txt")).Grow(1).MinWidth(0).Children(func() {
-			ui.Text(c, loc(c).OcrPermissionTitle()).FontSize(13).FontWeight(600).TextColor(ink)
+			ui.Text(c, title).FontSize(13).FontWeight(600).TextColor(ink)
 			ui.Row(c.Key("acts")).Gap(8).Margin(10, 0, 0, 0).Children(func() {
 				primary := ui.ButtonBase(c.Key("grant")).Height(24).Radius(12).Padding(0, 10, 0, 10).
 					Background(accent).Center().Label(loc(c).OcrOpenSettings())
@@ -231,6 +238,7 @@ func (a *shelf) ocrSheetStage(c *ui.Context) {
 				})
 				if cancel.Clicked() {
 					a.ocrSheet = false
+					a.ocrSheetShot = false
 					if a.win != nil {
 						a.win.Invalidate()
 					}

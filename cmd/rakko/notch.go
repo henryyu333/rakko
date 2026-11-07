@@ -1361,6 +1361,7 @@ func (a *shelf) finishClose() {
 	// 收起即放弃权限说明卡：面板再开时它要么还在等授权（重新触发再出），
 	// 要么授权已完成（预检通过直接框选），都不该回到一张旧卡。
 	a.ocrSheet = false
+	a.ocrSheetShot = false
 	a.resetToolsEdit()         // 工具页的编辑与目录不跨收起保留
 	a.music.out.loaded = false // the output device may have changed while closed
 	a.selection.clear()

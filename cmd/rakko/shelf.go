@@ -175,6 +175,16 @@ type shelf struct {
 	ocrBusyAt time.Time
 	ocrRunID  int
 	ocrSheet  bool
+	// ocrSheetShot remembers that the sheet is the screenshot flow's: the
+	// same permission card, with the screenshot title.
+	ocrSheetShot bool
+
+	// shot is the live screenshot session (screenshot.go): frozen displays,
+	// the overlay windows and the selection. nil when no capture is running.
+	shot *shotSession
+	// shotPins are the pinned screenshots of this launch; they outlive the
+	// session that made them and never enter layout.json.
+	shotPins []*shotPin
 
 	// 拖出后从托盘移除：当前拖出会话从托盘带走的项目（剪贴板页为 nil），
 	// 以及已拖出、等待最终移除的托盘项目及其放下时刻。

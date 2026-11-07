@@ -83,6 +83,7 @@ var (
 func toolCatalog() []toolCardDef {
 	return []toolCardDef{
 		{id: "ocr", kind: cardAction, title: "框选文字", icon: ocrSymbol, span: 1, accepts: imagesOnly, available: always},
+		{id: "shot", kind: cardAction, title: "截图", icon: shotSymbol, span: 1, accepts: never, available: always},
 		{id: "fit1m", kind: cardAction, title: "压缩到 1 MB", icon: shrinkSymbol, span: 1, accepts: imagesOnly, available: always},
 		{id: "topdf", kind: cardAction, title: "转成 PDF", icon: pdfSymbol, span: 1, accepts: imagesOnly, available: always},
 		{id: "tojpeg", kind: cardAction, title: "转 JPEG", icon: imgSymbol, span: 1, accepts: imagesOnly, available: always},
@@ -137,6 +138,8 @@ func (d *toolCardDef) name(l locales.Messages) string {
 	switch d.id {
 	case "ocr":
 		return l.CardOcr()
+	case "shot":
+		return l.CardShot()
 	case "fit1m":
 		return l.CardFit1M()
 	case "topdf":
@@ -447,6 +450,9 @@ func (a *shelf) runToolCard(id string) bool {
 	switch def.id {
 	case "ocr":
 		a.startScreenOCR() // 开始框选（设计 §5）；面板会先收起
+		return true
+	case "shot":
+		a.startScreenshot()
 		return true
 	case "playing", "recent":
 		return true // the card acts only through its own controls/thumbs

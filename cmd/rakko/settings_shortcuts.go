@@ -37,6 +37,7 @@ const (
 	shortcutPrevious
 	shortcutNext
 	shortcutCapture
+	shortcutScreenshot
 	shortcutTools
 	shortcutUsage
 	shortcutAwake
@@ -66,6 +67,8 @@ func (k shortcutKind) field(s *settings.ShortcutSettings) *string {
 		return &s.Clipboard
 	case shortcutCapture:
 		return &s.Capture
+	case shortcutScreenshot:
+		return &s.Screenshot
 	case shortcutOpenTray:
 		return &s.Tray
 	case shortcutPlayPause:
@@ -99,6 +102,8 @@ func (a *shelf) shortcutAction(k shortcutKind) func() {
 		return func() { a.togglePageShortcut(pageClipboard, a.openClipboardSearch) }
 	case shortcutCapture:
 		return a.startScreenOCR
+	case shortcutScreenshot:
+		return a.startScreenshot
 	case shortcutOpenTray:
 		return func() { a.togglePageShortcut(pageTray, a.openTray) }
 	case shortcutPlayPause:
