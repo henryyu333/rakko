@@ -653,42 +653,6 @@ func (a *shelf) takeKeyboard() {
 	a.win.Invalidate()
 }
 
-// takeTypingKeyboard gives a page's text field the keyboard (the Claude
-// sign-in's code box): the app comes forward and the window takes key, but
-// unlike the search bar the panel keeps its frame and the global Esc/Space
-// give way to the field. A panel that only draws never takes keys.
-func (a *shelf) takeTypingKeyboard() {
-	if a.pageTyping {
-		return
-	}
-	a.pageTyping = true
-	if a.win == nil {
-		return
-	}
-	if !a.focusMode && a.prevAppPID == 0 {
-		if pid := mac.FrontmostPID(); pid > 0 && pid != mac.OwnPID() {
-			a.prevAppPID = pid
-		}
-	}
-	a.syncMousePassThrough()
-	mac.ActivateSelf()
-	a.win.Focus()
-	a.releaseKeys()
-	a.win.Invalidate()
-}
-
-// releaseTypingKeyboard gives the global keys back once a page's field is
-// done; the panel stays open where it is.
-func (a *shelf) releaseTypingKeyboard() {
-	if !a.pageTyping {
-		return
-	}
-	a.pageTyping = false
-	if a.win != nil && a.visible {
-		a.holdKeys()
-	}
-}
-
 // rowKey keys a repeated row of the results.
 type rowKey struct {
 	name string

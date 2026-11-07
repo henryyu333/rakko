@@ -289,17 +289,17 @@ func claudeUsageArgs() []string {
 // when it holds a sign-in, the Mac's Claude Code otherwise. The two sources
 // keep separate account caches, so a cached "signed out" in one can never
 // answer for the other.
-func claudeReadingEnv(ctx context.Context, env Env) (Env, ClaudeSource) {
+func claudeReadingEnv(ctx context.Context, env Env) Env {
 	if env.RakkoClaudeDir != "" {
 		priv := env
 		priv.ClaudeConfigDir = env.RakkoClaudeDir
 		priv.ClaudeAccount = env.RakkoClaudeAccount
 		cred, found, err := claudeCredentialsCached(ctx, priv)
 		if err == nil && found && cred.OAuth.AccessToken != "" {
-			return priv, ClaudeSourceRakko
+			return priv
 		}
 	}
-	return env, ClaudeSourceUser
+	return env
 }
 
 // FetchClaude reads the subscription allowance of the account Claude Code
@@ -317,7 +317,7 @@ func FetchClaude(ctx context.Context, env Env) Quota {
 		return q
 	}
 
-	env, q.ClaudeSource = claudeReadingEnv(ctx, env)
+	env = claudeReadingEnv(ctx, env)
 	cred, found, err := claudeCredentialsCached(ctx, env)
 	if err != nil {
 		q.Status = QuotaFailed

@@ -393,12 +393,12 @@ func TestEnglishUsagePageStatesHaveNoChineseAndFit(t *testing.T) {
 		{"claude signed out", func(fx *usageFixture) {
 			fx.codex.q = okQuota(aiusage.ToolCodex, "Plus", now)
 			fx.claude.q = aiusage.Quota{Tool: aiusage.ToolClaude, Status: aiusage.QuotaNotLoggedIn,
-				FetchedAt: now, ClaudeSource: aiusage.ClaudeSourceUser}
+				FetchedAt: now}
 		}},
 		{"claude sign-in waiting", func(fx *usageFixture) {
 			fx.codex.q = okQuota(aiusage.ToolCodex, "Plus", now)
 			fx.claude.q = aiusage.Quota{Tool: aiusage.ToolClaude, Status: aiusage.QuotaNotLoggedIn, FetchedAt: now}
-			fx.f.claudeLogin = usageClaudeLogin{busy: true, url: "https://claude.com/cai/oauth/authorize?code=true&state=demo", codes: make(chan string, 1)}
+			fx.f.claudeLogin = usageClaudeLogin{busy: true, cancel: func() {}}
 		}},
 		{"limit reached", func(fx *usageFixture) {
 			fx.codex.q = aiusage.Quota{Tool: aiusage.ToolCodex, Status: aiusage.QuotaLimitReached, FetchedAt: now}

@@ -1824,9 +1824,6 @@ func (a *shelf) setLevelPage(level int, id pageID) {
 	if a.focusMode && level == 2 && next != pageClipboard {
 		a.leaveFocusMode()
 	}
-	if a.pageTyping && (level != 2 || next != pageUsage) {
-		a.releaseTypingKeyboard()
-	}
 	a.reveal = ""
 	a.selection.keepExisting(a.visibleItems())
 	a.syncWindowFrame()
@@ -1951,9 +1948,6 @@ func (a *shelf) setTab(id pageID) {
 	// gives the keyboard back, so the new page's band takes presses.
 	if a.focusMode && id != pageClipboard {
 		a.leaveFocusMode()
-	}
-	if a.pageTyping && id != pageUsage {
-		a.releaseTypingKeyboard()
 	}
 	// The tab and the shell size stay one state: every page is the tall
 	// shell. A caller that names a page without switching levels (a test

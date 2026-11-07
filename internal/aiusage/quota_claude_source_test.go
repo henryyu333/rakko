@@ -79,9 +79,6 @@ func TestFetchClaudePrefersRakkoSignIn(t *testing.T) {
 	if q.Status != QuotaOK {
 		t.Fatalf("status = %v, err %q", q.Status, q.Err)
 	}
-	if q.ClaudeSource != ClaudeSourceRakko {
-		t.Fatalf("source = %v, want Rakko's", q.ClaudeSource)
-	}
 	if cli.lastDir != priv {
 		t.Fatalf("config dir = %q, want %q", cli.lastDir, priv)
 	}
@@ -107,9 +104,6 @@ func TestFetchClaudeFallsBackToUserSignIn(t *testing.T) {
 	q := FetchClaude(context.Background(), env)
 	if q.Status != QuotaOK {
 		t.Fatalf("status = %v, err %q", q.Status, q.Err)
-	}
-	if q.ClaudeSource != ClaudeSourceUser {
-		t.Fatalf("source = %v, want the Mac's", q.ClaudeSource)
 	}
 	if cli.lastDir != "" {
 		t.Fatalf("config dir = %q, want the Mac's default", cli.lastDir)
@@ -153,8 +147,8 @@ func TestFetchClaudeSourceCachesSeparate(t *testing.T) {
 	env.RunClaude = cli.run
 
 	for range 2 {
-		if q := FetchClaude(context.Background(), env); q.ClaudeSource != ClaudeSourceUser {
-			t.Fatalf("source = %v, want the Mac's", q.ClaudeSource)
+		if q := FetchClaude(context.Background(), env); q.Status != QuotaOK || cli.lastDir != "" {
+			t.Fatalf("reading status=%v dir=%q, want the Mac's", q.Status, cli.lastDir)
 		}
 	}
 	if asked[claudeKeychainServiceFor(priv)] != 1 {

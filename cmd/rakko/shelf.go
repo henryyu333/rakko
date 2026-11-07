@@ -81,7 +81,6 @@ type shelf struct {
 	titleWidths                                                 map[string]float32    // back-row page name → measured width at the title font (see backTitleWidth)
 	reveal                                                      string                // row to keep in view after a keyboard move
 	focusMode                                                   bool                  // the window took the keyboard for clipboard search
-	pageTyping                                                  bool                  // the window took the keyboard for a page's text field (Claude sign-in)
 	prevAppPID                                                  int                   // app to hand the keyboard back to when focusMode ends
 	appNames                                                    map[string]string     // bundle id → display name, cached for menu labels
 	appIcons                                                    map[string]*ui.Bitmap // bundle id → icon, cached for clipboard rows

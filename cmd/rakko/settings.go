@@ -147,7 +147,6 @@ func init() { settingsOpen = (*shelf).openSettings }
 // the system every time the window opens or is re-focused, so the switch
 // reflects changes the user made in System Settings too.
 func (a *shelf) openSettings() {
-	a.pageTyping = false // the panel's field gives the keyboard to this window
 	if a.settingsWin != nil {
 		a.loginOn, a.loginErr = openAtLogin(), ""
 		a.repaintSettings()

@@ -10,11 +10,10 @@ import (
 func TestSaveAndLoadLastQuotas(t *testing.T) {
 	dir := t.TempDir()
 	q := Quota{
-		Tool:         ToolClaude,
-		Plan:         "Pro",
-		ClaudeSource: ClaudeSourceRakko,
-		Status:       QuotaOK,
-		FetchedAt:    fakeNow,
+		Tool:      ToolClaude,
+		Plan:      "Pro",
+		Status:    QuotaOK,
+		FetchedAt: fakeNow,
 		Windows: []Window{
 			{Name: "5 hours", UsedPct: 7, Length: 5 * time.Hour, ResetsAt: fakeNow.Add(4 * time.Hour)},
 			{Name: "7 days · Opus", Model: "opus", UsedPct: 12.5, Length: 7 * 24 * time.Hour},
@@ -30,9 +29,6 @@ func TestSaveAndLoadLastQuotas(t *testing.T) {
 	g := got[0]
 	if g.Tool != ToolClaude || g.Plan != "Pro" || g.Status != QuotaOK || !g.FetchedAt.Equal(fakeNow) {
 		t.Fatalf("quota = %+v", g)
-	}
-	if g.ClaudeSource != ClaudeSourceRakko {
-		t.Fatalf("source = %v, want Rakko's", g.ClaudeSource)
 	}
 	if len(g.Windows) != 2 || g.Windows[1].Name != "7 days · Opus" || g.Windows[1].Model != "opus" ||
 		g.Windows[1].UsedPct != 12.5 || g.Windows[1].Length != 7*24*time.Hour {

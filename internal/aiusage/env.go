@@ -58,10 +58,9 @@ type Env struct {
 type ClaudeRun func(ctx context.Context, args []string, configDir string) (stdout, stderr string, err error)
 
 // ClaudeLoginRun starts `claude auth login` against Rakko's private config
-// directory. onURL is called once the authorization link is printed; code
-// delivers pasted authorization codes to the process. It returns the
-// process's error, or ctx's when the sign-in was cancelled.
-type ClaudeLoginRun func(ctx context.Context, onURL func(string), code <-chan string) error
+// directory. It returns the process's error, or ctx's when the sign-in was
+// cancelled.
+type ClaudeLoginRun func(ctx context.Context) error
 
 const (
 	codexDefaultBase = "https://chatgpt.com/backend-api"

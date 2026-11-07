@@ -305,14 +305,10 @@ func (a *shelf) ready(show bool) {
 		fetchClaude: func(ctx context.Context) aiusage.Quota { return aiusage.FetchClaude(ctx, usageEnv) },
 		// Rakko signs in its own Claude Code; Claude Code keeps, refreshes
 		// and revokes the credentials, this app only starts the process.
-		loginClaude: func(ctx context.Context, onURL func(string), code <-chan string) error {
-			return aiusage.ClaudeAuthLogin(ctx, usageEnv, onURL, code)
+		loginClaude: func(ctx context.Context) error {
+			return aiusage.ClaudeAuthLogin(ctx, usageEnv)
 		},
-		logoutClaude: func(ctx context.Context) error {
-			return aiusage.ClaudeAuthLogout(ctx, usageEnv)
-		},
-		openURL: openInBrowser,
-		pace:    aiusage.Pace,
+		pace: aiusage.Pace,
 		// Claude Code's own logs tell whether an allowance moved at all;
 		// the /usage read runs only when it did.
 		claudeUsedSince: func(t time.Time) bool {

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 )
@@ -24,82 +23,30 @@ func TestClaudeAuthLoginInvalidatesPrivateCache(t *testing.T) {
 	cli := &fakeClaudeCLI{usageOut: claudeResultJSON(claudeSampleUsage, false)}
 	env.RunClaude = cli.run
 	env.Now = func() time.Time { return fakeNow }
-	if q := FetchClaude(context.Background(), env); q.ClaudeSource != ClaudeSourceUser {
-		t.Fatalf("before login source = %v, want the Mac's", q.ClaudeSource)
+	if q := FetchClaude(context.Background(), env); q.Status != QuotaOK || cli.lastDir != "" {
+		t.Fatalf("before login status=%v dir=%q, want the Mac's reading", q.Status, cli.lastDir)
 	}
 
 	// The sign-in succeeds and the same keychain now serves the private
 	// item; the cached miss must not hide it.
 	env.Keychain = sourceKeychain(t, priv, true, &asked)
-	urls := make(chan string, 1)
-	env.RunClaudeLogin = func(ctx context.Context, onURL func(string), code <-chan string) error {
-		onURL("https://claude.com/cai/oauth/authorize?code=true&state=test")
-		select {
-		case <-code:
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-		return nil
-	}
-	codes := make(chan string, 1)
-	done := make(chan error, 1)
-	go func() {
-		done <- ClaudeAuthLogin(context.Background(), env, func(u string) { urls <- u }, codes)
-	}()
-	var gotURL string
-	select {
-	case gotURL = <-urls:
-	case <-time.After(5 * time.Second):
-		t.Fatal("the sign-in never printed its link")
-	}
-	codes <- "the-code"
-	if err := <-done; err != nil {
+	env.RunClaudeLogin = func(context.Context) error { return nil }
+	if err := ClaudeAuthLogin(context.Background(), env); err != nil {
 		t.Fatalf("login: %v", err)
-	}
-	if gotURL == "" || !strings.Contains(gotURL, "oauth/authorize") {
-		t.Fatalf("url = %q", gotURL)
 	}
 
 	q := FetchClaude(context.Background(), env)
-	if q.ClaudeSource != ClaudeSourceRakko {
-		t.Fatalf("after login source = %v, want Rakko's (cache not invalidated)", q.ClaudeSource)
-	}
 	if q.Status != QuotaOK {
 		t.Fatalf("after login status = %v, err %q", q.Status, q.Err)
 	}
-}
-
-// Logout runs against Rakko's directory only, and its failure propagates.
-func TestClaudeAuthLogoutTouchesOnlyPrivateDir(t *testing.T) {
-	priv := filepath.Join(t.TempDir(), "claude")
-	cli := &fakeClaudeCLI{authOut: `{"loggedIn":true}`}
-	env := claudeEnv(t, t.TempDir())
-	env.RakkoClaudeDir = priv
-	env.RakkoClaudeAccount = &ClaudeAccount{}
-	env.RunClaude = cli.run
-
-	if err := ClaudeAuthLogout(context.Background(), env); err != nil {
-		t.Fatalf("logout: %v", err)
-	}
-	if got, want := strings.Join(cli.lastArgs, " "), "auth logout"; got != want {
-		t.Fatalf("args = %q, want %q", got, want)
-	}
 	if cli.lastDir != priv {
-		t.Fatalf("config dir = %q, want %q", cli.lastDir, priv)
-	}
-
-	env.RunClaude = func(ctx context.Context, args []string, dir string) (string, string, error) {
-		cli.lastArgs, cli.lastDir = args, dir
-		return "", "", os.ErrPermission
-	}
-	if err := ClaudeAuthLogout(context.Background(), env); err == nil {
-		t.Fatal("a failed logout must not report success")
+		t.Fatalf("after login config dir = %q, want %q (cache not invalidated)", cli.lastDir, priv)
 	}
 }
 
-// The real sign-in runs under a pseudo-terminal: Claude Code prints the
-// authorization link, then reads the pasted code from its prompt. A fake
-// claude binary exercises that handshake without touching any account.
+// The real sign-in runs Claude Code under a pseudo-terminal and takes the
+// process's exit as its result. A fake claude binary exercises the launch
+// without touching any account.
 func TestRunClaudeLoginThroughPseudoTTY(t *testing.T) {
 	if _, err := os.Stat("/usr/bin/script"); err != nil {
 		t.Skip("no /usr/bin/script on this machine")
@@ -108,13 +55,8 @@ func TestRunClaudeLoginThroughPseudoTTY(t *testing.T) {
 	scriptPath := filepath.Join(dir, "claude")
 	result := filepath.Join(dir, "config-dir.txt")
 	body := `#!/bin/sh
-echo "Opening browser to sign in…"
-echo "If the browser didn't open, visit: https://claude.com/cai/oauth/authorize?code=true&state=test"
-printf 'Paste code here if prompted > '
-read code
 printf '%s' "$CLAUDE_CONFIG_DIR" > "$RESULT_FILE"
-[ "$code" = "TEST-CODE" ] && exit 0
-exit 1
+exit 0
 `
 	if err := os.WriteFile(scriptPath, []byte(body), 0o700); err != nil {
 		t.Fatal(err)
@@ -127,24 +69,8 @@ exit 1
 		RakkoClaudeDir:     priv,
 		RakkoClaudeAccount: &ClaudeAccount{},
 	}
-
-	urls := make(chan string, 1)
-	codes := make(chan string, 1)
 	done := make(chan error, 1)
-	go func() {
-		done <- ClaudeAuthLogin(context.Background(), env, func(u string) { urls <- u }, codes)
-	}()
-
-	var url string
-	select {
-	case url = <-urls:
-	case <-time.After(10 * time.Second):
-		t.Fatal("the fake sign-in never printed its link")
-	}
-	if !strings.Contains(url, "oauth/authorize") {
-		t.Fatalf("url = %q", url)
-	}
-	codes <- "TEST-CODE"
+	go func() { done <- ClaudeAuthLogin(context.Background(), env) }()
 	select {
 	case err := <-done:
 		if err != nil {
@@ -153,7 +79,6 @@ exit 1
 	case <-time.After(10 * time.Second):
 		t.Fatal("the fake sign-in never finished")
 	}
-
 	got, err := os.ReadFile(result)
 	if err != nil {
 		t.Fatalf("the fake sign-in did not run: %v", err)
@@ -163,20 +88,14 @@ exit 1
 	}
 }
 
-// A rejected code is a failed sign-in, not a success.
-func TestRunClaudeLoginRejectsBadCode(t *testing.T) {
+// A non-zero exit is a failed sign-in, not a success.
+func TestRunClaudeLoginProcessFailure(t *testing.T) {
 	if _, err := os.Stat("/usr/bin/script"); err != nil {
 		t.Skip("no /usr/bin/script on this machine")
 	}
 	dir := t.TempDir()
 	scriptPath := filepath.Join(dir, "claude")
-	body := `#!/bin/sh
-echo "If the browser didn't open, visit: https://claude.com/cai/oauth/authorize?code=true&state=test"
-printf 'Paste code here if prompted > '
-read code
-exit 1
-`
-	if err := os.WriteFile(scriptPath, []byte(body), 0o700); err != nil {
+	if err := os.WriteFile(scriptPath, []byte("#!/bin/sh\nexit 1\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	env := Env{
@@ -185,42 +104,25 @@ exit 1
 		RakkoClaudeDir:     filepath.Join(dir, "private"),
 		RakkoClaudeAccount: &ClaudeAccount{},
 	}
-	urls := make(chan string, 1)
-	codes := make(chan string, 1)
-	done := make(chan error, 1)
-	go func() {
-		done <- ClaudeAuthLogin(context.Background(), env, func(u string) { urls <- u }, codes)
-	}()
-	select {
-	case <-urls:
-	case <-time.After(10 * time.Second):
-		t.Fatal("the fake sign-in never printed its link")
-	}
-	codes <- "WRONG"
-	select {
-	case err := <-done:
-		if err == nil {
-			t.Fatal("a rejected code must not report success")
-		}
-	case <-time.After(10 * time.Second):
-		t.Fatal("the fake sign-in never finished")
+	if err := ClaudeAuthLogin(context.Background(), env); err == nil {
+		t.Fatal("a failed process must not report success")
 	}
 }
 
 // Cancelling the sign-in reaches the runner and comes back as a cancelled
-// context, the one outcome the card does not report as a failure.
+// context, the one outcome that is not a failure.
 func TestClaudeAuthLoginCancellation(t *testing.T) {
 	env := Env{
 		RakkoClaudeDir:     t.TempDir(),
 		RakkoClaudeAccount: &ClaudeAccount{},
-		RunClaudeLogin: func(ctx context.Context, onURL func(string), code <-chan string) error {
+		RunClaudeLogin: func(ctx context.Context) error {
 			<-ctx.Done()
 			return ctx.Err()
 		},
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- ClaudeAuthLogin(ctx, env, nil, nil) }()
+	go func() { done <- ClaudeAuthLogin(ctx, env) }()
 	cancel()
 	select {
 	case err := <-done:
@@ -236,26 +138,7 @@ func TestClaudeAuthLoginCancellation(t *testing.T) {
 // than writing anywhere else.
 func TestClaudeAuthLoginNeedsRakkoDir(t *testing.T) {
 	env := Env{RakkoClaudeAccount: &ClaudeAccount{}}
-	if err := ClaudeAuthLogin(context.Background(), env, nil, nil); !errors.Is(err, errNoRakkoClaudeDir) {
+	if err := ClaudeAuthLogin(context.Background(), env); !errors.Is(err, errNoRakkoClaudeDir) {
 		t.Fatalf("err = %v, want errNoRakkoClaudeDir", err)
-	}
-	if err := ClaudeAuthLogout(context.Background(), env); !errors.Is(err, errNoRakkoClaudeDir) {
-		t.Fatalf("logout err = %v, want errNoRakkoClaudeDir", err)
-	}
-}
-
-// claudeAuthorizeURL reads the link out of the terminal line Claude Code
-// prints, including the ANSI hyperlink wrapper a pty adds.
-func TestClaudeAuthorizeURL(t *testing.T) {
-	line := "If the browser didn't open, visit: https://claude.com/cai/oauth/authorize?code=true&client_id=x&state=y"
-	if got := claudeAuthorizeURL(line); got != "https://claude.com/cai/oauth/authorize?code=true&client_id=x&state=y" {
-		t.Fatalf("url = %q", got)
-	}
-	wrapped := "\x1b]8;;https://claude.com/cai/oauth/authorize?code=true&state=z\x07https://claude.com/cai/oauth/authorize?code=true&state=z\x1b]8;;\x07"
-	if got := claudeAuthorizeURL(wrapped); !strings.Contains(got, "state=z") {
-		t.Fatalf("wrapped url = %q", got)
-	}
-	if got := claudeAuthorizeURL("Paste code here if prompted > "); got != "" {
-		t.Fatalf("prompt matched %q", got)
 	}
 }
