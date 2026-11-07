@@ -13,6 +13,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -218,11 +219,18 @@ func TestRenameSmoke(t *testing.T) {
 	time.Sleep(700 * time.Millisecond)
 
 	// Real context menu: right-click the first tile. The tile grid starts
-	// 24pt in and ~74pt down from the panel's top-left (DESIGN.md layout),
-	// and cells are ~99×100 with the first center at half that.
-	frame := a.win.Bounds()
-	tileX := float64(frame.X + 24 + 50)
-	tileY := float64(frame.Y + 74 + 50)
+	// 24pt in and ~74pt down from the panel's (drawn shell's) top-left
+	// (DESIGN.md layout), and cells are ~99×100 with the first center at
+	// half that. The open panel's native window is the session envelope, so
+	// the shell's box is read from the drawn shell, not the window corner.
+	var shellX, shellY int
+	onMain(func() {
+		w := int(math.Ceil(float64(a.fx.w)))
+		shellX = a.shellCentreX(a.fx.openK) - w/2
+		shellY = a.win.Bounds().Y + int(math.Round(float64(a.shellTopLocal(a.fx.h, a.fx.openK))))
+	})
+	tileX := float64(shellX + 24 + 50)
+	tileY := float64(shellY + 74 + 50)
 	postRightClick(t, tileX, tileY)
 	if err := os.MkdirAll(renameShotDir, 0o755); err != nil {
 		t.Fatal(err)
