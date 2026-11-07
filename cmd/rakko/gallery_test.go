@@ -1413,20 +1413,39 @@ func galleryGroupI() []galleryItem {
 			s.hoverOK = true
 			return galleryRender{view: galleryView(t, lang, func(c *ui.Context) { s.overlayView(c, 0) }, 900, 600)}
 		}},
-		{ID: "I6", Group: g, Title: "截图", State: "选区 · 标注与工具栏", Wide: true, Build: func(t *testing.T, lang string) galleryRender {
+		{ID: "I6", Group: g, Title: "截图", State: "选区 · 标注、属性栏与工具栏", Wide: true, Build: func(t *testing.T, lang string) galleryRender {
 			s := galleryShotSession(t, lang, 900, 600)
 			s.cursor = mygo.Point{X: 520, Y: 350}
 			s.hasSel = true
 			s.sel = mygo.Rectangle{X: 250, Y: 150, Width: 420, Height: 260}
 			s.tool = shotToolRect
 			s.color = shotAnnotationColors[0]
+			word := "截图说明"
+			if lang != "zh-Hans" {
+				word = "Screenshot note"
+			}
+			cells := map[[2]int]shotMosaicCell{}
+			var mosaic []shotMosaicCell
+			shotMosaicCells(s.displays[0].img, s.displays[0].shotTarget, shotMosaicBlockPixels(4), shotMosaicBrushRadius(4),
+				mygo.Point{X: 300, Y: 378}, mygo.Point{X: 600, Y: 402},
+				func(col, row int, cell shotMosaicCell) {
+					if cells[[2]int{col, row}].rect.Width == 0 {
+						cells[[2]int{col, row}] = cell
+						mosaic = append(mosaic, cell)
+					}
+				})
 			s.hist.annots = []shotAnnotation{
 				{tool: shotToolRect, color: shotAnnotationColors[0], width: 4,
-					a: mygo.Point{X: 280, Y: 190}, b: mygo.Point{X: 470, Y: 300}},
+					a: mygo.Point{X: 280, Y: 190}, b: mygo.Point{X: 430, Y: 270}},
+				{tool: shotToolArrow, color: shotAnnotationColors[1], width: 4,
+					a: mygo.Point{X: 450, Y: 200}, b: mygo.Point{X: 620, Y: 270}},
 				{tool: shotToolPen, color: shotAnnotationColors[3], width: 4,
-					points: []mygo.Point{{X: 300, Y: 340}, {X: 340, Y: 320}, {X: 380, Y: 350}}},
+					points: []mygo.Point{{X: 300, Y: 350}, {X: 340, Y: 330}, {X: 380, Y: 360}}},
+				{tool: shotToolText, color: shotAnnotationColors[4], width: 4,
+					a: mygo.Point{X: 290, Y: 300}, text: word},
+				{tool: shotToolMosaic, color: shotAnnotationColors[0], width: 4, cells: mosaic},
 				{tool: shotToolNumber, color: shotAnnotationColors[2], width: 2,
-					a: mygo.Point{X: 540, Y: 250}, number: 1},
+					a: mygo.Point{X: 630, Y: 380}, number: 1},
 			}
 			s.layoutBar()
 			return galleryRender{view: galleryView(t, lang, func(c *ui.Context) { s.overlayView(c, 0) }, 900, 600)}

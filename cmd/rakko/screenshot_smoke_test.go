@@ -10,8 +10,10 @@ package main
 // the user waits for. Run with RAKKO_BASKET_SMOKE=1 through native-gate.sh.
 
 import (
+	"bytes"
 	"fmt"
 	"image/color"
+	stdpng "image/png"
 	"os"
 	"path/filepath"
 	"testing"
@@ -140,8 +142,81 @@ func TestScreenshotSmokeOverlay(t *testing.T) {
 		t.Fatalf("selection = %+v, drag target = %+v", sel, target)
 	}
 
+	// Real HID: pick the arrow tool from the toolbar and drag a diagonal
+	// arrow inside the selection.
+	clickBar := func(kind shotBarKind, tool shotTool) {
+		var r mygo.Rectangle
+		onMain(func() {
+			look := func(strip shotBarStrip) {
+				for _, it := range strip.items {
+					if it.kind == kind && (kind != shotBarTool || it.tool == tool) {
+						r = it.rect
+					}
+				}
+			}
+			look(s.bar.shotBarStrip)
+			if s.bar.hasProps {
+				look(s.bar.props)
+			}
+		})
+		if r.Width == 0 {
+			t.Fatalf("no toolbar control kind=%v tool=%v", kind, tool)
+		}
+		postShotMouse(t, float64(r.X+r.Width/2), float64(r.Y+r.Height/2), num, 5, 1, 2)
+		time.Sleep(250 * time.Millisecond)
+	}
+	clickBar(shotBarTool, shotToolArrow)
+	from := mygo.Point{X: sel.X + 20, Y: sel.Y + 20}
+	to := mygo.Point{X: sel.X + 80, Y: sel.Y + 70}
+	postShotMouse(t, float64(from.X), float64(from.Y), num, 5, 1)
+	for i := 1; i <= 6; i++ {
+		postShotMouse(t, float64(from.X+(to.X-from.X)*i/6), float64(from.Y+(to.Y-from.Y)*i/6), num, 6)
+		time.Sleep(30 * time.Millisecond)
+	}
+	postShotMouse(t, float64(to.X), float64(to.Y), num, 2)
+	time.Sleep(250 * time.Millisecond)
+	var hasArrow bool
+	onMain(func() {
+		for _, an := range s.hist.annots {
+			if an.tool == shotToolArrow && an.b.X-an.a.X != 0 && an.b.Y-an.a.Y != 0 {
+				hasArrow = true
+			}
+		}
+	})
+	if !hasArrow {
+		t.Fatalf("the real diagonal drag made no diagonal arrow: %+v", s.hist.annots)
+	}
+
+	// Real keyboard: choose the text tool and its white colour, click a
+	// spot, type hello and commit with Return.
+	clickBar(shotBarTool, shotToolText)
+	// The property bar's last colour swatch is white.
+	clickBar(shotBarColor, shotToolNone)
+	textAt := mygo.Point{X: sel.X + 30, Y: sel.Y + sel.Height - 40}
+	postShotMouse(t, float64(textAt.X), float64(textAt.Y), num, 5, 1, 2)
+	time.Sleep(300 * time.Millisecond)
+	var keyIsKey bool
+	onMain(func() { keyIsKey = mac.IsKeyWindow(od.win.NativeHandle()) })
+	t.Logf("text editing key window=%v", keyIsKey)
+	postTyping(t, "hello")
+	time.Sleep(150 * time.Millisecond)
+	postReturn(t)
+	time.Sleep(300 * time.Millisecond)
+	var gotText string
+	onMain(func() {
+		for _, an := range s.hist.annots {
+			if an.tool == shotToolText {
+				gotText = an.text
+			}
+		}
+	})
+	if gotText != "hello" {
+		t.Fatalf("typed text = %q, want hello", gotText)
+	}
+
 	// The output crop is the production path, at the selection's pixels.
 	var pngLen int
+	var reds, whites int
 	onMain(func() {
 		png, err := s.outputPNG(true)
 		if err != nil {
@@ -149,15 +224,39 @@ func TestScreenshotSmokeOverlay(t *testing.T) {
 			return
 		}
 		pngLen = len(png)
+		img, derr := stdpng.Decode(bytes.NewReader(png))
+		if derr != nil {
+			t.Errorf("decode output: %v", derr)
+			return
+		}
+		for y := img.Bounds().Min.Y; y < img.Bounds().Max.Y; y++ {
+			for x := img.Bounds().Min.X; x < img.Bounds().Max.X; x++ {
+				r, g, b, _ := img.At(x, y).RGBA()
+				switch {
+				case r > 180<<8 && g < 120<<8 && b < 120<<8:
+					reds++
+				case r > 180<<8 && g > 180<<8 && b > 180<<8:
+					whites++
+				}
+			}
+		}
 	})
 	if pngLen == 0 {
 		t.Fatal("no PNG produced")
 	}
+	if reds == 0 {
+		t.Fatal("the exported crop has no arrow pixels")
+	}
+	if whites < 20 {
+		t.Fatalf("the exported crop has %d text pixels, want the typed line", whites)
+	}
+	t.Logf("export pixels: %d arrow red, %d text white", reds, whites)
 	shotWindow(t, od.win, "overlay-selection")
 	t.Logf("selection %+v, annotated PNG %d bytes", sel, pngLen)
 
-	// A real Esc while the overlay is key: the last step of the ladder
-	// leaves the selection, then closes.
+	// Real Escapes while the overlay is key: drop the tool, leave the
+	// selection, then close.
+	postEscape(t)
 	postEscape(t)
 	postEscape(t)
 	deadline := time.Now().Add(3 * time.Second)

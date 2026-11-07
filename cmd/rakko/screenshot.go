@@ -441,6 +441,9 @@ func (s *shotSession) overlayView(c *ui.Context, di int) {
 	}
 	el.HandleInput(func(ev ui.InputEvent) bool { return s.input(ev, di) }).
 		Draw(func(p *ui.Painter, r ui.Rect) { s.draw(p, r, di) })
+	if s.hasSel && di == s.owner {
+		s.buildBar(c, s.displays[di])
+	}
 }
 
 // cursorShape is the pointer over this display.
@@ -565,8 +568,10 @@ func (s *shotSession) pointerDown(p mygo.Point, ev ui.InputEvent, di int) bool {
 	if s.hasSel {
 		if di == s.owner {
 			s.layoutBar()
-			if it, ok := s.bar.shotBarAt(p); ok {
-				s.actBar(it)
+			if s.bar.contains(p) {
+				if it, ok := s.bar.shotBarAt(p); ok {
+					s.actBar(it)
+				}
 				return true
 			}
 			if shotPointInRect(p, s.sel) && ev.Clicks >= 2 {
@@ -781,7 +786,7 @@ func (s *shotSession) layoutBar() {
 		return
 	}
 	if d := s.ownerDisplay(); d != nil {
-		s.bar = shotToolbarLayout(s.sel, d.Bounds)
+		s.bar = shotToolbarLayout(s.sel, d.Bounds, s.tool)
 	}
 }
 
@@ -794,10 +799,14 @@ func (s *shotSession) actBar(it shotBarItem) {
 		} else {
 			s.tool = it.tool
 		}
+		s.layoutBar()
+		s.invalidate()
 	case shotBarColor:
 		s.color = shotAnnotationColors[it.index]
+		s.invalidate()
 	case shotBarWidth:
 		s.width = shotAnnotationWidths[it.index]
+		s.invalidate()
 	case shotBarUndo:
 		if s.hist.undoLast() {
 			s.invalidate()
@@ -929,6 +938,7 @@ func (s *shotSession) escape() {
 		s.cancelText()
 	case s.tool != shotToolNone:
 		s.tool = shotToolNone
+		s.layoutBar()
 		s.invalidate()
 	case s.hasSel:
 		s.hasSel = false

@@ -25,7 +25,6 @@ func (s *shotSession) draw(p *ui.Painter, r ui.Rect, di int) {
 			s.drawVeil(p, d)
 			s.drawSelection(p, d)
 			s.drawAnnotations(p, d)
-			s.drawBar(p, d)
 		}
 	} else if s.hoverOK && di == s.cursorDpy && shotRectsIntersect(s.hover, d.Bounds) {
 		s.drawWindowHint(p, d)
@@ -116,67 +115,169 @@ func (s *shotSession) drawAnnotations(p *ui.Painter, d *shotDisplay) {
 	}
 }
 
-// drawBar paints the toolbar in the owner display's local points.
-func (s *shotSession) drawBar(p *ui.Painter, d *shotDisplay) {
+// buildBar builds the selection's toolbar as real elements over the frozen
+// canvas, so hover fills, tooltips and clicks are the app's own controls.
+func (s *shotSession) buildBar(c *ui.Context, d *shotDisplay) {
 	tb := s.bar
 	if tb.rect.Width == 0 {
 		return
 	}
+	s.buildBarStrip(c, "main", tb.shotBarStrip, d)
+	if tb.hasProps {
+		s.buildBarStrip(c, "props", tb.props, d)
+	}
+}
+
+// buildBarStrip builds one row's frame, its group dividers and its buttons.
+func (s *shotSession) buildBarStrip(c *ui.Context, group string, strip shotBarStrip, d *shotDisplay) {
 	ox, oy := d.Bounds.X, d.Bounds.Y
-	local := func(r mygo.Rectangle) ui.Rect {
-		return ui.Rect{X: float32(r.X - ox), Y: float32(r.Y - oy), W: float32(r.Width), H: float32(r.Height)}
-	}
-	r := local(tb.rect)
-	p.Fill(r, shotBarFill, 10)
-	p.Stroke(r, shotBarEdge, 10, 0.5)
-	for _, it := range tb.items {
-		box := local(it.rect)
-		switch it.kind {
-		case shotBarTool:
-			if s.tool == it.tool {
-				p.Fill(box, accent.Alpha(0.22), 6)
-			}
-			p.Icon(shotToolIcon(it.tool), ui.Rect{X: box.X + 4, Y: box.Y + 4, W: box.W - 8, H: box.H - 8}, ink)
-		case shotBarColor:
-			c := shotAnnotationColors[it.index]
-			p.Fill(ui.Rect{X: box.X + 1, Y: box.Y + 1, W: box.W - 2, H: box.H - 2}, c, (box.W-2)/2)
-			if s.color == c {
-				p.Stroke(ui.Rect{X: box.X - 1, Y: box.Y - 1, W: box.W + 2, H: box.H + 2}, ink, (box.W+2)/2, 1.5)
-			}
-		case shotBarWidth:
-			if s.width == shotAnnotationWidths[it.index] {
-				p.Fill(box, shotBarHot, 6)
-			}
-			d := float32(shotAnnotationWidths[it.index])
-			p.Fill(ui.Rect{X: box.X + box.W/2 - d/2, Y: box.Y + box.H/2 - d/2, W: d, H: d}, ink, d/2)
-		case shotBarUndo:
-			c := ink
-			if !s.hist.canUndo() {
-				c = ink3
-			}
-			p.Icon(shotUndoSymbol, ui.Rect{X: box.X + 5, Y: box.Y + 5, W: box.W - 10, H: box.H - 10}, c)
-		case shotBarRedo:
-			c := ink
-			if !s.hist.canRedo() {
-				c = ink3
-			}
-			p.Icon(shotRedoSymbol, ui.Rect{X: box.X + 5, Y: box.Y + 5, W: box.W - 10, H: box.H - 10}, c)
-		case shotBarOCR:
-			p.Icon(ocrSymbol, ui.Rect{X: box.X + 5, Y: box.Y + 5, W: box.W - 10, H: box.H - 10}, ink)
-		case shotBarPin:
-			p.Icon(shotPinSymbol, ui.Rect{X: box.X + 5, Y: box.Y + 5, W: box.W - 10, H: box.H - 10}, ink)
-		case shotBarSave:
-			p.Icon(shotSaveSymbol, ui.Rect{X: box.X + 5, Y: box.Y + 5, W: box.W - 10, H: box.H - 10}, ink)
-		case shotBarCancel:
-			p.Icon(shotCloseSymbol, ui.Rect{X: box.X + 5, Y: box.Y + 5, W: box.W - 10, H: box.H - 10}, ink)
-		case shotBarCopy:
-			p.Fill(box, accent, 6)
-			label := s.a.appLoc().ShotCopyButton()
-			span := ui.Span{Text: label, Size: 12, Weight: 600, Color: ui.Hex("#FFFFFF")}
-			tw, th := p.MeasureText(0, span)
-			p.RichText(box.X+(box.W-tw)/2, box.Y+(box.H-th)/2, 0, span)
+	bg := ui.Box(c.Key("shotbar-"+group)).Absolute().
+		Left(float32(strip.rect.X-ox)).Top(float32(strip.rect.Y-oy)).
+		Width(float32(strip.rect.Width)).Height(float32(strip.rect.Height)).
+		Radius(10).Background(shotBarFill).Border(0.5, shotBarEdge)
+	// A Draw callback paints in window coordinates: r is where the bar is.
+	bg.Draw(func(p *ui.Painter, r ui.Rect) {
+		for _, gx := range strip.seps {
+			p.Fill(ui.Rect{X: r.X + float32(gx-strip.rect.X), Y: r.Y + 10, W: 1, H: r.H - 20}, shotBarEdge, 0)
 		}
+	})
+	for _, it := range strip.items {
+		s.buildBarButton(c, group, it, d)
 	}
+}
+
+// buildBarButton builds one toolbar control with its state: the selected
+// tool's accent, hover's fill, a disabled action's dimmed glyph, and the
+// tooltip with the control's name and shortcut.
+func (s *shotSession) buildBarButton(c *ui.Context, group string, it shotBarItem, d *shotDisplay) {
+	key := fmt.Sprintf("shotbar-%s-%d-%d-%d", group, it.kind, it.tool, it.index)
+	b := ui.Box(c.Key(key)).Absolute().
+		Left(float32(it.rect.X-d.Bounds.X)).Top(float32(it.rect.Y-d.Bounds.Y)).
+		Size(float32(it.rect.Width), float32(it.rect.Height)).
+		Radius(7).Center().Cursor(ui.CursorPointer)
+	if name, keys := shotBarTip(c, it); name != "" {
+		tip := name
+		if keys != "" {
+			tip += " · " + keys
+		}
+		b.Tooltip(tip)
+	}
+	hovered := b.Hovered()
+	disabled := false
+	switch it.kind {
+	case shotBarTool:
+		active := s.tool == it.tool
+		switch {
+		case active:
+			b.Background(accent.Alpha(0.22))
+		case hovered:
+			b.Background(shotBarHot)
+		}
+		col := ink
+		if active {
+			col = accent
+		}
+		b.Children(func() { ui.Icon(c, shotToolIcon(it.tool)).Size(17, 17).TextColor(col) })
+	case shotBarColor:
+		col := shotAnnotationColors[it.index]
+		b.Radius(shotButtonSize / 2)
+		if s.color == col {
+			b.Border(1.5, ink)
+		}
+		if hovered {
+			b.Background(shotBarHot)
+		}
+		b.Children(func() {
+			ui.Box(c.Key(key+"-swatch")).Size(shotSwatchSize, shotSwatchSize).
+				Radius(shotSwatchSize / 2).Background(col)
+		})
+	case shotBarWidth:
+		w := shotAnnotationWidths[it.index]
+		switch {
+		case s.width == w:
+			b.Background(accent.Alpha(0.22))
+		case hovered:
+			b.Background(shotBarHot)
+		}
+		d := float32(w)
+		b.Draw(func(p *ui.Painter, r ui.Rect) {
+			p.Fill(ui.Rect{X: r.X + (r.W-d)/2, Y: r.Y + (r.H-d)/2, W: d, H: d}, ink, d/2)
+		})
+	case shotBarUndo, shotBarRedo:
+		can := s.hist.canUndo()
+		if it.kind == shotBarRedo {
+			can = s.hist.canRedo()
+		}
+		disabled = !can
+		b.Disabled(disabled)
+		if can && hovered {
+			b.Background(shotBarHot)
+		}
+		col := ink
+		if !can {
+			col = ink3
+		}
+		icon := shotUndoSymbol
+		if it.kind == shotBarRedo {
+			icon = shotRedoSymbol
+		}
+		b.Children(func() { ui.Icon(c, icon).Size(17, 17).TextColor(col) })
+	case shotBarOCR, shotBarPin, shotBarSave, shotBarCancel:
+		if hovered {
+			b.Background(shotBarHot)
+		}
+		icon := map[shotBarKind]*ui.SVG{
+			shotBarOCR: ocrSymbol, shotBarPin: shotPinSymbol,
+			shotBarSave: shotSaveSymbol, shotBarCancel: shotCloseSymbol,
+		}[it.kind]
+		b.Children(func() { ui.Icon(c, icon).Size(17, 17).TextColor(ink) })
+	case shotBarCopy:
+		b.Radius(7).Background(accent)
+		label := loc(c).ShotCopyButton()
+		b.Children(func() {
+			ui.Text(c, label).FontSize(12).FontWeight(600).TextColor(ui.Hex("#FFFFFF")).SingleLine()
+		})
+	}
+	if !disabled && b.Clicked() {
+		s.actBar(it)
+	}
+}
+
+// shotBarTip is a control's name and its shortcut, for the tooltip.
+func shotBarTip(c *ui.Context, it shotBarItem) (name, keys string) {
+	l := loc(c)
+	switch it.kind {
+	case shotBarTool:
+		switch it.tool {
+		case shotToolRect:
+			return l.ShotToolRect(), ""
+		case shotToolArrow:
+			return l.ShotToolArrow(), ""
+		case shotToolPen:
+			return l.ShotToolPen(), ""
+		case shotToolMosaic:
+			return l.ShotToolMosaic(), ""
+		case shotToolText:
+			return l.ShotToolText(), ""
+		case shotToolNumber:
+			return l.ShotToolNumber(), ""
+		}
+	case shotBarUndo:
+		return l.ShotActionUndo(), "⌘Z"
+	case shotBarRedo:
+		return l.ShotActionRedo(), "⇧⌘Z"
+	case shotBarOCR:
+		return l.ShotActionOCR(), ""
+	case shotBarPin:
+		return l.ShotActionPin(), ""
+	case shotBarSave:
+		return l.ShotActionSave(), "⌘S"
+	case shotBarCancel:
+		return l.ShotActionCancel(), ""
+	case shotBarCopy:
+		return l.ShotCopyButton(), "⌘C"
+	}
+	return "", ""
 }
 
 // shotMagnifierAt places the magnifier beside the cursor and keeps it off
@@ -278,7 +379,6 @@ var (
 	shotSymbol       = symbol(`<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><rect x="7" y="9" width="10" height="6" rx="1"/>`)
 	shotRectSymbol   = symbol(`<rect x="4" y="5" width="16" height="14" rx="2"/>`)
 	shotArrowSymbol  = symbol(`<path d="M5 19L19 5M19 5h-6M19 5v6"/>`)
-	shotMosaicSymbol = symbol(`<path d="M4 4h6v6H4zM14 4h6v6h-6zM9 9h6v6H9zM4 14h6v6H4zM14 14h6v6h-6z"/>`)
 	shotTextSymbol   = symbol(`<path d="M5 6h14M12 6v13M8 19h8"/>`)
 	shotNumberSymbol = symbol(`<circle cx="12" cy="12" r="8"/><path d="M10 10l2-1v7"/>`)
 	shotUndoSymbol   = symbol(`<path d="M9 7L4 12l5 5"/><path d="M4 12h9a5 5 0 0 1 0 10h-2"/>`)
@@ -287,3 +387,7 @@ var (
 	shotSaveSymbol   = symbol(`<path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/>`)
 	shotCloseSymbol  = symbol(`<path d="M6 6l12 12M18 6L6 18"/>`)
 )
+
+// shotMosaicSymbol is a rounded frame holding a 2×2 checker, the same
+// stroke weight as the other tools' glyphs.
+var shotMosaicSymbol = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="M5 5h7v7H5zM12 12h7v7h-7z" fill="currentColor" stroke="none"/></svg>`))

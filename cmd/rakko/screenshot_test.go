@@ -116,7 +116,7 @@ func TestShotCropRectUsesDisplayLocalPixels(t *testing.T) {
 func TestShotToolbarStaysOnDisplay(t *testing.T) {
 	display := mygo.Rectangle{X: 0, Y: 0, Width: 1200, Height: 800}
 	sel := mygo.Rectangle{X: 500, Y: 300, Width: 300, Height: 200}
-	tb := shotToolbarLayout(sel, display)
+	tb := shotToolbarLayout(sel, display, shotToolNone)
 	if tb.rect.Y != sel.Y+sel.Height+8 {
 		t.Fatalf("toolbar did not sit below the selection: %+v", tb.rect)
 	}
@@ -130,16 +130,60 @@ func TestShotToolbarStaysOnDisplay(t *testing.T) {
 	// Below and above both fail for a full-screen selection: it goes
 	// inside the selection's bottom edge.
 	low := mygo.Rectangle{X: 0, Y: 0, Width: 1200, Height: 800}
-	tb = shotToolbarLayout(low, display)
+	tb = shotToolbarLayout(low, display, shotToolNone)
 	if tb.rect.Y < low.Y || tb.rect.Y+tb.rect.Height > low.Y+low.Height {
 		t.Fatalf("toolbar did not fold inside the selection: %+v sel %+v", tb.rect, low)
 	}
 
 	// A selection at the left edge still clamps onto the display.
 	left := mygo.Rectangle{X: 0, Y: 100, Width: 80, Height: 80}
-	tb = shotToolbarLayout(left, display)
+	tb = shotToolbarLayout(left, display, shotToolNone)
 	if tb.rect.X < 8 {
 		t.Fatalf("toolbar clamped off the left edge: %+v", tb.rect)
+	}
+}
+
+func TestShotPropertyBarFollowsTheTool(t *testing.T) {
+	display := mygo.Rectangle{X: 0, Y: 0, Width: 1200, Height: 800}
+	sel := mygo.Rectangle{X: 500, Y: 300, Width: 300, Height: 200}
+	tb := shotToolbarLayout(sel, display, shotToolRect)
+	if !tb.hasProps {
+		t.Fatal("a selected tool has no property bar")
+	}
+	if tb.props.rect.Y != tb.rect.Y+shotToolbarH+shotPropsGap {
+		t.Fatalf("property bar does not hang under the main bar: %+v", tb.props.rect)
+	}
+	if tb.props.rect.X+tb.props.rect.Width != tb.rect.X+tb.rect.Width {
+		t.Fatalf("property bar is not right-aligned with the main bar: %+v", tb.props.rect)
+	}
+	if !shotPointInRect(mygo.Point{X: tb.props.rect.X + 1, Y: tb.props.rect.Y + 1}, display) ||
+		tb.props.rect.Y+tb.props.rect.Height > display.Height-8 {
+		t.Fatalf("property bar left the display: %+v", tb.props.rect)
+	}
+	if got := len(tb.props.items); got != len(shotAnnotationColors)+len(shotAnnotationWidths) {
+		t.Fatalf("property controls = %d", got)
+	}
+	// The mosaic has widths only.
+	mosaic := shotToolbarLayout(sel, display, shotToolMosaic)
+	if got := len(mosaic.props.items); got != len(shotAnnotationWidths) {
+		t.Fatalf("mosaic property controls = %d", got)
+	}
+	for _, it := range mosaic.props.items {
+		if it.kind != shotBarWidth {
+			t.Fatalf("mosaic property bar shows a %v", it.kind)
+		}
+	}
+	// No tool, no property bar.
+	if none := shotToolbarLayout(sel, display, shotToolNone); none.hasProps {
+		t.Fatal("the property bar showed with no tool selected")
+	}
+	// A press in the property bar belongs to the bar, not the selection.
+	pt := mygo.Point{X: tb.props.items[0].rect.X + 2, Y: tb.props.items[0].rect.Y + 2}
+	if !tb.contains(pt) {
+		t.Fatal("the property bar does not absorb presses")
+	}
+	if it, ok := tb.shotBarAt(pt); !ok || it.kind != shotBarColor {
+		t.Fatalf("property hit = %+v, %v", it, ok)
 	}
 }
 
@@ -645,6 +689,69 @@ func TestShotTextSizeFollowsWidth(t *testing.T) {
 	}
 	if got := shotTextSizeFor(shotAnnotationWidths[2]); got != 24 {
 		t.Fatalf("thick text = %v", got)
+	}
+}
+
+func TestShotToolbarClicksSelectAndDeselect(t *testing.T) {
+	shotSeams(t)
+	s := shotTestSession(t, mygo.Rectangle{Width: 300, Height: 200}, 300, 200)
+	s.hasSel = true
+	s.sel = mygo.Rectangle{X: 10, Y: 10, Width: 200, Height: 100}
+	s.tool = shotToolNone
+	s.layoutBar()
+	v := shotTextView(t, s)
+	v.SetLocale("zh-Hans")
+	var arrow mygo.Rectangle
+	for _, it := range s.bar.items {
+		if it.kind == shotBarTool && it.tool == shotToolArrow {
+			arrow = it.rect
+		}
+	}
+	if arrow.Width == 0 {
+		t.Fatal("the toolbar has no arrow control")
+	}
+	cx, cy := float32(arrow.X+arrow.Width/2), float32(arrow.Y+arrow.Height/2)
+	v.ClickAtWith(0, cx, cy)
+	v.Frame()
+	if s.tool != shotToolArrow {
+		t.Fatalf("clicked tool = %v", s.tool)
+	}
+	if !s.bar.hasProps || len(s.bar.props.items) != len(shotAnnotationColors)+len(shotAnnotationWidths) {
+		t.Fatalf("property bar after choosing a tool: %+v", s.bar.props)
+	}
+	// The same control drops the tool and with it the property bar.
+	v.ClickAtWith(0, cx, cy)
+	v.Frame()
+	if s.tool != shotToolNone || s.bar.hasProps {
+		t.Fatalf("second click: tool=%v props=%v", s.tool, s.bar.hasProps)
+	}
+}
+
+func TestShotToolbarTooltipNamesTheControl(t *testing.T) {
+	shotSeams(t)
+	s := shotTestSession(t, mygo.Rectangle{Width: 300, Height: 200}, 300, 200)
+	s.hasSel = true
+	s.sel = mygo.Rectangle{X: 10, Y: 10, Width: 200, Height: 100}
+	s.layoutBar()
+	v := shotTextView(t, s)
+	v.SetLocale("zh-Hans")
+	var mosaic mygo.Rectangle
+	for _, it := range s.bar.items {
+		if it.kind == shotBarTool && it.tool == shotToolMosaic {
+			mosaic = it.rect
+		}
+	}
+	v.Move(float32(mosaic.X+mosaic.Width/2), float32(mosaic.Y+mosaic.Height/2))
+	v.Advance(700 * time.Millisecond)
+	v.Frame()
+	found := false
+	for _, text := range v.Texts() {
+		if text == "马赛克" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("no tooltip after resting on the mosaic button: texts=%v", v.Texts())
 	}
 }
 

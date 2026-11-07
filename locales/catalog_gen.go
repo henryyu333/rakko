@@ -1747,6 +1747,126 @@ func (msgs Messages) ShotCopyButton() string {
 	return Catalog.Format(msgs.locale, "shotCopyButton", nil)
 }
 
+// ShotToolRect says "矩形"
+// in the language the app shows.
+func ShotToolRect() string { return In(i18n.Locale()).ShotToolRect() }
+
+// ShotToolRect says "矩形"
+// in the language of msgs.
+func (msgs Messages) ShotToolRect() string {
+	return Catalog.Format(msgs.locale, "shotToolRect", nil)
+}
+
+// ShotToolArrow says "箭头"
+// in the language the app shows.
+func ShotToolArrow() string { return In(i18n.Locale()).ShotToolArrow() }
+
+// ShotToolArrow says "箭头"
+// in the language of msgs.
+func (msgs Messages) ShotToolArrow() string {
+	return Catalog.Format(msgs.locale, "shotToolArrow", nil)
+}
+
+// ShotToolPen says "画笔"
+// in the language the app shows.
+func ShotToolPen() string { return In(i18n.Locale()).ShotToolPen() }
+
+// ShotToolPen says "画笔"
+// in the language of msgs.
+func (msgs Messages) ShotToolPen() string {
+	return Catalog.Format(msgs.locale, "shotToolPen", nil)
+}
+
+// ShotToolMosaic says "马赛克"
+// in the language the app shows.
+func ShotToolMosaic() string { return In(i18n.Locale()).ShotToolMosaic() }
+
+// ShotToolMosaic says "马赛克"
+// in the language of msgs.
+func (msgs Messages) ShotToolMosaic() string {
+	return Catalog.Format(msgs.locale, "shotToolMosaic", nil)
+}
+
+// ShotToolText says "文字"
+// in the language the app shows.
+func ShotToolText() string { return In(i18n.Locale()).ShotToolText() }
+
+// ShotToolText says "文字"
+// in the language of msgs.
+func (msgs Messages) ShotToolText() string {
+	return Catalog.Format(msgs.locale, "shotToolText", nil)
+}
+
+// ShotToolNumber says "序号"
+// in the language the app shows.
+func ShotToolNumber() string { return In(i18n.Locale()).ShotToolNumber() }
+
+// ShotToolNumber says "序号"
+// in the language of msgs.
+func (msgs Messages) ShotToolNumber() string {
+	return Catalog.Format(msgs.locale, "shotToolNumber", nil)
+}
+
+// ShotActionUndo says "撤销"
+// in the language the app shows.
+func ShotActionUndo() string { return In(i18n.Locale()).ShotActionUndo() }
+
+// ShotActionUndo says "撤销"
+// in the language of msgs.
+func (msgs Messages) ShotActionUndo() string {
+	return Catalog.Format(msgs.locale, "shotActionUndo", nil)
+}
+
+// ShotActionRedo says "重做"
+// in the language the app shows.
+func ShotActionRedo() string { return In(i18n.Locale()).ShotActionRedo() }
+
+// ShotActionRedo says "重做"
+// in the language of msgs.
+func (msgs Messages) ShotActionRedo() string {
+	return Catalog.Format(msgs.locale, "shotActionRedo", nil)
+}
+
+// ShotActionOCR says "识别文字"
+// in the language the app shows.
+func ShotActionOCR() string { return In(i18n.Locale()).ShotActionOCR() }
+
+// ShotActionOCR says "识别文字"
+// in the language of msgs.
+func (msgs Messages) ShotActionOCR() string {
+	return Catalog.Format(msgs.locale, "shotActionOCR", nil)
+}
+
+// ShotActionPin says "钉到桌面"
+// in the language the app shows.
+func ShotActionPin() string { return In(i18n.Locale()).ShotActionPin() }
+
+// ShotActionPin says "钉到桌面"
+// in the language of msgs.
+func (msgs Messages) ShotActionPin() string {
+	return Catalog.Format(msgs.locale, "shotActionPin", nil)
+}
+
+// ShotActionSave says "保存"
+// in the language the app shows.
+func ShotActionSave() string { return In(i18n.Locale()).ShotActionSave() }
+
+// ShotActionSave says "保存"
+// in the language of msgs.
+func (msgs Messages) ShotActionSave() string {
+	return Catalog.Format(msgs.locale, "shotActionSave", nil)
+}
+
+// ShotActionCancel says "取消"
+// in the language the app shows.
+func ShotActionCancel() string { return In(i18n.Locale()).ShotActionCancel() }
+
+// ShotActionCancel says "取消"
+// in the language of msgs.
+func (msgs Messages) ShotActionCancel() string {
+	return Catalog.Format(msgs.locale, "shotActionCancel", nil)
+}
+
 // ShotSource says "截图"
 // in the language the app shows.
 func ShotSource() string { return In(i18n.Locale()).ShotSource() }

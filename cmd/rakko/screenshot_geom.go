@@ -343,8 +343,8 @@ func shotMosaicGridFor(t shotTarget, imgW, imgH, block int) shotMosaicGrid {
 
 // cellAt returns the grid cell holding a global point.
 func (g shotMosaicGrid) cellAt(p mygo.Point) (col, row int) {
-	lx := (float64(p.X-g.t.Bounds.X)) * g.scaleX
-	ly := (float64(p.Y-g.t.Bounds.Y)) * g.scaleY
+	lx := (float64(p.X - g.t.Bounds.X)) * g.scaleX
+	ly := (float64(p.Y - g.t.Bounds.Y)) * g.scaleY
 	return int(math.Floor(lx / float64(g.block))), int(math.Floor(ly / float64(g.block)))
 }
 
@@ -366,7 +366,7 @@ func (g shotMosaicGrid) cellRect(col, row int) mygo.Rectangle {
 	y1 := float64(g.t.Bounds.Y) + float64(r.Max.Y)/g.scaleY
 	return mygo.Rectangle{
 		X: int(math.Round(x0)), Y: int(math.Round(y0)),
-		Width: int(math.Round(x1)) - int(math.Round(x0)),
+		Width:  int(math.Round(x1)) - int(math.Round(x0)),
 		Height: int(math.Round(y1)) - int(math.Round(y0)),
 	}
 }
@@ -491,11 +491,20 @@ func clampInt(v, lo, hi int) int {
 	return min(max(v, lo), hi)
 }
 
-// shotToolbar is where the selection's toolbar sits and every button in
-// it, in global points.
-type shotToolbar struct {
+// shotBarStrip is one row of the selection's toolbar: its frame, its
+// controls in global points, and the x of the dividers between groups.
+type shotBarStrip struct {
 	rect  mygo.Rectangle
 	items []shotBarItem
+	seps  []int
+}
+
+// shotToolbar is the main bar and, while a tool is selected, the property
+// bar under it with the colours and widths that tool uses.
+type shotToolbar struct {
+	shotBarStrip
+	props    shotBarStrip
+	hasProps bool
 }
 
 // shotBarKind names one toolbar control.
@@ -523,73 +532,104 @@ type shotBarItem struct {
 }
 
 const (
-	shotToolbarH   = 42
+	shotToolbarH   = 44
 	shotToolbarPad = 8
-	shotButtonSize = 26
+	shotButtonSize = 28
 	shotButtonGap  = 4
-	shotSwatchSize = 16
-	shotSepW       = 9
+	shotGroupGap   = 12
+	shotSwatchSize = 18
+	shotCopyWidth  = 56
+	shotPropsGap   = 6
 )
 
-// shotToolbarWidth is the toolbar's fixed width: six tools, five colours,
-// three widths, undo/redo, and the five actions with the wider copy button.
-func shotToolbarWidth() int {
-	items := shotToolbarItems(0, 0)
-	maxX := 0
-	for _, it := range items {
-		maxX = max(maxX, it.rect.X+it.rect.Width)
-	}
-	return maxX + shotToolbarPad
-}
-
-// shotToolbarItems lays the controls out from x, y in local terms: x is the
-// toolbar's left edge and y its top. The returned items carry no toolbar
-// rect.
-func shotToolbarItems(x, y int) []shotBarItem {
+// shotMainItems lays the tools and actions out from (x, y): tools, undo
+// and redo, the four actions and the copy button, in four groups.
+func shotMainItems(x, y int) ([]shotBarItem, []int) {
 	var items []shotBarItem
-	cx, cy := x+shotToolbarPad, y+(shotToolbarH-shotButtonSize)/2
+	var seps []int
+	cx := x + shotToolbarPad
+	cy := y + (shotToolbarH-shotButtonSize)/2
 	add := func(kind shotBarKind, tool shotTool, index, w int) {
 		items = append(items, shotBarItem{kind: kind, tool: tool, index: index,
 			rect: mygo.Rectangle{X: cx, Y: cy, Width: w, Height: shotButtonSize}})
 		cx += w + shotButtonGap
 	}
-	sep := func() {
-		cx += shotSepW - shotButtonGap
+	group := func() {
+		if len(items) == 0 {
+			return
+		}
+		last := items[len(items)-1].rect
+		cx = last.X + last.Width + shotGroupGap
+		seps = append(seps, last.X+last.Width+shotGroupGap/2)
 	}
 	for _, tool := range []shotTool{shotToolRect, shotToolArrow, shotToolPen, shotToolMosaic, shotToolText, shotToolNumber} {
 		add(shotBarTool, tool, 0, shotButtonSize)
 	}
-	sep()
-	swatchY := y + (shotToolbarH-shotSwatchSize)/2
-	for i := range shotAnnotationColors {
-		items = append(items, shotBarItem{kind: shotBarColor, index: i,
-			rect: mygo.Rectangle{X: cx, Y: swatchY, Width: shotSwatchSize, Height: shotSwatchSize}})
-		cx += shotSwatchSize + 3
-	}
-	cx += shotSepW - 3
-	for i := range shotAnnotationWidths {
-		items = append(items, shotBarItem{kind: shotBarWidth, index: i,
-			rect: mygo.Rectangle{X: cx, Y: cy, Width: shotSwatchSize, Height: shotButtonSize}})
-		cx += shotSwatchSize + 3
-	}
-	cx += shotSepW - 3
+	group()
 	add(shotBarUndo, shotToolNone, 0, shotButtonSize)
 	add(shotBarRedo, shotToolNone, 0, shotButtonSize)
-	sep()
+	group()
 	add(shotBarOCR, shotToolNone, 0, shotButtonSize)
 	add(shotBarPin, shotToolNone, 0, shotButtonSize)
 	add(shotBarSave, shotToolNone, 0, shotButtonSize)
 	add(shotBarCancel, shotToolNone, 0, shotButtonSize)
+	group()
 	// The copy button is the primary action: wider, with its word.
-	add(shotBarCopy, shotToolNone, 0, 54)
-	return items
+	add(shotBarCopy, shotToolNone, 0, shotCopyWidth)
+	return items, seps
+}
+
+// shotPropertyItems lays the selected tool's colours and widths out from
+// (x, y). The mosaic has no colour; every other tool has both.
+func shotPropertyItems(x, y int, tool shotTool) ([]shotBarItem, []int) {
+	if tool == shotToolNone {
+		return nil, nil
+	}
+	var items []shotBarItem
+	var seps []int
+	cx := x + shotToolbarPad
+	cy := y + (shotToolbarH-shotButtonSize)/2
+	add := func(kind shotBarKind, index int) {
+		items = append(items, shotBarItem{kind: kind, index: index,
+			rect: mygo.Rectangle{X: cx, Y: cy, Width: shotButtonSize, Height: shotButtonSize}})
+		cx += shotButtonSize + shotButtonGap
+	}
+	if tool != shotToolMosaic {
+		for i := range shotAnnotationColors {
+			add(shotBarColor, i)
+		}
+		last := items[len(items)-1].rect
+		seps = append(seps, last.X+last.Width+shotGroupGap/2)
+		cx = last.X + last.Width + shotGroupGap
+	}
+	for i := range shotAnnotationWidths {
+		add(shotBarWidth, i)
+	}
+	return items, seps
+}
+
+// shotBarExtent is a bar's width: its last control plus the outer padding.
+func shotBarExtent(items []shotBarItem, x int) int {
+	if len(items) == 0 {
+		return 0
+	}
+	last := items[len(items)-1].rect
+	return last.X + last.Width - x + shotToolbarPad
+}
+
+// shotPropertyWidth is the property bar's width for a tool.
+func shotPropertyWidth(tool shotTool) int {
+	items, _ := shotPropertyItems(0, 0, tool)
+	return shotBarExtent(items, 0)
 }
 
 // shotToolbarLayout places the toolbar for sel inside display: below the
 // selection, right-aligned, flipped above when it does not fit, then
 // inside the selection's bottom edge, and always clamped onto the display.
-func shotToolbarLayout(sel, display mygo.Rectangle) shotToolbar {
-	w := shotToolbarWidth()
+// The property bar follows the same rules right under the main bar.
+func shotToolbarLayout(sel, display mygo.Rectangle, tool shotTool) shotToolbar {
+	items, _ := shotMainItems(0, 0)
+	w := shotBarExtent(items, 0)
 	margin := 8
 	x := sel.X + sel.Width - w
 	y := sel.Y + sel.Height + margin
@@ -601,25 +641,48 @@ func shotToolbarLayout(sel, display mygo.Rectangle) shotToolbar {
 	}
 	x = clampInt(x, display.X+margin, max(display.X+margin, display.X+display.Width-margin-w))
 	y = clampInt(y, display.Y+margin, max(display.Y+margin, display.Y+display.Height-margin-shotToolbarH))
-	rect := mygo.Rectangle{X: x, Y: y, Width: w, Height: shotToolbarH}
-	return shotToolbar{rect: rect, items: shotToolbarItems(x, y)}
+	tb := shotToolbar{shotBarStrip: shotBarStrip{rect: mygo.Rectangle{X: x, Y: y, Width: w, Height: shotToolbarH}}}
+	tb.items, tb.seps = shotMainItems(x, y)
+	if tool != shotToolNone {
+		pw := shotPropertyWidth(tool)
+		px := x + w - pw
+		py := y + shotToolbarH + shotPropsGap
+		if py+shotToolbarH > display.Y+display.Height-margin {
+			py = y - shotPropsGap - shotToolbarH
+		}
+		px = clampInt(px, display.X+margin, max(display.X+margin, display.X+display.Width-margin-pw))
+		py = clampInt(py, display.Y+margin, max(display.Y+margin, display.Y+display.Height-margin-shotToolbarH))
+		tb.hasProps = true
+		tb.props = shotBarStrip{rect: mygo.Rectangle{X: px, Y: py, Width: pw, Height: shotToolbarH}}
+		tb.props.items, tb.props.seps = shotPropertyItems(px, py, tool)
+	}
+	return tb
+}
+
+// contains reports whether p is on either bar, so a press in a gap never
+// reaches the selection behind it.
+func (tb shotToolbar) contains(p mygo.Point) bool {
+	if shotPointInRect(p, tb.rect) {
+		return true
+	}
+	return tb.hasProps && shotPointInRect(p, tb.props.rect)
 }
 
 // shotBarAt returns the control under p, if any.
 func (tb shotToolbar) shotBarAt(p mygo.Point) (shotBarItem, bool) {
-	if !shotPointInRect(p, tb.rect) {
+	search := func(strip shotBarStrip) (shotBarItem, bool) {
+		for _, it := range strip.items {
+			if shotPointInRect(p, it.rect) {
+				return it, true
+			}
+		}
 		return shotBarItem{}, false
 	}
-	for _, it := range tb.items {
-		// The width dots and colour swatches are small; give them a
-		// fingertip-sized target without moving what they draw.
-		r := it.rect
-		if it.kind == shotBarColor || it.kind == shotBarWidth {
-			r = mygo.Rectangle{X: r.X - 3, Y: tb.rect.Y + 3, Width: r.Width + 6, Height: tb.rect.Height - 6}
-		}
-		if shotPointInRect(p, r) {
-			return it, true
-		}
+	if shotPointInRect(p, tb.rect) {
+		return search(tb.shotBarStrip)
+	}
+	if tb.hasProps && shotPointInRect(p, tb.props.rect) {
+		return search(tb.props)
 	}
 	return shotBarItem{}, false
 }
