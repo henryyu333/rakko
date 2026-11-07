@@ -150,6 +150,9 @@ const (
 	// nsStatusWindowLevel is the overlay's resting level; the exported
 	// names live in overlay_hit.go next to the other band levels.
 	nsStatusWindowLevel = StatusWindowLevel
+	// nsScreenSaverWindowLevel is NSScreenSaverWindowLevel, above the menu
+	// bar (24) and the Dock: the screenshot overlay must cover everything.
+	nsScreenSaverWindowLevel = 1000
 
 	collectionCanJoinAllSpaces    = 1 << 0
 	collectionTransient           = 1 << 3
@@ -687,6 +690,37 @@ func ConfigureOverlayWindow(window uintptr) {
 		}
 		send(w, "setIgnoresMouseEvents:", 0)
 		registerOverlayDropTypes(w)
+	})
+}
+
+// ConfigureCaptureWindow turns a window into the screenshot overlay: a
+// borderless nonactivating panel at NSScreenSaverWindowLevel, above the
+// menu bar and the Dock, on every Space, with no opening animation. Unlike
+// the shelf's resting overlay it must take the keyboard (Esc, ⌘C, text
+// entry), which the MyGoPanel class already allows; nothing here refuses
+// key status. Main thread only.
+func ConfigureCaptureWindow(window uintptr) {
+	if window == 0 {
+		return
+	}
+	if err := Init(); err != nil {
+		return
+	}
+	withPool(func() {
+		w := id(window)
+		send(w, "setStyleMask:", nsWindowStyleMaskNonactivatingPanel)
+		send(w, "setLevel:", nsScreenSaverWindowLevel)
+		send(w, "setAnimationBehavior:", 0) // NSWindowAnimationBehaviorDefault
+		send(w, "setHasShadow:", 0)
+		send(w, "setHidesOnDeactivate:", 0)
+		send(w, "setMovable:", 0)
+		send(w, "setOpaque:", 0)
+		send(w, "setBackgroundColor:", uintptr(send(class("NSColor"), "clearColor")))
+		send(w, "setCollectionBehavior:", notchCollectionBehavior)
+		if send(w, "respondsToSelector:", uintptr(sel("setFloatingPanel:"))) != 0 {
+			send(w, "setFloatingPanel:", 1)
+		}
+		send(w, "setIgnoresMouseEvents:", 0)
 	})
 }
 

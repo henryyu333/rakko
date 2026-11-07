@@ -27,6 +27,7 @@ var (
 	windowOwnerPIDKey   id
 	windowLayerKey      id
 	windowNameKey       id
+	windowNumberKey     id
 	windowListOnce      sync.Once
 	windowListErr       error
 )
@@ -68,6 +69,7 @@ func loadWindowList() error {
 			"kCGWindowOwnerPID": &windowOwnerPIDKey,
 			"kCGWindowLayer":    &windowLayerKey,
 			"kCGWindowName":     &windowNameKey,
+			"kCGWindowNumber":   &windowNumberKey,
 		} {
 			keyAddr, err := purego.Dlsym(libCG, name)
 			if err != nil {
@@ -121,6 +123,66 @@ func WindowScreenRect(num int) (r NSRect, ok bool) {
 		}
 	})
 	return r, ok
+}
+
+// ScreenWindow is one ordinary on-screen window as WindowServer reports
+// it: the window's CGWindowID, its owner's process, and its bounds in MyGo
+// top-left screen coordinates. The list NormalWindows returns is in the
+// front-to-back order WindowServer hit-tests in.
+type ScreenWindow struct {
+	Number int
+	PID    int
+	Bounds NSRect
+}
+
+// NormalWindows lists the ordinary on-screen windows (layer 0) of other
+// processes, frontmost first. The screenshot overlay uses it to highlight
+// and pick the window under the pointer. Read-only; needs no permission
+// beyond what listing windows already needs, and returns nothing useful
+// when WindowServer withholds other apps' windows. Main thread only.
+func NormalWindows() []ScreenWindow {
+	if err := Init(); err != nil {
+		return nil
+	}
+	if err := loadWindowList(); err != nil {
+		return nil
+	}
+	self := os.Getpid()
+	var out []ScreenWindow
+	withPool(func() {
+		list := windowListCopy(kCGWindowListOptionOnScreenOnly|kCGWindowListExcludeDesktopElements, 0)
+		if list == 0 {
+			return
+		}
+		defer cfReleaseWL(uintptr(list))
+		for i, n := 0, cfArrayCount(list); i < n; i++ {
+			dict := cfArrayValueAtIndex(list, i)
+			if dict == 0 {
+				continue
+			}
+			pid := sendInt(cfDictGetValue(dict, windowOwnerPIDKey), "intValue")
+			if pid == self {
+				continue
+			}
+			if sendInt(cfDictGetValue(dict, windowLayerKey), "intValue") != kCGWindowListNormalWindowLayer {
+				continue
+			}
+			bounds := cfDictGetValue(dict, windowBoundsKey)
+			if bounds == 0 {
+				continue
+			}
+			var r NSRect
+			if !rectFromDict(bounds, &r) || r.Size.Width <= 0 || r.Size.Height <= 0 {
+				continue
+			}
+			number := 0
+			if num := cfDictGetValue(dict, windowNumberKey); num != 0 {
+				number = sendInt(num, "intValue")
+			}
+			out = append(out, ScreenWindow{Number: number, PID: pid, Bounds: r})
+		}
+	})
+	return out
 }
 
 // ScreenCaptureGrantedByWindowTitles reports whether WindowServer returns
