@@ -1185,6 +1185,7 @@ func (a *shelf) show(edge bool) {
 	// envelope): raise it to the envelope the whole panel fits in now,
 	// while nothing of the opening is drawn yet, so no spring resizes it.
 	a.beginSurfaceHold()
+	a.contentFrom = a.fx.revealK
 	prevFrame := a.frame
 	a.syncMousePassThrough()
 	a.syncDragGuard()
@@ -1436,6 +1437,10 @@ func (a *shelf) hide(exit hideExit) {
 	a.snap.panel = false
 	a.snap.wasOpen, a.snap.prevLevel = false, 0
 	a.closeAt = time.Now()
+	// The fade starts from what the content shows now: a close issued in
+	// the middle of an opening must not flash the page to full opacity
+	// before it fades.
+	a.closeFrom = a.fx.revealK
 	// 收起也复位层级进度：二级收起后 fx.levelK 若停在 1，下一次打开一级
 	// 的第一帧仍会按二级壳开窗（451pt），在菜单栏图标上方压一层透明窗。
 	// 绘制通道由 jumpLevel 在下一帧直接落位，这里同步帧几何读到的值。
@@ -1484,6 +1489,7 @@ func (a *shelf) hide(exit hideExit) {
 // opening starts on the island's default face with no search or edit.
 func (a *shelf) finishClose() {
 	a.closeAt = time.Time{}
+	a.closeFrom, a.contentFrom = 0, 0
 	a.focusMode, a.tab, a.tabFrom, a.search, a.reveal = false, pageTray, pageTray, "", ""
 	a.resetHomeSearch()
 	a.tabAt = time.Time{}

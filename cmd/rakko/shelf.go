@@ -47,6 +47,7 @@ type shelf struct {
 	level                                                       int       // drawn level: 1 search bar (76), 2 page (250)
 	jumpLevel                                                   bool      // the next frame snaps the level spring (fresh open)
 	closeAt                                                     time.Time // when hide started the content fade; zero = none
+	closeFrom, contentFrom                                      float32   // content opacity a fade-out starts from, and an opening fades in from
 	settings                                                    settings.Settings
 	locale                                                      string // language the native surfaces say (tray, menus, dialogs); "" = source
 	modules                                                     []module

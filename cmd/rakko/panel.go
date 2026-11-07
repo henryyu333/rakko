@@ -602,7 +602,9 @@ func (a *shelf) view(c *ui.Context) {
 		closeK = 1
 	case !a.closeAt.IsZero():
 		if e := now.Sub(a.closeAt); e < closeFade {
-			closeK = 1 - float32(e)/float32(closeFade)
+			// The fade starts where the content was drawn: an opening cut
+			// short dims from its own opacity instead of flashing to full.
+			closeK = a.closeFrom * (1 - float32(e)/float32(closeFade))
 		}
 	}
 	expanded := closeK > 0
@@ -850,14 +852,17 @@ func (a *shelf) view(c *ui.Context) {
 		// one place.
 		clip.Translate(shift, 0)
 		reduce := c.Preferences().ReduceMotion
-		reveal := contentK
+		// Opening continues from the opacity the content was drawn at — a
+		// reopen before the close fade ended keeps the page visible
+		// instead of blinking it out to fade in again.
+		reveal := a.contentFrom + (1-a.contentFrom)*contentK
 		if !a.visible && closeK > 0 {
 			reveal = closeK
 		}
 		a.fx.revealK = reveal
 		scale := float32(1)
 		if a.visible && !reduce {
-			scale = 0.96 + 0.04*contentK
+			scale = 0.96 + 0.04*reveal
 		}
 		up := a.shellUp()
 		contentH := a.pageShellH()
