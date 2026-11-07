@@ -286,13 +286,17 @@ func (s *shotSession) install(results []shotCapture, elapsedMS int64) {
 	shotActivateSelf()
 	// Activation can re-order the app's other windows (the notch shell at
 	// its status level, a Settings window). Re-front each overlay in its
-	// own (screen-saver) band before taking the keyboard.
-	for _, d := range s.displays {
-		if d.win != nil {
-			mac.SetWindowLevel(d.win.NativeHandle(), mac.CaptureWindowLevel)
-			mac.OrderOverlayFront(d.win.NativeHandle())
-		}
-	}
+	// own (screen-saver) band before taking the keyboard; AppKit may apply
+	// its own floating level once the run loop turns, so assert it again a
+	// moment later.
+	s.assertCaptureLevel()
+	time.AfterFunc(30*time.Millisecond, func() {
+		mygo.RunOnMain(func() {
+			if !s.closed {
+				s.assertCaptureLevel()
+			}
+		})
+	})
 	if w := s.displays[active].win; w != nil {
 		w.Focus()
 	}
@@ -370,6 +374,17 @@ func (s *shotSession) openWindow(di int) {
 	// front; the capture band must be the last word.
 	mac.SetWindowLevel(h, mac.CaptureWindowLevel)
 	d.win = w
+}
+
+// assertCaptureLevel puts every overlay in the screen-saver band and brings
+// it to the front of that band. Main thread only.
+func (s *shotSession) assertCaptureLevel() {
+	for _, d := range s.displays {
+		if d.win != nil {
+			mac.SetWindowLevel(d.win.NativeHandle(), mac.CaptureWindowLevel)
+			mac.OrderOverlayFront(d.win.NativeHandle())
+		}
+	}
 }
 
 // overlayView draws one display. The whole overlay is a single element:
