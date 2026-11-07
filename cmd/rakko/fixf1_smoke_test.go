@@ -189,10 +189,13 @@ func TestFixFToolsMusicCardShots(t *testing.T) {
 	onMain(func() { p.scroll.Y = 0; a.win.Invalidate() })
 	time.Sleep(250 * time.Millisecond)
 	// The card's rail, in window coordinates: the tester lays the same view
-	// out in the window's content box.
+	// out in the window's canvas, which the open panel keeps at the session
+	// envelope's size (wider and taller than the page itself).
 	var rail ui.Rect
+	var frame mygo.Rectangle
 	onMain(func() {
-		view := ui.NewTester(a.view, sheetW, panelTestH)
+		frame = a.frame
+		view := ui.NewTester(a.view, frame.Width, frame.Height)
 		if r, ok := view.Find("播放进度"); ok {
 			rail = r
 		}
@@ -200,8 +203,6 @@ func TestFixFToolsMusicCardShots(t *testing.T) {
 	if rail.W <= 0 {
 		t.Fatal("the 2×2 card drew no progress rail")
 	}
-	var frame mygo.Rectangle
-	onMain(func() { frame = a.frame })
 	if x, y := float64(frame.X)+float64(rail.X+rail.W/2), float64(frame.Y)+float64(rail.Y+rail.H/2); x > 0 && y > 0 {
 		// A real pointer over the rail: the knob shows on hover.
 		postMouse(t, x, y, 5)

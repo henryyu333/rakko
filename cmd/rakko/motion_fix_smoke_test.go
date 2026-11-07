@@ -419,10 +419,10 @@ func TestSmokeSettledPanelBottomMarginPassesThrough(t *testing.T) {
 			})
 			t.Cleanup(func() { motionClosed(a) })
 			time.Sleep(850 * time.Millisecond)
-			var below, side, top *mygo.Window
+			var below, side *mygo.Window
 			var frame, exact mygo.Rectangle
 			var belowPoint, leftPoint, rightPoint, topPoint mygo.Point
-			var shelfNum, belowNum, sideNum, topNum, targetH, shellBottom, shellLeft, shellRight int
+			var shelfNum, belowNum, sideNum, targetH, shellBottom, shellLeft, shellRight int
 			var moving bool
 			onMain(func() {
 				if a.winH == 0 {
@@ -463,22 +463,12 @@ func TestSmokeSettledPanelBottomMarginPassesThrough(t *testing.T) {
 				side.ShowInactive()
 				mac.SetWindowLevel(side.NativeHandle(), mac.StatusWindowLevel-1)
 				sideNum = mac.WindowNumber(side.NativeHandle())
-				top = mygo.NewWindow(mygo.WindowOptions{
-					Title: "ShelfU menu-bar click receiver", Width: 40, Height: 40,
-					Hidden: true, Frameless: true, DisableShadow: true, Panel: true, SkipTaskbar: true,
-					Content: ui.View(func(c *ui.Context) { ui.Text(c, "Receiver") }),
-				})
-				mac.SetWindowFrame(top.NativeHandle(), topPoint.X-20, topPoint.Y-20, 40, 40)
-				top.ShowInactive()
-				mac.SetWindowLevel(top.NativeHandle(), mac.StatusWindowLevel-1)
-				topNum = mac.WindowNumber(top.NativeHandle())
 				shelfNum = mac.WindowNumber(a.winH)
 			})
-			if below == nil || side == nil || top == nil {
+			if below == nil || side == nil {
 				t.Fatal("no native receiver")
 			}
 			t.Cleanup(func() {
-				onMain(top.Close)
 				onMain(side.Close)
 				onMain(below.Close)
 			})
@@ -500,8 +490,8 @@ func TestSmokeSettledPanelBottomMarginPassesThrough(t *testing.T) {
 					hit = mac.WindowAtPoint(float64(p.X), float64(p.Y), screenH)
 				})
 				if hit != want {
-					t.Errorf("%s at (%d,%d): target=%d want %d (ShelfU=%d below=%d side=%d top=%d frame=%+v)",
-						name, p.X, p.Y, hit, want, shelfNum, belowNum, sideNum, topNum, frame)
+					t.Errorf("%s at (%d,%d): target=%d want %d (ShelfU=%d below=%d side=%d frame=%+v)",
+						name, p.X, p.Y, hit, want, shelfNum, belowNum, sideNum, frame)
 				}
 			}
 			// Acceptance is pointer-gated per frame (overlayAcceptsMouse):
@@ -513,7 +503,22 @@ func TestSmokeSettledPanelBottomMarginPassesThrough(t *testing.T) {
 			probe("below frame", belowPoint, belowNum)
 			probe("left margin", leftPoint, sideNum)
 			probe("right margin", rightPoint, sideNum)
-			probe("menu-bar margin", topPoint, topNum)
+			// The menu-bar row belongs to the menu bar (or whichever status
+			// item is there), not to a test window: the only thing this row
+			// must prove is that the overlay lets the press through.
+			var topHit int
+			onMain(func() {
+				cursorPoint = func() mygo.Point { return topPoint }
+				a.syncMousePassThrough()
+			})
+			time.Sleep(150 * time.Millisecond)
+			onMain(func() {
+				screenH := float64(a.dispBounds.Y + a.dispBounds.Height)
+				topHit = mac.WindowAtPoint(float64(topPoint.X), float64(topPoint.Y), screenH)
+			})
+			if topHit == shelfNum {
+				t.Errorf("menu-bar margin at (%d,%d): the overlay took the press (window %d)", topPoint.X, topPoint.Y, topHit)
+			}
 			if moving || frame.Height < exact.Height || frame.Width < exact.Width {
 				t.Errorf("settled native frame %+v does not cover the panel's box %+v (moving=%v)", frame, exact, moving)
 			}
