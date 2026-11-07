@@ -1647,6 +1647,116 @@ func (msgs Messages) ItemCaptureText() string {
 	return Catalog.Format(msgs.locale, "itemCaptureText", nil)
 }
 
+// ItemScreenshot says "截图"
+// in the language the app shows.
+func ItemScreenshot() string { return In(i18n.Locale()).ItemScreenshot() }
+
+// ItemScreenshot says "截图"
+// in the language of msgs.
+func (msgs Messages) ItemScreenshot() string {
+	return Catalog.Format(msgs.locale, "itemScreenshot", nil)
+}
+
+// CardShot says "截图"
+// in the language the app shows.
+func CardShot() string { return In(i18n.Locale()).CardShot() }
+
+// CardShot says "截图"
+// in the language of msgs.
+func (msgs Messages) CardShot() string {
+	return Catalog.Format(msgs.locale, "cardShot", nil)
+}
+
+// SettingsShortcutScreenshot says "截图"
+// in the language the app shows.
+func SettingsShortcutScreenshot() string { return In(i18n.Locale()).SettingsShortcutScreenshot() }
+
+// SettingsShortcutScreenshot says "截图"
+// in the language of msgs.
+func (msgs Messages) SettingsShortcutScreenshot() string {
+	return Catalog.Format(msgs.locale, "settingsShortcutScreenshot", nil)
+}
+
+// ShotPermissionTitle says "截图需要「屏幕录制」权限"
+// in the language the app shows.
+func ShotPermissionTitle() string { return In(i18n.Locale()).ShotPermissionTitle() }
+
+// ShotPermissionTitle says "截图需要「屏幕录制」权限"
+// in the language of msgs.
+func (msgs Messages) ShotPermissionTitle() string {
+	return Catalog.Format(msgs.locale, "shotPermissionTitle", nil)
+}
+
+// ShotCopied says "截图已复制"
+// in the language the app shows.
+func ShotCopied() string { return In(i18n.Locale()).ShotCopied() }
+
+// ShotCopied says "截图已复制"
+// in the language of msgs.
+func (msgs Messages) ShotCopied() string {
+	return Catalog.Format(msgs.locale, "shotCopied", nil)
+}
+
+// ShotSaved says "截图已保存"
+// in the language the app shows.
+func ShotSaved() string { return In(i18n.Locale()).ShotSaved() }
+
+// ShotSaved says "截图已保存"
+// in the language of msgs.
+func (msgs Messages) ShotSaved() string {
+	return Catalog.Format(msgs.locale, "shotSaved", nil)
+}
+
+// ShotFileNamePrefix says "截屏"
+// in the language the app shows.
+func ShotFileNamePrefix() string { return In(i18n.Locale()).ShotFileNamePrefix() }
+
+// ShotFileNamePrefix says "截屏"
+// in the language of msgs.
+func (msgs Messages) ShotFileNamePrefix() string {
+	return Catalog.Format(msgs.locale, "shotFileNamePrefix", nil)
+}
+
+// ShotFileNameAt says " "
+// in the language the app shows.
+func ShotFileNameAt() string { return In(i18n.Locale()).ShotFileNameAt() }
+
+// ShotFileNameAt says " "
+// in the language of msgs.
+func (msgs Messages) ShotFileNameAt() string {
+	return Catalog.Format(msgs.locale, "shotFileNameAt", nil)
+}
+
+// ShotPinTitle says "Rakko 截图"
+// in the language the app shows.
+func ShotPinTitle() string { return In(i18n.Locale()).ShotPinTitle() }
+
+// ShotPinTitle says "Rakko 截图"
+// in the language of msgs.
+func (msgs Messages) ShotPinTitle() string {
+	return Catalog.Format(msgs.locale, "shotPinTitle", nil)
+}
+
+// ShotCopyButton says "复制"
+// in the language the app shows.
+func ShotCopyButton() string { return In(i18n.Locale()).ShotCopyButton() }
+
+// ShotCopyButton says "复制"
+// in the language of msgs.
+func (msgs Messages) ShotCopyButton() string {
+	return Catalog.Format(msgs.locale, "shotCopyButton", nil)
+}
+
+// ShotSource says "截图"
+// in the language the app shows.
+func ShotSource() string { return In(i18n.Locale()).ShotSource() }
+
+// ShotSource says "截图"
+// in the language of msgs.
+func (msgs Messages) ShotSource() string {
+	return Catalog.Format(msgs.locale, "shotSource", nil)
+}
+
 // ItemCompressTo says "压缩到"
 // in the language the app shows.
 func ItemCompressTo() string { return In(i18n.Locale()).ItemCompressTo() }
@@ -7453,4 +7563,24 @@ func SettingsPermStatusMissing(count int) string {
 // in the language of msgs.
 func (msgs Messages) SettingsPermStatusMissing(count int) string {
 	return Catalog.Format(msgs.locale, "settingsPermStatusMissing", map[string]any{"count": count})
+}
+
+// ShotSaveButton says "保存"
+// in the language the app shows.
+func ShotSaveButton() string { return In(i18n.Locale()).ShotSaveButton() }
+
+// ShotSaveButton says "保存"
+// in the language of msgs.
+func (msgs Messages) ShotSaveButton() string {
+	return Catalog.Format(msgs.locale, "shotSaveButton", nil)
+}
+
+// ShotFailed says "截图失败"
+// in the language the app shows.
+func ShotFailed() string { return In(i18n.Locale()).ShotFailed() }
+
+// ShotFailed says "截图失败"
+// in the language of msgs.
+func (msgs Messages) ShotFailed() string {
+	return Catalog.Format(msgs.locale, "shotFailed", nil)
 }

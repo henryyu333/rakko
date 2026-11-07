@@ -109,10 +109,11 @@ type WeeklySettings struct {
 // its default (see Default); an explicit empty string turns that shortcut
 // off, which is what Delete in the Settings window saves.
 type ShortcutSettings struct {
-	Toggle    string `json:"toggle"`
-	Clipboard string `json:"clipboard"`
-	Capture   string `json:"capture"`
-	Tray      string `json:"tray"`
+	Toggle     string `json:"toggle"`
+	Clipboard  string `json:"clipboard"`
+	Capture    string `json:"capture"`
+	Screenshot string `json:"screenshot"`
+	Tray       string `json:"tray"`
 	// PlayPause, Previous and Next drive the system's now-playing app.
 	PlayPause string `json:"playPause"`
 	Previous  string `json:"previous"`
@@ -132,10 +133,11 @@ type ShortcutSettings struct {
 // The shortcut defaults: the tray toggle, clipboard search and text
 // capture ship set; every other shortcut has none.
 const (
-	DefaultShortcutToggle    = "Ctrl+Alt+Space"
-	DefaultShortcutClipboard = "Ctrl+Alt+V"
-	DefaultShortcutCapture   = "Ctrl+Alt+O"
-	DefaultShortcutTray      = ""
+	DefaultShortcutToggle     = "Ctrl+Alt+Space"
+	DefaultShortcutClipboard  = "Ctrl+Alt+V"
+	DefaultShortcutCapture    = "Ctrl+Alt+O"
+	DefaultShortcutScreenshot = "Ctrl+Alt+A"
+	DefaultShortcutTray       = ""
 )
 
 // IslandPos is the floating island's place on one display: the shell's
@@ -343,10 +345,11 @@ func Default() Settings {
 		Pet:         PetSettings{Shown: true, Size: PetSizeMedium},
 		Weekly:      WeeklySettings{AppStats: false},
 		Shortcuts: ShortcutSettings{
-			Toggle:    DefaultShortcutToggle,
-			Clipboard: DefaultShortcutClipboard,
-			Capture:   DefaultShortcutCapture,
-			Tray:      DefaultShortcutTray,
+			Toggle:     DefaultShortcutToggle,
+			Clipboard:  DefaultShortcutClipboard,
+			Capture:    DefaultShortcutCapture,
+			Screenshot: DefaultShortcutScreenshot,
+			Tray:       DefaultShortcutTray,
 		},
 	}
 }

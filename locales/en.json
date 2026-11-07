@@ -159,6 +159,17 @@
   "itemExcludedApp": "No longer recording from “{app}”",
   "itemUnreadable": "None of the selected items can be read",
   "itemCaptureText": "Capture Text",
+  "itemScreenshot": "Screenshot",
+  "cardShot": "Screenshot",
+  "settingsShortcutScreenshot": "Screenshot",
+  "shotPermissionTitle": "Screenshot needs Screen Recording permission",
+  "shotCopied": "Screenshot copied",
+  "shotSaved": "Screenshot saved",
+  "shotFileNamePrefix": "Screenshot",
+  "shotFileNameAt": " at ",
+  "shotPinTitle": "Rakko Screenshot",
+  "shotCopyButton": "Copy",
+  "shotSource": "Screenshot",
   "itemCompressTo": "Compress to",
   "itemCompressUnder": "Under {size}",
   "pinAlways": "Always Expanded",
@@ -732,5 +743,7 @@
   "settingsRetentionCaption": "Pinned items are never removed",
   "settingsNotchNav": "Appearance",
   "settingsPermStatusOn": "All Permissions On",
-  "settingsPermStatusMissing": "{count, plural, one {One Permission Missing} other {{count, number, ::group-off} Permissions Missing}}"
+  "settingsPermStatusMissing": "{count, plural, one {One Permission Missing} other {{count, number, ::group-off} Permissions Missing}}",
+  "shotSaveButton": "Save",
+  "shotFailed": "Screenshot failed"
 }

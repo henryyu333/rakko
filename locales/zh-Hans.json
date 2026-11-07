@@ -159,6 +159,17 @@
   "itemExcludedApp": "已不再记录来自「{app}」的内容",
   "itemUnreadable": "选中的项目都已无法读取",
   "itemCaptureText": "框选文字",
+  "itemScreenshot": "截图",
+  "cardShot": "截图",
+  "settingsShortcutScreenshot": "截图",
+  "shotPermissionTitle": "截图需要「屏幕录制」权限",
+  "shotCopied": "截图已复制",
+  "shotSaved": "截图已保存",
+  "shotFileNamePrefix": "截屏",
+  "shotFileNameAt": " ",
+  "shotPinTitle": "Rakko 截图",
+  "shotCopyButton": "复制",
+  "shotSource": "截图",
   "itemCompressTo": "压缩到",
   "itemCompressUnder": "{size} 以内",
   "pinAlways": "始终展开",
@@ -732,5 +743,7 @@
   "settingsRetentionCaption": "置顶的项目不会清理",
   "settingsNotchNav": "外形与提示",
   "settingsPermStatusOn": "系统权限已全部开启",
-  "settingsPermStatusMissing": "还差 {count, number, ::group-off} 项权限"
+  "settingsPermStatusMissing": "还差 {count, number, ::group-off} 项权限",
+  "shotSaveButton": "保存",
+  "shotFailed": "截图失败"
 }
