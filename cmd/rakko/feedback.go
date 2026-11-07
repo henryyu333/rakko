@@ -100,6 +100,7 @@ type shellMotion struct {
 	resultsH           float32 // the drawn results sheet's height under the search bar (0 = none)
 	navK               float32 // how far the page capsule is shown: 0 hidden, 1 settled
 	homeW              float32 // the drawn search bar's width (0 = not drawn yet)
+	revealK            float32 // the content's drawn opacity: the open spring's, or the close fade's
 	peekKind           peekKind
 	openMoving         bool // the opening spring has not come to rest
 	sizeMoving         bool // a peek-shape morph has not come to rest

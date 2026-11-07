@@ -349,12 +349,23 @@ func (a *shelf) sheetTop() int {
 	return top
 }
 
+// frameTrace, when a test sets it, sees every frame the overlay built: the
+// canvas the frame was laid out in and the native frame at that moment. Nil
+// in production.
+var frameTrace func(canvasW, canvasH float32, native mygo.Rectangle)
+
 // view 画三种状态：空闲（完全不可见）、探头（悬停播放器、下拉箭头或拖拽
 // 提示）、展开（纯黑面板从刘海里长出来）。单元测试里 a.win 为 nil，
 // 直接按完整展开态渲染。
 func (a *shelf) view(c *ui.Context) {
 	a.buildingView = true
-	defer func() { a.buildingView = false }()
+	defer func() {
+		a.buildingView = false
+		if frameTrace != nil && a.win != nil {
+			w, h := c.Size()
+			frameTrace(w, h, a.win.Bounds())
+		}
+	}()
 	// A page that got switched off (or a stale id) must not stay current:
 	// fold back to the tray before anything reads a.tab.
 	a.normalizeTab()
@@ -595,6 +606,7 @@ func (a *shelf) view(c *ui.Context) {
 		}
 	}
 	expanded := closeK > 0
+	a.fx.revealK = 0
 	closing := !a.visible && openK > 0
 	// The drop zone's file snapshot runs before anything is laid out so
 	// the panel already shows the zone on the frame it appears.
@@ -828,6 +840,7 @@ func (a *shelf) view(c *ui.Context) {
 		if !a.visible && closeK > 0 {
 			reveal = closeK
 		}
+		a.fx.revealK = reveal
 		scale := float32(1)
 		if a.visible && !reduce {
 			scale = 0.96 + 0.04*contentK
