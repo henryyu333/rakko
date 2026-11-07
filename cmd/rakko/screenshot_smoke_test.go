@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ebitengine/purego"
 	"github.com/egoist/mygo"
 
 	"rakko/internal/mac"
@@ -89,20 +90,25 @@ func TestScreenshotSmokeOverlay(t *testing.T) {
 	if num == 0 {
 		t.Fatal("overlay window has no CGWindowID")
 	}
+	for _, w := range ownSmokeWindows(t) {
+		if w.ID == num {
+			t.Logf("overlay in WindowServer: %+v", w)
+		}
+	}
 	t.Logf("overlay display %d: bounds=%+v pix=%dx%d window=%d capture=%dms", od.ID, od.Bounds, od.pixW, od.pixH, num, s.captureMS)
 
 	// Real HID drag inside the display: move, press, drag, release.
 	target := mygo.Rectangle{X: d.Bounds.X + w/4, Y: d.Bounds.Y + h/4, Width: w / 3, Height: h / 3}
-	postIslandMouse(t, float64(target.X), float64(target.Y), 5)
+	postShotMouse(t, float64(target.X), float64(target.Y), num, 5)
 	time.Sleep(150 * time.Millisecond)
-	postIslandMouse(t, float64(target.X), float64(target.Y), 1)
+	postShotMouse(t, float64(target.X), float64(target.Y), num, 1)
 	for i := 1; i <= 8; i++ {
-		postIslandMouse(t,
+		postShotMouse(t,
 			float64(target.X)+float64(target.Width)*float64(i)/8,
-			float64(target.Y)+float64(target.Height)*float64(i)/8, 6)
+			float64(target.Y)+float64(target.Height)*float64(i)/8, num, 6)
 		time.Sleep(30 * time.Millisecond)
 	}
-	postIslandMouse(t, float64(target.X+target.Width), float64(target.Y+target.Height), 2)
+	postShotMouse(t, float64(target.X+target.Width), float64(target.Y+target.Height), num, 2)
 	time.Sleep(300 * time.Millisecond)
 
 	var hasSel bool
@@ -177,4 +183,50 @@ func TestScreenshotRealCaptureTiming(t *testing.T) {
 		}
 	}
 	t.Logf("screencapture -D 1: %v, %v, %v", times[0], times[1], times[2])
+}
+
+// postShotMouse posts one real HID mouse event per type at a screen point,
+// proving first that WindowServer routes the point to this capture's own
+// overlay window. The screenshot overlay sits above the menu bar and the
+// Dock, so (unlike postIslandMouse) it covers any point of the display,
+// including the ones the notch shell and the Dock would otherwise take.
+func postShotMouse(t *testing.T, x, y float64, overlay int, events ...uint32) {
+	t.Helper()
+	lib, err := purego.Dlopen("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", purego.RTLD_LAZY)
+	if err != nil {
+		t.Fatalf("CoreGraphics: %v", err)
+	}
+	var (
+		create  func(source uintptr, typ uint32, p mac.CGPoint, button uint32) uintptr
+		post    func(tap uint32, ev uintptr)
+		release func(cf uintptr)
+	)
+	purego.RegisterLibFunc(&create, lib, "CGEventCreateMouseEvent")
+	purego.RegisterLibFunc(&post, lib, "CGEventPost")
+	libCF, err := purego.Dlopen("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation", purego.RTLD_LAZY)
+	if err != nil {
+		t.Fatalf("CoreFoundation: %v", err)
+	}
+	purego.RegisterLibFunc(&release, libCF, "CFRelease")
+	button := uint32(0)
+	for _, typ := range events {
+		if typ == 3 || typ == 4 || typ == 27 {
+			button = 1
+		}
+		var hit int
+		onMain(func() {
+			primary := mygo.Screen.PrimaryDisplay()
+			hit = mac.WindowAtPoint(x, y, float64(primary.Bounds.Y+primary.Bounds.Height))
+		})
+		if hit != overlay {
+			t.Fatalf("refusing mouse event at %v,%v: WindowServer routes it to window %d, not the overlay %d", x, y, hit, overlay)
+		}
+		ev := create(0, typ, mac.CGPoint{X: x, Y: y}, button)
+		if ev == 0 {
+			t.Fatal("CGEventCreateMouseEvent returned nil")
+		}
+		post(0, ev)
+		release(ev)
+		time.Sleep(20 * time.Millisecond)
+	}
 }
