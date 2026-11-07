@@ -13,7 +13,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -249,6 +249,9 @@ func (a *shelf) onUI(fn func()) {
 }
 
 func (a *shelf) invalidateHome() {
+	// The query, its scope or the index's hits changed: the grouped rows
+	// must be built again, even if a frame already asked for them.
+	a.homeRowsOK = false
 	if a.win != nil {
 		// An open bar's results sheet springs to a taller box: take the
 		// envelope before that spring starts. A closed or folding panel
@@ -331,18 +334,42 @@ func spotGroupHits(q string, items []mac.SpotlightHit, shown map[string]bool) (a
 		}
 	}
 	for _, g := range [][]mac.SpotlightHit{apps, folders, files} {
-		sort.SliceStable(g, func(i, j int) bool {
-			ri, rj := spotRank(g[i].Name, q), spotRank(g[j].Name, q)
-			if ri != rj {
-				return ri < rj
-			}
-			if !g[i].LastUsed.Equal(g[j].LastUsed) {
-				return g[i].LastUsed.After(g[j].LastUsed)
-			}
-			return g[i].Name < g[j].Name
-		})
+		sortSpotGroup(g, q)
 	}
 	return apps, folders, files
+}
+
+// sortSpotGroup orders one Spotlight group: rank, then most recently used,
+// then name. The rank and the lower-cased name are computed once per hit,
+// not once per comparison: a large index result sorts in milliseconds
+// instead of lower-casing every name on every comparison.
+func sortSpotGroup(g []mac.SpotlightHit, q string) {
+	if len(g) < 2 {
+		return
+	}
+	type ranked struct {
+		hit  mac.SpotlightHit
+		rank int
+	}
+	rs := make([]ranked, len(g))
+	for i, h := range g {
+		rs[i] = ranked{hit: h, rank: spotRank(h.Name, q)}
+	}
+	slices.SortStableFunc(rs, func(a, b ranked) int {
+		if a.rank != b.rank {
+			return a.rank - b.rank
+		}
+		if !a.hit.LastUsed.Equal(b.hit.LastUsed) {
+			if a.hit.LastUsed.After(b.hit.LastUsed) {
+				return -1
+			}
+			return 1
+		}
+		return strings.Compare(a.hit.Name, b.hit.Name)
+	})
+	for i := range g {
+		g[i] = rs[i].hit
+	}
 }
 
 // spotHitRow is one index hit as a sheet row: ⏎ opens it, ⌘⏎ reveals it in

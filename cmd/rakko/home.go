@@ -85,6 +85,22 @@ func (h homeHit) bitmap(a *shelf) *ui.Bitmap {
 // are asked for the same mode, so the sheet never hides a row it paid to
 // fetch.
 func (a *shelf) homeHits() []homeHit {
+	// Within one build pass the sheet's target height, the view and the
+	// frame geometry all read the same grouped rows; outside a pass (a
+	// test, the tick's frame sync) the rows are computed fresh, so no
+	// caller ever sees a cached answer for inputs it just changed.
+	if a.buildingView && a.homeRowsOK {
+		return a.homeRows
+	}
+	out := a.computeHomeHits()
+	if a.buildingView {
+		a.homeRows, a.homeRowsOK = out, true
+	}
+	return out
+}
+
+// computeHomeHits is homeHits without the frame cache.
+func (a *shelf) computeHomeHits() []homeHit {
 	q := strings.ToLower(strings.TrimSpace(a.homeQuery))
 	if q == "" {
 		return nil
@@ -145,16 +161,18 @@ func (a *shelf) homeHits() []homeHit {
 	if items := a.homeSpotItems(); len(items) > 0 {
 		ag, fg, fh := spotGroupHits(q, items, shown)
 		if scope != mac.ScopeFiles {
+			label := l.HomeGroupApps()
 			for _, hit := range ag {
-				apps = append(apps, a.spotHitRow(l.HomeGroupApps(), hit))
+				apps = append(apps, a.spotHitRow(label, hit))
 			}
 		}
 		if scope != mac.ScopeApps {
+			folderLabel, fileLabel := l.HomeGroupFolders(), l.HomeGroupFiles()
 			for _, hit := range fg {
-				folders = append(folders, a.spotHitRow(l.HomeGroupFolders(), hit))
+				folders = append(folders, a.spotHitRow(folderLabel, hit))
 			}
 			for _, hit := range fh {
-				files = append(files, a.spotHitRow(l.HomeGroupFiles(), hit))
+				files = append(files, a.spotHitRow(fileLabel, hit))
 			}
 		}
 	}

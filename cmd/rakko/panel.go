@@ -359,6 +359,10 @@ var frameTrace func(canvasW, canvasH float32, native mygo.Rectangle)
 // 直接按完整展开态渲染。
 func (a *shelf) view(c *ui.Context) {
 	a.buildingView = true
+	// Grouping the index's hits is the one read several times in a pass:
+	// the sheet's target height, the view and the frame geometry all ask
+	// for the same rows.
+	a.homeRowsOK = false
 	defer func() {
 		a.buildingView = false
 		if frameTrace != nil && a.win != nil {
