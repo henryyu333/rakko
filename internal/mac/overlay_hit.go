@@ -392,6 +392,10 @@ const (
 	// the screen's top edge.
 	StatusWindowLevel = 25
 
+	// CaptureWindowLevel is NSScreenSaverWindowLevel: the screenshot
+	// overlay covers the menu bar and the Dock, not just ordinary windows.
+	CaptureWindowLevel = 1000
+
 	// PopUpMenuWindowLevel is NSPopUpMenuWindowLevel, used while a file
 	// drag needs the overlay above the menu bar's exclusive strip.
 	PopUpMenuWindowLevel = 101

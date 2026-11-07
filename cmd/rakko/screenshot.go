@@ -284,6 +284,15 @@ func (s *shotSession) install(results []shotCapture, elapsedMS int64) {
 	s.installed = true
 	s.refreshWindows()
 	shotActivateSelf()
+	// Activation can re-order the app's other windows (the notch shell at
+	// its status level, a Settings window). Re-front each overlay in its
+	// own (screen-saver) band before taking the keyboard.
+	for _, d := range s.displays {
+		if d.win != nil {
+			mac.SetWindowLevel(d.win.NativeHandle(), mac.CaptureWindowLevel)
+			mac.OrderOverlayFront(d.win.NativeHandle())
+		}
+	}
 	if w := s.displays[active].win; w != nil {
 		w.Focus()
 	}
@@ -357,6 +366,9 @@ func (s *shotSession) openWindow(di int) {
 	mac.ConfigureCaptureWindow(h)
 	mac.SetWindowFrame(h, b.X, b.Y, b.Width, b.Height)
 	w.ShowInactive()
+	// mygo applies the AlwaysOnTop floating level when it orders a window
+	// front; the capture band must be the last word.
+	mac.SetWindowLevel(h, mac.CaptureWindowLevel)
 	d.win = w
 }
 

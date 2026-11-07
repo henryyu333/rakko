@@ -152,7 +152,7 @@ const (
 	nsStatusWindowLevel = StatusWindowLevel
 	// nsScreenSaverWindowLevel is NSScreenSaverWindowLevel, above the menu
 	// bar (24) and the Dock: the screenshot overlay must cover everything.
-	nsScreenSaverWindowLevel = 1000
+	nsScreenSaverWindowLevel = CaptureWindowLevel
 
 	collectionCanJoinAllSpaces    = 1 << 0
 	collectionTransient           = 1 << 3
