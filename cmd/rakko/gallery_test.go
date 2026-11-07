@@ -1406,7 +1406,72 @@ func galleryGroupI() []galleryItem {
 		{ID: "I4", Group: g, Title: "排列预览框", State: "目标区域 · 16% 填充与 2pt 描边", Build: func(t *testing.T, lang string) galleryRender {
 			return galleryRender{view: galleryView(t, lang, snapGhostView, 320, 190)}
 		}},
+		{ID: "I5", Group: g, Title: "截图", State: "选择窗口 · 高亮与放大镜", Wide: true, Build: func(t *testing.T, lang string) galleryRender {
+			s := galleryShotSession(t, lang, 900, 600)
+			s.cursor = mygo.Point{X: 400, Y: 300}
+			s.hover = mygo.Rectangle{X: 120, Y: 90, Width: 420, Height: 300}
+			s.hoverOK = true
+			return galleryRender{view: galleryView(t, lang, func(c *ui.Context) { s.overlayView(c, 0) }, 900, 600)}
+		}},
+		{ID: "I6", Group: g, Title: "截图", State: "选区 · 标注与工具栏", Wide: true, Build: func(t *testing.T, lang string) galleryRender {
+			s := galleryShotSession(t, lang, 900, 600)
+			s.cursor = mygo.Point{X: 520, Y: 350}
+			s.hasSel = true
+			s.sel = mygo.Rectangle{X: 250, Y: 150, Width: 420, Height: 260}
+			s.tool = shotToolRect
+			s.color = shotAnnotationColors[0]
+			s.hist.annots = []shotAnnotation{
+				{tool: shotToolRect, color: shotAnnotationColors[0], width: 4,
+					a: mygo.Point{X: 280, Y: 190}, b: mygo.Point{X: 470, Y: 300}},
+				{tool: shotToolPen, color: shotAnnotationColors[3], width: 4,
+					points: []mygo.Point{{X: 300, Y: 340}, {X: 340, Y: 320}, {X: 380, Y: 350}}},
+				{tool: shotToolNumber, color: shotAnnotationColors[2], width: 2,
+					a: mygo.Point{X: 540, Y: 250}, number: 1},
+			}
+			s.layoutBar()
+			return galleryRender{view: galleryView(t, lang, func(c *ui.Context) { s.overlayView(c, 0) }, 900, 600)}
+		}},
+		{ID: "I7", Group: g, Title: "截图贴图", State: "桌面浮窗 · 双击或 Esc 关闭", Build: func(t *testing.T, lang string) galleryRender {
+			img := galleryShotImage(360, 240)
+			p := &shotPin{bitmap: ui.NewBitmap(img), pixW: 360, pixH: 240}
+			return galleryRender{view: galleryView(t, lang, p.view, 360, 240)}
+		}},
 	}
+}
+
+// galleryShotSession is an overlay over a synthetic desktop, with no
+// window and no real capture.
+func galleryShotSession(t *testing.T, lang string, w, h int) *shotSession {
+	t.Helper()
+	s := shotTestSession(t, mygo.Rectangle{Width: w, Height: h}, w, h)
+	s.a.locale = lang
+	img := galleryShotImage(w, h)
+	s.displays[0].img = img
+	s.displays[0].bitmap = ui.NewBitmap(img)
+	s.cursorDpy = 0
+	return s
+}
+
+// galleryShotImage is the wallpaper and a couple of windows the overlay
+// screenshots: enough to read the veil, the selection and the highlight.
+func galleryShotImage(w, h int) *image.RGBA {
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			i := y*img.Stride + x*4
+			img.Pix[i] = uint8(32 + 70*x/max(w, 1))
+			img.Pix[i+1] = uint8(52 + 50*y/max(h, 1))
+			img.Pix[i+2] = uint8(96 + 60*x/max(w, 1))
+			img.Pix[i+3] = 0xFF
+		}
+	}
+	win := func(r image.Rectangle, top color.RGBA) {
+		draw.Draw(img, r, &image.Uniform{color.RGBA{236, 238, 242, 255}}, image.Point{}, draw.Src)
+		draw.Draw(img, image.Rect(r.Min.X, r.Min.Y, r.Max.X, r.Min.Y+28), &image.Uniform{top}, image.Point{}, draw.Src)
+	}
+	win(image.Rect(120, 90, 540, 390), color.RGBA{60, 66, 78, 255})
+	win(image.Rect(500, 220, 800, 470), color.RGBA{80, 72, 90, 255})
+	return img
 }
 
 // --- J: desktop things ---
