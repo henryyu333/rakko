@@ -149,6 +149,12 @@ func (s *shotSession) recognize() {
 	})
 }
 
+// shotOpenPin is the pin window's seam: a headless shelf must not create
+// one.
+var shotOpenPin = func(a *shelf, png []byte, frame mygo.Rectangle, scale float64) {
+	a.openShotPin(png, frame, scale)
+}
+
 // pin opens a floating copy of the annotated crop on the desktop.
 func (s *shotSession) pin() {
 	png, err := s.outputPNG(true)
@@ -162,7 +168,7 @@ func (s *shotSession) pin() {
 	}
 	frame := s.pinFrame(d)
 	s.close(true)
-	s.a.openShotPin(png, frame, d.scale())
+	shotOpenPin(s.a, png, frame, d.scale())
 }
 
 // scale is the display's backing scale, or 1.

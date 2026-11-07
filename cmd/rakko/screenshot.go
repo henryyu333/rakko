@@ -193,7 +193,7 @@ func (a *shelf) startScreenshotOnMain() {
 	s.prevPID = shotFrontPID()
 	s.cursor = shotCursorPoint()
 	a.shot = s
-	wasVisible := a.visible
+	wasVisible := a.visible || a.peeking || !a.closeAt.IsZero()
 	if wasVisible {
 		a.hide(hideExplicit)
 	}
