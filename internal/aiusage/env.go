@@ -42,11 +42,26 @@ type Env struct {
 	ClaudeUser      string
 	RunClaude       ClaudeRun
 	ClaudeAccount   *ClaudeAccount
+
+	// RakkoClaudeDir is Rakko's own Claude Code config directory (empty
+	// when the app has none). A sign-in there takes precedence over the
+	// Mac's; RakkoClaudeAccount caches it separately so the two sources
+	// never answer for each other. RunClaudeLogin replaces the real
+	// `claude auth login` run in tests.
+	RakkoClaudeDir     string
+	RakkoClaudeAccount *ClaudeAccount
+	RunClaudeLogin     ClaudeLoginRun
 }
 
 // ClaudeRun runs Claude Code with args in configDir and returns its stdout,
 // stderr and process error.
 type ClaudeRun func(ctx context.Context, args []string, configDir string) (stdout, stderr string, err error)
+
+// ClaudeLoginRun starts `claude auth login` against Rakko's private config
+// directory. onURL is called once the authorization link is printed; code
+// delivers pasted authorization codes to the process. It returns the
+// process's error, or ctx's when the sign-in was cancelled.
+type ClaudeLoginRun func(ctx context.Context, onURL func(string), code <-chan string) error
 
 const (
 	codexDefaultBase = "https://chatgpt.com/backend-api"
@@ -69,6 +84,8 @@ func DefaultEnv() Env {
 		ClaudeConfigDir: os.Getenv("CLAUDE_CONFIG_DIR"),
 		ClaudeUser:      os.Getenv("USER"),
 		ClaudeAccount:   &ClaudeAccount{},
+
+		RakkoClaudeAccount: &ClaudeAccount{},
 	}
 }
 

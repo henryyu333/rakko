@@ -18,9 +18,10 @@ type lastQuotasFile struct {
 }
 
 type lastQuota struct {
-	At      time.Time `json:"at"`
-	Plan    string    `json:"plan,omitempty"`
-	Windows []Window  `json:"windows"`
+	At      time.Time    `json:"at"`
+	Plan    string       `json:"plan,omitempty"`
+	Source  ClaudeSource `json:"source,omitempty"`
+	Windows []Window     `json:"windows"`
 }
 
 // LoadLastQuotas reads the saved readings; a missing or unreadable file
@@ -49,11 +50,12 @@ func LoadLastQuotas(dir string) []Quota {
 			continue
 		}
 		out = append(out, Quota{
-			Tool:      entry.tool,
-			Plan:      entry.q.Plan,
-			Windows:   entry.q.Windows,
-			Status:    QuotaOK,
-			FetchedAt: entry.q.At,
+			Tool:         entry.tool,
+			Plan:         entry.q.Plan,
+			ClaudeSource: entry.q.Source,
+			Windows:      entry.q.Windows,
+			Status:       QuotaOK,
+			FetchedAt:    entry.q.At,
 		})
 	}
 	return out
@@ -71,7 +73,7 @@ func SaveLastQuota(dir string, q Quota) error {
 	if data, err := os.ReadFile(path); err == nil {
 		_ = json.Unmarshal(data, &file)
 	}
-	entry := &lastQuota{At: q.FetchedAt, Plan: q.Plan, Windows: q.Windows}
+	entry := &lastQuota{At: q.FetchedAt, Plan: q.Plan, Source: q.ClaudeSource, Windows: q.Windows}
 	switch q.Tool {
 	case ToolClaude:
 		file.Claude = entry

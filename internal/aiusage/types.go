@@ -60,14 +60,27 @@ func (s QuotaStatus) Transient() bool {
 	return s == QuotaRateLimited || s == QuotaFailed
 }
 
+// ClaudeSource names the Claude Code configuration directory a reading
+// came from: Rakko's own sign-in, the Mac's Claude Code, or neither yet.
+type ClaudeSource int
+
+const (
+	ClaudeSourceNone ClaudeSource = iota
+	ClaudeSourceRakko
+	ClaudeSourceUser
+)
+
 // Quota is one tool's subscription quota at FetchedAt; Windows is empty
 // while the fetch could not produce any (see Status and Err).
 type Quota struct {
-	Tool      Tool
-	Plan      string
-	Windows   []Window
-	Status    QuotaStatus
-	FetchedAt time.Time
+	Tool Tool
+	Plan string
+	// ClaudeSource is the config directory Claude's reading came from;
+	// only ToolClaude sets it.
+	ClaudeSource ClaudeSource
+	Windows      []Window
+	Status       QuotaStatus
+	FetchedAt    time.Time
 	// LimitResetsAt is when the allowance a QuotaLimitReached answer
 	// blocked comes back, when the vendor's message named it.
 	LimitResetsAt time.Time

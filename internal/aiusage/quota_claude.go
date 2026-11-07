@@ -98,6 +98,20 @@ func (a *ClaudeAccount) noteDenied(now time.Time) {
 	a.mu.Unlock()
 }
 
+// Invalidate forgets everything cached about one source: a login or logout
+// changed the sign-in, and a Keychain read that backed off must be allowed
+// again for the item Claude Code has just rewritten.
+func (a *ClaudeAccount) Invalidate() {
+	if a == nil {
+		return
+	}
+	a.mu.Lock()
+	a.credAt, a.cred, a.credFound = time.Time{}, claudeCredentials{}, false
+	a.statusAt, a.status, a.statusOK = time.Time{}, claudeAuthStatus{}, false
+	a.askedAt = time.Time{}
+	a.mu.Unlock()
+}
+
 // keychainDenied says whether a failed `security find-generic-password`
 // could have been a dialog the user answered no to: 44 is the item not
 // being there, which asks nobody.
@@ -271,6 +285,23 @@ func claudeUsageArgs() []string {
 		"--tools", "", "--strict-mcp-config", "--setting-sources", "", "--no-session-persistence"}
 }
 
+// claudeReadingEnv picks the config directory a reading uses: Rakko's own
+// when it holds a sign-in, the Mac's Claude Code otherwise. The two sources
+// keep separate account caches, so a cached "signed out" in one can never
+// answer for the other.
+func claudeReadingEnv(ctx context.Context, env Env) (Env, ClaudeSource) {
+	if env.RakkoClaudeDir != "" {
+		priv := env
+		priv.ClaudeConfigDir = env.RakkoClaudeDir
+		priv.ClaudeAccount = env.RakkoClaudeAccount
+		cred, found, err := claudeCredentialsCached(ctx, priv)
+		if err == nil && found && cred.OAuth.AccessToken != "" {
+			return priv, ClaudeSourceRakko
+		}
+	}
+	return env, ClaudeSourceUser
+}
+
 // FetchClaude reads the subscription allowance of the account Claude Code
 // is signed in to, by running Claude Code's own /usage. Nothing is sent to
 // Anthropic by ShelfU; Claude Code does that itself, with its own token,
@@ -286,6 +317,7 @@ func FetchClaude(ctx context.Context, env Env) Quota {
 		return q
 	}
 
+	env, q.ClaudeSource = claudeReadingEnv(ctx, env)
 	cred, found, err := claudeCredentialsCached(ctx, env)
 	if err != nil {
 		q.Status = QuotaFailed
