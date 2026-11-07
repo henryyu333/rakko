@@ -191,6 +191,12 @@ func (a *shelf) startScreenshotOnMain() {
 		nextNum: 1,
 	}
 	s.prevPID = shotFrontPID()
+	if s.prevPID == mac.OwnPID() && a.prevAppPID > 0 {
+		// The panel (or a settings window) was frontmost when the hotkey
+		// arrived: the app to hand the keyboard back to is the one it was
+		// opened from.
+		s.prevPID = a.prevAppPID
+	}
 	s.cursor = shotCursorPoint()
 	a.shot = s
 	wasVisible := a.visible || a.peeking || !a.closeAt.IsZero()
