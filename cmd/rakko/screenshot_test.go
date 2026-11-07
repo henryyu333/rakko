@@ -32,6 +32,7 @@ func shotSeams(t *testing.T) {
 	dispatch, work, clock := shotDispatch, shotWork, shotClock
 	front, activate, preflight := shotFrontPID, shotActivateSelf, shotPreflight
 	clipboard, readDir, writeFile, openWin := shotClipboard, shotReadSaveDir, shotWriteFile, shotOpenWindow
+	keyWindow, readText := shotKeyWindow, shotReadText
 	clean := shotCleanTemp
 	settle := shotPanelSettle
 	after := shotAfter
@@ -41,6 +42,7 @@ func shotSeams(t *testing.T) {
 		shotDispatch, shotWork, shotClock = dispatch, work, clock
 		shotFrontPID, shotActivateSelf, shotPreflight = front, activate, preflight
 		shotClipboard, shotReadSaveDir, shotWriteFile, shotOpenWindow = clipboard, readDir, writeFile, openWin
+		shotKeyWindow, shotReadText = keyWindow, readText
 		shotCleanTemp = clean
 		shotPanelSettle = settle
 		shotAfter, shotOpenPin = after, openPin
@@ -53,6 +55,8 @@ func shotSeams(t *testing.T) {
 	}
 	shotFrontPID = func() int { return 0 }
 	shotActivateSelf = func() {}
+	shotKeyWindow = func(uintptr) bool { return true }
+	shotReadText = func() string { return "" }
 	shotNormalWindow = func() []mac.ScreenWindow { return nil }
 	shotOpenWindow = func(*shotSession, int) {}
 	shotCleanTemp = func() { os.MkdirAll(shotTempDir(), 0o700) }
@@ -426,8 +430,8 @@ func TestShotEscapeLadder(t *testing.T) {
 	s.tool = shotToolRect
 	s.text = &shotTextEdit{at: mygo.Point{X: 20, Y: 20}, text: "hi"}
 	s.escape()
-	if s.text != nil || len(s.hist.annots) != 1 {
-		t.Fatalf("Esc did not commit the line: text=%v annots=%d", s.text, len(s.hist.annots))
+	if s.text != nil || len(s.hist.annots) != 0 {
+		t.Fatalf("Esc did not abandon the line: text=%v annots=%d", s.text, len(s.hist.annots))
 	}
 	s.escape()
 	if s.tool != shotToolNone {
@@ -476,6 +480,94 @@ func renderShotMarks(t *testing.T, w, h int, annots ...shotAnnotation) *image.RG
 			}
 		})
 	}, w, h, 1)
+}
+
+// shotTextView renders an editing overlay at 1×; typing through it is the
+// same TextCaret path the window uses.
+func shotTextView(t *testing.T, s *shotSession) *ui.Tester {
+	t.Helper()
+	v := ui.NewTester(func(c *ui.Context) { s.overlayView(c, 0) }, 300, 200)
+	v.SetScale(1)
+	v.Frame()
+	v.Frame()
+	return v
+}
+
+func TestShotTextEditingTakesTextAndCommits(t *testing.T) {
+	shotSeams(t)
+	s := shotTestSession(t, mygo.Rectangle{Width: 300, Height: 200}, 300, 200)
+	s.hasSel = true
+	s.sel = mygo.Rectangle{X: 10, Y: 10, Width: 200, Height: 100}
+	s.tool = shotToolText
+	s.layoutBar()
+	s.text = &shotTextEdit{at: mygo.Point{X: 30, Y: 30}}
+	v := shotTextView(t, s)
+	if _, active := v.TextCaret(); !active {
+		t.Fatal("the editing overlay does not take text from the input method")
+	}
+	v.Type("hello")
+	v.Frame()
+	if s.text == nil || s.text.text != "hello" {
+		t.Fatalf("typed line = %+v", s.text)
+	}
+	v.Key(0, ui.KeyEnter)
+	v.Frame()
+	if s.text != nil {
+		t.Fatal("Enter did not leave text mode")
+	}
+	if len(s.hist.annots) != 1 || s.hist.annots[0].text != "hello" {
+		t.Fatalf("committed annots = %+v", s.hist.annots)
+	}
+}
+
+func TestShotTextEditingEscCancelsAndPasteWorks(t *testing.T) {
+	shotSeams(t)
+	shotReadText = func() string { return "pasted\nline" }
+	s := shotTestSession(t, mygo.Rectangle{Width: 300, Height: 200}, 300, 200)
+	s.hasSel = true
+	s.sel = mygo.Rectangle{X: 10, Y: 10, Width: 200, Height: 100}
+	s.tool = shotToolText
+	s.layoutBar()
+	s.text = &shotTextEdit{at: mygo.Point{X: 30, Y: 30}}
+	v := shotTextView(t, s)
+	v.Type("bye")
+	v.Key(ui.Cmd, ui.KeyV)
+	v.Frame()
+	if s.text == nil || s.text.text != "byepasted line" {
+		t.Fatalf("pasted line = %+v", s.text)
+	}
+	v.Key(0, ui.KeyEscape)
+	v.Frame()
+	if s.text != nil {
+		t.Fatal("Esc did not leave text mode")
+	}
+	if len(s.hist.annots) != 0 {
+		t.Fatalf("Esc committed the canceled line: %+v", s.hist.annots)
+	}
+}
+
+func TestShotTextGatedToTheEditingLine(t *testing.T) {
+	s := shotTestSession(t, mygo.Rectangle{Width: 300, Height: 200}, 300, 200)
+	s.hasSel = true
+	s.sel = mygo.Rectangle{X: 10, Y: 10, Width: 200, Height: 100}
+	s.tool = shotToolText
+	s.layoutBar()
+	v := shotTextView(t, s)
+	if _, active := v.TextCaret(); active {
+		t.Fatal("the overlay took text while no line was being typed")
+	}
+}
+
+func TestShotTextSizeFollowsWidth(t *testing.T) {
+	if got := shotTextSizeFor(shotAnnotationWidths[0]); got != 14 {
+		t.Fatalf("thin text = %v", got)
+	}
+	if got := shotTextSizeFor(shotAnnotationWidths[1]); got != 18 {
+		t.Fatalf("medium text = %v", got)
+	}
+	if got := shotTextSizeFor(shotAnnotationWidths[2]); got != 24 {
+		t.Fatalf("thick text = %v", got)
+	}
 }
 
 func TestShotTempClipboardPayload(t *testing.T) {

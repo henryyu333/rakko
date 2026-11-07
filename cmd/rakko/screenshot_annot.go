@@ -44,8 +44,19 @@ var shotAnnotationWidths = []int{2, 4, 7}
 // shotMosaicBlock is the mosaic tool's cell size in points.
 const shotMosaicBlock = 10
 
-// shotTextSize is the text tool's type size in points.
-const shotTextSize = 16
+// shotTextSizes are the text tool's sizes in points, one per stroke width
+// preset: 2, 4 and 7 points.
+var shotTextSizes = []float32{14, 18, 24}
+
+// shotTextSizeFor returns the type size a stroke width types in.
+func shotTextSizeFor(width int) float32 {
+	for i, w := range shotAnnotationWidths {
+		if width <= w {
+			return shotTextSizes[i]
+		}
+	}
+	return shotTextSizes[len(shotTextSizes)-1]
+}
 
 // shotNumberRadius is a number badge's radius in points.
 const shotNumberRadius = 11
@@ -126,7 +137,7 @@ func (h *shotHistory) canUndo() bool { return len(h.undo) > 0 }
 func (h *shotHistory) canRedo() bool { return len(h.redo) > 0 }
 
 // shotAnnotationSize returns the text annotation's rendered size in points.
-func shotAnnotationTextSize(an shotAnnotation) float32 { return shotTextSize }
+func shotAnnotationTextSize(an shotAnnotation) float32 { return shotTextSizeFor(an.width) }
 
 // shotDrawAnnotation paints one mark: origin is the global point that maps
 // to (0, 0) and scale is the pixels a point takes. On an overlay scale is

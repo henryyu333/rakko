@@ -51,6 +51,8 @@ var (
 	shotFrontPID       = mac.FrontmostPID
 	shotActivateSelf   = mac.ActivateSelf
 	shotActivateApp    = mac.ActivateApp
+	shotKeyWindow      = mac.IsKeyWindow
+	shotReadText       = readClipboardText
 	shotPreflight      = mac.ScreenCapturePreflight
 	shotClipboard      = writeShotClipboard
 	shotReadSaveDir    = readScreenCaptureLocation
@@ -421,8 +423,22 @@ func (s *shotSession) overlayView(c *ui.Context, di int) {
 		}
 	})
 	cursor := s.cursorShape(di)
-	ui.Box(c.Key("shot")).Fill().Focusable().AutoFocus().Cursor(cursor).
-		HandleInput(func(ev ui.InputEvent) bool { return s.input(ev, di) }).
+	el := ui.Box(c.Key("shot")).Fill().Focusable().AutoFocus().Cursor(cursor)
+	if te := s.text; te != nil && di == s.owner {
+		// Input methods only compose text for an element that asks for it
+		// (TextCaret), and only while it has the keyboard. Declaring it
+		// only while a line is being typed keeps every other key a normal
+		// screenshot shortcut instead of an input-method candidate.
+		b := s.displays[di].Bounds
+		size := shotTextSizeFor(s.width)
+		tw, th := c.MeasureText(0, ui.Span{Text: te.text + te.compose, Size: size})
+		el = el.TextCaret(ui.Rect{
+			X: float32(te.at.X-b.X) + tw,
+			Y: float32(te.at.Y - b.Y),
+			W: 1, H: max(th, size),
+		})
+	}
+	el.HandleInput(func(ev ui.InputEvent) bool { return s.input(ev, di) }).
 		Draw(func(p *ui.Painter, r ui.Rect) { s.draw(p, r, di) })
 }
 
@@ -562,7 +578,7 @@ func (s *shotSession) pointerDown(p mygo.Point, ev ui.InputEvent, di int) bool {
 			}
 			if shotPointInRect(p, s.sel) {
 				if s.tool != shotToolNone {
-					s.beginMark(p)
+					s.beginMark(p, di)
 				} else {
 					s.mode, s.moveFrom, s.press = shotModeMove, s.sel, p
 				}
@@ -660,11 +676,12 @@ func (s *shotSession) pointerUp(p mygo.Point, ev ui.InputEvent, di int) bool {
 
 // beginMark starts a live mark with the current tool. Text and numbers are
 // placed on the press itself; the other tools drag.
-func (s *shotSession) beginMark(p mygo.Point) {
+func (s *shotSession) beginMark(p mygo.Point, di int) {
 	switch s.tool {
 	case shotToolText:
 		s.text = &shotTextEdit{at: p}
 		s.pre = pre{}
+		s.focusTextEdit(di)
 		s.invalidate()
 		return
 	case shotToolNumber:
@@ -677,6 +694,22 @@ func (s *shotSession) beginMark(p mygo.Point) {
 	s.mode = shotModeDraw
 	s.press = p
 	s.pre = pre{ann: shotDragAnnotation(s.tool, s.color, s.width, p, p, false), on: true}
+}
+
+// focusTextEdit gives the display's overlay the keyboard before the input
+// method takes over: a nonactivating panel must be made key explicitly,
+// and the press may have arrived while the app was inactive. The window
+// must already be on screen; it was focused when the session started.
+func (s *shotSession) focusTextEdit(di int) {
+	if di < 0 || di >= len(s.displays) {
+		return
+	}
+	d := s.displays[di]
+	if d.win == nil {
+		return
+	}
+	shotActivateSelf()
+	d.win.Focus()
 }
 
 // finishMark commits the live mark, if it is big enough to be deliberate.
@@ -772,7 +805,10 @@ func (s *shotSession) actBar(it shotBarItem) {
 func (s *shotSession) keyDown(ev ui.InputEvent) bool {
 	if s.text != nil {
 		switch ev.Key {
-		case ui.KeyEscape, ui.KeyEnter:
+		case ui.KeyEscape:
+			s.cancelText()
+			return true
+		case ui.KeyEnter:
 			s.commitText()
 			return true
 		case ui.KeyBackspace, ui.KeyDelete:
@@ -780,6 +816,10 @@ func (s *shotSession) keyDown(ev ui.InputEvent) bool {
 			return true
 		}
 		if ev.Mods&ui.Cmd != 0 {
+			if ev.Key == ui.KeyV {
+				s.pasteText()
+				return true
+			}
 			return false
 		}
 		return true
@@ -861,12 +901,12 @@ func (s *shotSession) nudge(dx, dy int) {
 	}
 }
 
-// escape is the one ladder: finish the line, drop the tool, drop the
+// escape is the one ladder: abandon the line, drop the tool, drop the
 // selection, leave.
 func (s *shotSession) escape() {
 	switch {
 	case s.text != nil:
-		s.commitText()
+		s.cancelText()
 	case s.tool != shotToolNone:
 		s.tool = shotToolNone
 		s.invalidate()
@@ -891,6 +931,43 @@ func (s *shotSession) commitText() {
 		s.hist.snap()
 		s.hist.push(shotAnnotation{tool: shotToolText, color: s.color, width: s.width, a: te.at, text: te.text})
 	}
+	s.layoutBar()
+	s.invalidate()
+}
+
+// cancelText drops the line being typed without adding it to the history.
+func (s *shotSession) cancelText() {
+	if s.text == nil {
+		return
+	}
+	s.text = nil
+	s.layoutBar()
+	s.invalidate()
+}
+
+// pasteText appends the pasteboard's text, flattened to one line: the text
+// tool draws a single line, so line breaks would otherwise hide everything
+// after the first.
+func (s *shotSession) pasteText() {
+	if s.text == nil {
+		return
+	}
+	text := shotReadText()
+	text = strings.Map(func(r rune) rune {
+		switch r {
+		case '\n', '\r', '\t':
+			return ' '
+		}
+		if r < 0x20 || r == 0x7f {
+			return -1
+		}
+		return r
+	}, text)
+	if text == "" {
+		return
+	}
+	s.text.text += text
+	s.text.compose = ""
 	s.layoutBar()
 	s.invalidate()
 }

@@ -321,6 +321,16 @@ func writeShotClipboard(png []byte, path string) error {
 	return mygo.Clipboard.Write(data)
 }
 
+// readClipboardText reads the pasteboard's plain text for a ⌘V in the text
+// tool. An empty pasteboard, or one with no text, reads as "".
+func readClipboardText() string {
+	b, err := mygo.Clipboard.ReadFormat(transfer.Text)
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
 // clipSourceShot is the SourceApp marker of screenshots Rakko produced.
 // Like clipSourceOCR it is not a bundle id; the clipboard row names it.
 const clipSourceShot = "shelf:shot"

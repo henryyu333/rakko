@@ -103,15 +103,16 @@ func (s *shotSession) drawAnnotations(p *ui.Painter, d *shotDisplay) {
 		shotDrawAnnotation(p, s.pre.ann, origin, 1)
 	}
 	if s.text != nil {
-		an := shotAnnotation{tool: shotToolText, color: s.color, a: s.text.at,
+		size := shotTextSizeFor(s.width)
+		an := shotAnnotation{tool: shotToolText, color: s.color, a: s.text.at, width: s.width,
 			text: s.text.text + s.text.compose}
 		shotDrawAnnotation(p, an, origin, 1)
 		x, y := float32(s.text.at.X-d.Bounds.X), float32(s.text.at.Y-d.Bounds.Y)
-		tw, th := p.MeasureText(0, ui.Span{Text: s.text.text + s.text.compose, Size: shotTextSize})
+		tw, th := p.MeasureText(0, ui.Span{Text: s.text.text + s.text.compose, Size: size})
 		if tw == 0 {
 			tw = 1
 		}
-		p.Line(x+tw, y, x+tw, y+max(th, shotTextSize), 1.5, accent)
+		p.Line(x+tw, y, x+tw, y+max(th, size), 1.5, accent)
 	}
 }
 
