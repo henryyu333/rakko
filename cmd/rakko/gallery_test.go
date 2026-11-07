@@ -1282,6 +1282,15 @@ func galleryGroupG() []galleryItem {
 			r.view.Frame()
 			return r
 		}},
+		{ID: "G9", Group: g, Title: "AI 用量", State: "Claude 未登录 · 登录按钮", Build: page(func(t *testing.T, fx *usageFixture) {
+			fx.claude.q = aiusage.Quota{Tool: aiusage.ToolClaude, Status: aiusage.QuotaNotLoggedIn,
+				FetchedAt: *fx.now, ClaudeSource: aiusage.ClaudeSourceUser}
+		})},
+		{ID: "G10", Group: g, Title: "AI 用量", State: "Claude 登录中 · 粘贴授权码", Build: page(func(t *testing.T, fx *usageFixture) {
+			fx.claude.q = aiusage.Quota{Tool: aiusage.ToolClaude, Status: aiusage.QuotaNotLoggedIn,
+				FetchedAt: *fx.now, ClaudeSource: aiusage.ClaudeSourceUser}
+			fx.f.claudeLogin = usageClaudeLogin{busy: true, codes: make(chan string, 1)}
+		})},
 	}
 }
 
@@ -1588,6 +1597,7 @@ func galleryGroupK() []galleryItem {
 			now := time.Now()
 			a.settings.AIUsage.Enabled = true
 			attachGalleryUsage(a, now)
+			a.usage.quota[quotaIndex(aiusage.ToolClaude)].latest.ClaudeSource = aiusage.ClaudeSourceRakko
 			a.settingsPage = settingsPageAIUsage
 			a.locale = lang
 			view := ui.NewTester(a.settingsView, settingsWidth, settingsHeight)
@@ -1599,6 +1609,33 @@ func galleryGroupK() []galleryItem {
 					break
 				}
 				view.Scroll(settingsWidth/2, settingsHeight/2, 0, 140)
+				view.Frame()
+			}
+			view.Frame()
+			return galleryRender{view: view}
+		}},
+		{ID: "K5b", Group: g, Title: "AI 用量", State: "Claude 登录中 · 粘贴授权码", Wide: true, Build: func(t *testing.T, lang string) galleryRender {
+			stubSettingsSeams(t, false, nil, nil)
+			a, _, _ := agentShelf(t)
+			now := time.Now()
+			a.settings.AIUsage.Enabled = true
+			attachGalleryUsage(a, now)
+			a.usage.quota[quotaIndex(aiusage.ToolClaude)].latest = aiusage.Quota{
+				Tool: aiusage.ToolClaude, Status: aiusage.QuotaNotLoggedIn, FetchedAt: now,
+				ClaudeSource: aiusage.ClaudeSourceUser,
+			}
+			a.usage.claudeLogin = usageClaudeLogin{busy: true, codes: make(chan string, 1)}
+			a.settingsPage = settingsPageAIUsage
+			a.locale = lang
+			view := ui.NewTester(a.settingsView, settingsWidth, settingsHeight)
+			view.SetLocale(lang)
+			view.SetScale(galleryScale)
+			view.Frame()
+			for range 30 {
+				if r, ok := view.Find("Claude 登录"); ok && r.W > 0 && r.H > 0 && r.Y >= 0 && r.Y+r.H <= settingsHeight {
+					break
+				}
+				view.Scroll(settingsWidth/2, settingsHeight/2, 0, 120)
 				view.Frame()
 			}
 			view.Frame()

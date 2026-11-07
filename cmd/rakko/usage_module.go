@@ -120,6 +120,7 @@ type usageClaudeLogin struct {
 	busy          bool
 	submitted     bool
 	failed        bool
+	cancelled     bool
 	url           string
 	code          string
 	codes         chan string
@@ -695,7 +696,7 @@ func (f *usageFeature) cancelClaudeLogin() {
 	if f.claudeLogin.cancel != nil {
 		f.claudeLogin.cancel()
 	}
-	f.claudeLogin = usageClaudeLogin{}
+	f.claudeLogin = usageClaudeLogin{cancelled: true}
 	if f.host != nil {
 		f.host.releaseTypingKeyboard()
 	}

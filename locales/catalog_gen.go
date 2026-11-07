@@ -609,6 +609,76 @@ func (msgs Messages) SettingsAIQuotaUnavailable() string {
 	return Catalog.Format(msgs.locale, "settingsAIQuotaUnavailable", nil)
 }
 
+// SettingsAIQuotaAccountGroup says "Claude 登录"
+// in the language the app shows.
+func SettingsAIQuotaAccountGroup() string { return In(i18n.Locale()).SettingsAIQuotaAccountGroup() }
+
+// SettingsAIQuotaAccountGroup says "Claude 登录"
+// in the language of msgs.
+func (msgs Messages) SettingsAIQuotaAccountGroup() string {
+	return Catalog.Format(msgs.locale, "settingsAIQuotaAccountGroup", nil)
+}
+
+// SettingsAIQuotaRakko says "Rakko 登录"
+// in the language the app shows.
+func SettingsAIQuotaRakko() string { return In(i18n.Locale()).SettingsAIQuotaRakko() }
+
+// SettingsAIQuotaRakko says "Rakko 登录"
+// in the language of msgs.
+func (msgs Messages) SettingsAIQuotaRakko() string {
+	return Catalog.Format(msgs.locale, "settingsAIQuotaRakko", nil)
+}
+
+// SettingsAIQuotaLocal says "使用本机 Claude Code"
+// in the language the app shows.
+func SettingsAIQuotaLocal() string { return In(i18n.Locale()).SettingsAIQuotaLocal() }
+
+// SettingsAIQuotaLocal says "使用本机 Claude Code"
+// in the language of msgs.
+func (msgs Messages) SettingsAIQuotaLocal() string {
+	return Catalog.Format(msgs.locale, "settingsAIQuotaLocal", nil)
+}
+
+// SettingsAIQuotaLogin says "登录"
+// in the language the app shows.
+func SettingsAIQuotaLogin() string { return In(i18n.Locale()).SettingsAIQuotaLogin() }
+
+// SettingsAIQuotaLogin says "登录"
+// in the language of msgs.
+func (msgs Messages) SettingsAIQuotaLogin() string {
+	return Catalog.Format(msgs.locale, "settingsAIQuotaLogin", nil)
+}
+
+// SettingsAIQuotaLogout says "退出"
+// in the language the app shows.
+func SettingsAIQuotaLogout() string { return In(i18n.Locale()).SettingsAIQuotaLogout() }
+
+// SettingsAIQuotaLogout says "退出"
+// in the language of msgs.
+func (msgs Messages) SettingsAIQuotaLogout() string {
+	return Catalog.Format(msgs.locale, "settingsAIQuotaLogout", nil)
+}
+
+// SettingsAIQuotaLoggingOut says "正在退出…"
+// in the language the app shows.
+func SettingsAIQuotaLoggingOut() string { return In(i18n.Locale()).SettingsAIQuotaLoggingOut() }
+
+// SettingsAIQuotaLoggingOut says "正在退出…"
+// in the language of msgs.
+func (msgs Messages) SettingsAIQuotaLoggingOut() string {
+	return Catalog.Format(msgs.locale, "settingsAIQuotaLoggingOut", nil)
+}
+
+// SettingsAIQuotaLogoutFailed says "退出失败，请重试"
+// in the language the app shows.
+func SettingsAIQuotaLogoutFailed() string { return In(i18n.Locale()).SettingsAIQuotaLogoutFailed() }
+
+// SettingsAIQuotaLogoutFailed says "退出失败，请重试"
+// in the language of msgs.
+func (msgs Messages) SettingsAIQuotaLogoutFailed() string {
+	return Catalog.Format(msgs.locale, "settingsAIQuotaLogoutFailed", nil)
+}
+
 // SettingsAILocalFoot says "本机用量自动统计本机所有 AI 工具的 token，只读本机日志，不联网、不上传。"
 // in the language the app shows.
 func SettingsAILocalFoot() string { return In(i18n.Locale()).SettingsAILocalFoot() }
@@ -1973,14 +2043,84 @@ func (msgs Messages) UsageQuerying() string {
 	return Catalog.Format(msgs.locale, "usageQuerying", nil)
 }
 
-// UsageSignedOutClaude says "未登录 Claude Code\n运行 claude login 后显示"
+// UsageSignedOutClaude says "未登录"
 // in the language the app shows.
 func UsageSignedOutClaude() string { return In(i18n.Locale()).UsageSignedOutClaude() }
 
-// UsageSignedOutClaude says "未登录 Claude Code\n运行 claude login 后显示"
+// UsageSignedOutClaude says "未登录"
 // in the language of msgs.
 func (msgs Messages) UsageSignedOutClaude() string {
 	return Catalog.Format(msgs.locale, "usageSignedOutClaude", nil)
+}
+
+// UsageClaudeLogin says "登录"
+// in the language the app shows.
+func UsageClaudeLogin() string { return In(i18n.Locale()).UsageClaudeLogin() }
+
+// UsageClaudeLogin says "登录"
+// in the language of msgs.
+func (msgs Messages) UsageClaudeLogin() string {
+	return Catalog.Format(msgs.locale, "usageClaudeLogin", nil)
+}
+
+// UsageClaudeCancel says "取消"
+// in the language the app shows.
+func UsageClaudeCancel() string { return In(i18n.Locale()).UsageClaudeCancel() }
+
+// UsageClaudeCancel says "取消"
+// in the language of msgs.
+func (msgs Messages) UsageClaudeCancel() string {
+	return Catalog.Format(msgs.locale, "usageClaudeCancel", nil)
+}
+
+// UsageClaudeWaiting says "在浏览器中完成登录…"
+// in the language the app shows.
+func UsageClaudeWaiting() string { return In(i18n.Locale()).UsageClaudeWaiting() }
+
+// UsageClaudeWaiting says "在浏览器中完成登录…"
+// in the language of msgs.
+func (msgs Messages) UsageClaudeWaiting() string {
+	return Catalog.Format(msgs.locale, "usageClaudeWaiting", nil)
+}
+
+// UsageClaudeCompleting says "正在完成登录…"
+// in the language the app shows.
+func UsageClaudeCompleting() string { return In(i18n.Locale()).UsageClaudeCompleting() }
+
+// UsageClaudeCompleting says "正在完成登录…"
+// in the language of msgs.
+func (msgs Messages) UsageClaudeCompleting() string {
+	return Catalog.Format(msgs.locale, "usageClaudeCompleting", nil)
+}
+
+// UsageClaudeLoginFailed says "登录未完成"
+// in the language the app shows.
+func UsageClaudeLoginFailed() string { return In(i18n.Locale()).UsageClaudeLoginFailed() }
+
+// UsageClaudeLoginFailed says "登录未完成"
+// in the language of msgs.
+func (msgs Messages) UsageClaudeLoginFailed() string {
+	return Catalog.Format(msgs.locale, "usageClaudeLoginFailed", nil)
+}
+
+// UsageClaudeLoginCancelled says "已取消登录"
+// in the language the app shows.
+func UsageClaudeLoginCancelled() string { return In(i18n.Locale()).UsageClaudeLoginCancelled() }
+
+// UsageClaudeLoginCancelled says "已取消登录"
+// in the language of msgs.
+func (msgs Messages) UsageClaudeLoginCancelled() string {
+	return Catalog.Format(msgs.locale, "usageClaudeLoginCancelled", nil)
+}
+
+// UsageClaudeCodePlaceholder says "粘贴授权码"
+// in the language the app shows.
+func UsageClaudeCodePlaceholder() string { return In(i18n.Locale()).UsageClaudeCodePlaceholder() }
+
+// UsageClaudeCodePlaceholder says "粘贴授权码"
+// in the language of msgs.
+func (msgs Messages) UsageClaudeCodePlaceholder() string {
+	return Catalog.Format(msgs.locale, "usageClaudeCodePlaceholder", nil)
 }
 
 // UsageSignedOutCodex says "未登录 Codex\n运行 codex login 后显示"

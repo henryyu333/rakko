@@ -69,9 +69,9 @@ func TestUsageClaudeSignInCancel(t *testing.T) {
 		t.Fatal("cancel did not stop the sign-in")
 	}
 	if fx.f.claudeLogin.busy || fx.f.claudeLogin.codes != nil {
-		t.Fatalf("state = %+v, want cleared", fx.f.claudeLogin)
+		t.Fatalf("state = %+v, want the session stopped", fx.f.claudeLogin)
 	}
-	if fx.f.claudeLogin.failed {
-		t.Fatal("a cancelled sign-in must not report failure")
+	if !fx.f.claudeLogin.cancelled || fx.f.claudeLogin.failed {
+		t.Fatalf("state = %+v, want a visible cancellation, not a failure", fx.f.claudeLogin)
 	}
 }

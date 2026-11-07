@@ -386,7 +386,89 @@ func (f *usageFeature) quotaInfo(c *ui.Context, tool aiusage.Tool, st *usageQuot
 		panelLabel(c, nil, tloc(c).UsageQuerying(), 11, 0).TextColor(ink3).Margin(4, 0, 0, 0)
 		return
 	}
+	if tool == aiusage.ToolClaude && st.latest.Status == aiusage.QuotaNotLoggedIn {
+		f.claudeSignIn(c)
+		return
+	}
 	f.quotaMessage(c, tool, st.latest, now)
+}
+
+// claudeSignIn is the Claude card's signed-out state: Rakko's own sign-in
+// can start here. While the browser flow waits, the card holds the paste
+// box for the authorization code (Claude Code asks for one in a terminal);
+// a sign-in that ended without credentials says so and offers another try.
+func (f *usageFeature) claudeSignIn(c *ui.Context) {
+	l := tloc(c)
+	s := &f.claudeLogin
+	block := ui.Column(c.Key("claude-signin")).Gap(3).Margin(4, 0, 0, 0)
+	// A click anywhere here re-takes the keyboard: the panel is an overlay
+	// that does not become key on its own.
+	block.HandleInput(func(ev ui.InputEvent) bool {
+		if ev.Kind == ui.InputPointerDown && f.host != nil && f.host.settingsWin == nil {
+			f.host.takeTypingKeyboard()
+		}
+		return false
+	})
+	block.Children(func() {
+		switch {
+		case s.busy && s.submitted:
+			ui.Row(c.Key("login-busy")).Height(20).AlignItems(ui.Center).Gap(6).Children(func() {
+				panelLabel(c, nil, l.UsageClaudeCompleting(), 10.5, 0).TextColor(ink3)
+				f.quotaButton(c, "claude-cancel", l.UsageClaudeCancel(), f.cancelClaudeLogin)
+			})
+		case s.busy:
+			panelLabel(c, nil, l.UsageClaudeWaiting(), 10.5, 0).TextColor(ink3)
+			ui.Row(c.Key("login-code")).Height(20).AlignItems(ui.Center).Gap(4).Children(func() {
+				in := ui.TextInputBase(c.Key("claude-code"), &s.code).Grow(1).MinWidth(0).
+					Height(20).Radius(6).Background(fill1).Padding(0, 6, 0, 6).
+					FontSize(10).TextColor(ink).
+					Placeholder(l.UsageClaudeCodePlaceholder()).Label(l.UsageClaudeCodePlaceholder())
+				if f.host != nil && f.host.pageTyping && f.host.settingsWin == nil {
+					in.Focus()
+				}
+				in.OnTextKey(func(k ui.TextKey) bool {
+					if k.Key == ui.KeyEnter {
+						f.submitClaudeCode()
+						return true
+					}
+					return false
+				})
+				f.quotaButton(c, "claude-cancel", l.UsageClaudeCancel(), f.cancelClaudeLogin)
+			})
+		case s.failed:
+			ui.Row(c.Key("login-failed")).Height(20).AlignItems(ui.Center).Gap(6).Children(func() {
+				panelLabel(c, nil, l.UsageClaudeLoginFailed(), 10.5, 0).TextColor(danger)
+				f.quotaButton(c, "claude-retry", l.UsageClaudeLogin(), func() { f.startClaudeLogin(false) })
+			})
+		case s.cancelled:
+			ui.Row(c.Key("login-cancelled")).Height(20).AlignItems(ui.Center).Gap(6).Children(func() {
+				panelLabel(c, nil, l.UsageClaudeLoginCancelled(), 10.5, 0).TextColor(ink3)
+				f.quotaButton(c, "claude-retry", l.UsageClaudeLogin(), func() { f.startClaudeLogin(false) })
+			})
+		default:
+			ui.Row(c.Key("login-out")).Height(20).AlignItems(ui.Center).Gap(6).Children(func() {
+				panelLabel(c, nil, l.UsageSignedOutClaude(), 10.5, 0).TextColor(ink3)
+				f.quotaButton(c, "claude-login", l.UsageClaudeLogin(), func() { f.startClaudeLogin(false) })
+			})
+		}
+	})
+}
+
+// quotaButton is the card's 20pt capsule action: 登录, 取消, 重试.
+func (f *usageFeature) quotaButton(c *ui.Context, key, label string, fn func()) ui.Element {
+	b := ui.ButtonBase(c.Key(key)).Height(20).Radius(10).Padding(0, 8, 0, 8).
+		AlignItems(ui.Center).Label(label).Tooltip(label)
+	b.Background(fill2)
+	if b.Hovered() {
+		b.Background(fill3)
+	}
+	b.Children(func() {
+		panelLabel(c, nil, label, 10, 600).TextColor(ink)
+	})
+	if b.Clicked() {
+		fn()
+	}
+	return b
 }
 
 // quotaMessage is the card's state text for the answers that produce no

@@ -341,6 +341,21 @@ func TestUsagePageStatesFitTheContentBox(t *testing.T) {
 			fx.codex.q = aiusage.Quota{Tool: aiusage.ToolCodex, Status: aiusage.QuotaNotLoggedIn, FetchedAt: now}
 			fx.claude.q = aiusage.Quota{Tool: aiusage.ToolClaude, Status: aiusage.QuotaNotLoggedIn, FetchedAt: now}
 		}},
+		{"claude signed out", false, func(fx *usageFixture) {
+			fx.codex.q = okQuota(aiusage.ToolCodex, "Plus", now)
+			fx.claude.q = aiusage.Quota{Tool: aiusage.ToolClaude, Status: aiusage.QuotaNotLoggedIn,
+				FetchedAt: now, ClaudeSource: aiusage.ClaudeSourceUser}
+		}},
+		{"claude sign-in waiting", false, func(fx *usageFixture) {
+			fx.codex.q = okQuota(aiusage.ToolCodex, "Plus", now)
+			fx.claude.q = aiusage.Quota{Tool: aiusage.ToolClaude, Status: aiusage.QuotaNotLoggedIn, FetchedAt: now}
+			fx.f.claudeLogin = usageClaudeLogin{busy: true, codes: make(chan string, 1)}
+		}},
+		{"claude sign-in failed", false, func(fx *usageFixture) {
+			fx.codex.q = okQuota(aiusage.ToolCodex, "Plus", now)
+			fx.claude.q = aiusage.Quota{Tool: aiusage.ToolClaude, Status: aiusage.QuotaNotLoggedIn, FetchedAt: now}
+			fx.f.claudeLogin = usageClaudeLogin{failed: true}
+		}},
 		{"expired", false, func(fx *usageFixture) {
 			fx.codex.q = aiusage.Quota{Tool: aiusage.ToolCodex, Status: aiusage.QuotaExpired, FetchedAt: now}
 			fx.claude.q = aiusage.Quota{Tool: aiusage.ToolClaude, Status: aiusage.QuotaExpired, FetchedAt: now}
