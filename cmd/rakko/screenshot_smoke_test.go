@@ -188,11 +188,11 @@ func TestScreenshotSmokeOverlay(t *testing.T) {
 	}
 
 	// Real keyboard: choose the text tool and its white colour, click a
-	// spot, type hello and commit with Return.
+	// spot, type two lines and commit with ⌘Return.
 	clickBar(shotBarTool, shotToolText)
 	// The property bar's last colour swatch is white.
 	clickBar(shotBarColor, shotToolNone)
-	textAt := mygo.Point{X: sel.X + 30, Y: sel.Y + sel.Height - 40}
+	textAt := mygo.Point{X: sel.X + 30, Y: sel.Y + sel.Height - 90}
 	postShotMouse(t, float64(textAt.X), float64(textAt.Y), num, 5, 1, 2)
 	time.Sleep(300 * time.Millisecond)
 	var keyIsKey bool
@@ -201,6 +201,10 @@ func TestScreenshotSmokeOverlay(t *testing.T) {
 	postTyping(t, "hello")
 	time.Sleep(150 * time.Millisecond)
 	postReturn(t)
+	time.Sleep(150 * time.Millisecond)
+	postTyping(t, "world")
+	time.Sleep(150 * time.Millisecond)
+	postCmdReturn(t)
 	time.Sleep(300 * time.Millisecond)
 	var gotText string
 	onMain(func() {
@@ -210,13 +214,13 @@ func TestScreenshotSmokeOverlay(t *testing.T) {
 			}
 		}
 	})
-	if gotText != "hello" {
-		t.Fatalf("typed text = %q, want hello", gotText)
+	if gotText != "hello\nworld" {
+		t.Fatalf("typed text = %q, want two lines", gotText)
 	}
 
 	// The output crop is the production path, at the selection's pixels.
 	var pngLen int
-	var reds, whites int
+	var reds, whites, bands int
 	onMain(func() {
 		png, err := s.outputPNG(true)
 		if err != nil {
@@ -229,6 +233,7 @@ func TestScreenshotSmokeOverlay(t *testing.T) {
 			t.Errorf("decode output: %v", derr)
 			return
 		}
+		bands = shotTextRowBands(img, img.Bounds())
 		for y := img.Bounds().Min.Y; y < img.Bounds().Max.Y; y++ {
 			for x := img.Bounds().Min.X; x < img.Bounds().Max.X; x++ {
 				r, g, b, _ := img.At(x, y).RGBA()
@@ -248,9 +253,12 @@ func TestScreenshotSmokeOverlay(t *testing.T) {
 		t.Fatal("the exported crop has no arrow pixels")
 	}
 	if whites < 20 {
-		t.Fatalf("the exported crop has %d text pixels, want the typed line", whites)
+		t.Fatalf("the exported crop has %d text pixels, want the typed lines", whites)
 	}
-	t.Logf("export pixels: %d arrow red, %d text white", reds, whites)
+	if bands < 2 {
+		t.Fatalf("the exported crop has text in %d row bands, want two lines", bands)
+	}
+	t.Logf("export pixels: %d arrow red, %d text white in %d row bands", reds, whites, bands)
 	shotWindow(t, od.win, "overlay-selection")
 	t.Logf("selection %+v, annotated PNG %d bytes", sel, pngLen)
 
@@ -345,4 +353,40 @@ func postShotMouse(t *testing.T, x, y float64, overlay int, events ...uint32) {
 		release(ev)
 		time.Sleep(20 * time.Millisecond)
 	}
+}
+
+// postCmdReturn presses ⌘Return with real key events.
+func postCmdReturn(t *testing.T) {
+	t.Helper()
+	lib, err := purego.Dlopen("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", purego.RTLD_LAZY)
+	if err != nil {
+		t.Fatalf("CoreGraphics: %v", err)
+	}
+	var (
+		createKey func(source uintptr, key uint16, down bool) uintptr
+		post      func(tap uint32, ev uintptr)
+		release   func(cf uintptr)
+	)
+	purego.RegisterLibFunc(&createKey, lib, "CGEventCreateKeyboardEvent")
+	purego.RegisterLibFunc(&post, lib, "CGEventPost")
+	libCF, err := purego.Dlopen("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation", purego.RTLD_LAZY)
+	if err != nil {
+		t.Fatalf("CoreFoundation: %v", err)
+	}
+	purego.RegisterLibFunc(&release, libCF, "CFRelease")
+	const cmdKey, returnKey = 55, 36
+	steps := []struct {
+		key  uint16
+		down bool
+	}{{cmdKey, true}, {returnKey, true}, {returnKey, false}, {cmdKey, false}}
+	for _, st := range steps {
+		ev := createKey(0, st.key, st.down)
+		if ev == 0 {
+			t.Fatal("CGEventCreateKeyboardEvent returned nil")
+		}
+		post(0, ev)
+		release(ev)
+		time.Sleep(20 * time.Millisecond)
+	}
+	time.Sleep(300 * time.Millisecond)
 }

@@ -32,7 +32,7 @@ func shotSeams(t *testing.T) {
 	dispatch, work, clock := shotDispatch, shotWork, shotClock
 	front, activate, preflight := shotFrontPID, shotActivateSelf, shotPreflight
 	clipboard, readDir, writeFile, openWin := shotClipboard, shotReadSaveDir, shotWriteFile, shotOpenWindow
-	keyWindow, readText := shotKeyWindow, shotReadText
+	keyWindow := shotKeyWindow
 	clean := shotCleanTemp
 	settle := shotPanelSettle
 	after := shotAfter
@@ -42,7 +42,7 @@ func shotSeams(t *testing.T) {
 		shotDispatch, shotWork, shotClock = dispatch, work, clock
 		shotFrontPID, shotActivateSelf, shotPreflight = front, activate, preflight
 		shotClipboard, shotReadSaveDir, shotWriteFile, shotOpenWindow = clipboard, readDir, writeFile, openWin
-		shotKeyWindow, shotReadText = keyWindow, readText
+		shotKeyWindow = keyWindow
 		shotCleanTemp = clean
 		shotPanelSettle = settle
 		shotAfter, shotOpenPin = after, openPin
@@ -56,7 +56,6 @@ func shotSeams(t *testing.T) {
 	shotFrontPID = func() int { return 0 }
 	shotActivateSelf = func() {}
 	shotKeyWindow = func(uintptr) bool { return true }
-	shotReadText = func() string { return "" }
 	shotNormalWindow = func() []mac.ScreenWindow { return nil }
 	shotOpenWindow = func(*shotSession, int) {}
 	shotCleanTemp = func() { os.MkdirAll(shotTempDir(), 0o700) }
@@ -550,10 +549,10 @@ func TestShotEscapeLadder(t *testing.T) {
 	s.hasSel = true
 	s.sel = mygo.Rectangle{X: 10, Y: 10, Width: 40, Height: 30}
 	s.tool = shotToolRect
-	s.text = &shotTextEdit{at: mygo.Point{X: 20, Y: 20}, text: "hi"}
+	s.text = &shotTextEdit{at: mygo.Point{X: 20, Y: 20}, width: 60, text: "hi"}
 	s.escape()
-	if s.text != nil || len(s.hist.annots) != 0 {
-		t.Fatalf("Esc did not abandon the line: text=%v annots=%d", s.text, len(s.hist.annots))
+	if s.text != nil || len(s.hist.annots) != 1 || s.hist.annots[0].text != "hi" {
+		t.Fatalf("Esc did not finish and keep the text: text=%v annots=%+v", s.text, s.hist.annots)
 	}
 	s.escape()
 	if s.tool != shotToolNone {
@@ -608,76 +607,485 @@ func renderShotMarks(t *testing.T, w, h int, annots ...shotAnnotation) *image.RG
 // same TextCaret path the window uses.
 func shotTextView(t *testing.T, s *shotSession) *ui.Tester {
 	t.Helper()
-	v := ui.NewTester(func(c *ui.Context) { s.overlayView(c, 0) }, 300, 200)
+	w, h := 300, 200
+	if d := s.ownerDisplay(); d != nil {
+		w, h = d.Bounds.Width, d.Bounds.Height
+	}
+	v := ui.NewTester(func(c *ui.Context) { s.overlayView(c, 0) }, w, h)
 	v.SetScale(1)
 	v.Frame()
 	v.Frame()
 	return v
 }
 
-func TestShotTextEditingTakesTextAndCommits(t *testing.T) {
+// shotNewTextBox clicks at (x, y) with the text tool and returns the new
+// editing box.
+func shotNewTextBox(t *testing.T, s *shotSession, v *ui.Tester, x, y float32) *shotTextEdit {
+	t.Helper()
+	if s.tool != shotToolText {
+		s.tool = shotToolText
+		s.layoutBar()
+	}
+	v.ClickAtWith(0, x, y)
+	v.Frame()
+	if s.text == nil {
+		t.Fatalf("a click with the text tool made no box at %v,%v", x, y)
+	}
+	return s.text
+}
+
+func TestShotTextClickCreatesDefaultBox(t *testing.T) {
 	shotSeams(t)
 	s := shotTestSession(t, mygo.Rectangle{Width: 300, Height: 200}, 300, 200)
 	s.hasSel = true
 	s.sel = mygo.Rectangle{X: 10, Y: 10, Width: 200, Height: 100}
 	s.tool = shotToolText
 	s.layoutBar()
-	s.text = &shotTextEdit{at: mygo.Point{X: 30, Y: 30}}
 	v := shotTextView(t, s)
-	if _, active := v.TextCaret(); !active {
-		t.Fatal("the editing overlay does not take text from the input method")
+	te := shotNewTextBox(t, s, v, 40, 40)
+	size := shotTextSizeFor(s.width)
+	want := shotTextDefaultWidth(size)
+	if te.width != want {
+		t.Fatalf("click box width = %d, want %d", te.width, want)
 	}
-	v.Type("hello")
+	if te.at != (mygo.Point{X: 40, Y: 40}) {
+		t.Fatalf("click box at %+v", te.at)
+	}
+	s.finishText()
+}
+
+func TestShotTextDragSetsBoxWidth(t *testing.T) {
+	shotSeams(t)
+	s := shotTestSession(t, mygo.Rectangle{Width: 300, Height: 200}, 300, 200)
+	s.hasSel = true
+	s.sel = mygo.Rectangle{X: 10, Y: 10, Width: 220, Height: 120}
+	s.tool = shotToolText
+	s.layoutBar()
+	v := shotTextView(t, s)
+	v.Move(40, 50)
+	v.Press(40, 50)
+	v.Move(120, 50)
+	v.Release(120, 50)
 	v.Frame()
-	if s.text == nil || s.text.text != "hello" {
-		t.Fatalf("typed line = %+v", s.text)
+	if s.text == nil {
+		t.Fatal("a drag with the text tool made no box")
 	}
+	if got, want := s.text.width, 80; got != want {
+		t.Fatalf("dragged box width = %d, want %d", got, want)
+	}
+	if got := s.text.at.X; got != 40 {
+		t.Fatalf("dragged box left = %d, want 40", got)
+	}
+	// Dragging left anchors the box at the released edge.
+	v.Move(160, 70)
+	v.Press(160, 70)
+	v.Move(100, 70)
+	v.Release(100, 70)
+	v.Frame()
+	if s.text == nil || s.text.at.X != 100 || s.text.width != 60 {
+		t.Fatalf("leftward drag = %+v", s.text)
+	}
+	s.finishText()
+}
+
+func TestShotTextEnterBreaksLinesAndCmdEnterFinishes(t *testing.T) {
+	shotSeams(t)
+	s := shotTestSession(t, mygo.Rectangle{Width: 300, Height: 200}, 300, 200)
+	s.hasSel = true
+	s.sel = mygo.Rectangle{X: 10, Y: 10, Width: 220, Height: 120}
+	s.tool = shotToolText
+	s.layoutBar()
+	v := shotTextView(t, s)
+	te := shotNewTextBox(t, s, v, 30, 30)
+	v.Type("hello")
 	v.Key(0, ui.KeyEnter)
+	v.Type("world")
+	v.Frame()
+	if got, want := te.text, "hello\nworld"; got != want {
+		t.Fatalf("typed text = %q, want %q", got, want)
+	}
+	v.Key(ui.Cmd, ui.KeyEnter)
 	v.Frame()
 	if s.text != nil {
-		t.Fatal("Enter did not leave text mode")
+		t.Fatal("⌘Enter did not leave the box")
 	}
-	if len(s.hist.annots) != 1 || s.hist.annots[0].text != "hello" {
-		t.Fatalf("committed annots = %+v", s.hist.annots)
+	if len(s.hist.annots) != 1 || s.hist.annots[0].text != "hello\nworld" {
+		t.Fatalf("committed text = %+v", s.hist.annots)
+	}
+	if s.hist.annots[0].boxW == 0 {
+		t.Fatal("the annotation lost its box width")
+	}
+	// The overlay takes the keyboard back after the box goes.
+	v.Key(0, ui.KeyEscape)
+	v.Frame()
+	if s.tool != shotToolNone {
+		t.Fatalf("Esc after finishing did not reach the overlay: tool=%v", s.tool)
 	}
 }
 
-func TestShotTextEditingEscCancelsAndPasteWorks(t *testing.T) {
+func TestShotTextEscKeepsTextAndEmptyDisappears(t *testing.T) {
 	shotSeams(t)
-	shotReadText = func() string { return "pasted\nline" }
 	s := shotTestSession(t, mygo.Rectangle{Width: 300, Height: 200}, 300, 200)
 	s.hasSel = true
-	s.sel = mygo.Rectangle{X: 10, Y: 10, Width: 200, Height: 100}
+	s.sel = mygo.Rectangle{X: 10, Y: 10, Width: 220, Height: 120}
 	s.tool = shotToolText
 	s.layoutBar()
-	s.text = &shotTextEdit{at: mygo.Point{X: 30, Y: 30}}
 	v := shotTextView(t, s)
-	v.Type("bye")
-	v.Key(ui.Cmd, ui.KeyV)
-	v.Frame()
-	if s.text == nil || s.text.text != "byepasted line" {
-		t.Fatalf("pasted line = %+v", s.text)
-	}
+	shotNewTextBox(t, s, v, 30, 30)
+	v.Type("keep")
 	v.Key(0, ui.KeyEscape)
 	v.Frame()
 	if s.text != nil {
-		t.Fatal("Esc did not leave text mode")
+		t.Fatal("Esc did not finish the box")
 	}
-	if len(s.hist.annots) != 0 {
-		t.Fatalf("Esc committed the canceled line: %+v", s.hist.annots)
+	if len(s.hist.annots) != 1 || s.hist.annots[0].text != "keep" {
+		t.Fatalf("Esc lost the text: %+v", s.hist.annots)
+	}
+	// An empty box leaves no annotation and no undo step.
+	before := len(s.hist.undo)
+	shotNewTextBox(t, s, v, 40, 60)
+	v.Key(0, ui.KeyEscape)
+	v.Frame()
+	if s.text != nil || len(s.hist.annots) != 1 || len(s.hist.undo) != before {
+		t.Fatalf("empty box left state: text=%v annots=%d undo=%d", s.text, len(s.hist.annots), len(s.hist.undo))
 	}
 }
 
-func TestShotTextGatedToTheEditingLine(t *testing.T) {
+func TestShotTextComposingEnterStaysInTheBox(t *testing.T) {
+	shotSeams(t)
 	s := shotTestSession(t, mygo.Rectangle{Width: 300, Height: 200}, 300, 200)
 	s.hasSel = true
-	s.sel = mygo.Rectangle{X: 10, Y: 10, Width: 200, Height: 100}
+	s.sel = mygo.Rectangle{X: 10, Y: 10, Width: 220, Height: 120}
 	s.tool = shotToolText
 	s.layoutBar()
 	v := shotTextView(t, s)
-	if _, active := v.TextCaret(); active {
-		t.Fatal("the overlay took text while no line was being typed")
+	shotNewTextBox(t, s, v, 30, 30)
+	v.Compose("ni", 2)
+	v.Frame()
+	v.Key(0, ui.KeyEnter)
+	v.Frame()
+	if s.text == nil {
+		t.Fatal("Enter while composing finished the box; it belongs to the input method")
 	}
+	v.Compose("", 0)
+	v.Key(0, ui.KeyEscape)
+	v.Frame()
+}
+
+func TestShotTextResizeReflows(t *testing.T) {
+	shotSeams(t)
+	s := shotTestSession(t, mygo.Rectangle{Width: 400, Height: 300}, 400, 300)
+	s.hasSel = true
+	s.sel = mygo.Rectangle{X: 10, Y: 10, Width: 300, Height: 220}
+	s.tool = shotToolText
+	s.layoutBar()
+	v := shotTextView(t, s)
+	te := shotNewTextBox(t, s, v, 30, 30)
+	v.Type("one two three four five six seven eight nine ten")
+	v.Frame()
+	before := s.textHeight(te)
+	gx := float32(te.at.X + te.width - 6 + 6) // grip-e's centre
+	gy := float32(te.at.Y + s.textHeight(te)/2)
+	v.Move(gx, gy)
+	v.Press(gx, gy)
+	v.Move(gx-70, gy)
+	v.Release(gx-70, gy)
+	v.Frame()
+	if te.width > shotTextDefaultWidth(te.size())-60 {
+		t.Fatalf("the grip did not narrow the box: width=%d", te.width)
+	}
+	if got := s.textHeight(te); got <= before {
+		t.Fatalf("lines did not reflow: height %d -> %d", before, got)
+	}
+	s.finishText()
+}
+
+func TestShotTextDoubleClickReeditsWithItsWidth(t *testing.T) {
+	shotSeams(t)
+	s := shotTestSession(t, mygo.Rectangle{Width: 300, Height: 200}, 300, 200)
+	s.hasSel = true
+	s.sel = mygo.Rectangle{X: 10, Y: 10, Width: 220, Height: 120}
+	s.tool = shotToolNone
+	s.hist.annots = []shotAnnotation{{tool: shotToolText, color: shotAnnotationColors[4], width: 4,
+		a: mygo.Point{X: 30, Y: 30}, text: "hello", boxW: 120}}
+	s.layoutBar()
+	v := shotTextView(t, s)
+	v.ClickAtWith(0, 40, 40)
+	v.ClickAtWith(0, 40, 40)
+	v.Frame()
+	if s.text == nil {
+		t.Fatal("double click did not reopen the text")
+	}
+	if s.text.width != 120 || s.text.text != "hello" || s.text.index != 1 {
+		t.Fatalf("reopened box = %+v", s.text)
+	}
+	s.finishText()
+	if len(s.hist.annots) != 1 || s.hist.annots[0].text != "hello" {
+		t.Fatalf("re-edit changed the annotation: %+v", s.hist.annots)
+	}
+}
+
+func TestShotTextPasteKeepsLinesAndUndoStaysInTheBox(t *testing.T) {
+	shotSeams(t)
+	s := shotTestSession(t, mygo.Rectangle{Width: 300, Height: 200}, 300, 200)
+	s.hasSel = true
+	s.sel = mygo.Rectangle{X: 10, Y: 10, Width: 220, Height: 120}
+	s.tool = shotToolText
+	s.layoutBar()
+	v := shotTextView(t, s)
+	te := shotNewTextBox(t, s, v, 30, 30)
+	v.SetClipboard("a\nb")
+	v.Key(ui.Cmd, ui.KeyV)
+	v.Frame()
+	if te.text != "a\nb" {
+		t.Fatalf("pasted text = %q", te.text)
+	}
+	v.Type("c")
+	v.Key(ui.Cmd, ui.KeyZ)
+	v.Frame()
+	if s.text == nil {
+		t.Fatal("⌘Z in the box finished the screenshot edit")
+	}
+	if te.text == "a\nbc" {
+		t.Fatal("⌘Z did not undo inside the text box")
+	}
+	s.finishText()
+}
+
+// shotTextRowBands counts the lines of white text in area: a glyph row
+// may have a blank row inside it, so bands closer than four rows are one
+// line.
+func shotTextRowBands(img image.Image, area image.Rectangle) int {
+	bands, last, gap := 0, -100, 0
+	for y := area.Min.Y; y < area.Max.Y; y++ {
+		row := false
+		for x := area.Min.X; x < area.Max.X; x++ {
+			px := color.NRGBAModel.Convert(img.At(x, y)).(color.NRGBA)
+			if px.R > 180 && px.G > 180 && px.B > 180 {
+				row = true
+				break
+			}
+		}
+		if row {
+			gap = y - last
+			if gap > 4 {
+				bands++
+			}
+			last = y
+		}
+	}
+	return bands
+}
+
+func TestShotTextExportWrapsLikeThePreview(t *testing.T) {
+	shotSeams(t)
+	s := shotTestSession(t, mygo.Rectangle{Width: 400, Height: 300}, 400, 300)
+	s.hasSel = true
+	s.sel = mygo.Rectangle{X: 0, Y: 0, Width: 300, Height: 200}
+	s.hist.annots = []shotAnnotation{{tool: shotToolText, color: ui.Hex("#FFFFFF"), width: 4,
+		a: mygo.Point{X: 20, Y: 20}, boxW: 100, text: "one two three four five six seven eight"}}
+	preview := ui.Render(func(c *ui.Context) { s.overlayView(c, 0) }, 400, 300, 1)
+	previewBands := shotTextRowBands(preview, image.Rect(15, 15, 130, 190))
+	png, err := s.outputPNG(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := stdpng.Decode(bytes.NewReader(png))
+	if err != nil {
+		t.Fatal(err)
+	}
+	exportBands := shotTextRowBands(out, image.Rect(0, 0, 300, 200))
+	if previewBands < 2 {
+		t.Fatalf("the test text did not wrap in the preview: %d bands", previewBands)
+	}
+	if exportBands != previewBands {
+		t.Fatalf("export wrapped into %d lines, preview into %d", exportBands, previewBands)
+	}
+	// A narrower box breaks the same text into more lines.
+	s.hist.annots[0].boxW = 50
+	png, err = s.outputPNG(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err = stdpng.Decode(bytes.NewReader(png))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if narrow := shotTextRowBands(out, image.Rect(0, 0, 300, 200)); narrow <= exportBands {
+		t.Fatalf("narrow box kept %d lines, wide had %d", narrow, exportBands)
+	}
+}
+
+func TestShotTextMovesAfterChoosingIt(t *testing.T) {
+	shotSeams(t)
+	s := shotTestSession(t, mygo.Rectangle{Width: 300, Height: 200}, 300, 200)
+	s.hasSel = true
+	s.sel = mygo.Rectangle{X: 10, Y: 10, Width: 220, Height: 120}
+	s.tool = shotToolNone
+	s.hist.annots = []shotAnnotation{{tool: shotToolText, color: shotAnnotationColors[4], width: 4,
+		a: mygo.Point{X: 30, Y: 30}, text: "move me", boxW: 100}}
+	s.layoutBar()
+	v := shotTextView(t, s)
+	v.Move(40, 40)
+	v.Press(40, 40)
+	v.Move(60, 55)
+	v.Release(60, 55)
+	v.Frame()
+	if got := s.hist.annots[0].a; got != (mygo.Point{X: 50, Y: 45}) {
+		t.Fatalf("moved text at %+v", got)
+	}
+	if !s.hist.undoLast() {
+		t.Fatal("moving a text made no undo step")
+	}
+	if got := s.hist.annots[0].a; got != (mygo.Point{X: 30, Y: 30}) {
+		t.Fatalf("undo left the text at %+v", got)
+	}
+}
+
+func TestShotTextToolSwitchFinishesTheBox(t *testing.T) {
+	shotSeams(t)
+	s := shotTestSession(t, mygo.Rectangle{Width: 400, Height: 300}, 400, 300)
+	s.hasSel = true
+	s.sel = mygo.Rectangle{X: 10, Y: 10, Width: 260, Height: 160}
+	s.tool = shotToolText
+	s.layoutBar()
+	v := shotTextView(t, s)
+	shotNewTextBox(t, s, v, 30, 30)
+	v.Type("done")
+	var arrow mygo.Rectangle
+	for _, it := range s.bar.items {
+		if it.kind == shotBarTool && it.tool == shotToolArrow {
+			arrow = it.rect
+		}
+	}
+	v.ClickAtWith(0, float32(arrow.X+arrow.Width/2), float32(arrow.Y+arrow.Height/2))
+	v.Frame()
+	if s.text != nil || s.tool != shotToolArrow {
+		t.Fatalf("switching tools left the box open: text=%v tool=%v", s.text, s.tool)
+	}
+	if len(s.hist.annots) != 1 || s.hist.annots[0].text != "done" {
+		t.Fatalf("the box text was lost: %+v", s.hist.annots)
+	}
+}
+
+func TestShotTextColourChangesWhileEditing(t *testing.T) {
+	shotSeams(t)
+	s := shotTestSession(t, mygo.Rectangle{Width: 400, Height: 300}, 400, 300)
+	s.hasSel = true
+	s.sel = mygo.Rectangle{X: 10, Y: 10, Width: 260, Height: 160}
+	s.tool = shotToolText
+	s.layoutBar()
+	v := shotTextView(t, s)
+	shotNewTextBox(t, s, v, 30, 30)
+	var swatch mygo.Rectangle
+	for _, it := range s.bar.props.items {
+		if it.kind == shotBarColor && it.index == 2 {
+			swatch = it.rect
+		}
+	}
+	v.ClickAtWith(0, float32(swatch.X+swatch.Width/2), float32(swatch.Y+swatch.Height/2))
+	v.Frame()
+	if s.text == nil {
+		t.Fatal("choosing a colour finished the box")
+	}
+	if s.text.color != shotAnnotationColors[2] {
+		t.Fatalf("editing colour = %+v, want %+v", s.text.color, shotAnnotationColors[2])
+	}
+	v.Type("green")
+	s.finishText()
+	if got := s.hist.annots[len(s.hist.annots)-1].color; got != shotAnnotationColors[2] {
+		t.Fatalf("committed colour = %+v", got)
+	}
+}
+
+// The live control and the export must break the same text at the same
+// width; only the type size and the box width decide the lines.
+func TestShotTextEditorWrapsLikeExport(t *testing.T) {
+	shotSeams(t)
+	s := shotTestSession(t, mygo.Rectangle{Width: 400, Height: 300}, 400, 300)
+	s.hasSel = true
+	s.sel = mygo.Rectangle{X: 0, Y: 0, Width: 300, Height: 200}
+	s.tool = shotToolText
+	s.color = ui.Hex("#FFFFFF")
+	s.layoutBar()
+	v := shotTextView(t, s)
+	te := shotNewTextBox(t, s, v, 30, 30)
+	v.Type("one two three four five six seven eight nine")
+	v.Frame()
+	te.width = 100
+	v.Frame()
+	preview := v.Image()
+	previewBands := shotTextRowBands(preview, image.Rect(38, 30, 120, 136))
+	if previewBands < 2 {
+		t.Fatalf("the control did not wrap the text: %d bands", previewBands)
+	}
+	s.finishText()
+	png, err := s.outputPNG(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := stdpng.Decode(bytes.NewReader(png))
+	if err != nil {
+		t.Fatal(err)
+	}
+	exportBands := shotTextRowBands(out, image.Rect(0, 0, 300, 200))
+	if exportBands != previewBands {
+		t.Fatalf("the control wrapped into %d lines, the export into %d", previewBands, exportBands)
+	}
+}
+
+// Retina only scales the same layout: the crop breaks lines where the
+// overlay does.
+func TestShotTextRetinaWrapsLikeThePreview(t *testing.T) {
+	shotSeams(t)
+	s := shotTestSession(t, mygo.Rectangle{Width: 200, Height: 150}, 400, 300)
+	s.displays[0].Scale = 2
+	s.displays[0].shotTarget.Scale = 2
+	s.hasSel = true
+	s.sel = mygo.Rectangle{X: 0, Y: 0, Width: 200, Height: 150}
+	s.hist.annots = []shotAnnotation{{tool: shotToolText, color: ui.Hex("#FFFFFF"), width: 4,
+		a: mygo.Point{X: 10, Y: 10}, boxW: 90, text: "one two three four five six seven eight"}}
+	preview := ui.Render(func(c *ui.Context) { s.overlayView(c, 0) }, 200, 150, 1)
+	previewBands := shotTextRowBands(preview, image.Rect(12, 10, 96, 140))
+	png, err := s.outputPNG(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := stdpng.Decode(bytes.NewReader(png))
+	if err != nil {
+		t.Fatal(err)
+	}
+	exportBands := shotTextRowBands(out, image.Rect(0, 0, 400, 300))
+	if previewBands < 2 || exportBands != previewBands {
+		t.Fatalf("retina export has %d lines, preview %d", exportBands, previewBands)
+	}
+}
+
+func TestShotTextSelectCopyCutStayInBox(t *testing.T) {
+	shotSeams(t)
+	s := shotTestSession(t, mygo.Rectangle{Width: 300, Height: 200}, 300, 200)
+	s.hasSel = true
+	s.sel = mygo.Rectangle{X: 10, Y: 10, Width: 220, Height: 120}
+	s.tool = shotToolText
+	s.layoutBar()
+	v := shotTextView(t, s)
+	te := shotNewTextBox(t, s, v, 30, 30)
+	v.Type("abc")
+	v.Key(ui.Cmd, ui.KeyA)
+	v.Key(ui.Cmd, ui.KeyC)
+	v.Frame()
+	if v.Clipboard() != "abc" {
+		t.Fatalf("⌘C in the box copied %q", v.Clipboard())
+	}
+	if s.text == nil {
+		t.Fatal("⌘C closed the box")
+	}
+	v.Key(ui.Cmd, ui.KeyX)
+	v.Frame()
+	if te.text != "" || s.text == nil {
+		t.Fatalf("⌘X left %q in the box (text nil: %v)", te.text, s.text == nil)
+	}
+	s.finishText()
 }
 
 func TestShotTextSizeFollowsWidth(t *testing.T) {

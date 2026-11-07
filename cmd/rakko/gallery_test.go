@@ -1455,6 +1455,44 @@ func galleryGroupI() []galleryItem {
 			p := &shotPin{bitmap: ui.NewBitmap(img), pixW: 360, pixH: 240}
 			return galleryRender{view: galleryView(t, lang, p.view, 360, 240)}
 		}},
+		{ID: "I8", Group: g, Title: "截图文字框", State: "多行编辑 · 左右把手 · 自动长高", Wide: true, Build: func(t *testing.T, lang string) galleryRender {
+			s := galleryShotSession(t, lang, 900, 600)
+			s.cursor = mygo.Point{X: 520, Y: 300}
+			s.hasSel = true
+			s.sel = mygo.Rectangle{X: 220, Y: 120, Width: 460, Height: 320}
+			s.tool = shotToolText
+			s.color = shotAnnotationColors[4]
+			s.width = shotAnnotationWidths[1]
+			text := "把首页卡片的间距改成 4pt，\n第二行继续折行显示。"
+			if lang != "zh-Hans" {
+				text = "Change the home cards' gap to 4pt,\nand let this second line wrap too."
+			}
+			s.text = &shotTextEdit{
+				at: mygo.Point{X: 270, Y: 170}, width: 240,
+				text: text, color: s.color, stroke: s.width, focus: true,
+			}
+			s.layoutBar()
+			return galleryRender{view: galleryView(t, lang, func(c *ui.Context) { s.overlayView(c, 0) }, 900, 600)}
+		}},
+		{ID: "I9", Group: g, Title: "截图文字", State: "完成后 · 按框宽折行且没有边框", Wide: true, Build: func(t *testing.T, lang string) galleryRender {
+			s := galleryShotSession(t, lang, 900, 600)
+			s.cursor = mygo.Point{X: 760, Y: 520}
+			s.hasSel = true
+			s.sel = mygo.Rectangle{X: 220, Y: 120, Width: 460, Height: 320}
+			s.tool = shotToolNone
+			text := "截图里的多行文字\n按框宽自动折行，导出后没有边框。"
+			if lang != "zh-Hans" {
+				text = "Multi-line text in a screenshot\nwraps to its box and exports without a frame."
+			}
+			s.hist.annots = []shotAnnotation{
+				{tool: shotToolText, color: shotAnnotationColors[4], width: 4,
+					a: mygo.Point{X: 270, Y: 170}, boxW: 220, text: text},
+				{tool: shotToolText, color: shotAnnotationColors[1], width: 7,
+					a: mygo.Point{X: 270, Y: 280}, boxW: 260, text: "Second size\n24pt wraps too"},
+			}
+			s.layoutBar()
+			return galleryRender{view: galleryView(t, lang, func(c *ui.Context) { s.overlayView(c, 0) }, 900, 600)}
+		}},
 	}
 }
 

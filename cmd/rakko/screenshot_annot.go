@@ -66,8 +66,9 @@ type shotMosaicCell struct {
 }
 
 // shotAnnotation is one mark. a and b are the drag's endpoints (a is the
-// anchor for text and the centre for a number), points is a pen's path,
-// and cells are the mosaic blocks a brush stroke covered.
+// top-left of text and the centre for a number), points is a pen's path,
+// and cells are the mosaic blocks a brush stroke covered. boxW is a text
+// box's content width in points; the height follows from the wrapped text.
 type shotAnnotation struct {
 	tool   shotTool
 	color  ui.Color
@@ -75,6 +76,7 @@ type shotAnnotation struct {
 	a, b   mygo.Point
 	points []mygo.Point
 	text   string
+	boxW   int
 	number int
 	cells  []shotMosaicCell
 }
@@ -206,9 +208,21 @@ func shotDrawAnnotation(p *ui.Painter, an shotAnnotation, origin mygo.Point, sca
 		if an.text == "" {
 			return
 		}
-		x, y := px(an.a)
-		size := shotAnnotationTextSize(an) * scale
-		p.Text(x, y+size*0.15, an.text, size, an.color)
+		// Lay the text out at its point size and scale the result: shaping
+		// it at the export's pixel size would break lines elsewhere, as
+		// glyph advances do not scale exactly. The preview draws at scale
+		// 1; a crop draws the same lines enlarged.
+		size := shotAnnotationTextSize(an)
+		lx := float32(an.a.X - origin.X)
+		ly := float32(an.a.Y - origin.Y)
+		draw := func() {
+			p.RichText(lx, ly, float32(an.boxW), ui.Span{Text: an.text, Size: size, Color: an.color})
+		}
+		if scale == 1 {
+			draw()
+		} else {
+			p.Transform(ui.Scaling(scale, scale), 0, 0, draw)
+		}
 	case shotToolNumber:
 		cx, cy := px(an.a)
 		r := float32(shotNumberRadius) * scale

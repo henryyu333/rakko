@@ -41,7 +41,7 @@ func (s *shotSession) outputPNG(withAnnotations bool) ([]byte, error) {
 	}
 	base := image.NewRGBA(image.Rect(0, 0, w, h))
 	draw.Draw(base, base.Bounds(), d.img, crop.Min, draw.Src)
-	if withAnnotations && (len(s.hist.annots) > 0 || s.text != nil) {
+	if withAnnotations && len(s.hist.annots) > 0 {
 		sx := float64(w) / float64(max(s.sel.Width, 1))
 		sy := float64(h) / float64(max(s.sel.Height, 1))
 		origin := mygo.Point{X: s.sel.X, Y: s.sel.Y}
@@ -51,10 +51,6 @@ func (s *shotSession) outputPNG(withAnnotations bool) ([]byte, error) {
 			ui.Box(c.Key("marks")).Fill().Draw(func(p *ui.Painter, r ui.Rect) {
 				for _, an := range s.hist.annots {
 					shotDrawAnnotation(p, an, origin, scale)
-				}
-				if s.text != nil {
-					shotDrawAnnotation(p, shotAnnotation{tool: shotToolText, color: s.color, a: s.text.at,
-						text: s.text.text + s.text.compose}, origin, scale)
 				}
 			})
 		}, w, h, 1)
@@ -70,6 +66,7 @@ func (s *shotSession) outputPNG(withAnnotations bool) ([]byte, error) {
 // copy puts the annotated crop on the pasteboard as PNG and as a file URL,
 // records it in the clipboard page, and leaves the overlay.
 func (s *shotSession) copy() {
+	s.finishText()
 	png, err := s.outputPNG(true)
 	if err != nil {
 		s.a.report(err)
@@ -100,6 +97,7 @@ func (a *shelf) copyShotPNG(png []byte) bool {
 
 // save writes the annotated crop to the system screenshot folder.
 func (s *shotSession) save() {
+	s.finishText()
 	png, err := s.outputPNG(true)
 	if err != nil {
 		s.a.report(err)
@@ -116,6 +114,7 @@ func (s *shotSession) save() {
 // recognize sends the unannotated selection through the app's one Vision
 // path; the result lands on the pasteboard with the 框选文字 wording.
 func (s *shotSession) recognize() {
+	s.finishText()
 	png, err := s.outputPNG(false)
 	if err != nil {
 		s.a.report(err)
@@ -157,6 +156,7 @@ var shotOpenPin = func(a *shelf, png []byte, frame mygo.Rectangle, scale float64
 
 // pin opens a floating copy of the annotated crop on the desktop.
 func (s *shotSession) pin() {
+	s.finishText()
 	png, err := s.outputPNG(true)
 	if err != nil {
 		s.a.report(err)
@@ -319,16 +319,6 @@ func writeShotClipboard(png []byte, path string) error {
 		return err
 	}
 	return mygo.Clipboard.Write(data)
-}
-
-// readClipboardText reads the pasteboard's plain text for a ⌘V in the text
-// tool. An empty pasteboard, or one with no text, reads as "".
-func readClipboardText() string {
-	b, err := mygo.Clipboard.ReadFormat(transfer.Text)
-	if err != nil {
-		return ""
-	}
-	return string(b)
 }
 
 // clipSourceShot is the SourceApp marker of screenshots Rakko produced.

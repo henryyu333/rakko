@@ -27,6 +27,7 @@ func (s *shotSession) draw(p *ui.Painter, r ui.Rect, di int) {
 			// paint over them so a mark at the edge cannot break it.
 			s.drawAnnotations(p, d)
 			s.drawSelection(p, d)
+			s.drawTextFrame(p, d)
 		}
 	} else if s.hoverOK && di == s.cursorDpy && shotRectsIntersect(s.hover, d.Bounds) {
 		s.drawWindowHint(p, d)
@@ -100,23 +101,14 @@ func (s *shotSession) drawAnnotations(p *ui.Painter, d *shotDisplay) {
 	sel := shotLocalRect(s.sel, d.shotTarget)
 	clip := ui.Rect{X: float32(sel.X), Y: float32(sel.Y), W: float32(sel.Width), H: float32(sel.Height)}
 	p.Clip(clip, 0, func() {
-		for _, an := range s.hist.annots {
+		for i, an := range s.hist.annots {
+			if s.text != nil && s.text.index == i+1 {
+				continue // the live control draws it
+			}
 			shotDrawAnnotation(p, an, origin, 1)
 		}
 		if s.pre.on {
 			shotDrawAnnotation(p, s.pre.ann, origin, 1)
-		}
-		if s.text != nil {
-			size := shotTextSizeFor(s.width)
-			an := shotAnnotation{tool: shotToolText, color: s.color, a: s.text.at, width: s.width,
-				text: s.text.text + s.text.compose}
-			shotDrawAnnotation(p, an, origin, 1)
-			x, y := float32(s.text.at.X-d.Bounds.X), float32(s.text.at.Y-d.Bounds.Y)
-			tw, th := p.MeasureText(0, ui.Span{Text: s.text.text + s.text.compose, Size: size})
-			if tw == 0 {
-				tw = 1
-			}
-			p.Line(x+tw, y, x+tw, y+max(th, size), 1.5, accent)
 		}
 	})
 }
@@ -140,7 +132,7 @@ func (s *shotSession) buildBarStrip(c *ui.Context, group string, strip shotBarSt
 	bg := ui.Box(c.Key("shotbar-"+group)).Absolute().
 		Left(float32(strip.rect.X-ox)).Top(float32(strip.rect.Y-oy)).
 		Width(float32(strip.rect.Width)).Height(float32(strip.rect.Height)).
-		Radius(10).Background(shotBarFill).Border(0.5, shotBarEdge)
+		Radius(10).Background(shotBarFill).Border(0.5, shotBarEdge).KeepFocus()
 	// A Draw callback paints in window coordinates: r is where the bar is.
 	bg.Draw(func(p *ui.Painter, r ui.Rect) {
 		for _, gx := range strip.seps {
@@ -160,7 +152,7 @@ func (s *shotSession) buildBarButton(c *ui.Context, group string, it shotBarItem
 	b := ui.Box(c.Key(key)).Absolute().
 		Left(float32(it.rect.X-d.Bounds.X)).Top(float32(it.rect.Y-d.Bounds.Y)).
 		Size(float32(it.rect.Width), float32(it.rect.Height)).
-		Radius(7).Center().Cursor(ui.CursorPointer)
+		Radius(7).Center().Cursor(ui.CursorPointer).KeepFocus()
 	if name, keys := shotBarTip(c, it); name != "" {
 		tip := name
 		if keys != "" {

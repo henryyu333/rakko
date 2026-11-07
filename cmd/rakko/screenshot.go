@@ -25,7 +25,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -51,7 +50,6 @@ var (
 	shotActivateSelf   = mac.ActivateSelf
 	shotActivateApp    = mac.ActivateApp
 	shotKeyWindow      = mac.IsKeyWindow
-	shotReadText       = readClipboardText
 	shotPreflight      = mac.ScreenCapturePreflight
 	shotClipboard      = writeShotClipboard
 	shotReadSaveDir    = readScreenCaptureLocation
@@ -104,11 +102,32 @@ type shotCapture struct {
 	err    error
 }
 
-// shotTextEdit is the text tool's live line.
+// shotTextEdit is one text box being edited: its top-left, content width,
+// the text bound to the TextArea, its current style, and the annotation it
+// replaces (-1 for a new one). The control owns composing, selection and
+// line breaks; this carries only what the annotation will store.
 type shotTextEdit struct {
-	at      mygo.Point
-	text    string
-	compose string
+	at     mygo.Point
+	width  int
+	text   string
+	color  ui.Color
+	stroke int
+	index  int
+	orig   shotAnnotation
+	focus  bool
+}
+
+// shotTextDraft is the box a drag with the text tool is making.
+type shotTextDraft struct {
+	at  mygo.Point
+	cur mygo.Point
+}
+
+// shotTextRect caches one finished text's box for hit testing, in global
+// points; the index names its annotation.
+type shotTextRect struct {
+	index int
+	rect  mygo.Rectangle
 }
 
 // shotSession is one screenshot from the hotkey to the output.
@@ -131,6 +150,11 @@ type shotSession struct {
 	hist      shotHistory
 	pre       pre
 	text      *shotTextEdit
+	textDraft *shotTextDraft
+	textRects []shotTextRect
+	textBoxH  int
+	textDrag  *shotTextDrag
+	focusRoot bool
 	brushFrom mygo.Point
 	brushSeen map[[2]int]bool
 	nextNum   int
@@ -404,12 +428,14 @@ func (s *shotSession) overlayView(c *ui.Context, di int) {
 	// ⌘C / ⌘S and undo also arrive as window shortcuts on macOS: the Edit
 	// menu can turn ⌘C into an InputCommand the focused element never sees.
 	c.OnShortcut(ui.Cmd, ui.KeyC, func() {
-		if !s.closed && s.hasSel {
+		// While a box edits, ⌘C copies its selection, not the screenshot.
+		if !s.closed && s.hasSel && s.text == nil {
 			s.copy()
 		}
 	})
 	c.OnShortcut(ui.Cmd, ui.KeyS, func() {
 		if !s.closed && s.hasSel {
+			s.finishText()
 			s.save()
 		}
 	})
@@ -423,25 +449,21 @@ func (s *shotSession) overlayView(c *ui.Context, di int) {
 			s.invalidate()
 		}
 	})
-	cursor := s.cursorShape(di)
-	el := ui.Box(c.Key("shot")).Fill().Focusable().AutoFocus().Cursor(cursor)
-	if te := s.text; te != nil && di == s.owner {
-		// Input methods only compose text for an element that asks for it
-		// (TextCaret), and only while it has the keyboard. Declaring it
-		// only while a line is being typed keeps every other key a normal
-		// screenshot shortcut instead of an input-method candidate.
-		b := s.displays[di].Bounds
-		size := shotTextSizeFor(s.width)
-		tw, th := c.MeasureText(0, ui.Span{Text: te.text + te.compose, Size: size})
-		el = el.TextCaret(ui.Rect{
-			X: float32(te.at.X-b.X) + tw,
-			Y: float32(te.at.Y - b.Y),
-			W: 1, H: max(th, size),
-		})
-	}
-	el.HandleInput(func(ev ui.InputEvent) bool { return s.input(ev, di) }).
-		Draw(func(p *ui.Painter, r ui.Rect) { s.draw(p, r, di) })
 	if s.hasSel && di == s.owner {
+		s.measureTexts(c)
+	}
+	cursor := s.cursorShape(di)
+	root := ui.Box(c.Key("shot")).Fill().Focusable().AutoFocus().Cursor(cursor).
+		HandleInput(func(ev ui.InputEvent) bool { return s.input(ev, di) }).
+		Draw(func(p *ui.Painter, r ui.Rect) { s.draw(p, r, di) })
+	if s.focusRoot {
+		root.Focus()
+		s.focusRoot = false
+	}
+	if s.hasSel && di == s.owner {
+		if s.text != nil {
+			s.buildTextEditor(c, s.displays[di])
+		}
 		s.buildBar(c, s.displays[di])
 	}
 }
@@ -524,21 +546,6 @@ func (s *shotSession) input(ev ui.InputEvent, di int) bool {
 	switch ev.Kind {
 	case ui.InputKeyDown:
 		return s.keyDown(ev)
-	case ui.InputText:
-		if s.text != nil {
-			s.text.text += ev.Text
-			s.text.compose = ""
-			s.layoutBar()
-			s.invalidate()
-			return true
-		}
-	case ui.InputCompose:
-		if s.text != nil {
-			s.text.compose = ev.Text
-			s.layoutBar()
-			s.invalidate()
-			return true
-		}
 	case ui.InputPointerDown:
 		if ev.Button != 0 {
 			return false
@@ -561,9 +568,9 @@ func (s *shotSession) input(ev ui.InputEvent, di int) bool {
 // pointerDown starts a selection, a move, a resize or a mark.
 func (s *shotSession) pointerDown(p mygo.Point, ev ui.InputEvent, di int) bool {
 	if s.text != nil {
-		// A click elsewhere commits the line first; a click in the text
-		// area itself then starts the next line.
-		s.commitText()
+		// A press outside the box (the control takes its own) completes
+		// the edit before whatever the press was meant for.
+		s.finishText()
 	}
 	if s.hasSel {
 		if di == s.owner {
@@ -572,6 +579,14 @@ func (s *shotSession) pointerDown(p mygo.Point, ev ui.InputEvent, di int) bool {
 				if it, ok := s.bar.shotBarAt(p); ok {
 					s.actBar(it)
 				}
+				return true
+			}
+			if idx, ok := s.textAt(p); ok {
+				if ev.Clicks >= 2 {
+					s.editText(idx)
+					return true
+				}
+				s.startTextMove(idx, p)
 				return true
 			}
 			if shotPointInRect(p, s.sel) && ev.Clicks >= 2 {
@@ -583,7 +598,9 @@ func (s *shotSession) pointerDown(p mygo.Point, ev ui.InputEvent, di int) bool {
 				return true
 			}
 			if shotPointInRect(p, s.sel) {
-				if s.tool != shotToolNone {
+				if s.tool == shotToolText {
+					s.startTextDraft(p)
+				} else if s.tool != shotToolNone {
 					s.beginMark(p, di)
 				} else {
 					s.mode, s.moveFrom, s.press = shotModeMove, s.sel, p
@@ -608,6 +625,11 @@ func (s *shotSession) pointerDown(p mygo.Point, ev ui.InputEvent, di int) bool {
 // just moves the magnifier and the window highlight.
 func (s *shotSession) pointerMove(p mygo.Point, ev ui.InputEvent, di int) bool {
 	d := s.displays[di]
+	if s.textDraft != nil {
+		s.textDraft.cur = p
+		s.invalidate()
+		return true
+	}
 	switch s.mode {
 	case shotModeSelect:
 		if !s.dragging && abs(p.X-s.press.X)+abs(p.Y-s.press.Y) >= 3 {
@@ -625,6 +647,10 @@ func (s *shotSession) pointerMove(p mygo.Point, ev ui.InputEvent, di int) bool {
 			s.layoutBar()
 		}
 	case shotModeMove:
+		if s.textDrag != nil && s.textDrag.index >= 0 {
+			s.textDragTo(p, d.Bounds)
+			return true
+		}
 		dx, dy := p.X-s.press.X, p.Y-s.press.Y
 		s.sel = shotClampRect(mygo.Rectangle{
 			X: s.moveFrom.X + dx, Y: s.moveFrom.Y + dy,
@@ -659,6 +685,14 @@ func (s *shotSession) pointerMove(p mygo.Point, ev ui.InputEvent, di int) bool {
 // display), a drag becomes the selection, and a mark joins the history.
 func (s *shotSession) pointerUp(p mygo.Point, ev ui.InputEvent, di int) bool {
 	d := s.displays[di]
+	if s.textDraft != nil {
+		s.textDraft.cur = p
+		s.createTextFromDraft()
+		s.textDraft = nil
+		s.mode = shotModeIdle
+		s.invalidate()
+		return true
+	}
 	switch s.mode {
 	case shotModeSelect:
 		if !s.dragging {
@@ -674,6 +708,7 @@ func (s *shotSession) pointerUp(p mygo.Point, ev ui.InputEvent, di int) bool {
 		s.mode = shotModeIdle
 		s.layoutBar()
 	case shotModeMove, shotModeResize:
+		s.textDrag = nil
 		s.mode = shotModeIdle
 		s.layoutBar()
 	case shotModeDraw:
@@ -688,12 +723,6 @@ func (s *shotSession) pointerUp(p mygo.Point, ev ui.InputEvent, di int) bool {
 // placed on the press itself; the other tools drag.
 func (s *shotSession) beginMark(p mygo.Point, di int) {
 	switch s.tool {
-	case shotToolText:
-		s.text = &shotTextEdit{at: p}
-		s.pre = pre{}
-		s.focusTextEdit(di)
-		s.invalidate()
-		return
 	case shotToolNumber:
 		s.hist.snap()
 		s.hist.push(shotAnnotation{tool: shotToolNumber, color: s.color, width: s.width, a: p, number: s.nextNum})
@@ -712,22 +741,6 @@ func (s *shotSession) beginMark(p mygo.Point, di int) {
 	s.mode = shotModeDraw
 	s.press = p
 	s.pre = pre{ann: shotDragAnnotation(s.tool, s.color, s.width, p, p, false), on: true}
-}
-
-// focusTextEdit gives the display's overlay the keyboard before the input
-// method takes over: a nonactivating panel must be made key explicitly,
-// and the press may have arrived while the app was inactive. The window
-// must already be on screen; it was focused when the session started.
-func (s *shotSession) focusTextEdit(di int) {
-	if di < 0 || di >= len(s.displays) {
-		return
-	}
-	d := s.displays[di]
-	if d.win == nil {
-		return
-	}
-	shotActivateSelf()
-	d.win.Focus()
 }
 
 // finishMark commits the live mark, if it is big enough to be deliberate.
@@ -793,8 +806,21 @@ func (s *shotSession) layoutBar() {
 	}
 }
 
-// actBar runs one toolbar control.
+// actBar runs one toolbar control. Colour and width changes apply to the
+// box being edited at once; every other control completes the edit first.
 func (s *shotSession) actBar(it shotBarItem) {
+	if s.text != nil && (it.kind == shotBarColor || it.kind == shotBarWidth) {
+		if it.kind == shotBarColor {
+			s.color = shotAnnotationColors[it.index]
+			s.text.color = s.color
+		} else {
+			s.width = shotAnnotationWidths[it.index]
+			s.text.stroke = s.width
+		}
+		s.invalidate()
+		return
+	}
+	s.finishText()
 	switch it.kind {
 	case shotBarTool:
 		if s.tool == it.tool {
@@ -835,27 +861,6 @@ func (s *shotSession) actBar(it shotBarItem) {
 // while a line is being typed, ordinary keys never trigger the toolbar
 // shortcuts.
 func (s *shotSession) keyDown(ev ui.InputEvent) bool {
-	if s.text != nil {
-		switch ev.Key {
-		case ui.KeyEscape:
-			s.cancelText()
-			return true
-		case ui.KeyEnter:
-			s.commitText()
-			return true
-		case ui.KeyBackspace, ui.KeyDelete:
-			s.backspaceText()
-			return true
-		}
-		if ev.Mods&ui.Cmd != 0 {
-			if ev.Key == ui.KeyV {
-				s.pasteText()
-				return true
-			}
-			return false
-		}
-		return true
-	}
 	if ev.Key == ui.KeyEscape {
 		s.escape()
 		return true
@@ -938,7 +943,7 @@ func (s *shotSession) nudge(dx, dy int) {
 func (s *shotSession) escape() {
 	switch {
 	case s.text != nil:
-		s.cancelText()
+		s.finishText()
 	case s.tool != shotToolNone:
 		s.tool = shotToolNone
 		s.layoutBar()
@@ -951,74 +956,4 @@ func (s *shotSession) escape() {
 	default:
 		s.close(true)
 	}
-}
-
-// commitText adds the typed line to the history and leaves text mode.
-func (s *shotSession) commitText() {
-	te := s.text
-	s.text = nil
-	if te == nil {
-		return
-	}
-	if strings.TrimSpace(te.text) != "" {
-		s.hist.snap()
-		s.hist.push(shotAnnotation{tool: shotToolText, color: s.color, width: s.width, a: te.at, text: te.text})
-	}
-	s.layoutBar()
-	s.invalidate()
-}
-
-// cancelText drops the line being typed without adding it to the history.
-func (s *shotSession) cancelText() {
-	if s.text == nil {
-		return
-	}
-	s.text = nil
-	s.layoutBar()
-	s.invalidate()
-}
-
-// pasteText appends the pasteboard's text, flattened to one line: the text
-// tool draws a single line, so line breaks would otherwise hide everything
-// after the first.
-func (s *shotSession) pasteText() {
-	if s.text == nil {
-		return
-	}
-	text := shotReadText()
-	text = strings.Map(func(r rune) rune {
-		switch r {
-		case '\n', '\r', '\t':
-			return ' '
-		}
-		if r < 0x20 || r == 0x7f {
-			return -1
-		}
-		return r
-	}, text)
-	if text == "" {
-		return
-	}
-	s.text.text += text
-	s.text.compose = ""
-	s.layoutBar()
-	s.invalidate()
-}
-
-// backspaceText removes the last rune of the composition, then of the line.
-func (s *shotSession) backspaceText() {
-	if s.text == nil {
-		return
-	}
-	if s.text.compose != "" {
-		r := []rune(s.text.compose)
-		s.text.compose = string(r[:len(r)-1])
-	} else {
-		r := []rune(s.text.text)
-		if len(r) > 0 {
-			s.text.text = string(r[:len(r)-1])
-		}
-	}
-	s.layoutBar()
-	s.invalidate()
 }
