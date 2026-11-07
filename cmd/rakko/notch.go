@@ -197,9 +197,23 @@ func (a *shelf) desiredFrame() mygo.Rectangle {
 // current level through it; the session envelope asks it for every level and
 // page the panel can reach.
 func (a *shelf) openFrame(tw, th, resultsH float32) mygo.Rectangle {
+	return a.openFrameIn(a.panelPlacement(), tw, th, resultsH, 0)
+}
+
+// openFrameIn is openFrame for a given placement. headroom > 0 builds the
+// envelope's box for a candidate target: the panel may spring past its
+// target by that many points, and the side is read from the candidate's
+// placement rather than from the shell drawn now. A candidate on the
+// upward side reaches from the panel's top (plus headroom) down to just
+// under the island; the downward one keeps the drawn shell's row.
+func (a *shelf) openFrameIn(place panelPlacement, tw, th, resultsH float32, headroom int) mygo.Rectangle {
 	top := a.sheetTop()
 	ears := a.earWidth()
-	place := a.panelPlacement()
+	up := a.shellUp()
+	y := a.frameTop()
+	if headroom > 0 && place.Up {
+		up, y = true, place.Y-headroom
+	}
 	w, roomH := a.frameRoom(tw, float32(th+float32(top)))
 	// The frame is symmetric about the strip so the shell stays centred in
 	// its canvas; a panel clamped away from the island's axis widens both
@@ -211,8 +225,15 @@ func (a *shelf) openFrame(tw, th, resultsH float32) mygo.Rectangle {
 	// Once settled the height is the shell's exact box, so its transparent
 	// margin cannot swallow clicks below.
 	h := max(int(math.Ceil(float64(th)))+top, int(math.Ceil(float64(a.fx.h)))+top)
-	y := a.frameTop()
-	if a.shellUp() {
+	if headroom > 0 && place.Up {
+		// The upward envelope covers the whole flight: from the panel's
+		// top, with the spring's overshoot room, down to the island's row
+		// and the results sheet or capsule hanging under it.
+		below := max(th+a.belowExtent(th, resultsH), a.fx.h+a.belowExtent(a.fx.h, a.fx.resultsH))
+		h := a.upShellFloor() - y + int(math.Ceil(float64(below-th)))
+		return mygo.Rectangle{X: a.stripCenter() - w/2, Y: y, Width: w, Height: h}
+	}
+	if up {
 		// The island's bottom is the shell's floor: frameTop already reaches
 		// up for a shell that overshoots its level or still shows the page
 		// while the bar folds back, and the frame ends two points under the
@@ -228,7 +249,7 @@ func (a *shelf) openFrame(tw, th, resultsH float32) mygo.Rectangle {
 	// panel hangs them under the island's row, where its shell's bottom
 	// edge is.
 	below := max(th+a.belowExtent(th, resultsH), a.fx.h+a.belowExtent(a.fx.h, a.fx.resultsH))
-	if a.shellUp() {
+	if up {
 		h = max(h, a.upShellFloor()-y+int(math.Ceil(float64(below-th))))
 	} else {
 		h = max(h, top+int(math.Ceil(float64(below))))
@@ -260,39 +281,40 @@ func unionRect(a, b mygo.Rectangle) mygo.Rectangle {
 // covers every shape the panel can grow into and the window is resized only
 // while the surface is blank.
 //
-// The island shell keeps its per-frame geometry: its panel changes sides
-// with the page, and a box holding both sides would cover the display.
+// An island takes the envelope on the side its panel hangs on now; a box
+// holding both sides would cover the display. A target that would land on
+// the other side is left to the side change itself, which is allowed to
+// move the window.
 func (a *shelf) sessionFrame() mygo.Rectangle {
 	r := a.desiredFrame()
-	if a.island {
-		return r
+	up := a.panelPlacement().Up
+	side := func(sideH float32) bool {
+		return !a.island || (a.anchorScreenTop()+int(sideH) > a.workArea().Y+a.workArea().Height) == up
 	}
-	add := func(tw, th, resultsH float32) {
-		r = unionRect(r, a.openFrame(tw, th, resultsH))
+	// The bar shares the current page's side: the panel's side follows the
+	// tallest box it takes, not the level drawn now.
+	pageH := a.pageShellH()
+	add := func(tw, th, resultsH, sideH float32) {
+		if !side(sideH) {
+			return
+		}
+		headroom := 0
+		if up {
+			headroom = int(math.Ceil(float64(th)*panelOpenOvershoot)) + 2
+		}
+		r = unionRect(r, a.openFrameIn(a.panelSpotFor(int(math.Ceil(float64(tw))), int(math.Ceil(float64(th))), up), tw, th, resultsH, headroom))
 	}
-	add(homeTypingW, float32(homeShellH), resultsMaxH)
+	add(homeTypingW, float32(homeShellH), resultsMaxH, pageH)
 	for _, p := range a.enabledPages() {
-		add(pageShellWidth(p), pageShellHeight(p), 0)
+		add(pageShellWidth(p), pageShellHeight(p), 0, pageShellHeight(p))
 	}
-	add(snapW, snapH, 0)
+	add(snapW, snapH, 0, pageH)
 	return r
 }
 
-// blankSurface reports whether the overlay draws nothing at all: the panel
-// folded, the 30 ms clock run out, and no peek shape, capsule, app switcher
-// or drag keeps a drawing up. Only then may the native frame change: a
-// resize shows the last canvas stretched into the new frame until the next
-// one is presented.
-func (a *shelf) blankSurface() bool {
-	return !a.visible && a.fx.openK <= 0.002 && a.progress <= 0.01 &&
-		!a.peeking && a.fx.peekK <= 0.002 && !a.apps.on &&
-		!a.fb.drawn && !a.fb.retracting &&
-		!a.dragging && !a.pointerDrag && !a.islandDrag && !a.liveUp()
-}
-
 // beginSurfaceHold raises the native window to the envelope everything the
-// panel can draw fits in, while the surface is blank. The window then keeps
-// that frame until blankSurface is true again, so no spring resizes it.
+// panel can draw fits in. The window then keeps that frame until every
+// spring has come to rest (view() drops it), so no spring resizes it.
 func (a *shelf) beginSurfaceHold() {
 	a.holdSurface(a.sessionFrame())
 }
@@ -301,7 +323,7 @@ func (a *shelf) beginSurfaceHold() {
 // nothing while the shelf is settled closed, or while a drag owns the
 // frame.
 func (a *shelf) holdSurface(t mygo.Rectangle) {
-	if a.win == nil || a.island || a.dragging || a.pointerDrag || a.islandDrag {
+	if a.win == nil || a.dragging || a.pointerDrag || a.islandDrag {
 		return
 	}
 	// Nothing is up to hold a surface for: a closed, unpeeked shelf's
@@ -337,14 +359,11 @@ func (a *shelf) targetFrame() mygo.Rectangle {
 	if a.dragging || a.pointerDrag || a.islandDrag {
 		return r
 	}
-	if a.blankSurface() {
-		a.frameHold = mygo.Rectangle{}
-		return r
-	}
 	if a.flip.active {
-		// A side change slides the window itself: follow it, and keep the
-		// union for the panel that lands.
-		a.frameHold = unionRect(a.frameHold, r)
+		// A side change slides the window itself, so it owns the frame
+		// while it runs. It lands with the exact box; the next transition
+		// takes the envelope of the side it landed on.
+		a.frameHold = mygo.Rectangle{}
 		return r
 	}
 	a.frameHold = unionRect(a.frameHold, r)

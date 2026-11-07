@@ -756,7 +756,7 @@ func (a *shelf) view(c *ui.Context) {
 	// not resize under the pill; an open panel does not need it once its
 	// springs rest.
 	hovering := !a.visible && (a.peeking || a.fx.peekK > 0.002)
-	if a.frameHold != (mygo.Rectangle{}) && !a.fx.openMoving && !a.fx.sizeMoving &&
+	if a.frameHold != (mygo.Rectangle{}) && !a.fx.openMoving && !a.fx.sizeMoving && zone.Settled("peek") &&
 		!hovering && (a.closeAt.IsZero() || time.Since(a.closeAt) >= closeFade) {
 		a.frameHold = mygo.Rectangle{}
 	}

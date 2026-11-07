@@ -159,6 +159,17 @@ func (a *shelf) upShellFloor() int {
 	return floor
 }
 
+// panelSpotFor places a candidate panel box on the given side, the way
+// panelPlacement places the current one: the notch style hangs it from the
+// display's top edge, the island from its own edge on that side. The
+// session envelope asks it for boxes the panel can still grow into.
+func (a *shelf) panelSpotFor(w, h int, up bool) panelPlacement {
+	if !a.island {
+		return panelPlacement{X: a.stripCenter() - w/2, Y: a.anchorScreenTop(), W: w, H: h}
+	}
+	return panelSpotSide(a.stripCenter(), a.anchorScreenTop(), islandIdleH, a.workArea(), w, h, up)
+}
+
 // panelPlacement is the opened panel's box on screen at the current level.
 // The hardware-notch shell has no island to move, so its panel keeps the
 // old anchored box.
