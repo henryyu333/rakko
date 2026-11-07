@@ -50,6 +50,8 @@ var (
 	shotActivateSelf   = mac.ActivateSelf
 	shotActivateApp    = mac.ActivateApp
 	shotKeyWindow      = mac.IsKeyWindow
+	shotSetWindowLevel = mac.SetWindowLevel
+	shotOrderOverlay   = mac.OrderOverlayFront
 	shotPreflight      = mac.ScreenCapturePreflight
 	shotClipboard      = writeShotClipboard
 	shotReadSaveDir    = readScreenCaptureLocation
@@ -92,6 +94,7 @@ type shotDisplay struct {
 	pixH   int
 	bitmap *ui.Bitmap
 	win    *mygo.Window
+	handle uintptr
 }
 
 // shotCapture is one display's freeze result, ready to be assigned.
@@ -132,43 +135,44 @@ type shotTextRect struct {
 
 // shotSession is one screenshot from the hotkey to the output.
 type shotSession struct {
-	a         *shelf
-	displays  []*shotDisplay
-	owner     int // display that owns the selection, -1 for none
-	hasSel    bool
-	sel       mygo.Rectangle
-	dragging  bool
-	mode      shotMode
-	press     mygo.Point
-	pressWin  mygo.Rectangle
-	pressHit  bool
-	moveFrom  mygo.Rectangle
-	resizeH   shotHandle
-	tool      shotTool
-	color     ui.Color
-	width     int
-	hist      shotHistory
-	pre       pre
-	text      *shotTextEdit
-	textDraft *shotTextDraft
-	textRects []shotTextRect
-	textBoxH  int
-	textDrag  *shotTextDrag
-	focusRoot bool
-	brushFrom mygo.Point
-	brushSeen map[[2]int]bool
-	nextNum   int
-	bar       shotToolbar
-	cursor    mygo.Point
-	cursorDpy int
-	hover     mygo.Rectangle
-	hoverOK   bool
-	windows   []mac.ScreenWindow
-	windowsAt time.Time
-	prevPID   int
-	captureMS int64
-	installed bool
-	closed    bool
+	a            *shelf
+	displays     []*shotDisplay
+	owner        int // display that owns the selection, -1 for none
+	hasSel       bool
+	sel          mygo.Rectangle
+	dragging     bool
+	mode         shotMode
+	press        mygo.Point
+	pressWin     mygo.Rectangle
+	pressHit     bool
+	moveFrom     mygo.Rectangle
+	resizeH      shotHandle
+	tool         shotTool
+	color        ui.Color
+	width        int
+	hist         shotHistory
+	pre          pre
+	text         *shotTextEdit
+	textDraft    *shotTextDraft
+	textRects    []shotTextRect
+	textBoxH     int
+	textDrag     *shotTextDrag
+	focusRoot    bool
+	textLevelLow bool
+	brushFrom    mygo.Point
+	brushSeen    map[[2]int]bool
+	nextNum      int
+	bar          shotToolbar
+	cursor       mygo.Point
+	cursorDpy    int
+	hover        mygo.Rectangle
+	hoverOK      bool
+	windows      []mac.ScreenWindow
+	windowsAt    time.Time
+	prevPID      int
+	captureMS    int64
+	installed    bool
+	closed       bool
 }
 
 // captureShotDisplayFile freezes one display with the system tool. -D
@@ -406,17 +410,52 @@ func (s *shotSession) openWindow(di int) {
 	// mygo applies the AlwaysOnTop floating level when it orders a window
 	// front; the capture band must be the last word.
 	mac.SetWindowLevel(h, mac.CaptureWindowLevel)
+	d.handle = h
 	d.win = w
 }
 
 // assertCaptureLevel puts every overlay in the screen-saver band and brings
 // it to the front of that band. Main thread only.
 func (s *shotSession) assertCaptureLevel() {
-	for _, d := range s.displays {
+	for i, d := range s.displays {
+		if s.textLevelLow && i == s.owner {
+			continue // an editing box keeps its display below the IM band
+		}
 		if d.win != nil {
 			mac.SetWindowLevel(d.win.NativeHandle(), mac.CaptureWindowLevel)
 			mac.OrderOverlayFront(d.win.NativeHandle())
 		}
+	}
+}
+
+// lowerForText puts the owner display's overlay below the input method's
+// candidate band while a text box edits: a candidate panel belongs to the
+// input method's process and is drawn at kCGDockWindowLevel (20), so a
+// screenshot overlay at the capture level would hide it completely. The
+// other displays stay in the capture band.
+func (s *shotSession) lowerForText() {
+	if s.textLevelLow {
+		return
+	}
+	d := s.ownerDisplay()
+	if d == nil || d.handle == 0 {
+		return
+	}
+	shotSetWindowLevel(d.handle, mac.SearchKeyboardLevel)
+	s.textLevelLow = true
+}
+
+// restoreTextLevel puts the owner display's overlay back in the capture
+// band and re-fronts it. It runs when editing ends and when the session
+// closes; the other displays are untouched.
+func (s *shotSession) restoreTextLevel() {
+	if !s.textLevelLow {
+		return
+	}
+	s.textLevelLow = false
+	if d := s.ownerDisplay(); d != nil && d.handle != 0 {
+		shotSetWindowLevel(d.handle, mac.CaptureWindowLevel)
+		shotOrderOverlay(d.handle)
 	}
 }
 
@@ -491,6 +530,9 @@ func (s *shotSession) close(restore bool) {
 	if s.closed {
 		return
 	}
+	// Leaving the screenshot always puts the owner display back in the
+	// capture band, even when it closes from under an editing box.
+	s.restoreTextLevel()
 	s.closed = true
 	for _, d := range s.displays {
 		if d.win != nil {

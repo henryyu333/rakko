@@ -196,8 +196,53 @@ func TestScreenshotSmokeOverlay(t *testing.T) {
 	postShotMouse(t, float64(textAt.X), float64(textAt.Y), num, 5, 1, 2)
 	time.Sleep(300 * time.Millisecond)
 	var keyIsKey bool
-	onMain(func() { keyIsKey = mac.IsKeyWindow(od.win.NativeHandle()) })
-	t.Logf("text editing key window=%v", keyIsKey)
+	var textLevel int
+	onMain(func() {
+		keyIsKey = mac.IsKeyWindow(od.win.NativeHandle())
+		textLevel = mac.WindowLevel(od.win.NativeHandle())
+	})
+	t.Logf("text editing key window=%v level=%d", keyIsKey, textLevel)
+	if textLevel != mac.SearchKeyboardLevel {
+		t.Fatalf("the overlay under an editing box is at level %d, want %d below the input method's candidates", textLevel, mac.SearchKeyboardLevel)
+	}
+
+	// The candidate panel anchors to the text input client's caret rect:
+	// it must be a real rect inside the overlay and near the text box.
+	var caret mac.NSRect
+	var caretOK bool
+	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); {
+		onMain(func() { caret, caretOK = mac.IMECompositionRect(od.win.NativeHandle(), 0, 0) })
+		if caretOK {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if !caretOK {
+		t.Fatal("firstRectForCharacterRange returned no caret rect for the text box")
+	}
+	var frame mac.NSRect
+	var box mygo.Rectangle
+	onMain(func() {
+		frame = mac.WindowFrame(od.win.NativeHandle())
+		te := s.text
+		box = mygo.Rectangle{
+			X: te.at.X - shotTextBoxPadX, Y: te.at.Y - shotTextBoxPadY,
+			Width: te.width + 2*shotTextBoxPadX, Height: s.textHeight(te) + 2*shotTextBoxPadY,
+		}
+	})
+	if caret.Origin.X < frame.Origin.X || caret.Origin.Y < frame.Origin.Y ||
+		caret.Origin.X > frame.Origin.X+frame.Size.Width ||
+		caret.Origin.Y+caret.Size.Height > frame.Origin.Y+frame.Size.Height {
+		t.Fatalf("caret rect %+v is outside the overlay frame %+v", caret, frame)
+	}
+	caretX := caret.Origin.X + caret.Size.Width/2
+	caretY := float64(h) - (caret.Origin.Y + caret.Size.Height) + caret.Size.Height/2
+	near := mygo.Rectangle{X: box.X - 60, Y: box.Y - 60, Width: box.Width + 120, Height: box.Height + 120}
+	if caretX < float64(near.X) || caretX > float64(near.X+near.Width) ||
+		caretY < float64(near.Y) || caretY > float64(near.Y+near.Height) {
+		t.Fatalf("caret anchor %.1f,%.1f is not near the text box %+v", caretX, caretY, box)
+	}
+	t.Logf("editing box=%+v caretAnchor=%+v screen rect=%+v", box, mac.NSPoint{X: caretX, Y: caretY}, caret)
 	postTyping(t, "hello")
 	time.Sleep(150 * time.Millisecond)
 	postReturn(t)
@@ -217,6 +262,12 @@ func TestScreenshotSmokeOverlay(t *testing.T) {
 	if gotText != "hello\nworld" {
 		t.Fatalf("typed text = %q, want two lines", gotText)
 	}
+	var restoredLevel int
+	onMain(func() { restoredLevel = mac.WindowLevel(od.win.NativeHandle()) })
+	if restoredLevel != mac.CaptureWindowLevel {
+		t.Fatalf("after ⌘Return the overlay level = %d, want %d", restoredLevel, mac.CaptureWindowLevel)
+	}
+	t.Logf("overlay level after editing=%d", restoredLevel)
 
 	// The output crop is the production path, at the selection's pixels.
 	var pngLen int

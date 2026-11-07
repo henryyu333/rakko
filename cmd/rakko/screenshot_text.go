@@ -121,6 +121,7 @@ func (s *shotSession) createTextFromDraft() {
 		at:    mygo.Point{X: frameX + shotTextBoxPadX, Y: frameY + shotTextBoxPadY},
 		width: frameW - 2*shotTextBoxPadX, color: s.color, stroke: s.width, focus: true,
 	}
+	s.lowerForText()
 	s.textBoxH = 0
 }
 
@@ -142,6 +143,7 @@ func (s *shotSession) editText(index int) {
 		at: an.a, width: width, text: an.text, color: an.color,
 		stroke: an.width, index: index + 1, orig: an, focus: true,
 	}
+	s.lowerForText()
 	s.textBoxH = 0
 	s.color, s.width = an.color, an.width
 	s.textMoveReset()
@@ -160,6 +162,7 @@ func (s *shotSession) finishText() {
 	s.textBoxH = 0
 	s.textDrag = nil
 	s.textDraft = nil
+	s.restoreTextLevel()
 	text := te.text
 	nonEmpty := strings.TrimSpace(text) != ""
 	switch {

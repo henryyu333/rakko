@@ -33,6 +33,7 @@ func shotSeams(t *testing.T) {
 	front, activate, preflight := shotFrontPID, shotActivateSelf, shotPreflight
 	clipboard, readDir, writeFile, openWin := shotClipboard, shotReadSaveDir, shotWriteFile, shotOpenWindow
 	keyWindow := shotKeyWindow
+	setLevel, orderOverlay := shotSetWindowLevel, shotOrderOverlay
 	clean := shotCleanTemp
 	settle := shotPanelSettle
 	after := shotAfter
@@ -43,6 +44,7 @@ func shotSeams(t *testing.T) {
 		shotFrontPID, shotActivateSelf, shotPreflight = front, activate, preflight
 		shotClipboard, shotReadSaveDir, shotWriteFile, shotOpenWindow = clipboard, readDir, writeFile, openWin
 		shotKeyWindow = keyWindow
+		shotSetWindowLevel, shotOrderOverlay = setLevel, orderOverlay
 		shotCleanTemp = clean
 		shotPanelSettle = settle
 		shotAfter, shotOpenPin = after, openPin
@@ -56,6 +58,8 @@ func shotSeams(t *testing.T) {
 	shotFrontPID = func() int { return 0 }
 	shotActivateSelf = func() {}
 	shotKeyWindow = func(uintptr) bool { return true }
+	shotSetWindowLevel = func(uintptr, int) {}
+	shotOrderOverlay = func(uintptr) {}
 	shotNormalWindow = func() []mac.ScreenWindow { return nil }
 	shotOpenWindow = func(*shotSession, int) {}
 	shotCleanTemp = func() { os.MkdirAll(shotTempDir(), 0o700) }
@@ -1167,6 +1171,174 @@ func TestShotTextExportKeepsTheEditorTextPosition(t *testing.T) {
 	}
 	if previewBox.Min != exportBox.Min {
 		t.Fatalf("text starts at %v in the editor, %v in the export", previewBox.Min, exportBox.Min)
+	}
+}
+
+// shotLevelCall records one window-level or re-fronting call.
+type shotLevelCall struct {
+	op     string
+	window uintptr
+	level  int
+}
+
+// shotLevelRecorder replaces the level seams with a recorder.
+func shotLevelRecorder(t *testing.T) *[]shotLevelCall {
+	t.Helper()
+	var calls []shotLevelCall
+	shotSetWindowLevel = func(w uintptr, level int) {
+		calls = append(calls, shotLevelCall{op: "level", window: w, level: level})
+	}
+	shotOrderOverlay = func(w uintptr) {
+		calls = append(calls, shotLevelCall{op: "front", window: w})
+	}
+	return &calls
+}
+
+// shotLevelSession is a session with two displays and an editing box on
+// the owner, both windows carrying fake handles so level calls are visible.
+func shotLevelSession(t *testing.T, a *shelf) (*shotSession, *[]shotLevelCall) {
+	t.Helper()
+	shotSeams(t)
+	calls := shotLevelRecorder(t)
+	s := shotTestSession(t, mygo.Rectangle{Width: 400, Height: 300}, 400, 300)
+	s.a = a
+	s.displays[0].handle = 101
+	s.displays = append(s.displays, &shotDisplay{
+		shotTarget: shotTarget{ID: 2, Bounds: mygo.Rectangle{X: 400, Width: 300, Height: 300}, Scale: 1},
+		handle:     202,
+	})
+	s.hasSel = true
+	s.sel = mygo.Rectangle{X: 20, Y: 20, Width: 300, Height: 200}
+	s.owner = 0
+	s.tool = shotToolText
+	s.layoutBar()
+	s.startTextDraft(mygo.Point{X: 60, Y: 60})
+	s.createTextFromDraft()
+	return s, calls
+}
+
+func TestShotTextLowersOnlyOwnerAndRestores(t *testing.T) {
+	s, calls := shotLevelSession(t, &shelf{})
+	if len(*calls) != 1 || (*calls)[0] != (shotLevelCall{"level", 101, mac.SearchKeyboardLevel}) {
+		t.Fatalf("entering the box called %+v", *calls)
+	}
+	if !s.textLevelLow {
+		t.Fatal("the session did not mark the lowered level")
+	}
+	s.finishText()
+	want := []shotLevelCall{
+		{"level", 101, mac.SearchKeyboardLevel},
+		{"level", 101, mac.CaptureWindowLevel},
+		{"front", 101, 0},
+	}
+	if len(*calls) != len(want) {
+		t.Fatalf("level calls = %+v, want %+v", *calls, want)
+	}
+	for i := range want {
+		if (*calls)[i] != want[i] {
+			t.Fatalf("level calls = %+v, want %+v", *calls, want)
+		}
+	}
+	for _, c := range *calls {
+		if c.window == 202 {
+			t.Fatalf("the other display's overlay changed level: %+v", *calls)
+		}
+	}
+	if s.textLevelLow {
+		t.Fatal("the lowered level stayed marked after finishing")
+	}
+}
+
+func TestShotTextLevelRestoresOnEndPaths(t *testing.T) {
+	paths := []struct {
+		name string
+		act  func(t *testing.T, s *shotSession, a *shelf)
+	}{
+		{"escape", func(t *testing.T, s *shotSession, a *shelf) { s.escape() }},
+		{"click outside", func(t *testing.T, s *shotSession, a *shelf) {
+			s.pointerDown(mygo.Point{X: 380, Y: 280}, ui.InputEvent{Kind: ui.InputPointerDown}, 0)
+		}},
+		{"tool switch", func(t *testing.T, s *shotSession, a *shelf) {
+			s.actBar(shotBarItem{kind: shotBarTool, tool: shotToolArrow})
+		}},
+		{"copy", func(t *testing.T, s *shotSession, a *shelf) {
+			shotClipboard = func([]byte, string) error { return nil }
+			s.copy()
+		}},
+		{"save", func(t *testing.T, s *shotSession, a *shelf) {
+			shotReadSaveDir = func() string { return t.TempDir() }
+			s.save()
+		}},
+		{"pin", func(t *testing.T, s *shotSession, a *shelf) {
+			shotOpenPin = func(*shelf, []byte, mygo.Rectangle, float64) {}
+			s.pin()
+		}},
+		{"recognize", func(t *testing.T, s *shotSession, a *shelf) {
+			ocrSeams(t)
+			ocrRecognize = func(string) ([]string, error) { return []string{"x"}, nil }
+			a.write = recordClipFunc(func(string) error { return nil })
+			s.recognize()
+		}},
+		{"close", func(t *testing.T, s *shotSession, a *shelf) { s.close(true) }},
+	}
+	for _, path := range paths {
+		t.Run(path.name, func(t *testing.T) {
+			a := &shelf{}
+			s, calls := shotLevelSession(t, a)
+			s.text.text = "kept"
+			path.act(t, s, a)
+			found := false
+			for i, c := range *calls {
+				if i > 0 && c.op == "level" && c.window == 101 && c.level == mac.CaptureWindowLevel {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatalf("%s did not restore the capture level: %+v", path.name, *calls)
+			}
+			if s.textLevelLow && !s.closed {
+				t.Fatalf("%s left the overlay low: %+v", path.name, *calls)
+			}
+		})
+	}
+}
+
+func TestShotTextKeyboardLevel(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		key  func(v *ui.Tester)
+	}{
+		{"cmd-enter", func(v *ui.Tester) { v.Key(ui.Cmd, ui.KeyEnter) }},
+		{"escape", func(v *ui.Tester) { v.Key(0, ui.KeyEscape) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a := &shelf{}
+			s, calls := shotLevelSession(t, a)
+			// The session built the box directly; drive the control's
+			// keyboard path through a tester.
+			s.displays[0].handle = 101
+			v := shotTextView(t, s)
+			v.Type("x")
+			v.Frame()
+			tc.key(v)
+			v.Frame()
+			if s.text != nil {
+				t.Fatal("the key did not finish the box")
+			}
+			last := (*calls)[len(*calls)-1]
+			if last.op != "front" || last.window != 101 {
+				t.Fatalf("after %s the level calls = %+v", tc.name, *calls)
+			}
+			restored := false
+			for _, c := range *calls {
+				if c.op == "level" && c.window == 101 && c.level == mac.CaptureWindowLevel {
+					restored = true
+				}
+			}
+			if !restored {
+				t.Fatalf("after %s the capture level was not restored: %+v", tc.name, *calls)
+			}
+		})
 	}
 }
 
