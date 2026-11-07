@@ -81,6 +81,9 @@ func TestScreenshotSmokeOverlay(t *testing.T) {
 	if len(s.displays) == 0 {
 		t.Fatal("no frozen display")
 	}
+	// WindowServer publishes the order a beat after orderFrontRegardless;
+	// ask again once it has, and prove the overlay covers the menu bar.
+	time.Sleep(300 * time.Millisecond)
 	od := s.displays[0]
 	if od.win == nil {
 		t.Fatal("overlay window missing")
@@ -89,6 +92,20 @@ func TestScreenshotSmokeOverlay(t *testing.T) {
 	onMain(func() { num = mac.WindowNumber(od.win.NativeHandle()) })
 	if num == 0 {
 		t.Fatal("overlay window has no CGWindowID")
+	}
+	var level int
+	var srect mac.NSRect
+	var onScreen bool
+	var menuHit int
+	onMain(func() {
+		level = mac.WindowLevel(od.win.NativeHandle())
+		srect, onScreen = mac.WindowScreenRect(num)
+		primary := mygo.Screen.PrimaryDisplay()
+		menuHit = mac.WindowAtPoint(float64(d.Bounds.X+w/2), float64(d.Bounds.Y+10), float64(primary.Bounds.Y+primary.Bounds.Height))
+	})
+	t.Logf("overlay level=%d screenRect=%+v onscreen=%v menuHit=%d", level, srect, onScreen, menuHit)
+	if menuHit != num {
+		t.Fatalf("the overlay does not cover the menu bar: WindowServer routes a press there to %d, not %d", menuHit, num)
 	}
 	for _, w := range ownSmokeWindows(t) {
 		if w.ID == num {
