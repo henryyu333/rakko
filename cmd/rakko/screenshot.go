@@ -770,6 +770,9 @@ func (s *shotSession) paintMosaic(from, to mygo.Point) {
 	width := s.pre.ann.width
 	shotMosaicCells(d.img, d.shotTarget, shotMosaicBlockPixels(width), shotMosaicBrushRadius(width), from, to,
 		func(col, row int, cell shotMosaicCell) {
+			if !shotRectsIntersect(cell.rect, s.sel) {
+				return
+			}
 			key := [2]int{col, row}
 			if s.brushSeen[key] {
 				return

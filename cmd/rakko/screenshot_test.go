@@ -755,6 +755,78 @@ func TestShotToolbarTooltipNamesTheControl(t *testing.T) {
 	}
 }
 
+// Marks belong inside the selection: the preview clips them, so a mosaic
+// block (or any other mark) at the edge cannot paint over the veil or break
+// the selection border.
+func TestShotPreviewClipsMarksToSelection(t *testing.T) {
+	s := shotTestSession(t, mygo.Rectangle{Width: 400, Height: 300}, 400, 300)
+	s.hasSel = true
+	s.sel = mygo.Rectangle{X: 100, Y: 80, Width: 200, Height: 120}
+	s.tool = shotToolNone
+	s.layoutBar()
+	green := ui.RGBA(0, 255, 0, 1)
+	inside := shotMosaicCell{rect: mygo.Rectangle{X: 150, Y: 120, Width: 20, Height: 20}, color: green}
+	crossing := shotMosaicCell{rect: mygo.Rectangle{X: 180, Y: 190, Width: 20, Height: 20}, color: green}
+	outside := shotMosaicCell{rect: mygo.Rectangle{X: 320, Y: 40, Width: 20, Height: 20}, color: green}
+	s.hist.annots = []shotAnnotation{{tool: shotToolMosaic, color: green, width: 4,
+		cells: []shotMosaicCell{inside, crossing, outside}}}
+	img := ui.Render(func(c *ui.Context) { s.overlayView(c, 0) }, 400, 300, 1)
+	isGreen := func(x, y int) bool {
+		px := img.RGBAAt(x, y)
+		return px.G > 180 && px.R < 80 && px.B < 80
+	}
+	if !isGreen(155, 125) {
+		t.Fatal("the block inside the selection was not painted")
+	}
+	if isGreen(325, 45) {
+		t.Fatal("a block outside the selection painted over the veil")
+	}
+	if isGreen(190, 205) {
+		t.Fatal("a block's outside part painted below the selection")
+	}
+	// The border is complete across the bottom edge, including where the
+	// crossing block meets it.
+	accentish := func(x, y int) bool {
+		px := img.RGBAAt(x, y)
+		return px.B > 180 && px.R < 90 && px.G > 90 && px.G < 190
+	}
+	for x := 105; x <= 295; x += 5 {
+		if abs(x-200) <= 8 {
+			continue // the bottom-centre handle sits on this stretch
+		}
+		found := false
+		for y := 197; y <= 202; y++ {
+			if accentish(x, y) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("the selection border is broken at x=%d", x)
+		}
+	}
+}
+
+// The brush collects no block wholly outside the selection.
+func TestShotMosaicBrushKeepsInsideSelection(t *testing.T) {
+	shotSeams(t)
+	s := shotTestSession(t, mygo.Rectangle{Width: 400, Height: 300}, 400, 300)
+	s.hasSel = true
+	s.sel = mygo.Rectangle{X: 100, Y: 80, Width: 200, Height: 120}
+	s.tool = shotToolMosaic
+	s.pre = pre{ann: shotAnnotation{tool: shotToolMosaic, width: shotAnnotationWidths[1]}, on: true}
+	s.brushSeen = map[[2]int]bool{}
+	s.paintMosaic(mygo.Point{X: 60, Y: 140}, mygo.Point{X: 140, Y: 140})
+	if len(s.pre.ann.cells) == 0 {
+		t.Fatal("the brush collected no cells at the selection's edge")
+	}
+	for _, cell := range s.pre.ann.cells {
+		if !shotRectsIntersect(cell.rect, s.sel) {
+			t.Fatalf("the brush collected a block outside the selection: %+v", cell.rect)
+		}
+	}
+}
+
 func TestShotTempClipboardPayload(t *testing.T) {
 	shotSeams(t)
 	var wrotePNG []byte

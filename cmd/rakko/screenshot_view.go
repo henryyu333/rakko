@@ -23,8 +23,10 @@ func (s *shotSession) draw(p *ui.Painter, r ui.Rect, di int) {
 			p.Fill(r, shotDim, 0)
 		} else {
 			s.drawVeil(p, d)
-			s.drawSelection(p, d)
+			// Marks stay inside the selection; the border and handles
+			// paint over them so a mark at the edge cannot break it.
 			s.drawAnnotations(p, d)
+			s.drawSelection(p, d)
 		}
 	} else if s.hoverOK && di == s.cursorDpy && shotRectsIntersect(s.hover, d.Bounds) {
 		s.drawWindowHint(p, d)
@@ -95,24 +97,28 @@ func (s *shotSession) drawWindowHint(p *ui.Painter, d *shotDisplay) {
 // line being typed.
 func (s *shotSession) drawAnnotations(p *ui.Painter, d *shotDisplay) {
 	origin := mygo.Point{X: d.Bounds.X, Y: d.Bounds.Y}
-	for _, an := range s.hist.annots {
-		shotDrawAnnotation(p, an, origin, 1)
-	}
-	if s.pre.on {
-		shotDrawAnnotation(p, s.pre.ann, origin, 1)
-	}
-	if s.text != nil {
-		size := shotTextSizeFor(s.width)
-		an := shotAnnotation{tool: shotToolText, color: s.color, a: s.text.at, width: s.width,
-			text: s.text.text + s.text.compose}
-		shotDrawAnnotation(p, an, origin, 1)
-		x, y := float32(s.text.at.X-d.Bounds.X), float32(s.text.at.Y-d.Bounds.Y)
-		tw, th := p.MeasureText(0, ui.Span{Text: s.text.text + s.text.compose, Size: size})
-		if tw == 0 {
-			tw = 1
+	sel := shotLocalRect(s.sel, d.shotTarget)
+	clip := ui.Rect{X: float32(sel.X), Y: float32(sel.Y), W: float32(sel.Width), H: float32(sel.Height)}
+	p.Clip(clip, 0, func() {
+		for _, an := range s.hist.annots {
+			shotDrawAnnotation(p, an, origin, 1)
 		}
-		p.Line(x+tw, y, x+tw, y+max(th, size), 1.5, accent)
-	}
+		if s.pre.on {
+			shotDrawAnnotation(p, s.pre.ann, origin, 1)
+		}
+		if s.text != nil {
+			size := shotTextSizeFor(s.width)
+			an := shotAnnotation{tool: shotToolText, color: s.color, a: s.text.at, width: s.width,
+				text: s.text.text + s.text.compose}
+			shotDrawAnnotation(p, an, origin, 1)
+			x, y := float32(s.text.at.X-d.Bounds.X), float32(s.text.at.Y-d.Bounds.Y)
+			tw, th := p.MeasureText(0, ui.Span{Text: s.text.text + s.text.compose, Size: size})
+			if tw == 0 {
+				tw = 1
+			}
+			p.Line(x+tw, y, x+tw, y+max(th, size), 1.5, accent)
+		}
+	})
 }
 
 // buildBar builds the selection's toolbar as real elements over the frozen
