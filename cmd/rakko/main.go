@@ -297,10 +297,22 @@ func (a *shelf) ready(show bool) {
 	// usage-cache/。这里的组装不碰凭据、文件与网络——一切取数都在
 	// tick/点击触发且 aiUsage.enabled 为 true 之后才开始。
 	usageEnv := aiusage.DefaultEnv()
+	// Rakko's own Claude Code lives in its data directory, so an app update
+	// never moves the sign-in and the Mac's own ~/.claude stays untouched.
+	usageEnv.RakkoClaudeDir = filepath.Join(a.dataDir, "claude")
 	deps := usageDeps{
 		fetchCodex:  func(ctx context.Context) aiusage.Quota { return aiusage.FetchCodex(ctx, usageEnv) },
 		fetchClaude: func(ctx context.Context) aiusage.Quota { return aiusage.FetchClaude(ctx, usageEnv) },
-		pace:        aiusage.Pace,
+		// Rakko signs in its own Claude Code; Claude Code keeps, refreshes
+		// and revokes the credentials, this app only starts the process.
+		loginClaude: func(ctx context.Context, onURL func(string), code <-chan string) error {
+			return aiusage.ClaudeAuthLogin(ctx, usageEnv, onURL, code)
+		},
+		logoutClaude: func(ctx context.Context) error {
+			return aiusage.ClaudeAuthLogout(ctx, usageEnv)
+		},
+		openURL: openInBrowser,
+		pace:    aiusage.Pace,
 		// Claude Code's own logs tell whether an allowance moved at all;
 		// the /usage read runs only when it did.
 		claudeUsedSince: func(t time.Time) bool {

@@ -1153,7 +1153,7 @@ func (a *shelf) keysAreOurs() bool {
 	if a.rn != nil && a.rn.win != nil {
 		return false
 	}
-	return !a.focusMode
+	return !a.focusMode && !a.pageTyping
 }
 
 func (a *shelf) releaseKeys() {
@@ -1323,6 +1323,7 @@ func (a *shelf) hide(exit hideExit) {
 	// The keyboard went back with the close: a reopen before the fade ends
 	// must open the search bar, not the clipboard search it was left on.
 	a.focusMode = false
+	a.pageTyping = false
 	// A closed bar keeps no query in flight; the drawn hits survive the
 	// content fade and finishClose retires them.
 	a.cancelHomeSpot()
@@ -1348,7 +1349,7 @@ func (a *shelf) hide(exit hideExit) {
 // opening starts on the island's default face with no search or edit.
 func (a *shelf) finishClose() {
 	a.closeAt = time.Time{}
-	a.focusMode, a.tab, a.tabFrom, a.search, a.reveal = false, pageTray, pageTray, "", ""
+	a.focusMode, a.pageTyping, a.tab, a.tabFrom, a.search, a.reveal = false, false, pageTray, pageTray, "", ""
 	a.resetHomeSearch()
 	a.tabAt = time.Time{}
 	a.tabOutK, a.tabOutShift = 1, 0

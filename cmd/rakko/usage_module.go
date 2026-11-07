@@ -16,6 +16,8 @@ import (
 	"context"
 	"errors"
 	"math/rand/v2"
+	"os/exec"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -71,7 +73,14 @@ type usageDeps struct {
 	// supported reader is on and the on-disk incremental cache makes a
 	// rebuild cheap.
 	newScanner func() usageScanner
-	now        func() time.Time
+	// loginClaude signs Rakko's own Claude Code in; onURL receives the
+	// authorization link, code carries the pasted authorization code.
+	// logoutClaude signs it out. openURL opens the link in the browser;
+	// nil leaves it to Claude Code's own attempt.
+	loginClaude  func(ctx context.Context, onURL func(string), code <-chan string) error
+	logoutClaude func(ctx context.Context) error
+	openURL      func(string)
+	now          func() time.Time
 }
 
 // usageScanner is the local record store slice B provides: Scan walks new
@@ -103,6 +112,21 @@ type usageQuotaState struct {
 	usedSince   bool
 }
 
+// usageClaudeLogin is the sign-in session the Claude card and the settings
+// row report. busy covers the browser wait and the code exchange; codes is
+// the box the pasted authorization code goes into; cancel stops the
+// process. Main thread only.
+type usageClaudeLogin struct {
+	busy          bool
+	submitted     bool
+	failed        bool
+	url           string
+	code          string
+	codes         chan string
+	cancel        context.CancelFunc
+	focusSettings bool // the Settings window's code box has not taken the keyboard yet
+}
+
 // usageFeature is the AI 用量 page: the panelPage whose ear icon and stage
 // usage_page.go draws, and the module that schedules refreshes from the
 // monitor tick.
@@ -123,6 +147,11 @@ type usageFeature struct {
 	rangeSel   aiusage.Range
 	wasVisible bool
 	hoverTool  aiusage.Tool // the quota card under the pointer this frame
+
+	// Rakko's own Claude sign-in; logout runs behind the settings row.
+	claudeLogin      usageClaudeLogin
+	claudeLogoutBusy bool
+	claudeLogoutErr  bool
 
 	// workGen/workCancel retire local scans and cancel in-flight fetches.
 	// Completed quota answers remain useful after a page change.
@@ -152,6 +181,14 @@ func newUsageFeature(a *shelf, deps usageDeps) *usageFeature {
 		}
 	}
 	return f
+}
+
+// openInBrowser shows the Claude authorization link in the default browser.
+func openInBrowser(url string) {
+	if url == "" {
+		return
+	}
+	_ = exec.Command("/usr/bin/open", url).Start()
 }
 
 // defaultClaudeWait is the next unasked /usage read's gap: a whole minute
@@ -218,6 +255,11 @@ func (f *usageFeature) stopWork() {
 		f.quota[i].busy = false
 	}
 	f.localBusy = false
+	if f.host != nil {
+		// A page switch or a hide takes the keyboard from the sign-in box;
+		// the browser flow itself keeps running.
+		f.host.releaseTypingKeyboard()
+	}
 	f.invalidate()
 }
 
@@ -584,6 +626,156 @@ func (f *usageFeature) askQuota(t aiusage.Tool) {
 		return
 	}
 	f.quota[quotaIndex(t)].ask = true
+}
+
+// startClaudeLogin signs Rakko's own Claude Code in on a worker: Claude
+// Code opens the browser, the card shows the paste box, and the process
+// ends when the browser flow does or the user cancels. fromSettings keeps
+// the panel's keyboard alone — the Settings window already has it.
+func (f *usageFeature) startClaudeLogin(fromSettings bool) {
+	if f.claudeLogin.busy || f.deps.loginClaude == nil {
+		return
+	}
+	codes := make(chan string, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	f.claudeLogin = usageClaudeLogin{busy: true, codes: codes, cancel: cancel,
+		focusSettings: fromSettings}
+	f.claudeLogoutErr = false
+	f.invalidate()
+	if !fromSettings && f.host != nil {
+		f.host.takeTypingKeyboard()
+	}
+	openURL := f.deps.openURL
+	run := f.deps.loginClaude
+	onURL := func(u string) {
+		dispatchMain(func() {
+			if f.claudeLogin.codes != codes {
+				return // a newer session, or a cancelled one, owns the card
+			}
+			f.claudeLogin.url = u
+			if openURL != nil {
+				openURL(u)
+			}
+			f.invalidate()
+		})
+	}
+	goWork(func() {
+		err := run(ctx, onURL, codes)
+		dispatchMain(func() { f.gotClaudeLogin(err, codes) })
+	})
+}
+
+// submitClaudeCode hands the pasted authorization code to the waiting
+// process, then gives the keyboard back: the browser's answer is what the
+// card reports next.
+func (f *usageFeature) submitClaudeCode() {
+	code := strings.TrimSpace(f.claudeLogin.code)
+	if code == "" || !f.claudeLogin.busy || f.claudeLogin.submitted {
+		return
+	}
+	select {
+	case f.claudeLogin.codes <- code:
+	default:
+		return // the writer is gone: no process to hand it to
+	}
+	f.claudeLogin.code = ""
+	f.claudeLogin.submitted = true
+	if f.host != nil {
+		f.host.releaseTypingKeyboard()
+	}
+	f.invalidate()
+}
+
+// cancelClaudeLogin stops the sign-in the user started and forgets its
+// state; a cancelled sign-in reports no failure.
+func (f *usageFeature) cancelClaudeLogin() {
+	if !f.claudeLogin.busy {
+		return
+	}
+	if f.claudeLogin.cancel != nil {
+		f.claudeLogin.cancel()
+	}
+	f.claudeLogin = usageClaudeLogin{}
+	if f.host != nil {
+		f.host.releaseTypingKeyboard()
+	}
+	f.invalidate()
+}
+
+// gotClaudeLogin publishes the sign-in's end. A successful one makes the
+// next Claude read an explicit user request; a failed one stays on the
+// card until the user tries again.
+func (f *usageFeature) gotClaudeLogin(err error, codes chan string) {
+	if f.claudeLogin.codes != codes {
+		return
+	}
+	cancel := f.claudeLogin.cancel
+	f.claudeLogin = usageClaudeLogin{}
+	if cancel != nil {
+		cancel()
+	}
+	if f.host != nil {
+		f.host.releaseTypingKeyboard()
+	}
+	switch {
+	case err == nil:
+		// The old "not signed in" answer is no longer true: show the
+		// check rather than offering a second sign-in.
+		st := &f.quota[quotaIndex(aiusage.ToolClaude)]
+		if st.latest.Status == aiusage.QuotaNotLoggedIn {
+			st.latest = aiusage.Quota{Tool: aiusage.ToolClaude, ClaudeSource: aiusage.ClaudeSourceRakko}
+		}
+		f.askQuota(aiusage.ToolClaude)
+		f.startDueClaude(f.deps.now())
+	case errors.Is(err, context.Canceled):
+		// The user asked to stop; nothing to report.
+	default:
+		f.claudeLogin.failed = true
+	}
+	f.invalidate()
+}
+
+// startDueClaude reads Claude now when the floor has passed, or leaves the
+// ask for the monitor tick that starts it at the floor.
+func (f *usageFeature) startDueClaude(now time.Time) {
+	if !f.quotaOn(aiusage.ToolClaude) || f.deps.fetchClaude == nil {
+		return
+	}
+	st := &f.quota[quotaIndex(aiusage.ToolClaude)]
+	if st.busy {
+		return
+	}
+	if !st.attemptAt.IsZero() && now.Sub(st.attemptAt) < usageClaudeFloor {
+		return
+	}
+	f.startQuota(aiusage.ToolClaude)
+}
+
+// startClaudeLogout signs Rakko's own Claude Code out on a worker, then
+// reads again so the card says whether the Mac's own sign-in remains.
+func (f *usageFeature) startClaudeLogout() {
+	if f.claudeLogoutBusy || f.deps.logoutClaude == nil {
+		return
+	}
+	f.claudeLogoutBusy, f.claudeLogoutErr = true, false
+	f.invalidate()
+	run := f.deps.logoutClaude
+	goWork(func() {
+		err := run(context.Background())
+		dispatchMain(func() {
+			f.claudeLogoutBusy = false
+			f.claudeLogoutErr = err != nil
+			if err == nil {
+				st := &f.quota[quotaIndex(aiusage.ToolClaude)]
+				if st.latest.ClaudeSource == aiusage.ClaudeSourceRakko {
+					st.latest = aiusage.Quota{Tool: aiusage.ToolClaude, ClaudeSource: aiusage.ClaudeSourceUser}
+				}
+				f.askQuota(aiusage.ToolClaude)
+				f.startDueClaude(f.deps.now())
+			}
+			f.invalidate()
+		})
+	})
 }
 
 // offline reports whether an enabled quota source's last fetch failed on
