@@ -443,6 +443,41 @@ func TestShotEscapeLadder(t *testing.T) {
 	}
 }
 
+func TestShotArrowDrawsDiagonalAndSolidHead(t *testing.T) {
+	img := renderShotMarks(t, 64, 64, shotAnnotation{
+		tool: shotToolArrow, color: ui.Hex("#FF0000"), width: 4,
+		a: mygo.Point{X: 6, Y: 6}, b: mygo.Point{X: 58, Y: 58},
+	})
+	red := func(x, y int) bool {
+		px := img.RGBAAt(x, y)
+		return px.R > 180 && px.G < 100 && px.B < 100 && px.A > 180
+	}
+	if !red(30, 30) {
+		t.Fatal("the diagonal shaft painted nothing on the diagonal")
+	}
+	// The old painter line filled an axis-aligned band at the start's row.
+	if red(30, 6) {
+		t.Fatal("the arrow still painted an axis-aligned bar off the diagonal")
+	}
+	if !red(53, 49) {
+		t.Fatal("the arrow head is not solid beside the shaft")
+	}
+}
+
+// renderShotMarks paints annotations over a transparent canvas at 1× so a
+// test can read exact pixels.
+func renderShotMarks(t *testing.T, w, h int, annots ...shotAnnotation) *image.RGBA {
+	t.Helper()
+	return ui.Render(func(c *ui.Context) {
+		c.Root().Background(ui.Transparent)
+		ui.Box(c.Key("marks")).Fill().Draw(func(p *ui.Painter, r ui.Rect) {
+			for _, an := range annots {
+				shotDrawAnnotation(p, an, mygo.Point{}, 1)
+			}
+		})
+	}, w, h, 1)
+}
+
 func TestShotTempClipboardPayload(t *testing.T) {
 	shotSeams(t)
 	var wrotePNG []byte

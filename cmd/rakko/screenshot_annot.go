@@ -144,16 +144,28 @@ func shotDrawAnnotation(p *ui.Painter, an shotAnnotation, origin mygo.Point, sca
 		r := ui.Rect{X: min(x0, x1), Y: min(y0, y1), W: absF(x1 - x0), H: absF(y1 - y0)}
 		p.Stroke(r, an.color, 0, w)
 	case shotToolArrow:
+		// Painter.Line fills an axis-aligned box, so a slanted arrow came
+		// out as a horizontal or vertical bar. The shaft is a polyline; the
+		// head is a solid triangle, as the system's markup tool draws it.
 		x0, y0 := px(an.a)
 		x1, y1 := px(an.b)
-		p.Line(x0, y0, x1, y1, w, an.color)
-		ang := math.Atan2(float64(y1-y0), float64(x1-x0))
-		head := math.Max(float64(10*scale), float64(w)*3)
-		for _, delta := range []float64{math.Pi * 5 / 6, -math.Pi * 5 / 6} {
-			hx := float64(x1) + math.Cos(ang+delta)*head
-			hy := float64(y1) + math.Sin(ang+delta)*head
-			p.Line(x1, y1, float32(hx), float32(hy), w, an.color)
+		dx, dy := x1-x0, y1-y0
+		length := float32(math.Hypot(float64(dx), float64(dy)))
+		if length < 0.5 {
+			return
 		}
+		ux, uy := dx/length, dy/length
+		head := max(11*scale, w*3.2)
+		if head > length*0.7 {
+			head = length * 0.7
+		}
+		bx, by := x1-ux*head*0.85, y1-uy*head*0.85
+		p.StrokePolyline([][2]float32{{x0, y0}, {bx, by}}, w, an.color)
+		half := head * 0.55
+		shotFillTriangle(p,
+			[2]float32{x1, y1},
+			[2]float32{bx - uy*half, by + ux*half},
+			[2]float32{bx + uy*half, by - ux*half}, an.color)
 	case shotToolPen:
 		if len(an.points) == 0 {
 			return
@@ -223,6 +235,32 @@ func shotDragAnnotation(tool shotTool, color ui.Color, width int, start, cur myg
 		}
 	}
 	return an
+}
+
+// shotFillTriangle paints a solid triangle row by row: the painter has no
+// path fill, and an arrow head drawn as strokes would stay hollow. Half-point
+// rows keep the edges from stepping a whole point.
+func shotFillTriangle(p *ui.Painter, a, b, c [2]float32, col ui.Color) {
+	edges := [][2][2]float32{{a, b}, {b, c}, {c, a}}
+	minY := min(a[1], b[1], c[1])
+	maxY := max(a[1], b[1], c[1])
+	for y := minY; y < maxY; y += 0.5 {
+		yc := y + 0.25
+		x0, x1 := float32(math.Inf(1)), float32(math.Inf(-1))
+		for _, e := range edges {
+			p0, p1 := e[0], e[1]
+			if (p0[1] <= yc) == (p1[1] <= yc) {
+				continue
+			}
+			t := (yc - p0[1]) / (p1[1] - p0[1])
+			x := p0[0] + t*(p1[0]-p0[0])
+			x0 = min(x0, x)
+			x1 = max(x1, x)
+		}
+		if x1 > x0 {
+			p.Fill(ui.Rect{X: x0, Y: y, W: x1 - x0, H: 0.5}, col, 0)
+		}
+	}
 }
 
 // absF is the float32 absolute value.
