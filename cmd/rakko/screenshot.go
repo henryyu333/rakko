@@ -259,10 +259,11 @@ func decodeShotPNG(path string) (*image.RGBA, error) {
 // overlays. A capture with no usable picture ends the session quietly: the
 // usual cause is a refused capture, which the preflight already screened.
 func (s *shotSession) install(results []shotCapture, elapsedMS int64) {
-	if s.closed || s.a.shot != s {
+	if s.closed || s.a.quitting || s.a.shot != s {
 		return
 	}
 	s.captureMS = elapsedMS
+	s.cursor = shotCursorPoint()
 	s.displays = assignShotDisplays(results)
 	if len(s.displays) == 0 {
 		s.close(true)
@@ -1377,9 +1378,10 @@ func (a *shelf) recordShotClip(png []byte) {
 }
 
 // shotTempDir is the folder copy's file URL lives in, under the system
-// temporary directory. It is emptied at the start of each screenshot.
+// temporary directory. It is emptied at the start of each screenshot; the
+// report and the gallery live beside it, not in it, and are never touched.
 func shotTempDir() string {
-	return filepath.Join(os.TempDir(), "rakko-shot")
+	return filepath.Join(os.TempDir(), "rakko-shot", "clip")
 }
 
 // cleanShotTempDir empties the folder at the start of a session; a pinned
