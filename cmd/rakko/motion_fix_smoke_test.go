@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -308,10 +309,94 @@ func TestFixNativeFoldTrace(t *testing.T) {
 	motionShot(t, a, "folded-notch", 300*time.Millisecond)
 }
 
+// TestSmokeOpenPanelKeepsOneFrame proves the open panel keeps one native
+// frame from the moment it is drawn until it folds away: typing widens the
+// bar, the results sheet grows and shrinks, and pages switch, and
+// WindowServer must never be asked to resize the surface under the content.
+// mygo presents a resized frame's last canvas stretched into the new frame,
+// so every such resize is a one-frame flash; the strip's exact box returns
+// only after the close.
+func TestSmokeOpenPanelKeepsOneFrame(t *testing.T) {
+	a := redesignShelf(t)
+	motionClosed(a)
+	time.Sleep(600 * time.Millisecond)
+	stop := startMotionTicker(a)
+	defer stop()
+	t.Cleanup(func() { motionClosed(a) })
+	onMain(func() { a.show(false) })
+	if !waitMain(2*time.Second, func() bool {
+		return a.progress >= 0.999 && !a.fx.openMoving
+	}) {
+		t.Fatal("the panel never settled open")
+	}
+	var opened, exact, hold mygo.Rectangle
+	onMain(func() {
+		a.syncWindowFrame()
+		opened = a.win.Bounds()
+		exact = a.desiredFrame()
+		hold = a.frameHold
+	})
+	t.Logf("open panel: native frame %+v, held envelope %+v, exact box %+v", opened, hold, exact)
+	if hold == (mygo.Rectangle{}) || opened != hold {
+		t.Fatalf("the settled open panel's native frame %+v is not the held envelope %+v", opened, hold)
+	}
+	if opened == exact {
+		t.Fatal("the settled open panel kept the exact box; the envelope was dropped")
+	}
+	step := func(name string, fn func()) {
+		onMain(fn)
+		// Long enough for every spring on the bar, the sheet and the page
+		// to rest, and for the old code to have dropped the envelope.
+		time.Sleep(700 * time.Millisecond)
+		var got mygo.Rectangle
+		onMain(func() { got = a.win.Bounds() })
+		if got != opened {
+			t.Fatalf("%s resized the open panel: %+v -> %+v", name, opened, got)
+		}
+	}
+	step("typing", func() { startHomeQuery(a, "rakko", false, nil) })
+	step("results", func() { startHomeQuery(a, "rakko", true, fakeHits(9)) })
+	step("clear", func() { resetHomeQuery(a) })
+	step("level 2", func() { a.setLevel(2) })
+	step("clipboard tab", func() { a.setTab(pageClipboard) })
+	step("home tab", func() { a.setTab(pageHome) })
+	step("tray tab", func() { a.setTab(pageTray) })
+	step("level 1", func() { a.setLevel(1) })
+	var frames atomic.Int64
+	onMain(func() {
+		frameTrace = func(float32, float32, mygo.Rectangle) { frames.Add(1) }
+	})
+	onMain(func() { a.hide(hidePassive) })
+	if !waitMain(4*time.Second, func() bool {
+		return !a.visible && a.frameHold == (mygo.Rectangle{}) && a.closeAt.IsZero() && !a.fx.openMoving
+	}) {
+		var frame, desired, hold mygo.Rectangle
+		var diag string
+		onMain(func() {
+			frame, desired, hold = a.win.Bounds(), a.desiredFrame(), a.frameHold
+			diag = fmt.Sprintf("visible=%v closeAt=%v openMoving=%v sizeMoving=%v progress=%.4f openK=%.4f peekK=%.4f peekProgress=%.4f peeking=%v frames=%d",
+				a.visible, a.closeAt, a.fx.openMoving, a.fx.sizeMoving, a.progress, a.fx.openK, a.fx.peekK, a.peekProgress, a.peeking, frames.Load())
+		})
+		t.Fatalf("the closed shelf never released its envelope: frame %+v hold %+v exact %+v (%s)", frame, hold, desired, diag)
+	}
+	time.Sleep(200 * time.Millisecond)
+	var frame, desired mygo.Rectangle
+	onMain(func() {
+		a.syncWindowFrame()
+		frame, desired = a.win.Bounds(), a.desiredFrame()
+	})
+	if frame != desired {
+		t.Fatalf("the closed shelf's native frame %+v is not the strip's box %+v", frame, desired)
+	}
+}
+
 // WindowServer, not a placeholder Window or desiredFrame arithmetic, must
-// send presses below the settled panel to the receiver underneath it. The
-// shell accepts the mouse only under the pointer, so the probe parks the
-// pointer on the shell's bottom row before asking.
+// send presses in the settled panel's transparent margin to the windows
+// underneath it: below the frame, and beside the shell inside the frame.
+// The open panel now keeps its whole envelope for as long as it stays open,
+// so the margin beside the shell is always part of its window; the shell
+// accepts the mouse only under the pointer, so each probe parks the pointer
+// on its own point before asking.
 func TestSmokeSettledPanelBottomMarginPassesThrough(t *testing.T) {
 	for _, tall := range []bool{false, true} {
 		name := "tray"
@@ -334,10 +419,10 @@ func TestSmokeSettledPanelBottomMarginPassesThrough(t *testing.T) {
 			})
 			t.Cleanup(func() { motionClosed(a) })
 			time.Sleep(850 * time.Millisecond)
-			var receiver *mygo.Window
-			var point mygo.Point
-			var frame mygo.Rectangle
-			var shelfNum, receiverNum, insideHit, outsideHit, targetH, wantH, shellBottom int
+			var below, side, top *mygo.Window
+			var frame, exact mygo.Rectangle
+			var belowPoint, leftPoint, rightPoint, topPoint mygo.Point
+			var shelfNum, belowNum, sideNum, topNum, targetH, shellBottom, shellLeft, shellRight int
 			var moving bool
 			onMain(func() {
 				if a.winH == 0 {
@@ -345,56 +430,95 @@ func TestSmokeSettledPanelBottomMarginPassesThrough(t *testing.T) {
 					return
 				}
 				frame, targetH, moving = a.win.Bounds(), a.panelH(), a.fx.openMoving
-				wantH = a.desiredFrame().Height
+				exact = a.desiredFrame()
 				shellBottom = a.y + a.sheetTop() + targetH
+				shellLeft = a.stripCenter() - int(math.Ceil(float64(a.fx.w)/2))
+				shellRight = a.stripCenter() + int(math.Ceil(float64(a.fx.w)/2))
+				midY := a.y + a.sheetTop() + targetH/2
 				// The page capsule hangs under the shell, so the margin that
 				// must pass clicks through is below the whole window, not
 				// two points under the sheet.
-				point = mygo.Point{X: a.stripCenter(), Y: frame.Y + frame.Height + 2}
-				receiver = mygo.NewWindow(mygo.WindowOptions{
+				belowPoint = mygo.Point{X: a.stripCenter(), Y: frame.Y + frame.Height + 2}
+				leftPoint = mygo.Point{X: frame.X + 10, Y: midY}
+				rightPoint = mygo.Point{X: frame.X + frame.Width - 10, Y: midY}
+				// The menu-bar row beside the shell: the window's top band
+				// is transparent there (the shell starts under the band),
+				// so an icon under it must still take the press.
+				topPoint = mygo.Point{X: frame.X + 12, Y: 20}
+				below = mygo.NewWindow(mygo.WindowOptions{
 					Title: "ShelfU bottom-edge click receiver", Width: 40, Height: 40,
 					Hidden: true, Frameless: true, DisableShadow: true, Panel: true, SkipTaskbar: true,
 					Content: ui.View(func(c *ui.Context) { ui.Text(c, "Receiver") }),
 				})
-				mac.SetWindowFrame(receiver.NativeHandle(), point.X-20, point.Y-20, 40, 40)
-				receiver.ShowInactive()
-				mac.SetWindowLevel(receiver.NativeHandle(), mac.StatusWindowLevel-1)
-				receiverNum = mac.WindowNumber(receiver.NativeHandle())
+				mac.SetWindowFrame(below.NativeHandle(), belowPoint.X-20, belowPoint.Y-20, 40, 40)
+				below.ShowInactive()
+				mac.SetWindowLevel(below.NativeHandle(), mac.StatusWindowLevel-1)
+				belowNum = mac.WindowNumber(below.NativeHandle())
+				side = mygo.NewWindow(mygo.WindowOptions{
+					Title: "ShelfU side-margin click receiver", Width: frame.Width - 16, Height: 30,
+					Hidden: true, Frameless: true, DisableShadow: true, Panel: true, SkipTaskbar: true,
+					Content: ui.View(func(c *ui.Context) { ui.Text(c, "Receiver") }),
+				})
+				mac.SetWindowFrame(side.NativeHandle(), frame.X+8, midY-15, frame.Width-16, 30)
+				side.ShowInactive()
+				mac.SetWindowLevel(side.NativeHandle(), mac.StatusWindowLevel-1)
+				sideNum = mac.WindowNumber(side.NativeHandle())
+				top = mygo.NewWindow(mygo.WindowOptions{
+					Title: "ShelfU menu-bar click receiver", Width: 40, Height: 40,
+					Hidden: true, Frameless: true, DisableShadow: true, Panel: true, SkipTaskbar: true,
+					Content: ui.View(func(c *ui.Context) { ui.Text(c, "Receiver") }),
+				})
+				mac.SetWindowFrame(top.NativeHandle(), topPoint.X-20, topPoint.Y-20, 40, 40)
+				top.ShowInactive()
+				mac.SetWindowLevel(top.NativeHandle(), mac.StatusWindowLevel-1)
+				topNum = mac.WindowNumber(top.NativeHandle())
 				shelfNum = mac.WindowNumber(a.winH)
 			})
-			if receiver == nil {
+			if below == nil || side == nil || top == nil {
 				t.Fatal("no native receiver")
 			}
-			t.Cleanup(func() { onMain(receiver.Close) })
-			time.Sleep(150 * time.Millisecond)
-			// Acceptance is pointer-gated per frame (overlayAcceptsMouse):
-			// the shell takes a press only where the pointer is, so a probe
-			// of the shell's own bottom row must park the pointer there —
-			// the convention the capsule's click-through tests use. The
-			// pointer never moves afterwards, which is the case this test
-			// is about: the shell must take the press without one.
+			t.Cleanup(func() {
+				onMain(top.Close)
+				onMain(side.Close)
+				onMain(below.Close)
+			})
+			if leftPoint.X >= shellLeft || rightPoint.X <= shellRight {
+				t.Fatalf("the frame %+v leaves no side margin around the %.0fpt shell (left %d right %d)",
+					frame, a.fx.w, shellLeft, shellRight)
+			}
 			oldCursor := cursorPoint
 			t.Cleanup(func() { onMain(func() { cursorPoint = oldCursor }) })
-			onMain(func() {
-				p := mygo.Point{X: point.X, Y: shellBottom - 4}
-				cursorPoint = func() mygo.Point { return p }
-				a.syncMousePassThrough()
-			})
-			time.Sleep(150 * time.Millisecond) // let WindowServer apply the flag
-			onMain(func() {
-				screenH := float64(a.dispBounds.Y + a.dispBounds.Height)
-				insideHit = mac.WindowAtPoint(float64(point.X), float64(shellBottom-4), screenH)
-				outsideHit = mac.WindowAtPoint(float64(point.X), float64(point.Y), screenH)
-			})
-			if moving || frame.Height != wantH {
-				t.Errorf("settled native frame %+v does not match the settled sizes: want %d moving=%v", frame, wantH, moving)
+			probe := func(name string, p mygo.Point, want int) {
+				var hit int
+				onMain(func() {
+					cursorPoint = func() mygo.Point { return p }
+					a.syncMousePassThrough()
+				})
+				time.Sleep(150 * time.Millisecond) // let WindowServer apply the flag
+				onMain(func() {
+					screenH := float64(a.dispBounds.Y + a.dispBounds.Height)
+					hit = mac.WindowAtPoint(float64(p.X), float64(p.Y), screenH)
+				})
+				if hit != want {
+					t.Errorf("%s at (%d,%d): target=%d want %d (ShelfU=%d below=%d side=%d top=%d frame=%+v)",
+						name, p.X, p.Y, hit, want, shelfNum, belowNum, sideNum, topNum, frame)
+				}
 			}
-			if insideHit != shelfNum || outsideHit != receiverNum {
-				t.Errorf("bottom edge at y=%d: inside target=%d want ShelfU=%d; y=%d target=%d want receiver=%d",
-					shellBottom, insideHit, shelfNum, point.Y, outsideHit, receiverNum)
+			// Acceptance is pointer-gated per frame (overlayAcceptsMouse):
+			// the shell takes a press only where the pointer is, so a probe
+			// of the shell's own bottom row parks the pointer there. The
+			// margin probes park it in the transparent part, where the old
+			// exact frame did not exist at all.
+			probe("shell bottom", mygo.Point{X: belowPoint.X, Y: shellBottom - 4}, shelfNum)
+			probe("below frame", belowPoint, belowNum)
+			probe("left margin", leftPoint, sideNum)
+			probe("right margin", rightPoint, sideNum)
+			probe("menu-bar margin", topPoint, topNum)
+			if moving || frame.Height < exact.Height || frame.Width < exact.Width {
+				t.Errorf("settled native frame %+v does not cover the panel's box %+v (moving=%v)", frame, exact, moving)
 			}
-			t.Logf("native frame=%+v panelH=%d point=(%d,%d) ShelfU=%d receiver=%d inside_hit=%d outside_hit=%d",
-				frame, targetH, point.X, point.Y, shelfNum, receiverNum, insideHit, outsideHit)
+			t.Logf("native frame=%+v panelH=%d margins: below=(%d,%d) left=(%d,%d) right=(%d,%d) top=(%d,%d)",
+				frame, targetH, belowPoint.X, belowPoint.Y, leftPoint.X, leftPoint.Y, rightPoint.X, rightPoint.Y, topPoint.X, topPoint.Y)
 		})
 	}
 }
