@@ -648,8 +648,8 @@ func TestShotTextClickCreatesDefaultBox(t *testing.T) {
 	if te.width != want {
 		t.Fatalf("click box width = %d, want %d", te.width, want)
 	}
-	if te.at != (mygo.Point{X: 40, Y: 40}) {
-		t.Fatalf("click box at %+v", te.at)
+	if te.at != (mygo.Point{X: 40 + shotTextBoxPadX, Y: 40 + shotTextBoxPadY}) {
+		t.Fatalf("click box content at %+v", te.at)
 	}
 	s.finishText()
 }
@@ -670,11 +670,11 @@ func TestShotTextDragSetsBoxWidth(t *testing.T) {
 	if s.text == nil {
 		t.Fatal("a drag with the text tool made no box")
 	}
-	if got, want := s.text.width, 80; got != want {
-		t.Fatalf("dragged box width = %d, want %d", got, want)
+	if got, want := s.text.width+2*shotTextBoxPadX, 80; got != want {
+		t.Fatalf("dragged frame width = %d, want %d", got, want)
 	}
-	if got := s.text.at.X; got != 40 {
-		t.Fatalf("dragged box left = %d, want 40", got)
+	if got := s.text.at.X - shotTextBoxPadX; got != 40 {
+		t.Fatalf("dragged frame left = %d, want 40", got)
 	}
 	// Dragging left anchors the box at the released edge.
 	v.Move(160, 70)
@@ -682,7 +682,7 @@ func TestShotTextDragSetsBoxWidth(t *testing.T) {
 	v.Move(100, 70)
 	v.Release(100, 70)
 	v.Frame()
-	if s.text == nil || s.text.at.X != 100 || s.text.width != 60 {
+	if s.text == nil || s.text.at.X-shotTextBoxPadX != 100 || s.text.width+2*shotTextBoxPadX != 60 {
 		t.Fatalf("leftward drag = %+v", s.text)
 	}
 	s.finishText()
@@ -784,8 +784,9 @@ func TestShotTextResizeReflows(t *testing.T) {
 	v.Type("one two three four five six seven eight nine ten")
 	v.Frame()
 	before := s.textHeight(te)
-	gx := float32(te.at.X + te.width - 6 + 6) // grip-e's centre
-	gy := float32(te.at.Y + s.textHeight(te)/2)
+	frame := shotTextFrameRect(te.at, te.width, s.textHeight(te))
+	gx := float32(frame.X + frame.Width)
+	gy := float32(frame.Y + frame.Height/2)
 	v.Move(gx, gy)
 	v.Press(gx, gy)
 	v.Move(gx-70, gy)
@@ -1015,7 +1016,8 @@ func TestShotTextEditorWrapsLikeExport(t *testing.T) {
 	te.width = 100
 	v.Frame()
 	preview := v.Image()
-	previewBands := shotTextRowBands(preview, image.Rect(38, 30, 120, 136))
+	content := image.Rect(te.at.X+2, te.at.Y, te.at.X+te.width-2, te.at.Y+s.textBoxH)
+	previewBands := shotTextRowBands(preview, content)
 	if previewBands < 2 {
 		t.Fatalf("the control did not wrap the text: %d bands", previewBands)
 	}
@@ -1086,6 +1088,86 @@ func TestShotTextSelectCopyCutStayInBox(t *testing.T) {
 		t.Fatalf("⌘X left %q in the box (text nil: %v)", te.text, s.text == nil)
 	}
 	s.finishText()
+}
+
+func TestShotTextFramePadsAndGripsClearTheText(t *testing.T) {
+	at := mygo.Point{X: 100, Y: 100}
+	content := mygo.Rectangle{X: at.X, Y: at.Y, Width: 120, Height: 60}
+	frame := shotTextFrameRect(at, content.Width, content.Height)
+	want := mygo.Rectangle{X: 100 - shotTextBoxPadX, Y: 100 - shotTextBoxPadY,
+		Width: 120 + 2*shotTextBoxPadX, Height: 60 + 2*shotTextBoxPadY}
+	if frame != want {
+		t.Fatalf("frame = %+v, want %+v", frame, want)
+	}
+	for i, grip := range shotTextGrips(frame) {
+		if shotRectsIntersect(grip, content) {
+			t.Fatalf("grip %d %+v covers the text %+v", i, grip, content)
+		}
+	}
+}
+
+// shotColourBox is the bounding box of green text pixels in area.
+func shotColourBox(img image.Image, area image.Rectangle) (image.Rectangle, bool) {
+	box := image.Rectangle{}
+	found := false
+	for y := area.Min.Y; y < area.Max.Y; y++ {
+		for x := area.Min.X; x < area.Max.X; x++ {
+			px := color.NRGBAModel.Convert(img.At(x, y)).(color.NRGBA)
+			if px.G > 180 && px.R < 100 && px.B < 100 {
+				pt := image.Rect(x, y, x+1, y+1)
+				if !found {
+					box, found = pt, true
+				} else {
+					box = box.Union(pt)
+				}
+			}
+		}
+	}
+	return box, found
+}
+
+// The frame's padding is chrome: the same text starts at the same place in
+// the editor and in the exported crop.
+func TestShotTextExportKeepsTheEditorTextPosition(t *testing.T) {
+	shotSeams(t)
+	s := shotTestSession(t, mygo.Rectangle{Width: 400, Height: 300}, 400, 300)
+	s.hasSel = true
+	s.sel = mygo.Rectangle{X: 0, Y: 0, Width: 300, Height: 200}
+	s.tool = shotToolText
+	s.color = ui.RGBA(0, 255, 0, 1)
+	s.layoutBar()
+	v := shotTextView(t, s)
+	te := shotNewTextBox(t, s, v, 40, 40)
+	v.Type("padded text stays put")
+	v.Frame()
+	preview := v.Image()
+	previewBox, ok := shotColourBox(preview, image.Rect(te.at.X, te.at.Y, te.at.X+te.width, te.at.Y+s.textBoxH))
+	if !ok {
+		t.Fatal("no text in the editing box")
+	}
+	s.finishText()
+	if len(s.hist.annots) != 1 {
+		t.Fatalf("annots = %+v", s.hist.annots)
+	}
+	an := s.hist.annots[0]
+	if an.a != te.at || an.boxW != te.width {
+		t.Fatalf("annotation at %+v width %d, editor content %+v width %d", an.a, an.boxW, te.at, te.width)
+	}
+	png, err := s.outputPNG(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := stdpng.Decode(bytes.NewReader(png))
+	if err != nil {
+		t.Fatal(err)
+	}
+	exportBox, ok := shotColourBox(out, image.Rect(0, 0, 300, 200))
+	if !ok {
+		t.Fatal("no text in the export")
+	}
+	if previewBox.Min != exportBox.Min {
+		t.Fatalf("text starts at %v in the editor, %v in the export", previewBox.Min, exportBox.Min)
+	}
 }
 
 func TestShotTextSizeFollowsWidth(t *testing.T) {

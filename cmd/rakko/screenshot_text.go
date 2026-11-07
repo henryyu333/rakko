@@ -51,9 +51,42 @@ func shotTextDefaultWidth(size float32) int {
 	return int(math.Round(float64(size) * 8))
 }
 
-// textWidthMax is the widest content that still fits right of atX.
-func textWidthMax(sel mygo.Rectangle, atX int) int {
-	return max(1, sel.X+sel.Width-atX)
+// The editing frame's inner padding: text never touches the frame, and
+// the grips sit on the frame's outside, clear of the text.
+const (
+	shotTextBoxPadX = 6
+	shotTextBoxPadY = 4
+)
+
+// shotTextFrameRect is the editing frame around a text's content: the
+// content top-left, width and height grown by the padding. The annotation
+// stores the content, so an export (which has no frame) lands exactly where
+// the editor showed the text.
+func shotTextFrameRect(at mygo.Point, width, height int) mygo.Rectangle {
+	return mygo.Rectangle{
+		X: at.X - shotTextBoxPadX, Y: at.Y - shotTextBoxPadY,
+		Width: width + 2*shotTextBoxPadX, Height: height + 2*shotTextBoxPadY,
+	}
+}
+
+// shotTextGrips are the three width grips: the left and right edges'
+// midpoints and the bottom-right corner, centred on the frame's border so
+// half of each sits outside it.
+func shotTextGrips(frame mygo.Rectangle) []mygo.Rectangle {
+	const gw, gh, corner = 8, 20, 8
+	midY := frame.Y + frame.Height/2
+	right := frame.X + frame.Width
+	bottom := frame.Y + frame.Height
+	return []mygo.Rectangle{
+		{X: frame.X - gw/2, Y: midY - gh/2, Width: gw, Height: gh},
+		{X: right - gw/2, Y: midY - gh/2, Width: gw, Height: gh},
+		{X: right - corner/2, Y: bottom - corner/2, Width: corner, Height: corner},
+	}
+}
+
+// textWidthMax is the widest content that still fits right of frameX.
+func textWidthMax(sel mygo.Rectangle, frameX int) int {
+	return max(1, sel.X+sel.Width-frameX-2*shotTextBoxPadX)
 }
 
 // startTextDraft begins a press with the text tool: a click makes the
@@ -72,20 +105,21 @@ func (s *shotSession) createTextFromDraft() {
 		return
 	}
 	size := shotTextSizeFor(s.width)
-	at := draft.at
-	width := shotTextDefaultWidth(size)
+	frameX := draft.at.X
+	frameW := shotTextDefaultWidth(size) + 2*shotTextBoxPadX
 	if dx := draft.cur.X - draft.at.X; abs(dx) >= 3 {
-		width = abs(dx)
+		frameW = abs(dx)
 		if dx < 0 {
-			at.X = draft.cur.X
+			frameX = draft.cur.X
 		}
 	}
-	maxW := textWidthMax(s.sel, at.X)
-	width = clampInt(width, shotTextMinWidth(size), maxW)
-	at.X = clampInt(at.X, s.sel.X, max(s.sel.X, s.sel.X+s.sel.Width-width))
-	at.Y = clampInt(at.Y, s.sel.Y, max(s.sel.Y, s.sel.Y+s.sel.Height-1))
+	maxW := textWidthMax(s.sel, frameX) + 2*shotTextBoxPadX
+	frameW = clampInt(frameW, shotTextMinWidth(size)+2*shotTextBoxPadX, maxW)
+	frameX = clampInt(frameX, s.sel.X, max(s.sel.X, s.sel.X+s.sel.Width-frameW))
+	frameY := clampInt(draft.at.Y, s.sel.Y, max(s.sel.Y, s.sel.Y+s.sel.Height-1))
 	s.text = &shotTextEdit{
-		at: at, width: width, color: s.color, stroke: s.width, focus: true,
+		at:    mygo.Point{X: frameX + shotTextBoxPadX, Y: frameY + shotTextBoxPadY},
+		width: frameW - 2*shotTextBoxPadX, color: s.color, stroke: s.width, focus: true,
 	}
 	s.textBoxH = 0
 }
@@ -252,25 +286,27 @@ func (s *shotSession) textDragTo(p mygo.Point, area mygo.Rectangle) {
 			if r, ok := s.textRectOf(drag.index); ok {
 				h = r.rect.Height
 			}
-			at.X = clampInt(at.X, s.sel.X, max(s.sel.X, s.sel.X+s.sel.Width-w))
-			at.Y = clampInt(at.Y, s.sel.Y, max(s.sel.Y, s.sel.Y+s.sel.Height-h))
+			at.X = clampInt(at.X, s.sel.X+shotTextBoxPadX, max(s.sel.X+shotTextBoxPadX, s.sel.X+s.sel.Width-shotTextBoxPadX-w))
+			at.Y = clampInt(at.Y, s.sel.Y+shotTextBoxPadY, max(s.sel.Y+shotTextBoxPadY, s.sel.Y+s.sel.Height-shotTextBoxPadY-h))
 			if drag.snapped {
 				s.hist.annots[drag.index].a = at
 			}
 			break
 		}
 		h := s.textHeight(te)
-		te.at.X = clampInt(at.X, s.sel.X, max(s.sel.X, s.sel.X+s.sel.Width-te.width))
-		te.at.Y = clampInt(at.Y, s.sel.Y, max(s.sel.Y, s.sel.Y+s.sel.Height-h))
+		te.at.X = clampInt(at.X, s.sel.X+shotTextBoxPadX, max(s.sel.X+shotTextBoxPadX, s.sel.X+s.sel.Width-shotTextBoxPadX-te.width))
+		te.at.Y = clampInt(at.Y, s.sel.Y+shotTextBoxPadY, max(s.sel.Y+shotTextBoxPadY, s.sel.Y+s.sel.Height-shotTextBoxPadY-h))
 	case shotTextDragLeft:
-		right := drag.at.X + drag.width
-		minW := shotTextMinWidth(te.size())
-		left := clampInt(p.X, s.sel.X, max(s.sel.X, right-minW))
-		te.at.X = left
-		te.width = right - left
+		right := drag.at.X + drag.width + shotTextBoxPadX
+		minFrame := shotTextMinWidth(te.size()) + 2*shotTextBoxPadX
+		left := clampInt(p.X, s.sel.X, max(s.sel.X, right-minFrame))
+		te.at.X = left + shotTextBoxPadX
+		te.width = right - left - 2*shotTextBoxPadX
 	case shotTextDragRight:
-		minW := shotTextMinWidth(te.size())
-		te.width = clampInt(p.X-te.at.X, minW, textWidthMax(s.sel, te.at.X))
+		minFrame := shotTextMinWidth(te.size()) + 2*shotTextBoxPadX
+		frameX := te.at.X - shotTextBoxPadX
+		right := clampInt(p.X, frameX+minFrame, s.sel.X+s.sel.Width)
+		te.width = right - frameX - 2*shotTextBoxPadX
 	}
 	s.invalidate()
 }
@@ -328,8 +364,9 @@ func (s *shotSession) buildTextEditor(c *ui.Context, d *shotDisplay) {
 // hit targets: dragging an edge moves the box, a grip changes its width.
 func (s *shotSession) buildTextChrome(c *ui.Context, d *shotDisplay) {
 	te := s.text
-	r := mygo.Rectangle{X: te.at.X, Y: te.at.Y, Width: te.width, Height: s.textHeight(te)}
-	const edge = 5
+	r := shotTextFrameRect(te.at, te.width, s.textHeight(te))
+	const edge = 4
+	grips := shotTextGrips(r)
 	type strip struct {
 		key  string
 		rect mygo.Rectangle
@@ -341,9 +378,9 @@ func (s *shotSession) buildTextChrome(c *ui.Context, d *shotDisplay) {
 		{"move-s", mygo.Rectangle{X: r.X, Y: r.Y + r.Height - edge/2, Width: r.Width, Height: edge}, ui.CursorMove, shotTextDragMove},
 		{"move-w", mygo.Rectangle{X: r.X - edge/2, Y: r.Y, Width: edge, Height: r.Height}, ui.CursorMove, shotTextDragMove},
 		{"move-e", mygo.Rectangle{X: r.X + r.Width - edge/2, Y: r.Y, Width: edge, Height: r.Height}, ui.CursorMove, shotTextDragMove},
-		{"grip-w", mygo.Rectangle{X: r.X - 6, Y: r.Y + r.Height/2 - 12, Width: 12, Height: 24}, ui.CursorResizeEW, shotTextDragLeft},
-		{"grip-e", mygo.Rectangle{X: r.X + r.Width - 6, Y: r.Y + r.Height/2 - 12, Width: 12, Height: 24}, ui.CursorResizeEW, shotTextDragRight},
-		{"grip-se", mygo.Rectangle{X: r.X + r.Width - 7, Y: r.Y + r.Height - 7, Width: 14, Height: 14}, ui.CursorResizeNWSE, shotTextDragRight},
+		{"grip-w", grips[0], ui.CursorResizeEW, shotTextDragLeft},
+		{"grip-e", grips[1], ui.CursorResizeEW, shotTextDragRight},
+		{"grip-se", grips[2], ui.CursorResizeNWSE, shotTextDragRight},
 	}
 	for _, st := range strips {
 		local := st.rect
@@ -410,11 +447,12 @@ func (s *shotSession) drawTextFrame(p *ui.Painter, d *shotDisplay) {
 	if te == nil {
 		return
 	}
-	h := s.textHeight(te)
+	frame := shotTextFrameRect(te.at, te.width, s.textHeight(te))
 	r := ui.Rect{
-		X: float32(te.at.X - d.Bounds.X), Y: float32(te.at.Y - d.Bounds.Y),
-		W: float32(te.width), H: float32(h),
+		X: float32(frame.X - d.Bounds.X), Y: float32(frame.Y - d.Bounds.Y),
+		W: float32(frame.Width), H: float32(frame.Height),
 	}
 	p.Fill(r, ui.RGBA(0, 0, 0, 0.10), 2)
-	p.Stroke(r, ui.RGBA(255, 255, 255, 0.55), 2, 1)
+	p.Stroke(r, ui.RGBA(0, 0, 0, 0.35), 2, 1)
+	p.Stroke(ui.Rect{X: r.X + 1, Y: r.Y + 1, W: r.W - 2, H: r.H - 2}, ui.RGBA(255, 255, 255, 0.75), 2, 1)
 }
