@@ -27,6 +27,7 @@ import (
 	"github.com/egoist/mygo"
 
 	"rakko/internal/mac"
+	"rakko/internal/settings"
 )
 
 type motionFrame struct {
@@ -176,6 +177,21 @@ func hideNow(a *shelf) {
 }
 
 func settle(a *shelf, d time.Duration) { time.Sleep(d) }
+
+// setMotionStyle switches the shell style the way 设置 does, without
+// saving it, and re-places on the display the shelf lives on.
+func setMotionStyle(a *shelf, island bool) {
+	onMain(func() {
+		style := settings.ShellStyleNotch
+		if island {
+			style = settings.ShellStyleIsland
+		}
+		a.settings.ShellStyle = style
+		a.applyShellStyle()
+		a.place(mygo.Screen.CursorScreenPoint())
+		a.win.Invalidate()
+	})
+}
 
 func resetHomeQuery(a *shelf) {
 	onMain(func() {
@@ -362,46 +378,16 @@ const (
 	motionMetric  = 1.5 * motionFrameMS
 )
 
-// TestMotionMetricSmoke records the animations' frames and checks the
-// motion acceptance: no native resize under a moving spring, no frame built
-// in a canvas the window did not have, frame intervals inside 1.5 display
-// refreshes and content opacity that moves frame by frame.
-func TestMotionMetricSmoke(t *testing.T) {
-	a := redesignShelf(t)
-	dir := os.Getenv("MOTION_METRIC_DIR")
-	if dir == "" {
-		dir = "/tmp/Rakko-anim-fix/metrics"
-	}
-	// Frame logs carry microseconds so their pacing can be read beside
-	// the traces.
-	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
-	collectOnly := os.Getenv("MOTION_METRIC_COLLECT") == "1"
-	m := &motionMeter{a: a, start: time.Now()}
-	onMain(func() { frameTrace = m.frame })
-	defer onMain(func() { frameTrace = nil })
-	stop := startMotionTicker(a)
-	defer stop()
-	motionClosed(a)
-	settle(a, 500*time.Millisecond)
+type motionScenario struct {
+	name string
+	run  func(rep int)
+}
 
-	// First openings pay the GPU's pipeline setup (a 300 ms first frame in
-	// MYGO_FRAME_STATS): warm the surfaces up before a measured scene.
-	for range 3 {
-		motionClosed(a)
-		settle(a, 200*time.Millisecond)
-		openSheetNow(a)
-		settle(a, 600*time.Millisecond)
-		hideNow(a)
-		settle(a, 600*time.Millisecond)
-	}
-	m.take()
-
-	const reps = 10
-
-	scenarios := []struct {
-		name string
-		run  func(rep int)
-	}{
+// motionScenarios drives the shell the way the user does: opening and
+// closing, a close in the middle of an opening, a hover morph, three page
+// switches, a widening search bar and a growing results sheet.
+func motionScenarios(a *shelf, m *motionMeter) []motionScenario {
+	return []motionScenario{
 		{"open-close", func(rep int) {
 			m.nextRep()
 			m.mark("")
@@ -490,17 +476,73 @@ func TestMotionMetricSmoke(t *testing.T) {
 			settle(a, 500*time.Millisecond)
 		}},
 	}
+}
+
+// TestMotionMetricSmoke records the animations' frames and checks the
+// motion acceptance: no native resize under a moving spring, no frame built
+// in a canvas the window did not have, frame intervals inside 1.5 display
+// refreshes and content opacity that moves frame by frame.
+func TestMotionMetricSmoke(t *testing.T) {
+	a := redesignShelf(t)
+	dir := os.Getenv("MOTION_METRIC_DIR")
+	if dir == "" {
+		dir = "/tmp/Rakko-anim-fix/metrics"
+	}
+	// Frame logs carry microseconds so their pacing can be read beside
+	// the traces.
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+	collectOnly := os.Getenv("MOTION_METRIC_COLLECT") == "1"
+	m := &motionMeter{a: a, start: time.Now()}
+	onMain(func() { frameTrace = m.frame })
+	defer onMain(func() { frameTrace = nil })
+	stop := startMotionTicker(a)
+	defer stop()
+	motionClosed(a)
+	settle(a, 500*time.Millisecond)
+
+	// The shell's two styles animate the same scenes: the notch hangs the
+	// panel from the screen's top edge, the island from its own row.
+	styles := []struct {
+		name   string
+		island bool
+	}{
+		{"notch", false},
+		{"island", true},
+	}
+	restoreStyle := func() { setMotionStyle(a, false) }
+	t.Cleanup(restoreStyle)
 
 	var stats []motionStats
-	for _, sc := range scenarios {
-		m.take() // the settled frames before the scene are not its data
-		for rep := range reps {
-			sc.run(rep)
+	for _, style := range styles {
+		setMotionStyle(a, style.island)
+		motionClosed(a)
+		// First openings pay the GPU's pipeline setup (a 300 ms first frame
+		// in MYGO_FRAME_STATS): warm the surfaces up before a measured scene.
+		for range 3 {
+			motionClosed(a)
+			settle(a, 200*time.Millisecond)
+			openSheetNow(a)
+			settle(a, 600*time.Millisecond)
+			hideNow(a)
+			settle(a, 600*time.Millisecond)
 		}
-		rows := m.take()
-		saveMotionFrames(t, dir, sc.name, rows)
-		stats = append(stats, metricsFrom(sc.name, rows))
+		m.take()
+
+		const reps = 10
+
+		scenarios := motionScenarios(a, m)
+		for _, sc := range scenarios {
+			m.take() // the settled frames before the scene are not its data
+			for rep := range reps {
+				sc.run(rep)
+			}
+			rows := m.take()
+			name := style.name + "-" + sc.name
+			saveMotionFrames(t, dir, name, rows)
+			stats = append(stats, metricsFrom(name, rows))
+		}
 	}
+	restoreStyle()
 
 	for _, st := range stats {
 		t.Logf("%-15s reps=%d frames=%d motion=%d gap p50=%.2f p95=%.2f max=%.2f drops=%d mid-resizes=%d edge-resizes=%d canvas-mismatch=%d reverse=%d reveal-jump=%.3f",
