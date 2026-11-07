@@ -20,6 +20,12 @@ import (
 func (a *shelf) place(p mygo.Point) {
 	a.placeAt(p)
 	if a.win != nil {
+		// The anchor moved (a display change, or the island's row). An open
+		// panel takes its envelope again at the new row in this one resize
+		// instead of keeping a box measured around the old anchor.
+		if a.visible && !a.dragging && !a.pointerDrag && !a.islandDrag {
+			a.frameHold = a.sessionFrame()
+		}
 		a.syncWindowFrame()
 		a.win.SetOpacity(1)
 	}
@@ -52,6 +58,9 @@ func (a *shelf) placeAt(p mygo.Point) {
 	// showing, folding and a display change all replay it instead of the
 	// default row.
 	a.placeIslandAxis()
+	// A held envelope was measured around the previous anchor; the caller
+	// takes a fresh one for the new row (show, holdSurface).
+	a.frameHold = mygo.Rectangle{}
 }
 
 // overAnchor 只认实测几何：光标真正进入锚点热区（刘海，或者灵动岛的
@@ -306,7 +315,15 @@ func (a *shelf) sessionFrame() mygo.Rectangle {
 	}
 	add(homeTypingW, float32(homeShellH), resultsMaxH, pageH)
 	for _, p := range a.enabledPages() {
-		add(pageShellWidth(p), pageShellHeight(p), 0, pageShellHeight(p))
+		w := pageShellWidth(p)
+		if p.id() == pageHome {
+			// The home page widens to its lyrics column when a track gains
+			// lyrics while the panel is open; the envelope holds its widest
+			// form from the start so that widening never resizes the surface
+			// under the drawn page.
+			w = max(w, homeLyricsW)
+		}
+		add(w, pageShellHeight(p), 0, pageShellHeight(p))
 	}
 	add(snapW, snapH, 0, pageH)
 	return r
@@ -343,14 +360,33 @@ func (a *shelf) holdSurface(t mygo.Rectangle) {
 	a.frameHold = unionRect(a.frameHold, t)
 }
 
+// holdFaded reports whether the panel has finished folding and its content
+// faded: the envelope has nothing left to hold and the window may return to
+// the closed strip's exact box. The values are read directly, not through
+// the zone's settled flags: the last fold frame snaps openK to zero and the
+// next frame is the idle one, which draws nothing and returns before the
+// spring bookkeeping ever runs.
+func (a *shelf) holdFaded() bool {
+	return !a.visible && a.progress <= 0.01 && a.fx.openK <= 0.002 && a.fx.peekK <= 0.002 &&
+		!a.peeking && !a.fx.openMoving && !a.fx.sizeMoving &&
+		(a.closeAt.IsZero() || time.Since(a.closeAt) >= closeFade)
+}
+
 // targetFrame is the frame the window maps. While a hold is up it is the
 // envelope, grown to cover whatever the current frame asks for (never
-// shrunk under a running spring); once every spring has come to rest the
-// hold ends and the exact target returns, which keeps the settled window
-// the shell's own box.
+// shrunk under a running spring). The envelope lasts as long as the panel
+// stays open: dropping it at rest would make the next keystroke, result
+// batch or page change resize the surface under drawn content, and a resized
+// surface presents its previous canvas stretched for a display frame. Once
+// the panel has folded away and nothing of it is drawn, the hold ends and
+// the closed strip's exact box returns.
 func (a *shelf) targetFrame() mygo.Rectangle {
 	r := a.desiredFrame()
 	if a.frameHold == (mygo.Rectangle{}) {
+		return r
+	}
+	if a.holdFaded() {
+		a.frameHold = mygo.Rectangle{}
 		return r
 	}
 	// A drag owns the frame it draws: the drop band and its guard landing
@@ -1200,6 +1236,20 @@ func (a *shelf) show(edge bool) {
 	a.dropZoneSnap(edge)
 	a.fx.openMoving = true
 	a.animationFrom, a.animationStart = a.progress, time.Now()
+	// The search bar takes the keyboard as it grows (below); focus mode
+	// lowers an island's panel row for the input method, so the envelope
+	// must be measured with that row already in place. Remember the app the
+	// keyboard came from here, while it is still the frontmost one.
+	if level == 1 && !a.snap.panel {
+		if !a.focusMode {
+			if pid := mac.FrontmostPID(); pid > 0 && pid != mac.OwnPID() {
+				a.prevAppPID = pid
+			}
+		}
+		a.focusMode = true
+		a.resetHomeSearch()
+		a.warmSpotlight()
+	}
 	// The surface was blank before this opening (or holds the previous
 	// envelope): raise it to the envelope the whole panel fits in now,
 	// while nothing of the opening is drawn yet, so no spring resizes it.
@@ -1218,10 +1268,9 @@ func (a *shelf) show(edge bool) {
 		}
 	}
 	// The search bar takes the keyboard as it grows: typing starts at
-	// once. The arrangement panel is not a search and keeps it away.
+	// once. The arrangement panel is not a search and keeps it away. The
+	// keyboard mode was taken above, before the envelope was measured.
 	if level == 1 && !a.snap.panel {
-		a.resetHomeSearch()
-		a.warmSpotlight()
 		a.takeKeyboard()
 	}
 }

@@ -159,6 +159,9 @@ func (a *shelf) moveIslandTo(centre, top int) {
 	}
 	a.islandDX, a.islandDY = dx, dy
 	a.y = a.dispBounds.Y + dy
+	// The held envelope was measured around the old row; it must not span
+	// both places after the panel lands at this one.
+	a.frameHold = mygo.Rectangle{}
 	a.syncWindowFrame()
 }
 
@@ -272,6 +275,12 @@ func (a *shelf) panelFlipStep(zone ui.Element) {
 	a.flip.k = k
 	if k >= 1 || zone.Settled("flip") {
 		a.flip = panelFlip{}
+		// The side change lands on the exact box; take the envelope of the
+		// side it landed on now, so the next keystroke or page change does
+		// not resize the drawn panel again.
+		if a.visible && !a.dragging && !a.pointerDrag && !a.islandDrag {
+			a.beginSurfaceHold()
+		}
 	}
 }
 
@@ -346,6 +355,9 @@ func (a *shelf) islandDragTick(p mygo.Point, down bool) bool {
 	if moved {
 		a.moveIslandTo(centre, top)
 		a.saveIslandSpot()
+		// The open panel re-takes its envelope around the spot it landed
+		// on: a later keystroke must not resize the surface again.
+		a.beginSurfaceHold()
 	} else {
 		a.show(false)
 	}
@@ -396,6 +408,9 @@ func (a *shelf) panelDragTick(p mygo.Point, down bool) bool {
 		if to.Up != up {
 			a.startPanelFlip(from, to)
 		}
+		// The panel keeps its envelope at the new row; a side change takes
+		// its own on the side it lands on.
+		a.beginSurfaceHold()
 	}
 	a.syncDragGuard()
 	a.syncMousePassThrough()

@@ -750,20 +750,17 @@ func (a *shelf) view(c *ui.Context) {
 	a.fx.openK, a.fx.peekK = openK, peekK
 	a.fx.openMoving = a.win != nil && (!zone.Settled("open") || !zone.Settled("level") ||
 		!zone.Settled("home-w") || !zone.Settled("results-h") || !zone.Settled("nav"))
-	// The surface keeps the wide envelope only while a spring runs: once
-	// every channel rests, the window returns to the shell's exact box (a
-	// settled panel's transparent margin must not sit over the pointer's
-	// targets below it). syncMousePassThrough below asks for the resize
-	// after this frame painted, so the new canvas and the new native frame
-	// commit together.
-	// A hover keeps the envelope so the click that opens the panel does
-	// not resize under the pill; an open panel does not need it once its
-	// springs rest.
-	hovering := !a.visible && (a.peeking || a.fx.peekK > 0.002)
-	if a.frameHold != (mygo.Rectangle{}) && !a.fx.openMoving && !a.fx.sizeMoving && zone.Settled("peek") &&
-		!hovering && (a.closeAt.IsZero() || time.Since(a.closeAt) >= closeFade) {
-		a.frameHold = mygo.Rectangle{}
-	}
+	// The surface keeps the wide envelope for the whole time the panel is
+	// open, not only while its springs run (targetFrame decides when it may
+	// drop). Returning to the shell's exact box at rest looks harmless, but
+	// the next keystroke or result batch grows the window again — and a
+	// resize under drawn content presents the last canvas stretched into
+	// the new frame for a display frame (mygo v0.8.3 presents a resized
+	// frame's old canvas until its transaction commits). That was the
+	// single-frame block and the shrunken/grown panel in the user's
+	// recordings. A settled open panel's transparent margin still passes the
+	// pointer through: the gate accepts presses only on the drawn shell
+	// (overlayAcceptsMouse), so the exact box is not needed there.
 	a.fx.peek = !expanded && peeked && !closing
 	// A panel drag released on the other side of the island slides there on
 	// the panel's own spring; the box, its frame and its hit shape all read
