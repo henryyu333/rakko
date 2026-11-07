@@ -34,6 +34,8 @@ func shotSeams(t *testing.T) {
 	clipboard, readDir, writeFile, openWin := shotClipboard, shotReadSaveDir, shotWriteFile, shotOpenWindow
 	clean := shotCleanTemp
 	settle := shotPanelSettle
+	after := shotAfter
+	openPin := shotOpenPin
 	t.Cleanup(func() {
 		shotDisplays, shotCursorPoint, shotCaptureDisplay, shotNormalWindow = displays, cursor, capture, windows
 		shotDispatch, shotWork, shotClock = dispatch, work, clock
@@ -41,15 +43,22 @@ func shotSeams(t *testing.T) {
 		shotClipboard, shotReadSaveDir, shotWriteFile, shotOpenWindow = clipboard, readDir, writeFile, openWin
 		shotCleanTemp = clean
 		shotPanelSettle = settle
+		shotAfter, shotOpenPin = after, openPin
 	})
 	shotDispatch = func(fn func()) { fn() }
 	shotWork = func(fn func()) { fn() }
+	shotDisplays = func() []mygo.Display {
+		return []mygo.Display{{ID: 1, Bounds: mygo.Rectangle{Width: 1000, Height: 800},
+			WorkArea: mygo.Rectangle{Width: 1000, Height: 800}, ScaleFactor: 1, Primary: true}}
+	}
 	shotFrontPID = func() int { return 0 }
 	shotActivateSelf = func() {}
 	shotNormalWindow = func() []mac.ScreenWindow { return nil }
 	shotOpenWindow = func(*shotSession, int) {}
 	shotCleanTemp = func() { os.MkdirAll(shotTempDir(), 0o700) }
 	shotPanelSettle = 0
+	shotAfter = func(time.Duration, func()) *time.Timer { return time.NewTimer(time.Hour) }
+	shotOpenPin = func(*shelf, []byte, mygo.Rectangle, float64) {}
 }
 
 // writeShotTestPNG writes a w×h opaque PNG for the capture stub.
@@ -477,5 +486,103 @@ func TestShotClipboardOffersPNGAndFile(t *testing.T) {
 		if !found {
 			t.Fatalf("clipboard data lacks %s; formats=%v", want, formats)
 		}
+	}
+}
+
+func TestShotEnterCopiesAndCloses(t *testing.T) {
+	shotSeams(t)
+	var got []byte
+	var path string
+	shotClipboard = func(png []byte, p string) error {
+		got, path = png, p
+		return nil
+	}
+	a := &shelf{}
+	s := shotTestSession(t, mygo.Rectangle{Width: 40, Height: 30}, 40, 30)
+	s.a = a
+	s.hasSel = true
+	s.sel = mygo.Rectangle{X: 5, Y: 5, Width: 20, Height: 15}
+	if !s.keyDown(ui.InputEvent{Kind: ui.InputKeyDown, Key: ui.KeyEnter}) {
+		t.Fatal("Enter was not handled")
+	}
+	if len(got) == 0 || path == "" {
+		t.Fatalf("clipboard got png=%d path=%q", len(got), path)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("clipboard file URL target missing: %v", err)
+	}
+	if !s.closed {
+		t.Fatal("Enter did not close the session")
+	}
+}
+
+func TestShotSaveWritesToConfiguredFolder(t *testing.T) {
+	shotSeams(t)
+	dir := t.TempDir()
+	shotReadSaveDir = func() string { return dir }
+	s := shotTestSession(t, mygo.Rectangle{Width: 40, Height: 30}, 40, 30)
+	s.a = &shelf{}
+	s.hasSel = true
+	s.sel = mygo.Rectangle{X: 5, Y: 5, Width: 20, Height: 15}
+	s.save()
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("saved files = %v, %v", entries, err)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, entries[0].Name()))
+	if err != nil || len(b) < 8 {
+		t.Fatalf("saved png = %d bytes, %v", len(b), err)
+	}
+}
+
+func TestShotRecognizeCopiesFromUnannotatedCrop(t *testing.T) {
+	ocrSeams(t)
+	shotSeams(t)
+	var sawFile int
+	ocrRecognize = func(path string) ([]string, error) {
+		if b, err := os.ReadFile(path); err == nil {
+			sawFile = len(b)
+		}
+		return []string{"识别出的截图文字"}, nil
+	}
+	var copied string
+	a := &shelf{}
+	a.write = recordClipFunc(func(text string) error { copied = text; return nil })
+	s := shotTestSession(t, mygo.Rectangle{Width: 40, Height: 30}, 40, 30)
+	s.a = a
+	s.hasSel = true
+	s.sel = mygo.Rectangle{X: 5, Y: 5, Width: 20, Height: 15}
+	s.hist.annots = []shotAnnotation{{tool: shotToolRect, color: ui.Hex("#FF0000"), width: 2,
+		a: mygo.Point{X: 5, Y: 5}, b: mygo.Point{X: 25, Y: 20}}}
+	s.recognize()
+	if sawFile == 0 {
+		t.Fatal("the recognizer got no file")
+	}
+	if copied != "识别出的截图文字" {
+		t.Fatalf("copied %q", copied)
+	}
+}
+
+func TestShotPinOpensAnnotatedCrop(t *testing.T) {
+	shotSeams(t)
+	var pinned []byte
+	var frame mygo.Rectangle
+	var scale float64
+	shotOpenPin = func(_ *shelf, png []byte, f mygo.Rectangle, sc float64) {
+		pinned, frame, scale = png, f, sc
+	}
+	s := shotTestSession(t, mygo.Rectangle{Width: 400, Height: 300}, 400, 300)
+	s.a = &shelf{}
+	s.hasSel = true
+	s.sel = mygo.Rectangle{X: 40, Y: 30, Width: 120, Height: 90}
+	s.pin()
+	if len(pinned) == 0 {
+		t.Fatal("no pinned picture")
+	}
+	if frame.Width != 120 || frame.Height != 90 {
+		t.Fatalf("pin frame = %+v", frame)
+	}
+	if scale != 1 {
+		t.Fatalf("pin scale = %v", scale)
 	}
 }
