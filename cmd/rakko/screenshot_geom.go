@@ -296,43 +296,144 @@ func shotRectsIntersect(a, b mygo.Rectangle) bool {
 	return a.X < b.X+b.Width && b.X < a.X+a.Width && a.Y < b.Y+b.Height && b.Y < a.Y+a.Height
 }
 
-// shotPixelate averages the pixels of src's region into a grid of block×
-// block squares: the mosaic tool's picture, small enough to be drawn scaled
-// up as pixel art. The region is clipped to the image; the grid keeps at
-// least one cell.
-func shotPixelate(src *image.RGBA, region image.Rectangle, block int) *image.RGBA {
-	region = region.Intersect(src.Bounds())
-	if region.Empty() {
-		return image.NewRGBA(image.Rect(0, 0, 1, 1))
+// shotMosaicBlockPixels is one mosaic cell's size in frozen pixels: the
+// three stroke presets get 10, 14 and 20 pixels. The grid is anchored at
+// the frozen image's own origin, so a cell covers the same pixels in the
+// preview and in the export.
+func shotMosaicBlockPixels(width int) int {
+	switch {
+	case width <= shotAnnotationWidths[0]:
+		return 10
+	case width <= shotAnnotationWidths[1]:
+		return 14
 	}
-	block = max(block, 1)
-	w := (region.Dx() + block - 1) / block
-	h := (region.Dy() + block - 1) / block
-	out := image.NewRGBA(image.Rect(0, 0, w, h))
-	for by := range h {
-		for bx := range w {
-			x0, y0 := region.Min.X+bx*block, region.Min.Y+by*block
-			x1, y1 := min(x0+block, region.Max.X), min(y0+block, region.Max.Y)
-			var r, g, b, a, n uint64
-			for y := y0; y < y1; y++ {
-				row := src.Pix[y*src.Stride:]
-				for x := x0; x < x1; x++ {
-					i := x * 4
-					r += uint64(row[i])
-					g += uint64(row[i+1])
-					b += uint64(row[i+2])
-					a += uint64(row[i+3])
-					n++
+	return 20
+}
+
+// shotMosaicBrushRadius is the brush's radius in points for a stroke width;
+// it covers roughly two cells on either side of the pointer.
+func shotMosaicBrushRadius(width int) float64 {
+	switch {
+	case width <= shotAnnotationWidths[0]:
+		return 10
+	case width <= shotAnnotationWidths[1]:
+		return 16
+	}
+	return 24
+}
+
+// shotMosaicGrid maps a display's points to the frozen image's mosaic cells.
+type shotMosaicGrid struct {
+	t      shotTarget
+	imgW   int
+	imgH   int
+	block  int
+	scaleX float64
+	scaleY float64
+}
+
+// shotMosaicGridFor builds the cell grid of one frozen image.
+func shotMosaicGridFor(t shotTarget, imgW, imgH, block int) shotMosaicGrid {
+	return shotMosaicGrid{
+		t: t, imgW: imgW, imgH: imgH, block: max(block, 1),
+		scaleX: float64(imgW) / float64(max(t.Bounds.Width, 1)),
+		scaleY: float64(imgH) / float64(max(t.Bounds.Height, 1)),
+	}
+}
+
+// cellAt returns the grid cell holding a global point.
+func (g shotMosaicGrid) cellAt(p mygo.Point) (col, row int) {
+	lx := (float64(p.X-g.t.Bounds.X)) * g.scaleX
+	ly := (float64(p.Y-g.t.Bounds.Y)) * g.scaleY
+	return int(math.Floor(lx / float64(g.block))), int(math.Floor(ly / float64(g.block)))
+}
+
+// imageRect is the cell's part of the frozen image, clipped at its edges.
+func (g shotMosaicGrid) imageRect(col, row int) image.Rectangle {
+	x0, x1 := col*g.block, (col+1)*g.block
+	y0, y1 := row*g.block, (row+1)*g.block
+	x0, x1 = clampInt(x0, 0, g.imgW), clampInt(x1, 0, g.imgW)
+	y0, y1 = clampInt(y0, 0, g.imgH), clampInt(y1, 0, g.imgH)
+	return image.Rect(x0, y0, x1, y1)
+}
+
+// cellRect is the cell's rectangle in global points.
+func (g shotMosaicGrid) cellRect(col, row int) mygo.Rectangle {
+	r := g.imageRect(col, row)
+	x0 := float64(g.t.Bounds.X) + float64(r.Min.X)/g.scaleX
+	x1 := float64(g.t.Bounds.X) + float64(r.Max.X)/g.scaleX
+	y0 := float64(g.t.Bounds.Y) + float64(r.Min.Y)/g.scaleY
+	y1 := float64(g.t.Bounds.Y) + float64(r.Max.Y)/g.scaleY
+	return mygo.Rectangle{
+		X: int(math.Round(x0)), Y: int(math.Round(y0)),
+		Width: int(math.Round(x1)) - int(math.Round(x0)),
+		Height: int(math.Round(y1)) - int(math.Round(y0)),
+	}
+}
+
+// shotMosaicCells walks a brush stroke from one point to the next and adds
+// every cell the circle touches, with the cell's average colour from img.
+// Samples are spaced by half the radius, so a fast drag cannot skip a cell;
+// the caller de-duplicates cells shared by samples.
+func shotMosaicCells(img *image.RGBA, t shotTarget, block int, radius float64, from, to mygo.Point, add func(col, row int, cell shotMosaicCell)) {
+	g := shotMosaicGridFor(t, img.Bounds().Dx(), img.Bounds().Dy(), block)
+	dx, dy := float64(to.X-from.X), float64(to.Y-from.Y)
+	dist := math.Hypot(dx, dy)
+	step := math.Max(0.5, radius/2)
+	n := max(1, int(math.Ceil(dist/step)))
+	for i := 0; i <= n; i++ {
+		k := float64(i) / float64(n)
+		p := mygo.Point{
+			X: from.X + int(math.Round(dx*k)),
+			Y: from.Y + int(math.Round(dy*k)),
+		}
+		c0, r0 := g.cellAt(mygo.Point{X: p.X - int(math.Ceil(radius)), Y: p.Y - int(math.Ceil(radius))})
+		c1, r1 := g.cellAt(mygo.Point{X: p.X + int(math.Ceil(radius)), Y: p.Y + int(math.Ceil(radius))})
+		for row := r0; row <= r1; row++ {
+			for col := c0; col <= c1; col++ {
+				rect := g.cellRect(col, row)
+				if rect.Width <= 0 || rect.Height <= 0 {
+					continue
 				}
+				if shotPointRectDistance(p, rect) > radius {
+					continue
+				}
+				add(col, row, shotMosaicCell{rect: rect, color: shotAverageColor(img, g.imageRect(col, row))})
 			}
-			if n == 0 {
-				continue
-			}
-			i := out.Pix[by*out.Stride+bx*4:]
-			i[0], i[1], i[2], i[3] = uint8(r/n), uint8(g/n), uint8(b/n), uint8(a/n)
 		}
 	}
-	return out
+}
+
+// shotPointRectDistance is the distance from p to the nearest point of r,
+// zero inside it.
+func shotPointRectDistance(p mygo.Point, r mygo.Rectangle) float64 {
+	dx := math.Max(float64(r.X-p.X), float64(p.X-(r.X+r.Width)))
+	dy := math.Max(float64(r.Y-p.Y), float64(p.Y-(r.Y+r.Height)))
+	dx = math.Max(dx, 0)
+	dy = math.Max(dy, 0)
+	return math.Hypot(dx, dy)
+}
+
+// shotAverageColor averages the pixels of a region: the colour a mosaic cell
+// shows.
+func shotAverageColor(src *image.RGBA, region image.Rectangle) ui.Color {
+	region = region.Intersect(src.Bounds())
+	if region.Empty() {
+		return ui.RGBA(0, 0, 0, 0)
+	}
+	var r, g, b, a, n uint64
+	for y := region.Min.Y; y < region.Max.Y; y++ {
+		row := src.Pix[y*src.Stride:]
+		for x := region.Min.X; x < region.Max.X; x++ {
+			i := x * 4
+			r += uint64(row[i])
+			g += uint64(row[i+1])
+			b += uint64(row[i+2])
+			a += uint64(row[i+3])
+			n++
+		}
+	}
+	return ui.RGBA(uint8(r/n), uint8(g/n), uint8(b/n), float32(a)/float32(n)/255)
 }
 
 // shotFilePrefix and shotFileAt pick the system screenshot's name in the

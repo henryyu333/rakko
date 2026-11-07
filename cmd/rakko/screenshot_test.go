@@ -186,7 +186,7 @@ func TestShotWindowAtPicksFrontmost(t *testing.T) {
 	}
 }
 
-func TestShotPixelateAveragesBlocks(t *testing.T) {
+func TestShotMosaicCellAverage(t *testing.T) {
 	src := image.NewRGBA(image.Rect(0, 0, 4, 4))
 	for y := 0; y < 4; y++ {
 		for x := 0; x < 4; x++ {
@@ -198,15 +198,93 @@ func TestShotPixelateAveragesBlocks(t *testing.T) {
 			}
 		}
 	}
-	out := shotPixelate(src, src.Bounds(), 2)
-	if out.Bounds().Dx() != 2 || out.Bounds().Dy() != 2 {
-		t.Fatalf("grid = %v", out.Bounds())
+	top := shotAverageColor(src, image.Rect(0, 0, 2, 2))
+	if top.R != 10 || top.G != 20 || top.B != 30 {
+		t.Fatalf("top-left cell = %+v", top)
 	}
-	if got := out.RGBAAt(0, 0); got.R != 10 || got.G != 20 || got.B != 30 || got.A != 255 {
-		t.Fatalf("top-left cell = %v", got)
+	bottom := shotAverageColor(src, image.Rect(2, 2, 4, 4))
+	if bottom.R != 200 || bottom.G != 210 || bottom.B != 220 {
+		t.Fatalf("bottom-right cell = %+v", bottom)
 	}
-	if got := out.RGBAAt(1, 1); got.R != 200 || got.G != 210 || got.B != 220 {
-		t.Fatalf("bottom-right cell = %v", got)
+}
+
+// A fast drag must not leave holes: every point of the stroke lies in some
+// cell the brush added.
+func TestShotMosaicStrokeCoversFastDrag(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 200, 200))
+	for i := 0; i < len(img.Pix); i += 4 {
+		img.Pix[i], img.Pix[i+1], img.Pix[i+2], img.Pix[i+3] = 90, 90, 90, 255
+	}
+	target := shotTarget{ID: 1, Bounds: mygo.Rectangle{Width: 200, Height: 200}, Scale: 1}
+	cells := map[[2]int]shotMosaicCell{}
+	shotMosaicCells(img, target, 10, 10, mygo.Point{X: 10, Y: 10}, mygo.Point{X: 150, Y: 150},
+		func(col, row int, cell shotMosaicCell) { cells[[2]int{col, row}] = cell })
+	if len(cells) == 0 {
+		t.Fatal("the stroke painted no cells")
+	}
+	for i := 0; i <= 140; i++ {
+		p := mygo.Point{X: 10 + i, Y: 10 + i}
+		covered := false
+		for _, cell := range cells {
+			if shotPointInRect(p, cell.rect) {
+				covered = true
+				break
+			}
+		}
+		if !covered {
+			t.Fatalf("the stroke left a hole at %+v", p)
+		}
+	}
+}
+
+func TestShotMosaicBrushDragUndoAndExport(t *testing.T) {
+	shotSeams(t)
+	s := shotTestSession(t, mygo.Rectangle{Width: 200, Height: 200}, 200, 200)
+	// A picture whose halves have different colours, so the export proves
+	// each cell carries its own block's average.
+	img := image.NewRGBA(image.Rect(0, 0, 200, 200))
+	for y := 0; y < 200; y++ {
+		for x := 0; x < 200; x++ {
+			i := y*img.Stride + x*4
+			if x < 100 {
+				img.Pix[i], img.Pix[i+1], img.Pix[i+2], img.Pix[i+3] = 10, 20, 30, 255
+			} else {
+				img.Pix[i], img.Pix[i+1], img.Pix[i+2], img.Pix[i+3] = 200, 210, 220, 255
+			}
+		}
+	}
+	s.displays[0].img = img
+	s.displays[0].bitmap = ui.NewBitmap(img)
+	s.hasSel = true
+	s.sel = mygo.Rectangle{X: 0, Y: 0, Width: 200, Height: 200}
+	s.tool = shotToolMosaic
+	s.layoutBar()
+	down := ui.InputEvent{Kind: ui.InputPointerDown}
+	move := ui.InputEvent{Kind: ui.InputPointerMove}
+	up := ui.InputEvent{Kind: ui.InputPointerUp}
+	s.pointerDown(mygo.Point{X: 20, Y: 20}, down, 0)
+	s.pointerMove(mygo.Point{X: 180, Y: 180}, move, 0)
+	s.pointerUp(mygo.Point{X: 180, Y: 180}, up, 0)
+	if len(s.hist.annots) != 1 || len(s.hist.annots[0].cells) == 0 {
+		t.Fatalf("brush annots = %+v", s.hist.annots)
+	}
+	png, err := s.outputPNG(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := stdpng.Decode(bytes.NewReader(png))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if px := color.NRGBAModel.Convert(out.At(5, 5)).(color.NRGBA); px.R != 10 || px.G != 20 || px.B != 30 {
+		t.Fatalf("left cell exported %v, want its block's average", px)
+	}
+	if px := color.NRGBAModel.Convert(out.At(195, 195)).(color.NRGBA); px.R != 200 || px.G != 210 || px.B != 220 {
+		t.Fatalf("right cell exported %v, want its block's average", px)
+	}
+	// One drag is one history step.
+	if !s.hist.undoLast() || len(s.hist.annots) != 0 {
+		t.Fatalf("undo left %+v", s.hist.annots)
 	}
 }
 

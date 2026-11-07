@@ -21,7 +21,6 @@ import (
 	"image"
 	"image/draw"
 	stdpng "image/png"
-	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -132,6 +131,8 @@ type shotSession struct {
 	hist      shotHistory
 	pre       pre
 	text      *shotTextEdit
+	brushFrom mygo.Point
+	brushSeen map[[2]int]bool
 	nextNum   int
 	bar       shotToolbar
 	cursor    mygo.Point
@@ -629,9 +630,13 @@ func (s *shotSession) pointerMove(p mygo.Point, ev ui.InputEvent, di int) bool {
 		s.sel = shotResize(s.sel, s.resizeH, p, d.Bounds)
 		s.layoutBar()
 	case shotModeDraw:
-		if s.tool == shotToolPen && s.pre.on && ev.Mods&ui.Shift == 0 {
+		switch {
+		case s.tool == shotToolPen && s.pre.on && ev.Mods&ui.Shift == 0:
 			s.pre.ann.points = append(s.pre.ann.points, p)
-		} else {
+		case s.tool == shotToolMosaic && s.pre.on:
+			s.paintMosaic(s.brushFrom, p)
+			s.brushFrom = p
+		default:
 			s.pre.ann = shotDragAnnotation(s.tool, s.color, s.width, s.press, p, ev.Mods&ui.Shift != 0)
 			s.pre.on = true
 		}
@@ -690,6 +695,14 @@ func (s *shotSession) beginMark(p mygo.Point, di int) {
 		s.nextNum++
 		s.invalidate()
 		return
+	case shotToolMosaic:
+		s.mode = shotModeDraw
+		s.press = p
+		s.pre = pre{ann: shotAnnotation{tool: shotToolMosaic, color: s.color, width: s.width}, on: true}
+		s.brushFrom, s.brushSeen = p, map[[2]int]bool{}
+		s.paintMosaic(p, p)
+		s.invalidate()
+		return
 	}
 	s.mode = shotModeDraw
 	s.press = p
@@ -721,8 +734,12 @@ func (s *shotSession) finishMark() {
 		return
 	}
 	switch an.tool {
-	case shotToolRect, shotToolArrow, shotToolMosaic:
+	case shotToolRect, shotToolArrow:
 		if abs(an.b.X-an.a.X) < 2 || abs(an.b.Y-an.a.Y) < 2 {
+			return
+		}
+	case shotToolMosaic:
+		if len(an.cells) == 0 {
 			return
 		}
 	case shotToolPen:
@@ -730,28 +747,31 @@ func (s *shotSession) finishMark() {
 			return
 		}
 	}
-	if an.tool == shotToolMosaic {
-		if d := s.ownerDisplay(); d != nil {
-			an.mosaic = s.mosaicBitmap(d, an)
-		}
-	}
 	s.hist.snap()
 	s.hist.push(an)
 }
 
-// mosaicBitmap turns the source pixels under an's rectangle into the small
-// grid the mosaic draws. The block size is in points, so the grid looks the
-// same at any backing scale.
-func (s *shotSession) mosaicBitmap(d *shotDisplay, an shotAnnotation) *ui.Bitmap {
-	crop := shotCropRect(shotNormalizeRect(an.a, an.b), d.shotTarget, d.pixW, d.pixH)
-	if crop.Empty() {
-		return nil
+// paintMosaic adds the cells a brush stroke passes between two pointer
+// samples. Cells are shared by the whole stroke, so a slow drag does not
+// paint the same block twice.
+func (s *shotSession) paintMosaic(from, to mygo.Point) {
+	d := s.ownerDisplay()
+	if d == nil || !s.pre.on {
+		return
 	}
-	block := int(math.Round(float64(shotMosaicBlock) * d.scale()))
-	if block < 1 {
-		block = 1
+	if s.brushSeen == nil {
+		s.brushSeen = map[[2]int]bool{}
 	}
-	return ui.NewBitmap(shotPixelate(d.img, crop, block)).Pixelated()
+	width := s.pre.ann.width
+	shotMosaicCells(d.img, d.shotTarget, shotMosaicBlockPixels(width), shotMosaicBrushRadius(width), from, to,
+		func(col, row int, cell shotMosaicCell) {
+			key := [2]int{col, row}
+			if s.brushSeen[key] {
+				return
+			}
+			s.brushSeen[key] = true
+			s.pre.ann.cells = append(s.pre.ann.cells, cell)
+		})
 }
 
 // layoutBar places the toolbar for the current selection.

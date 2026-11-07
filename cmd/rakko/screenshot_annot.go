@@ -41,9 +41,6 @@ var shotAnnotationColors = []ui.Color{
 // shotAnnotationWidths are the three stroke widths, in points.
 var shotAnnotationWidths = []int{2, 4, 7}
 
-// shotMosaicBlock is the mosaic tool's cell size in points.
-const shotMosaicBlock = 10
-
 // shotTextSizes are the text tool's sizes in points, one per stroke width
 // preset: 2, 4 and 7 points.
 var shotTextSizes = []float32{14, 18, 24}
@@ -61,9 +58,16 @@ func shotTextSizeFor(width int) float32 {
 // shotNumberRadius is a number badge's radius in points.
 const shotNumberRadius = 11
 
+// shotMosaicCell is one mosaic block: its place on the frozen picture and
+// the average colour it covers.
+type shotMosaicCell struct {
+	rect  mygo.Rectangle
+	color ui.Color
+}
+
 // shotAnnotation is one mark. a and b are the drag's endpoints (a is the
 // anchor for text and the centre for a number), points is a pen's path,
-// and mosaic is the pixelated picture made when the drag ended.
+// and cells are the mosaic blocks a brush stroke covered.
 type shotAnnotation struct {
 	tool   shotTool
 	color  ui.Color
@@ -72,7 +76,7 @@ type shotAnnotation struct {
 	points []mygo.Point
 	text   string
 	number int
-	mosaic *ui.Bitmap
+	cells  []shotMosaicCell
 }
 
 // pre is the annotation a drag is drawing; it is not in the history until
@@ -191,17 +195,13 @@ func shotDrawAnnotation(p *ui.Painter, an shotAnnotation, origin mygo.Point, sca
 		}
 		p.StrokePolyline(pts, w, an.color)
 	case shotToolMosaic:
-		x0, y0 := px(an.a)
-		x1, y1 := px(an.b)
-		dst := ui.Rect{X: min(x0, x1), Y: min(y0, y1), W: absF(x1 - x0), H: absF(y1 - y0)}
-		if an.mosaic == nil {
-			// While the drag is live there is no grid yet: show the area
-			// the pixelation will take.
-			p.Fill(dst, an.color.Alpha(0.18), 0)
-			p.Stroke(dst, an.color, 0, w)
-			return
+		// Every block carries the frozen picture's average colour for its
+		// pixels, so the preview and the export paint the same grid.
+		for _, cell := range an.cells {
+			x0, y0 := px(mygo.Point{X: cell.rect.X, Y: cell.rect.Y})
+			x1, y1 := px(mygo.Point{X: cell.rect.X + cell.rect.Width, Y: cell.rect.Y + cell.rect.Height})
+			p.Fill(ui.Rect{X: x0, Y: y0, W: x1 - x0, H: y1 - y0}, cell.color, 0)
 		}
-		p.ImageRegion(an.mosaic, ui.Rect{}, dst, ui.ImageOptions{})
 	case shotToolText:
 		if an.text == "" {
 			return
