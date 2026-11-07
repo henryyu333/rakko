@@ -124,44 +124,7 @@ func (a *shelf) desiredFrame() mygo.Rectangle {
 		// that has not moved, and the transparent columns beside the shell
 		// no longer take clicks anyway (overlayAcceptsMouse).
 		tw, th := a.panelBox()
-		place := a.panelPlacement()
-		w, roomH := a.frameRoom(tw, float32(th+float32(top)))
-		// The frame is symmetric about the strip so the shell stays centred
-		// in its canvas; a panel clamped away from the island's axis widens
-		// both sides equally.
-		off := abs(place.X + place.W/2 - a.stripCenter())
-		w = max(w, 2*(off+place.W/2)+int(math.Ceil(float64(tw)*panelOpenOvershoot))+2*ears)
-		w = max(w, int(math.Ceil(float64(a.fx.w)))+2*ears,
-			frameCoverX(a.stripCenter(), a.shellCentreX(a.fx.openK), a.fx.w, ears))
-		// Once settled the height is the shell's exact box, so its
-		// transparent margin cannot swallow clicks below.
-		h := max(int(math.Ceil(float64(th)))+top, int(math.Ceil(float64(a.fx.h)))+top)
-		y := a.frameTop()
-		if a.shellUp() {
-			// The island's bottom is the shell's floor: frameTop already
-			// reaches up for a shell that overshoots its level or still
-			// shows the page while the bar folds back, and the frame
-			// ends two points under the island, which stays on screen even
-			// when the Dock lifted the panel's own bottom off it.
-			h = a.upShellFloor() - y
-		} else if a.fx.openMoving {
-			h = max(h, roomH)
-		}
-		// Under the shell hang the results sheet and the page capsule: the
-		// frame holds them at the drawn and the settled size, and the
-		// level's overshoot room below them while a spring is in flight.
-		// An upward panel hangs them under the island's row, where its
-		// shell's bottom edge is.
-		below := max(th+a.belowExtent(th, a.resultsTargetH()), a.fx.h+a.belowExtent(a.fx.h, a.fx.resultsH))
-		if a.shellUp() {
-			h = max(h, a.upShellFloor()-y+int(math.Ceil(float64(below-th))))
-		} else {
-			h = max(h, top+int(math.Ceil(float64(below))))
-			if a.fx.openMoving {
-				h = max(h, roomH+int(math.Ceil(float64(below-th))))
-			}
-		}
-		return mygo.Rectangle{X: a.stripCenter() - w/2, Y: y, Width: w, Height: h}
+		return a.openFrame(tw, th, a.resultsTargetH())
 	}
 	// An incoming system drag shrinks the resident strip to the anchor's
 	// band: outside it ShelfU only shows a widened band-height hint, inside
@@ -226,6 +189,166 @@ func (a *shelf) desiredFrame() mygo.Rectangle {
 	}
 	r := mygo.Rectangle{X: a.stripCenter() - w/2, Y: a.y, Width: w, Height: h}
 	return a.frameCoverAppsPop(r, ph)
+}
+
+// openFrame is the window a settled open panel of tw × th needs with a
+// results sheet of resultsH hanging under its bar. The drawn shell and the
+// overshoot room of a spring on its way widen it. desiredFrame computes the
+// current level through it; the session envelope asks it for every level and
+// page the panel can reach.
+func (a *shelf) openFrame(tw, th, resultsH float32) mygo.Rectangle {
+	top := a.sheetTop()
+	ears := a.earWidth()
+	place := a.panelPlacement()
+	w, roomH := a.frameRoom(tw, float32(th+float32(top)))
+	// The frame is symmetric about the strip so the shell stays centred in
+	// its canvas; a panel clamped away from the island's axis widens both
+	// sides equally.
+	off := abs(place.X + place.W/2 - a.stripCenter())
+	w = max(w, 2*(off+place.W/2)+int(math.Ceil(float64(tw)*panelOpenOvershoot))+2*ears)
+	w = max(w, int(math.Ceil(float64(a.fx.w)))+2*ears,
+		frameCoverX(a.stripCenter(), a.shellCentreX(a.fx.openK), a.fx.w, ears))
+	// Once settled the height is the shell's exact box, so its transparent
+	// margin cannot swallow clicks below.
+	h := max(int(math.Ceil(float64(th)))+top, int(math.Ceil(float64(a.fx.h)))+top)
+	y := a.frameTop()
+	if a.shellUp() {
+		// The island's bottom is the shell's floor: frameTop already reaches
+		// up for a shell that overshoots its level or still shows the page
+		// while the bar folds back, and the frame ends two points under the
+		// island, which stays on screen even when the Dock lifted the
+		// panel's own bottom off it.
+		h = a.upShellFloor() - y
+	} else if a.fx.openMoving {
+		h = max(h, roomH)
+	}
+	// Under the shell hang the results sheet and the page capsule: the
+	// frame holds them at the drawn and the settled size, and the level's
+	// overshoot room below them while a spring is in flight. An upward
+	// panel hangs them under the island's row, where its shell's bottom
+	// edge is.
+	below := max(th+a.belowExtent(th, resultsH), a.fx.h+a.belowExtent(a.fx.h, a.fx.resultsH))
+	if a.shellUp() {
+		h = max(h, a.upShellFloor()-y+int(math.Ceil(float64(below-th))))
+	} else {
+		h = max(h, top+int(math.Ceil(float64(below))))
+		if a.fx.openMoving {
+			h = max(h, roomH+int(math.Ceil(float64(below-th))))
+		}
+	}
+	return mygo.Rectangle{X: a.stripCenter() - w/2, Y: y, Width: w, Height: h}
+}
+
+// unionRect is the smallest rectangle holding both.
+func unionRect(a, b mygo.Rectangle) mygo.Rectangle {
+	if b.Width <= 0 || b.Height <= 0 {
+		return a
+	}
+	if a.Width <= 0 || a.Height <= 0 {
+		return b
+	}
+	x0, y0 := min(a.X, b.X), min(a.Y, b.Y)
+	x1, y1 := max(a.X+a.Width, b.X+b.Width), max(a.Y+a.Height, b.Y+b.Height)
+	return mygo.Rectangle{X: x0, Y: y0, Width: x1 - x0, Height: y1 - y0}
+}
+
+// sessionFrame is the envelope an open panel holds for as long as anything
+// is drawn: the union of the bar's widest form with its tallest results
+// sheet, every enabled page, and the arrangement panel. Resizing the
+// surface under a running spring presents the last canvas stretched into
+// the new frame and makes the frame wait for its transaction, so one box
+// covers every shape the panel can grow into and the window is resized only
+// while the surface is blank.
+//
+// The island shell keeps its per-frame geometry: its panel changes sides
+// with the page, and a box holding both sides would cover the display.
+func (a *shelf) sessionFrame() mygo.Rectangle {
+	r := a.desiredFrame()
+	if a.island {
+		return r
+	}
+	add := func(tw, th, resultsH float32) {
+		r = unionRect(r, a.openFrame(tw, th, resultsH))
+	}
+	add(homeTypingW, float32(homeShellH), resultsMaxH)
+	for _, p := range a.enabledPages() {
+		add(pageShellWidth(p), pageShellHeight(p), 0)
+	}
+	add(snapW, snapH, 0)
+	return r
+}
+
+// blankSurface reports whether the overlay draws nothing at all: the panel
+// folded, the 30 ms clock run out, and no peek shape, capsule, app switcher
+// or drag keeps a drawing up. Only then may the native frame change: a
+// resize shows the last canvas stretched into the new frame until the next
+// one is presented.
+func (a *shelf) blankSurface() bool {
+	return !a.visible && a.fx.openK <= 0.002 && a.progress <= 0.01 &&
+		!a.peeking && a.fx.peekK <= 0.002 && !a.apps.on &&
+		!a.fb.drawn && !a.fb.retracting &&
+		!a.dragging && !a.pointerDrag && !a.islandDrag && !a.liveUp()
+}
+
+// beginSurfaceHold raises the native window to the envelope everything the
+// panel can draw fits in, while the surface is blank. The window then keeps
+// that frame until blankSurface is true again, so no spring resizes it.
+func (a *shelf) beginSurfaceHold() {
+	a.holdSurface(a.sessionFrame())
+}
+
+// holdSurface grows the held envelope (or starts one) to cover t. It does
+// nothing while the shelf is settled closed, or while a drag owns the
+// frame.
+func (a *shelf) holdSurface(t mygo.Rectangle) {
+	if a.win == nil || a.island || a.dragging || a.pointerDrag || a.islandDrag {
+		return
+	}
+	// Nothing is up to hold a surface for: a closed, unpeeked shelf's
+	// frame is the strip's own.
+	if !a.visible && a.fx.openK <= 0.002 && !a.peeking && !a.fb.drawn && !a.fb.retracting {
+		return
+	}
+	// A fold only shrinks: it runs inside the frame the panel has, and the
+	// window is not widened for a box the folding shell no longer needs.
+	if !a.visible && a.fx.openK > 0.002 && a.frame.Width > 0 {
+		t = a.frame
+	}
+	if a.frameHold == (mygo.Rectangle{}) {
+		a.frameHold = unionRect(a.desiredFrame(), t)
+		return
+	}
+	a.frameHold = unionRect(a.frameHold, t)
+}
+
+// targetFrame is the frame the window maps. While a hold is up it is the
+// envelope, grown to cover whatever the current frame asks for (never
+// shrunk under a running spring); once every spring has come to rest the
+// hold ends and the exact target returns, which keeps the settled window
+// the shell's own box.
+func (a *shelf) targetFrame() mygo.Rectangle {
+	r := a.desiredFrame()
+	if a.frameHold == (mygo.Rectangle{}) {
+		return r
+	}
+	// A drag owns the frame it draws: the drop band and its guard landing
+	// row must stay the size WindowServer sees, so the band always takes
+	// the pointer.
+	if a.dragging || a.pointerDrag || a.islandDrag {
+		return r
+	}
+	if a.blankSurface() {
+		a.frameHold = mygo.Rectangle{}
+		return r
+	}
+	if a.flip.active {
+		// A side change slides the window itself: follow it, and keep the
+		// union for the panel that lands.
+		a.frameHold = unionRect(a.frameHold, r)
+		return r
+	}
+	a.frameHold = unionRect(a.frameHold, r)
+	return a.frameHold
 }
 
 // frameCoverAppsPop grows the resident frame r (top edge at a.y) so it
@@ -293,7 +416,7 @@ func (a *shelf) syncWindowFrame() {
 	if a.win == nil || a.settingFrame {
 		return
 	}
-	r := a.desiredFrame()
+	r := a.targetFrame()
 	if r == a.frame {
 		return
 	}
@@ -330,7 +453,7 @@ func (a *shelf) windowGeometryChanged() {
 	if a.settingFrame || a.win == nil {
 		return
 	}
-	if actual := a.win.Bounds(); actual == a.desiredFrame() {
+	if actual := a.win.Bounds(); actual == a.targetFrame() {
 		a.frame = actual
 		return
 	}
@@ -910,6 +1033,11 @@ func (a *shelf) setPeek(peek bool) {
 	}
 	a.peeking = peek
 	a.peekFrom, a.peekAnimStart = a.peekProgress, time.Now()
+	// A peek starts from a blank surface: take the envelope before the pill
+	// is drawn, so neither the pill's morph nor a later opening resizes it.
+	if peek {
+		a.beginSurfaceHold()
+	}
 	a.syncMousePassThrough()
 	if a.win != nil {
 		a.win.Invalidate()
@@ -1053,6 +1181,10 @@ func (a *shelf) show(edge bool) {
 	a.dropZoneSnap(edge)
 	a.fx.openMoving = true
 	a.animationFrom, a.animationStart = a.progress, time.Now()
+	// The surface was blank before this opening (or holds the previous
+	// envelope): raise it to the envelope the whole panel fits in now,
+	// while nothing of the opening is drawn yet, so no spring resizes it.
+	a.beginSurfaceHold()
 	prevFrame := a.frame
 	a.syncMousePassThrough()
 	a.syncDragGuard()
@@ -1333,6 +1465,10 @@ func (a *shelf) hide(exit hideExit) {
 	a.suppressed = true
 	a.hidePending = false
 	a.dropHot = false
+	// The fold runs inside the envelope the open panel had: take it before
+	// the first closing frame, so no tick resizes the surface under the
+	// shell coming down.
+	a.beginSurfaceHold()
 	a.syncMousePassThrough()
 	// A suppressed drag is not pushed: the corridor parks with it.
 	a.syncDragGuard()
@@ -1397,14 +1533,15 @@ func (a *shelf) animate(now time.Time) {
 	if a.win == nil {
 		return
 	}
-	// 动画途中由 zone.AnimateTo 以显示器帧率自驱动重绘；结束时补一次穿透状态同步。
-	if !a.animationStart.IsZero() || !a.peekAnimStart.IsZero() || finished {
-		if finished {
-			a.syncMousePassThrough()
-		}
-		if !a.fx.openMoving && !a.fx.sizeMoving {
-			a.win.Invalidate()
-		}
+	// 动画途中由 zone.AnimateTo 以显示器帧率自驱动重绘；一个被 AppKit 自身
+	// display 周期吞掉的 tick 会暂停 display link，所以每个 tick 在有东西
+	// 在动时再要一帧（下一次帧前的重复请求只合并成一帧）。结束时补一次
+	// 穿透状态同步。
+	if finished {
+		a.syncMousePassThrough()
+	}
+	if !a.animationStart.IsZero() || !a.peekAnimStart.IsZero() || a.fx.openMoving || a.fx.sizeMoving || finished {
+		a.win.Invalidate()
 	}
 }
 

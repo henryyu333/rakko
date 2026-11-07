@@ -250,6 +250,13 @@ func (a *shelf) onUI(fn func()) {
 
 func (a *shelf) invalidateHome() {
 	if a.win != nil {
+		// An open bar's results sheet springs to a taller box: take the
+		// envelope before that spring starts. A closed or folding panel
+		// only redraws.
+		if a.visible {
+			a.beginSurfaceHold()
+			a.syncWindowFrame()
+		}
 		a.win.Invalidate()
 	}
 }

@@ -39,6 +39,7 @@ type shelf struct {
 	x, y                                                        int
 	dispBounds                                                  mygo.Rectangle
 	frame                                                       mygo.Rectangle // 常驻窗口当前实际映射的屏幕矩形（desiredFrame 最近一次应用值）
+	frameHold                                                   mygo.Rectangle // envelope held while something is drawn; zero = none
 	settingFrame                                                bool
 	buildingView, frameQueued                                   bool // defer native resize until the current UI frame has painted
 	animationStart                                              time.Time

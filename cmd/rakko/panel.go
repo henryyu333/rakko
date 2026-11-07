@@ -744,6 +744,20 @@ func (a *shelf) view(c *ui.Context) {
 	a.fx.openK, a.fx.peekK = openK, peekK
 	a.fx.openMoving = a.win != nil && (!zone.Settled("open") || !zone.Settled("level") ||
 		!zone.Settled("home-w") || !zone.Settled("results-h") || !zone.Settled("nav"))
+	// The surface keeps the wide envelope only while a spring runs: once
+	// every channel rests, the window returns to the shell's exact box (a
+	// settled panel's transparent margin must not sit over the pointer's
+	// targets below it). syncMousePassThrough below asks for the resize
+	// after this frame painted, so the new canvas and the new native frame
+	// commit together.
+	// A hover keeps the envelope so the click that opens the panel does
+	// not resize under the pill; an open panel does not need it once its
+	// springs rest.
+	hovering := !a.visible && (a.peeking || a.fx.peekK > 0.002)
+	if a.frameHold != (mygo.Rectangle{}) && !a.fx.openMoving && !a.fx.sizeMoving &&
+		!hovering && (a.closeAt.IsZero() || time.Since(a.closeAt) >= closeFade) {
+		a.frameHold = mygo.Rectangle{}
+	}
 	a.fx.peek = !expanded && peeked && !closing
 	// A panel drag released on the other side of the island slides there on
 	// the panel's own spring; the box, its frame and its hit shape all read
@@ -1831,6 +1845,9 @@ func (a *shelf) setLevelPage(level int, id pageID) {
 	}
 	a.level = level
 	a.startPageSwitch(from, next)
+	// The level's box may need a wider surface than the settled one: take
+	// the envelope before the spring starts, never under it.
+	a.beginSurfaceHold()
 	// A page is not a search: the keyboard goes back unless the page is
 	// the clipboard search that asked for it. The window then sits above
 	// the menu bar again, so the page's band takes presses.
@@ -1986,6 +2003,9 @@ func (a *shelf) setTab(id pageID) {
 			a.startPanelFlip(flipFrom, to)
 		}
 	}
+	// A page may draw a box taller or wider than the settled one (the 每周
+	// 简报, a reading page): hold its own box before the frame draws it.
+	a.holdSurface(a.openFrame(pageShellWidth(p), pageShellHeight(p), 0))
 	a.syncWindowFrame()
 	if a.win != nil {
 		a.win.Invalidate()
