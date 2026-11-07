@@ -153,6 +153,9 @@ const (
 	// nsScreenSaverWindowLevel is NSScreenSaverWindowLevel, above the menu
 	// bar (24) and the Dock: the screenshot overlay must cover everything.
 	nsScreenSaverWindowLevel = CaptureWindowLevel
+	// nsWindowAnimationBehaviorNone is NSWindowAnimationBehaviorNone: the
+	// window appears and disappears without the default scale/fade.
+	nsWindowAnimationBehaviorNone = 2
 
 	collectionCanJoinAllSpaces    = 1 << 0
 	collectionTransient           = 1 << 3
@@ -710,7 +713,7 @@ func ConfigureCaptureWindow(window uintptr) {
 		w := id(window)
 		send(w, "setStyleMask:", nsWindowStyleMaskNonactivatingPanel)
 		send(w, "setLevel:", nsScreenSaverWindowLevel)
-		send(w, "setAnimationBehavior:", 0) // NSWindowAnimationBehaviorDefault
+		send(w, "setAnimationBehavior:", nsWindowAnimationBehaviorNone)
 		send(w, "setHasShadow:", 0)
 		send(w, "setHidesOnDeactivate:", 0)
 		send(w, "setMovable:", 0)
@@ -721,6 +724,22 @@ func ConfigureCaptureWindow(window uintptr) {
 			send(w, "setFloatingPanel:", 1)
 		}
 		send(w, "setIgnoresMouseEvents:", 0)
+	})
+}
+
+// DisableWindowAnimation turns off the window's opening and closing
+// animation. The screenshot overlay and a pinned screenshot must appear as
+// the frozen pixels, without the default scale/fade that Reduce Motion can
+// still show. Main thread only.
+func DisableWindowAnimation(window uintptr) {
+	if window == 0 {
+		return
+	}
+	if err := Init(); err != nil {
+		return
+	}
+	withPool(func() {
+		send(id(window), "setAnimationBehavior:", nsWindowAnimationBehaviorNone)
 	})
 }
 

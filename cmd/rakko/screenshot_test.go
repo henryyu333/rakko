@@ -586,3 +586,33 @@ func TestShotPinOpensAnnotatedCrop(t *testing.T) {
 		t.Fatalf("pin scale = %v", scale)
 	}
 }
+
+// The magnifier covers the pixels it magnifies: it belongs to choosing,
+// not to working on a settled selection.
+func TestShotMagnifierOnlyWhileSelecting(t *testing.T) {
+	s := shotTestSession(t, mygo.Rectangle{Width: 400, Height: 300}, 400, 300)
+	if !s.magnifierVisible() {
+		t.Fatal("no magnifier before a selection")
+	}
+	s.mode = shotModeSelect
+	if !s.magnifierVisible() {
+		t.Fatal("no magnifier while dragging a new selection")
+	}
+	s.mode = shotModeResize
+	if !s.magnifierVisible() {
+		t.Fatal("no magnifier while resizing a handle")
+	}
+	s.hasSel = true
+	s.mode = shotModeIdle
+	if s.magnifierVisible() {
+		t.Fatal("magnifier stayed over a settled selection")
+	}
+	s.mode = shotModeMove
+	if s.magnifierVisible() {
+		t.Fatal("magnifier showed while moving the selection")
+	}
+	s.mode = shotModeDraw
+	if s.magnifierVisible() {
+		t.Fatal("magnifier showed while annotating")
+	}
+}

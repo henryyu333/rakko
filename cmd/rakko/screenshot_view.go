@@ -30,9 +30,24 @@ func (s *shotSession) draw(p *ui.Painter, r ui.Rect, di int) {
 	} else if s.hoverOK && di == s.cursorDpy && shotRectsIntersect(s.hover, d.Bounds) {
 		s.drawWindowHint(p, d)
 	}
-	if di == s.cursorDpy {
+	if di == s.cursorDpy && s.magnifierVisible() {
 		s.drawMagnifier(p, d)
 	}
+}
+
+// magnifierVisible reports whether the pixel magnifier belongs on screen:
+// only while choosing (no selection yet, dragging a new one, or dragging a
+// handle). Once the selection is settled, while it is moved whole, and
+// while an annotation is being drawn it would cover the very pixels the
+// user is working on.
+func (s *shotSession) magnifierVisible() bool {
+	switch s.mode {
+	case shotModeSelect, shotModeResize:
+		return true
+	case shotModeMove, shotModeDraw:
+		return false
+	}
+	return !s.hasSel
 }
 
 // drawVeil darkens everything outside the selection on its display.

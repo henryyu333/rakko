@@ -71,6 +71,7 @@ func (a *shelf) openShotPin(png []byte, frame mygo.Rectangle, scale float64) {
 	// The overlay policy gives a key-capable nonactivating panel; the
 	// floating level keeps it over ordinary windows, under the menu bar.
 	mac.ConfigureOverlayWindow(hnd)
+	mac.DisableWindowAnimation(hnd)
 	mac.SetWindowLevel(hnd, 3) // NSFloatingWindowLevel
 	mac.SetWindowFrame(hnd, frame.X, frame.Y, frame.Width, frame.Height)
 	win.OnClose(func(*mygo.CloseEvent) { a.removeShotPin(p) })
