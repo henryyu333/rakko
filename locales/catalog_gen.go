@@ -2073,6 +2073,16 @@ func (msgs Messages) UsageClaudeCancel() string {
 	return Catalog.Format(msgs.locale, "usageClaudeCancel", nil)
 }
 
+// UsageClaudeOpenPage says "打开登录页"
+// in the language the app shows.
+func UsageClaudeOpenPage() string { return In(i18n.Locale()).UsageClaudeOpenPage() }
+
+// UsageClaudeOpenPage says "打开登录页"
+// in the language of msgs.
+func (msgs Messages) UsageClaudeOpenPage() string {
+	return Catalog.Format(msgs.locale, "usageClaudeOpenPage", nil)
+}
+
 // UsageClaudeWaiting says "在浏览器中完成登录…"
 // in the language the app shows.
 func UsageClaudeWaiting() string { return In(i18n.Locale()).UsageClaudeWaiting() }

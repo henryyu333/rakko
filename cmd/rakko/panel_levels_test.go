@@ -349,7 +349,7 @@ func TestUsagePageStatesFitTheContentBox(t *testing.T) {
 		{"claude sign-in waiting", false, func(fx *usageFixture) {
 			fx.codex.q = okQuota(aiusage.ToolCodex, "Plus", now)
 			fx.claude.q = aiusage.Quota{Tool: aiusage.ToolClaude, Status: aiusage.QuotaNotLoggedIn, FetchedAt: now}
-			fx.f.claudeLogin = usageClaudeLogin{busy: true, codes: make(chan string, 1)}
+			fx.f.claudeLogin = usageClaudeLogin{busy: true, url: "https://claude.com/cai/oauth/authorize?code=true&state=demo", codes: make(chan string, 1)}
 		}},
 		{"claude sign-in failed", false, func(fx *usageFixture) {
 			fx.codex.q = okQuota(aiusage.ToolCodex, "Plus", now)

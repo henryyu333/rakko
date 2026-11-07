@@ -39,9 +39,9 @@ func TestUsageClaudeSignedOutOffersSignIn(t *testing.T) {
 	}
 }
 
-// Signing in runs the injected process, opens the printed link in the
-// browser and reads Claude again once the process ends.
-func TestUsageClaudeSignInOpensLinkAndReads(t *testing.T) {
+// Starting a sign-in never opens a browser tab itself: Claude Code has
+// already tried its own link, and the printed one waits behind a button.
+func TestUsageClaudeSignInDoesNotOpenLink(t *testing.T) {
 	var opened string
 	loginURL := "https://claude.com/cai/oauth/authorize?code=true&state=test"
 	fx := newUsageFixtureWith(t, true, func(d *usageDeps) {
@@ -69,8 +69,8 @@ func TestUsageClaudeSignInOpensLinkAndReads(t *testing.T) {
 	if err := fx.view.Click("登录"); err != nil {
 		t.Fatalf("click login: %v", err)
 	}
-	if opened != loginURL {
-		t.Fatalf("opened %q, want the printed link %q", opened, loginURL)
+	if opened != "" {
+		t.Fatalf("the sign-in opened %q by itself; the user must ask", opened)
 	}
 	if fx.claude.calls != 2 {
 		t.Fatalf("claude fetches = %d, want the sign-in's own read", fx.claude.calls)
@@ -78,6 +78,34 @@ func TestUsageClaudeSignInOpensLinkAndReads(t *testing.T) {
 	fx.view.Frame()
 	if !fx.view.HasText("Pro") {
 		t.Fatalf("the card did not show the fresh plan; texts=%v", fx.view.Texts())
+	}
+}
+
+// The printed link is opened only when the user presses the card's small
+// 打开登录页 button.
+func TestUsageClaudeOpenLinkButton(t *testing.T) {
+	loginURL := "https://claude.com/cai/oauth/authorize?code=true&state=test"
+	var opened string
+	fx := newUsageFixtureWith(t, true, func(d *usageDeps) {
+		d.openURL = func(u string) { opened = u }
+	})
+	signedOutClaude(fx, aiusage.ClaudeSourceUser)
+	codes := make(chan string, 1)
+	fx.f.claudeLogin = usageClaudeLogin{busy: true, codes: codes}
+	fx.view.Frame()
+	if _, ok := fx.view.Find("打开登录页"); ok {
+		t.Fatal("the link button showed before Claude Code printed a link")
+	}
+	fx.f.claudeLogin.url = loginURL
+	fx.view.Frame()
+	if _, ok := fx.view.Find("打开登录页"); !ok {
+		t.Fatalf("missing the link button; texts=%v", fx.view.Texts())
+	}
+	if err := fx.view.Click("打开登录页"); err != nil {
+		t.Fatalf("click open link: %v", err)
+	}
+	if opened != loginURL {
+		t.Fatalf("opened %q, want %q", opened, loginURL)
 	}
 }
 
@@ -205,6 +233,30 @@ func TestSettingsClaudeAccountRow(t *testing.T) {
 				t.Fatalf("missing action %q; texts=%v", tc.wantAction, view.Texts())
 			}
 		})
+	}
+}
+
+// The Settings row offers the same link action beside 取消.
+func TestSettingsClaudeOpenLinkButton(t *testing.T) {
+	var opened string
+	a, view := settingsAccountShelf(t)
+	a.usage.deps.openURL = func(u string) { opened = u }
+	loginURL := "https://claude.com/cai/oauth/authorize?code=true&state=test"
+	a.usage.quota[quotaIndex(aiusage.ToolClaude)].latest = aiusage.Quota{
+		Tool: aiusage.ToolClaude, Status: aiusage.QuotaNotLoggedIn, FetchedAt: time.Now(),
+	}
+	a.usage.claudeLogin = usageClaudeLogin{
+		busy: true, url: loginURL, codes: make(chan string, 1),
+	}
+	view.Frame()
+	if !view.HasText("打开登录页") {
+		t.Fatalf("missing the link button; texts=%v", view.Texts())
+	}
+	if err := view.Click("打开登录页"); err != nil {
+		t.Fatalf("click open link: %v", err)
+	}
+	if opened != loginURL {
+		t.Fatalf("opened %q, want %q", opened, loginURL)
 	}
 }
 

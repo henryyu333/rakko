@@ -369,6 +369,9 @@ func (a *shelf) settingsClaudeAccountGroup(c *ui.Context) {
 					}
 					return false
 				})
+				if f.claudeLogin.url != "" {
+					settingsButton(c, "claude-open", l.UsageClaudeOpenPage(), false, f.openClaudeLink)
+				}
 				settingsButton(c, "claude-cancel", l.UsageClaudeCancel(), false, f.cancelClaudeLogin)
 			case f.claudeLogin.busy:
 				settingsButton(c, "claude-cancel", l.UsageClaudeCancel(), false, f.cancelClaudeLogin)

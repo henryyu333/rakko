@@ -75,8 +75,8 @@ type usageDeps struct {
 	newScanner func() usageScanner
 	// loginClaude signs Rakko's own Claude Code in; onURL receives the
 	// authorization link, code carries the pasted authorization code.
-	// logoutClaude signs it out. openURL opens the link in the browser;
-	// nil leaves it to Claude Code's own attempt.
+	// logoutClaude signs it out. openURL opens the printed link when the
+	// user asks for it; nil leaves the only attempt to Claude Code.
 	loginClaude  func(ctx context.Context, onURL func(string), code <-chan string) error
 	logoutClaude func(ctx context.Context) error
 	openURL      func(string)
@@ -646,17 +646,16 @@ func (f *usageFeature) startClaudeLogin(fromSettings bool) {
 	if !fromSettings && f.host != nil {
 		f.host.takeTypingKeyboard()
 	}
-	openURL := f.deps.openURL
 	run := f.deps.loginClaude
 	onURL := func(u string) {
 		dispatchMain(func() {
 			if f.claudeLogin.codes != codes {
 				return // a newer session, or a cancelled one, owns the card
 			}
+			// Claude Code has already tried to open its own callback link;
+			// this one is the manual fallback, shown behind a button so a
+			// second tab only appears when the user asks for it.
 			f.claudeLogin.url = u
-			if openURL != nil {
-				openURL(u)
-			}
 			f.invalidate()
 		})
 	}
@@ -664,6 +663,15 @@ func (f *usageFeature) startClaudeLogin(fromSettings bool) {
 		err := run(ctx, onURL, codes)
 		dispatchMain(func() { f.gotClaudeLogin(err, codes) })
 	})
+}
+
+// openClaudeLink opens the authorization link Claude Code printed, for
+// when its own browser attempt did not come up.
+func (f *usageFeature) openClaudeLink() {
+	if f.claudeLogin.url == "" || f.deps.openURL == nil {
+		return
+	}
+	f.deps.openURL(f.claudeLogin.url)
 }
 
 // submitClaudeCode hands the pasted authorization code to the waiting

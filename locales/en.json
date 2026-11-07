@@ -201,6 +201,7 @@
   "usageSignedOutClaude": "Not signed in",
   "usageClaudeLogin": "Sign in",
   "usageClaudeCancel": "Cancel",
+  "usageClaudeOpenPage": "Open sign-in page",
   "usageClaudeWaiting": "Waiting for your browser…",
   "usageClaudeCompleting": "Finishing sign-in…",
   "usageClaudeLoginFailed": "Sign-in failed",
