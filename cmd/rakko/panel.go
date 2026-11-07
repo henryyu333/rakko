@@ -861,7 +861,7 @@ func (a *shelf) view(c *ui.Context) {
 					home := ui.Column(c.Key("home-wrap")).Absolute().Top(0).Left(0).Right(0).
 						AlignItems(ui.Center).Opacity(homeOp)
 					if homeOp < 0.5 {
-						home.PassThrough()
+						home.IgnoreInput(true)
 					}
 					home.Children(func() { a.homeBar(c, homeWd) })
 				}
@@ -870,7 +870,7 @@ func (a *shelf) view(c *ui.Context) {
 				}
 				inner := ui.Column(c.Key("panel")).Width(a.pageShellW()).Height(a.pageShellH()).Opacity(levelK)
 				if levelK < 0.5 {
-					inner.PassThrough()
+					inner.IgnoreInput(true)
 				}
 				if up {
 					// The block keeps its own fixed layout inside the
@@ -1083,7 +1083,7 @@ func (a *shelf) pageBody(c *ui.Context, over bool) {
 		}
 		if out != nil && outAlpha > 0.001 {
 			old := ui.Column(c.Key("frame-out")).Absolute().Top(0).Left(outLeft).
-				Width(pageBoxW(out)).Height(pageBodyHeight(out)).PassThrough().Opacity(outAlpha)
+				Width(pageBoxW(out)).Height(pageBodyHeight(out)).IgnoreInput(true).AccessHidden(true).Opacity(outAlpha)
 			old.Children(func() { a.pageBlock(c, out, over, false, outAlpha, outLeft) })
 		}
 		// The arrival offset is a layout offset, not a paint transform: a
@@ -1193,7 +1193,7 @@ func (a *shelf) warmPage(c *ui.Context) {
 	}
 	hidden := ui.Column(c.Key("warm-" + string(id))).Absolute().Left(0).
 		Top(top).Width(pageBoxW(p)).Height(h).
-		PassThrough().Opacity(pageWarmOpacity)
+		IgnoreInput(true).AccessHidden(true).Opacity(pageWarmOpacity)
 	hidden.Children(func() { p.body(c, false, false) })
 	a.warmed[id] = true
 	a.warming = ""
@@ -1431,7 +1431,7 @@ func (a *shelf) toastLayer(c *ui.Context, over bool) {
 // pill is one bottom-center capsule: 11pt ink2 on fill2, 22pt tall.
 func (a *shelf) pill(c *ui.Context, key, text string, isErr bool) {
 	p := ui.Row(c.Key("pill-"+key)).Height(22).Padding(0, 12, 0, 12).Radius(11).
-		AlignItems(ui.Center).Gap(6).Background(fill2)
+		AlignItems(ui.Center).Gap(6).Background(fill2).IgnoreInput(true)
 	p.Children(func() {
 		if isErr {
 			ui.Box(c).Size(6, 6).Radius(3).Background(danger)
@@ -1461,8 +1461,8 @@ func (a *shelf) statusToast(c *ui.Context) {
 		return
 	}
 	p := ui.Row(c.Key("pill-status")).Height(22).Padding(0, 12, 0, 12).Radius(11).
-		AlignItems(ui.Center).Gap(6).Background(fill2)
-	// 末段淡出：胶囊本身是透明 pill，不抢指针（toastLayer PassThrough）。
+		AlignItems(ui.Center).Gap(6).Background(fill2).IgnoreInput(true)
+	// 末段淡出：胶囊本身是透明 pill，不抢指针（IgnoreInput 连子元素一起）。
 	k := p.AnimateTo("statusFade", float32(1), ui.Animation{Duration: toastFade})
 	if remaining < toastFade {
 		k = p.AnimateTo("statusFade", float32(0), ui.Animation{Duration: toastFade})

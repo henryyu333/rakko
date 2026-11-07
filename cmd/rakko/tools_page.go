@@ -430,7 +430,7 @@ func (p *toolsPage) toolLiftedCard(c *ui.Context, d toolPress) {
 	card := a.toolCard(c, spec, cardEdit, "lift")
 	card.Absolute().Left(d.px-d.grabDX).Top(d.py-d.grabDY).
 		Width(toolColW(spec.Cols())).Height(toolRowH(spec.Height())).
-		Scale(1.06, 1.06).TransformOrigin(0.5, 0.5).PassThrough()
+		Scale(1.06, 1.06).TransformOrigin(0.5, 0.5).IgnoreInput(true)
 }
 
 // toolCardInput wires the pointer: down starts a press, move past the

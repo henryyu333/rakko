@@ -79,10 +79,21 @@ func TestWarmLayerTakesNoPointer(t *testing.T) {
 	}
 	warm(pageClipboard)
 
-	// A click over the hidden clipboard row lands on the tray tile under it.
-	if err := view.Click("剪贴板条目 5 · 一段用于命中的文字"); err != nil {
-		t.Fatalf("clicking over the warm layer: %v", err)
+	// Over the hidden clipboard row, at its center: the tray tile is the
+	// one that takes the pointer. A label click refuses a point another
+	// control covers, and the visible tile is on top by design.
+	overWarm := func(s string) (float32, float32) {
+		t.Helper()
+		r, ok := view.Find(s)
+		if !ok {
+			t.Fatalf("the warm layer does not show %q", s)
+		}
+		return r.X + r.W/2, r.Y + r.H/2
 	}
+
+	// A click over the hidden clipboard row lands on the tray tile under it.
+	x, y := overWarm("剪贴板条目 5 · 一段用于命中的文字")
+	view.ClickAt(x, y)
 	if len(*copied) == 0 {
 		t.Fatal("the click copied nothing: it did not reach the visible page")
 	}
@@ -95,9 +106,8 @@ func TestWarmLayerTakesNoPointer(t *testing.T) {
 	// the layer is warmed again for the next interaction.
 	warm(pageClipboard)
 	before := len(*copied)
-	if err := view.RightClick("剪贴板条目 4 · 一段用于命中的文字"); err != nil {
-		t.Fatalf("right-clicking over the warm layer: %v", err)
-	}
+	x, y = overWarm("剪贴板条目 4 · 一段用于命中的文字")
+	view.RightClickAt(x, y)
 	if len(view.Menu()) == 0 {
 		t.Fatal("the right-click opened no menu: it missed the visible page")
 	}

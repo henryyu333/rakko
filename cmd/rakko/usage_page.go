@@ -289,13 +289,13 @@ func (f *usageFeature) body(c *ui.Context, _ bool, _ bool) ui.Element {
 		}
 		// The detail popover overlays the content while a card is hovered:
 		// at 250pt tall the sheet has no room beside a card for a 300pt
-		// card, and PassThrough hands the pointer back to the card so the
+		// card, and IgnoreInput hands the pointer back to the card so the
 		// hover (and the popover) cannot flicker.
 		if f.hoverTool != "" {
 			pop := ui.Column(c.Key("usage-pop")).Absolute().Left(0).Top(6).Width(300).Radius(14).
 				Background(usagePopBG).Border(0.5, usagePopEdge).
 				Shadow(0, 12, 32, 0, ui.RGBA(0, 0, 0, 0.55)).
-				Padding(12, 14, 12, 14).PassThrough()
+				Padding(12, 14, 12, 14).IgnoreInput(true)
 			pop.Children(func() { f.popoverBody(c, f.hoverTool) })
 		}
 	})

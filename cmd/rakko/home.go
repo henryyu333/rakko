@@ -560,7 +560,7 @@ func (a *shelf) navView(c *ui.Context, r ui.Rect, opacity float32) {
 		Padding(0, navPadX, 0, navPadX).Gap(navBtnGap).AlignItems(ui.Center).Opacity(opacity).
 		Radius(navH/2).Draw(glassPaneDraw(navH/2)).Border(0.5, paneRim)
 	if opacity < 0.5 {
-		row.PassThrough()
+		row.IgnoreInput(true)
 	}
 	button := func(key string, label string, on bool, icon func()) ui.Element {
 		b := ui.ButtonBase(c.Key("nav-"+key)).Size(navBtnW, navBtnH).Radius(navBtnH / 2).Center().
