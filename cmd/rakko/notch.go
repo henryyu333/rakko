@@ -1198,6 +1198,11 @@ func (a *shelf) show(edge bool) {
 	if a.visible {
 		return
 	}
+	// A permission request owns the notch: a click on it must not fold the
+	// card away behind an open panel while its hook is still waiting.
+	if a.approval != nil && a.approval.currentAsk() != nil {
+		return
+	}
 	a.hidePending = false
 	// 跟随系统时，系统语言可能已经变了（用户在系统设置里改过）：每次打开
 	// 面板都按同一条规则重新解析；显式选择的语言不受影响。

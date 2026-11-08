@@ -100,6 +100,9 @@ const (
 	// liveAgentDone is an agent harness finishing a turn: the two-line card
 	// under the notch (agentCard).
 	liveAgentDone
+	// liveAgentAsk is an agent asking for permission: the interactive card
+	// (approvalCard), which owns the notch until it is answered.
+	liveAgentAsk
 )
 
 // wings reports whether the event uses the wide two-wing shape instead of
@@ -151,6 +154,8 @@ type liveEvent struct {
 	agent string
 	task  string
 	tool  agentnotify.Tool
+	// ask is the permission request a liveAgentAsk draws.
+	ask   *approval
 	token string // device UID: a late battery reading enriches this event
 	width float32
 	// hold is how long the event stays once it reaches the screen;
@@ -182,6 +187,8 @@ func (a *shelf) liveEnabled(kind liveKind) bool {
 		return s.Downloads
 	case liveAgentDone:
 		return a.settings.AgentNotify.Enabled
+	case liveAgentAsk:
+		return a.settings.Approval.Enabled
 	}
 	return false
 }
@@ -192,7 +199,7 @@ func (a *shelf) liveEnabled(kind liveKind) bool {
 // completion is the exception: it waits for the panel to fold and shows
 // then, because the work it announces does not stop when the panel opens.
 func (a *shelf) pushLive(ev liveEvent, hold time.Duration, now time.Time) {
-	if !a.liveEnabled(ev.kind) || (a.visible && ev.kind != liveAgentDone) {
+	if !a.liveEnabled(ev.kind) || (a.visible && ev.kind != liveAgentDone && ev.kind != liveAgentAsk) {
 		return
 	}
 	if ev.kind == liveDownloadDone && a.mergeDownloadDone(ev.paths) {
@@ -280,7 +287,18 @@ func mergePaths(list, add []string) []string {
 // clearLive drops everything queued or showing; opening the panel calls it
 // so no event survives behind it.
 func (a *shelf) clearLive() {
-	a.live = liveQueue{}
+	// A permission request is not a transient notice: opening the panel or
+	// another event must not drop the hook's only chance to answer.
+	q := liveQueue{}
+	if a.live.shown && a.live.cur.kind == liveAgentAsk {
+		q.cur, q.until, q.shown, q.coveredAt = a.live.cur, a.live.until, true, a.live.coveredAt
+	}
+	for _, ev := range a.live.queued {
+		if ev.kind == liveAgentAsk {
+			q.queued = append(q.queued, ev)
+		}
+	}
+	a.live = q
 }
 
 // liveNow advances the queue and returns the event to draw. allow is false
@@ -296,8 +314,21 @@ func (a *shelf) liveNow(now time.Time, allow bool) (liveEvent, bool) {
 	// The completion capsule covers a showing notice; so does the app
 	// switcher — its wings must not eat the reminder it pauses for.
 	covered := a.capsuleUp(now) || a.appsModeOn()
+	// A card covered by a capsule keeps waiting, but never past its own
+	// deadline plus the two seconds the fold needs: the hook is about to
+	// give up, and the card must show why.
+	frozen := q.shown && covered && (!q.coveredAt.IsZero() || now.Before(q.until))
+	// A live permission request does not yield to a file drag or a closing
+	// panel: its hook is blocked until the card is answered.
+	if q.shown && !covered && q.cur.kind == liveAgentAsk && q.cur.ask != nil &&
+		q.cur.ask.state.active() && now.Before(q.until) {
+		return q.cur, true
+	}
+	if frozen && q.cur.kind == liveAgentAsk && q.cur.ask != nil && now.After(q.cur.ask.deadline.Add(2*time.Second)) {
+		frozen = false
+	}
 	switch {
-	case q.shown && covered && (!q.coveredAt.IsZero() || now.Before(q.until)):
+	case frozen:
 		// Covered: the clock rests until the capsule is gone. Once the
 		// notice is already covered it stays paused even past its frozen
 		// deadline: the capsule outlasting the hold must not hand the
@@ -320,11 +351,14 @@ func (a *shelf) liveNow(now time.Time, allow bool) (liveEvent, bool) {
 			q.cur = liveEvent{}
 		}
 	}
-	if !allow || covered {
+	if covered {
 		return liveEvent{}, false
 	}
 	for len(q.queued) > 0 {
 		ev := q.queued[0]
+		if !allow && ev.kind != liveAgentAsk {
+			return liveEvent{}, false
+		}
 		q.queued = q.queued[1:]
 		if !a.liveEnabled(ev.kind) {
 			continue // its switch went off after it was queued
@@ -333,12 +367,21 @@ func (a *shelf) liveNow(now time.Time, allow bool) (liveEvent, bool) {
 		// asked for finished, whether or not a busy queue delayed the
 		// words. An agent completion waits for the panel to fold, which can
 		// take longer than the bound. Every other kind is stale after it.
-		if ev.kind != liveDownloadDone && ev.kind != liveAgentDone && now.Sub(ev.queuedAt) > liveQueueMaxWait {
+		if ev.kind != liveDownloadDone && ev.kind != liveAgentDone && ev.kind != liveAgentAsk &&
+			now.Sub(ev.queuedAt) > liveQueueMaxWait {
 			continue
 		}
 		// The hold starts now, not at arrival, so waiting behind another
-		// notice never eats this one's own duration.
-		q.cur, q.until, q.shown = ev, now.Add(ev.hold), true
+		// notice never eats this one's own duration. A permission request
+		// keeps its own deadline instead: its hook is waiting too.
+		until := now.Add(ev.hold)
+		if ev.kind == liveAgentAsk && ev.ask != nil {
+			until = ev.ask.deadline
+		}
+		q.cur, q.until, q.shown = ev, until, true
+		if ev.kind == liveAgentAsk {
+			a.approvalFeature().syncKey()
+		}
 		return ev, true
 	}
 	return liveEvent{}, false
@@ -381,6 +424,9 @@ func (a *shelf) liveShape(ev liveEvent) (w, h float32) {
 	}
 	if ev.kind == liveAgentDone {
 		return a.agentCardSize()
+	}
+	if ev.kind == liveAgentAsk && ev.ask != nil {
+		return a.approvalCardSize(ev.ask)
 	}
 	w = ev.width
 	if w <= 0 {
@@ -513,7 +559,8 @@ func (a *shelf) liveClickable(now time.Time) bool {
 	if !a.live.shown || now.After(a.live.until) {
 		return false
 	}
-	return a.live.cur.kind == liveDownloadDone || a.live.cur.kind == liveAgentDone
+	return a.live.cur.kind == liveDownloadDone || a.live.cur.kind == liveAgentDone ||
+		a.live.cur.kind == liveAgentAsk
 }
 
 // downloadFile is one browser download that is still in flight.
@@ -556,6 +603,16 @@ func (ev liveEvent) statusLineIn(l locales.Messages) string {
 		return l.LiveStatusDownloaded(ev.label)
 	case liveAgentDone:
 		return l.LiveStatusAgentDone(ev.agent, ev.task)
+	case liveAgentAsk:
+		if ev.ask == nil {
+			return ""
+		}
+		what := ev.ask.analysis.Sentence(l)
+		for _, r := range ev.ask.analysis.Risks {
+			what += " · " + r.Label(l)
+		}
+		age := int(time.Since(ev.ask.at).Seconds())
+		return l.LiveStatusAgentAsk(ev.agent, what) + " · " + l.LiveApprovalAge(age)
 	case liveHeadsetOff:
 		return l.LiveStatusOff(ev.label)
 	case liveHeadset:

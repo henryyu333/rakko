@@ -42,6 +42,10 @@ var (
 
 // liveView draws the event the queue is showing at the shell's final size.
 func (a *shelf) liveView(c *ui.Context, shellW, shellH, peekK float32, ev liveEvent) {
+	if ev.kind == liveAgentAsk && ev.ask != nil {
+		a.approvalCard(c, shellW, shellH, peekK, ev.ask)
+		return
+	}
 	if ev.kind.wings() {
 		a.powerWings(c, shellW, shellH, peekK, ev)
 		return

@@ -111,7 +111,7 @@ func (f *agentNotifyFeature) start() {
 	if f.srv != nil {
 		return
 	}
-	srv, err := agentnotify.Listen(f.dir, f.accept, nil)
+	srv, err := agentnotify.Listen(f.dir, f.accept, f.host.approvalFeature().ask)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if err != nil {
@@ -318,7 +318,11 @@ func (a *shelf) setAgentNotify(on bool) {
 func (a *shelf) agentApply(on bool) {
 	f := a.agentFeature()
 	if !on {
-		f.stop()
+		if a.settings.Approval.Enabled {
+			f.start() // approvals keep the socket open
+		} else {
+			f.stop()
+		}
 		// Every tool, not only the detected ones: an entry written while a
 		// tool looked installed must still go when it no longer does.
 		// Disconnect leaves files without Rakko's marker untouched; one it
@@ -416,7 +420,7 @@ func (a *shelf) agentApplyTool(tool agentnotify.Tool, on bool) {
 // agentStartEnabled starts listening at launch when the switch is on. It
 // writes nothing: entries belong to the switch being turned on.
 func (a *shelf) agentStartEnabled() {
-	if !a.settings.AgentNotify.Enabled {
+	if !a.settings.AgentNotify.Enabled && !a.settings.Approval.Enabled {
 		return
 	}
 	f := a.agentFeature()

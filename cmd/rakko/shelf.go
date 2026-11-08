@@ -62,6 +62,7 @@ type shelf struct {
 	weekly                                                      *weeklyFeature      // nil until the 每周简报 page registers itself
 	agent                                                       *agentNotifyFeature // nil until the Agent 完成提醒 switch or a hook event needs it
 	onb                                                         *onboardingFeature  // the first-launch guide; nil on an upgraded install
+	approval                                                    *approvalFeature    // nil until Agent 审批 or an approval request needs it
 	lyrCache                                                    *lyrics.Cache       // synced lyrics for the home page; nil until first used
 	clip                                                        *clipboardModule    // nil until monitoring starts
 	awake                                                       *awakeModule        // nil until the app starts

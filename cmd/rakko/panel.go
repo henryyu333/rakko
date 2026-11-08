@@ -798,6 +798,12 @@ func (a *shelf) view(c *ui.Context) {
 	if a.snap.panel || a.snap.drawn {
 		corner = snapGhostR * 2 // 24: the design's snap panel corners
 	}
+	// The approval card has its own measured shell: 9 pt ears and a 22 pt
+	// bottom radius (A21's real rendering), not the panel's 12.
+	askUp := a.live.shown && a.live.cur.kind == liveAgentAsk
+	if askUp {
+		corner = 22
+	}
 	shift := float32(a.shellCentreX(openK) - a.stripCenter())
 	zone.Draw(func(p *ui.Painter, r ui.Rect) {
 		x0 := (r.W-shellW)/2 + shift + a.appsDrawOff()
@@ -816,10 +822,13 @@ func (a *shelf) view(c *ui.Context) {
 			return
 		}
 		ear := float32(earR)
+		if askUp {
+			ear = 9
+		}
 		// 底部圆角：探头胶囊半圆 → 一级 22 → 二级 24。
 		botR := min(shellH/2, corner)
 		path.MoveTo(x0-ear+shake, y0)
-		path.QuadTo(x0+shake, y0, x0+shake, y0+earR)
+		path.QuadTo(x0+shake, y0, x0+shake, y0+ear)
 		// The shell's own outline draws the bottom edge and corners: the
 		// glass inside it stops short of this edge, so the only visible
 		// line along the bottom is this one.
@@ -828,7 +837,7 @@ func (a *shelf) view(c *ui.Context) {
 		path.QuadTo(x0+shake, y1, x0+shake+botR, y1)
 		path.LineTo(x1-botR+shake, y1)
 		path.QuadTo(x1+shake, y1, x1+shake, y1-botR)
-		path.LineTo(x1+shake, y0+earR)
+		path.LineTo(x1+shake, y0+ear)
 		path.QuadTo(x1+shake, y0, x1+ear+shake, y0)
 		path.Close()
 		a.panelFill(p, &path, ui.Rect{X: x0 + shake, Y: y0, W: shellW, H: shellH}, botR, glassy)

@@ -8371,21 +8371,21 @@ func (msgs Messages) LiveApprovalTerminalDone() string {
 	return Catalog.Format(msgs.locale, "liveApprovalTerminalDone", nil)
 }
 
-// LiveApprovalAge says "已等 {n} 秒"
+// LiveApprovalAge says "已等 {n, number, ::group-off} 秒"
 // in the language the app shows.
-func LiveApprovalAge(n string) string { return In(i18n.Locale()).LiveApprovalAge(n) }
+func LiveApprovalAge(n int) string { return In(i18n.Locale()).LiveApprovalAge(n) }
 
-// LiveApprovalAge says "已等 {n} 秒"
+// LiveApprovalAge says "已等 {n, number, ::group-off} 秒"
 // in the language of msgs.
-func (msgs Messages) LiveApprovalAge(n string) string {
+func (msgs Messages) LiveApprovalAge(n int) string {
 	return Catalog.Format(msgs.locale, "liveApprovalAge", map[string]any{"n": n})
 }
 
-// LiveApprovalMore says "{n, plural, other {还有 {n} 个文件}}"
+// LiveApprovalMore says "{n, plural, other {还有 {n, number, ::group-off} 个文件}}"
 // in the language the app shows.
 func LiveApprovalMore(n int) string { return In(i18n.Locale()).LiveApprovalMore(n) }
 
-// LiveApprovalMore says "{n, plural, other {还有 {n} 个文件}}"
+// LiveApprovalMore says "{n, plural, other {还有 {n, number, ::group-off} 个文件}}"
 // in the language of msgs.
 func (msgs Messages) LiveApprovalMore(n int) string {
 	return Catalog.Format(msgs.locale, "liveApprovalMore", map[string]any{"n": n})
@@ -8481,11 +8481,11 @@ func (msgs Messages) AskRunCommand() string {
 	return Catalog.Format(msgs.locale, "askRunCommand", nil)
 }
 
-// AskEditFiles says "{n, plural, other {想修改 {n} 个文件}}"
+// AskEditFiles says "{n, plural, other {想修改 {n, number, ::group-off} 个文件}}"
 // in the language the app shows.
 func AskEditFiles(n int) string { return In(i18n.Locale()).AskEditFiles(n) }
 
-// AskEditFiles says "{n, plural, other {想修改 {n} 个文件}}"
+// AskEditFiles says "{n, plural, other {想修改 {n, number, ::group-off} 个文件}}"
 // in the language of msgs.
 func (msgs Messages) AskEditFiles(n int) string {
 	return Catalog.Format(msgs.locale, "askEditFiles", map[string]any{"n": n})

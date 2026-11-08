@@ -48,6 +48,11 @@ func main() {
 	if agentnotify.RunHookCLI(os.Args[1:], os.Stdin) {
 		return
 	}
+	// The same binary as a blocking approval client: it asks the running app
+	// and prints the tool's decision, also before any window or data work.
+	if agentnotify.RunApproveCLI(os.Args[1:], os.Stdin, os.Stdout) {
+		return
+	}
 	// A bundle an in-app update left at ShelfU.app or Shelf.app moves to
 	// Rakko.app and reopens from there before anything reads the data
 	// directory.
@@ -399,6 +404,7 @@ func (a *shelf) ready(show bool) {
 	// the same floating level, outside the dock's and the panel's zones.
 	a.petStart()
 	a.agentStartEnabled()
+	a.approvalStartEnabled()
 	a.startMonitoring()
 	log.Print("Rakko ready")
 }
