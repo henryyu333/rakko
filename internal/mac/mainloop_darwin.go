@@ -5,7 +5,6 @@ package mac
 import (
 	"sync"
 	"time"
-	"unsafe"
 
 	"github.com/ebitengine/purego"
 )
@@ -91,12 +90,11 @@ func loadMainLoop() error {
 			!bind(&mlWakeUp, "CFRunLoopWakeUp") {
 			return
 		}
-		modeAddr, err := purego.Dlsym(lib, "kCFRunLoopCommonModes")
-		if err != nil {
-			mainLoopErr = err
-			return
-		}
-		commonMode = *(*uintptr)(unsafe.Pointer(modeAddr))
+		// kCFRunLoopCommonModes is CFSTR("kCFRunLoopCommonModes"); build the
+		// equivalent string instead of reading a data symbol.
+		withPool(func() {
+			commonMode = uintptr(send(nsString("kCFRunLoopCommonModes"), "retain"))
+		})
 		mainRunLoop = mlGetMain()
 
 		timerCb := purego.NewCallback(func(uintptr, uintptr) {
