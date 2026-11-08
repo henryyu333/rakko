@@ -222,6 +222,11 @@ func (f *approvalFeature) enqueue(ap *approval) bool {
 	if f.host.visible {
 		f.host.hide(hidePassive)
 	}
+	// A completion or download notice already on screen gives the notch up
+	// now: its hold ends this frame and the request takes the next.
+	if f.host.live.shown && f.host.live.cur.kind != liveAgentAsk {
+		f.host.live.until = ap.at
+	}
 	f.host.pushLive(liveEvent{kind: liveAgentAsk, ask: ap}, approvalWait, ap.at)
 	return true
 }

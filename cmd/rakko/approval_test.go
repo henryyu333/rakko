@@ -82,6 +82,24 @@ func TestApprovalCardRoundTrip(t *testing.T) {
 	}
 }
 
+func TestApprovalPreemptsNotice(t *testing.T) {
+	a, f := approvalTestShelf(t)
+	a.settings.AgentNotify.Enabled = true
+	now := time.Now()
+	a.pushLive(liveEvent{kind: liveAgentDone, agent: "Codex", task: "Done", tool: agentnotify.ToolCodex},
+		liveHoldAgent, now)
+	if ev, ok := a.liveNow(now, true); !ok || ev.kind != liveAgentDone {
+		t.Fatalf("the completion card did not show: %+v", ev)
+	}
+	ap := testApproval(t, testID(5), "claude", `{"command":"ls"}`)
+	if !f.enqueue(ap) {
+		t.Fatal("enqueue refused")
+	}
+	if ev, ok := a.liveNow(ap.at.Add(time.Millisecond), true); !ok || ev.kind != liveAgentAsk {
+		t.Fatalf("the request waited behind the completion: %+v ok=%v", ev, ok)
+	}
+}
+
 func TestApprovalPanelPreempts(t *testing.T) {
 	a, f := approvalTestShelf(t)
 	a.visible = true
