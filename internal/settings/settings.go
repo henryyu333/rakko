@@ -104,10 +104,30 @@ type Settings struct {
 	// user unpinned everything or saved none) stays empty — a missing key
 	// and "none" are different states, like Lyrics's pointer.
 	PinnedApps *[]string `json:"pinnedApps,omitempty"`
+	// Onboarding is the first-launch guide: Pending is set only by a
+	// launch that found no settings.json (a fresh install) and cleared
+	// when the guide finishes or is skipped. A file without the object —
+	// every install that upgraded to this version — keeps Pending false,
+	// so the guide is never replayed for users who already know the app.
+	Onboarding OnboardingSettings `json:"onboarding"`
+
 	// Weekly is the 每周简报. AppStats is the explicit consent to collect
 	// frontmost-app time; it is off until the user turns it on in the
 	// report and nothing turns it on for them.
 	Weekly WeeklySettings `json:"weekly"`
+}
+
+// OnboardingSettings is the onboarding object in settings.json: the
+// first-launch guide's pending flag and the step it reached. Pending is
+// true only after a launch that found no settings.json at all (a fresh
+// install wrote it into the defaults); an upgraded install's file simply
+// lacks the object, which reads as pending=false, so the guide never
+// reappears. Step names the page to resume at after a relaunch (a move to
+// /Applications or a permission grant that needs a restart); "" starts at
+// the first step.
+type OnboardingSettings struct {
+	Pending bool   `json:"pending"`
+	Step    string `json:"step,omitempty"`
 }
 
 // WeeklySettings is the 每周简报's preferences. AppStats is the user's
@@ -452,6 +472,15 @@ func LanguageOf(dir string) (language string, ok bool) {
 		return "", false
 	}
 	return s.Language, true
+}
+
+// Exists reports whether dir/settings.json is there, without creating or
+// reading it. The first-launch check needs the bare fact, and it must run
+// before Load because Load writes the file when it is missing — after Load
+// the answer is always yes.
+func Exists(dir string) bool {
+	_, err := os.Stat(filepath.Join(dir, FileName))
+	return err == nil
 }
 
 // write saves s atomically: a temporary file in dir renamed over the target,
