@@ -380,7 +380,7 @@ func (a *shelf) settingsAgentGroup(c *ui.Context) {
 					caption = l.SettingsAgentNeedsApp()
 				}
 			}
-			a.settingsAgentToolRow(c, tool, caption, status, color,
+			a.settingsAgentToolRow(c, "agent", tool, caption, status, color,
 				toolOn, !a.settings.AgentNotify.Enabled, a.setAgentNotifyTool)
 		}
 	})
@@ -430,7 +430,7 @@ func (a *shelf) settingsApprovalGroup(c *ui.Context) {
 					caption = l.SettingsAgentNeedsApp()
 				}
 			}
-			a.settingsAgentToolRow(c, tool, caption, status, color,
+			a.settingsAgentToolRow(c, "approval", tool, caption, status, color,
 				toolOn, !a.settings.Approval.Enabled, a.setApprovalTool)
 		}
 	})
@@ -440,8 +440,8 @@ func (a *shelf) settingsApprovalGroup(c *ui.Context) {
 // configuration path on the left, the state of Rakko's entry, then the
 // tool's own switch. The switch mirrors the settings value and is locked
 // while the group switch is off.
-func (a *shelf) settingsAgentToolRow(c *ui.Context, tool agentnotify.Tool, caption, status string, color ui.Color, on, locked bool, apply func(agentnotify.Tool, bool)) {
-	key := "agent-" + string(tool)
+func (a *shelf) settingsAgentToolRow(c *ui.Context, prefix string, tool agentnotify.Tool, caption, status string, color ui.Color, on, locked bool, apply func(agentnotify.Tool, bool)) {
+	key := prefix + "-" + string(tool)
 	row := ui.ToggleBase(c.Key("toggle-"+key), &on).FillWidth().AlignItems(ui.Center).
 		Gap(14).MinHeight(settingsRowMinHeight).Padding(settingsRowPadY, settingsRowPadX).
 		Label(tool.Name()).Disabled(locked)

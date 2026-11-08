@@ -58,7 +58,9 @@ func (a *shelf) approvalCardSize(ap *approval) (w, h float32) {
 	w = min(max(approvalCardW, baseW+60), fbMaxW)
 	body := ap.bodyHeight(w)
 	if a.island {
-		return w, body + 12
+		// The island has no notch band: 6 pt above the body, whose own
+		// bottom padding is the card's lower inset.
+		return w, body + 6
 	}
 	return w, float32(max(32, a.notchH)) + body
 }
@@ -133,12 +135,12 @@ func (ap *approval) detailHeight() float32 {
 func (a *shelf) approvalCard(c *ui.Context, shellW, shellH, k float32, ap *approval) ui.Element {
 	l := loc(c)
 	now := c.Now()
-	top := float32(max(32, a.notchH))
+	top, padBot := float32(max(32, a.notchH)), float32(approvalPadBot)
 	if a.island {
-		top = 6
+		top, padBot = 6, 0
 	}
 	card := ui.Column(c.Key("approval-card")).Width(shellW).Height(shellH).
-		Padding(top, approvalPadX, approvalPadBot, approvalPadX).Gap(approvalGap).
+		Padding(top, approvalPadX, padBot, approvalPadX).Gap(approvalGap).
 		Clip().Opacity(min(max(k*k, 0), 1)).Label(approvalStatusLine(l, ap, now))
 	card.Children(func() {
 		a.approvalRow1(c, shellW, ap, now)
