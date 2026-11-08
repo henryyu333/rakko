@@ -262,3 +262,18 @@ func TestGatePollingFollowsMovement(t *testing.T) {
 		t.Fatal("the poll window did not close")
 	}
 }
+
+// TestMonitorDeadlineTakesEarliest: the loop arms one timer at the earliest
+// due item, not one timer per module.
+func TestMonitorDeadlineTakesEarliest(t *testing.T) {
+	now := time.Now()
+	a := monitorShelf()
+	a.clip = &clipboardModule{pollAt: now.Add(100 * time.Millisecond)}
+	a.modules = append(a.modules, a.clip)
+	a.audio = &audioModule{next: now.Add(time.Second)}
+	a.modules = append(a.modules, a.audio)
+	a.pins = []*pinItem{{edge: pinLeft, expanded: true, leftAt: now.Add(-550 * time.Millisecond)}}
+	if got := a.monitorDeadline(now).Sub(now); got != pinHideDelay-550*time.Millisecond {
+		t.Fatalf("earliest deadline = %v, want the pin's %v", got, pinHideDelay-550*time.Millisecond)
+	}
+}
