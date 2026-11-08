@@ -935,6 +935,20 @@ var gateMoveUntil atomic.Int64
 // event delivery/coalescing gap documented on gatePollInterval.
 const gatePollWindow = 150 * time.Millisecond
 
+// wakeGatePoll restarts the poller after a move when an overlay already
+// needs it. setGatePolling only signals on the off→on edge, so a move that
+// lands while the gate was already on would otherwise leave the poller
+// asleep.
+func wakeGatePoll() {
+	if !gatePolling.Load() {
+		return
+	}
+	select {
+	case gateWake <- struct{}{}:
+	default:
+	}
+}
+
 // gateShouldPoll reports whether the move window is still open. It is the
 // only reason the 10 ms poller wakes; a still pointer is covered by the
 // direct syncPointerGate calls every shape change makes.

@@ -393,6 +393,7 @@ func (a *shelf) pointerMoved() {
 	now := time.Now()
 	a.lastMoveAt = now
 	gateMoveUntil.Store(now.Add(gatePollWindow).UnixNano())
+	wakeGatePoll()
 	p := cursorPoint()
 	if a.dispBounds.Width > 0 && !insideRect(p, a.dispBounds) {
 		a.place(p)
