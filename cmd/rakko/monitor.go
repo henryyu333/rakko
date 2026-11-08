@@ -261,10 +261,6 @@ func (a *shelf) scheduleMonitor(now time.Time) {
 		return
 	}
 	if a.monitorActive(now) {
-		if a.monitorTimer != nil {
-			a.monitorTimer.Stop()
-			a.monitorTimer = nil
-		}
 		if a.activeTickerStop == nil {
 			a.activeTickerStop = mac.StartMainTicker(pointerInterval, func() { a.monitorRun() })
 		}
@@ -276,16 +272,11 @@ func (a *shelf) scheduleMonitor(now time.Time) {
 	}
 	gen := a.monitorGen.Add(1)
 	delay := a.monitorDelay(now)
-	if a.monitorTimer != nil {
-		a.monitorTimer.Stop()
-	}
-	a.monitorTimer = time.AfterFunc(delay, func() {
-		a.postMain(func() {
-			if a.quitting || a.monitorGen.Load() != gen {
-				return
-			}
-			a.monitorRun()
-		})
+	mac.AfterMainOnce(delay, func() {
+		if a.quitting || a.monitorGen.Load() != gen {
+			return
+		}
+		a.monitorRun()
 	})
 }
 

@@ -87,8 +87,10 @@ var (
 	modes       []uintptr
 	wakeQueue   mainWakeQueue
 
-	tickerMu  sync.Mutex
-	tickerCbs = map[uintptr]uintptr{}
+	tickerMu      sync.Mutex
+	tickerCbs     = map[uintptr]uintptr{}
+	deadlineMu    sync.Mutex
+	deadlineTimer uintptr
 )
 
 func loadMainLoop() error {
@@ -159,6 +161,44 @@ func WakeMain(fn func()) {
 	wakeQueue.push(fn)
 	mlSourceSignal(mainSource)
 	mlWakeUp(mainRunLoop)
+}
+
+// AfterMainOnce runs fn on the main run loop after d, replacing any earlier
+// pending deadline. Call on the main thread only. It is the idle scheduler:
+// one native timer, no Go timer and no cross-thread wakeup.
+func AfterMainOnce(d time.Duration, fn func()) {
+	if fn == nil || loadMainLoop() != nil {
+		return
+	}
+	var tc cfRunLoopTimerContext
+	var timer, cb uintptr
+	cb = purego.NewCallback(func(t uintptr, _ uintptr) {
+		releaseCF(t)
+		deadlineMu.Lock()
+		if deadlineTimer == t {
+			deadlineTimer = 0
+		}
+		deadlineMu.Unlock()
+		fn()
+	})
+	deadlineMu.Lock()
+	old := deadlineTimer
+	deadlineTimer = 0
+	deadlineMu.Unlock()
+	if old != 0 {
+		mlTimerInvalidate(old)
+		releaseCF(old)
+	}
+	timer = mlTimerCreate(0, mlTime()+d.Seconds(), 0, 0, 0, cb, &tc)
+	if timer == 0 {
+		return
+	}
+	deadlineMu.Lock()
+	deadlineTimer = timer
+	deadlineMu.Unlock()
+	for _, mode := range modes {
+		mlAddTimer(mainRunLoop, timer, mode)
+	}
 }
 
 // StartMainTicker calls fn on the main run loop every interval until stop is
