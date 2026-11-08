@@ -57,7 +57,7 @@ func TestSentenceGeneric(t *testing.T) {
 		kind           SentenceKind
 	}{
 		{"Bash", `{}`, "想运行一个命令", "Wants to run a command", SentenceRun},
-		{"Edit", `{"file_path":"a.go"}`, "想修改文件", "Wants to edit a file", SentenceEditFile},
+		{"Edit", `{"file_path":"a.go"}`, "想修改 1 个文件", "Wants to edit 1 file", SentenceEditFiles},
 		{"apply_patch", `{"input":"*** Begin Patch\n*** Update File: a.go\n*** Add File: b.go\n+x\n*** End Patch"}`, "想修改 2 个文件", "Wants to edit 2 files", SentenceEditFiles},
 		{"Edit", `{"files":["a","b"]}`, "想修改文件", "Wants to edit a file", SentenceEditFile},
 		{"Read", `{}`, "想读取文件", "Wants to read files", SentenceRead},
@@ -153,6 +153,7 @@ func TestAnalyzeRisks(t *testing.T) {
 		{"ls -la", nil},
 		{"env FOO=1 rm x", []RiskKind{RiskDelete}},
 		{"timeout 10 rm x", []RiskKind{RiskDelete}},
+		{"nice -n 10 rm x", []RiskKind{RiskDelete}},
 	}
 	for _, tc := range cases {
 		a := analyze(t, ToolClaude, "Bash", mustJSON(t, map[string]any{"command": tc.command}))

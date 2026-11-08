@@ -230,10 +230,9 @@ func Analyze(tool Tool, toolName string, input json.RawMessage) (Analysis, bool)
 
 	a.Kind, a.Arg = kind, arg
 	switch {
-	case kind == SentenceEditFile && a.Count > 1:
+	case kind == SentenceEditFile && a.Count >= 1:
+		// One known file still says the number: 「想修改 1 个文件」.
 		a.Kind = SentenceEditFiles
-	case kind == SentenceEditFile && a.Count == 1:
-		a.Kind = SentenceEditFile
 	case kind == SentenceFetch:
 		if host := hostOf(rawURL); host != "" {
 			a.Arg = host
@@ -707,7 +706,16 @@ func commandTokens(text string) []string {
 			if len(tokens) > 0 {
 				tokens = tokens[1:]
 			}
-		case "nice", "ionice", "stdbuf":
+		case "nice", "ionice":
+			tokens = tokens[1:]
+			for len(tokens) > 0 && strings.HasPrefix(tokens[0], "-") {
+				opt := tokens[0]
+				tokens = tokens[1:]
+				if opt == "-n" && len(tokens) > 0 {
+					tokens = tokens[1:] // the priority follows -n
+				}
+			}
+		case "stdbuf":
 			tokens = tokens[1:]
 			for len(tokens) > 0 && strings.HasPrefix(tokens[0], "-") {
 				tokens = tokens[1:]
