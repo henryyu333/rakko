@@ -40,6 +40,10 @@ type ocrIndex struct {
 	// nextAt gates the pace: one image per interval, never back to back.
 	nextAt   time.Time
 	interval time.Duration
+	// idle is set after a full scan found nothing left to do. New clipboard
+	// images clear it, so the idle tick no longer walks the whole history.
+	// Zero value is "scan once" (captures from older launches).
+	idle bool
 	// Seams: tests substitute a fake recognizer, a synchronous dispatch
 	// and an inline worker launch; nil falls back to the real ones.
 	recognize func(path string) ([]string, error)
@@ -82,7 +86,7 @@ func (o *ocrIndex) nowTime() time.Time {
 // the main thread from the monitoring loop like every module.
 func (o *ocrIndex) tick(time.Time) {
 	a := o.host
-	if a.quitting || a.store == nil {
+	if a.quitting || a.store == nil || o.idle {
 		return
 	}
 	if len(o.pending) > 0 && len(o.inflight) == 0 {
@@ -110,6 +114,13 @@ func (o *ocrIndex) tick(time.Time) {
 			return
 		}
 	}
+	o.idle = true
+}
+
+// wake asks the background pass to scan again: a new clipboard image may be
+// waiting, and the idle scan would otherwise skip the history entirely.
+func (o *ocrIndex) wake() {
+	o.idle = false
 }
 
 // needs reports whether the background pass should recognize the item:

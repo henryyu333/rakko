@@ -133,6 +133,9 @@ func (m *clipboardModule) record(now time.Time, source string) {
 		}
 		m.pending = nil
 		a.changed(a.store.AddClipImage(png, source))
+		if o := a.ocr(); o != nil {
+			o.wake()
+		}
 		a.warmClipApp(source)
 	default:
 		// Private or concealed markers, Finder files, unknown types, or an

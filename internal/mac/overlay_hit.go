@@ -248,7 +248,19 @@ func WindowClassName(window uintptr) string {
 	return name
 }
 
+// assocOverlayDropTypes marks views whose dragged types are already
+// registered. The registration list never changes, and AppKit keeps it on
+// the view, so asking again only rebuilds eight NSStrings and an array on
+// every pointer tick. Association is per object: a surface view mygo
+// replaces arrives unmarked and is registered on its next sighting.
+var assocOverlayDropTypes byte
+
 func registerOverlayDropTypes(window id) {
+	needed := func(v id) bool { return v != 0 && !hasAssoc(v, &assocOverlayDropTypes) }
+	content, surface := send(window, "contentView"), overlaySurfaceView(window)
+	if !needed(content) && !needed(surface) {
+		return
+	}
 	arr := send(class("NSMutableArray"), "arrayWithCapacity:", 8)
 	for _, t := range []string{
 		"public.file-url",
@@ -263,13 +275,13 @@ func registerOverlayDropTypes(window id) {
 		send(arr, "addObject:", uintptr(nsString(t)))
 	}
 	register := func(v id) {
-		if v != 0 {
+		if needed(v) {
 			send(v, "registerForDraggedTypes:", uintptr(arr))
+			markAssoc(v, &assocOverlayDropTypes)
 		}
 	}
-	content := send(window, "contentView")
 	register(content)
-	register(overlaySurfaceView(window))
+	register(surface)
 }
 
 // SetOverlayAcceptsMouse decides whether the overlay window takes mouse

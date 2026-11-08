@@ -837,6 +837,16 @@ func (a *shelf) overlayWanted() bool {
 		a.appsModeOn() || a.liveUp()
 }
 
+// pointerSample is the pointer a monitoring pass reads: the caller caches
+// the sample once (drag.monitorDrag, or the tick), and every hit test in
+// the pass reuses it. Without a pass it is a direct read.
+func (a *shelf) pointerSample() mygo.Point {
+	if a.pointerTickValid {
+		return a.pointerTick
+	}
+	return cursorPoint()
+}
+
 // overlayAcceptsMouse answers whether the overlay takes the mouse at the
 // current pointer, reading the pointer only when the answer depends on it:
 // a headless surface has no window to gate, a drag owns the whole frame
@@ -850,7 +860,7 @@ func (a *shelf) overlayAcceptsMouse() bool {
 	if a.dragging || a.pointerDrag || a.islandDrag {
 		return wanted
 	}
-	p := cursorPoint()
+	p := a.pointerSample()
 	if !wanted {
 		// A notched shelf at rest draws nothing: every press belongs to
 		// whatever is under the strip. The island's resting capsule is a

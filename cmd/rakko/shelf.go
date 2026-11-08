@@ -163,17 +163,22 @@ type shelf struct {
 	music                                                       musicControls // the player's seek / volume rails (music_controls.go)
 	fx                                                          shellMotion   // the shell drawn last, for the window frame
 	ignoringMouse                                               bool
-	watchingPointer                                             bool // registered with the process-wide pointer gate
-	reduceTrans                                                 bool // cached Reduce Transparency (refreshed on a slow tick)
-	appearanceAt                                                time.Time
-	thumbnails                                                  map[string]*ui.Bitmap
-	shake                                                       shakeDetector // 摇晃召唤：拖拽中左右晃动检测
-	basket                                                      basketState   // 摇晃召唤的拖放篮
-	thumbPending                                                map[string]bool
-	thumbDiscard                                                map[string]bool
-	thumbActive                                                 int
-	pins                                                        []*pinItem // desktop-pinned cards (pin.go)
-	pinReturning                                                bool       // a pin drag holds the notch's 松开放回 bulge
+	// pointerTick caches the pointer for one monitoring pass: the
+	// monitor, the gate and the drag logic must see one sample per tick,
+	// not one WindowServer round trip each.
+	pointerTick      mygo.Point
+	pointerTickValid bool
+	watchingPointer  bool // registered with the process-wide pointer gate
+	reduceTrans      bool // cached Reduce Transparency (refreshed on a slow tick)
+	appearanceAt     time.Time
+	thumbnails       map[string]*ui.Bitmap
+	shake            shakeDetector // 摇晃召唤：拖拽中左右晃动检测
+	basket           basketState   // 摇晃召唤的拖放篮
+	thumbPending     map[string]bool
+	thumbDiscard     map[string]bool
+	thumbActive      int
+	pins             []*pinItem // desktop-pinned cards (pin.go)
+	pinReturning     bool       // a pin drag holds the notch's 松开放回 bulge
 	// pet 是桌面海獭的窗口与按下会话（pet.go）；nil 表示桌面上没有它。
 	// lastAct 是最近一次使用（打开面板、提起海獭、接住投放），十分钟
 	// 没有它海獭就睡觉；happyUntil 是接到好消息后的开心表情截止时刻。

@@ -258,6 +258,14 @@ func (a *shelf) pointerDragged() {
 
 // monitorDrag updates placement, drag protection and interaction on the main thread.
 func (a *shelf) monitorDrag(now time.Time) {
+	// One pointer sample per pass: the band, the gate and the pass-through
+	// test all read the same point. A caller that already sampled (the
+	// monitoring tick) keeps ownership of the cache.
+	owned := !a.pointerTickValid
+	if owned {
+		a.pointerTick, a.pointerTickValid = cursorPoint(), true
+		defer func() { a.pointerTickValid = false }()
+	}
 	// A press in our own window ends with the button: the corridor comes
 	// back for the next gesture (answered here because the app observes no
 	// global mouse-up).
@@ -283,7 +291,7 @@ func (a *shelf) monitorDrag(now time.Time) {
 		a.hidePending = false
 	}
 	a.settlePendingHide(now)
-	p := cursorPoint()
+	p := a.pointerTick
 	if !a.visible && !insideRect(p, a.dispBounds) {
 		a.place(p)
 	}
