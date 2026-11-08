@@ -185,6 +185,49 @@ func NormalWindows() []ScreenWindow {
 	return out
 }
 
+// WindowsOfPID lists every on-screen window owned by pid, at any layer.
+// The notch's panel sits above the menu bar, so the ordinary layer-0 list
+// would miss it. Frontmost first. Main thread only.
+func WindowsOfPID(pid int) []ScreenWindow {
+	if err := Init(); err != nil {
+		return nil
+	}
+	if err := loadWindowList(); err != nil {
+		return nil
+	}
+	var out []ScreenWindow
+	withPool(func() {
+		list := windowListCopy(kCGWindowListOptionOnScreenOnly|kCGWindowListExcludeDesktopElements, 0)
+		if list == 0 {
+			return
+		}
+		defer cfReleaseWL(uintptr(list))
+		for i, n := 0, cfArrayCount(list); i < n; i++ {
+			dict := cfArrayValueAtIndex(list, i)
+			if dict == 0 {
+				continue
+			}
+			if sendInt(cfDictGetValue(dict, windowOwnerPIDKey), "intValue") != pid {
+				continue
+			}
+			bounds := cfDictGetValue(dict, windowBoundsKey)
+			if bounds == 0 {
+				continue
+			}
+			var r NSRect
+			if !rectFromDict(bounds, &r) || r.Size.Width <= 0 || r.Size.Height <= 0 {
+				continue
+			}
+			number := 0
+			if num := cfDictGetValue(dict, windowNumberKey); num != 0 {
+				number = sendInt(num, "intValue")
+			}
+			out = append(out, ScreenWindow{Number: number, PID: pid, Bounds: r})
+		}
+	})
+	return out
+}
+
 // ScreenCaptureGrantedByWindowTitles reports whether WindowServer returns
 // the titles of other apps' ordinary windows. Without the screen-recording
 // grant CGWindowListCopyWindowInfo still lists those windows, but
