@@ -362,9 +362,10 @@ func (a *shelf) dropZoneSnap(over bool) []string {
 		d.on, _ = a.dropZoneShow()
 		return d.files
 	}
-	// The guide's scripted drag and its chip drag stand the zone up without
-	// a real drag: the demo file is the set, and the release lands it.
-	if a.onb != nil && a.onb.demoOn && !a.onb.tried {
+	// The guide's scripted demo stands the zone up without a real drag: the
+	// demo file is the set, and its own clock lands it. A chip held by the
+	// pointer keeps the guide page instead — the zone would hide the chip.
+	if a.onb != nil && a.onb.demoOn && !a.onb.chipDrag && !a.onb.tried {
 		if name := a.onb.sampleName(a.appLoc()); len(d.files) != 1 || d.files[0] != name {
 			d.files = []string{name}
 			d.class = classifyDrop(d.files)

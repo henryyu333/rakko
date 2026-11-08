@@ -429,6 +429,11 @@ func (a *shelf) view(c *ui.Context) {
 		}
 	}
 	a.fb.follow(a, now)
+	// The guide's scripted demo runs on the view's clock, not on its page:
+	// the zone replaces the page mid-demo, and the clock must outlive it.
+	if a.onb != nil {
+		a.onb.demoTick(c)
+	}
 	if f := &a.fb; f.text != "" && f.pillW == 0 {
 		f.pillW = f.measure(c)
 	}

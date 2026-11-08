@@ -423,3 +423,26 @@ func TestOnboardingIsOwedOnlyForAFreshInstall(t *testing.T) {
 		}
 	}
 }
+
+// A click on the sample chip (no drag) plays the demo, as the prototype's
+// chip does: the pointer path the panel really receives.
+func TestOnboardingChipClickPlaysTheDemo(t *testing.T) {
+	a, view := onboardingShelf(t)
+	a.onb.step = len(a.onb.steps()) - 1
+	view.Frame()
+	view.Frame()
+	name := a.onb.sampleName(a.appLoc())
+	if err := view.Click(name); err != nil {
+		t.Fatalf("chip click: %v", err)
+	}
+	if a.onb.demoAt.IsZero() {
+		t.Fatal("the chip click did not arm the demo")
+	}
+
+	// The demo's clock lands the file on its last phase.
+	view.Advance(900 * time.Millisecond)
+	view.Frame()
+	if !a.onb.tried || len(a.store.Items) != 1 {
+		t.Fatalf("the demo did not land the sample: tried=%v items=%d", a.onb.tried, len(a.store.Items))
+	}
+}

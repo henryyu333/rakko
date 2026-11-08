@@ -284,7 +284,9 @@ func (o *onboardingFeature) actions(c *ui.Context) []ui.Element { return nil }
 
 // body draws the whole page area the sheet gives a full-bleed page: the
 // 22pt action row (progress dots and 跳过), then the 144pt step over a 30pt
-// button row, all inside the 416-pt content box.
+// button row, all inside the 416-pt content box. The page ignores live: the
+// scripted demo's clock runs on the view (shelf.view), because the real drop
+// zone replaces this page while the demo plays.
 func (o *onboardingFeature) body(c *ui.Context, over bool, live bool) ui.Element {
 	l := loc(c)
 	ui.Column(c.Key("onb")).FillWidth().Grow(1).Children(func() {
@@ -304,11 +306,6 @@ func (o *onboardingFeature) body(c *ui.Context, over bool, live bool) ui.Element
 		})
 		o.buttonRow(c, l)
 	})
-	// A scripted demo run is clocked by the view: while it is armed, keep
-	// frames coming and let its phases land on time.
-	if live {
-		o.demoTick(c)
-	}
 	return ui.Box(c).Size(0, 0)
 }
 
@@ -591,8 +588,11 @@ func (o *onboardingFeature) stepTry(c *ui.Context, l locales.Messages, live bool
 func (o *onboardingFeature) trackChip(c *ui.Context, chip ui.Element) {
 	a := o.host
 	if chip.Dragging() {
+		// The page stays while the chip is held: the zone would replace
+		// it and take the chip (and its release) with it. The release is
+		// what lands the file.
 		o.chipDrag = true
-		o.demoOn = true
+		o.demoOn = false
 		c.AnimationFrame()
 		return
 	}
