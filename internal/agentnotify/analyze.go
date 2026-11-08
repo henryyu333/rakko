@@ -172,6 +172,7 @@ func Analyze(tool Tool, toolName string, input json.RawMessage) (Analysis, bool)
 	if d := descriptionOf(m); d != "" {
 		a.Description = clipDisplay(d, 120)
 	}
+	kind, arg := sentenceClass(toolName)
 
 	command, commandOK := commandOf(m)
 	files, more, patchOK := filesOf(toolName, m)
@@ -183,15 +184,24 @@ func Analyze(tool Tool, toolName string, input json.RawMessage) (Analysis, bool)
 		}
 	}
 	// opencode's evaluate payload carries the affected resources instead of
-	// a file path.
-	if !patchOK {
+	// a file path. A shell action's resources are the command; an edit's are
+	// its files.
+	if !patchOK && !commandOK {
 		if rs, ok := m["resources"].([]any); ok {
+			var parts []string
 			for _, r := range rs {
 				if s, ok := r.(string); ok && s != "" {
-					files = append(files, FileChange{Path: s})
+					parts = append(parts, s)
 				}
 			}
-			patchOK = len(files) > 0
+			if kind == SentenceRun && len(parts) > 0 {
+				command, commandOK = strings.Join(parts, " "), true
+			} else if kind != SentenceRun {
+				for _, p := range parts {
+					files = append(files, FileChange{Path: p})
+				}
+				patchOK = len(files) > 0
+			}
 		}
 	}
 
@@ -204,7 +214,6 @@ func Analyze(tool Tool, toolName string, input json.RawMessage) (Analysis, bool)
 		a.Detail = Detail{Kind: DetailURL, URL: rawURL}
 	}
 
-	kind, arg := sentenceClass(toolName)
 	if commandOK {
 		a.Risks = risksOf(command)
 	}

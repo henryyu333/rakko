@@ -52,9 +52,9 @@ func TestSentenceGeneric(t *testing.T) {
 	zh := locales.In("zh-Hans")
 	en := locales.In("en")
 	cases := []struct {
-		name, input         string
-		zhWant, enWant      string
-		kind                SentenceKind
+		name, input    string
+		zhWant, enWant string
+		kind           SentenceKind
 	}{
 		{"Bash", `{}`, "想运行一个命令", "Wants to run a command", SentenceRun},
 		{"Edit", `{"file_path":"a.go"}`, "想修改文件", "Wants to edit a file", SentenceEditFile},
@@ -230,6 +230,13 @@ func TestAnalyzeDetail(t *testing.T) {
 		many += "*** Add File: f" + string(rune('0'+i)) + ".go\n+x\n"
 	}
 	many += "*** End Patch"
+	g := analyze(t, ToolOpencode, "bash", `{"action":"bash","resources":["rm -rf build"]}`)
+	if g.Detail.Kind != DetailCommand || g.Detail.Command != "rm -rf build" {
+		t.Fatalf("opencode shell resources: %+v", g.Detail)
+	}
+	if len(g.Risks) != 1 || g.Risks[0].Kind != RiskDelete {
+		t.Fatalf("opencode shell risks: %+v", g.Risks)
+	}
 	f := analyze(t, ToolCodex, "apply_patch", mustJSON(t, map[string]any{"input": many}))
 	if len(f.Detail.Files) != 5 || f.Detail.More != 2 {
 		t.Fatalf("more files: %d listed, %d more", len(f.Detail.Files), f.Detail.More)
