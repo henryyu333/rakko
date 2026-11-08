@@ -614,3 +614,27 @@ func TestOCRWorkerAndWordConvertNeverOverlap(t *testing.T) {
 		t.Fatalf("two Vision calls ran at once (max %d); the paths must serialize", maxSeen)
 	}
 }
+
+// TestOCRIdleSkipsHistoryUntilWoken: once a full scan found nothing, a
+// tick must not walk the history again; a new capture wakes the pass.
+func TestOCRIdleSkipsHistoryUntilWoken(t *testing.T) {
+	a, o, _ := testOCRShelf(t)
+	a.visible = false
+	o.tick(time.Now())
+	if !o.idle {
+		t.Fatal("an empty scan did not go idle")
+	}
+	it := addClipImage(t, a, 30)
+	calls := 0
+	o.recognize = func(string) ([]string, error) { calls++; return nil, nil }
+	o.tick(time.Now())
+	if calls != 0 {
+		t.Fatal("idle tick walked the history")
+	}
+	o.wake()
+	o.tick(time.Now())
+	if calls != 1 {
+		t.Fatalf("woken tick did not recognize the new image: %d calls", calls)
+	}
+	_ = it
+}
