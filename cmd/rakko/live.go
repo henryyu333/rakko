@@ -356,7 +356,11 @@ func (a *shelf) liveNow(now time.Time, allow bool) (liveEvent, bool) {
 	}
 	for len(q.queued) > 0 {
 		ev := q.queued[0]
-		if !allow && ev.kind != liveAgentAsk {
+		// A permission request may claim the notch while a file drag does,
+		// but not while the panel is still folding: wait for the 120 ms fold
+		// so the shell grows from the notch, not out of a moving panel.
+		askReady := ev.kind == liveAgentAsk && !a.visible && a.progress <= 0.01 && !a.appsModeOn()
+		if !allow && !askReady {
 			return liveEvent{}, false
 		}
 		q.queued = q.queued[1:]
