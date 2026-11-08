@@ -78,8 +78,8 @@ func (ap *approval) bodyHeight(w float32) float32 {
 		approvalSentenceLines(ap.analysis.Sentence(locales.In("en")), textW),
 	)
 	body := float32(approvalRow1H+approvalGap) + float32(lines*approvalLineH+approvalGap)
-	if len(ap.analysis.Risks) > 0 {
-		body += approvalRiskH + approvalGap
+	if rows := ap.riskRows(w); rows > 0 {
+		body += float32(rows*approvalRiskH+(rows-1)*4) + approvalGap
 	}
 	body += ap.detailHeight() + approvalGap
 	if ap.state == approvalDenying {
@@ -89,6 +89,39 @@ func (ap *approval) bodyHeight(w float32) float32 {
 	}
 	body += approvalPadBot
 	return body
+}
+
+// riskRows is how many chip lines the risks take. Both languages are
+// measured, because the shell is sized before the locale is known.
+func (ap *approval) riskRows(w float32) int {
+	if len(ap.analysis.Risks) == 0 {
+		return 0
+	}
+	avail := w - 2*approvalPadX
+	count := func(l locales.Messages) int {
+		rows, used := 1, float32(0)
+		for _, r := range ap.analysis.Risks {
+			label := r.Label(l)
+			cw := float32(16) // the chip's 8 pt padding per side
+			for _, ch := range label {
+				if ch > 0x2E80 {
+					cw += 11
+				} else {
+					cw += 6.2
+				}
+			}
+			if used > 0 && used+4+cw > avail {
+				rows++
+				used = 0
+			}
+			if used > 0 {
+				used += 4
+			}
+			used += cw
+		}
+		return rows
+	}
+	return max(count(locales.In("zh-Hans")), count(locales.In("en")))
 }
 
 // approvalSentenceLines estimates the wrapped line count at 13 pt, capped
