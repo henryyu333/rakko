@@ -241,3 +241,24 @@ func TestMonitorDeadlines(t *testing.T) {
 		})
 	}
 }
+
+// TestGatePollingFollowsMovement: the 10 ms gate poll runs only inside the
+// window opened by a move event, and only while an overlay is on screen.
+func TestGatePollingFollowsMovement(t *testing.T) {
+	oldCursor := cursorPoint
+	t.Cleanup(func() { cursorPoint = oldCursor })
+	now := time.Now()
+	gateMoveUntil.Store(now.Add(-time.Millisecond).UnixNano())
+	if gateShouldPoll(now) {
+		t.Fatal("an old move kept the gate poller awake")
+	}
+	a := monitorShelf()
+	cursorPoint = func() mygo.Point { return mygo.Point{X: 100, Y: 800} }
+	a.pointerMoved()
+	if !gateShouldPoll(time.Now()) {
+		t.Fatal("a fresh move did not open the poll window")
+	}
+	if gateShouldPoll(time.Now().Add(gatePollWindow + time.Millisecond)) {
+		t.Fatal("the poll window did not close")
+	}
+}

@@ -935,6 +935,13 @@ var gateMoveUntil atomic.Int64
 // event delivery/coalescing gap documented on gatePollInterval.
 const gatePollWindow = 150 * time.Millisecond
 
+// gateShouldPoll reports whether the move window is still open. It is the
+// only reason the 10 ms poller wakes; a still pointer is covered by the
+// direct syncPointerGate calls every shape change makes.
+func gateShouldPoll(now time.Time) bool {
+	return now.UnixNano() < gateMoveUntil.Load()
+}
+
 // gateWake carries "polling started" to the poller, which sleeps otherwise.
 var gateWake = make(chan struct{}, 1)
 
@@ -969,7 +976,7 @@ func (a *shelf) watchPointer() {
 func pollPointerGate() {
 	for range gateWake {
 		for gatePolling.Load() {
-			if time.Now().UnixNano() >= gateMoveUntil.Load() {
+			if !gateShouldPoll(time.Now()) {
 				break
 			}
 			time.Sleep(gatePollInterval)
