@@ -925,6 +925,16 @@ const gatePollInterval = 10 * time.Millisecond
 // the poller never reads a shelf off it (the fields are main-thread only).
 var gatePolling atomic.Bool
 
+// gateMoveUntil is the last move plus gatePollWindow, in Unix nanoseconds.
+// The poller re-reads the pointer only while move events are still likely
+// to arrive late or be coalesced; a still pointer is covered by shape
+// changes, which call syncPointerGate directly.
+var gateMoveUntil atomic.Int64
+
+// gatePollWindow bounds the poll after a move. It only has to cover the
+// event delivery/coalescing gap documented on gatePollInterval.
+const gatePollWindow = 150 * time.Millisecond
+
 // gateWake carries "polling started" to the poller, which sleeps otherwise.
 var gateWake = make(chan struct{}, 1)
 
@@ -959,6 +969,9 @@ func (a *shelf) watchPointer() {
 func pollPointerGate() {
 	for range gateWake {
 		for gatePolling.Load() {
+			if time.Now().UnixNano() >= gateMoveUntil.Load() {
+				break
+			}
 			time.Sleep(gatePollInterval)
 			mygo.RunOnMain(func() {
 				if !gatePolling.Load() {
