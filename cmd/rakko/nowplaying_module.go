@@ -162,13 +162,25 @@ func (m *nowPlayingModule) tick(now time.Time) {
 		m.invalidate(npSnap{})
 		return
 	}
-	rev := m.np.Revision()
-	if rev == m.seenRev && (m.posNext.IsZero() || now.Before(m.posNext)) {
+	if !m.refreshDue(now) {
 		return
 	}
-	m.seenRev = rev
+	m.seenRev = m.np.Revision()
 	m.refresh(now)
 	m.posNext = m.nextPosition(now)
+}
+
+// refreshDue is a helper line or a visible card's next whole-second clock.
+// A card that became visible while paused at a full second still has no
+// posNext yet; it refreshes once when the panel opens and arms the clock.
+func (m *nowPlayingModule) refreshDue(now time.Time) bool {
+	if m.np.Revision() != m.seenRev {
+		return true
+	}
+	if m.host == nil || !m.host.visible || !m.have || !m.last.Playing {
+		return false
+	}
+	return m.posNext.IsZero() || !now.Before(m.posNext)
 }
 
 // watch wakes the monitoring loop on each helper line and on the helper's
@@ -193,7 +205,7 @@ func (m *nowPlayingModule) watch(h *mac.NowPlayingHost) {
 // nextPosition is when the visible card's elapsed clock next crosses a
 // whole second; zero while nothing on screen shows the position.
 func (m *nowPlayingModule) nextPosition(now time.Time) time.Time {
-	if !m.host.visible || !m.have || !m.last.Playing {
+	if m.host == nil || !m.host.visible || !m.have || !m.last.Playing {
 		return time.Time{}
 	}
 	pos := m.last.Position(now)
@@ -214,7 +226,13 @@ func (m *nowPlayingModule) nextTick(now time.Time) time.Time {
 		}
 		return m.retryAt
 	}
-	return m.posNext
+	if m.host != nil && m.host.visible && m.have && m.last.Playing {
+		if m.posNext.IsZero() {
+			return now
+		}
+		return m.posNext
+	}
+	return time.Time{}
 }
 
 // spawnHost builds the helper host through the test seam when one is set.

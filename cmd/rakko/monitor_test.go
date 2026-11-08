@@ -202,7 +202,8 @@ func TestMonitorDeadlines(t *testing.T) {
 			a.modules = append(a.modules, a.np)
 		}, 4 * time.Second},
 		{"now-playing-position", func(a *shelf) {
-			a.np = &nowPlayingModule{host: a, started: true, posNext: now.Add(700 * time.Millisecond)}
+			a.np = &nowPlayingModule{host: a, started: true, have: true, posNext: now.Add(700 * time.Millisecond), last: mac.NowPlayingState{Playing: true}}
+			a.visible = true
 			a.modules = append(a.modules, a.np)
 		}, 700 * time.Millisecond},
 		{"weekly-sample", func(a *shelf) {
