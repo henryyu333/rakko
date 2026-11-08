@@ -954,7 +954,6 @@ func (a *shelf) onboardingMove() {
 			// The next step is persisted before the relaunch so the new
 			// process opens on the permissions, not the intro.
 			a.saveOnboarding(o.steps()[o.step+1])
-			o.relaunchAt = time.Now().Add(900 * time.Millisecond)
 			onbMoveAfterFunc(900*time.Millisecond, func() {
 				onbMoveDispatch(func() { a.onboardingRelaunch(dest) })
 			})
