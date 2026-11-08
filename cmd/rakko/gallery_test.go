@@ -1785,15 +1785,9 @@ func galleryGroupK() []galleryItem {
 		}
 	}
 	return []galleryItem{
-		{ID: "K1", Group: g, Title: "通用", State: "登录项、语言、默认搜索模式、自动更新", Wide: true, Build: page(settingsPageGeneral, func(t *testing.T, a *shelf) {
-			a.settings.AutoCheckUpdates = true
-			a.updateLastCheck = galleryTodayAt(9, 12)
-			a.updateLastResult = updateResultLatest
-		})},
+		{ID: "K1", Group: g, Title: "通用", State: "登录项、语言、默认搜索模式", Wide: true, Build: page(settingsPageGeneral, nil)},
 		{ID: "K16", Group: g, Title: "通用", State: "默认搜索模式 · 应用", Wide: true, Build: page(settingsPageGeneral, func(t *testing.T, a *shelf) {
 			a.settings.SearchMode = settings.SearchModeApps
-			a.updateLastCheck = galleryTodayAt(9, 12)
-			a.updateLastResult = updateResultLatest
 		})},
 		{ID: "K2", Group: g, Title: "外形与提示", State: "灵动岛、桌宠、实时活动、贴边排列", Wide: true, Build: page(settingsPageNotch, nil)},
 		{ID: "K3", Group: g, Title: "托盘", State: "保留时长与拖出后移除", Wide: true, Build: page(settingsPageTray, nil)},
@@ -1804,7 +1798,7 @@ func galleryGroupK() []galleryItem {
 				"com.apple.Notes": "Notes",
 			}
 		})},
-		{ID: "K5", Group: g, Title: "AI 用量", State: "额度开关与 Agent 完成提醒", Wide: true, Build: func(t *testing.T, lang string) galleryRender {
+		{ID: "K5", Group: g, Title: "AI", State: "额度开关与 Agent 完成提醒", Wide: true, Build: func(t *testing.T, lang string) galleryRender {
 			stubSettingsSeams(t, false, nil, nil)
 			a, home, _ := agentShelf(t)
 			agentInstall(t, home, agentnotify.ToolClaude, agentnotify.ToolCodex, agentnotify.ToolGemini)
@@ -1831,7 +1825,11 @@ func galleryGroupK() []galleryItem {
 		}},
 		{ID: "K6", Group: g, Title: "快捷键", State: "四个全局组合与面板只读键", Wide: true, Build: page(settingsPageShortcuts, nil)},
 		{ID: "K7", Group: g, Title: "系统权限", State: "三项权限与一个开关", Wide: true, Build: page(settingsPagePermissions, nil)},
-		{ID: "K8", Group: g, Title: "关于", State: "版本、检查更新、隐私与源码", Wide: true, Build: page(settingsPageAbout, nil)},
+		{ID: "K8", Group: g, Title: "关于", State: "版本、更新、隐私与源码", Wide: true, Build: page(settingsPageAbout, func(t *testing.T, a *shelf) {
+			a.settings.AutoCheckUpdates = true
+			a.updateLastCheck = galleryTodayAt(9, 12)
+			a.updateLastResult = updateResultLatest
+		})},
 		{ID: "K9", Group: g, Title: "快捷键", State: "录制中 · 按下新的组合键…", Wide: true, Build: page(settingsPageShortcuts, func(t *testing.T, a *shelf) {
 			a.settingsRecording = shortcutToggle
 		})},

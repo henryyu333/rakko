@@ -733,9 +733,9 @@ func TestUpdateWhenClassifiesCalendarDays(t *testing.T) {
 	}
 }
 
-// 现在检查 runs the same check the menu runs, and the button is locked
-// while one runs.
-func TestSettingsCheckNowRow(t *testing.T) {
+// 检查更新 is the About page's one check action: it runs the same check the
+// menu runs, and it is locked while one runs or when this copy cannot update.
+func TestSettingsAboutUpdateButton(t *testing.T) {
 	stubSettingsSeams(t, false, nil, nil)
 	// A build that can check: production, with an enabled updater and a
 	// stubbed check. The window factory returns nil, so the manual check's
@@ -759,13 +759,35 @@ func TestSettingsCheckNowRow(t *testing.T) {
 		goWork, dispatchMain = origWork, origMain
 	})
 
-	_, view := newSettingsShelf(t)
-	if err := view.Click("现在检查"); err != nil {
+	a, view := newSettingsShelf(t)
+	openSettingsPage(t, view, "关于")
+	if err := view.Click("检查更新"); err != nil {
 		t.Fatal(err)
 	}
 	view.Frame()
 	if calls != 1 {
-		t.Fatalf("现在检查 did not start a check: calls=%d", calls)
+		t.Fatalf("检查更新 did not start a check: calls=%d", calls)
+	}
+
+	// A check in flight locks the button: the click that just worked does
+	// nothing now. A disabled control keeps its place in the tree, so the
+	// tester still finds it; it just takes no click.
+	a.updateChecking = true
+	view.Frame()
+	_ = view.Click("检查更新")
+	view.Frame()
+	if calls != 1 {
+		t.Fatalf("检查更新 started a second check while one was running: calls=%d", calls)
+	}
+	a.updateChecking = false
+
+	// So does a copy that cannot update, before any check can run.
+	updateEnabled = func() bool { return false }
+	view.Frame()
+	_ = view.Click("检查更新")
+	view.Frame()
+	if calls != 1 {
+		t.Fatalf("a copy that cannot update still ran a check: calls=%d", calls)
 	}
 }
 

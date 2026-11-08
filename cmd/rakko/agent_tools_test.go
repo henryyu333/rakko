@@ -148,7 +148,7 @@ func TestAgentToolRowSwitchInSettings(t *testing.T) {
 	a.setAgentNotify(true)
 	view := ui.NewTester(a.settingsView, settingsWidth, settingsHeight)
 	view.Frame()
-	openSettingsPage(t, view, "AI 用量")
+	openSettingsPage(t, view, "AI")
 	clickVisible(t, view, "Gemini CLI") // the click that flips the row
 	view.Frame()
 	if !a.settings.AgentNotify.ToolOff(string(agentnotify.ToolGemini)) {
@@ -172,7 +172,7 @@ func TestAgentToolRowsLockedWithGroupSwitch(t *testing.T) {
 	agentInstall(t, home, agentnotify.ToolGemini)
 	view := ui.NewTester(a.settingsView, settingsWidth, settingsHeight)
 	view.Frame()
-	openSettingsPage(t, view, "AI 用量")
+	openSettingsPage(t, view, "AI")
 	clickVisible(t, view, "Gemini CLI") // a locked row: the click must do nothing
 	view.Frame()
 	if a.settings.AgentNotify.Enabled {
@@ -186,7 +186,7 @@ func TestAgentToolRowsLockedWithGroupSwitch(t *testing.T) {
 	}
 }
 
-// TestAgentSettingsScreenshot renders the AI 用量 page at the Agent 完成提醒
+// TestAgentSettingsScreenshot renders the AI page at the Agent 完成提醒
 // group: three detected tools, one of them switched off on its own row.
 // Gated by RAKKO_AGENT_SHOT=1; the PNG lands in /tmp/rakko-risks/.
 func TestAgentSettingsScreenshot(t *testing.T) {
@@ -199,7 +199,7 @@ func TestAgentSettingsScreenshot(t *testing.T) {
 	a.setAgentNotifyTool(agentnotify.ToolGemini, false)
 	view := ui.NewTester(a.settingsView, settingsWidth, settingsHeight)
 	view.Frame()
-	openSettingsPage(t, view, "AI 用量")
+	openSettingsPage(t, view, "AI")
 	for range 30 {
 		if r, ok := view.Find("Gemini CLI"); ok && r.W > 0 && r.H > 0 &&
 			r.Y >= 0 && r.Y+r.H <= settingsHeight {

@@ -187,14 +187,14 @@ func TestSettingsViewShowsSections(t *testing.T) {
 		nav   string
 		texts []string
 	}{
-		{"通用", []string{"开机时自动启动", "自动检查更新", "检查更新", "现在检查"}},
+		{"通用", []string{"开机时自动启动", "默认搜索模式"}},
 		{"外形与提示", []string{"刘海样式", "充电提示", "耳机连接提示", "下载进度", "拖窗口到刘海分屏"}},
 		{"托盘", []string{"自动清理旧内容", "拖出后从托盘移除"}},
 		{"剪贴板", []string{"保留条数", "排除的应用"}},
-		{"AI 用量", []string{"在刘海里显示 AI 用量", "额度显示", "套餐额度", "本机用量自动统计本机所有 AI 工具的 token"}},
+		{"AI", []string{"在刘海里显示 AI 用量", "额度显示", "套餐额度", "本机用量自动统计本机所有 AI 工具的 token"}},
 		{"快捷键", []string{"显示 / 收起", "剪贴板搜索", "框选文字", "打开托盘", "在刘海里"}},
 		{"系统权限", []string{"完整磁盘访问", "辅助功能", "屏幕录制"}},
-		{"关于", []string{"打开数据文件夹", "源代码", "隐私"}},
+		{"关于", []string{"检查更新", "自动检查更新", "自动下载并安装更新", "打开数据文件夹", "源代码", "隐私"}},
 	}
 	for _, p := range pages {
 		openSettingsPage(t, view, p.nav)
@@ -222,7 +222,7 @@ func TestAIUsageQuotaRowsLeadWithToolMarks(t *testing.T) {
 		latest: okQuota(aiusage.ToolCodex, "Plus", now)}
 	view := ui.NewTester(a.settingsView, settingsWidth, settingsHeight)
 	view.Frame()
-	openSettingsPage(t, view, "AI 用量")
+	openSettingsPage(t, view, "AI")
 	a.settingsScroll.Y = 0
 	view.SetScale(2)
 	view.Frame()
@@ -311,14 +311,15 @@ func channelGap(a, b int) int {
 	return b - a
 }
 
-// The 通用 section's 自动检查更新 switch drives setAutoCheckUpdates through
-// the same applySettings path the menus use, so the file holds the choice.
+// The 关于 page's 更新 group drives 自动检查更新 through the same
+// applySettings path the menus use, so the file holds the choice.
 func TestSettingsViewAutoCheckToggle(t *testing.T) {
 	stubSettingsSeams(t, false, nil, nil)
 	a, view := newSettingsShelf(t)
 	if !a.settings.AutoCheckUpdates {
 		t.Fatal("autoCheckUpdates must default on")
 	}
+	openSettingsPage(t, view, "关于")
 	clickVisible(t, view, "自动检查更新")
 	if a.settings.AutoCheckUpdates {
 		t.Fatal("toggle did not flip the running setting")
@@ -710,7 +711,7 @@ func TestSettingsViewLiveTogglesSave(t *testing.T) {
 	}
 }
 
-// The ready update shows in 通用 → 更新 with its restart button, and it does
+// The ready update shows in 关于 → 更新 with its restart button, and it does
 // not appear under the search bar.
 func TestUpdateReadinessLivesInSettings(t *testing.T) {
 	stubSettingsSeams(t, false, nil, nil)
@@ -722,7 +723,7 @@ func TestUpdateReadinessLivesInSettings(t *testing.T) {
 	a, view := newSettingsShelf(t)
 	a.update = &mygo.Update{Version: "9.9.9"}
 	a.updateInstalled = true
-	openSettingsPage(t, view, "通用")
+	openSettingsPage(t, view, "关于")
 	if !view.HasText(locales.In("zh-Hans").UpdateReady()) {
 		t.Fatalf("the update readiness row is missing; texts %v", view.Texts())
 	}

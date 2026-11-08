@@ -489,11 +489,11 @@ func (msgs Messages) SettingsClipboardRemoveLabel(name string) string {
 	return Catalog.Format(msgs.locale, "settingsClipboardRemoveLabel", map[string]any{"name": name})
 }
 
-// SettingsAISection says "AI 用量"
+// SettingsAISection says "AI"
 // in the language the app shows.
 func SettingsAISection() string { return In(i18n.Locale()).SettingsAISection() }
 
-// SettingsAISection says "AI 用量"
+// SettingsAISection says "AI"
 // in the language of msgs.
 func (msgs Messages) SettingsAISection() string {
 	return Catalog.Format(msgs.locale, "settingsAISection", nil)
@@ -2669,11 +2669,11 @@ func (msgs Messages) UsageEmptyTitle() string {
 	return Catalog.Format(msgs.locale, "usageEmptyTitle", nil)
 }
 
-// UsageEmptyDetail says "在设置 → AI 用量里打开套餐额度"
+// UsageEmptyDetail says "在设置 → AI 里打开套餐额度"
 // in the language the app shows.
 func UsageEmptyDetail() string { return In(i18n.Locale()).UsageEmptyDetail() }
 
-// UsageEmptyDetail says "在设置 → AI 用量里打开套餐额度"
+// UsageEmptyDetail says "在设置 → AI 里打开套餐额度"
 // in the language of msgs.
 func (msgs Messages) UsageEmptyDetail() string {
 	return Catalog.Format(msgs.locale, "usageEmptyDetail", nil)
@@ -7387,16 +7387,6 @@ func SettingsUpdateCheckRow() string { return In(i18n.Locale()).SettingsUpdateCh
 // in the language of msgs.
 func (msgs Messages) SettingsUpdateCheckRow() string {
 	return Catalog.Format(msgs.locale, "settingsUpdateCheckRow", nil)
-}
-
-// SettingsUpdateCheckNow says "现在检查"
-// in the language the app shows.
-func SettingsUpdateCheckNow() string { return In(i18n.Locale()).SettingsUpdateCheckNow() }
-
-// SettingsUpdateCheckNow says "现在检查"
-// in the language of msgs.
-func (msgs Messages) SettingsUpdateCheckNow() string {
-	return Catalog.Format(msgs.locale, "settingsUpdateCheckNow", nil)
 }
 
 // SettingsUpdateNever says "尚未检查"

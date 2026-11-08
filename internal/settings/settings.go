@@ -65,11 +65,11 @@ type Settings struct {
 	// download notices on the notch. Every switch is on for a fresh
 	// install; a settings.json without the object keeps all three.
 	LiveActivities LiveActivitySettings `json:"liveActivities"`
-	// AgentNotify is the 设置 → AI 用量 group that announces a finished
+	// AgentNotify is the 设置 → AI group that announces a finished
 	// agent turn on the notch. Off by default: while it is on, Rakko's hook
 	// entries live in the installed agents' own configuration files.
 	AgentNotify AgentNotifySettings `json:"agentNotify"`
-	// Approval is the 设置 → AI 用量 group that puts an agent's permission
+	// Approval is the 设置 → AI group that puts an agent's permission
 	// requests on the notch. Off by default and independent of AgentNotify:
 	// it is a separate opt-in writing its own hook entries.
 	Approval ApprovalSettings `json:"approval"`

@@ -2,7 +2,7 @@
 
 package main
 
-// The marks before each tool in 设置 → AI 用量 → Agent 完成提醒. Claude Code
+// The marks before each tool in 设置 → AI → Agent 完成提醒. Claude Code
 // and Codex reuse the quota cards' marks; the rest are the tools' own marks:
 // opencode and pi from their sites' favicons, omp from omp.sh's favicon
 // (its gradient flattened to the middle stop), Gemini's spark and Grok's

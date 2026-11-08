@@ -52,9 +52,10 @@ var (
 	heroPermGlow = ui.RGBA(94, 92, 230, 1)
 )
 
-// settingsGeneralPage: 启动 (open at login, language) and 更新 (automatic
-// checks, 现在检查 with its last result). Only the login item survives a
-// broken settings.json; every other row is locked with the file.
+// settingsGeneralPage: 启动 (open at login, language) and 搜索 (default
+// search mode). Only the login item survives a broken settings.json; every
+// other row is locked with the file. Updates live on 关于, beside the
+// version they apply to.
 func (a *shelf) settingsGeneralPage(c *ui.Context) {
 	l := loc(c)
 	settingsHero(c, "general", l.General(), "neutral",
@@ -87,29 +88,6 @@ func (a *shelf) settingsGeneralPage(c *ui.Context) {
 					a.setSearchMode(searchModeAt(idx))
 				}
 			})
-		})
-	})
-
-	settingsGroup(c, "update", l.SettingsUpdateGroup(), "", func() {
-		ui.Column(c.Key("update-rows")).FillWidth().Disabled(a.settingsBroken).Children(func() {
-			settingsToggleRow(c, "autocheck", l.SettingsAutoCheckRow(), "",
-				a.settings.AutoCheckUpdates, a.setAutoCheckUpdates)
-			settingsSep(c, "autocheck")
-			settingsToggleRow(c, "autoinstall", l.UpdateAutoInstallSettingsRow(), "",
-				a.settings.UpdateAutoInstall, a.setUpdateAutoInstall)
-			settingsSep(c, "autoinstall")
-			settingsRow(c, "check", l.SettingsUpdateCheckRow(), a.updateCaption(l), func() {
-				busy := a.updateChecking || a.updateInstalling || a.updateUnavailableReason() != ""
-				settingsButton(c, "check-now", l.SettingsUpdateCheckNow(), false, func() { a.checkUpdates(true) }).Disabled(busy)
-			})
-			if a.updateInstalled && a.update != nil {
-				// The ready update lives here, not under the search bar:
-				// the restart is one click from where updates are managed.
-				settingsSep(c, "ready")
-				settingsRow(c, "ready", l.UpdateReady(), "", func() {
-					settingsButton(c, "restart", l.PanelRestart(), true, relaunchApp).Label(l.PanelRestartLabel())
-				})
-			}
 		})
 	})
 }
@@ -702,8 +680,8 @@ func (a *shelf) settingsPermissionsPage(c *ui.Context) {
 	})
 }
 
-// settingsAboutPage: the big otter, the version, the actions, and the
-// privacy and source notes.
+// settingsAboutPage: the big otter, the version, its actions, the 更新
+// group the version belongs to, and the privacy and source notes.
 func (a *shelf) settingsAboutPage(c *ui.Context) {
 	l := loc(c)
 
@@ -719,14 +697,37 @@ func (a *shelf) settingsAboutPage(c *ui.Context) {
 			ui.Text(c, l.SettingsAboutVersion(appVersion(), runtime.GOARCH)).SingleLine().
 				FontSize(12).TextColor(ink3).Padding(2, 0, 0, 0)
 			ui.Row(c.Key("about-actions")).AlignItems(ui.Center).Gap(8).Padding(14, 0, 0, 0).Children(func() {
-				settingsButton(c, "update", l.SettingsUpdateCheckNow(), false, func() { a.checkUpdates(true) }).
-					Disabled(a.updateChecking || a.updateInstalling)
+				// The one check action on this page: the 更新 group below
+				// only reports what the last one found.
+				busy := a.updateChecking || a.updateInstalling || a.updateUnavailableReason() != ""
+				settingsButton(c, "update", l.SettingsUpdateCheckRow(), false, func() { a.checkUpdates(true) }).
+					Disabled(busy)
 				settingsButton(c, "data", l.SettingsOpenDataFolder(), false, func() {
 					if err := openPath(a.dataDir); err != nil {
 						a.report(err)
 					}
 				})
 			})
+		})
+	})
+
+	settingsGroup(c, "update", l.SettingsUpdateGroup(), "", func() {
+		ui.Column(c.Key("update-rows")).FillWidth().Disabled(a.settingsBroken).Children(func() {
+			settingsToggleRow(c, "autocheck", l.SettingsAutoCheckRow(), "",
+				a.settings.AutoCheckUpdates, a.setAutoCheckUpdates)
+			settingsSep(c, "autocheck")
+			settingsToggleRow(c, "autoinstall", l.UpdateAutoInstallSettingsRow(), "",
+				a.settings.UpdateAutoInstall, a.setUpdateAutoInstall)
+			settingsSep(c, "autoinstall")
+			settingsRow(c, "check", l.SettingsUpdateCheckRow(), a.updateCaption(l), func() {})
+			if a.updateInstalled && a.update != nil {
+				// The ready update lives here, not under the search bar:
+				// the restart is one click from where updates are managed.
+				settingsSep(c, "ready")
+				settingsRow(c, "ready", l.UpdateReady(), "", func() {
+					settingsButton(c, "restart", l.PanelRestart(), true, relaunchApp).Label(l.PanelRestartLabel())
+				})
+			}
 		})
 	})
 

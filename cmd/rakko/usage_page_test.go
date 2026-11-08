@@ -565,7 +565,7 @@ func TestUsageQuotaCardSettings(t *testing.T) {
 func TestUsageSettingsSection(t *testing.T) {
 	stubSettingsSeams(t, false, nil, nil)
 	a, view := newSettingsShelf(t)
-	openSettingsPage(t, view, "AI 用量")
+	openSettingsPage(t, view, "AI")
 	for _, want := range []string{
 		"AI 用量", "在刘海里显示 AI 用量", "套餐额度",
 		"Claude Code", "Codex", "额度显示", "已用", "剩余",
@@ -621,7 +621,7 @@ func TestUsageSettingsSection(t *testing.T) {
 func TestUsageSettingsQuotaLockedWhileOff(t *testing.T) {
 	stubSettingsSeams(t, false, nil, nil)
 	a, view := newSettingsShelf(t) // AIUsage.Enabled defaults to false
-	openSettingsPage(t, view, "AI 用量")
+	openSettingsPage(t, view, "AI")
 	before := a.settings.AIUsage
 	clickVisible(t, view, "Codex")
 	if a.settings.AIUsage != before {
@@ -651,7 +651,7 @@ func TestUsageSettingsQuotaCaption(t *testing.T) {
 	now := time.Date(2026, 10, 19, 12, 0, 0, 0, time.Local)
 	a.usage = newUsageFeature(a, usageDeps{now: func() time.Time { return now }})
 	a.usage.quota[quotaIndex(aiusage.ToolCodex)].latest = okQuota(aiusage.ToolCodex, "Plus", now)
-	openSettingsPage(t, view, "AI 用量")
+	openSettingsPage(t, view, "AI")
 	if !view.HasText("Plus") {
 		t.Fatalf("plan caption missing; texts=%v", view.Texts())
 	}

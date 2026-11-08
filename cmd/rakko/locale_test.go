@@ -147,7 +147,7 @@ func TestEnglishSettingsWindowHasNoChinese(t *testing.T) {
 	joined := strings.Join(view.Texts(), "\n")
 	for _, want := range []string{
 		l.SettingsAboutPage(), l.SettingsAboutVersion(appVersion(), runtime.GOARCH),
-		l.SettingsOpenDataFolder(),
+		l.SettingsOpenDataFolder(), l.SettingsAutoCheckRow(),
 	} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("settings: %q missing from the English About page", want)
@@ -155,7 +155,7 @@ func TestEnglishSettingsWindowHasNoChinese(t *testing.T) {
 	}
 	openSettingsPage(t, view, l.General())
 	for _, want := range []string{
-		l.SettingsLoginRow(), l.SettingsAutoCheckRow(), l.LanguageRow(),
+		l.SettingsLoginRow(), l.LanguageRow(),
 		l.LanguageFollowSystem(), l.LanguageEnglish(),
 	} {
 		if !strings.Contains(strings.Join(view.Texts(), "\n"), want) {
