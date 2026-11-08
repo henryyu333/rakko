@@ -145,13 +145,13 @@ func (a *shelf) approvalCard(c *ui.Context, shellW, shellH, k float32, ap *appro
 		Padding(top, approvalPadX, padBot, approvalPadX).Gap(approvalGap).
 		Clip().Opacity(min(max(k*k, 0), 1)).Label(approvalStatusLine(l, ap, now))
 	card.Children(func() {
-		a.approvalRow1(c, shellW, ap, now)
+		a.approvalRow1(c, ap, now)
 		a.approvalSentence(c, ap)
 		if len(ap.analysis.Risks) > 0 {
 			a.approvalRisks(c, ap)
 		}
-		a.approvalDetail(c, ap, now)
-		a.approvalTail(c, shellW, ap, now)
+		a.approvalDetail(c, ap)
+		a.approvalTail(c, ap, now)
 	})
 	// The age and the armed window are time-driven.
 	if ap.state.active() {
@@ -199,7 +199,7 @@ func approvalStatusLine(l locales.Messages, ap *approval, now time.Time) string 
 	return l.LiveStatusAgentAsk(ap.ask.Tool.Name(), what) + " · " + l.LiveApprovalAge(age)
 }
 
-func (a *shelf) approvalRow1(c *ui.Context, shellW float32, ap *approval, now time.Time) {
+func (a *shelf) approvalRow1(c *ui.Context, ap *approval, now time.Time) {
 	l := loc(c)
 	age := int(now.Sub(ap.at).Seconds())
 	ageColor := approvalAgeColor(age)
@@ -253,7 +253,7 @@ func (a *shelf) approvalRisks(c *ui.Context, ap *approval) {
 
 // approvalDetail is the collapsed one-line block or the expanded raw data.
 // Clicking it never decides anything.
-func (a *shelf) approvalDetail(c *ui.Context, ap *approval, now time.Time) {
+func (a *shelf) approvalDetail(c *ui.Context, ap *approval) {
 	l := loc(c)
 	h := ap.detailHeight()
 	bg := fill1
@@ -348,7 +348,7 @@ func (a *shelf) approvalFiles(c *ui.Context, ap *approval) {
 }
 
 // approvalTail is the buttons, the deny input or the result line.
-func (a *shelf) approvalTail(c *ui.Context, shellW float32, ap *approval, now time.Time) {
+func (a *shelf) approvalTail(c *ui.Context, ap *approval, now time.Time) {
 	l := loc(c)
 	f := a.approvalFeature()
 	switch ap.state {
@@ -359,10 +359,9 @@ func (a *shelf) approvalTail(c *ui.Context, shellW float32, ap *approval, now ti
 	if ap.state == approvalDenying {
 		column := ui.Column(c.Key("approval-deny")).FillWidth().Gap(approvalGap)
 		column.Children(func() {
-			input := ui.TextInput(c, &ap.reason).FillWidth().Height(approvalBtnH).
+			ui.TextInput(c, &ap.reason).FillWidth().Height(approvalBtnH).
 				FontSize(13).Padding(0, 10).Radius(approvalBtnR).
 				Background(fill1).Placeholder(l.LiveApprovalReason()).Focus()
-			_ = input
 			row := ui.Row(c.Key("approval-deny-row")).FillWidth().Gap(8).Justify(ui.End)
 			row.Children(func() {
 				if approvalTextButton(c, "approval-cancel", l.LiveApprovalCancel(), ink2).Clicked() {
