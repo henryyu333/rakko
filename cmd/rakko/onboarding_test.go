@@ -494,11 +494,14 @@ func TestOnboardingMoveKeySettlesTheBundle(t *testing.T) {
 		t.Fatalf("step = %s, want the move", a.onb.current())
 	}
 
+	// The move runs off the main thread and hands its results back through
+	// the dispatch seam; the test plays the main thread by pumping them.
+	queue := make(chan func(), 8)
 	oldExe, oldApps, oldDispatch, oldAfter := onbExecutable, onbApplicationsDir, onbMoveDispatch, onbMoveAfterFunc
 	oldPlan, oldQuit := onbOpenPlan, onbQuit
 	onbExecutable = func() (string, error) { return exe, nil }
 	onbApplicationsDir = apps
-	onbMoveDispatch = func(fn func()) { fn() }
+	onbMoveDispatch = func(fn func()) { queue <- fn }
 	onbMoveAfterFunc = func(_ time.Duration, fn func()) permissionTimer {
 		fn()
 		return &fakePermissionTimer{}
@@ -513,23 +516,27 @@ func TestOnboardingMoveKeySettlesTheBundle(t *testing.T) {
 	})
 
 	a.onboardingKey("Enter")
-	dest := filepath.Join(apps, newBundleName)
-	moved := false
-	for range 60 {
-		if _, err := os.Stat(dest); err == nil && a.onb.moved {
-			moved = true
-			break
+	deadline := time.After(10 * time.Second)
+	for !quit {
+		select {
+		case fn := <-queue:
+			fn()
+		case <-deadline:
+			t.Fatalf("the move never finished; moveErr=%v", a.onb.moveErr)
 		}
-		time.Sleep(50 * time.Millisecond)
 	}
-	if !moved {
-		t.Fatalf("the move never ran; moveErr=%v", a.onb.moveErr)
+	dest := filepath.Join(apps, newBundleName)
+	if _, err := os.Stat(dest); err != nil {
+		t.Fatalf("the bundle did not land: %v (moveErr=%v)", err, a.onb.moveErr)
 	}
-	if !opened || !quit {
-		t.Fatalf("the move did not reopen the app: opened=%v quit=%v", opened, quit)
+	if !a.onb.moved {
+		t.Fatal("the guide does not know the move succeeded")
 	}
-	if want := filepath.Join(dest, "Contents", "MacOS", "Rakko"); !strings.Contains(strings.Join(plan.Args, " "), dest) {
-		t.Fatalf("the relaunch plan does not name the moved bundle: %+v (want %s)", plan, want)
+	if !opened {
+		t.Fatal("the move did not reopen the app")
+	}
+	if !strings.Contains(strings.Join(plan.Args, " "), dest) {
+		t.Fatalf("the relaunch plan does not name the moved bundle: %+v", plan)
 	}
 	if a.settings.Onboarding.Step != onbStepPerms {
 		t.Fatalf("the step was not persisted before the relaunch: %q", a.settings.Onboarding.Step)
