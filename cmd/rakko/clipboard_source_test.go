@@ -80,3 +80,16 @@ func TestClipboardSourceAdvanceDropsSeenSwitches(t *testing.T) {
 		t.Fatalf("source = %q, want the current app", got)
 	}
 }
+
+// TestClipboardSourceSelfCopyHasNoSource: a copy made while Rakko itself
+// was frontmost records no source, matching the old direct comparison.
+func TestClipboardSourceSelfCopyHasNoSource(t *testing.T) {
+	now := time.Now()
+	m := &clipboardModule{
+		tracked: true, front: "com.example.Editor", lastPoll: now.Add(-100 * time.Millisecond),
+		active: []clipActivation{{at: now.Add(-40 * time.Millisecond), prev: "", next: "com.example.Editor"}},
+	}
+	if got := m.sourceFor(now); got != "" {
+		t.Fatalf("source = %q, want empty for a self copy", got)
+	}
+}

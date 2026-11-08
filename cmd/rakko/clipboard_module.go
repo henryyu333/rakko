@@ -126,7 +126,8 @@ func (m *clipboardModule) stop() {
 // before it. Runs on the main thread from NSWorkspace's notification.
 func (m *clipboardModule) noteActivation(now time.Time) {
 	bundleID, _ := mac.FrontmostApp()
-	if bundleID == "" || bundleID == m.front {
+	bundleID = captureSource(mac.FrontmostPID(), mac.OwnPID(), bundleID)
+	if bundleID == m.front {
 		return
 	}
 	m.active = append(m.active, clipActivation{at: now, prev: m.front, next: bundleID})
@@ -145,15 +146,11 @@ func (m *clipboardModule) sourceFor(now time.Time) string {
 	if !m.tracked {
 		return m.board.sourceApp()
 	}
-	for i, ev := range m.active {
+	for _, ev := range m.active {
 		if ev.at.After(m.lastPoll) && !ev.at.After(now) {
-			if ev.prev != "" {
-				return ev.prev
-			}
-			if i+1 < len(m.active) {
-				return m.active[i+1].next
-			}
-			return ev.next
+			// prev may be "" when Rakko itself was frontmost: the copy
+			// then has no source app, exactly like the old direct read.
+			return ev.prev
 		}
 	}
 	if m.front != "" {
