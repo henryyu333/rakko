@@ -533,8 +533,7 @@ func (a *shelf) dropTrayCell(c *ui.Context, paths []string) {
 		if otter {
 			a.startDropCatch(row)
 		}
-		a.receive(drop.Data)
-		if a.onboardingPending() {
+		if err := a.receive(drop.Data); err == nil && a.onboardingPending() {
 			a.onboardingCatch()
 		}
 	}

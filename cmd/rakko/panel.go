@@ -968,7 +968,11 @@ func (a *shelf) view(c *ui.Context) {
 	if drop, ok := ui.DropData(zone, opts); ok {
 		a.drop.done = true
 		if !a.homeTakesNoDrop() {
-			a.receive(drop.Data)
+			if err := a.receive(drop.Data); err == nil && a.onboardingPending() {
+				// A real file released anywhere on the guide's page
+				// answers its try step, like a release on the tray row.
+				a.onboardingCatch()
+			}
 		}
 		if !a.visible {
 			a.show(false)
