@@ -256,10 +256,11 @@ func galleryItems() []galleryItem {
 	items = append(items, galleryGroupM()...)
 	items = append(items, galleryGroupU()...)
 	items = append(items, galleryGroupN()...)
+	items = append(items, galleryGroupV()...)
 	return items
 }
 
-// --- N: agent approvals ---
+// --- V: agent approvals ---
 
 // galleryQuote writes a string as a JSON literal for a fixture payload.
 func galleryQuote(s string) string {
@@ -329,24 +330,24 @@ func galleryApproval(kind string, island bool) func(t *testing.T, lang string) g
 	}
 }
 
-func galleryGroupN() []galleryItem {
+func galleryGroupV() []galleryItem {
 	const g = "Agent 审批"
 	plain := galleryApproval("plain", false)
 	return []galleryItem{
-		{ID: "N1", Group: g, Title: "审批卡", State: "无风险 · 单击允许", Notch: true, Build: plain},
-		{ID: "N2", Group: g, Title: "审批卡", State: "有风险 · 按住允许 63%", Notch: true, Build: galleryApproval("hold", false)},
-		{ID: "N3", Group: g, Title: "审批卡", State: "已等 33 秒 · 警示色", Notch: true, Build: galleryApproval("late", false)},
-		{ID: "N4", Group: g, Title: "审批卡", State: "已超时 · 交回终端", Notch: true, Build: galleryApproval("expired", false)},
-		{ID: "N5", Group: g, Title: "审批卡", State: "已拒绝", Notch: true, Build: galleryApproval("denied", false)},
-		{ID: "N6", Group: g, Title: "审批卡", State: "展开 · 文件列表与增删行", Notch: true, Build: galleryApproval("expanded", false)},
-		{ID: "N7", Group: g, Title: "审批卡", State: "排队 · +2", Notch: true, Build: galleryApproval("queue", false)},
-		{ID: "N8", Group: g, Title: "审批卡", State: "灵动岛 · 无风险", Build: galleryApproval("plain", true)},
-		{ID: "N9", Group: g, Title: "审批卡", State: "灵动岛 · 有风险按住", Build: galleryApproval("hold", true)},
-		{ID: "N10", Group: g, Title: "审批卡", State: "灵动岛 · 已等 33 秒", Build: galleryApproval("late", true)},
-		{ID: "N11", Group: g, Title: "审批卡", State: "灵动岛 · 已超时", Build: galleryApproval("expired", true)},
-		{ID: "N12", Group: g, Title: "审批卡", State: "灵动岛 · 已拒绝", Build: galleryApproval("denied", true)},
-		{ID: "N13", Group: g, Title: "审批卡", State: "灵动岛 · 展开文件列表", Build: galleryApproval("expanded", true)},
-		{ID: "N14", Group: g, Title: "审批卡", State: "灵动岛 · +2 排队", Build: galleryApproval("queue", true)},
+		{ID: "V1", Group: g, Title: "审批卡", State: "无风险 · 单击允许", Notch: true, Build: plain},
+		{ID: "V2", Group: g, Title: "审批卡", State: "有风险 · 按住允许 63%", Notch: true, Build: galleryApproval("hold", false)},
+		{ID: "V3", Group: g, Title: "审批卡", State: "已等 33 秒 · 警示色", Notch: true, Build: galleryApproval("late", false)},
+		{ID: "V4", Group: g, Title: "审批卡", State: "已超时 · 交回终端", Notch: true, Build: galleryApproval("expired", false)},
+		{ID: "V5", Group: g, Title: "审批卡", State: "已拒绝", Notch: true, Build: galleryApproval("denied", false)},
+		{ID: "V6", Group: g, Title: "审批卡", State: "展开 · 文件列表与增删行", Notch: true, Build: galleryApproval("expanded", false)},
+		{ID: "V7", Group: g, Title: "审批卡", State: "排队 · +2", Notch: true, Build: galleryApproval("queue", false)},
+		{ID: "V8", Group: g, Title: "审批卡", State: "灵动岛 · 无风险", Build: galleryApproval("plain", true)},
+		{ID: "V9", Group: g, Title: "审批卡", State: "灵动岛 · 有风险按住", Build: galleryApproval("hold", true)},
+		{ID: "V10", Group: g, Title: "审批卡", State: "灵动岛 · 已等 33 秒", Build: galleryApproval("late", true)},
+		{ID: "V11", Group: g, Title: "审批卡", State: "灵动岛 · 已超时", Build: galleryApproval("expired", true)},
+		{ID: "V12", Group: g, Title: "审批卡", State: "灵动岛 · 已拒绝", Build: galleryApproval("denied", true)},
+		{ID: "V13", Group: g, Title: "审批卡", State: "灵动岛 · 展开文件列表", Build: galleryApproval("expanded", true)},
+		{ID: "V14", Group: g, Title: "审批卡", State: "灵动岛 · +2 排队", Build: galleryApproval("queue", true)},
 	}
 }
 

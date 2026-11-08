@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"rakko/internal/agentnotify"
+	"rakko/internal/settings"
 	"rakko/locales"
 )
 
@@ -339,6 +340,36 @@ func TestApprovalSwitchOffPassesWaiting(t *testing.T) {
 	}
 	if ev, ok := a.liveNow(time.Now(), true); ok {
 		t.Fatalf("card survived switch-off: %+v", ev)
+	}
+}
+
+// The first-launch guide keeps live notices away (liveAllow is false and
+// the panel opens on the guide), but an agent waiting for permission must
+// still take the notch: the hook is blocked until the card is answered.
+func TestApprovalDuringOnboarding(t *testing.T) {
+	a, f := approvalTestShelf(t)
+	a.settings.Onboarding = settings.OnboardingSettings{Pending: true}
+	if a.liveAllow() {
+		t.Fatal("the guide did not suppress live activities")
+	}
+	ap := testApproval(t, testID(93), "claude", `{"command":"ls"}`)
+	f.enqueue(ap)
+	if ev, ok := a.liveNow(time.Now(), a.liveAllow()); !ok || ev.kind != liveAgentAsk || ev.ask != ap {
+		t.Fatalf("the card did not appear during the guide: %+v ok=%v", ev, ok)
+	}
+	f.decide(ap.id, agentnotify.DecisionAllow, "")
+
+	// If the guide is open when the request arrives, it folds for the card
+	// and stays folded afterwards, so the user can finish the guide on the
+	// next click instead of being trapped behind a waiting hook.
+	a.visible, a.tab, a.progress = true, pageOnboarding, 0
+	second := testApproval(t, testID(94), "claude", `{"command":"pwd"}`)
+	f.enqueue(second)
+	if a.visible {
+		t.Fatal("the guide stayed open over a permission request")
+	}
+	if ev, ok := a.liveNow(time.Now(), a.liveAllow()); !ok || ev.kind != liveAgentAsk || ev.ask != second {
+		t.Fatalf("the card did not replace the open guide: %+v ok=%v", ev, ok)
 	}
 }
 
