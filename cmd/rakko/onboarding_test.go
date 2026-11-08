@@ -408,17 +408,19 @@ func TestOnboardingSampleIsRemovableAndNamedForItsDay(t *testing.T) {
 func TestOnboardingIsOwedOnlyForAFreshInstall(t *testing.T) {
 	const broken = "settings.json is not valid JSON"
 	for _, tt := range []struct {
-		name  string
-		fresh bool
-		err   error
-		want  bool
+		name        string
+		fresh, save bool
+		err         error
+		want        bool
 	}{
-		{"a fresh install", true, nil, true},
-		{"an upgraded install", false, nil, false},
-		{"a fresh install whose file could not be made", true, errors.New(broken), false},
-		{"an upgraded install with a broken file", false, errors.New(broken), false},
+		{"a fresh install", true, false, nil, true},
+		{"an upgraded install", false, false, nil, false},
+		{"a relaunch mid-guide", false, true, nil, true},
+		{"a fresh install whose file could not be made", true, false, errors.New(broken), false},
+		{"an upgraded install with a broken file", false, false, errors.New(broken), false},
+		{"a mid-guide file that cannot be read", false, true, errors.New(broken), false},
 	} {
-		if got := onboardingOwed(tt.fresh, tt.err); got != tt.want {
+		if got := onboardingOwed(tt.fresh, tt.err, tt.save); got != tt.want {
 			t.Errorf("%s: onboardingOwed = %v, want %v", tt.name, got, tt.want)
 		}
 	}
@@ -466,5 +468,70 @@ func TestRunLocationFollowsALinkedHome(t *testing.T) {
 	}
 	if got := runLocation(exe, link); got != originDownloads {
 		t.Fatalf("a linked home read as %v, want Downloads", got)
+	}
+}
+
+// ⏎ / → on the move step runs the move itself — the primary button's
+// action — and the app reopens from the new bundle at the permissions.
+func TestOnboardingMoveKeySettlesTheBundle(t *testing.T) {
+	tmp := t.TempDir()
+	bundle := filepath.Join(tmp, "Downloads", newBundleName)
+	exe := filepath.Join(bundle, "Contents", "MacOS", "Rakko")
+	if err := os.MkdirAll(filepath.Dir(exe), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(exe, []byte("x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	apps := filepath.Join(tmp, "Applications")
+	if err := os.MkdirAll(apps, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	a, _ := onboardingShelf(t)
+	a.onb.origin = originDownloads
+	a.onb.step = 1
+	if a.onb.current() != onbStepMove {
+		t.Fatalf("step = %s, want the move", a.onb.current())
+	}
+
+	oldExe, oldApps, oldDispatch, oldAfter := onbExecutable, onbApplicationsDir, onbMoveDispatch, onbMoveAfterFunc
+	oldPlan, oldQuit := onbOpenPlan, onbQuit
+	onbExecutable = func() (string, error) { return exe, nil }
+	onbApplicationsDir = apps
+	onbMoveDispatch = func(fn func()) { fn() }
+	onbMoveAfterFunc = func(_ time.Duration, fn func()) permissionTimer {
+		fn()
+		return &fakePermissionTimer{}
+	}
+	var plan relaunchPlan
+	opened, quit := false, false
+	onbOpenPlan = func(p relaunchPlan) error { opened, plan = true, p; return nil }
+	onbQuit = func() { quit = true }
+	t.Cleanup(func() {
+		onbExecutable, onbApplicationsDir, onbMoveDispatch, onbMoveAfterFunc = oldExe, oldApps, oldDispatch, oldAfter
+		onbOpenPlan, onbQuit = oldPlan, oldQuit
+	})
+
+	a.onboardingKey("Enter")
+	dest := filepath.Join(apps, newBundleName)
+	moved := false
+	for range 60 {
+		if _, err := os.Stat(dest); err == nil && a.onb.moved {
+			moved = true
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if !moved {
+		t.Fatalf("the move never ran; moveErr=%v", a.onb.moveErr)
+	}
+	if !opened || !quit {
+		t.Fatalf("the move did not reopen the app: opened=%v quit=%v", opened, quit)
+	}
+	if want := filepath.Join(dest, "Contents", "MacOS", "Rakko"); !strings.Contains(strings.Join(plan.Args, " "), dest) {
+		t.Fatalf("the relaunch plan does not name the moved bundle: %+v (want %s)", plan, want)
+	}
+	if a.settings.Onboarding.Step != onbStepPerms {
+		t.Fatalf("the step was not persisted before the relaunch: %q", a.settings.Onboarding.Step)
 	}
 }

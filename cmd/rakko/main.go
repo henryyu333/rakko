@@ -114,7 +114,7 @@ func main() {
 	// guide; an upgraded install always has the file. A broken read keeps
 	// the flag off too — that file is never rewritten behind the user's
 	// back, so nothing may claim the install is new.
-	prefs.Onboarding.Pending = onboardingOwed(freshInstall, perr)
+	prefs.Onboarding.Pending = onboardingOwed(freshInstall, perr, prefs.Onboarding.Pending)
 	a := &shelf{store: s, settings: prefs, dataDir: *dataDir, stop: make(chan struct{}), thumbnails: make(map[string]*ui.Bitmap), thumbPending: make(map[string]bool)}
 	if perr != nil {
 		a.settingsBroken = true

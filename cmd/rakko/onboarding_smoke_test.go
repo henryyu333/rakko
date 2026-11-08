@@ -17,6 +17,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"image/png"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -46,7 +47,10 @@ func TestOnboardingFirstLaunchNative(t *testing.T) {
 	screenH := float64(primary.Bounds.Y + primary.Bounds.Height)
 	// The panel follows the pointer's display; park the pointer on the
 	// primary one, off the notch itself.
-	movePointer(float32(primary.Bounds.X)+float32(primary.Bounds.Width)/2, float32(primary.Bounds.Y)+120)
+	want := mygo.Point{X: int(primary.Bounds.X) + int(primary.Bounds.Width)/2, Y: int(primary.Bounds.Y) + 120}
+	movePointer(float32(want.X), float32(want.Y))
+	time.Sleep(300 * time.Millisecond)
+	t.Logf("primary=%+v cursor=%+v want=%+v displays=%+v", primary.Bounds, mygo.Screen.CursorScreenPoint(), want, displayBounds())
 
 	// A copy that already lives in an Applications folder: three steps.
 	tmp := t.TempDir()
@@ -66,10 +70,15 @@ func TestOnboardingFirstLaunchNative(t *testing.T) {
 
 	// Drag the sample chip into the panel: the real drag path, then the
 	// file lands in the tray. A click is the fallback the design offers.
+	// The shell's place inside the window differs by display (a notchless
+	// screen hangs the panel under the menu bar), so it is measured from
+	// a capture instead of assumed.
+	shell := shellRect(t, run.shot(t, "native-onboarding-try"), run.frame)
+	t.Logf("shell in window %+v", shell)
 	chip := chipRect(t)
-	cx := float32(run.frame.X) + chip.X + chip.W/2
-	cy := float32(run.frame.Y) + chip.Y + chip.H/2
-	run.drag(t, cx, cy, float32(run.frame.X)+float32(run.frame.Width)/2, float32(run.frame.Y+run.frame.Height)-40)
+	cx := float32(run.frame.X) + shell.X + chip.X + chip.W/2
+	cy := float32(run.frame.Y) + shell.Y + chip.Y + chip.H/2
+	run.drag(t, cx, cy, float32(run.frame.X)+shell.X+shell.W/2, float32(run.frame.Y)+shell.Y+shell.H-40)
 	if !waitTrayItems(t, data, 1, 3*time.Second) {
 		run.click(t, cx, cy)
 		if !waitTrayItems(t, data, 1, 3*time.Second) {
@@ -107,8 +116,8 @@ func TestOnboardingFirstLaunchNative(t *testing.T) {
 	run2.press(t, 36)
 	time.Sleep(700 * time.Millisecond)
 	run2.shot(t, "native-onboarding-downloads-move")
-	// The primary button on the move step runs the move.
-	run2.click(t, float32(run2.frame.X+run2.frame.Width)-72, float32(run2.frame.Y+run2.frame.Height)-27)
+	// ⏎ runs the move step's primary action, the same as the button.
+	run2.press(t, 36)
 	moved := waitFor(t, 25*time.Second, func() bool {
 		_, err := os.Stat(filepath.Join(apps2, newBundleName))
 		return err == nil
@@ -144,6 +153,10 @@ func TestOnboardingFirstLaunchNative(t *testing.T) {
 	}
 	defer relaunched.stop(t)
 	time.Sleep(1200 * time.Millisecond)
+	if args, err := exec.Command("ps", "-o", "command=", "-p", fmt.Sprint(relaunched.pid)).Output(); err == nil {
+		t.Logf("relaunched pid %d: %s", relaunched.pid, strings.TrimSpace(string(args)))
+	}
+	t.Logf("relaunched win=%d frame=%+v", relaunched.win, relaunched.frame)
 	relaunched.shot(t, "native-onboarding-after-move")
 	saved2, err := settings.Load(data2)
 	if err != nil {
@@ -272,12 +285,21 @@ func launchRakko(t *testing.T, bundle, data, appsDir string) *appRun {
 		t.Fatalf("the notch window never appeared; log:\n%s", r.log())
 	}
 	r.win, r.frame = w.number, w.frame
+	t.Logf("window %d frame=%+v", r.win, r.frame)
 	primary := mygo.Screen.PrimaryDisplay()
 	r.screenH = float64(primary.Bounds.Y + primary.Bounds.Height)
 	// The opening runs notch -> search bar -> page; the guide's page draws
 	// only at the end of that flight.
 	time.Sleep(1800 * time.Millisecond)
 	return r
+}
+
+func displayBounds() []mygo.Rectangle {
+	var out []mygo.Rectangle
+	for _, d := range mygo.Screen.Displays() {
+		out = append(out, d.Bounds)
+	}
+	return out
 }
 
 type windowInfo struct {
@@ -322,10 +344,20 @@ func (r *appRun) ownsPoint(x, y float32) bool {
 	return hit == r.win
 }
 
+// mustOwn waits for WindowServer to route the point to this app's window.
+// Another Rakko at the same notch can briefly sit in front; the press is
+// never posted elsewhere.
 func (r *appRun) mustOwn(x, y float32, what string) {
 	r.t.Helper()
-	if !r.ownsPoint(x, y) {
-		r.t.Fatalf("%s: the point (%.0f,%.0f) is not this app's window %d; refusing to post", what, x, y, r.win)
+	deadline := time.Now().Add(4 * time.Second)
+	for {
+		if r.ownsPoint(x, y) {
+			return
+		}
+		if time.Now().After(deadline) {
+			r.t.Fatalf("%s: the point (%.0f,%.0f) is not this app's window %d; refusing to post", what, x, y, r.win)
+		}
+		time.Sleep(200 * time.Millisecond)
 	}
 }
 
@@ -368,6 +400,58 @@ func chipRect(t *testing.T) ui.Rect {
 		t.Fatalf("the chip %q is not in the layout", name)
 	}
 	return r
+}
+
+// shellRect is where the 440 x 250 page shell sits inside a window
+// capture: the opaque bounding box of the shot, in window points. The
+// transparent envelope around it depends on the display (a notch vs. the
+// menu bar), so the smoke measures rather than assumes.
+type shellBox struct {
+	X, Y, W, H float32
+}
+
+func shellRect(t *testing.T, shot string, frame mygo.Rectangle) shellBox {
+	t.Helper()
+	f, err := os.Open(shot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	img, decErr := png.Decode(f)
+	f.Close()
+	if decErr != nil {
+		t.Fatalf("decoding %s: %v", shot, decErr)
+	}
+	minX, minY, maxX, maxY := img.Bounds().Max.X, img.Bounds().Max.Y, 0, 0
+	for y := img.Bounds().Min.Y; y < img.Bounds().Max.Y; y++ {
+		for x := img.Bounds().Min.X; x < img.Bounds().Max.X; x++ {
+			r, _, _, a := img.At(x, y).RGBA()
+			if r == 0 && a == 0 {
+				continue
+			}
+			if x < minX {
+				minX = x
+			}
+			if x > maxX {
+				maxX = x
+			}
+			if y < minY {
+				minY = y
+			}
+			if y > maxY {
+				maxY = y
+			}
+		}
+	}
+	if maxX <= minX || maxY <= minY {
+		t.Fatalf("%s: the window capture is empty", shot)
+	}
+	scale := float64(img.Bounds().Dx()) / float64(frame.Width)
+	return shellBox{
+		X: float32(float64(minX) / scale),
+		Y: float32(float64(minY) / scale),
+		W: float32(float64(maxX+1-minX) / scale),
+		H: float32(float64(maxY+1-minY) / scale),
+	}
 }
 
 func waitFor(t *testing.T, d time.Duration, ok func() bool) bool {

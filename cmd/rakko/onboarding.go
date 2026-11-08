@@ -183,12 +183,16 @@ func (a *shelf) saveOnboarding(step string) {
 	a.applySettings(next)
 }
 
-// onboardingOwed is the first-launch rule: the guide is owed only when the
-// launch found no settings.json at all (fresh) and the file it made — or
-// failed to read — is readable. A broken file is never rewritten behind the
-// user's back, so nothing may claim the install is new.
-func onboardingOwed(fresh bool, loadErr error) bool {
-	return fresh && loadErr == nil
+// onboardingOwed is the first-launch rule: the guide is owed when this
+// launch found no settings.json at all (a fresh install), or when the file
+// it read still says so — a move or a permission grant relaunches the app
+// mid-guide, and that launch must keep it. A file that could not be read
+// never claims either: it is never rewritten behind the user's back.
+func onboardingOwed(fresh bool, loadErr error, saved bool) bool {
+	if loadErr != nil {
+		return false
+	}
+	return fresh || saved
 }
 
 // onboardingPending reports whether the guide is owed: set by a fresh
@@ -770,7 +774,20 @@ func (a *shelf) onboardingKey(key string) {
 	case "Left":
 		a.onb.back()
 	case "Right", "Enter":
-		a.onb.next()
+		a.onb.primary()
+	}
+}
+
+// primary is what the primary button does, for → and ⏎: the move on the
+// step that offers it, 开始使用 on the finish block, otherwise the next step.
+func (o *onboardingFeature) primary() {
+	switch {
+	case o.last():
+		o.host.onboardingFinish()
+	case o.current() == onbStepMove && !o.moved:
+		o.host.onboardingMove()
+	default:
+		o.next()
 	}
 }
 
