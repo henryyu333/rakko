@@ -69,6 +69,10 @@ type Settings struct {
 	// agent turn on the notch. Off by default: while it is on, Rakko's hook
 	// entries live in the installed agents' own configuration files.
 	AgentNotify AgentNotifySettings `json:"agentNotify"`
+	// Approval is the 设置 → AI 用量 group that puts an agent's permission
+	// requests on the notch. Off by default and independent of AgentNotify:
+	// it is a separate opt-in writing its own hook entries.
+	Approval ApprovalSettings `json:"approval"`
 	// Lyrics remembers whether the home page's lyrics column is open (the
 	// player's lyrics button). A missing object keeps it closed: nothing is
 	// asked of lrclib.net until the user opens it.
@@ -252,6 +256,60 @@ func (s *AgentNotifySettings) pruneOff() {
 	s.Off = off
 }
 
+// ApprovalSettings is the approval object in settings.json. Enabled is off
+// for a fresh install. Off lists the tools whose approval row the user
+// switched off while the group switch stays on; empty means every detected
+// tool is on.
+type ApprovalSettings struct {
+	Enabled bool     `json:"enabled"`
+	Off     []string `json:"off,omitempty"`
+}
+
+// ToolOff reports whether the user switched one tool off on its own row.
+func (s ApprovalSettings) ToolOff(id string) bool {
+	for _, off := range s.Off {
+		if off == id {
+			return true
+		}
+	}
+	return false
+}
+
+// SetToolOn stores one tool's own approval switch.
+func (s *ApprovalSettings) SetToolOn(id string, on bool) {
+	off := make([]string, 0, len(s.Off)+1)
+	for _, v := range s.Off {
+		if v != id {
+			off = append(off, v)
+		}
+	}
+	if !on {
+		off = append(off, id)
+	}
+	if len(off) == 0 {
+		off = nil
+	}
+	s.Off = off
+}
+
+// pruneOff drops unknown and repeated tool ids, like AgentNotify's.
+func (s *ApprovalSettings) pruneOff() {
+	off := make([]string, 0, len(s.Off))
+	seen := make(map[string]bool, len(s.Off))
+	for _, id := range s.Off {
+		t := agentnotify.Tool(id)
+		if seen[id] || !t.Valid() || !t.Approvable() {
+			continue
+		}
+		seen[id] = true
+		off = append(off, id)
+	}
+	if len(off) == 0 {
+		off = nil
+	}
+	s.Off = off
+}
+
 // LyricsSettings is the lyrics object in settings.json: whether the home
 // page's lyrics column is open, which is also the only time it asks
 // lrclib.net for synced lyrics. Closed for a fresh install and for a file
@@ -375,6 +433,7 @@ func Default() Settings {
 			QuotaClaude: true,
 		},
 		AgentNotify: AgentNotifySettings{Enabled: false},
+		Approval:    ApprovalSettings{Enabled: false},
 		Pet:         PetSettings{Shown: true, Size: PetSizeMedium},
 		Weekly:      WeeklySettings{AppStats: false},
 		Shortcuts: ShortcutSettings{
@@ -424,6 +483,7 @@ func Load(dir string) (Settings, error) {
 	s.SearchMode = s.SearchMode.Normalized()
 	s.Pet.Size = s.Pet.Size.Normalized()
 	s.AgentNotify.pruneOff()
+	s.Approval.pruneOff()
 	s.PinnedApps = normalizePinnedApps(s.PinnedApps)
 	return s, nil
 }
