@@ -194,7 +194,7 @@ Requires a Mac with Apple Silicon (M1 or later) running macOS 13 or later. Intel
 1. Download **[Rakko.dmg](https://github.com/henryyu333/rakko/releases/latest/download/Rakko.dmg)**.
 2. Open the downloaded file and drag **Rakko** onto the **Applications** folder.
 3. Open Rakko from Applications. The first time, macOS will stop it — follow [First launch](#first-launch) below. You only do this once.
-4. Rakko lives in the menu bar, not the Dock. Hover the notch, or press `⌃⌥Space`. A fresh install opens a short guide in the notch the first time: where Rakko lives, the optional permissions, and dropping one file to try it — Skip or Esc leaves at any step. If Rakko is running from Downloads or the disk image, the guide offers Move to Applications (an older Rakko already there goes to the Trash first) and reopens from there. Updating from an earlier version never shows the guide.
+4. Rakko lives in the menu bar, not the Dock. Hover the notch, or press `⌃⌥Space`. A fresh install opens a short guide in the notch the first time: where Rakko lives and the optional permissions, ending with Start using Rakko — Skip or Esc leaves at any step. If Rakko is running from Downloads or the disk image, the guide offers Move to Applications (an older Rakko already there goes to the Trash first) and reopens from there. Updating from an earlier version never shows the guide.
 
 Prefer a zip? Every release on the [Releases page](https://github.com/henryyu333/rakko/releases/latest) also has `Rakko-<version>-macos-arm64.zip` and the `.dmg` of the same version.
 
@@ -478,7 +478,7 @@ Rakko 是住在 Mac 刘海里的工具：它把摄像头周围那块黑色刘海
 1. 下载 **[Rakko.dmg](https://github.com/henryyu333/rakko/releases/latest/download/Rakko.dmg)**。
 2. 打开下载好的文件，把 **Rakko** 拖到 **Applications（应用程序）** 文件夹上。
 3. 从“应用程序”里打开 Rakko。第一次打开会被系统拦下，按下面的[第一次打开](#第一次打开)操作即可，只需要做一次。
-4. Rakko 在屏幕顶部的菜单栏里，不在 Dock 上。把鼠标移到刘海上，或按 `⌃⌥Space`。全新安装第一次打开时，刘海里会走一段简短的引导：Rakko 住在哪、可选的系统权限、拖一个文件进来试试；任何一步都可以点「跳过」或按 Esc 离开。如果 Rakko 是从「下载」或磁盘映像里打开的，引导会提供「移到「应用程序」」（那里已有的旧 Rakko 会先移到废纸篓），然后从新位置重新打开。从旧版本升级的不会看到引导。
+4. Rakko 在屏幕顶部的菜单栏里，不在 Dock 上。把鼠标移到刘海上，或按 `⌃⌥Space`。全新安装第一次打开时，刘海里会走一段简短的引导：Rakko 住在哪、可选的系统权限，最后点「开始使用」；任何一步都可以点「跳过」或按 Esc 离开。如果 Rakko 是从「下载」或磁盘映像里打开的，引导会提供「移到「应用程序」」（那里已有的旧 Rakko 会先移到废纸篓），然后从新位置重新打开。从旧版本升级的不会看到引导。
 
 想要 zip 压缩包？[Releases 页面](https://github.com/henryyu333/rakko/releases/latest)的每个版本里也有同一版本的 `Rakko-<version>-macos-arm64.zip` 和 `.dmg`。
 
