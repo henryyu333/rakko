@@ -316,7 +316,7 @@ func TestForwarderWithoutAppIsSilentAndQuick(t *testing.T) {
 func TestForwarderDeliversToSocket(t *testing.T) {
 	dataDir := testDataDir(t)
 	got := make(chan Event, 1)
-	srv, err := Listen(dataDir, func(ev Event) { got <- ev })
+	srv, err := Listen(dataDir, func(ev Event) { got <- ev }, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -347,7 +347,7 @@ func TestForwarderIgnoresClaudeEntryInsideGrok(t *testing.T) {
 	t.Setenv("GROK_SESSION_ID", "grok-session")
 	dataDir := testDataDir(t)
 	got := make(chan Event, 1)
-	srv, err := Listen(dataDir, func(ev Event) { got <- ev })
+	srv, err := Listen(dataDir, func(ev Event) { got <- ev }, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -380,7 +380,7 @@ func TestDevinReportsItselfOnce(t *testing.T) {
 	t.Setenv("DEVIN_PROJECT_DIR", "/tmp/project")
 	dataDir := testDataDir(t)
 	got := make(chan Event, 2)
-	srv, err := Listen(dataDir, func(ev Event) { got <- ev })
+	srv, err := Listen(dataDir, func(ev Event) { got <- ev }, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

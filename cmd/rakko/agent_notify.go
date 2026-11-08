@@ -111,7 +111,7 @@ func (f *agentNotifyFeature) start() {
 	if f.srv != nil {
 		return
 	}
-	srv, err := agentnotify.Listen(f.dir, f.accept)
+	srv, err := agentnotify.Listen(f.dir, f.accept, nil)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if err != nil {

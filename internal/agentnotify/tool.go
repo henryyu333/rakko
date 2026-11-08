@@ -89,6 +89,29 @@ type spec struct {
 	// also lists other files an earlier switch-on may have written to;
 	// switching off cleans them too.
 	also func(home string) []string
+	// approve describes the tool's "approve for the user" channel. nil
+	// means the tool only announces completions.
+	approve *approveSpec
+}
+
+// approveSpec is one tool's approval surface: the event its hook entry
+// registers, the timeout written into that entry, and how the entry is
+// installed. The timeout is the outer wall of the three-level budget
+// (45 s card, 55 s client, 60 s hook).
+type approveSpec struct {
+	event   string
+	timeout int
+	// fallback is emitted by the installed shell command when the app
+	// binary is gone. Empty means "print nothing" (the tool's own flow).
+	fallback string
+	// config overrides the file an approve entry lives in. Empty uses the
+	// completion file (KindHooks / KindNamed).
+	config func(home string) string
+	// member is the named member for KindNamed tools.
+	member string
+	// module is the source file for module tools (Copilot's JSON hook file,
+	// opencode's plugin, pi's extension).
+	module string
 }
 
 // at resolves the file Rakko writes now, and whether it is bare.
@@ -158,8 +181,9 @@ var specs = []spec{
 		detect: func(home string) []string {
 			return paths(home, ".claude/projects", ".claude/history.jsonl", ".claude.json")
 		},
-		config: func(home string) string { return join(home, ".claude", "settings.json") },
-		events: []string{"UserPromptSubmit", "Stop"},
+		config:  func(home string) string { return join(home, ".claude", "settings.json") },
+		events:  []string{"UserPromptSubmit", "Stop"},
+		approve: &approveSpec{event: "PermissionRequest", timeout: approveTimeout},
 	},
 	{
 		tool: ToolCodex,
@@ -168,8 +192,9 @@ var specs = []spec{
 		detect: func(home string) []string {
 			return paths(codexHome(home), "sessions", "auth.json", "config.toml", ".codex-global-state.json")
 		},
-		config: func(home string) string { return join(codexHome(home), "hooks.json") },
-		events: []string{"UserPromptSubmit", "Stop"},
+		config:  func(home string) string { return join(codexHome(home), "hooks.json") },
+		events:  []string{"UserPromptSubmit", "Stop"},
+		approve: &approveSpec{event: "PermissionRequest", timeout: approveTimeout},
 	},
 	{
 		// Cursor (the editor and cursor-agent): ~/.cursor/hooks.json,
@@ -197,6 +222,13 @@ var specs = []spec{
 		},
 		config: func(home string) string { return join(home, ".copilot", "hooks", "rakko-agent-completion.json") },
 		module: copilotHooks,
+		approve: &approveSpec{
+			event: "permissionRequest", timeout: approveTimeout,
+			config: func(home string) string {
+				return join(home, ".copilot", "hooks", "rakko-agent-approval.json")
+			},
+			module: copilotApproveHooks,
+		},
 	},
 	{
 		// Devin CLI: Claude Code's hook format under the "hooks" key of its
@@ -207,8 +239,9 @@ var specs = []spec{
 		detect: func(home string) []string {
 			return paths(home, ".config/devin/config.json", ".config/devin/cli")
 		},
-		config: func(home string) string { return join(home, ".config", "devin", "config.json") },
-		events: []string{"UserPromptSubmit", "Stop"},
+		config:  func(home string) string { return join(home, ".config", "devin", "config.json") },
+		events:  []string{"UserPromptSubmit", "Stop"},
+		approve: &approveSpec{event: "PermissionRequest", timeout: approveTimeout},
 	},
 	{
 		tool: ToolGemini,
@@ -236,6 +269,10 @@ var specs = []spec{
 		config:   func(home string) string { return join(home, ".gemini", "config", "hooks.json") },
 		events:   []string{"Stop"},
 		eventArg: true,
+		approve: &approveSpec{
+			event: "PreToolUse", timeout: approveTimeout, fallback: `{"decision":"allow"}`,
+			member: "rakko-agent-approval",
+		},
 	},
 	{
 		tool: ToolOpencode,
@@ -248,6 +285,13 @@ var specs = []spec{
 			return join(home, ".config", "opencode", "plugins", "rakko-agent-completion.js")
 		},
 		module: opencodeModule,
+		approve: &approveSpec{
+			event: "evaluate", timeout: approveTimeout,
+			config: func(home string) string {
+				return join(home, ".config", "opencode", "plugins", "rakko-agent-approval.js")
+			},
+			module: opencodeApproveModule,
+		},
 	},
 	{
 		tool: ToolOmp,
@@ -272,6 +316,13 @@ var specs = []spec{
 			return join(home, ".pi", "agent", "extensions", "rakko-agent-completion.ts")
 		},
 		module: extensionModule,
+		approve: &approveSpec{
+			event: "tool_call", timeout: approveTimeout,
+			config: func(home string) string {
+				return join(home, ".pi", "agent", "extensions", "rakko-agent-approval.ts")
+			},
+			module: piApproveModule,
+		},
 	},
 	{
 		tool: ToolGrok,
@@ -291,8 +342,9 @@ var specs = []spec{
 		detect: func(home string) []string {
 			return paths(home, ".qwen/settings.json", ".qwen/oauth_creds.json", ".qwen/installation_id", ".qwen/tmp", ".qwen/projects")
 		},
-		config: func(home string) string { return join(home, ".qwen", "settings.json") },
-		events: []string{"UserPromptSubmit", "Stop"},
+		config:  func(home string) string { return join(home, ".qwen", "settings.json") },
+		events:  []string{"UserPromptSubmit", "Stop"},
+		approve: &approveSpec{event: "PermissionRequest", timeout: approveTimeout},
 	},
 	{
 		// Factory Droid reads ~/.factory/hooks.json (keyed by event at its
@@ -317,7 +369,8 @@ var specs = []spec{
 		also: func(home string) []string {
 			return paths(home, ".factory/hooks.json", ".factory/settings.json")
 		},
-		events: []string{"UserPromptSubmit", "Stop"},
+		events:  []string{"UserPromptSubmit", "Stop"},
+		approve: &approveSpec{event: "PreToolUse", timeout: approveTimeout},
 	},
 	{
 		// Kiro: a v1 hook file of Rakko's own in ~/.kiro/hooks.
@@ -353,6 +406,42 @@ func specFor(tool Tool) (spec, bool) {
 		}
 	}
 	return spec{}, false
+}
+
+// Approvable reports whether the tool has a channel Rakko can answer for
+// the user. Tools without one only announce completions.
+func (t Tool) Approvable() bool {
+	s, ok := specFor(t)
+	return ok && s.approve != nil
+}
+
+// ApproveEvent is the hook event the approval entry registers.
+func (t Tool) ApproveEvent() string {
+	if s, ok := specFor(t); ok && s.approve != nil {
+		return s.approve.event
+	}
+	return ""
+}
+
+// ApproveConfigPath is the file the approval entry lives in.
+func ApproveConfigPath(home string, t Tool) string {
+	s, ok := specFor(t)
+	if !ok || s.approve == nil {
+		return ""
+	}
+	if s.approve.config != nil {
+		return s.approve.config(home)
+	}
+	return s.config(home)
+}
+
+// ApproveDisplayPath is ApproveConfigPath with home written as "~".
+func ApproveDisplayPath(home string, t Tool) string {
+	p := ApproveConfigPath(home, t)
+	if home != "" && strings.HasPrefix(p, home+string(filepath.Separator)) {
+		return "~" + p[len(home):]
+	}
+	return p
 }
 
 // Tools lists the tools Rakko can announce, in settings order.

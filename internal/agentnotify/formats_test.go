@@ -144,7 +144,7 @@ func TestAntigravityOwnsOneNamedHook(t *testing.T) {
 func TestForwarderEventArgAndCursorFilters(t *testing.T) {
 	dataDir := testDataDir(t)
 	got := make(chan Event, 4)
-	srv, err := Listen(dataDir, func(ev Event) { got <- ev })
+	srv, err := Listen(dataDir, func(ev Event) { got <- ev }, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -285,7 +285,7 @@ func TestOffKeepsAUserMatcherGroup(t *testing.T) {
 func TestForwarderDropsBorrowedAndInterrupted(t *testing.T) {
 	dataDir := testDataDir(t)
 	got := make(chan Event, 4)
-	srv, err := Listen(dataDir, func(ev Event) { got <- ev })
+	srv, err := Listen(dataDir, func(ev Event) { got <- ev }, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
