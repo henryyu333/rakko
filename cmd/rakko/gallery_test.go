@@ -255,6 +255,7 @@ func galleryItems() []galleryItem {
 	items = append(items, galleryGroupL()...)
 	items = append(items, galleryGroupM()...)
 	items = append(items, galleryGroupU()...)
+	items = append(items, galleryGroupN()...)
 	return items
 }
 
@@ -2021,3 +2022,62 @@ func galleryGroupU() []galleryItem {
 	}
 	return items
 }
+
+// --- N: the first-launch guide ---
+
+func galleryGroupN() []galleryItem {
+	const g = "首次启动引导"
+	build := func(origin runOrigin, step int, tweak func(t *testing.T, o *onboardingFeature)) func(t *testing.T, lang string) galleryRender {
+		return func(t *testing.T, lang string) galleryRender {
+			a := motionShelf()
+			a.settings = settings.Default()
+			a.settings.Onboarding = settings.OnboardingSettings{Pending: true}
+			a.visible = true
+			o := &onboardingFeature{host: a, origin: origin}
+			o.step = min(max(step, 0), len(o.steps())-1)
+			if tweak != nil {
+				tweak(t, o)
+			}
+			a.onb = o
+			a.registerPage(o)
+			a.tab, a.tabFrom = pageOnboarding, pageOnboarding
+			return galleryRender{view: galleryPanel(t, lang, a, sheetW+2*earR, panelTestH)}
+		}
+	}
+	downloads := originDownloads
+	return []galleryItem{
+		{ID: "N1", Group: g, Title: "第一步", State: "住在刘海 · 中性水獭与快捷键", Build: build(originInstalled, 0, nil)},
+		{ID: "N2", Group: g, Title: "第二步", State: "从「下载」移入「应用程序」", Build: build(downloads, 1, nil)},
+		{ID: "N3", Group: g, Title: "第二步", State: "从磁盘映像移入 · 只读源", Build: build(originDiskImage, 1, nil)},
+		{ID: "N4", Group: g, Title: "第二步", State: "搬移中", Build: build(downloads, 1, func(_ *testing.T, o *onboardingFeature) { o.moving = true })},
+		{ID: "N5", Group: g, Title: "第二步", State: "已到位 · 重新打开", Build: build(downloads, 1, func(_ *testing.T, o *onboardingFeature) { o.moved = true })},
+		{ID: "N6", Group: g, Title: "第二步", State: "搬移失败 · 重试", Build: build(downloads, 1, func(_ *testing.T, o *onboardingFeature) {
+			o.moveErr = errGalleryMove
+		})},
+		{ID: "N7", Group: g, Title: "第三步", State: "权限 · 三项未开", Build: build(originInstalled, 1, nil)},
+		{ID: "N8", Group: g, Title: "第四步", State: "试一试 · 示例文件与演示", Build: build(originInstalled, 2, nil)},
+		{ID: "N9", Group: g, Title: "第四步", State: "拖到投放区 · 松开放入", Build: build(originInstalled, 2, func(_ *testing.T, o *onboardingFeature) { o.demoOn = true })},
+		{ID: "N10", Group: g, Title: "完成", State: "文件已在托盘 · 开始使用", Build: build(originInstalled, 2, func(_ *testing.T, o *onboardingFeature) {
+			o.tried = true
+		})},
+		{ID: "N11", Group: g, Title: "第三步", State: "权限 · 三项已开", Build: build(originInstalled, 1, func(t *testing.T, o *onboardingFeature) {
+			allPermissionsOn(t)
+		})},
+		{ID: "N12", Group: g, Title: "跳过", State: "完成胶囊 · 随时点刘海呼出", Notch: true, Build: galleryCapsule("随时点刘海呼出", "Click the notch anytime", statusInfo)},
+		{ID: "N13", Group: g, Title: "完成", State: "完成胶囊 · Rakko 已就绪", Notch: true, Build: galleryCapsule("Rakko 已就绪", "Rakko is ready", statusOK)},
+	}
+}
+
+// allPermissionsOn makes the three probes answer granted for one build.
+func allPermissionsOn(t *testing.T) {
+	t.Helper()
+	fda, ax, screen := fullDiskAccessProbe, accessibilityProbe, screenCaptureProbe
+	fullDiskAccessProbe = func() bool { return true }
+	accessibilityProbe = func() bool { return true }
+	screenCaptureProbe = func() bool { return true }
+	t.Cleanup(func() {
+		fullDiskAccessProbe, accessibilityProbe, screenCaptureProbe = fda, ax, screen
+	})
+}
+
+var errGalleryMove = errors.New("没有写入「应用程序」的权限")

@@ -579,5 +579,46 @@ func TestUpdateWindowKeys(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("saved update keys did not round-trip:\n got %+v\nwant %+v", got, want)
+}
+
+// Exists answers the bare fact without creating the file: the first-launch
+// check must run before Load, which writes the default file on a fresh
+// install. A file without the onboarding object — every install that
+// upgraded — is never read as an owed guide.
+func TestOnboardingExistsAndUpgradesAreNotFresh(t *testing.T) {
+	dir := t.TempDir()
+	if Exists(dir) {
+		t.Fatal("Exists reported a file before one was written")
+	}
+	if _, err := Load(dir); err != nil {
+		t.Fatal(err)
+	}
+	if !Exists(dir) {
+		t.Fatal("Load did not create settings.json")
+	}
+
+	upgrade := t.TempDir()
+	if err := os.WriteFile(filepath.Join(upgrade, FileName), []byte(`{"snapWindows": true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Load(upgrade)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Onboarding.Pending {
+		t.Fatal("an upgraded install reads as a fresh one")
+	}
+
+	saved := Default()
+	saved.Onboarding = OnboardingSettings{Pending: true, Step: "move"}
+	if err := Save(upgrade, saved); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(upgrade)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Onboarding.Pending || got.Onboarding.Step != "move" {
+		t.Fatalf("onboarding did not round-trip: %+v", got.Onboarding)
 	}
 }
