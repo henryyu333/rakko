@@ -28,6 +28,9 @@ func agentShelf(t *testing.T) (*shelf, string, string) {
 		t.Fatal(err)
 	}
 	home := t.TempDir()
+	// Codex can move its whole surface under $CODEX_HOME; a developer's real
+	// setting must not make a test inspect (or write) their configuration.
+	t.Setenv("CODEX_HOME", "")
 	origHome, origExe, origMain := agentNotifyHome, agentNotifyExe, agentRunOnMain
 	agentNotifyHome = func() (string, error) { return home, nil }
 	agentNotifyExe = func() (string, error) {
