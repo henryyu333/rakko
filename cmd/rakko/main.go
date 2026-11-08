@@ -108,10 +108,14 @@ func main() {
 			log.Printf("Rakko: 迁移前备份失败，已停止写入以免覆盖可恢复原件：%v", merr)
 		}
 	}
+	freshInstall := !settings.Exists(*dataDir)
 	prefs, perr := settings.Load(*dataDir)
+	// Only a launch that found no settings.json at all owes the first-launch
+	// guide; an upgraded install always has the file. A broken read keeps
+	// the flag off too — that file is never rewritten behind the user's
+	// back, so nothing may claim the install is new.
+	prefs.Onboarding.Pending = onboardingOwed(freshInstall, perr)
 	a := &shelf{store: s, settings: prefs, dataDir: *dataDir, stop: make(chan struct{}), thumbnails: make(map[string]*ui.Bitmap), thumbPending: make(map[string]bool)}
-	// 剪贴板文字限额来自设置；小于 1 的值由 store 回落到默认 30。
-	s.SetTextLimit(prefs.ClipboardLimit)
 	if perr != nil {
 		a.settingsBroken = true
 		a.notice(locales.In(resolveLanguage(prefs.Language, preferredLanguages())).StartupSettingsBroken(perr.Error()))
@@ -353,6 +357,17 @@ func (a *shelf) ready(show bool) {
 	a.registerPage(a.weekly)
 	a.modules = append(a.modules, a.weekly)
 	_, a.dragSerial = mac.DragState()
+	// The first-launch guide registers before the panel can open: a fresh
+	// install's flag is on already, and the page stays until finish/skip.
+	if a.onboardingPending() {
+		a.onb = newOnboarding(a)
+		a.registerPage(a.onb)
+		// Persist at once: a crash or force-quit before the first step
+		// change still resumes the guide instead of losing it.
+		next := a.settings
+		next.Onboarding.Step = a.onb.steps()[a.onb.step]
+		a.applySettings(next)
+	}
 	mygo.Screen.OnDisplaysChanged(func() {
 		// 常驻窗口跟随光标所在显示器重新定位（收起态无感）。
 		a.place(mygo.Screen.CursorScreenPoint())

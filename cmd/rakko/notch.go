@@ -1219,6 +1219,11 @@ func (a *shelf) show(edge bool) {
 	level := 1
 	a.tabAt = time.Time{}
 	switch {
+	case a.onboardingPending():
+		// The guide owns the panel while it is owed: every opening — the
+		// click, the hotkey, a drag hovering — lands on it, never on the
+		// search bar or another page.
+		level, a.tabFrom, a.tab = 2, pageOnboarding, pageOnboarding
 	case a.focusMode || a.ocrSheet:
 		// The caller already chose the page (the clipboard search, the
 		// recording card); it keeps it.
@@ -1273,6 +1278,8 @@ func (a *shelf) show(edge bool) {
 	if level == 1 && !a.snap.panel {
 		a.takeKeyboard()
 	}
+	// The guide holds its own keys while its page is the one on screen.
+	a.syncOnboardingKeys()
 }
 
 // Global hotkey seams: holdKeys/releaseKeys register and unregister the
@@ -1428,6 +1435,12 @@ func (a *shelf) escape() {
 			return
 		}
 	}
+	// The guide's Esc is its 跳过: the same fold to the notch, never a step
+	// back to a search bar it does not have.
+	if a.currentLevel() == 2 && a.currentPage().id() == pageOnboarding {
+		a.onboardingSkip()
+		return
+	}
 	// The report opens from Home, so its Esc step is back to Home rather than
 	// out to the search bar. Every other page backs out to the search bar.
 	if a.currentLevel() == 2 && a.currentPage().id() == pageWeekly {
@@ -1547,6 +1560,8 @@ func (a *shelf) hide(exit hideExit) {
 	// shell coming down.
 	a.beginSurfaceHold()
 	a.syncMousePassThrough()
+	// The guide's arrow keys leave with the panel they belong to.
+	a.syncOnboardingKeys()
 	// A suppressed drag is not pushed: the corridor parks with it.
 	a.syncDragGuard()
 	if restore {

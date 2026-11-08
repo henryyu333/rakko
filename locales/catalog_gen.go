@@ -1061,6 +1061,336 @@ func (msgs Messages) PermMenuMissing(count int) string {
 	return Catalog.Format(msgs.locale, "permMenuMissing", map[string]any{"count": count})
 }
 
+// OnboardingPageTitle says "首次启动"
+// in the language the app shows.
+func OnboardingPageTitle() string { return In(i18n.Locale()).OnboardingPageTitle() }
+
+// OnboardingPageTitle says "首次启动"
+// in the language of msgs.
+func (msgs Messages) OnboardingPageTitle() string {
+	return Catalog.Format(msgs.locale, "onboardingPageTitle", nil)
+}
+
+// OnboardingSkip says "跳过"
+// in the language the app shows.
+func OnboardingSkip() string { return In(i18n.Locale()).OnboardingSkip() }
+
+// OnboardingSkip says "跳过"
+// in the language of msgs.
+func (msgs Messages) OnboardingSkip() string {
+	return Catalog.Format(msgs.locale, "onboardingSkip", nil)
+}
+
+// OnboardingBack says "上一步"
+// in the language the app shows.
+func OnboardingBack() string { return In(i18n.Locale()).OnboardingBack() }
+
+// OnboardingBack says "上一步"
+// in the language of msgs.
+func (msgs Messages) OnboardingBack() string {
+	return Catalog.Format(msgs.locale, "onboardingBack", nil)
+}
+
+// OnboardingContinue says "继续"
+// in the language the app shows.
+func OnboardingContinue() string { return In(i18n.Locale()).OnboardingContinue() }
+
+// OnboardingContinue says "继续"
+// in the language of msgs.
+func (msgs Messages) OnboardingContinue() string {
+	return Catalog.Format(msgs.locale, "onboardingContinue", nil)
+}
+
+// OnboardingDone says "完成"
+// in the language the app shows.
+func OnboardingDone() string { return In(i18n.Locale()).OnboardingDone() }
+
+// OnboardingDone says "完成"
+// in the language of msgs.
+func (msgs Messages) OnboardingDone() string {
+	return Catalog.Format(msgs.locale, "onboardingDone", nil)
+}
+
+// OnboardingStart says "开始使用"
+// in the language the app shows.
+func OnboardingStart() string { return In(i18n.Locale()).OnboardingStart() }
+
+// OnboardingStart says "开始使用"
+// in the language of msgs.
+func (msgs Messages) OnboardingStart() string {
+	return Catalog.Format(msgs.locale, "onboardingStart", nil)
+}
+
+// OnboardingIntroTitle says "Rakko 住在刘海里"
+// in the language the app shows.
+func OnboardingIntroTitle() string { return In(i18n.Locale()).OnboardingIntroTitle() }
+
+// OnboardingIntroTitle says "Rakko 住在刘海里"
+// in the language of msgs.
+func (msgs Messages) OnboardingIntroTitle() string {
+	return Catalog.Format(msgs.locale, "onboardingIntroTitle", nil)
+}
+
+// OnboardingIntroLead says "点刘海，或按"
+// in the language the app shows.
+func OnboardingIntroLead() string { return In(i18n.Locale()).OnboardingIntroLead() }
+
+// OnboardingIntroLead says "点刘海，或按"
+// in the language of msgs.
+func (msgs Messages) OnboardingIntroLead() string {
+	return Catalog.Format(msgs.locale, "onboardingIntroLead", nil)
+}
+
+// OnboardingIntroNote says "不占 Dock；退出在菜单栏。"
+// in the language the app shows.
+func OnboardingIntroNote() string { return In(i18n.Locale()).OnboardingIntroNote() }
+
+// OnboardingIntroNote says "不占 Dock；退出在菜单栏。"
+// in the language of msgs.
+func (msgs Messages) OnboardingIntroNote() string {
+	return Catalog.Format(msgs.locale, "onboardingIntroNote", nil)
+}
+
+// OnboardingMoveTitle says "先把它放进「应用程序」"
+// in the language the app shows.
+func OnboardingMoveTitle() string { return In(i18n.Locale()).OnboardingMoveTitle() }
+
+// OnboardingMoveTitle says "先把它放进「应用程序」"
+// in the language of msgs.
+func (msgs Messages) OnboardingMoveTitle() string {
+	return Catalog.Format(msgs.locale, "onboardingMoveTitle", nil)
+}
+
+// OnboardingMoveFromDownloads says "下载"
+// in the language the app shows.
+func OnboardingMoveFromDownloads() string { return In(i18n.Locale()).OnboardingMoveFromDownloads() }
+
+// OnboardingMoveFromDownloads says "下载"
+// in the language of msgs.
+func (msgs Messages) OnboardingMoveFromDownloads() string {
+	return Catalog.Format(msgs.locale, "onboardingMoveFromDownloads", nil)
+}
+
+// OnboardingMoveFromDiskImage says "磁盘映像"
+// in the language the app shows.
+func OnboardingMoveFromDiskImage() string { return In(i18n.Locale()).OnboardingMoveFromDiskImage() }
+
+// OnboardingMoveFromDiskImage says "磁盘映像"
+// in the language of msgs.
+func (msgs Messages) OnboardingMoveFromDiskImage() string {
+	return Catalog.Format(msgs.locale, "onboardingMoveFromDiskImage", nil)
+}
+
+// OnboardingMoveDest says "应用程序"
+// in the language the app shows.
+func OnboardingMoveDest() string { return In(i18n.Locale()).OnboardingMoveDest() }
+
+// OnboardingMoveDest says "应用程序"
+// in the language of msgs.
+func (msgs Messages) OnboardingMoveDest() string {
+	return Catalog.Format(msgs.locale, "onboardingMoveDest", nil)
+}
+
+// OnboardingMoveButton says "移到「应用程序」"
+// in the language the app shows.
+func OnboardingMoveButton() string { return In(i18n.Locale()).OnboardingMoveButton() }
+
+// OnboardingMoveButton says "移到「应用程序」"
+// in the language of msgs.
+func (msgs Messages) OnboardingMoveButton() string {
+	return Catalog.Format(msgs.locale, "onboardingMoveButton", nil)
+}
+
+// OnboardingMoving says "正在移入「应用程序」…"
+// in the language the app shows.
+func OnboardingMoving() string { return In(i18n.Locale()).OnboardingMoving() }
+
+// OnboardingMoving says "正在移入「应用程序」…"
+// in the language of msgs.
+func (msgs Messages) OnboardingMoving() string {
+	return Catalog.Format(msgs.locale, "onboardingMoving", nil)
+}
+
+// OnboardingMoveRetry says "重试"
+// in the language the app shows.
+func OnboardingMoveRetry() string { return In(i18n.Locale()).OnboardingMoveRetry() }
+
+// OnboardingMoveRetry says "重试"
+// in the language of msgs.
+func (msgs Messages) OnboardingMoveRetry() string {
+	return Catalog.Format(msgs.locale, "onboardingMoveRetry", nil)
+}
+
+// OnboardingMoveFailed says "没有移过去：{error}"
+// in the language the app shows.
+func OnboardingMoveFailed(error string) string { return In(i18n.Locale()).OnboardingMoveFailed(error) }
+
+// OnboardingMoveFailed says "没有移过去：{error}"
+// in the language of msgs.
+func (msgs Messages) OnboardingMoveFailed(error string) string {
+	return Catalog.Format(msgs.locale, "onboardingMoveFailed", map[string]any{"error": error})
+}
+
+// OnboardingReopening says "已到位，正在重新打开…"
+// in the language the app shows.
+func OnboardingReopening() string { return In(i18n.Locale()).OnboardingReopening() }
+
+// OnboardingReopening says "已到位，正在重新打开…"
+// in the language of msgs.
+func (msgs Messages) OnboardingReopening() string {
+	return Catalog.Format(msgs.locale, "onboardingReopening", nil)
+}
+
+// OnboardingMoveWhyDownloads says "留在「下载」里，更新会被拦住。"
+// in the language the app shows.
+func OnboardingMoveWhyDownloads() string { return In(i18n.Locale()).OnboardingMoveWhyDownloads() }
+
+// OnboardingMoveWhyDownloads says "留在「下载」里，更新会被拦住。"
+// in the language of msgs.
+func (msgs Messages) OnboardingMoveWhyDownloads() string {
+	return Catalog.Format(msgs.locale, "onboardingMoveWhyDownloads", nil)
+}
+
+// OnboardingMoveWhyDiskImage says "磁盘映像是只读的，应用不能一直住在里面。"
+// in the language the app shows.
+func OnboardingMoveWhyDiskImage() string { return In(i18n.Locale()).OnboardingMoveWhyDiskImage() }
+
+// OnboardingMoveWhyDiskImage says "磁盘映像是只读的，应用不能一直住在里面。"
+// in the language of msgs.
+func (msgs Messages) OnboardingMoveWhyDiskImage() string {
+	return Catalog.Format(msgs.locale, "onboardingMoveWhyDiskImage", nil)
+}
+
+// OnboardingMoveWhyTranslocated says "系统把它隔离在临时位置，更新会被拦住。"
+// in the language the app shows.
+func OnboardingMoveWhyTranslocated() string { return In(i18n.Locale()).OnboardingMoveWhyTranslocated() }
+
+// OnboardingMoveWhyTranslocated says "系统把它隔离在临时位置，更新会被拦住。"
+// in the language of msgs.
+func (msgs Messages) OnboardingMoveWhyTranslocated() string {
+	return Catalog.Format(msgs.locale, "onboardingMoveWhyTranslocated", nil)
+}
+
+// OnboardingPermsTitle says "权限"
+// in the language the app shows.
+func OnboardingPermsTitle() string { return In(i18n.Locale()).OnboardingPermsTitle() }
+
+// OnboardingPermsTitle says "权限"
+// in the language of msgs.
+func (msgs Messages) OnboardingPermsTitle() string {
+	return Catalog.Format(msgs.locale, "onboardingPermsTitle", nil)
+}
+
+// OnboardingPermsNote says "不开也能用，之后可在设置里开。"
+// in the language the app shows.
+func OnboardingPermsNote() string { return In(i18n.Locale()).OnboardingPermsNote() }
+
+// OnboardingPermsNote says "不开也能用，之后可在设置里开。"
+// in the language of msgs.
+func (msgs Messages) OnboardingPermsNote() string {
+	return Catalog.Format(msgs.locale, "onboardingPermsNote", nil)
+}
+
+// OnboardingTryTitle says "试一试"
+// in the language the app shows.
+func OnboardingTryTitle() string { return In(i18n.Locale()).OnboardingTryTitle() }
+
+// OnboardingTryTitle says "试一试"
+// in the language of msgs.
+func (msgs Messages) OnboardingTryTitle() string {
+	return Catalog.Format(msgs.locale, "onboardingTryTitle", nil)
+}
+
+// OnboardingTryLead says "把文件拖进来。"
+// in the language the app shows.
+func OnboardingTryLead() string { return In(i18n.Locale()).OnboardingTryLead() }
+
+// OnboardingTryLead says "把文件拖进来。"
+// in the language of msgs.
+func (msgs Messages) OnboardingTryLead() string {
+	return Catalog.Format(msgs.locale, "onboardingTryLead", nil)
+}
+
+// OnboardingTryDemo says "演示"
+// in the language the app shows.
+func OnboardingTryDemo() string { return In(i18n.Locale()).OnboardingTryDemo() }
+
+// OnboardingTryDemo says "演示"
+// in the language of msgs.
+func (msgs Messages) OnboardingTryDemo() string {
+	return Catalog.Format(msgs.locale, "onboardingTryDemo", nil)
+}
+
+// OnboardingTryNote says "松手就收进托盘。"
+// in the language the app shows.
+func OnboardingTryNote() string { return In(i18n.Locale()).OnboardingTryNote() }
+
+// OnboardingTryNote says "松手就收进托盘。"
+// in the language of msgs.
+func (msgs Messages) OnboardingTryNote() string {
+	return Catalog.Format(msgs.locale, "onboardingTryNote", nil)
+}
+
+// OnboardingTryFailed says "示例文件没造出来：{error}"
+// in the language the app shows.
+func OnboardingTryFailed(error string) string { return In(i18n.Locale()).OnboardingTryFailed(error) }
+
+// OnboardingTryFailed says "示例文件没造出来：{error}"
+// in the language of msgs.
+func (msgs Messages) OnboardingTryFailed(error string) string {
+	return Catalog.Format(msgs.locale, "onboardingTryFailed", map[string]any{"error": error})
+}
+
+// OnboardingSampleName says "截图 {date}.png"
+// in the language the app shows.
+func OnboardingSampleName(date string) string { return In(i18n.Locale()).OnboardingSampleName(date) }
+
+// OnboardingSampleName says "截图 {date}.png"
+// in the language of msgs.
+func (msgs Messages) OnboardingSampleName(date string) string {
+	return Catalog.Format(msgs.locale, "onboardingSampleName", map[string]any{"date": date})
+}
+
+// OnboardingDoneTitle says "就这些"
+// in the language the app shows.
+func OnboardingDoneTitle() string { return In(i18n.Locale()).OnboardingDoneTitle() }
+
+// OnboardingDoneTitle says "就这些"
+// in the language of msgs.
+func (msgs Messages) OnboardingDoneTitle() string {
+	return Catalog.Format(msgs.locale, "onboardingDoneTitle", nil)
+}
+
+// OnboardingDoneNote says "文件已经在托盘里，点刘海就能看到。"
+// in the language the app shows.
+func OnboardingDoneNote() string { return In(i18n.Locale()).OnboardingDoneNote() }
+
+// OnboardingDoneNote says "文件已经在托盘里，点刘海就能看到。"
+// in the language of msgs.
+func (msgs Messages) OnboardingDoneNote() string {
+	return Catalog.Format(msgs.locale, "onboardingDoneNote", nil)
+}
+
+// OnboardingReady says "Rakko 已就绪"
+// in the language the app shows.
+func OnboardingReady() string { return In(i18n.Locale()).OnboardingReady() }
+
+// OnboardingReady says "Rakko 已就绪"
+// in the language of msgs.
+func (msgs Messages) OnboardingReady() string {
+	return Catalog.Format(msgs.locale, "onboardingReady", nil)
+}
+
+// OnboardingSkippedHint says "随时点刘海呼出"
+// in the language the app shows.
+func OnboardingSkippedHint() string { return In(i18n.Locale()).OnboardingSkippedHint() }
+
+// OnboardingSkippedHint says "随时点刘海呼出"
+// in the language of msgs.
+func (msgs Messages) OnboardingSkippedHint() string {
+	return Catalog.Format(msgs.locale, "onboardingSkippedHint", nil)
+}
+
 // StartupLegacyRunningTitle says "旧版本仍在运行"
 // in the language the app shows.
 func StartupLegacyRunningTitle() string { return In(i18n.Locale()).StartupLegacyRunningTitle() }

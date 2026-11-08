@@ -621,7 +621,13 @@ func (a *shelf) view(c *ui.Context) {
 		// A file drag over the island opens the sheet on the tray page: the
 		// drop zone lives there, and the island cannot show it.
 		if a.drop.on && len(a.drop.files) > 0 && a.currentLevel() == 1 {
-			a.tabFrom, a.tab = pageTray, pageTray
+			if a.onboardingPending() {
+				// The guide keeps the panel: the zone opens on its page,
+				// not the tray the drag would otherwise land on.
+				a.tabFrom, a.tab = pageOnboarding, pageOnboarding
+			} else {
+				a.tabFrom, a.tab = pageTray, pageTray
+			}
 			a.setLevel(2)
 		}
 	} else {
@@ -712,7 +718,7 @@ func (a *shelf) view(c *ui.Context) {
 	// capsule spring on their own channels; the shell reads the bar's
 	// drawn width (shellSize), the frame and the hit test the sheet's.
 	homeTarget, resultsTarget, navTarget := a.homeBoxW(), a.resultsTargetH(), float32(0)
-	if a.visible && !(a.snap.panel || a.snap.drawn) {
+	if a.visible && !(a.snap.panel || a.snap.drawn) && !(a.onboardingPending() && !a.onboardingTried()) {
 		navTarget = 1
 	}
 	homeWd, resultsH, navK := homeTarget, resultsTarget, navTarget
@@ -1837,13 +1843,14 @@ func (a *shelf) setLevelPage(level int, id pageID) {
 	level = min(max(level, 1), 2)
 	next := id
 	switch {
+	case level == 2 && a.onboardingPending():
+		// While the guide is owed every page landing is on it: a collapse to
+		// the search bar is not offered until the guide ends.
+		next = pageOnboarding
 	case level == 1:
 		next = a.tab
 	case next == "":
 		next = a.tab
-	}
-	if p := a.page(next); p == nil || !p.enabled() {
-		next = pageTray
 	}
 	from := a.currentPage().id()
 	if a.level == level && from == next {
@@ -1872,6 +1879,7 @@ func (a *shelf) setLevelPage(level int, id pageID) {
 		a.win.Invalidate()
 	}
 	a.syncCopyKey()
+	a.syncOnboardingKeys()
 }
 
 // visibleItems is the item list the expanded panel shows and acts on: the
@@ -1962,6 +1970,11 @@ func (a *shelf) startPageSwitch(from, to pageID) {
 // list does not show are dropped, so a ⇧-range never spans rows the user
 // cannot see. Disabled or unregistered pages cannot be switched to.
 func (a *shelf) setTab(id pageID) {
+	if a.onboardingPending() {
+		// The guide owns the panel while it is owed: every caller asking
+		// for another page lands on it.
+		id = pageOnboarding
+	}
 	p := a.page(id)
 	if p == nil || !p.enabled() {
 		return
@@ -2017,6 +2030,7 @@ func (a *shelf) setTab(id pageID) {
 		a.win.Invalidate()
 	}
 	a.syncCopyKey()
+	a.syncOnboardingKeys()
 }
 
 // clipShortcutKeys are the digits ⌘1..⌘9 paste by, in the order the panel

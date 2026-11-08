@@ -278,6 +278,21 @@ func (a *shelf) startPermissionFlow() {
 	a.beginPermissionStep()
 }
 
+// startPermissionWalk runs the same guided flow over caller-chosen ids: the
+// guide's permission rows grant one at a time, each click walking just the
+// row that was clicked. An id already granted skips itself in
+// beginPermissionStep, like the settings walk's own missing list.
+func (a *shelf) startPermissionWalk(ids []string) {
+	a.stopPermissionFlow()
+	if len(ids) == 0 {
+		a.repaintSettings()
+		return
+	}
+	a.perm = permissionFlow{stage: permissionWaiting, ids: ids}
+	a.repaintSettings()
+	a.beginPermissionStep()
+}
+
 func (a *shelf) permissionFlowCurrent() (systemPermission, bool) {
 	if a.perm.step < 0 || a.perm.step >= len(a.perm.ids) {
 		return systemPermission{}, false

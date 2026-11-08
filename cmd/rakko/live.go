@@ -497,7 +497,7 @@ func (a *shelf) openDownloaded(ev liveEvent) {
 // closed (or fully folded), no incoming file drag owns the shape, and the
 // app switcher is not holding the wings.
 func (a *shelf) liveAllow() bool {
-	return !a.visible && a.progress <= 0.01 && !a.appsModeOn() && !(a.dragging && !a.ownDrag)
+	return !a.visible && a.progress <= 0.01 && !a.appsModeOn() && !(a.dragging && !a.ownDrag) && !a.onboardingPending()
 }
 
 // liveUp reports whether a live activity currently occupies the peek

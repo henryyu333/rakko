@@ -61,6 +61,7 @@ type shelf struct {
 	usage                                                       *usageFeature       // nil until the AI usage page registers itself
 	weekly                                                      *weeklyFeature      // nil until the 每周简报 page registers itself
 	agent                                                       *agentNotifyFeature // nil until the Agent 完成提醒 switch or a hook event needs it
+	onb                                                         *onboardingFeature  // the first-launch guide; nil on an upgraded install
 	lyrCache                                                    *lyrics.Cache       // synced lyrics for the home page; nil until first used
 	clip                                                        *clipboardModule    // nil until monitoring starts
 	awake                                                       *awakeModule        // nil until the app starts
@@ -133,6 +134,7 @@ type shelf struct {
 	guard                                                       dragGuard
 	snap                                                        snapState // 拖窗口到刘海分屏 session / panel
 	escHeld, spaceHeld, cmdCHeld                                bool
+	onbKeysHeld                                                 map[string]bool // the guide's held Left/Right/Enter
 	selection                                                   selection
 	stopMouseObservation, stopDragObservation                   func()
 	leftSince                                                   time.Time

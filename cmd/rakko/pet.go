@@ -262,6 +262,11 @@ func (a *shelf) petStart() {
 	if a.pet != nil {
 		return
 	}
+	if a.onboardingPending() {
+		// The desk otter waits for the guide to finish or be skipped: the
+		// panel's own otter is the one the first launch should meet.
+		return
+	}
 	if petArt() == nil {
 		return
 	}

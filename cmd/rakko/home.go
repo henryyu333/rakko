@@ -307,7 +307,7 @@ func (a *shelf) belowExtent(shellH, resultsH float32) float32 {
 	// The capsule is part of the frame for a settled open panel even
 	// before its first drawn frame, and for the whole close fade once it
 	// was drawn; the arrangement panel never draws it.
-	wanted := a.visible && !(a.snap.panel || a.snap.drawn)
+	wanted := a.visible && !(a.snap.panel || a.snap.drawn) && !(a.onboardingPending() && !a.onboardingTried())
 	if !wanted && a.fx.navK <= 0.01 {
 		return 0
 	}
