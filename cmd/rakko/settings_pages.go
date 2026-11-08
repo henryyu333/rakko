@@ -95,8 +95,11 @@ func (a *shelf) settingsGeneralPage(c *ui.Context) {
 			settingsToggleRow(c, "autocheck", l.SettingsAutoCheckRow(), "",
 				a.settings.AutoCheckUpdates, a.setAutoCheckUpdates)
 			settingsSep(c, "autocheck")
+			settingsToggleRow(c, "autoinstall", l.UpdateAutoInstallSettingsRow(), "",
+				a.settings.UpdateAutoInstall, a.setUpdateAutoInstall)
+			settingsSep(c, "autoinstall")
 			settingsRow(c, "check", l.SettingsUpdateCheckRow(), a.updateCaption(l), func() {
-				busy := a.updateChecking || a.updateInstalling
+				busy := a.updateChecking || a.updateInstalling || a.updateUnavailableReason() != ""
 				settingsButton(c, "check-now", l.SettingsUpdateCheckNow(), false, func() { a.checkUpdates(true) }).Disabled(busy)
 			})
 			if a.updateInstalled && a.update != nil {
@@ -697,6 +700,9 @@ const sourceURL = "https://github.com/henryyu333/rakko"
 // updateCaption is the 检查更新 row's second line: the last check's time and
 // outcome, or what is happening now.
 func (a *shelf) updateCaption(l locales.Messages) string {
+	if reason := a.updateUnavailableReason(); reason != "" {
+		return reason
+	}
 	switch {
 	case a.updateChecking:
 		return l.UpdateChecking()

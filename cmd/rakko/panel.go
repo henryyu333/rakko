@@ -1528,7 +1528,7 @@ func (a *shelf) updatePill(c *ui.Context, note string) {
 			}
 		case a.update != nil && !a.updateInstalling:
 			if ui.Button(c, l.PanelInstallUpdate(a.update.Version)).Label(l.PanelInstallUpdate(a.update.Version)).Clicked() {
-				a.installUpdate()
+				a.installUpdate(false)
 			}
 		}
 	})

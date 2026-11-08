@@ -145,6 +145,9 @@ func (a *shelf) retitleWindows() {
 	if a.basket.win != nil {
 		a.basket.win.SetTitle(m.WindowBasket())
 	}
+	if a.updateWin != nil {
+		a.updateWin.SetTitle(a.updateWindowTitle())
+	}
 	for _, p := range a.pins {
 		if p.win != nil {
 			p.win.SetTitle(m.WindowPins())

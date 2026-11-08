@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"log"
 	"strings"
@@ -116,6 +117,19 @@ type shelf struct {
 	updateLastCheck                                             time.Time         // when the last check ran (this launch)
 	updateLastResult                                            updateCheckResult // how it went
 	updateLastVersion                                           string            // the version it found, if any
+	updateWin                                                   *mygo.Window      // the update window; nil while closed
+	updateWinStage                                              updateStage       // which face it shows
+	updateBytes, updateTotal                                    int64             // download counts; total may be 0
+	updateInstallCancel, updateCheckCancel                      context.CancelFunc
+	updateInstallQuiet                                          bool           // the auto-install path staged it: prompt once when ready
+	updateFailDetail                                            string         // the failed face's reason; "" = the generic one
+	updateCheckDead                                             bool           // the running check's window was canceled: bury its outcome
+	updateNotes                                                 ui.ScrollState // release notes scroll, reset on each open
+	updatePrompted                                              string         // the version already prompted for this launch
+	updateWinMarked                                             bool           // window logically open (headless mark or native)
+	updateCanceled                                              bool           // the download's cancel was clicked: the result unwinds quietly
+	updatePromptPending                                         updateStage    // deferred auto-prompt's face; updateStageChecking = none
+	updatePromptAt                                              time.Time      // a deferred auto-prompt's earliest moment; zero = none
 	guard                                                       dragGuard
 	snap                                                        snapState // 拖窗口到刘海分屏 session / panel
 	escHeld, spaceHeld, cmdCHeld                                bool
@@ -533,6 +547,7 @@ func (a *shelf) applySettings(next settings.Settings) bool {
 		a.win.Invalidate()
 	}
 	a.repaintSettings()
+	a.repaintUpdateWindow()
 	return true
 }
 

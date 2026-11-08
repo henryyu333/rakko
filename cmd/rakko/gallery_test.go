@@ -254,6 +254,7 @@ func galleryItems() []galleryItem {
 	items = append(items, galleryGroupK()...)
 	items = append(items, galleryGroupL()...)
 	items = append(items, galleryGroupM()...)
+	items = append(items, galleryGroupU()...)
 	return items
 }
 
@@ -1896,4 +1897,127 @@ func galleryGroupM() []galleryItem {
 			return galleryRender{view: v}
 		}},
 	}
+}
+
+// --- U: the update window ---
+
+// galleryUpdateNotes is a release-notes body shaped like the CHANGELOG's:
+// ### section names and bulleted items, long enough to scroll.
+func galleryUpdateNotes(lang string) string {
+	if strings.HasPrefix(lang, "zh") {
+		return `### 新增
+- 发现新版本时打开更新窗口，说明里写清这一版改了什么
+- 托盘菜单直接安装更新，不再跳转浏览器
+- 说明可以滚动，长版本也不会被截断
+
+### 改进
+- 面板展开的跟手感更好
+- 剪贴板搜索支持拼音首字母
+- 下载进度按字节显示，不再只给一个百分比
+
+### 修复
+- 修复拖动固定卡片时偶尔丢焦点的问题
+- 修复浅色模式下分隔线过亮
+- 修复更新检查超时后按钮一直不可用`
+	}
+	return `### New
+- An update window shows what changed, with skip and remind later
+- Install from the tray menu without opening a browser
+- Notes scroll, so a long release is never cut off
+
+### Improved
+- The panel follows the pointer more closely
+- Clipboard search matches pinyin initials
+- The download reports bytes, not just a percentage
+
+### Fixed
+- Losing focus while dragging a pinned card
+- Separators too bright in light mode
+- The check button staying disabled after a timeout`
+}
+
+// galleryStageUpdateIcon points the update window's hero image at the
+// shipped icon, so the gallery draws what the bundle draws.
+func galleryStageUpdateIcon(t *testing.T) {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("..", "..", "resources", "icon.png"))
+	if err != nil {
+		return
+	}
+	b, err := ui.DecodeBitmap(data)
+	if err != nil {
+		return
+	}
+	// Mark the lazy load done first: updateAppIcon would otherwise retry
+	// the bundle path and overwrite this with nil.
+	appIconOnce.Do(func() {})
+	old := appIconBitmap
+	appIconBitmap = b
+	t.Cleanup(func() { appIconBitmap = old })
+}
+
+// galleryUpdateFace renders one face of the update window at its own size,
+// in one appearance and language. tweak runs before the first frame.
+func galleryUpdateFace(t *testing.T, lang string, dark bool, stage updateStage, tweak func(*shelf)) galleryRender {
+	t.Helper()
+	galleryStageUpdateIcon(t)
+	oldVer := appVersionProbe
+	appVersionProbe = func() string { return "1.13.0" }
+	t.Cleanup(func() { appVersionProbe = oldVer })
+	a := updateShelf()
+	a.dataDir = t.TempDir()
+	a.update = &mygo.Update{Version: "1.14.0", Notes: galleryUpdateNotes(lang)}
+	a.updateWinStage = stage
+	a.updateLastCheck = galleryTodayAt(10, 5)
+	a.updateLastResult = updateResultAvailable
+	a.updateLastVersion = "1.14.0"
+	if tweak != nil {
+		tweak(a)
+	}
+	a.locale = lang
+	w, h := a.updateWinSize(stage)
+	v := ui.NewTester(a.updateView, w, h)
+	v.SetLocale(lang)
+	v.SetScale(galleryScale)
+	v.SetDark(dark)
+	v.Frame()
+	v.Frame()
+	return galleryRender{view: v}
+}
+
+func galleryGroupU() []galleryItem {
+	const g = "更新窗口"
+	faces := []struct {
+		id, title, state string
+		stage            updateStage
+		tweak            func(*shelf)
+	}{
+		{"1", "发现新版本", "说明、复选框与三个动作", updateStageFound, nil},
+		{"2", "正在下载更新", "进度 42% 与字节", updateStageDownloading, func(a *shelf) {
+			a.updateProgress = 0.42
+			a.updateBytes, a.updateTotal = 7_000_000, 11_400_000
+		}},
+		{"3", "可以开始安装了", "安装并重启应用", updateStageReady, nil},
+		{"4", "已是最新版本", "版本与检查时间", updateStageLatest, nil},
+		{"5", "检查更新失败", "原因与重试", updateStageFailed, nil},
+	}
+	var items []galleryItem
+	for _, dark := range []bool{true, false} {
+		for _, f := range faces {
+			id := "U" + f.id
+			state := "深色 · " + f.state
+			if !dark {
+				id += "L"
+				state = "浅色 · " + f.state
+			}
+			stage, tweak := f.stage, f.tweak
+			items = append(items, galleryItem{
+				ID: id, Group: g, Title: f.title, State: state,
+				Build: func(t *testing.T, lang string) galleryRender {
+					return galleryUpdateFace(t, lang, dark, stage, tweak)
+				},
+			})
+		}
+	}
+	return items
 }

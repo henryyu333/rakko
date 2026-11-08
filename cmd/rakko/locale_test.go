@@ -886,3 +886,93 @@ func TestNumbersDoNotGroup(t *testing.T) {
 		t.Logf("%s: %d counting messages checked", lang, covered)
 	}
 }
+
+// TestUpdateWindowFacesFitAndSpeakTheirLanguage renders all five faces of
+// the update window in both appearances and both languages: every label
+// the face promises is there, nothing is drawn outside the fixed window,
+// the English faces carry no Chinese, and the two palettes really differ
+// (the window background is the dark or the light one).
+func TestUpdateWindowFacesFitAndSpeakTheirLanguage(t *testing.T) {
+	notes := map[string]string{
+		"zh-Hans": "### 新增\n- 更新窗口说明这一版改了什么\n- 长版本可以滚动",
+		"en":      "### New\n- The update window says what changed\n- Long releases scroll",
+	}
+	for _, lang := range []string{"zh-Hans", "en"} {
+		l := locales.In(lang)
+		for _, dark := range []bool{true, false} {
+			for _, tc := range []struct {
+				stage updateStage
+				want  []string
+			}{
+				{updateStageFound, []string{
+					l.UpdateFoundTitle(),
+					l.UpdateFoundBody("1.14.0", "1.13.0"),
+					l.UpdateAutoInstallRow(), l.UpdateSkipVersion(),
+					l.UpdateLater(), l.UpdateInstallNow(),
+				}},
+				{updateStageDownloading, []string{
+					l.UpdateUpdatingWindowTitle(), l.UpdateDownloadingShort(),
+					l.UpdateDownloadBytes("7.0 MB", "11.4 MB"), l.UpdateCancel(),
+				}},
+				{updateStageReady, []string{
+					l.UpdateUpdatingWindowTitle(), l.UpdateReadyShort(),
+					l.UpdateInstallAndRelaunch(),
+				}},
+				{updateStageLatest, []string{
+					l.UpdateWindowTitle(), l.UpdateUpToDateTitle(),
+					l.UpdateOK(),
+				}},
+				{updateStageFailed, []string{
+					l.UpdateWindowTitle(), l.UpdateFailedTitle(),
+					l.UpdateFailedDetail(), l.UpdateOK(), l.UpdateRetry(),
+				}},
+			} {
+				where := fmt.Sprintf("%s/%v/%d", lang, dark, tc.stage)
+				oldVer := appVersionProbe
+				appVersionProbe = func() string { return "1.13.0" }
+				a := updateShelf()
+				a.dataDir = t.TempDir()
+				a.update = &mygo.Update{Version: "1.14.0", Notes: notes[lang]}
+				a.updateWinStage = tc.stage
+				a.updateLastCheck = time.Date(2026, 11, 8, 10, 5, 0, 0, time.Local)
+				a.updateProgress = 0.42
+				a.updateBytes, a.updateTotal = 7_000_000, 11_400_000
+				a.locale = lang
+				w, h := a.updateWinSize(tc.stage)
+				v := ui.NewTester(a.updateView, w, h)
+				v.SetLocale(lang)
+				v.SetDark(dark)
+				v.Frame()
+				v.Frame()
+				appVersionProbe = oldVer
+
+				texts := v.Texts()
+				if lang == "en" {
+					assertNoHan(t, "update/"+where, texts)
+				}
+				joined := strings.Join(texts, "\n")
+				for _, want := range tc.want {
+					if !strings.Contains(joined, want) {
+						t.Errorf("%s: %q missing; texts %v", where, want, texts)
+					}
+					r, ok := v.Find(want)
+					if !ok {
+						continue
+					}
+					if r.X < -0.5 || r.Y < -0.5 || r.X+r.W > float32(w)+0.5 || r.Y+r.H > float32(h)+0.5 {
+						t.Errorf("%s: %q at %+v leaves the %dx%d window", where, want, r, w, h)
+					}
+				}
+				// The palette follows the appearance, not a pinned one.
+				px := v.Image().At(2, h-2)
+				r, g, b, _ := px.RGBA()
+				if dark && (r>>8 != 0x0E || g>>8 != 0x0F || b>>8 != 0x11) {
+					t.Errorf("%s: dark background = #%02X%02X%02X", where, r>>8, g>>8, b>>8)
+				}
+				if !dark && (r>>8 != 0xFF || g>>8 != 0xFF || b>>8 != 0xFF) {
+					t.Errorf("%s: light background = #%02X%02X%02X", where, r>>8, g>>8, b>>8)
+				}
+			}
+		}
+	}
+}

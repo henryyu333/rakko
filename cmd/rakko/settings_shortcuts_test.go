@@ -737,10 +737,20 @@ func TestUpdateWhenClassifiesCalendarDays(t *testing.T) {
 // while one runs.
 func TestSettingsCheckNowRow(t *testing.T) {
 	stubSettingsSeams(t, false, nil, nil)
-	orig := updateCheck
+	// A build that can check: production, with an enabled updater and a
+	// stubbed check. The update window's factory is marked too, so the
+	// manual check's progress face does not need a window server.
+	origCheck, origEnabled, origDev := updateCheck, updateEnabled, updateDevBuild
+	origMake := updateWinMake
 	var calls int
 	updateCheck = func(ctx context.Context) (*mygo.Update, error) { calls++; return nil, nil }
-	t.Cleanup(func() { updateCheck = orig })
+	updateEnabled = func() bool { return true }
+	updateDevBuild = func() bool { return false }
+	updateWinMake = func(*shelf) *mygo.Window { return nil }
+	t.Cleanup(func() {
+		updateCheck, updateEnabled, updateDevBuild = origCheck, origEnabled, origDev
+		updateWinMake = origMake
+	})
 
 	_, view := newSettingsShelf(t)
 	if err := view.Click("现在检查"); err != nil {

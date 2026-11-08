@@ -72,7 +72,7 @@ func TestDownloadingCapsuleIsBriefButPanelKeepsDeadline(t *testing.T) {
 			a.visible = opened
 			up := &mygo.Update{Version: "1.2.3"}
 			a.update = up
-			a.installUpdate()
+			a.installUpdate(true)
 			if time.Until(a.statusUntil) < 9*time.Minute {
 				t.Fatal("panel deadline was shortened")
 			}
