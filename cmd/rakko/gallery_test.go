@@ -259,6 +259,97 @@ func galleryItems() []galleryItem {
 	return items
 }
 
+// --- N: agent approvals ---
+
+// galleryQuote writes a string as a JSON literal for a fixture payload.
+func galleryQuote(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
+}
+
+// galleryApproval is one approval card state on one shell. The fixture
+// builds a request through the same analysis and queue the app uses.
+func galleryApproval(kind string, island bool) func(t *testing.T, lang string) galleryRender {
+	return func(t *testing.T, lang string) galleryRender {
+		a := liveShelf()
+		a.settings.Approval.Enabled = true
+		a.island = island
+		f := a.approvalFeature()
+		f.enabled.Store(true)
+
+		zh := lang != "en"
+		desc := map[bool][3]string{
+			true:  {"运行测试并生成覆盖率报告", "清理构建产物后重新编译", "清理构建产物"},
+			false: {"Run the tests and write a coverage report", "Clean the build and compile the release", "Clean the build directory"},
+		}[zh]
+		d := func(which int) string { return desc[which] }
+		tool, input := "claude", `{"command":"npm test -- --coverage","description":`+galleryQuote(d(0))+`}`
+		switch kind {
+		case "risky", "hold", "late", "queue":
+			tool, input = "claude", `{"command":"rm -rf build && make release","description":`+galleryQuote(d(1))+`}`
+		case "expanded":
+			desc := "想修改 2 个文件"
+			if !zh {
+				desc = "Edit 2 files"
+			}
+			tool, input = "codex", `{"input":"*** Begin Patch\n*** Update File: cmd/rakko/agent_notify.go\n@@\n-old\n+new\n*** Update File: internal/agentnotify/socket.go\n@@\n-a\n+b\n+c\n*** End Patch","description":`+galleryQuote(desc)+`}`
+		case "denied":
+			tool, input = "claude", `{"command":"git clean -fdx","description":`+galleryQuote(d(2))+`}`
+		case "expired":
+			tool, input = "codex", `{"command":"npm publish --access public"}`
+		}
+		ap := testApproval(t, testID(900), tool, input)
+		now := time.Now()
+		switch kind {
+		case "hold":
+			ap.state = approvalHolding
+			ap.holdFrom = now.Add(-380 * time.Millisecond)
+		case "late":
+			ap.at = now.Add(-33 * time.Second)
+		case "expired":
+			ap.state = approvalExpired
+			ap.resultUntil = now.Add(time.Minute)
+		case "denied":
+			ap.state = approvalDenied
+			ap.resultUntil = now.Add(time.Minute)
+		case "expanded":
+			ap.expanded = true
+		}
+		f.enqueue(ap)
+		if kind == "queue" {
+			second := testApproval(t, testID(901), "codex", `{"command":"npm test"}`)
+			third := testApproval(t, testID(902), "cursor", `{"command":"docker compose down -v"}`)
+			f.enqueue(second)
+			f.enqueue(third)
+		}
+		a.peeking, a.peekProgress, a.peekFrom = true, 1, 1
+		w, h := a.approvalCardSize(ap)
+		winW := int(max(w+80, 400))
+		return galleryRender{view: galleryPanel(t, lang, a, winW, int(h)+90)}
+	}
+}
+
+func galleryGroupN() []galleryItem {
+	const g = "Agent 审批"
+	plain := galleryApproval("plain", false)
+	return []galleryItem{
+		{ID: "N1", Group: g, Title: "审批卡", State: "无风险 · 单击允许", Notch: true, Build: plain},
+		{ID: "N2", Group: g, Title: "审批卡", State: "有风险 · 按住允许 63%", Notch: true, Build: galleryApproval("hold", false)},
+		{ID: "N3", Group: g, Title: "审批卡", State: "已等 33 秒 · 警示色", Notch: true, Build: galleryApproval("late", false)},
+		{ID: "N4", Group: g, Title: "审批卡", State: "已超时 · 交回终端", Notch: true, Build: galleryApproval("expired", false)},
+		{ID: "N5", Group: g, Title: "审批卡", State: "已拒绝", Notch: true, Build: galleryApproval("denied", false)},
+		{ID: "N6", Group: g, Title: "审批卡", State: "展开 · 文件列表与增删行", Notch: true, Build: galleryApproval("expanded", false)},
+		{ID: "N7", Group: g, Title: "审批卡", State: "排队 · +2", Notch: true, Build: galleryApproval("queue", false)},
+		{ID: "N8", Group: g, Title: "审批卡", State: "灵动岛 · 无风险", Build: galleryApproval("plain", true)},
+		{ID: "N9", Group: g, Title: "审批卡", State: "灵动岛 · 有风险按住", Build: galleryApproval("hold", true)},
+		{ID: "N10", Group: g, Title: "审批卡", State: "灵动岛 · 已等 33 秒", Build: galleryApproval("late", true)},
+		{ID: "N11", Group: g, Title: "审批卡", State: "灵动岛 · 已超时", Build: galleryApproval("expired", true)},
+		{ID: "N12", Group: g, Title: "审批卡", State: "灵动岛 · 已拒绝", Build: galleryApproval("denied", true)},
+		{ID: "N13", Group: g, Title: "审批卡", State: "灵动岛 · 展开文件列表", Build: galleryApproval("expanded", true)},
+		{ID: "N14", Group: g, Title: "审批卡", State: "灵动岛 · +2 排队", Build: galleryApproval("queue", true)},
+	}
+}
+
 // --- A: the closed notch ---
 
 func galleryGroupA() []galleryItem {
