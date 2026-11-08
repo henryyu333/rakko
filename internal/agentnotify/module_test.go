@@ -144,7 +144,8 @@ function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
 	}
 }
 
-// opencode names the session after the newest prompt, not its first one.
+// opencode's V2 plugin subscribes to the event stream and names the session
+// after the newest prompt, not its first one.
 func TestOpencodeModuleNamesTheLatestPrompt(t *testing.T) {
 	var turn = func(id, text string) string {
 		return `{type:"message.updated", properties:{info:{id:"` + id + `", role:"user", sessionID:"s1"}}},
@@ -152,11 +153,35 @@ func TestOpencodeModuleNamesTheLatestPrompt(t *testing.T) {
 {type:"session.idle", properties:{sessionID:"s1", cwd:"/tmp/proj"}}`
 	}
 	dir, events := moduleHarness(t, ToolOpencode, `
-import { RakkoAgentCompletion } from "./module.mjs";
-const hooks = await RakkoAgentCompletion({ directory: "/tmp/proj" });
+import mod from "./module.mjs";
 const events = [`+turn("m1", "first task")+`,`+turn("m2", "second task")+`];
-for (const event of events) await hooks.event({ event });
+let cleanup;
+const ctx = {
+  location: { directory: "/tmp/proj" },
+  event: {
+    subscribe() {
+      return (async function* () { for (const event of events) yield event; })();
+    },
+  },
+};
+cleanup = await mod.setup(ctx);
+await new Promise((resolve) => setTimeout(resolve, 300));
+if (typeof cleanup === "function") cleanup();
 `)
+	// The module imports @opencode/plugin; the real package is not part of
+	// this repository, so the harness supplies the one symbol it uses.
+	stub := filepath.Join(dir, "node_modules", "@opencode", "plugin")
+	if err := os.MkdirAll(stub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stub, "package.json"),
+		[]byte(`{"name":"@opencode/plugin","type":"module","exports":"./index.js"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stub, "index.js"),
+		[]byte("export const Plugin = { define: (plugin) => plugin };\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	runNodeDriver(t, dir)
 	lines := waitEvents(t, events, 2)
 	// Detached children may reach the recorder in either order; both turns

@@ -39,40 +39,50 @@ function rakkoSend(event, session, cwd, prompt) {
 const opencodeModule = `// ` + moduleMarker + `: written by Rakko. Removed when its switch is off.
 import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
+import { Plugin } from "@opencode/plugin";
 
 const EXE = __RAKKO_EXE__;
 const DATA = __RAKKO_DATA__;
 const TOOL = __RAKKO_TOOL__;
 ` + sendHelper + `
-export const RakkoAgentCompletion = async ({ directory }) => {
-  const prompts = new Map();
-  const users = new Set();
-  return {
-    event: async ({ event }) => {
+export default Plugin.define({
+  id: "` + moduleMarker + `",
+  async setup(ctx) {
+    const prompts = new Map();
+    const users = new Set();
+    const controller = new AbortController();
+    const run = async () => {
       try {
-        const type = event && event.type;
-        const p = (event && event.properties) || {};
-        const info = p.info || {};
-        const part = p.part || {};
-        if (type === "message.updated" && info.role === "user" && info.id) {
-          users.add(info.id);
-          // A new user message starts a new task: clear what the previous
-          // turn left, so the first text part of this message names it.
-          if (info.sessionID) prompts.set(info.sessionID, "");
-        }
-        if (type === "message.part.updated" && part.type === "text" && part.text &&
-            users.has(part.messageID)) {
-          const id = part.sessionID || p.sessionID;
-          if (id && !prompts.get(id)) prompts.set(id, part.text);
-        }
-        if (type === "session.idle") {
-          const id = p.sessionID || p.sessionId;
-          rakkoSend("session.idle", id, p.cwd || directory, prompts.get(id) || "");
+        for await (const event of ctx.event.subscribe({ signal: controller.signal })) {
+          try {
+            const type = event && event.type;
+            const p = (event && event.properties) || event || {};
+            const info = p.info || {};
+            const part = p.part || {};
+            if (type === "message.updated" && info.role === "user" && info.id) {
+              users.add(info.id);
+              // A new user message starts a new task: clear what the
+              // previous turn left, so the first text part of this message
+              // names it.
+              if (info.sessionID) prompts.set(info.sessionID, "");
+            }
+            if (type === "message.part.updated" && part.type === "text" && part.text &&
+                users.has(part.messageID)) {
+              const id = part.sessionID || p.sessionID;
+              if (id && !prompts.get(id)) prompts.set(id, part.text);
+            }
+            if (type === "session.idle") {
+              const id = p.sessionID || p.sessionId;
+              rakkoSend("session.idle", id, p.cwd || (ctx.location && ctx.location.directory), prompts.get(id) || "");
+            }
+          } catch (_) {}
         }
       } catch (_) {}
-    },
-  };
-};
+    };
+    void run();
+    return () => controller.abort();
+  },
+});
 `
 
 const extensionModule = `// ` + moduleMarker + `: written by Rakko. Removed when its switch is off.
