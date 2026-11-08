@@ -17,6 +17,11 @@ import (
 	"rakko/internal/mac"
 )
 
+// idleDragPoll is the fallback read of the drag pasteboard while the shell
+// is at rest. Drag events arrive on their own; this only covers a missed
+// first event, so it can be far slower than the active cadence.
+const idleDragPoll = 250 * time.Millisecond
+
 // monitorActiveCondition is one state that makes the shell need 30 ms
 // frames. The list is the contract the scheduler test walks: every entry
 // must be reachable and must keep or enter the active cadence.
@@ -293,12 +298,21 @@ func (a *shelf) monitorTick(now time.Time) {
 	a.pointerTick, a.pointerTickValid = cursorPoint(), true
 	defer func() { a.pointerTickValid = false }()
 
+	active := a.monitorActive(now)
 	for _, m := range a.modules {
 		m.tick(now)
 	}
-	a.animate(now)
 	a.refreshAppearance(now)
-	a.monitorDrag(now)
+	// The idle pass only exists for the clipboard poll and the shell's own
+	// clocks. Pointer and drag work runs at the active cadence, or as a
+	// fallback once per idleDragPoll in case a drag event was missed.
+	if active || a.lastDragPoll.IsZero() || now.Sub(a.lastDragPoll) >= idleDragPoll {
+		a.lastDragPoll = now
+		a.animate(now)
+		a.monitorDrag(now)
+		a.syncWindowFrame()
+		a.syncPointerGate()
+	}
 	// 内容高度随项目数/正在播放卡片/搜索状态变化：
 	// desiredFrame 未变时是恒等比较，不触发原生缩放。
 	a.syncWindowFrame()
@@ -307,7 +321,9 @@ func (a *shelf) monitorTick(now time.Time) {
 	// settled panel), a missed move event and a shape that changed under a
 	// still pointer, so a press never waits for the next move.
 	a.syncPointerGate()
-	a.nextWarmPage(now)
+	if active {
+		a.nextWarmPage(now)
+	}
 	a.tickUpdates(now)
 	// The status's clock runs only while it is actually on screen: the open
 	// panel's pill counts, a drawn capsule counts, and a capsule paused by
