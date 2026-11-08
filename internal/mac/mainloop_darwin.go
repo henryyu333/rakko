@@ -4,79 +4,158 @@ package mac
 
 import (
 	"sync"
-	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/ebitengine/purego"
-	"github.com/egoist/mygo"
 )
 
-// AfterMain runs fn on the main queue after d. The monitoring loop uses it
-// as its only clock: libdispatch owns the deadline, so the main thread is
-// woken once instead of a Go ticker waking the scheduler to bounce a
-// closure onto it. Safe from any goroutine; fn always runs on the main
-// thread. A call scheduled for d <= 0 runs on the next queue pass.
+// Main-loop scheduling. The monitoring loop needs wakeups at a deadline and
+// immediate wakes from helper goroutines, both delivered on the AppKit main
+// thread. libdispatch's main-queue symbols are not exported by name on this
+// system, so this uses CoreFoundation directly: one run-loop timer for the
+// single pending deadline and one run-loop source for cross-thread wakes.
+// Both are added to kCFRunLoopCommonModes so they fire during tracking too.
+
+type cfRunLoopTimerContext struct {
+	version         int
+	info            uintptr
+	retain          uintptr
+	release         uintptr
+	copyDescription uintptr
+}
+
+type cfRunLoopSourceContext struct {
+	version         int
+	info            uintptr
+	retain          uintptr
+	release         uintptr
+	copyDescription uintptr
+	equal           uintptr
+	hash            uintptr
+	schedule        uintptr
+	cancel          uintptr
+	perform         uintptr
+}
+
 var (
-	afterMainOnce sync.Once
-	afterMainErr  error
-	dispatchAfter func(when uint64, queue, context, work uintptr)
-	dispatchAt    func(when uint64, delta int64) uint64
-	dispatchQueue func() uintptr
+	mainLoopOnce sync.Once
+	mainLoopErr  error
 
-	afterMainWork uintptr
-	afterMainSeq  atomic.Uint64
-	afterMainJobs sync.Map // uint64 → func()
+	mlGetMain          func() uintptr
+	mlAddTimer         func(runLoop, timer, mode uintptr)
+	mlTimerCreate      func(allocator uintptr, fireDate float64, interval float64, flags uintptr, order int, callout uintptr, context *cfRunLoopTimerContext) uintptr
+	mlTimerSetNext     func(timer uintptr, at float64)
+	mlTime             func() float64
+	mlAddSource        func(runLoop, source, mode uintptr)
+	mlSourceCreate     func(allocator uintptr, order int, context *cfRunLoopSourceContext) uintptr
+	mlSourceSignal     func(source uintptr)
+	mlSourceInvalidate func(source uintptr)
+	mlWakeUp           func(runLoop uintptr)
+
+	mainRunLoop uintptr
+	mainTimer   uintptr
+	mainSource  uintptr
+	commonMode  uintptr
+
+	mainLoopMu  sync.Mutex
+	deadlineJob func()
+	wakeJob     func()
 )
 
-func loadAfterMain() error {
-	afterMainOnce.Do(func() {
-		var (
-			afterAddr, timeAddr, queueAddr uintptr
-			err                            error
-		)
-		if afterAddr, err = purego.Dlsym(purego.RTLD_DEFAULT, "dispatch_after_f"); err != nil {
-			afterMainErr = err
+func loadMainLoop() error {
+	mainLoopOnce.Do(func() {
+		lib, err := purego.Dlopen("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation", purego.RTLD_LAZY)
+		if err != nil {
+			mainLoopErr = err
 			return
 		}
-		if timeAddr, err = purego.Dlsym(purego.RTLD_DEFAULT, "dispatch_time"); err != nil {
-			afterMainErr = err
+		bind := func(fn any, name string) bool {
+			addr, e := purego.Dlsym(lib, name)
+			if e != nil {
+				mainLoopErr = e
+				return false
+			}
+			purego.RegisterFunc(fn, addr)
+			return true
+		}
+		if !bind(&mlGetMain, "CFRunLoopGetMain") ||
+			!bind(&mlAddTimer, "CFRunLoopAddTimer") ||
+			!bind(&mlTimerCreate, "CFRunLoopTimerCreate") ||
+			!bind(&mlTimerSetNext, "CFRunLoopTimerSetNextFireDate") ||
+			!bind(&mlTime, "CFAbsoluteTimeGetCurrent") ||
+			!bind(&mlAddSource, "CFRunLoopAddSource") ||
+			!bind(&mlSourceCreate, "CFRunLoopSourceCreate") ||
+			!bind(&mlSourceSignal, "CFRunLoopSourceSignal") ||
+			!bind(&mlSourceInvalidate, "CFRunLoopSourceInvalidate") ||
+			!bind(&mlWakeUp, "CFRunLoopWakeUp") {
 			return
 		}
-		// dispatch_get_main_queue() is a macro for &_dispatch_main_q, and
-		// the function itself is not exported. The symbol is the queue
-		// object; its address is the queue pointer.
-		if queueAddr, err = purego.Dlsym(purego.RTLD_DEFAULT, "_dispatch_main_q"); err != nil {
-			afterMainErr = err
+		modeAddr, err := purego.Dlsym(lib, "kCFRunLoopCommonModes")
+		if err != nil {
+			mainLoopErr = err
 			return
 		}
-		purego.RegisterFunc(&dispatchAfter, afterAddr)
-		purego.RegisterFunc(&dispatchAt, timeAddr)
-		dispatchQueue = func() uintptr { return queueAddr }
-		afterMainWork = purego.NewCallback(func(context uintptr) {
-			if fn, ok := afterMainJobs.LoadAndDelete(context); ok {
-				fn.(func())()
+		commonMode = *(*uintptr)(unsafe.Pointer(modeAddr))
+		mainRunLoop = mlGetMain()
+
+		timerCb := purego.NewCallback(func(uintptr, uintptr) {
+			mainLoopMu.Lock()
+			fn := deadlineJob
+			deadlineJob = nil
+			mainLoopMu.Unlock()
+			if fn != nil {
+				fn()
 			}
 		})
+		var tc cfRunLoopTimerContext
+		mainTimer = mlTimerCreate(0, mlTime()+3600, 3600, 0, 0, timerCb, &tc)
+		mlAddTimer(mainRunLoop, mainTimer, commonMode)
+
+		sourceCb := purego.NewCallback(func(uintptr) {
+			mainLoopMu.Lock()
+			fn := wakeJob
+			wakeJob = nil
+			mainLoopMu.Unlock()
+			if fn != nil {
+				fn()
+			}
+		})
+		sc := cfRunLoopSourceContext{perform: sourceCb}
+		mainSource = mlSourceCreate(0, 0, &sc)
+		mlAddSource(mainRunLoop, mainSource, commonMode)
 	})
-	return afterMainErr
+	return mainLoopErr
 }
 
-// AfterMain posts fn to the main queue after d. When the dispatch symbols
-// are unavailable it falls back to a Go timer that hands the callback to
-// mygo's main thread; the callback must never run on a worker goroutine,
-// because it owns UI state.
+// AfterMain runs fn on the main run loop after d, replacing any earlier
+// deadline. Call on the main thread only (the monitoring loop does).
+// A failure leaves the callback unrun rather than executing UI code on a
+// worker: the caller can detect load failure through MainLoopAvailable.
 func AfterMain(d time.Duration, fn func()) {
-	if fn == nil {
+	if fn == nil || loadMainLoop() != nil {
 		return
 	}
-	if err := loadAfterMain(); err != nil {
-		go func() {
-			time.Sleep(d)
-			mygo.RunOnMain(fn)
-		}()
-		return
-	}
-	id := afterMainSeq.Add(1)
-	afterMainJobs.Store(id, fn)
-	dispatchAfter(dispatchAt(0, int64(d)), dispatchQueue(), uintptr(id), afterMainWork)
+	mainLoopMu.Lock()
+	deadlineJob = fn
+	mainLoopMu.Unlock()
+	at := mlTime() + d.Seconds()
+	mlTimerSetNext(mainTimer, at)
 }
+
+// WakeMain makes fn run on the main run loop as soon as possible. Safe from
+// any goroutine.
+func WakeMain(fn func()) {
+	if fn == nil || loadMainLoop() != nil {
+		return
+	}
+	mainLoopMu.Lock()
+	wakeJob = fn
+	mainLoopMu.Unlock()
+	mlSourceSignal(mainSource)
+	mlWakeUp(mainRunLoop)
+}
+
+// MainLoopAvailable reports whether the run-loop bindings loaded. The
+// monitoring loop uses it to fail visibly instead of silently stopping.
+func MainLoopAvailable() bool { return loadMainLoop() == nil }

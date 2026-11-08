@@ -274,7 +274,7 @@ func (a *shelf) wakeMonitor() {
 		a.monitorWakeQueued.Store(false)
 		return
 	}
-	mac.AfterMain(0, func() {
+	mac.WakeMain(func() {
 		a.monitorWakeQueued.Store(false)
 		if a.quitting {
 			return
