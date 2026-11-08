@@ -446,3 +446,25 @@ func TestOnboardingChipClickPlaysTheDemo(t *testing.T) {
 		t.Fatalf("the demo did not land the sample: tried=%v items=%d", a.onb.tried, len(a.store.Items))
 	}
 }
+
+// A linked home (or macOS's own /var -> /private/var) must not hide the
+// Downloads rule: the resolved bundle and the resolved home are compared.
+func TestRunLocationFollowsALinkedHome(t *testing.T) {
+	tmp := t.TempDir()
+	real := filepath.Join(tmp, "real")
+	bundle := filepath.Join(real, "Downloads", "Rakko.app")
+	if err := os.MkdirAll(filepath.Join(bundle, "Contents", "MacOS"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	exe := filepath.Join(bundle, "Contents", "MacOS", "rakko")
+	if err := os.WriteFile(exe, []byte("x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(tmp, "linked-home")
+	if err := os.Symlink(real, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if got := runLocation(exe, link); got != originDownloads {
+		t.Fatalf("a linked home read as %v, want Downloads", got)
+	}
+}

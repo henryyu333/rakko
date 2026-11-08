@@ -830,9 +830,18 @@ func onboardingOrigin() runOrigin {
 // home the user's home directory. Translocation resolves the staged
 // bundle back to where the user put it before judging.
 func runLocation(exe, home string) runOrigin {
+	// The executable comes resolved (onbExecutable follows symlinks), so
+	// the home must be too: /var is a link to /private/var here, and a
+	// home on a linked volume is just as ordinary.
+	if resolved, err := filepath.EvalSymlinks(home); err == nil {
+		home = resolved
+	}
 	bundle, ok := appBundleForExecutable(exe)
 	if !ok {
 		return originInstalled // go run, go test: not a bundle to move
+	}
+	if resolved, err := filepath.EvalSymlinks(bundle); err == nil {
+		bundle = resolved
 	}
 	if strings.Contains(bundle, "/AppTranslocation/") {
 		if real := translocatedSource(bundle); real != "" {
