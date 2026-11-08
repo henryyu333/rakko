@@ -497,6 +497,7 @@ func TestSkipUpdateVersion(t *testing.T) {
 	a := updateShelf()
 	a.dataDir = t.TempDir()
 	a.update = &mygo.Update{Version: "1.2.3"}
+	a.updateWinStage = updateStageFound
 	a.updateWinMarked = true
 	a.skipUpdateVersion()
 	if a.settings.UpdateSkippedVersion != "1.2.3" {
@@ -538,6 +539,7 @@ func TestRemindUpdateLater(t *testing.T) {
 	a := updateShelf()
 	a.dataDir = t.TempDir()
 	a.update = &mygo.Update{Version: "1.2.3"}
+	a.updateWinStage = updateStageFound
 	a.updateWinMarked = true
 	before := time.Now()
 	a.remindUpdateLater()
