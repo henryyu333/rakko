@@ -18,9 +18,10 @@ import (
 )
 
 // idleDragPoll is the fallback read of the drag pasteboard while the shell
-// is at rest. Drag events arrive on their own; this only covers a missed
-// first event, so it can be far slower than the active cadence.
-const idleDragPoll = 250 * time.Millisecond
+// is at rest. Every drag moves again after its first event, so a missed
+// first event is recovered by the next one; this only bounds the case where
+// the event monitor itself is unavailable.
+const idleDragPoll = time.Second
 
 // monitorActiveCondition is one state that makes the shell need 30 ms
 // frames. The list is the contract the scheduler test walks: every entry
@@ -212,16 +213,6 @@ func (a *shelf) monitorDelay(now time.Time) time.Duration {
 	if a.monitorActive(now) {
 		return pointerInterval
 	}
-	// At rest the clipboard poll is the heartbeat. One wake per 100 ms
-	// services every module's own gate; waking separately for each 250 ms /
-	// 1 s / 2 s deadline would multiply the idle wakes without changing
-	// behaviour by more than the poll's own granularity.
-	if a.clip != nil && !a.clip.pollAt.IsZero() {
-		if d := a.clip.pollAt.Sub(now); d > 0 {
-			return d
-		}
-		return 0
-	}
 	next := a.monitorDeadline(now)
 	if next.IsZero() {
 		return time.Second
@@ -240,6 +231,9 @@ func (a *shelf) startMonitoring() {
 	}
 	a.monitorRunFn = a.monitorRun
 	a.monitorStarted.Store(true)
+	if a.clip != nil {
+		a.clip.startBackground()
+	}
 	// A pointer already resting on the notch must peek at once, exactly as
 	// the old 30 ms loop did, without waiting for the next move event.
 	p := cursorPoint()
@@ -258,12 +252,27 @@ func (a *shelf) monitorRun() {
 	a.scheduleMonitor(now)
 }
 
-// scheduleMonitor arms the one pending main-queue timer. A newer
-// scheduling supersedes an older timer without cancelling it: the stale
-// callback sees the generation change and returns, and no extra tick runs.
+// scheduleMonitor keeps exactly one clock: a repeating native run-loop
+// timer at the active 30 ms cadence, or one Go timer at the earliest idle
+// deadline. Switching between them starts/stops the native timer, so an
+// active shell never pays a cross-thread wakeup per frame.
 func (a *shelf) scheduleMonitor(now time.Time) {
 	if a.quitting || !a.monitorStarted.Load() {
 		return
+	}
+	if a.monitorActive(now) {
+		if a.monitorTimer != nil {
+			a.monitorTimer.Stop()
+			a.monitorTimer = nil
+		}
+		if a.activeTickerStop == nil {
+			a.activeTickerStop = mac.StartMainTicker(pointerInterval, func() { a.monitorRun() })
+		}
+		return
+	}
+	if a.activeTickerStop != nil {
+		a.activeTickerStop()
+		a.activeTickerStop = nil
 	}
 	gen := a.monitorGen.Add(1)
 	delay := a.monitorDelay(now)
@@ -271,13 +280,23 @@ func (a *shelf) scheduleMonitor(now time.Time) {
 		a.monitorTimer.Stop()
 	}
 	a.monitorTimer = time.AfterFunc(delay, func() {
-		mac.WakeMain(func() {
+		a.postMain(func() {
 			if a.quitting || a.monitorGen.Load() != gen {
 				return
 			}
 			a.monitorRun()
 		})
 	})
+}
+
+// postMain delivers fn to the main run loop. Tests replace wakeMainFn to
+// drive the scheduler without AppKit.
+func (a *shelf) postMain(fn func()) {
+	if a.wakeMainFn != nil {
+		a.wakeMainFn(fn)
+		return
+	}
+	mac.WakeMain(fn)
 }
 
 // wakeMonitor asks for an immediate pass. Safe from any goroutine; repeated
@@ -294,7 +313,7 @@ func (a *shelf) wakeMonitor() {
 		a.monitorWakeQueued.Store(false)
 		return
 	}
-	mac.WakeMain(func() {
+	a.postMain(func() {
 		a.monitorWakeQueued.Store(false)
 		if a.quitting {
 			return
@@ -426,7 +445,7 @@ func (a *shelf) pointerMoved() {
 	gateMoveUntil.Store(now.Add(gatePollWindow).UnixNano())
 	wakeGatePoll()
 	p := cursorPoint()
-	if a.dispBounds.Width > 0 && !insideRect(p, a.dispBounds) {
+	if !a.visible && a.dispBounds.Width > 0 && !insideRect(p, a.dispBounds) {
 		a.place(p)
 		a.wakeMonitor()
 	}

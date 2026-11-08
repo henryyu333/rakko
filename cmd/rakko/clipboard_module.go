@@ -3,6 +3,7 @@
 package main
 
 import (
+	"sync"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -72,20 +73,21 @@ type clipboardModule struct {
 	// attributing it to whatever app is frontmost by then.
 	pending *clipPending
 
-	// pollAt is the next changeCount read; lastPoll is the previous one.
-	// Activations after lastPoll and before now decide the source app of a
-	// change found now.
-	pollAt   time.Time
+	// lastPoll is the previous change observation; activations after it and
+	// before a change decide the source app of that change.
 	lastPoll time.Time
 	front    string
 	active   []clipActivation
 	// stopObserve ends the activation observer; nil when none was installed
 	// (tests build the module without AppKit).
 	stopObserve func()
-	// clocked is set by the production constructor. Tests drive tick
-	// directly at their own times and keep the old every-call semantics;
-	// the app reads the pasteboard on the 100 ms clock.
-	clocked bool
+	// background is set when the app's poller goroutine owns changeCount;
+	// tests drive tick directly and keep the every-call semantics.
+	background bool
+	bgMu       sync.Mutex
+	bgCount    int64
+	bgAt       time.Time
+	bgPending  bool
 	// tracked is true when the activation observer installed. Without it
 	// (headless shelves, tests) the source is read at each copy.
 	tracked bool
@@ -103,8 +105,8 @@ func newClipboardModule(host *shelf) *clipboardModule {
 	board := systemClipReader{}
 	now := time.Now()
 	m := &clipboardModule{
-		host: host, board: board, count: board.changeCount(), clocked: host.win != nil,
-		pollAt: now.Add(clipPollInterval), lastPoll: now,
+		host: host, board: board, count: board.changeCount(),
+		lastPoll: now, bgCount: board.changeCount(),
 	}
 	if host.win != nil {
 		m.tracked = true
@@ -172,8 +174,58 @@ func (m *clipboardModule) advancePoll(now time.Time) {
 	m.active = kept
 }
 
-// nextTick is the pasteboard poll deadline, always finite.
-func (m *clipboardModule) nextTick(time.Time) time.Time { return m.pollAt }
+// nextTick is a pending change's retry deadline. With the background poller
+// there is no main-thread poll clock at all.
+func (m *clipboardModule) nextTick(now time.Time) time.Time {
+	if p := m.pending; p != nil {
+		return p.seen.Add(clipPollInterval)
+	}
+	return time.Time{}
+}
+
+// startBackground starts the 100 ms changeCount poller. Only the general
+// pasteboard's change counter is read off the main thread; types, text,
+// images and source attribution are still handled on the main thread.
+func (m *clipboardModule) startBackground() {
+	if m.background {
+		return
+	}
+	m.background = true
+	board, stop := m.board, m.host.stop
+	go func() {
+		t := time.NewTicker(clipPollInterval)
+		defer t.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case now := <-t.C:
+				count := board.changeCount()
+				m.bgMu.Lock()
+				changed := count != m.bgCount
+				if changed {
+					m.bgCount, m.bgAt, m.bgPending = count, now, true
+				}
+				m.bgMu.Unlock()
+				if changed {
+					m.host.wakeMonitor()
+				}
+			}
+		}
+	}()
+}
+
+// takeBackground hands the latest background observation to the main
+// thread, if one is waiting.
+func (m *clipboardModule) takeBackground() (int64, time.Time, bool) {
+	m.bgMu.Lock()
+	defer m.bgMu.Unlock()
+	if !m.bgPending {
+		return 0, time.Time{}, false
+	}
+	m.bgPending = false
+	return m.bgCount, m.bgAt, true
+}
 
 // tick reads the pasteboard on the 100 ms clock. The changeCount read is
 // cheap, and the activation history attributes a copy to the app that was
@@ -186,15 +238,24 @@ func (m *clipboardModule) nextTick(time.Time) time.Time { return m.pollAt }
 // bump is still recorded exactly once. A newer change supersedes a pending
 // one and is attributed to the app frontmost at its own bump.
 func (m *clipboardModule) tick(now time.Time) {
-	if m.clocked {
-		if now.Before(m.pollAt) {
+	var count int64
+	var changeAt time.Time
+	if m.background {
+		var ok bool
+		count, changeAt, ok = m.takeBackground()
+		if !ok {
+			if p := m.pending; p != nil && now.Sub(p.seen) < clipPublishWait {
+				m.record(now, p.source)
+			} else if p != nil {
+				m.pending = nil
+			}
 			return
 		}
-		m.pollAt = now.Add(clipPollInterval)
+	} else {
+		count, changeAt = m.board.changeCount(), now
 	}
-	count := m.board.changeCount()
-	source := m.sourceFor(now)
-	m.advancePoll(now)
+	source := m.sourceFor(changeAt)
+	m.advancePoll(changeAt)
 	if count != m.count {
 		m.pending = nil
 		m.count = count
@@ -209,8 +270,6 @@ func (m *clipboardModule) tick(now time.Time) {
 	}
 	if p := m.pending; p != nil {
 		if now.Sub(p.seen) >= clipPublishWait {
-			// The pasteboard never published anything usable for this change:
-			// drop it for good so later ticks cost nothing.
 			m.pending = nil
 			return
 		}

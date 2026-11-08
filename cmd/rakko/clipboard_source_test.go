@@ -93,3 +93,24 @@ func TestClipboardSourceSelfCopyHasNoSource(t *testing.T) {
 		t.Fatalf("source = %q, want empty for a self copy", got)
 	}
 }
+
+// TestClipboardBackgroundChangeIsProcessedOnce: the poller only reads the
+// counter; the main-thread tick drains one observation, records it, and
+// clears the pending flag so the same change is not recorded twice.
+func TestClipboardBackgroundChangeIsProcessedOnce(t *testing.T) {
+	a, _, _ := clipShelf(t)
+	board := &copyEventReader{app: "com.example.Source", formats: []string{"public.utf8-plain-text"}, value: "from background", serial: 1}
+	m := &clipboardModule{host: a, board: board, count: 0, background: true, bgCount: 1, bgAt: time.Now(), bgPending: true}
+	a.clip = m
+	m.tick(time.Now())
+	if len(a.store.Items) != 1 || a.store.Items[0].Text != "from background" {
+		t.Fatalf("background change not recorded: %+v", a.store.Items)
+	}
+	if m.bgPending {
+		t.Fatal("background observation was not consumed")
+	}
+	m.tick(time.Now())
+	if len(a.store.Items) != 1 {
+		t.Fatalf("the same change was recorded twice: %+v", a.store.Items)
+	}
+}

@@ -9,12 +9,11 @@ import (
 	"github.com/ebitengine/purego"
 )
 
-// Main-loop scheduling. The monitoring loop needs wakeups at a deadline and
-// immediate wakes from helper goroutines, both delivered on the AppKit main
-// thread. libdispatch's main-queue symbols are not exported by name on this
-// system, so this uses CoreFoundation directly: one run-loop timer for the
-// single pending deadline and one run-loop source for cross-thread wakes.
-// Both are added to kCFRunLoopCommonModes so they fire during tracking too.
+// Main-loop scheduling. Two native primitives cover the app: a run-loop
+// source carrying a FIFO of cross-thread wakeups (nothing may overwrite a
+// queued wakeup), and repeating CFRunLoopTimers for the active 30 ms
+// cadence, added to the default and event-tracking modes. All callbacks run
+// on the AppKit main thread.
 
 type cfRunLoopTimerContext struct {
 	version         int
@@ -37,6 +36,37 @@ type cfRunLoopSourceContext struct {
 	perform         uintptr
 }
 
+// mainWakeQueue is the FIFO the run-loop source drains. A single slot is
+// wrong: a timer wake and an event wake can both arrive before the main
+// thread runs, and overwriting one would strand monitorWakeQueued at true.
+type mainWakeQueue struct {
+	mu   sync.Mutex
+	jobs []func()
+}
+
+func (q *mainWakeQueue) push(fn func()) {
+	if fn == nil {
+		return
+	}
+	q.mu.Lock()
+	q.jobs = append(q.jobs, fn)
+	q.mu.Unlock()
+}
+
+func (q *mainWakeQueue) drain() []func() {
+	q.mu.Lock()
+	jobs := q.jobs
+	q.jobs = nil
+	q.mu.Unlock()
+	return jobs
+}
+
+func (q *mainWakeQueue) empty() bool {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return len(q.jobs) == 0
+}
+
 var (
 	mainLoopOnce sync.Once
 	mainLoopErr  error
@@ -44,7 +74,6 @@ var (
 	mlGetMain          func() uintptr
 	mlAddTimer         func(runLoop, timer, mode uintptr)
 	mlTimerCreate      func(allocator uintptr, fireDate float64, interval float64, flags uintptr, order int, callout uintptr, context *cfRunLoopTimerContext) uintptr
-	mlTimerSetNext     func(timer uintptr, at float64)
 	mlTimerInvalidate  func(timer uintptr)
 	mlTime             func() float64
 	mlAddSource        func(runLoop, source, mode uintptr)
@@ -56,12 +85,10 @@ var (
 	mainRunLoop uintptr
 	mainSource  uintptr
 	modes       []uintptr
+	wakeQueue   mainWakeQueue
 
-	mainLoopMu   sync.Mutex
-	deadlineJob  func()
-	deadlineCb   uintptr
-	pendingTimer uintptr
-	wakeJob      func()
+	tickerMu  sync.Mutex
+	tickerCbs = map[uintptr]uintptr{}
 )
 
 func loadMainLoop() error {
@@ -83,7 +110,6 @@ func loadMainLoop() error {
 		if !bind(&mlGetMain, "CFRunLoopGetMain") ||
 			!bind(&mlAddTimer, "CFRunLoopAddTimer") ||
 			!bind(&mlTimerCreate, "CFRunLoopTimerCreate") ||
-			!bind(&mlTimerSetNext, "CFRunLoopTimerSetNextFireDate") ||
 			!bind(&mlTimerInvalidate, "CFRunLoopTimerInvalidate") ||
 			!bind(&mlTime, "CFAbsoluteTimeGetCurrent") ||
 			!bind(&mlAddSource, "CFRunLoopAddSource") ||
@@ -93,12 +119,9 @@ func loadMainLoop() error {
 			!bind(&mlWakeUp, "CFRunLoopWakeUp") {
 			return
 		}
-		// kCFRunLoopCommonModes is CFSTR("kCFRunLoopCommonModes"); build the
-		// equivalent string instead of reading a data symbol.
-		// kCFRunLoopCommonModes/DefaultMode are CFSTR constants. Creating a
-		// string with the common-mode name is not equivalent to the run
-		// loop's own constant, so add the default and event-tracking modes
-		// explicitly; the app rests and tracks drags in those two.
+		// CFSTR("kCFRunLoopCommonModes") built as an NSString is not the
+		// run loop's own constant. Add the two modes the app actually runs
+		// in: resting and tracking a mouse drag.
 		withPool(func() {
 			for _, name := range []string{"kCFRunLoopDefaultMode", "kCFRunLoopEventTracking"} {
 				modes = append(modes, uintptr(send(nsString(name), "retain")))
@@ -106,27 +129,15 @@ func loadMainLoop() error {
 		})
 		mainRunLoop = mlGetMain()
 
-		deadlineCb = purego.NewCallback(func(t uintptr, _ uintptr) {
-			releaseCF(t)
-			mainLoopMu.Lock()
-			if pendingTimer == t {
-				pendingTimer = 0
-			}
-			fn := deadlineJob
-			deadlineJob = nil
-			mainLoopMu.Unlock()
-			if fn != nil {
-				fn()
-			}
-		})
-
 		sourceCb := purego.NewCallback(func(uintptr) {
-			mainLoopMu.Lock()
-			fn := wakeJob
-			wakeJob = nil
-			mainLoopMu.Unlock()
-			if fn != nil {
-				fn()
+			for {
+				jobs := wakeQueue.drain()
+				if len(jobs) == 0 {
+					return
+				}
+				for _, fn := range jobs {
+					fn()
+				}
 			}
 		})
 		sc := cfRunLoopSourceContext{perform: sourceCb}
@@ -138,49 +149,50 @@ func loadMainLoop() error {
 	return mainLoopErr
 }
 
-// AfterMain runs fn on the main run loop after d, replacing any earlier
-// deadline. Call on the main thread only (the monitoring loop does).
-// A failure leaves the callback unrun rather than executing UI code on a
-// worker: the caller can detect load failure through MainLoopAvailable.
-func AfterMain(d time.Duration, fn func()) {
-	if fn == nil || loadMainLoop() != nil {
-		return
-	}
-	var tc cfRunLoopTimerContext
-	mainLoopMu.Lock()
-	deadlineJob = fn
-	old := pendingTimer
-	pendingTimer = 0
-	mainLoopMu.Unlock()
-	if old != 0 {
-		mlTimerInvalidate(old)
-		releaseCF(old)
-	}
-	timer := mlTimerCreate(0, mlTime()+d.Seconds(), 0, 0, 0, deadlineCb, &tc)
-	if timer == 0 {
-		return
-	}
-	mainLoopMu.Lock()
-	pendingTimer = timer
-	mainLoopMu.Unlock()
-	for _, mode := range modes {
-		mlAddTimer(mainRunLoop, timer, mode)
-	}
-}
-
 // WakeMain makes fn run on the main run loop as soon as possible. Safe from
-// any goroutine.
+// any goroutine. Every queued function runs; a second wakeup never replaces
+// the first.
 func WakeMain(fn func()) {
 	if fn == nil || loadMainLoop() != nil {
 		return
 	}
-	mainLoopMu.Lock()
-	wakeJob = fn
-	mainLoopMu.Unlock()
+	wakeQueue.push(fn)
 	mlSourceSignal(mainSource)
 	mlWakeUp(mainRunLoop)
 }
 
-// MainLoopAvailable reports whether the run-loop bindings loaded. The
-// monitoring loop uses it to fail visibly instead of silently stopping.
+// StartMainTicker calls fn on the main run loop every interval until stop is
+// called. It uses a repeating CFRunLoopTimer in the default and
+// event-tracking modes, so an active shell is driven without a Go timer and
+// a cross-thread wakeup on every frame.
+func StartMainTicker(interval time.Duration, fn func()) (stop func()) {
+	if fn == nil || interval <= 0 || loadMainLoop() != nil {
+		return func() {}
+	}
+	var tc cfRunLoopTimerContext
+	var timer, cb uintptr
+	cb = purego.NewCallback(func(uintptr, uintptr) { fn() })
+	timer = mlTimerCreate(0, mlTime()+interval.Seconds(), interval.Seconds(), 0, 0, cb, &tc)
+	if timer == 0 {
+		return func() {}
+	}
+	tickerMu.Lock()
+	tickerCbs[timer] = cb
+	tickerMu.Unlock()
+	for _, mode := range modes {
+		mlAddTimer(mainRunLoop, timer, mode)
+	}
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			mlTimerInvalidate(timer)
+			releaseCF(timer)
+			tickerMu.Lock()
+			delete(tickerCbs, timer)
+			tickerMu.Unlock()
+		})
+	}
+}
+
+// MainLoopAvailable reports whether the run-loop bindings loaded.
 func MainLoopAvailable() bool { return loadMainLoop() == nil }

@@ -161,7 +161,7 @@ func TestMonitorDeadlines(t *testing.T) {
 		want time.Duration
 	}{
 		{"clipboard", func(a *shelf) {
-			a.clip = &clipboardModule{pollAt: now.Add(100 * time.Millisecond)}
+			a.clip = &clipboardModule{pending: &clipPending{seen: now}}
 			a.modules = append(a.modules, a.clip)
 		}, 100 * time.Millisecond},
 		{"audio", func(a *shelf) {
@@ -268,12 +268,66 @@ func TestGatePollingFollowsMovement(t *testing.T) {
 func TestMonitorDeadlineTakesEarliest(t *testing.T) {
 	now := time.Now()
 	a := monitorShelf()
-	a.clip = &clipboardModule{pollAt: now.Add(100 * time.Millisecond)}
+	a.clip = &clipboardModule{pending: &clipPending{seen: now}}
 	a.modules = append(a.modules, a.clip)
 	a.audio = &audioModule{next: now.Add(time.Second)}
 	a.modules = append(a.modules, a.audio)
 	a.pins = []*pinItem{{edge: pinLeft, expanded: true, leftAt: now.Add(-550 * time.Millisecond)}}
 	if got := a.monitorDeadline(now).Sub(now); got != pinHideDelay-550*time.Millisecond {
 		t.Fatalf("earliest deadline = %v, want the pin's %v", got, pinHideDelay-550*time.Millisecond)
+	}
+}
+
+// TestPointerMovedFollowsDisplayOnlyWhenClosed: a closed shelf follows the
+// pointer to another display; an open panel stays where it is, matching
+// monitorDrag's rule.
+func TestPointerMovedFollowsDisplayOnlyWhenClosed(t *testing.T) {
+	oldDisplay, oldNotch, oldCursor := displayNearest, notchRect, cursorPoint
+	t.Cleanup(func() { displayNearest, notchRect, cursorPoint = oldDisplay, oldNotch, oldCursor })
+	displayNearest = func(p mygo.Point) mygo.Display {
+		if p.X < 200 {
+			return mygo.Display{ID: 1, Bounds: mygo.Rectangle{X: 0, Y: 0, Width: 200, Height: 200}}
+		}
+		return mygo.Display{ID: 2, Bounds: mygo.Rectangle{X: 200, Y: 0, Width: 200, Height: 200}}
+	}
+	notchRect = func(int64) (int, int, int, int, bool) { return 0, 0, 0, 0, false }
+	a := monitorShelf()
+	a.dispID, a.dispBounds = 1, mygo.Rectangle{X: 0, Y: 0, Width: 200, Height: 200}
+	cursorPoint = func() mygo.Point { return mygo.Point{X: 300, Y: 20} }
+	a.pointerMoved()
+	if a.dispID != 2 {
+		t.Fatalf("closed shelf did not follow the pointer: dispID=%d", a.dispID)
+	}
+	a.visible = true
+	cursorPoint = func() mygo.Point { return mygo.Point{X: 20, Y: 20} }
+	a.pointerMoved()
+	if a.dispID != 2 {
+		t.Fatalf("open panel moved to another display: dispID=%d", a.dispID)
+	}
+}
+
+// TestWakeAndTimerJobsBothRun: a timer wake and a wakeMonitor wake queued
+// before the main thread runs must both execute, and the coalescing flag
+// must return to false so later event wakes are not swallowed.
+func TestWakeAndTimerJobsBothRun(t *testing.T) {
+	a := monitorShelf()
+	a.monitorStarted.Store(true)
+	runs := 0
+	a.monitorRunFn = func() { runs++ }
+	var queued []func()
+	a.wakeMainFn = func(fn func()) { queued = append(queued, fn) }
+	a.postMain(func() { runs++ })
+	a.wakeMonitor()
+	if len(queued) != 2 {
+		t.Fatalf("queued %d jobs, want timer + wake", len(queued))
+	}
+	for _, fn := range queued {
+		fn()
+	}
+	if runs != 2 {
+		t.Fatalf("ran %d jobs, want 2", runs)
+	}
+	if a.monitorWakeQueued.Load() {
+		t.Fatal("monitorWakeQueued stayed true")
 	}
 }
