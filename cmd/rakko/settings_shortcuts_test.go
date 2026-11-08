@@ -738,8 +738,8 @@ func TestUpdateWhenClassifiesCalendarDays(t *testing.T) {
 func TestSettingsCheckNowRow(t *testing.T) {
 	stubSettingsSeams(t, false, nil, nil)
 	// A build that can check: production, with an enabled updater and a
-	// stubbed check. The update window's factory is marked too, so the
-	// manual check's progress face does not need a window server.
+	// stubbed check. The window factory returns nil, so the manual check's
+	// progress face runs as a headless mark instead of a real window.
 	origCheck, origEnabled, origDev := updateCheck, updateEnabled, updateDevBuild
 	origMake := updateWinMake
 	var calls int
