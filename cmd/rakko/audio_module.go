@@ -235,3 +235,11 @@ func percentOf(v any) (int, bool) {
 	}
 	return 0, false
 }
+
+// nextTick is the next audio-device scan.
+func (m *audioModule) nextTick(now time.Time) time.Time {
+	if m.next.IsZero() {
+		return now
+	}
+	return m.next
+}

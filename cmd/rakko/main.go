@@ -161,6 +161,9 @@ func main() {
 		if a.stopDragObservation != nil {
 			a.stopDragObservation()
 		}
+		if a.clip != nil {
+			a.clip.stop()
+		}
 		if a.tray != nil {
 			a.tray.Destroy()
 		}
@@ -379,6 +382,7 @@ func (a *shelf) ready(show bool) {
 	mygo.Screen.OnDisplaysChanged(func() {
 		// 常驻窗口跟随光标所在显示器重新定位（收起态无感）。
 		a.place(mygo.Screen.CursorScreenPoint())
+		a.wakeMonitor()
 		// 拔掉显示器的固定项回主显示器同一边。
 		a.pinDisplaysChanged()
 		// 桌宠所在的显示器拔掉了就回主显示器。

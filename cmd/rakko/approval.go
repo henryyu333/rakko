@@ -123,7 +123,7 @@ func (a *shelf) approvalFeature() *approvalFeature {
 }
 
 // main runs fn on the app's main thread. agentRunOnMain is the test seam.
-func (f *approvalFeature) main(fn func()) { agentRunOnMain(fn) }
+func (f *approvalFeature) main(fn func()) { agentRunOnMain(func() { fn(); f.host.wakeMonitor() }) }
 
 // ask is the socket's blocking side: it admits the request on the main
 // thread, then waits for an answer, a timeout or the peer hanging up.

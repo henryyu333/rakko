@@ -661,6 +661,7 @@ func (a *shelf) mouseDown(inside bool, button int, p mygo.Point) {
 	if a.quitting {
 		return
 	}
+	a.wakeMonitor()
 	// A left press on our own window is the user's gesture, not an
 	// incoming drag: park the notch corridor for as long as the button is
 	// held (released in monitorDrag), so a small wobble on a band icon
@@ -945,6 +946,7 @@ func (a *shelf) watchPointer() {
 	pointerWatched = true
 	mac.ObserveMouseMoved(func() {
 		for _, s := range pointerShelves {
+			s.pointerMoved()
 			s.syncPointerGate()
 		}
 	})
@@ -959,6 +961,9 @@ func pollPointerGate() {
 		for gatePolling.Load() {
 			time.Sleep(gatePollInterval)
 			mygo.RunOnMain(func() {
+				if !gatePolling.Load() {
+					return
+				}
 				for _, s := range pointerShelves {
 					s.syncPointerGate()
 				}

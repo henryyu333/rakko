@@ -168,17 +168,26 @@ type shelf struct {
 	// not one WindowServer round trip each.
 	pointerTick      mygo.Point
 	pointerTickValid bool
-	watchingPointer  bool // registered with the process-wide pointer gate
-	reduceTrans      bool // cached Reduce Transparency (refreshed on a slow tick)
-	appearanceAt     time.Time
-	thumbnails       map[string]*ui.Bitmap
-	shake            shakeDetector // 摇晃召唤：拖拽中左右晃动检测
-	basket           basketState   // 摇晃召唤的拖放篮
-	thumbPending     map[string]bool
-	thumbDiscard     map[string]bool
-	thumbActive      int
-	pins             []*pinItem // desktop-pinned cards (pin.go)
-	pinReturning     bool       // a pin drag holds the notch's 松开放回 bulge
+	// The monitoring loop: started is readable from helper goroutines that
+	// ask for a wake, the generation lets a superseded main-queue timer
+	// retire without a second pass.
+	monitorStarted    atomic.Bool
+	monitorWakeQueued atomic.Bool
+	monitorGen        atomic.Uint64
+	monitorRunFn      func()    // set at start; breaks the wake→tick init cycle
+	pointerNear       bool      // the pointer is on a watched surface
+	lastMoveAt        time.Time // last move event, for the gate poll window
+	watchingPointer   bool      // registered with the process-wide pointer gate
+	reduceTrans       bool      // cached Reduce Transparency (refreshed on a slow tick)
+	appearanceAt      time.Time
+	thumbnails        map[string]*ui.Bitmap
+	shake             shakeDetector // 摇晃召唤：拖拽中左右晃动检测
+	basket            basketState   // 摇晃召唤的拖放篮
+	thumbPending      map[string]bool
+	thumbDiscard      map[string]bool
+	thumbActive       int
+	pins              []*pinItem // desktop-pinned cards (pin.go)
+	pinReturning      bool       // a pin drag holds the notch's 松开放回 bulge
 	// pet 是桌面海獭的窗口与按下会话（pet.go）；nil 表示桌面上没有它。
 	// lastAct 是最近一次使用（打开面板、提起海獭、接住投放），十分钟
 	// 没有它海獭就睡觉；happyUntil 是接到好消息后的开心表情截止时刻。
@@ -237,82 +246,6 @@ func (a *shelf) toggle() {
 	}
 }
 
-func (a *shelf) startMonitoring() {
-	go func() {
-		ticker := time.NewTicker(pointerInterval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-a.stop:
-				return
-			case now := <-ticker.C:
-				mygo.RunOnMain(func() {
-					if a.quitting {
-						return
-					}
-					for _, m := range a.modules {
-						m.tick(now)
-					}
-					a.animate(now)
-					a.refreshAppearance(now)
-					a.monitorDrag(now)
-					// 内容高度随项目数/正在播放卡片/搜索状态变化：
-					// desiredFrame 未变时是恒等比较，不触发原生缩放。
-					a.syncWindowFrame()
-					// The gate follows the shape the last frame drew, so it
-					// is normally right already; asking again every tick
-					// covers what draws nothing (a settled panel), a missed
-					// move event and a shape that changed under a still
-					// pointer, so a press never waits for the next move.
-					a.syncPointerGate()
-					a.nextWarmPage(now)
-					a.tickUpdates(now)
-					// The status's clock runs only while it is actually on
-					// screen: the open panel's pill counts, a drawn capsule
-					// counts, and a capsule paused by hover or a drag holds
-					// both its own hold and the panel's deadline.
-					seeing := a.status != "" && (a.visible || (a.fb.drawn && a.fb.pausedAt.IsZero()))
-					if seeing {
-						if a.statusSeenAt.IsZero() {
-							a.statusSeenAt = now
-						} else {
-							a.statusSeen += now.Sub(a.statusSeenAt)
-							a.statusSeenAt = now
-						}
-					} else {
-						a.statusSeenAt = time.Time{}
-					}
-					// A capsule paused mid-hold extends the shared deadline:
-					// the toast must not expire while its words are parked
-					// off screen.
-					until := a.statusUntil
-					if !a.fb.pausedAt.IsZero() {
-						if f := &a.fb; f.until.After(until) {
-							until = f.until
-						}
-					}
-					if !a.statusUntil.IsZero() && now.After(until) {
-						a.dismissReadFeedback(now)
-						a.status, a.statusUntil, a.statusSeen, a.statusSeenAt = "", time.Time{}, 0, time.Time{}
-						if a.win != nil {
-							a.win.Invalidate()
-						}
-					}
-					// statusToast 给无期限状态（报错、启动提示）计时：
-					// 看见满 toastLife 后清掉。
-					if a.status != "" && a.statusUntil.IsZero() && a.statusSeen >= toastLife {
-						a.dismissReadFeedback(now)
-						a.status, a.statusSeen, a.statusSeenAt = "", 0, time.Time{}
-						if a.win != nil {
-							a.win.Invalidate()
-						}
-					}
-				})
-			}
-		}
-	}()
-}
-
 // statusKind 是提示的级别：做成的事情、普通信息、错误。面板底部 pill
 // 只给错误加红点；刘海胶囊按级别给状态点配色（DESIGN.md：成功绿
 // #30D158 ✓、普通信息中性白点、错误红 #FF453A !）。
@@ -368,6 +301,7 @@ func (a *shelf) toast(msg string, until time.Time, kind statusKind, capsule bool
 	if a.win != nil {
 		a.win.Invalidate()
 	}
+	a.wakeMonitor()
 }
 
 func (a *shelf) showStatusFeedback(now time.Time) {
@@ -556,6 +490,7 @@ func (a *shelf) applySettings(next settings.Settings) bool {
 	}
 	a.repaintSettings()
 	a.repaintUpdateWindow()
+	a.wakeMonitor()
 	return true
 }
 

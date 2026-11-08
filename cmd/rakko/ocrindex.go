@@ -199,6 +199,7 @@ func (o *ocrIndex) start(it store.Item, cb func(string, error)) {
 		lines, err := recognize(path)
 		dispatch(func() {
 			gone, werr := o.finish(id, lines, err)
+			host.wakeMonitor()
 			if cb != nil {
 				switch {
 				case gone:
@@ -399,4 +400,23 @@ func ocrSnippetLine(c *ui.Context, before, hit, after string) ui.Element {
 		ui.Span{Text: hit, Color: ink, Weight: 600},
 		ui.Span{Text: after, Color: ink2},
 	).SingleLine().FontSize(11)
+}
+
+// nextTick reports when the background pass has work to do. An in-flight
+// worker reports the next image's turn (finish sets nextAt) and wakes the
+// loop when it lands; idle means no deadline at all.
+func (o *ocrIndex) nextTick(now time.Time) time.Time {
+	if o.idle {
+		return time.Time{}
+	}
+	if len(o.inflight) > 0 && len(o.pending) == 0 {
+		return time.Time{}
+	}
+	if len(o.pending) > 0 && len(o.inflight) == 0 {
+		return now
+	}
+	if now.Before(o.nextAt) {
+		return o.nextAt
+	}
+	return now
 }

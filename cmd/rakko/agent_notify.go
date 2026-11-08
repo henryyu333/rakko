@@ -180,7 +180,10 @@ func (f *agentNotifyFeature) accept(ev agentnotify.Event) {
 		f.finished[key] = agentTask{tool: tool, task: task, at: now}
 		f.mu.Unlock()
 	}
-	agentRunOnMain(func() { f.host.postAgentDone(tool, task) })
+	agentRunOnMain(func() {
+		f.host.postAgentDone(tool, task)
+		f.host.wakeMonitor()
+	})
 }
 
 // snapshot is the home page's AGENT section: the turns under way now,

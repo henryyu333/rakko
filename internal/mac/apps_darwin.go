@@ -5,6 +5,8 @@ package mac
 import (
 	"os"
 	"strings"
+
+	"github.com/ebitengine/purego/objc"
 )
 
 // NSApplicationActivationOptions, as NSRunningApplication expects them.
@@ -291,4 +293,36 @@ func AppPathForBundleID(bundleID string) string {
 		}
 	})
 	return path
+}
+
+// ObserveActiveApp reports every application activation through
+// NSWorkspaceDidActivateApplicationNotification. The clipboard recorder
+// needs the activation order, not just the foreground app at poll time: a
+// copy followed by a quick app switch must still be attributed to the app
+// the user copied from. The block runs on the main thread. Install and stop
+// on the main thread; no permission is needed.
+func ObserveActiveApp(changed func()) (stop func()) {
+	if err := Init(); err != nil {
+		return func() {}
+	}
+	var center, token id
+	withPool(func() {
+		ws := send(class("NSWorkspace"), "sharedWorkspace")
+		center = send(ws, "notificationCenter")
+		block := objc.NewBlock(func(_ objc.Block, _ id) { changed() })
+		defer block.Release()
+		token = send(center, "addObserverForName:object:queue:usingBlock:",
+			uintptr(nsString("NSWorkspaceDidActivateApplicationNotification")),
+			0, uintptr(send(class("NSOperationQueue"), "mainQueue")), uintptr(block))
+		send(token, "retain")
+	})
+	return func() {
+		withPool(func() {
+			if token != 0 {
+				send(center, "removeObserver:", uintptr(token))
+				send(token, "release")
+				token = 0
+			}
+		})
+	}
 }

@@ -55,3 +55,11 @@ func (a *shelf) removeExpired(now time.Time) {
 		}
 	}
 }
+
+// nextTick is the next retention pass.
+func (m *retentionModule) nextTick(now time.Time) time.Time {
+	if m.last.IsZero() {
+		return now
+	}
+	return m.last.Add(retentionCheck)
+}

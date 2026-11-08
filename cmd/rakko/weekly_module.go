@@ -377,3 +377,32 @@ func (f *weeklyFeature) invalidate() {
 		f.host.win.Invalidate()
 	}
 }
+
+// nextTick is the next sample or dirty flush; the report scan runs from
+// the page's own active ticks.
+func (f *weeklyFeature) nextTick(now time.Time) time.Time {
+	var next time.Time
+	due := func(at time.Time) {
+		if at.IsZero() || !at.After(now) {
+			at = now
+		}
+		if next.IsZero() || at.Before(next) {
+			next = at
+		}
+	}
+	if f.sampler != nil && f.consent() {
+		if f.lastSample.IsZero() {
+			due(now)
+		} else {
+			due(f.lastSample.Add(weekly.SampleInterval))
+		}
+	}
+	if f.store != nil && f.store.Dirty() {
+		if f.lastFlush.IsZero() {
+			due(now)
+		} else {
+			due(f.lastFlush.Add(weeklyFlushInterval))
+		}
+	}
+	return next
+}

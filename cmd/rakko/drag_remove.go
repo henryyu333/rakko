@@ -104,3 +104,17 @@ func (a *shelf) flushLeaving(cutoff time.Time) {
 type leavingModule struct{ host *shelf }
 
 func (m *leavingModule) tick(now time.Time) { m.host.flushLeaving(now.Add(-leaveGrace)) }
+
+// nextTick is the earliest dragged-out item's grace expiry.
+func (m *leavingModule) nextTick(now time.Time) time.Time {
+	var next time.Time
+	for _, at := range m.host.leaving {
+		due := at.Add(leaveGrace)
+		if due.After(now) && (next.IsZero() || due.Before(next)) {
+			next = due
+		} else if !due.After(now) {
+			return now
+		}
+	}
+	return next
+}

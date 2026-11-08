@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -298,12 +299,14 @@ type NowPlayingHost struct {
 	// the real perl host; tests substitute a fake.
 	start func(ctx context.Context) (io.WriteCloser, io.ReadCloser, func() error, error)
 
-	mu     sync.Mutex
-	latest NowPlayingState // last state read
-	have   bool
-	cmd    io.WriteCloser
-	cancel context.CancelFunc
-	done   chan struct{}
+	mu       sync.Mutex
+	latest   NowPlayingState // last state read
+	have     bool
+	revision atomic.Uint64
+	updates  chan struct{}
+	cmd      io.WriteCloser
+	cancel   context.CancelFunc
+	done     chan struct{}
 }
 
 // NewNowPlayingHost returns a host that will run the helper bundle from
@@ -339,6 +342,7 @@ func (h *NowPlayingHost) Start() error {
 	h.cmd = in
 	h.cancel = cancel
 	h.done = make(chan struct{})
+	h.updates = make(chan struct{}, 1)
 	go h.loop(out, wait)
 	return nil
 }
@@ -365,7 +369,12 @@ func (h *NowPlayingHost) loop(out io.ReadCloser, wait func() error) {
 			continue
 		}
 		h.latest, h.have = u.state, true
+		h.revision.Add(1)
 		h.mu.Unlock()
+		select {
+		case h.updates <- struct{}{}:
+		default:
+		}
 	}
 }
 
@@ -398,6 +407,18 @@ func (h *NowPlayingHost) Dead() bool {
 		return false
 	}
 }
+
+// Revision changes whenever a helper line lands. A monitoring pass can
+// skip the state lock when it has not.
+func (h *NowPlayingHost) Revision() uint64 { return h.revision.Load() }
+
+// Updates receives one token per helper line. It is closed when the host
+// stops producing, so a watcher can wake the main loop on changes instead
+// of polling the state every tick.
+func (h *NowPlayingHost) Updates() <-chan struct{} { return h.updates }
+
+// Done is closed when the helper has exited.
+func (h *NowPlayingHost) Done() <-chan struct{} { return h.done }
 
 // State returns the latest snapshot and whether one has arrived.
 func (h *NowPlayingHost) State() (NowPlayingState, bool) {

@@ -708,3 +708,11 @@ func (r *renameUI) doneView(c *ui.Context) {
 		})
 	})
 }
+
+// nextTick is the 撤销 pill's expiry.
+func (m renameModule) nextTick(time.Time) time.Time {
+	if m.host.rn == nil {
+		return time.Time{}
+	}
+	return m.host.rn.undoUntil
+}

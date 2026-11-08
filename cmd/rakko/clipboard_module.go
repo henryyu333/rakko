@@ -40,6 +40,26 @@ func (systemClipReader) sourceApp() string {
 // retries while a change that never fills in is dropped within ~1 s.
 const clipPublishWait = time.Second
 
+// clipPollInterval is the pasteboard poll. macOS has no change
+// notification for the general pasteboard, so the recorder reads
+// changeCount on a timer; an idle wake every 100 ms is far cheaper than
+// the 30 ms monitoring wake it replaces, and content still lands within
+// one poll.
+const clipPollInterval = 100 * time.Millisecond
+
+// clipActivation is one app switch seen between two polls. prev is the app
+// that was frontmost before it: a copy in that window belongs to prev,
+// because the user switched after copying.
+type clipActivation struct {
+	at         time.Time
+	prev, next string
+}
+
+// clipActivationHistory bounds what a source decision has to consider. A
+// burst of app switches is enough to find the app before the first one;
+// older events cannot describe a copy this poll has not seen yet.
+const clipActivationHistory = 16
+
 // clipboardModule records copied text and images throughout the app session.
 type clipboardModule struct {
 	host  *shelf
@@ -51,6 +71,24 @@ type clipboardModule struct {
 	// the first sighting, so later ticks retry the same change instead of
 	// attributing it to whatever app is frontmost by then.
 	pending *clipPending
+
+	// pollAt is the next changeCount read; lastPoll is the previous one.
+	// Activations after lastPoll and before now decide the source app of a
+	// change found now.
+	pollAt   time.Time
+	lastPoll time.Time
+	front    string
+	active   []clipActivation
+	// stopObserve ends the activation observer; nil when none was installed
+	// (tests build the module without AppKit).
+	stopObserve func()
+	// clocked is set by the production constructor. Tests drive tick
+	// directly at their own times and keep the old every-call semantics;
+	// the app reads the pasteboard on the 100 ms clock.
+	clocked bool
+	// tracked is true when the activation observer installed. Without it
+	// (headless shelves, tests) the source is read at each copy.
+	tracked bool
 }
 
 // clipPending is one counted but not yet readable change.
@@ -63,13 +101,86 @@ type clipPending struct {
 // copied before launch is not recorded.
 func newClipboardModule(host *shelf) *clipboardModule {
 	board := systemClipReader{}
-	return &clipboardModule{host: host, board: board, count: board.changeCount()}
+	now := time.Now()
+	m := &clipboardModule{
+		host: host, board: board, count: board.changeCount(), clocked: host.win != nil,
+		pollAt: now.Add(clipPollInterval), lastPoll: now,
+	}
+	if host.win != nil {
+		m.tracked = true
+		m.front = board.sourceApp()
+		m.stopObserve = mac.ObserveActiveApp(func() { m.noteActivation(time.Now()) })
+	}
+	return m
 }
 
-// tick runs on every monitoring poll (~30 ms): the changeCount read is
-// cheap and keeps latency low, which also lets the frontmost app be
-// attributed to the app that copied, not whatever is frontmost when a
-// slower poll happens to run.
+// stop ends the module's system observer. Called once as the app quits.
+func (m *clipboardModule) stop() {
+	if m.stopObserve != nil {
+		m.stopObserve()
+		m.stopObserve = nil
+	}
+}
+
+// noteActivation records one app switch with the app that was frontmost
+// before it. Runs on the main thread from NSWorkspace's notification.
+func (m *clipboardModule) noteActivation(now time.Time) {
+	bundleID, _ := mac.FrontmostApp()
+	if bundleID == "" || bundleID == m.front {
+		return
+	}
+	m.active = append(m.active, clipActivation{at: now, prev: m.front, next: bundleID})
+	if len(m.active) > clipActivationHistory {
+		m.active = m.active[len(m.active)-clipActivationHistory:]
+	}
+	m.front = bundleID
+}
+
+// sourceFor answers which app owned the copy discovered at now. An
+// activation since the previous poll means the user switched after
+// copying, so the app before the first such switch owns it; otherwise the
+// frontmost app does. The board fallback keeps a module built without the
+// observer (tests, early launch) on the old behaviour.
+func (m *clipboardModule) sourceFor(now time.Time) string {
+	if !m.tracked {
+		return m.board.sourceApp()
+	}
+	for i, ev := range m.active {
+		if ev.at.After(m.lastPoll) && !ev.at.After(now) {
+			if ev.prev != "" {
+				return ev.prev
+			}
+			if i+1 < len(m.active) {
+				return m.active[i+1].next
+			}
+			return ev.next
+		}
+	}
+	if m.front != "" {
+		return m.front
+	}
+	return m.board.sourceApp()
+}
+
+// advancePoll closes the current observation window: later switches belong
+// to the next copy. Events at or before now can no longer describe one.
+func (m *clipboardModule) advancePoll(now time.Time) {
+	m.lastPoll = now
+	kept := m.active[:0]
+	for _, ev := range m.active {
+		if ev.at.After(now) {
+			kept = append(kept, ev)
+		}
+	}
+	m.active = kept
+}
+
+// nextTick is the pasteboard poll deadline, always finite.
+func (m *clipboardModule) nextTick(time.Time) time.Time { return m.pollAt }
+
+// tick reads the pasteboard on the 100 ms clock. The changeCount read is
+// cheap, and the activation history attributes a copy to the app that was
+// frontmost when it happened even if the user switched immediately after.
 //
 // A tick can land in the gap between the changeCount bump and the
 // pasteboard publishing its types (see clipPublishWait). Such a change is
@@ -78,7 +189,15 @@ func newClipboardModule(host *shelf) *clipboardModule {
 // bump is still recorded exactly once. A newer change supersedes a pending
 // one and is attributed to the app frontmost at its own bump.
 func (m *clipboardModule) tick(now time.Time) {
+	if m.clocked {
+		if now.Before(m.pollAt) {
+			return
+		}
+		m.pollAt = now.Add(clipPollInterval)
+	}
 	count := m.board.changeCount()
+	source := m.sourceFor(now)
+	m.advancePoll(now)
 	if count != m.count {
 		m.pending = nil
 		m.count = count
@@ -88,7 +207,7 @@ func (m *clipboardModule) tick(now time.Time) {
 		}
 		// 记录复制发生的瞬间哪个应用在最前。ShelfU 自己处于前台（搜索面板
 		// 拿了键盘）时不记来源；被用户排除的应用整条跳过。
-		m.record(now, m.board.sourceApp())
+		m.record(now, source)
 		return
 	}
 	if p := m.pending; p != nil {

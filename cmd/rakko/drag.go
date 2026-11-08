@@ -220,6 +220,7 @@ func (a *shelf) pointerDragged() {
 	if a.quitting {
 		return
 	}
+	a.wakeMonitor()
 	active, serial := dragState()
 	if serial != a.dragSerial {
 		// A new drag: remember whether the panel was already open (and on

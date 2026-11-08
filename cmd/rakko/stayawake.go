@@ -289,3 +289,18 @@ func (m *awakeModule) chip(c *ui.Context) ui.Element {
 	}
 	return chip
 }
+
+// nextTick is the hold's expiry, or the next countdown repaint while the
+// panel shows it.
+func (m *awakeModule) nextTick(now time.Time) time.Time {
+	if !m.active() {
+		return time.Time{}
+	}
+	if !m.until.IsZero() {
+		return m.until
+	}
+	if m.host.visible {
+		return now.Add(time.Second)
+	}
+	return time.Time{}
+}

@@ -468,3 +468,11 @@ func readXMLPlist(path string) (map[string]mac.PlistValue, bool) {
 	}
 	return out, true
 }
+
+// nextTick is the next folder scan.
+func (m *downloadsModule) nextTick(now time.Time) time.Time {
+	if m.next.IsZero() {
+		return now
+	}
+	return m.next
+}

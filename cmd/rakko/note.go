@@ -641,3 +641,15 @@ func (a *shelf) noteBody(c *ui.Context, card ui.Element, span int, surf toolCard
 		})
 	})
 }
+
+// nextTick is the pending autosave after typing stops.
+func (m noteModule) nextTick(now time.Time) time.Time {
+	n := m.host.note
+	if n == nil || n.locked || !n.dirty() {
+		return time.Time{}
+	}
+	if n.since.IsZero() {
+		return now
+	}
+	return n.since.Add(noteSaveDelay)
+}

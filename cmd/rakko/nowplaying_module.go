@@ -7,6 +7,7 @@ import (
 	"image"
 	_ "image/jpeg" // artwork formats players publish
 	"image/png"
+	"math"
 	"time"
 
 	_ "golang.org/x/image/webp"
@@ -38,6 +39,11 @@ type nowPlayingModule struct {
 	np      *mac.NowPlayingHost
 	started bool
 	retryAt time.Time // next start attempt after a failure
+	// seenRev is the helper revision the display was last built from, and
+	// posNext the next whole-second repaint while the card is visible. Both
+	// keep the idle tick from reading the helper state at all.
+	seenRev uint64
+	posNext time.Time
 
 	// newHost builds the helper host; nil means the real Apple-signed perl
 	// host. A seam for tests.
@@ -140,6 +146,8 @@ func (m *nowPlayingModule) tick(now time.Time) {
 		}
 		m.np, m.started = host, true
 		m.retryAt = time.Time{}
+		m.seenRev = 0
+		m.watch(host)
 	} else if m.np.Dead() {
 		// The helper exited (perl gone, a pipe broke). Drop the stale
 		// state; a later tick starts a fresh host.
@@ -150,10 +158,63 @@ func (m *nowPlayingModule) tick(now time.Time) {
 		m.forgetArt()
 		m.artDone, m.iconFor = "", ""
 		m.optUntil = time.Time{}
+		m.posNext = time.Time{}
 		m.invalidate(npSnap{})
 		return
 	}
+	rev := m.np.Revision()
+	if rev == m.seenRev && (m.posNext.IsZero() || now.Before(m.posNext)) {
+		return
+	}
+	m.seenRev = rev
 	m.refresh(now)
+	m.posNext = m.nextPosition(now)
+}
+
+// watch wakes the monitoring loop on each helper line and on the helper's
+// exit, so the module never needs a polling tick of its own.
+func (m *nowPlayingModule) watch(h *mac.NowPlayingHost) {
+	a := m.host
+	go func() {
+		for {
+			select {
+			case <-a.stop:
+				return
+			case <-h.Updates():
+				a.wakeMonitor()
+			case <-h.Done():
+				a.wakeMonitor()
+				return
+			}
+		}
+	}()
+}
+
+// nextPosition is when the visible card's elapsed clock next crosses a
+// whole second; zero while nothing on screen shows the position.
+func (m *nowPlayingModule) nextPosition(now time.Time) time.Time {
+	if !m.host.visible || !m.have || !m.last.Playing {
+		return time.Time{}
+	}
+	pos := m.last.Position(now)
+	frac := pos - math.Floor(pos)
+	if frac <= 0 || frac >= 1 {
+		return now.Add(time.Second)
+	}
+	return now.Add(time.Duration((1 - frac) * float64(time.Second)))
+}
+
+// nextTick is the helper restart delay or the visible card's position
+// clock; a running helper with nothing on screen has no deadline (new
+// lines and its exit wake the loop themselves).
+func (m *nowPlayingModule) nextTick(now time.Time) time.Time {
+	if !m.started {
+		if m.retryAt.IsZero() {
+			return now
+		}
+		return m.retryAt
+	}
+	return m.posNext
 }
 
 // spawnHost builds the helper host through the test seam when one is set.

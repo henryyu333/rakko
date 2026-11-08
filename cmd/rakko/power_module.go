@@ -53,7 +53,10 @@ func (m *powerModule) watchPower() bool {
 	if powerObserver == nil {
 		return false
 	}
-	src, err := powerObserver(func() { m.wake.Store(true) })
+	src, err := powerObserver(func() {
+		m.wake.Store(true)
+		m.host.wakeMonitor()
+	})
 	return err == nil && src != 0
 }
 
@@ -133,4 +136,12 @@ func (m *powerModule) fullNotice(st mac.BatteryStatus, now time.Time) {
 
 func (m *powerModule) lowNotice(st mac.BatteryStatus, now time.Time) {
 	m.host.pushLive(liveEvent{kind: liveLow, label: m.host.appLoc().LiveLow(), pct: st.Percent}, liveHoldLow, now)
+}
+
+// nextTick is the next battery probe; the IOKit observer wakes it earlier.
+func (m *powerModule) nextTick(now time.Time) time.Time {
+	if m.next.IsZero() {
+		return now
+	}
+	return m.next
 }
