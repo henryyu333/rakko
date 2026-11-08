@@ -25,7 +25,7 @@ func ConnectApprove(home, dataDir, exe string, tool Tool) error {
 		if ap.member == "" {
 			return fmt.Errorf("agentnotify: %s has no approval member", tool)
 		}
-		return connectNamedMember(s, home, dataDir, ap.member, []string{ap.event}, false, ap.timeout,
+		return connectNamedMember(s, home, dataDir, ap.member, []string{ap.event}, ap.timeout,
 			func(string) string { return ApproveCommand(exe, tool, dataDir) })
 	case KindModule:
 		return writeApproveModule(s, home, dataDir, exe)

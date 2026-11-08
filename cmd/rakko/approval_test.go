@@ -324,6 +324,27 @@ func TestApprovalSwitchOffPassesWaiting(t *testing.T) {
 	}
 }
 
+func TestApprovalCardSize(t *testing.T) {
+	a, _ := approvalTestShelf(t)
+	plain := testApproval(t, testID(90), "claude", `{"command":"ls"}`)
+	w, h := a.approvalCardSize(plain)
+	if w != 360 || h != 158 {
+		t.Fatalf("plain card %0.fx%0.f, want 360x158", w, h)
+	}
+	risky := testApproval(t, testID(91), "claude", `{"command":"rm -rf build"}`)
+	if _, h := a.approvalCardSize(risky); h != 184 {
+		t.Fatalf("risky card height %0.f, want 184", h)
+	}
+	long := testApproval(t, testID(92), "claude", `{"command":"ls","description":"`+strings.Repeat("长", 100)+`"}`)
+	if _, h := a.approvalCardSize(long); h != 176 {
+		t.Fatalf("two-line card height %0.f, want 176", h)
+	}
+	a.island = true
+	if _, h := a.approvalCardSize(plain); h != 132 {
+		t.Fatalf("island card height %0.f, want 132", h)
+	}
+}
+
 func TestApprovalDuplicateReplacesOld(t *testing.T) {
 	_, f := approvalTestShelf(t)
 	first := testApproval(t, testID(70), "claude", `{"command":"ls"}`)

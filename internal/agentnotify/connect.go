@@ -341,7 +341,7 @@ func connectNamed(s spec, home, dataDir, exe string) error {
 	if timeout == 0 {
 		timeout = hookTimeout
 	}
-	return connectNamedMember(s, home, dataDir, namedHook, events, s.eventArg, timeout, func(ev string) string {
+	return connectNamedMember(s, home, dataDir, namedHook, events, timeout, func(ev string) string {
 		event := ""
 		if s.eventArg {
 			event = ev
@@ -352,7 +352,7 @@ func connectNamed(s spec, home, dataDir, exe string) error {
 
 // connectNamedMember writes one member of a named hooks document:
 // {"<member>": {"<event>": [{"type", "command", "timeout"}]}}.
-func connectNamedMember(s spec, home, dataDir, member string, events []string, eventArg bool, timeout int, commandFor func(ev string) string) error {
+func connectNamedMember(s spec, home, dataDir, member string, events []string, timeout int, commandFor func(ev string) string) error {
 	path := s.config(home)
 	return updateFile(path, func(raw []byte, existed bool, mode os.FileMode) (filePlan, error) {
 		doc, derr := newJSONDoc(raw)
