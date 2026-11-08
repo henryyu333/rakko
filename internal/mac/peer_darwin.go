@@ -66,11 +66,10 @@ func connFD(conn net.Conn) (int, error) {
 		return 0, err
 	}
 	var fd int
-	var cerr error
 	if err := raw.Control(func(got uintptr) { fd = int(got) }); err != nil {
 		return 0, err
 	}
-	return fd, cerr
+	return fd, nil
 }
 
 // procPath is libproc's proc_pidpath.
@@ -107,10 +106,9 @@ func PeerExePath(pid int) (string, error) {
 }
 
 // PeerIsSelf reports whether the process on the other end of conn is this
-// same Rakko binary: same path, same inode, and — when both sides carry a
-// code signature — the same cdhash. A development build without a signature
-// falls back to path and inode; a mismatch between two present hashes is
-// always refused.
+// same Rakko binary: same path and inode, then the code signature. If this
+// binary carries a cdhash the peer must carry the same one; only an unsigned
+// build (no cdhash of its own) falls back to path and inode alone.
 func PeerIsSelf(conn net.Conn) error {
 	pid, err := PeerPID(conn)
 	if err != nil {
@@ -148,15 +146,42 @@ func PeerIsSelf(conn net.Conn) error {
 	if !sok || !pok || si.Dev != pi.Dev || si.Ino != pi.Ino {
 		return errors.New("mac: peer executable is not the same file")
 	}
-	selfHash, selfErr := codeHash(0)
-	peerHash, peerErr := codeHash(pid)
-	switch {
-	case selfErr == nil && peerErr == nil:
-		if !bytes.Equal(selfHash, peerHash) {
-			return errors.New("mac: peer binary has a different code signature")
-		}
-	case selfErr != nil || peerErr != nil:
-		debugf("peer signature unavailable: self=%v peer=%v", selfErr, peerErr)
+	selfHash, selfErr := codeHashSelf()
+	var peerHash []byte
+	var peerErr error
+	if selfErr == nil {
+		peerHash, peerErr = codeHashPeer(pid)
+	}
+	return signatureDecision(selfHash, selfErr, peerHash, peerErr)
+}
+
+// codeHashSelf and codeHashPeer are seams for the signature decision tests;
+// production reads the real framework.
+var (
+	codeHashSelf = func() ([]byte, error) { return codeHash(0) }
+	codeHashPeer = func(pid int) ([]byte, error) { return codeHash(pid) }
+)
+
+// signatureDecision is the rule PeerIsSelf applies after path and inode
+// match. An unsigned development build has no cdhash of its own and may
+// rely on path and inode; once this binary has a hash, the peer must have
+// the same one. Anything less is refused.
+func signatureDecision(self []byte, selfErr error, peer []byte, peerErr error) error {
+	if selfErr != nil {
+		debugf("own signature unavailable, using path and inode: %v", selfErr)
+		return nil
+	}
+	if len(self) == 0 {
+		return errors.New("mac: own code signature is empty")
+	}
+	if peerErr != nil {
+		return fmt.Errorf("mac: peer code signature unavailable: %w", peerErr)
+	}
+	if len(peer) == 0 {
+		return errors.New("mac: peer code signature is empty")
+	}
+	if !bytes.Equal(self, peer) {
+		return errors.New("mac: peer binary has a different code signature")
 	}
 	return nil
 }
@@ -206,6 +231,7 @@ const (
 )
 
 func loadSecurity() {
+	secErr = nil
 	lib, err := purego.Dlopen("/System/Library/Frameworks/Security.framework/Security",
 		purego.RTLD_LAZY)
 	if err != nil {
@@ -238,13 +264,16 @@ func loadSecurity() {
 	}
 	kSecGuestAttributePid = global(lib, "kSecGuestAttributePid")
 	kSecCodeInfoUnique = global(lib, "kSecCodeInfoUnique")
-	addr, err := purego.Dlsym(cf, "peerKeyCallbacks")
+	// CFDictionaryCreate wants the address of each callback struct, which
+	// is what Dlsym returns for these exported globals; dereferencing them
+	// would pass the first field instead of the struct.
+	addr, err := purego.Dlsym(cf, "kCFTypeDictionaryKeyCallBacks")
 	if err != nil {
 		symErr = err
 	} else {
 		peerKeyCallbacks = addr
 	}
-	addr, err = purego.Dlsym(cf, "peerValueCallbacks")
+	addr, err = purego.Dlsym(cf, "kCFTypeDictionaryValueCallBacks")
 	if err != nil {
 		symErr = err
 	} else {
