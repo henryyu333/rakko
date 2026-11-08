@@ -136,6 +136,91 @@ func TestMoveBundleSettlesItInApplications(t *testing.T) {
 	if _, err := os.Stat(third); err != nil {
 		t.Fatalf("the failed move lost the source bundle: %v", err)
 	}
+	if _, err := os.Stat(dest); err != nil {
+		t.Fatalf("the failed Trash lost the installed app: %v", err)
+	}
+
+	// A copy that fails leaves the installed app untouched: the old one is
+	// neither trashed nor overwritten, and no staging copy is left behind.
+	fourth := filepath.Join(tmp, "Downloads4", "Rakko.app")
+	if err := os.MkdirAll(filepath.Join(fourth, "Contents", "MacOS"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(fourth, "Contents", "MacOS", "rakko"), []byte("x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	trashed = ""
+	onbTrashPath = func(path string) (string, error) { trashed = path; return "", os.RemoveAll(path) }
+	oldCopy, oldOnly := onbCopyBundle, onbCopyOnly
+	onbCopyOnly = func(string) bool { return true }
+	onbCopyBundle = func(string, string) error { return errors.New("disk full") }
+	t.Cleanup(func() { onbCopyBundle, onbCopyOnly = oldCopy, oldOnly })
+	if _, err := moveBundleToApplications(fourth, apps); err == nil {
+		t.Fatal("a failed copy was reported as a successful move")
+	}
+	if trashed != "" {
+		t.Fatalf("the old app was trashed before the new one was whole: %q", trashed)
+	}
+	if _, err := os.Stat(dest); err != nil {
+		t.Fatalf("the failed copy lost the installed app: %v", err)
+	}
+	entries, err := os.ReadDir(apps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), ".") {
+			t.Fatalf("a staging copy was left behind: %s", e.Name())
+		}
+	}
+	if _, err := os.Stat(filepath.Join(fourth, "Contents", "MacOS", "rakko")); err != nil {
+		t.Fatalf("the failed move lost the source bundle: %v", err)
+	}
+
+	// A read-only source is copied: the copy lands under a staging name
+	// beside the destination, the old app goes to the Trash only after it
+	// is whole, and the source (a disk image) stays where it is.
+	fifth := filepath.Join(tmp, "Volumes", newBundleName)
+	if err := os.MkdirAll(filepath.Join(fifth, "Contents", "MacOS"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(fifth, "Contents", "MacOS", "new"), []byte("new"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	oldMarker := filepath.Join(dest, "Contents", "MacOS", "rakko")
+	if err := os.MkdirAll(filepath.Dir(oldMarker), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(oldMarker, []byte("old"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	trashCalls, stagedBesideDest := 0, false
+	onbCopyBundle = func(src, stage string) error {
+		if filepath.Dir(stage) != apps {
+			t.Errorf("the copy was staged at %s, not beside the destination", stage)
+		}
+		if trashCalls != 0 {
+			t.Error("the old app was trashed before the copy was whole")
+		}
+		stagedBesideDest = true
+		return copyBundle(src, stage)
+	}
+	onbTrashPath = func(path string) (string, error) { trashCalls++; return "", os.RemoveAll(path) }
+	if _, err := moveBundleToApplications(fifth, apps); err != nil {
+		t.Fatalf("copy move: %v", err)
+	}
+	if !stagedBesideDest || trashCalls != 1 {
+		t.Fatalf("the order was not stage-then-trash: staged=%v trash=%d", stagedBesideDest, trashCalls)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "Contents", "MacOS", "new")); err != nil {
+		t.Fatalf("the new bundle did not land: %v", err)
+	}
+	if _, err := os.Stat(oldMarker); !os.IsNotExist(err) {
+		t.Fatalf("the old app is still in place: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(fifth, "Contents", "MacOS", "new")); err != nil {
+		t.Fatalf("a read-only source was removed: %v", err)
+	}
 }
 
 func TestCopyBundleKeepsTheSourceAndStripsQuarantine(t *testing.T) {
@@ -540,5 +625,17 @@ func TestOnboardingMoveKeySettlesTheBundle(t *testing.T) {
 	}
 	if a.settings.Onboarding.Step != onbStepPerms {
 		t.Fatalf("the step was not persisted before the relaunch: %q", a.settings.Onboarding.Step)
+	}
+}
+
+// A page that is no longer offered falls back to the tray: once the guide
+// ends its page is disabled, and nothing may land on it.
+func TestSetLevelPageNeverLandsOnADisabledPage(t *testing.T) {
+	a, _ := onboardingShelf(t)
+	a.visible, a.level = true, 1
+	a.onboardingDone()
+	a.setLevelPage(2, pageOnboarding)
+	if a.currentLevel() != 2 || a.currentPage().id() != pageTray {
+		t.Fatalf("landed on level %d page %s, want the tray", a.currentLevel(), a.currentPage().id())
 	}
 }

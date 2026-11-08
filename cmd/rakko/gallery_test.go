@@ -1949,8 +1949,8 @@ func galleryStageUpdateIcon(t *testing.T) {
 	if err != nil {
 		return
 	}
-	// Mark the lazy load done first: updateAppIcon would otherwise retry
-	// the bundle path and overwrite this with nil.
+	// Mark the lazy load done first: bundleIcon would otherwise retry the
+	// bundle path and overwrite this with nil.
 	appIconOnce.Do(func() {})
 	old := appIconBitmap
 	appIconBitmap = b
@@ -2029,6 +2029,7 @@ func galleryGroupN() []galleryItem {
 	const g = "首次启动引导"
 	build := func(origin runOrigin, step int, tweak func(t *testing.T, o *onboardingFeature)) func(t *testing.T, lang string) galleryRender {
 		return func(t *testing.T, lang string) galleryRender {
+			galleryStageUpdateIcon(t)
 			a := motionShelf()
 			a.settings = settings.Default()
 			a.settings.Onboarding = settings.OnboardingSettings{Pending: true}

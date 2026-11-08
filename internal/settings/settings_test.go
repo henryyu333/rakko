@@ -579,6 +579,7 @@ func TestUpdateWindowKeys(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("saved update keys did not round-trip:\n got %+v\nwant %+v", got, want)
+	}
 }
 
 // Exists answers the bare fact without creating the file: the first-launch

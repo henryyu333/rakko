@@ -8,7 +8,10 @@ import (
 // TrashFile moves the file, folder or bundle at path to the Trash, the way
 // Finder's 移到废纸篓 does, and answers where it landed. It fails rather
 // than deleting anything when the item cannot be trashed, so the caller's
-// fallback can leave the item where it is. Main thread only.
+// fallback can leave the item where it is. Callable from any thread: it is
+// Foundation's NSFileManager (thread-safe) wrapped in an autorelease pool,
+// with no AppKit or window server work, so the guide's move can trash the
+// old bundle from its worker without stopping the panel.
 func TrashFile(path string) (trashed string, err error) {
 	if err := Init(); err != nil {
 		return "", err

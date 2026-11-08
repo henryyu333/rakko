@@ -1861,6 +1861,12 @@ func (a *shelf) setLevelPage(level int, id pageID) {
 	case next == "":
 		next = a.tab
 	}
+	// A page that is missing or switched off cannot be landed on: the tray
+	// is the fallback every caller has always had (the guide's page itself
+	// goes away the moment it is no longer owed).
+	if p := a.page(next); p == nil || !p.enabled() {
+		next = pageTray
+	}
 	from := a.currentPage().id()
 	if a.level == level && from == next {
 		return

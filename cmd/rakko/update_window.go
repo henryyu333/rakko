@@ -163,10 +163,11 @@ var (
 	appIconBitmap *ui.Bitmap
 )
 
-// updateAppIcon is the running app's icon for the window's hero image: the
-// bundle's icon.png while packaged, the checkout's resources file under
-// go test. Loaded once; nil when the file is missing.
-func updateAppIcon() *ui.Bitmap {
+// bundleIcon is the running app's icon: the bundle's icon.png while packaged,
+// the checkout's resources file under go test. The update window draws it as
+// its hero image and the guide's move step as the app on the path. Loaded
+// once; nil when the file is missing.
+func bundleIcon() *ui.Bitmap {
 	appIconOnce.Do(func() {
 		dir, err := mygo.App.Path(mygo.PathResources)
 		if err != nil {
@@ -183,7 +184,7 @@ func updateAppIcon() *ui.Bitmap {
 // updateIcon is the app icon at the size one face asks for, or nothing
 // when the icon is missing (dev builds without resources draw text only).
 func updateIcon(c *ui.Context, size float32) {
-	if b := updateAppIcon(); b != nil {
+	if b := bundleIcon(); b != nil {
 		ui.Image(c.Key("icon"), b).Size(size, size).Fit(ui.Contain)
 	}
 }

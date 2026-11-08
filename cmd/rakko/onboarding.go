@@ -409,7 +409,7 @@ func (o *onboardingFeature) stepMove(c *ui.Context, l locales.Messages) {
 			row.Background(fill2)
 		}
 		row.Children(func() {
-			if icon := appIconBitmap(); icon != nil {
+			if icon := bundleIcon(); icon != nil {
 				ui.Image(c.Key("appic"), icon).Size(32, 32).Radius(8).Fit(ui.Contain)
 			}
 			ui.Column(c.Key("onb-from")).Gap(1).Children(func() {
@@ -418,9 +418,15 @@ func (o *onboardingFeature) stepMove(c *ui.Context, l locales.Messages) {
 			})
 			ui.Box(c.Key("onb-arrow-gap")).Grow(1)
 			if !o.moved {
+				// The design puts the folder on its own 30pt tile, the
+				// same size as the app icon on the left.
 				ui.Icon(c, arrowRightSymbol).Size(13, 13).TextColor(ink3)
-				ui.Icon(c, folderSymbol).Size(30, 30).TextColor(ink3)
-				panelLabel(c, nil, l.OnboardingMoveDest(), 12, 600).TextColor(ink)
+				ui.Row(c.Key("onb-dest")).Gap(6).AlignItems(ui.Center).Children(func() {
+					ui.Row(c.Key("onb-dest-tile")).Size(30, 30).Radius(9).Background(fill2).Center().Children(func() {
+						ui.Icon(c, folderSymbol).Size(15, 15).TextColor(ink2)
+					})
+					panelLabel(c, nil, l.OnboardingMoveDest(), 12, 600).TextColor(ink)
+				})
 			} else {
 				ui.Row(c.Key("onb-ok")).Size(17, 17).Radius(9).Background(success).Center().Children(func() {
 					ui.Icon(c, checkSymbol).Size(10, 10).TextColor(knockout)
@@ -897,6 +903,16 @@ func translocatedSource(bundle string) string {
 
 // --- the move ---------------------------------------------------------------
 
+// onbCopyOnly reports a source that has to be copied rather than moved: a
+// read-only volume, or Gatekeeper's staging area. A test replaces it to run
+// the copy path against a writable temporary bundle.
+var onbCopyOnly = func(bundle string) bool {
+	return strings.HasPrefix(bundle, "/Volumes/") || strings.Contains(bundle, "/AppTranslocation/")
+}
+
+// onbCopyBundle is that copy. A test replaces it to fail one.
+var onbCopyBundle = copyBundle
+
 // onbMoveAfterFunc and onbMoveDispatch mirror the permission flow's seams:
 // the move's own clock, so a test can hold the relaunch.
 var (
@@ -993,40 +1009,71 @@ func relaunchPlanForBundle(bundle string, args []string, pid int) relaunchPlan {
 	return relaunchPlan{Exec: "/bin/sh", Args: []string{"-c", b.String()}}
 }
 
-// moveBundleToApplications puts bundle at /Applications/Rakko.app. A
-// bundle on a read-only volume copies; anywhere else it moves. An older
-// Rakko.app already there goes to the Trash first — recoverable, never
-// overwritten in place.
+// moveBundleToApplications settles bundle at destDir/Rakko.app. The new
+// bundle lands whole under a staging name beside the destination first;
+// only then does an older Rakko.app go to the Trash, and the last rename is
+// atomic on the same volume. A failure at any step leaves the old app where
+// it was — the user never ends up with neither — and a staged move goes
+// back to its own folder instead of being deleted with the copy.
 func moveBundleToApplications(bundle, destDir string) (string, error) {
 	dest := filepath.Join(destDir, newBundleName)
 	if bundle == dest {
 		return dest, nil
 	}
+	stage := filepath.Join(destDir, "."+newBundleName+".new")
+	_ = os.RemoveAll(stage) // a crashed earlier attempt left nothing usable
+	readOnly := onbCopyOnly(bundle)
+	// staged: the app now sits at stage because it was moved there; a copy
+	// leaves the source in place and the stage is its duplicate.
+	staged, removeSource := false, false
+	switch {
+	case readOnly:
+		if err := onbCopyBundle(bundle, stage); err != nil {
+			_ = os.RemoveAll(stage)
+			return "", err
+		}
+	default:
+		err := os.Rename(bundle, stage)
+		switch {
+		case err == nil:
+			staged = true
+		case errorsIsEXDEV(err):
+			// Downloads and /Applications on different volumes: copy, then
+			// drop the source once the new app is in place.
+			if cerr := onbCopyBundle(bundle, stage); cerr != nil {
+				_ = os.RemoveAll(stage)
+				return "", cerr
+			}
+			removeSource = true
+		default:
+			return "", err
+		}
+	}
+	// abandon puts the app back the way the user had it: a staged move goes
+	// home, a copy is dropped.
+	abandon := func() {
+		if staged {
+			if err := os.Rename(stage, bundle); err != nil {
+				log.Printf("%s: keeping the new bundle at %s; moving it back to %s failed: %v", appName, stage, bundle, err)
+			}
+			return
+		}
+		_ = os.RemoveAll(stage)
+	}
 	if _, err := os.Stat(dest); err == nil {
 		if _, err := onbTrashPath(dest); err != nil {
+			abandon()
 			return "", fmt.Errorf("existing %s could not be trashed: %w", dest, err)
 		}
 	}
-	readOnly := strings.HasPrefix(bundle, "/Volumes/") || strings.Contains(bundle, "/AppTranslocation/")
-	if readOnly {
-		if err := copyBundle(bundle, dest); err != nil {
-			return "", err
-		}
-		return dest, nil
-	}
-	if err := os.Rename(bundle, dest); err != nil {
-		if errorsIsEXDEV(err) {
-			// Downloads and /Applications on different volumes: copy, then
-			// leave nothing behind by removing the source after a full copy.
-			if err := copyBundle(bundle, dest); err != nil {
-				return "", err
-			}
-			if err := os.RemoveAll(bundle); err != nil {
-				log.Printf("%s: moved to %s but the old copy at %s stayed: %v", appName, dest, bundle, err)
-			}
-			return dest, nil
-		}
+	if err := os.Rename(stage, dest); err != nil {
+		abandon()
 		return "", err
+	}
+	if removeSource {
+		if err := os.RemoveAll(bundle); err != nil {
+			log.Printf("%s: moved to %s but the old copy at %s stayed: %v", appName, dest, bundle, err)
+		}
 	}
 	return dest, nil
 }
@@ -1181,28 +1228,6 @@ func (o *onboardingFeature) ensureSample() (string, error) {
 	o.sample = path
 	return path, nil
 }
-
-// --- app icon ----------------------------------------------------------------
-
-// appIconBitmap decodes the app's own icon for the path row, from the
-// same resources file the bundle ships; a dev run without resources draws
-// the file glyph instead.
-var appIconBitmap = func() func() *ui.Bitmap {
-	var once *ui.Bitmap
-	var tried bool
-	return func() *ui.Bitmap {
-		if tried {
-			return once
-		}
-		tried = true
-		if dir, err := mygo.App.Path(mygo.PathResources); err == nil {
-			if data, rerr := os.ReadFile(filepath.Join(dir, "icon.png")); rerr == nil {
-				once, _ = ui.DecodeBitmap(data)
-			}
-		}
-		return once
-	}
-}()
 
 // Symbols the guide borrows or adds.
 var (
