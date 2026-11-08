@@ -623,3 +623,29 @@ func TestOnboardingExistsAndUpgradesAreNotFresh(t *testing.T) {
 		t.Fatalf("onboarding did not round-trip: %+v", got.Onboarding)
 	}
 }
+
+// Approvals are a separate, off-by-default opt-in: a settings file written
+// before the feature existed keeps them off, and a tool id that cannot be
+// approved is dropped from the off list.
+func TestApprovalDefaultsOff(t *testing.T) {
+	if Default().Approval.Enabled {
+		t.Fatal("a fresh install has approvals on")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, FileName),
+		[]byte(`{"agentNotify":{"enabled":true}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Approval.Enabled {
+		t.Fatal("an old settings file turned approvals on")
+	}
+	s.Approval.Off = []string{"claude", "cursor", "claude", "nonsense"}
+	s.Approval.pruneOff()
+	if len(s.Approval.Off) != 1 || s.Approval.Off[0] != "claude" {
+		t.Fatalf("pruned off list %v", s.Approval.Off)
+	}
+}
