@@ -325,6 +325,7 @@ func (a *shelf) settingsAIUsagePage(c *ui.Context) {
 	})
 
 	a.settingsAgentGroup(c)
+	a.settingsApprovalGroup(c)
 
 	settingsFootnote(c, "ai-foot", l.SettingsAILocalFoot())
 }
@@ -380,7 +381,57 @@ func (a *shelf) settingsAgentGroup(c *ui.Context) {
 				}
 			}
 			a.settingsAgentToolRow(c, tool, caption, status, color,
-				toolOn, !a.settings.AgentNotify.Enabled)
+				toolOn, !a.settings.AgentNotify.Enabled, a.setAgentNotifyTool)
+		}
+	})
+}
+
+// settingsApprovalGroup is the Agent 审批 card: one switch for every tool,
+// then one row per installed approvable tool. It is independent of the
+// completion group above it.
+func (a *shelf) settingsApprovalGroup(c *ui.Context) {
+	l := loc(c)
+	f := a.approvalFeature()
+	f.refreshIfStale()
+	settingsGroupRows(c, "approval", l.SettingsApprovalGroup(), "", a.settingsBroken, func() {
+		settingsToggleRow(c, "approval", l.SettingsApprovalRow(), l.SettingsApprovalCaption(),
+			a.settings.Approval.Enabled, a.setApproval)
+		tools := f.detected()
+		if len(tools) == 0 {
+			settingsSep(c, "approval-none")
+			settingsRowLine(c, "approval-none").Children(func() {
+				settingsRowText(c, l.SettingsApprovalNone(), "")
+			})
+			return
+		}
+		for _, tool := range tools {
+			settingsSep(c, "approval-"+string(tool))
+			state, note := f.settingRow(tool)
+			toolOn := !a.settings.Approval.ToolOff(string(tool))
+			status, color := l.SettingsAgentNotInjected(), ink3
+			switch state {
+			case agentnotify.StateInjected:
+				status = l.SettingsAgentInjected()
+				if tool == agentnotify.ToolCodex {
+					status = l.SettingsAgentCodexTrust()
+				}
+			case agentnotify.StateUnsupported:
+				status = l.SettingsAgentUnsupported()
+			case agentnotify.StateError:
+				status, color = l.SettingsAgentError(), danger
+			}
+			if state == agentnotify.StateNotInjected && a.settings.Approval.Enabled && toolOn {
+				status, color = l.SettingsAgentRewritten(), warning
+			}
+			caption := agentnotify.ApproveDisplayPath(f.home, tool)
+			if state == agentnotify.StateError && note != "" {
+				caption = note
+				if note == agentNeedsAppNote {
+					caption = l.SettingsAgentNeedsApp()
+				}
+			}
+			a.settingsAgentToolRow(c, tool, caption, status, color,
+				toolOn, !a.settings.Approval.Enabled, a.setApprovalTool)
 		}
 	})
 }
@@ -389,7 +440,7 @@ func (a *shelf) settingsAgentGroup(c *ui.Context) {
 // configuration path on the left, the state of Rakko's entry, then the
 // tool's own switch. The switch mirrors the settings value and is locked
 // while the group switch is off.
-func (a *shelf) settingsAgentToolRow(c *ui.Context, tool agentnotify.Tool, caption, status string, color ui.Color, on, locked bool) {
+func (a *shelf) settingsAgentToolRow(c *ui.Context, tool agentnotify.Tool, caption, status string, color ui.Color, on, locked bool, apply func(agentnotify.Tool, bool)) {
 	key := "agent-" + string(tool)
 	row := ui.ToggleBase(c.Key("toggle-"+key), &on).FillWidth().AlignItems(ui.Center).
 		Gap(14).MinHeight(settingsRowMinHeight).Padding(settingsRowPadY, settingsRowPadX).
@@ -407,7 +458,7 @@ func (a *shelf) settingsAgentToolRow(c *ui.Context, tool agentnotify.Tool, capti
 		}
 	})
 	if !locked && (row.Changed() || sw.Changed()) {
-		a.setAgentNotifyTool(tool, on)
+		apply(tool, on)
 	}
 }
 
