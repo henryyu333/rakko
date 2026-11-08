@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/henryyu333/rakko/releases/latest/download/Rakko.dmg"><img src="https://img.shields.io/badge/Download_for_macOS-Rakko.dmg-007AFF?style=for-the-badge&logo=apple&logoColor=white" alt="Download Rakko.dmg for macOS"></a>
+  <a href="https://github.com/henryyu333/rakko/releases/latest/download/Rakko.zip"><img src="https://img.shields.io/badge/Download_for_macOS-Rakko.zip-007AFF?style=for-the-badge&logo=apple&logoColor=white" alt="Download Rakko.zip for macOS"></a>
 </p>
 
 <p align="center">
@@ -191,12 +191,18 @@ A tool counts as installed only by files it writes itself, so a stray `~/.claude
 
 Requires a Mac with Apple Silicon (M1 or later) running macOS 13 or later. Intel Macs are not supported.
 
-1. Download **[Rakko.dmg](https://github.com/henryyu333/rakko/releases/latest/download/Rakko.dmg)**.
-2. Open the downloaded file and drag **Rakko** onto the **Applications** folder.
-3. Open Rakko from Applications. The first time, macOS will stop it — follow [First launch](#first-launch) below. You only do this once.
-4. Rakko lives in the menu bar, not the Dock. Hover the notch, or press `⌃⌥Space`. A fresh install opens a short guide in the notch the first time: where Rakko lives and the optional permissions, ending with Start using Rakko — Skip or Esc leaves at any step. If Rakko is running from Downloads or the disk image, the guide offers Move to Applications (an older Rakko already there goes to the Trash first) and reopens from there. Updating from an earlier version never shows the guide.
+1. Download **[Rakko.zip](https://github.com/henryyu333/rakko/releases/latest/download/Rakko.zip)** and double-click it in Downloads (Safari unzips it for you).
+2. Double-click **Rakko**. The first time, macOS stops it — follow [First launch](#first-launch) below. You only do this once.
+3. Rakko opens a short guide in the notch: where it lives, Move to Applications (it copies itself there, an older Rakko already there goes to the Trash first, and it reopens from there), and the optional permissions, ending with Start using Rakko. Skip or Esc leaves at any step; updating from an earlier version never shows the guide.
+4. Rakko lives in the menu bar, not the Dock. Hover the notch, or press `⌃⌥Space`.
 
-Prefer a zip? Every release on the [Releases page](https://github.com/henryyu333/rakko/releases/latest) also has `Rakko-<version>-macos-arm64.zip` and the `.dmg` of the same version.
+Comfortable in Terminal? This installs the latest release into Applications with its signature checked, and macOS asks nothing (files `curl` downloads carry no quarantine flag):
+
+```sh
+curl -fsSL https://github.com/henryyu333/rakko/releases/latest/download/install.sh | sh
+```
+
+Every release on the [Releases page](https://github.com/henryyu333/rakko/releases/latest) also has `Rakko.dmg`, `Rakko-<version>-macos-arm64.zip` and the `.dmg` of the same version. A disk image is stopped by macOS twice — once for the image, once for the app — so the zip is the shorter way.
 
 <a id="first-launch"></a>
 
@@ -206,14 +212,16 @@ Rakko is free and not notarized by Apple, so macOS asks you to confirm it once. 
 
 **macOS 15 or later**
 
-1. Double-click Rakko in Applications. When macOS says Rakko was not opened, click **Done** (not Move to Trash).
+1. Double-click Rakko. When macOS says Rakko was not opened, click **Done** (not Move to Trash).
 2. Open **System Settings → Privacy & Security** and scroll down to **Security**.
 3. Next to "Rakko was blocked to protect your Mac", click **Open Anyway**.
 4. Enter your password or use Touch ID, then click **Open Anyway** once more.
 
+If the line in Privacy & Security is gone, double-click Rakko again so macOS stops it again; the line shows for about an hour after a block. A downloaded `Rakko.dmg` is stopped the same way before it opens — allow it with the same steps.
+
 **macOS 13 or 14**
 
-Control-click (or right-click) Rakko in Applications, choose **Open**, then click **Open** in the dialog.
+Control-click (or right-click) Rakko, choose **Open**, then click **Open** in the dialog.
 
 From then on Rakko opens normally. If macOS ever says the app **is damaged**, don't bypass it — delete it and download it again from the Releases page. Apple's guide: [Safely open apps on your Mac](https://support.apple.com/102445).
 
@@ -475,12 +483,18 @@ Rakko 是住在 Mac 刘海里的工具：它把摄像头周围那块黑色刘海
 
 需要 Apple Silicon 芯片（M1 或更新）的 Mac，系统 macOS 13 或以上。不支持 Intel 芯片的 Mac。
 
-1. 下载 **[Rakko.dmg](https://github.com/henryyu333/rakko/releases/latest/download/Rakko.dmg)**。
-2. 打开下载好的文件，把 **Rakko** 拖到 **Applications（应用程序）** 文件夹上。
-3. 从“应用程序”里打开 Rakko。第一次打开会被系统拦下，按下面的[第一次打开](#第一次打开)操作即可，只需要做一次。
-4. Rakko 在屏幕顶部的菜单栏里，不在 Dock 上。把鼠标移到刘海上，或按 `⌃⌥Space`。全新安装第一次打开时，刘海里会走一段简短的引导：Rakko 住在哪、可选的系统权限，最后点「开始使用」；任何一步都可以点「跳过」或按 Esc 离开。如果 Rakko 是从「下载」或磁盘映像里打开的，引导会提供「移到「应用程序」」（那里已有的旧 Rakko 会先移到废纸篓），然后从新位置重新打开。从旧版本升级的不会看到引导。
+1. 下载 **[Rakko.zip](https://github.com/henryyu333/rakko/releases/latest/download/Rakko.zip)**，在「下载」文件夹里双击它解压（用 Safari 下载会自动解压）。
+2. 双击 **Rakko**。第一次打开会被系统拦下，按下面的[第一次打开](#第一次打开)操作即可，只需要做一次。
+3. Rakko 会在刘海里打开一段简短的引导：它住在哪、移到「应用程序」（它会把自己复制过去，那里已有的旧 Rakko 先移到废纸篓，然后从新位置重新打开）、可选的系统权限，最后点「开始使用」。任何一步都可以点「跳过」或按 Esc 离开；从旧版本升级的不会看到引导。
+4. Rakko 在屏幕顶部的菜单栏里，不在 Dock 上。把鼠标移到刘海上，或按 `⌃⌥Space`。
 
-想要 zip 压缩包？[Releases 页面](https://github.com/henryyu333/rakko/releases/latest)的每个版本里也有同一版本的 `Rakko-<version>-macos-arm64.zip` 和 `.dmg`。
+会用终端的话，下面这行会下载最新版、核对签名后装进「应用程序」，macOS 一次都不会拦（`curl` 下载的文件没有隔离标记）：
+
+```sh
+curl -fsSL https://github.com/henryyu333/rakko/releases/latest/download/install.sh | sh
+```
+
+[Releases 页面](https://github.com/henryyu333/rakko/releases/latest)的每个版本里也有 `Rakko.dmg`、同一版本的 `Rakko-<version>-macos-arm64.zip` 和 `.dmg`。磁盘映像会被系统拦两次（映像一次、App 一次），所以 zip 更省事。
 
 <a id="第一次打开"></a>
 
@@ -490,14 +504,16 @@ Rakko 是免费软件，没有经过 Apple 公证，所以 macOS 会让你确认
 
 **macOS 15 或更新**
 
-1. 在“应用程序”里双击 Rakko。系统提示未打开时，点 **完成**（不要点“移到废纸篓”）。
+1. 双击 Rakko。系统提示未打开时，点 **完成**（不要点“移到废纸篓”）。
 2. 打开 **系统设置 → 隐私与安全性**，往下滚动到 **安全性**。
 3. 在“已阻止 Rakko 以保护 Mac”旁边，点 **仍要打开**。
 4. 输入开机密码或用触控 ID 确认，再点一次 **仍要打开**。
 
+如果「隐私与安全性」里找不到那一行，就再双击一次 Rakko，让系统再拦一次；那一行只在被拦后大约一小时内出现。下载的 `Rakko.dmg` 在打开前也会这样被拦一次，用同样的步骤放行。
+
 **macOS 13 或 14**
 
-在“应用程序”里按住 Control 点按（或右键点按）Rakko，选 **打开**，再在弹窗里点 **打开**。
+按住 Control 点按（或右键点按）Rakko，选 **打开**，再在弹窗里点 **打开**。
 
 之后就能正常打开了。如果系统提示 App **已损坏**，不要绕过，删掉后从 Releases 页面重新下载。Apple 官方说明：[在 Mac 上安全地打开 App](https://support.apple.com/zh-cn/102445)。
 
