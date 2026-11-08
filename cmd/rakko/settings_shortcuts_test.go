@@ -742,14 +742,21 @@ func TestSettingsCheckNowRow(t *testing.T) {
 	// progress face runs as a headless mark instead of a real window.
 	origCheck, origEnabled, origDev := updateCheck, updateEnabled, updateDevBuild
 	origMake := updateWinMake
+	origWork, origMain := goWork, dispatchMain
 	var calls int
 	updateCheck = func(ctx context.Context) (*mygo.Update, error) { calls++; return nil, nil }
 	updateEnabled = func() bool { return true }
 	updateDevBuild = func() bool { return false }
 	updateWinMake = func(*shelf) *mygo.Window { return nil }
+	// The check runs on this goroutine: the click returns only after the
+	// stubbed check and its main-thread dispatch have both run, so the
+	// count is settled and nothing races.
+	goWork = func(fn func()) { fn() }
+	dispatchMain = func(fn func()) { fn() }
 	t.Cleanup(func() {
 		updateCheck, updateEnabled, updateDevBuild = origCheck, origEnabled, origDev
 		updateWinMake = origMake
+		goWork, dispatchMain = origWork, origMain
 	})
 
 	_, view := newSettingsShelf(t)
@@ -757,8 +764,6 @@ func TestSettingsCheckNowRow(t *testing.T) {
 		t.Fatal(err)
 	}
 	view.Frame()
-	// The check runs: the count is what matters. Under the smoke harness the
-	// stubbed check finishes at once, so updateChecking is already clear.
 	if calls != 1 {
 		t.Fatalf("现在检查 did not start a check: calls=%d", calls)
 	}

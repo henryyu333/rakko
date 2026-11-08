@@ -708,24 +708,43 @@ func TestFoundAnnouncesMenuAndStatus(t *testing.T) {
 	}
 }
 
-// The window's faces are sized per face: found shrinks without notes,
-// every other face is the small card.
-func TestUpdateWinSize(t *testing.T) {
+// Empty release notes hide the notes card and the window shortens: the
+// found face draws its headline, checkbox and three actions, but no card,
+// and every control stays inside the shortened window.
+func TestFoundFaceWithoutNotes(t *testing.T) {
 	a := updateShelf()
-	a.update = &mygo.Update{Version: "1.2.3", Notes: "### What's new"}
-	if w, h := a.updateWinSize(updateStageFound); w != 520 || h != 420 {
-		t.Fatalf("found-with-notes size = %dx%d", w, h)
+	a.dataDir = t.TempDir()
+	a.update = &mygo.Update{Version: "1.2.3", Notes: "   "}
+	a.updateWinStage = updateStageFound
+	a.locale = "zh-Hans"
+	l := locales.In("zh-Hans")
+	w, h := a.updateWinSize(updateStageFound)
+	if h >= updateFoundH {
+		t.Fatalf("empty notes left the window tall: %dx%d", w, h)
 	}
-	a.update.Notes = "   "
-	if w, h := a.updateWinSize(updateStageFound); w != 520 || h != updateFoundMin {
-		t.Fatalf("found-without-notes size = %dx%d", w, h)
+	v := ui.NewTester(a.updateView, w, h)
+	v.SetLocale("zh-Hans")
+	v.Frame()
+	v.Frame()
+
+	texts := strings.Join(v.Texts(), "\n")
+	if !strings.Contains(texts, l.UpdateFoundTitle()) {
+		t.Fatalf("the headline is missing; texts %v", v.Texts())
 	}
-	for _, stage := range []updateStage{
-		updateStageChecking, updateStageDownloading, updateStageReady,
-		updateStageLatest, updateStageFailed,
+	// The notes card is gone: a 206pt card plus its 18pt gap would push the
+	// buttons out of this window.
+	if r, ok := v.Find(l.UpdateFoundTitle()); !ok || r.Y+r.H > float32(h) {
+		t.Fatalf("headline outside the %dpt window: %+v", h, r)
+	}
+	for _, want := range []string{
+		l.UpdateAutoInstallRow(), l.UpdateSkipVersion(), l.UpdateLater(), l.UpdateInstallNow(),
 	} {
-		if w, h := a.updateWinSize(stage); w != 400 || h != 146 {
-			t.Fatalf("stage %d size = %dx%d", stage, w, h)
+		r, ok := v.Find(want)
+		if !ok {
+			t.Fatalf("%q missing from the short face; texts %v", want, v.Texts())
+		}
+		if r.X < -0.5 || r.Y < -0.5 || r.X+r.W > float32(w)+0.5 || r.Y+r.H > float32(h)+0.5 {
+			t.Fatalf("%q at %+v leaves the %dx%d window", want, r, w, h)
 		}
 	}
 }
