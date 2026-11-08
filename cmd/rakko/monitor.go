@@ -212,6 +212,16 @@ func (a *shelf) monitorDelay(now time.Time) time.Duration {
 	if a.monitorActive(now) {
 		return pointerInterval
 	}
+	// At rest the clipboard poll is the heartbeat. One wake per 100 ms
+	// services every module's own gate; waking separately for each 250 ms /
+	// 1 s / 2 s deadline would multiply the idle wakes without changing
+	// behaviour by more than the poll's own granularity.
+	if a.clip != nil && !a.clip.pollAt.IsZero() {
+		if d := a.clip.pollAt.Sub(now); d > 0 {
+			return d
+		}
+		return 0
+	}
 	next := a.monitorDeadline(now)
 	if next.IsZero() {
 		return time.Second
@@ -257,11 +267,16 @@ func (a *shelf) scheduleMonitor(now time.Time) {
 	}
 	gen := a.monitorGen.Add(1)
 	delay := a.monitorDelay(now)
-	mac.AfterMain(delay, func() {
-		if a.quitting || a.monitorGen.Load() != gen {
-			return
-		}
-		a.monitorRun()
+	if a.monitorTimer != nil {
+		a.monitorTimer.Stop()
+	}
+	a.monitorTimer = time.AfterFunc(delay, func() {
+		mac.WakeMain(func() {
+			if a.quitting || a.monitorGen.Load() != gen {
+				return
+			}
+			a.monitorRun()
+		})
 	})
 }
 
