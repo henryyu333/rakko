@@ -800,7 +800,7 @@ func (a *shelf) view(c *ui.Context) {
 	}
 	// The approval card has its own measured shell: 9 pt ears and a 22 pt
 	// bottom radius (A21's real rendering), not the panel's 12.
-	askUp := a.live.shown && a.live.cur.kind == liveAgentAsk
+	askUp := a.live.shown && a.live.cur.kind == liveAgentAsk && !a.capsuleUp(time.Now()) && !a.appsModeOn()
 	if askUp {
 		corner = 22
 	}

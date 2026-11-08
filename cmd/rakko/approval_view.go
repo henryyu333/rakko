@@ -55,7 +55,9 @@ var (
 // or the island's floating box.
 func (a *shelf) approvalCardSize(ap *approval) (w, h float32) {
 	baseW, _ := a.anchorSize()
-	w = min(max(approvalCardW, baseW+60), fbMaxW)
+	// The 380 pt cap keeps the card from growing beyond the design, but a
+	// notch wider than that still needs its own width.
+	w = min(max(approvalCardW, baseW+60), max(float32(fbMaxW), baseW))
 	body := ap.bodyHeight(w)
 	if a.island {
 		// The island has no notch band: 6 pt above the body, whose own
