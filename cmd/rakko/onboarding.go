@@ -10,13 +10,13 @@ package main
 // real drop zone — because the guide's only job is teaching what the real
 // shelf looks like.
 //
-// Lifecycle: a launch that found no settings.json wrote
-// onboarding.pending into the defaults it created (main.go). Pending shows
-// the guide, hides the page capsule, mutes the notch's transient
-// activities, and keeps the desk pet off the desktop; it clears on finish
-// or skip, never on a plain close — closing the panel mid-guide just
-// pauses, and the next opening returns to the same step. A move or a
-// permission grant that needs a restart persists the step to resume at,
+// Lifecycle: a launch that found no settings.json owes the guide (main.go),
+// which is written as onboarding.pending. Pending shows the guide, hides the
+// page capsule, mutes the notch's transient activities, and keeps the desk
+// pet off the desktop; it clears on finish or skip, never on a plain close —
+// closing the panel mid-guide just pauses, and the next opening returns to
+// the same step. A move or a permission grant that needs a restart persists
+// the step to resume at, so the relaunched app opens on the permissions.
 import (
 	"fmt"
 	"image"

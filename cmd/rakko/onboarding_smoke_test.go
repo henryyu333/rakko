@@ -30,6 +30,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"rakko/internal/mac"
 	"rakko/internal/settings"
 	"rakko/locales"
 )
@@ -56,6 +57,7 @@ func TestOnboardingFirstLaunchNative(t *testing.T) {
 		t.Fatalf("the fresh data directory already has settings.json: %v", err)
 	}
 	proc := launchRakko(t, appsBundle, data, "")
+	t.Logf("accessibility=%v screenCapture=%v", accessibilityProbe(), mac.ScreenCaptureGrantedByWindowTitles())
 	shotScreen(t, primary, "native-onboarding-intro")
 	pressKey(t, 36 /* Return */)
 	time.Sleep(700 * time.Millisecond)
@@ -67,11 +69,12 @@ func TestOnboardingFirstLaunchNative(t *testing.T) {
 	// Drag the sample chip into the panel: the real drag path, then the
 	// file lands in the tray. A click is the fallback the design offers.
 	chip := chipRect(t)
+	t.Logf("panelLeft=%.1f chip=%+v", panelLeft(primary), chip)
 	dragPointer(t,
 		float32(primary.Bounds.X)+panelLeft(primary)+chip.X+chip.W/2,
 		float32(primary.Bounds.Y)+chip.Y+chip.H/2,
 		float32(primary.Bounds.X)+panelLeft(primary)+416/2,
-		float32(primary.Bounds.Y)+300)
+		float32(primary.Bounds.Y)+200)
 	if !waitTrayItems(t, data, 1, 3*time.Second) {
 		clickPointer(t,
 			float32(primary.Bounds.X)+panelLeft(primary)+chip.X+chip.W/2,
