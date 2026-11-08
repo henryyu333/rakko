@@ -110,12 +110,15 @@ func main() {
 	}
 	freshInstall := !settings.Exists(*dataDir)
 	prefs, perr := settings.Load(*dataDir)
-	// Only a launch that found no settings.json at all owes the first-launch
-	// guide; an upgraded install always has the file. A broken read keeps
-	// the flag off too — that file is never rewritten behind the user's
-	// back, so nothing may claim the install is new.
+	// A launch that found no settings.json at all owes the first-launch
+	// guide; a launch that already owed it (a move or permission relaunch)
+	// keeps it. An upgraded install has the file without the flag, and a
+	// broken read never claims the install is new — that file is never
+	// rewritten behind the user's back.
 	prefs.Onboarding.Pending = onboardingOwed(freshInstall, perr, prefs.Onboarding.Pending)
 	a := &shelf{store: s, settings: prefs, dataDir: *dataDir, stop: make(chan struct{}), thumbnails: make(map[string]*ui.Bitmap), thumbPending: make(map[string]bool)}
+	// 剪贴板文字限额来自设置；小于 1 的值由 store 回落到默认 30。
+	s.SetTextLimit(prefs.ClipboardLimit)
 	if perr != nil {
 		a.settingsBroken = true
 		a.notice(locales.In(resolveLanguage(prefs.Language, preferredLanguages())).StartupSettingsBroken(perr.Error()))
