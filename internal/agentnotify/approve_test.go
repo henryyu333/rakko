@@ -418,6 +418,7 @@ func TestExtractAsk(t *testing.T) {
 // The entries Rakko writes must match each tool's documented shape. This
 // reads the files back rather than trusting the writer's intent.
 func TestApproveEntryShapes(t *testing.T) {
+	t.Setenv("CODEX_HOME", "")
 	home, data := t.TempDir(), t.TempDir()
 	exe := "/Applications/Rakko.app/Contents/MacOS/Rakko"
 	for _, tool := range []Tool{ToolClaude, ToolCodex, ToolQwen, ToolDevin, ToolCopilot,
