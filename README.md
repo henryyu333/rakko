@@ -87,15 +87,15 @@ It lives in the menu bar, has no Dock icon, keeps everything on your Mac, and ne
 - AI totals come from locally readable logs and estimated cost is not your subscription bill. Rakko counts successful conversions, Capture Text and items taken from the Tray from when recording began.
 
 **AI usage** (optional, off by default)
-- Turn it on in Settings → AI Usage → Show AI Usage in the Notch and the panel gains one more page icon. The page fits one screen and never scrolls: the left column holds a double-ring card per tool — outer ring weekly, inner ring 5-hour — and the right column holds this Mac's total token usage over Today / 7D / 30D / All, as four numbers (tokens, requests, cost, cache hits) and one chart. Hover a card for its plan, reset times, the even-pace mark and any per-model weekly limits; hover a number for its parts.
-- Quotas show how much is used by default; switch to what is left in Settings → AI Usage → Quota Shown. The same page has one switch per quota source — Claude Code and Codex. The AI Usage card on Tools reads the same quotas: at 1 × 1 it draws one double ring — outer weekly, inner 5-hour — around the mark of the tool with the least left; hover it for the numbers. At 2 × 1 it keeps the ring beside its name.
+- Turn it on in Settings → AI → Show AI Usage in the Notch and the panel gains one more page icon. The page fits one screen and never scrolls: the left column holds a double-ring card per tool — outer ring weekly, inner ring 5-hour — and the right column holds this Mac's total token usage over Today / 7D / 30D / All, as four numbers (tokens, requests, cost, cache hits) and one chart. Hover a card for its plan, reset times, the even-pace mark and any per-model weekly limits; hover a number for its parts.
+- Quotas show how much is used by default; switch to what is left in Settings → AI → Quota Shown. The same page has one switch per quota source — Claude Code and Codex. The AI Usage card on Tools reads the same quotas: at 1 × 1 it draws one double ring — outer weekly, inner 5-hour — around the mark of the tool with the least left; hover it for the numbers. At 2 × 1 it keeps the ring beside its name.
 - The Claude Code quota comes from Claude Code itself: Rakko runs your installed Claude Code's `/usage` command, so the numbers match what Claude Code reports. Claude Code must be installed; Rakko never downloads it. When Claude Code on this Mac is signed out, the Claude card says Not Signed In with a Sign In button: it opens Claude's sign-in page in your browser and keeps that sign-in in Rakko's own folder (`~/Library/Application Support/Rakko/claude/`), apart from your Claude Code's. Rakko reads the quota with its own sign-in when it has one, and with your Claude Code's otherwise. The Codex quota reads the login Codex already saved on this Mac and sends it only to chatgpt.com.
 - Opening the page or pressing refresh reads the quota (Claude Code at most once every 30 seconds); while the page stays open, Claude Code is read again every 5–15 minutes, and only after you used it. The last reading is kept, so the page shows it right after a restart.
 - Local usage is found on its own: the session records of omp, Claude Code, Codex, pi, opencode and Grok are read where those tools keep them. The AI Usage page shows a combined total; the weekly report also shows the available sources.
 
 **Agent completion notices** (optional, off by default)
-- Settings → AI Usage → Agent Completion → Notify When a Turn Finishes. While it is on, Rakko writes a hook entry into the configuration file of each agent it finds installed, so a finished turn reaches the notch. Turning it off removes every entry it wrote, whole; a file it cannot parse is never rewritten.
-- The notice is a two-line card under the notch: the tool's mark, its name and a green Done on the first line, the task it was working on below. It only reports — nothing approves, answers or reads a conversation, and the agent keeps working exactly as it would without Rakko.
+- Settings → AI → Agent Completion → Notify When a Turn Finishes. While it is on, Rakko writes a hook entry into the configuration file of each agent it finds installed, so a finished turn reaches the notch. Turning it off removes every entry it wrote, whole; a file it cannot parse is never rewritten.
+- The notice is a two-line card under the notch: the tool's mark, its name and a green Done on the first line, the task it was working on below. It only reports — nothing answers or reads a conversation, and the agent keeps working exactly as it would without Rakko.
 - Codex asks once before it runs the entry: open `/hooks` in Codex, review the hook Rakko added and trust it. Until then Codex skips it.
 - Supported tools, and the file Rakko writes for each:
 
@@ -118,6 +118,12 @@ It lives in the menu bar, has no Dock icon, keeps everything on your Mac, and ne
 | Auggie | `~/.augment/settings.json` |
 
 A tool counts as installed only by files it writes itself, so a stray `~/.claude` folder from an installer does not put a row in the list. The switch needs the installed app: a build run from a terminal writes nothing and says so.
+
+**Agent approvals** (optional, off by default)
+- Settings → AI → Agent Approvals → Approve agent requests in the notch. When an agent asks for permission — to run a command, edit files, fetch a URL — a card drops from the notch instead of your terminal waiting: the project and one plain sentence (the agent's own description when it gives one), risk tags only when something is risky (deletes files, network or downloads, installs packages, admin rights, rewrites history, pipes into a shell, publishes), and the full command, file list or URL one click away.
+- Allow, Deny (with an optional reason the agent reads) or Handle in Terminal. A risky request turns the allow button amber and asks you to hold it for 0.6 s. The card never takes the keyboard; `⌘↩` is its one shortcut, and on a risky request it has to be pressed twice. The card shows how long it has waited; after 45 seconds it hands the request back to the terminal. Nothing is ever allowed for you.
+- Claude Code, Codex, Qwen Code, Devin and opencode ask only when they would have asked you anyway, so every request shows a card. Copilot CLI, Droid, Antigravity and pi check every tool call, so Rakko shows a card only for risky ones and leaves the rest to the tool's own rules. Cursor, Gemini CLI, Grok, Kiro, Auggie and omp keep completion notices only: their hooks cannot approve on your behalf.
+- Rakko answers only through its own socket and checks that the process on the other end is this signed Rakko; if Rakko is not running or the check fails, the tool falls back to asking in the terminal. Approval entries are separate from completion entries — each switch adds and removes only its own. Codex asks you to trust the new hook once in `/hooks`. Copilot CLI uses `~/.copilot/hooks/rakko-agent-approval.json`, opencode `~/.config/opencode/plugins/rakko-agent-approval.js`, pi `~/.pi/agent/extensions/rakko-agent-approval.ts`; the other tools get their entry in the same file as in the table above.
 
 **Stay awake**
 - Right-click the menu-bar icon → Keep Awake and your Mac won't fall asleep for 30 minutes, 1, 2 or 4 hours, or until you turn it off. Tick Keep Screen On to keep the display awake as well.
@@ -174,10 +180,10 @@ A tool counts as installed only by files it writes itself, so a stray `~/.claude
 - Show / Hide (`⌃⌥Space`) opens the search bar or closes the shelf; clicking anywhere else tucks it away, and Esc steps back one level at a time — a page returns to the search bar, a typed query clears first, and the bar folds into the notch.
 - Reduce Transparency draws the panel pure black; Reduce Motion keeps the fades and drops the travel and bounce. Secondary text — times, counts, captions — is drawn brighter than before, so it stays readable on black.
 - Every page switch is one fade: the page you leave fades out while the new page fades in. Over the open panel the pointer stays a plain arrow.
-- Settings… is a normal window with a sidebar: General (Open at Login, Language, automatic updates with Check Now), Appearance (notch style, island position, desktop otter, live activities, snap windows), Tray, Clipboard, AI Usage (display, quota, Agent Completion), Shortcuts, System Permissions and About. The sidebar's footer says whether every permission is on; About holds the version, Check Now, the source link and the data folder. Every control applies at once.
+- Settings… is a normal window with a sidebar: General (Open at Login, Language, default search mode), Appearance (notch style, island position, desktop otter, live activities, snap windows), Tray, Clipboard, AI (display, quota, Agent Completion, Agent Approvals), Shortcuts, System Permissions and About. The sidebar's footer says whether every permission is on; About holds the version, Check for Updates, the data folder, the update settings, the privacy note and the source link. Every control applies at once.
 - Fourteen global shortcuts live in Settings → Shortcuts, in three groups: Global Shortcuts (Show / Hide `⌃⌥Space`, Clipboard Search `⌃⌥V`, Open Tray, App Switcher), Playback (Play / Pause, Previous Track, Next Track) and Tools (Capture Text `⌃⌥O`, Screenshot `⌃⌥A`, Open Tools, Open AI Usage, Toggle Keep Awake, New Note, Show or Hide the Otter). Only the four with defaults start set; every other row says Not Set. Click a row and press the new keys: a key with ⌃, ⌥ or ⌘ saves at once; F1–F12, the arrows, Home, End, PageUp, PageDown and Insert work alone or with ⇧; a key that types text asks first — "X" will be taken from every app — with Use Anyway or Cancel. Delete clears the row, Esc cancels, and a combination another app already holds leaves the previous one in place.
-- Pressing Clipboard Search, Open Tray, Open Tools or Open AI Usage while that page is already showing closes the panel. With AI Usage off, its shortcut opens Settings → AI Usage.
-- Updates are checked against this repository's GitHub releases. Rakko tells you when one is out and installs it only when you say so. Settings → General → Updates is where it lives: the last check's time and result, Check Now, and — once a version is downloaded — a Restart button; the pill at the bottom of the panel offers the same restart.
+- Pressing Clipboard Search, Open Tray, Open Tools or Open AI Usage while that page is already showing closes the panel. With AI Usage off, its shortcut opens Settings → AI.
+- Updates are checked against this repository's GitHub releases. When a new version is out, an update window opens with its release notes: Skip This Version, Remind Me Later (a day), or Install Update, which downloads in the same window and ends with Install and Relaunch. The window follows the system's light or dark appearance. Settings → About holds Check for Updates, the last check's time and result, Check for Updates Automatically and Automatically download and install updates (off by default; when on, only the ready-to-relaunch window appears), plus a Restart button once a version is downloaded; the pill at the bottom of the panel offers the same restart.
 
 <a id="install"></a>
 
@@ -188,7 +194,7 @@ Requires a Mac with Apple Silicon (M1 or later) running macOS 13 or later. Intel
 1. Download **[Rakko.dmg](https://github.com/henryyu333/rakko/releases/latest/download/Rakko.dmg)**.
 2. Open the downloaded file and drag **Rakko** onto the **Applications** folder.
 3. Open Rakko from Applications. The first time, macOS will stop it — follow [First launch](#first-launch) below. You only do this once.
-4. Rakko lives in the menu bar, not the Dock. Hover the notch, or press `⌃⌥Space`.
+4. Rakko lives in the menu bar, not the Dock. Hover the notch, or press `⌃⌥Space`. A fresh install opens a short guide in the notch the first time: where Rakko lives, the optional permissions, and dropping one file to try it — Skip or Esc leaves at any step. If Rakko is running from Downloads or the disk image, the guide offers Move to Applications (an older Rakko already there goes to the Trash first) and reopens from there. Updating from an earlier version never shows the guide.
 
 Prefer a zip? Every release on the [Releases page](https://github.com/henryyu333/rakko/releases/latest) also has `Rakko-<version>-macos-arm64.zip` and the `.dmg` of the same version.
 
@@ -262,14 +268,15 @@ Coming from the older Shelf app? Rakko copies from `Application Support/Shelf/` 
 | Clear the shelf | Click the trash icon in the page's action row — only that page is cleared, pinned items stay, original files are never deleted |
 | Change settings | Right-click the menu-bar icon → Settings… |
 | Change a shortcut | Settings → Shortcuts: click the row, press the new combination; Delete clears it, Esc cancels |
-| Check for updates | Right-click the menu-bar icon → Check for Updates…, or Settings → General → Check Now |
-| Get told an agent finished | Settings → AI Usage → Agent Completion → Notify When a Turn Finishes; Codex asks you to trust the hook once in its own `/hooks` |
+| Check for updates | Right-click the menu-bar icon → Check for Updates…, or Settings → About → Check for Updates |
+| Get told an agent finished | Settings → AI → Agent Completion → Notify When a Turn Finishes; Codex asks you to trust the hook once in its own `/hooks` |
+| Approve an agent's request from the notch | Settings → AI → Agent Approvals → Approve agent requests in the notch |
 
 The full manual is in [docs/MANUAL.zh-CN.md](docs/MANUAL.zh-CN.md) (Chinese).
 
 ## Privacy
 
-Everything stays on your Mac: no account, no telemetry, no cloud sync. Rakko makes three kinds of network requests. The update check — shortly after launch and then once a day, Rakko asks this repository's latest GitHub release whether a newer version exists; it sends nothing but the app version in the standard User-Agent header. Turn it off in Settings → General → Check for Updates Automatically; checking by hand from the menu still works. Lyrics — only after you open the lyrics column with the button on the Home player, and only for a song Rakko has no answer for yet, it sends the title, artist, album and length to lrclib.net and, when lrclib.net has nothing or is busy, the title and artist to NetEase Cloud Music (music.163.com); the answer is kept on this Mac, and close the column and nothing more is asked. And, only if you enable the optional AI usage page, its quota lookups: the Codex quota goes to chatgpt.com with the login Codex saved, and the Claude Code quota is read by running your installed Claude Code, which talks to Anthropic itself as it always does. Nothing else is sent. These requests follow the proxy settings on the Mac: `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` decide when the app was started with them, and otherwise the system proxy from System Settings → Network → Proxies applies as CFNetwork itself reads it — HTTP for http, HTTPS for https, SOCKS only when the scheme's own proxy is off, never one scheme's proxy standing in for the other, with the system's exception list and the simple-hostname exclusion. Turning a proxy on takes effect without relaunching Rakko. A proxy auto-configuration (PAC) script is not evaluated: with only a PAC configured, Rakko connects directly.
+Everything stays on your Mac: no account, no telemetry, no cloud sync. Rakko makes three kinds of network requests. The update check — shortly after launch and then once a day, Rakko asks this repository's latest GitHub release whether a newer version exists; it sends nothing but the app version in the standard User-Agent header. Turn it off in Settings → About → Check for Updates Automatically; checking by hand from the menu still works. Lyrics — only after you open the lyrics column with the button on the Home player, and only for a song Rakko has no answer for yet, it sends the title, artist, album and length to lrclib.net and, when lrclib.net has nothing or is busy, the title and artist to NetEase Cloud Music (music.163.com); the answer is kept on this Mac, and close the column and nothing more is asked. And, only if you enable the optional AI usage page, its quota lookups: the Codex quota goes to chatgpt.com with the login Codex saved, and the Claude Code quota is read by running your installed Claude Code, which talks to Anthropic itself as it always does. Nothing else is sent. Agent approvals never leave the Mac: the hook and Rakko talk over a socket in Rakko's own folder. These requests follow the proxy settings on the Mac: `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` decide when the app was started with them, and otherwise the system proxy from System Settings → Network → Proxies applies as CFNetwork itself reads it — HTTP for http, HTTPS for https, SOCKS only when the scheme's own proxy is off, never one scheme's proxy standing in for the other, with the system's exception list and the simple-hostname exclusion. Turning a proxy on takes effect without relaunching Rakko. A proxy auto-configuration (PAC) script is not evaluated: with only a PAC configured, Rakko connects directly.
 
 The Agent Completion switch adds no traffic: those hooks run Rakko's own binary on this Mac, hand it the tool's own event through a local socket in the data folder, and send nothing over the network. They report only that a turn finished and what the task was — never a conversation, never an answer.
 
@@ -364,15 +371,15 @@ Rakko 是住在 Mac 刘海里的工具：它把摄像头周围那块黑色刘海
 - AI 数据来自仍可读取的本机日志，费用为估算，不代表订阅账单。Rakko 统计开始记录后的成功转换、框选文字和托盘取出次数。
 
 **AI 用量**（可选，默认关闭）
-- 在 设置… →「AI 用量」→「在刘海里显示 AI 用量」打开后，顶栏会多出一个页面图标。整页一屏看全，不用滚动：左栏是 Claude Code、Codex 的套餐额度卡（每张卡内外双圈：外圈每周、内圈 5 小时），右栏是这台电脑上的 token 用量总量——今天 / 7 天 / 30 天 / 全部，四个数字（Token、请求、费用、缓存命中）和一根柱图。悬停额度卡可以看到套餐名、重置时间、均匀消耗标记和按模型的每周额度；悬停数字可以看到它的组成部分。
-- 额度默认显示「已用」；可以在 设置… →「AI 用量」→「额度显示」改成「剩余」。同一页里每个额度来源各有一个开关（Claude Code、Codex）。工具页的 AI 用量卡用同一份额度数据：1×1 只画一个双圈——外圈每周、内圈 5 小时——中间是剩余额度最少的那个工具的标志，鼠标悬停看具体数字；2×1 仍是圈在左、名字在右。
+- 在 设置… →「AI」→「在刘海里显示 AI 用量」打开后，顶栏会多出一个页面图标。整页一屏看全，不用滚动：左栏是 Claude Code、Codex 的套餐额度卡（每张卡内外双圈：外圈每周、内圈 5 小时），右栏是这台电脑上的 token 用量总量——今天 / 7 天 / 30 天 / 全部，四个数字（Token、请求、费用、缓存命中）和一根柱图。悬停额度卡可以看到套餐名、重置时间、均匀消耗标记和按模型的每周额度；悬停数字可以看到它的组成部分。
+- 额度默认显示「已用」；可以在 设置… →「AI」→「额度显示」改成「剩余」。同一页里每个额度来源各有一个开关（Claude Code、Codex）。工具页的 AI 用量卡用同一份额度数据：1×1 只画一个双圈——外圈每周、内圈 5 小时——中间是剩余额度最少的那个工具的标志，鼠标悬停看具体数字；2×1 仍是圈在左、名字在右。
 - Claude Code 的额度由 Claude Code 自己给出：Rakko 运行你装好的 Claude Code 的 `/usage` 命令，所以数字和 Claude Code 显示的一致。需要先装好 Claude Code，Rakko 不会替你下载。本机 Claude Code 没有登录时，Claude 卡片显示「未登录」和「登录」按钮：点了会在浏览器里打开 Claude 的登录页，登录结果只存在 Rakko 自己的目录（`~/Library/Application Support/Rakko/claude/`），不碰你自己的 Claude Code；Rakko 有自己的登录就用它查额度，没有就用你 Claude Code 的登录。Codex 的额度读取 Codex 保存在本机的登录信息，只发给 chatgpt.com。
 - 打开这一页或点刷新时会查询额度（Claude Code 最多 30 秒查一次）；页面一直开着时，只有你用过 Claude Code 才会每 5–15 分钟再查一次。上次的结果会保存，重启后打开就能看到。
 - 本机用量自己去找：omp、Claude Code、Codex、pi、opencode、Grok 各自的会话记录在它们自己的位置被读取。AI 用量页显示合计；每周简报也会显示可读取的来源。
 
 **Agent 完成提醒**（可选，默认关闭）
-- 设置… →「AI 用量」→「Agent 完成提醒」→「完成时在刘海提醒」。打开后，Rakko 会在它找到的每个 agent 的配置文件里写入一条 hook，让「这一轮做完了」传到刘海。关掉时，它写进去的条目会整条移除；解析不了的文件绝不会被改写。
-- 提示是刘海下面的一张两行卡：第一行是这个工具的标志、名字和绿色的「完成」，第二行是它刚才在做的事。它只负责通知——不批准、不回复、不读对话，agent 的工作和没有 Rakko 时完全一样。
+- 设置… →「AI」→「Agent 完成提醒」→「完成时在刘海提醒」。打开后，Rakko 会在它找到的每个 agent 的配置文件里写入一条 hook，让「这一轮做完了」传到刘海。关掉时，它写进去的条目会整条移除；解析不了的文件绝不会被改写。
+- 提示是刘海下面的一张两行卡：第一行是这个工具的标志、名字和绿色的「完成」，第二行是它刚才在做的事。它只负责通知——不回复、不读对话，agent 的工作和没有 Rakko 时完全一样。
 - Codex 要你自己确认一次：在 Codex 里打开 `/hooks`，审阅 Rakko 加的那条 hook 并信任它；在那之前 Codex 会跳过它。
 - 支持的工具，以及 Rakko 为各自写入的文件：
 
@@ -395,6 +402,12 @@ Rakko 是住在 Mac 刘海里的工具：它把摄像头周围那块黑色刘海
 | Auggie | `~/.augment/settings.json` |
 
 一个工具算不算装好，只看它自己写出来的文件，所以安装器留下的空文件夹不会在列表里多出一行。这个开关需要安装版：从终端直接跑起来的构建不会写入任何东西，设置页里也会这样说明。
+
+**Agent 审批**（可选，默认关闭）
+- 设置… →「AI」→「Agent 审批」→「在刘海审批 Agent 请求」。agent 要权限时（跑命令、改文件、联网），刘海里直接弹出一张卡，不用切回终端：第一行是项目，下面一句人话（agent 自己写了说明就用它的说明）；有风险时才出现风险标签（会删除文件、联网 / 下载、安装软件包、管理员权限、改写历史、管道进 shell、发布）；点一下展开完整命令、文件列表或网址。
+- 三个按钮：「拒绝」（可以附一句原因，agent 会收到）、「在终端处理」、「允许」。有风险时「允许」变成警示色，要「按住允许」0.6 秒。卡片不抢键盘，唯一的快捷键是 `⌘↩`，有风险时要按两次。卡上显示已经等了多少秒，45 秒没处理就交回终端；Rakko 从不替你自动允许。
+- Claude Code、Codex、Qwen Code、Devin、opencode 只在本来就要问你的时候问，所以每次都上卡；Copilot CLI、Droid、Antigravity、pi 每次调用工具都会问，Rakko 只对有风险的上卡，其余照工具自己的规则走。Cursor、Gemini CLI、Grok、Kiro、Auggie、omp 只做完成提醒：它们的 hook 不能替你批准。
+- Rakko 只通过自己数据目录里的 socket 回答，并确认另一头就是这个签名的 Rakko；Rakko 没在运行或校验不通过时，工具照常在终端问你。审批条目和完成提醒的条目互相独立，各自的开关只增删自己的。Codex 要在 `/hooks` 里信任一次新加的 hook。Copilot CLI 写 `~/.copilot/hooks/rakko-agent-approval.json`，opencode 写 `~/.config/opencode/plugins/rakko-agent-approval.js`，pi 写 `~/.pi/agent/extensions/rakko-agent-approval.ts`；其他工具写在上表同一个文件里。
 
 **保持唤醒**
 - 右键菜单栏图标 →「保持唤醒」，选 30 分钟、1 小时、2 小时、4 小时或「一直（直到关闭）」，这段时间里 Mac 不会自动睡眠；勾选「屏幕也保持亮着」，屏幕也不会熄灭。
@@ -451,10 +464,10 @@ Rakko 是住在 Mac 刘海里的工具：它把摄像头周围那块黑色刘海
 - 「显示 / 收起」是 `⌃⌥Space`，用来打开搜索条或收起；点别处就自动缩回刘海。Esc 一级一级往回退：页面先回到搜索条，有输入时先清空输入，再按一次收回刘海。
 - 打开「减少透明度」时面板画成纯黑；「减少动态效果」时只保留淡入淡出。时间、计数、说明这类次要文字在纯黑上更容易看清。
 - 页面之间用同一种切换：旧页淡出，新页淡入。指针在展开的面板上始终是普通箭头。
-- 设置… 是一个带侧栏的普通窗口：通用（开机时自动启动、语言、自动更新和「现在检查」）、外形与提示（刘海样式、灵动岛位置、桌宠、实时活动、拖窗口分屏）、托盘、剪贴板、AI 用量（显示、额度、Agent 完成提醒）、快捷键、系统权限和关于。侧栏底部显示权限状态；关于页有版本号、「现在检查」、源代码链接和数据文件夹。改完立即生效。
+- 设置… 是一个带侧栏的普通窗口：通用（开机时自动启动、语言、默认搜索模式）、外形与提示（刘海样式、灵动岛位置、桌宠、实时活动、拖窗口分屏）、托盘、剪贴板、AI（显示、额度、Agent 完成提醒、Agent 审批）、快捷键、系统权限和关于。侧栏底部显示权限状态；关于页有版本号、「检查更新」、数据文件夹、更新设置、隐私说明和源代码链接。改完立即生效。
 - 设置… → 快捷键 里有十四个全局快捷键，分三组：「全局快捷键」（显示 / 收起 `⌃⌥Space`、剪贴板搜索 `⌃⌥V`、打开托盘、应用切换）、「播放」（播放 / 暂停、上一首、下一首）、「工具」（框选文字 `⌃⌥O`、截图 `⌃⌥A`、打开工具页、打开 AI 用量、保持唤醒开 / 关、新建便利贴、放出 / 收回海獭）。除显示 / 收起、剪贴板搜索、框选文字、截图外，其余初始都是「未设置」。点一下那一行，按新的组合键：带 ⌃、⌥ 或 ⌘ 的立即保存；F1–F12、方向键、Home、End、PageUp、PageDown、Insert 可以单用，也可以加 ⇧；会打字的键先问一句「X」会在所有应用里被截走，再选「仍然使用」或「取消」。Delete 清空，Esc 取消；组合被其他应用占用时，保留原来的组合并提示。
-- 页面已经打开时，再按剪贴板搜索、打开托盘、打开工具页或打开 AI 用量，就收起面板；AI 用量页关着时，「打开 AI 用量」打开 设置… →「AI 用量」。
-- 新版本从本仓库的 GitHub Releases 检查；有更新时会提示你，你点了才会安装。更新的信息都在 设置… → 通用 →「更新」里：上次检查的时间和结果、「现在检查」，下载好后还有「重新启动」按钮；面板底部的小胶囊也会提示，并给出同样的重新启动。
+- 页面已经打开时，再按剪贴板搜索、打开托盘、打开工具页或打开 AI 用量，就收起面板；AI 用量页关着时，「打开 AI 用量」打开 设置… →「AI」。
+- 新版本从本仓库的 GitHub Releases 检查。发现新版本时会弹出更新窗口，更新说明就在里面：「跳过这个版本」「稍后提醒我」（一天后再提醒）或「安装更新」，下载在同一个窗口里进行，下载好后点「安装并重启应用」。窗口跟随系统的深色 / 浅色。设置… →「关于」里有「检查更新」、上次检查的时间和结果、「自动检查更新」和「自动下载并安装更新」（默认关；打开后只在下载好时弹窗），下载好后还有「重新启动」按钮；面板底部的小胶囊也会提示，并给出同样的重新启动。
 
 <a id="安装"></a>
 
@@ -465,7 +478,7 @@ Rakko 是住在 Mac 刘海里的工具：它把摄像头周围那块黑色刘海
 1. 下载 **[Rakko.dmg](https://github.com/henryyu333/rakko/releases/latest/download/Rakko.dmg)**。
 2. 打开下载好的文件，把 **Rakko** 拖到 **Applications（应用程序）** 文件夹上。
 3. 从“应用程序”里打开 Rakko。第一次打开会被系统拦下，按下面的[第一次打开](#第一次打开)操作即可，只需要做一次。
-4. Rakko 在屏幕顶部的菜单栏里，不在 Dock 上。把鼠标移到刘海上，或按 `⌃⌥Space`。
+4. Rakko 在屏幕顶部的菜单栏里，不在 Dock 上。把鼠标移到刘海上，或按 `⌃⌥Space`。全新安装第一次打开时，刘海里会走一段简短的引导：Rakko 住在哪、可选的系统权限、拖一个文件进来试试；任何一步都可以点「跳过」或按 Esc 离开。如果 Rakko 是从「下载」或磁盘映像里打开的，引导会提供「移到「应用程序」」（那里已有的旧 Rakko 会先移到废纸篓），然后从新位置重新打开。从旧版本升级的不会看到引导。
 
 想要 zip 压缩包？[Releases 页面](https://github.com/henryyu333/rakko/releases/latest)的每个版本里也有同一版本的 `Rakko-<version>-macos-arm64.zip` 和 `.dmg`。
 
@@ -539,13 +552,14 @@ macOS 会把 Rakko 当成一个新应用，所以升级后系统权限和「开�
 | 清空当前列表 | 点页面动作行右边的垃圾桶图标——只清这一页，置顶的保留，原文件不会被删除 |
 | 修改设置 | 右键菜单栏图标 → 设置… |
 | 修改快捷键 | 设置… → 快捷键：点一下那一行，按新的组合键；Delete 清空，Esc 取消 |
-| 检查更新 | 右键菜单栏图标 →「检查更新…」，或 设置… → 通用 →「现在检查」 |
+| 检查更新 | 右键菜单栏图标 →「检查更新…」，或 设置… →「关于」→「检查更新」 |
+| 在刘海审批 agent 的请求 | 设置… →「AI」→「Agent 审批」→「在刘海审批 Agent 请求」 |
 
 完整说明见 [使用手册](docs/MANUAL.zh-CN.md)。
 
 ## 隐私
 
-一切都留在你的 Mac 上：不用注册账号，没有遥测，没有云同步。联网请求只有三类：检查更新（启动后不久一次、之后每天一次，向本仓库 GitHub 上的最新 Release 询问有没有新版本，请求里只带一个标准的 User-Agent 头；「自动检查更新」可以在 设置… → 通用 里关闭，关闭后仍可在菜单里手动检查）；歌词（只有你用首页播放器左下的歌词按钮打开歌词栏后，才把一首还没有结果的歌的歌名、歌手、专辑和时长发给 lrclib.net；lrclib.net 没有或太忙时，再把歌名和歌手发给网易云音乐（music.163.com）；结果存在本机；收起歌词栏就不再联网）；以及可选的 AI 用量页的额度查询——只有打开它才会发生：Codex 的额度用 Codex 保存的登录信息发给 chatgpt.com；Claude Code 的额度通过运行你装好的 Claude Code 读取，由 Claude Code 自己照常联系 Anthropic。除此之外不发送任何内容。这些请求跟随这台 Mac 的代理设置：启动 Rakko 时带了 `HTTP_PROXY`、`HTTPS_PROXY` 或 `NO_PROXY` 就按它们走（`NO_PROXY` 里的绕过项单独生效，不会退回系统代理）；否则用 系统设置 → 网络 → 代理 里的 HTTP / HTTPS / SOCKS 代理及其例外列表，改完不用重开 Rakko，几秒内生效。自动代理配置脚本（PAC）不解析：只配了 PAC 时 Rakko 直连。
+一切都留在你的 Mac 上：不用注册账号，没有遥测，没有云同步。联网请求只有三类：检查更新（启动后不久一次、之后每天一次，向本仓库 GitHub 上的最新 Release 询问有没有新版本，请求里只带一个标准的 User-Agent 头；「自动检查更新」可以在 设置… →「关于」里关闭，关闭后仍可在菜单里手动检查）；歌词（只有你用首页播放器左下的歌词按钮打开歌词栏后，才把一首还没有结果的歌的歌名、歌手、专辑和时长发给 lrclib.net；lrclib.net 没有或太忙时，再把歌名和歌手发给网易云音乐（music.163.com）；结果存在本机；收起歌词栏就不再联网）；以及可选的 AI 用量页的额度查询——只有打开它才会发生：Codex 的额度用 Codex 保存的登录信息发给 chatgpt.com；Claude Code 的额度通过运行你装好的 Claude Code 读取，由 Claude Code 自己照常联系 Anthropic。除此之外不发送任何内容。Agent 审批不出本机：hook 和 Rakko 通过 Rakko 自己数据目录里的 socket 通信。这些请求跟随这台 Mac 的代理设置：启动 Rakko 时带了 `HTTP_PROXY`、`HTTPS_PROXY` 或 `NO_PROXY` 就按它们走（`NO_PROXY` 里的绕过项单独生效，不会退回系统代理）；否则用 系统设置 → 网络 → 代理 里的 HTTP / HTTPS / SOCKS 代理及其例外列表，改完不用重开 Rakko，几秒内生效。自动代理配置脚本（PAC）不解析：只配了 PAC 时 Rakko 直连。
 
 Agent 完成提醒这个开关不增加任何流量：那些 hook 只在本机运行 Rakko 自己的可执行文件，把工具自己的事件通过数据文件夹里的本地 socket 交给它，不经过网络。它们只报告「这一轮做完了」和这一轮在做什么——不读对话，也不回话。
 
