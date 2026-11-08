@@ -1947,36 +1947,6 @@ func (msgs Messages) UpdateChecking() string {
 	return Catalog.Format(msgs.locale, "updateChecking", nil)
 }
 
-// UpdateDisabled says "此构建未启用自动更新（开发构建或未签名的安装）"
-// in the language the app shows.
-func UpdateDisabled() string { return In(i18n.Locale()).UpdateDisabled() }
-
-// UpdateDisabled says "此构建未启用自动更新（开发构建或未签名的安装）"
-// in the language of msgs.
-func (msgs Messages) UpdateDisabled() string {
-	return Catalog.Format(msgs.locale, "updateDisabled", nil)
-}
-
-// UpdateCheckFailed says "检查更新失败：{err}"
-// in the language the app shows.
-func UpdateCheckFailed(err string) string { return In(i18n.Locale()).UpdateCheckFailed(err) }
-
-// UpdateCheckFailed says "检查更新失败：{err}"
-// in the language of msgs.
-func (msgs Messages) UpdateCheckFailed(err string) string {
-	return Catalog.Format(msgs.locale, "updateCheckFailed", map[string]any{"err": err})
-}
-
-// UpdateUpToDate says "已是最新版本"
-// in the language the app shows.
-func UpdateUpToDate() string { return In(i18n.Locale()).UpdateUpToDate() }
-
-// UpdateUpToDate says "已是最新版本"
-// in the language of msgs.
-func (msgs Messages) UpdateUpToDate() string {
-	return Catalog.Format(msgs.locale, "updateUpToDate", nil)
-}
-
 // UpdateAvailable says "发现新版本 v{version} · 从菜单栏图标的菜单安装"
 // in the language the app shows.
 func UpdateAvailable(version string) string { return In(i18n.Locale()).UpdateAvailable(version) }

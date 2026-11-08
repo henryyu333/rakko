@@ -18,7 +18,6 @@ import (
 	"errors"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -688,13 +687,6 @@ func (a *shelf) repaintUpdateWindow() {
 	if a.updateWin != nil {
 		a.updateWin.Invalidate()
 	}
-}
-
-// updateBundlePath is the running app's .app directory: three levels up
-// from the executable, as mygo's installTarget finds it. Pure apart from
-// the executable probe; unit-tested through updateBundleFrom.
-func updateBundleFrom(exe string) string {
-	return filepath.Dir(filepath.Dir(filepath.Dir(exe)))
 }
 
 // updateUnavailableReason says why this copy cannot update, "" when it
