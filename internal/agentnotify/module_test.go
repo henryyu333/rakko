@@ -198,3 +198,88 @@ if (typeof cleanup === "function") cleanup();
 		t.Fatalf("turns named %v, want both prompts", prompts)
 	}
 }
+
+// approveModuleHarness writes a fake Rakko approve binary and one rendered
+// approval module. The binary denies a command containing rm -rf and allows
+// everything else, so the module's deny/allow wiring is visible from the
+// driver's result.
+func approveModuleHarness(t *testing.T, tool Tool, driver string) string {
+	t.Helper()
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skip("node is not installed")
+	}
+	dir := t.TempDir()
+	exe := filepath.Join(dir, "fake-rakko")
+	script := "#!/bin/sh\npayload=$(cat)\ncase \"$payload\" in\n  *\"rm -rf\"*) printf '%s' '{\"decision\":\"deny\",\"message\":\"stop\"}' ;;\n  *) printf '%s' '{\"decision\":\"allow\"}' ;;\nesac\n"
+	if err := os.WriteFile(exe, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	s, _ := specFor(tool)
+	body := renderApproveModule(s.approve.module, tool, exe, "")
+	if err := os.WriteFile(filepath.Join(dir, "module.mjs"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "driver.mjs"), []byte(driver), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// pi's tool_call handler blocks only on a deny; an allow returns nothing,
+// which is pi's normal flow.
+func TestPiApproveModule(t *testing.T) {
+	dir := approveModuleHarness(t, ToolPi, `
+import mod from "./module.mjs";
+const handlers = {};
+mod({ on(name, fn) { handlers[name] = fn; } });
+const denied = await handlers["tool_call"]({toolName:"bash", input:{command:"rm -rf build"}}, {cwd:"/tmp/proj"});
+const allowed = await handlers["tool_call"]({toolName:"bash", input:{command:"ls"}}, {cwd:"/tmp/proj"});
+console.log(JSON.stringify({denied, allowed: allowed === undefined ? "none" : allowed}));
+`)
+	out := runNodeDriver(t, dir)
+	if !strings.Contains(out, `"denied":{"block":true,"reason":"stop"}`) {
+		t.Fatalf("pi did not block the denied call:\n%s", out)
+	}
+	if !strings.Contains(out, `"allowed":"none"`) {
+		t.Fatalf("pi blocked an allowed call:\n%s", out)
+	}
+}
+
+// opencode's evaluate hook changes effect only when Rakko denies; another
+// effect is left alone.
+func TestOpencodeApproveModule(t *testing.T) {
+	dir := approveModuleHarness(t, ToolOpencode, `
+import mod from "./module.mjs";
+let evaluate;
+const ctx = {
+  location: { directory: "/tmp/proj" },
+  permission: { hook(name, fn) { if (name === "evaluate") evaluate = fn; } },
+};
+await mod.setup(ctx);
+const denied = {action:"bash", resources:["rm -rf build"], sessionID:"s1", effect:"ask"};
+await evaluate(denied);
+const allowed = {action:"read", resources:["/tmp/a"], sessionID:"s1", effect:"allow"};
+await evaluate(allowed);
+console.log(JSON.stringify({denied, allowed}));
+`)
+	// The module imports @opencode/plugin; the harness supplies its define.
+	stub := filepath.Join(dir, "node_modules", "@opencode", "plugin")
+	if err := os.MkdirAll(stub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stub, "package.json"),
+		[]byte(`{"name":"@opencode/plugin","type":"module","exports":"./index.js"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stub, "index.js"),
+		[]byte("export const Plugin = { define: (plugin) => plugin };\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := runNodeDriver(t, dir)
+	if !strings.Contains(out, `"effect":"deny","message":"stop"`) {
+		t.Fatalf("opencode did not deny:\n%s", out)
+	}
+	if !strings.Contains(out, `"allowed":{"action":"read","resources":["/tmp/a"],"sessionID":"s1","effect":"allow"}`) {
+		t.Fatalf("opencode changed an allow:\n%s", out)
+	}
+}
