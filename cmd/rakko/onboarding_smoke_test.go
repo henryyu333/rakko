@@ -252,6 +252,11 @@ func buildRakkoBundle(t *testing.T, tmp, folder string) string {
 	if err := os.WriteFile(filepath.Join(bundle, "Contents", "Info.plist"), []byte(plist), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// The checkout's resources, where a signed build ships them: the app
+	// icon on the move step and the otter's poses need them.
+	if err := copyTree(filepath.Join("..", "..", "resources"), filepath.Join(bundle, "Contents", "Resources")); err != nil {
+		t.Fatalf("staging resources: %v", err)
+	}
 	return bundle
 }
 
