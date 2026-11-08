@@ -158,6 +158,9 @@ const MaxRisks = 4
 // hook payload said (the inner tool_input / toolArgs / toolCall.args), so
 // the app and the client see exactly the same bytes.
 func Analyze(tool Tool, toolName string, input json.RawMessage) (Analysis, bool) {
+	if !tool.Valid() {
+		return Analysis{}, false
+	}
 	var m map[string]any
 	if len(input) > 0 {
 		if err := json.Unmarshal(input, &m); err != nil {
