@@ -45,6 +45,7 @@ var (
 	mlAddTimer         func(runLoop, timer, mode uintptr)
 	mlTimerCreate      func(allocator uintptr, fireDate float64, interval float64, flags uintptr, order int, callout uintptr, context *cfRunLoopTimerContext) uintptr
 	mlTimerSetNext     func(timer uintptr, at float64)
+	mlTimerInvalidate  func(timer uintptr)
 	mlTime             func() float64
 	mlAddSource        func(runLoop, source, mode uintptr)
 	mlSourceCreate     func(allocator uintptr, order int, context *cfRunLoopSourceContext) uintptr
@@ -53,13 +54,14 @@ var (
 	mlWakeUp           func(runLoop uintptr)
 
 	mainRunLoop uintptr
-	mainTimer   uintptr
 	mainSource  uintptr
-	commonMode  uintptr
+	modes       []uintptr
 
-	mainLoopMu  sync.Mutex
-	deadlineJob func()
-	wakeJob     func()
+	mainLoopMu   sync.Mutex
+	deadlineJob  func()
+	deadlineCb   uintptr
+	pendingTimer uintptr
+	wakeJob      func()
 )
 
 func loadMainLoop() error {
@@ -82,6 +84,7 @@ func loadMainLoop() error {
 			!bind(&mlAddTimer, "CFRunLoopAddTimer") ||
 			!bind(&mlTimerCreate, "CFRunLoopTimerCreate") ||
 			!bind(&mlTimerSetNext, "CFRunLoopTimerSetNextFireDate") ||
+			!bind(&mlTimerInvalidate, "CFRunLoopTimerInvalidate") ||
 			!bind(&mlTime, "CFAbsoluteTimeGetCurrent") ||
 			!bind(&mlAddSource, "CFRunLoopAddSource") ||
 			!bind(&mlSourceCreate, "CFRunLoopSourceCreate") ||
@@ -92,13 +95,23 @@ func loadMainLoop() error {
 		}
 		// kCFRunLoopCommonModes is CFSTR("kCFRunLoopCommonModes"); build the
 		// equivalent string instead of reading a data symbol.
+		// kCFRunLoopCommonModes/DefaultMode are CFSTR constants. Creating a
+		// string with the common-mode name is not equivalent to the run
+		// loop's own constant, so add the default and event-tracking modes
+		// explicitly; the app rests and tracks drags in those two.
 		withPool(func() {
-			commonMode = uintptr(send(nsString("kCFRunLoopCommonModes"), "retain"))
+			for _, name := range []string{"kCFRunLoopDefaultMode", "kCFRunLoopEventTracking"} {
+				modes = append(modes, uintptr(send(nsString(name), "retain")))
+			}
 		})
 		mainRunLoop = mlGetMain()
 
-		timerCb := purego.NewCallback(func(uintptr, uintptr) {
+		deadlineCb = purego.NewCallback(func(t uintptr, _ uintptr) {
+			releaseCF(t)
 			mainLoopMu.Lock()
+			if pendingTimer == t {
+				pendingTimer = 0
+			}
 			fn := deadlineJob
 			deadlineJob = nil
 			mainLoopMu.Unlock()
@@ -106,9 +119,6 @@ func loadMainLoop() error {
 				fn()
 			}
 		})
-		var tc cfRunLoopTimerContext
-		mainTimer = mlTimerCreate(0, mlTime()+3600, 3600, 0, 0, timerCb, &tc)
-		mlAddTimer(mainRunLoop, mainTimer, commonMode)
 
 		sourceCb := purego.NewCallback(func(uintptr) {
 			mainLoopMu.Lock()
@@ -121,7 +131,9 @@ func loadMainLoop() error {
 		})
 		sc := cfRunLoopSourceContext{perform: sourceCb}
 		mainSource = mlSourceCreate(0, 0, &sc)
-		mlAddSource(mainRunLoop, mainSource, commonMode)
+		for _, mode := range modes {
+			mlAddSource(mainRunLoop, mainSource, mode)
+		}
 	})
 	return mainLoopErr
 }
@@ -134,11 +146,26 @@ func AfterMain(d time.Duration, fn func()) {
 	if fn == nil || loadMainLoop() != nil {
 		return
 	}
+	var tc cfRunLoopTimerContext
 	mainLoopMu.Lock()
 	deadlineJob = fn
+	old := pendingTimer
+	pendingTimer = 0
 	mainLoopMu.Unlock()
-	at := mlTime() + d.Seconds()
-	mlTimerSetNext(mainTimer, at)
+	if old != 0 {
+		mlTimerInvalidate(old)
+		releaseCF(old)
+	}
+	timer := mlTimerCreate(0, mlTime()+d.Seconds(), 0, 0, 0, deadlineCb, &tc)
+	if timer == 0 {
+		return
+	}
+	mainLoopMu.Lock()
+	pendingTimer = timer
+	mainLoopMu.Unlock()
+	for _, mode := range modes {
+		mlAddTimer(mainRunLoop, timer, mode)
+	}
 }
 
 // WakeMain makes fn run on the main run loop as soon as possible. Safe from
