@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"net"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -13,12 +14,17 @@ import (
 
 func listenAsk(t *testing.T, ask func(context.Context, Ask) Decision) (string, *Server) {
 	t.Helper()
-	dir := t.TempDir()
+	// A short directory: Darwin's unix socket path is capped near 104 bytes,
+	// and a long test name under /var/folders can exceed it.
+	dir, err := os.MkdirTemp("/tmp", "rakko-ask-")
+	if err != nil {
+		t.Fatal(err)
+	}
 	srv, err := Listen(dir, nil, ask)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(srv.Close)
+	t.Cleanup(func() { srv.Close(); os.RemoveAll(dir) })
 	return filepath.Join(dir, SocketName), srv
 }
 
@@ -96,6 +102,36 @@ func TestAskRejectsBadFrames(t *testing.T) {
 	}
 	if called {
 		t.Fatal("ask ran for an invalid frame")
+	}
+}
+
+func TestAskOutlivesTheReadDeadline(t *testing.T) {
+	path, _ := listenAsk(t, func(ctx context.Context, a Ask) Decision {
+		select {
+		case <-ctx.Done():
+			return Decision{ID: a.ID, Decision: DecisionPass}
+		case <-time.After(2100 * time.Millisecond):
+			return Decision{ID: a.ID, Decision: DecisionAllow}
+		}
+	})
+	conn, err := net.Dial("unix", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	body, _ := json.Marshal(askFrame(t, testAskID, "claude"))
+	conn.Write(append(body, '\n'))
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	line, err := bufio.NewReader(conn).ReadBytes('\n')
+	if err != nil {
+		t.Fatalf("reading after two seconds: %v", err)
+	}
+	var d Decision
+	if err := json.Unmarshal(line, &d); err != nil {
+		t.Fatal(err)
+	}
+	if d.Decision != DecisionAllow {
+		t.Fatalf("decision %q after the framing deadline passed, want allow", d.Decision)
 	}
 }
 

@@ -170,6 +170,10 @@ func (s *Server) handle(conn net.Conn) {
 	if err != nil {
 		return
 	}
+	// The request is in; the read deadline was for the framing only. An
+	// approval connection stays open while its card waits, and a leftover
+	// deadline would cancel it two seconds later.
+	_ = conn.SetReadDeadline(time.Time{})
 	var env struct {
 		V    int    `json:"v"`
 		Kind string `json:"kind"`

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func readJSONFile(t *testing.T, path string) map[string]any {
@@ -328,6 +329,51 @@ func TestApproveFallbackCommand(t *testing.T) {
 		if !strings.Contains(cmd, "'/tmp/data dir'") {
 			t.Errorf("%s data dir not quoted: %s", tool, cmd)
 		}
+	}
+}
+
+// A fake listener that is not this binary must never be believed: the
+// client has to leave without waiting for a decision, even though the
+// socket exists and accepts the connection.
+func TestApprovalForeignServerRejected(t *testing.T) {
+	if _, err := exec.LookPath("nc"); err != nil {
+		t.Skip("nc is not installed")
+	}
+	dir, err := os.MkdirTemp("/tmp", "rakko-foreign-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	sock := filepath.Join(dir, SocketName)
+	server := exec.Command("/bin/sh", "-c", "sleep 5 | nc -lU "+shellQuote(sock)+" >/dev/null")
+	if err := server.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = server.Process.Kill(); _, _ = server.Process.Wait() }()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if _, err := os.Stat(sock); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the fake listener never made its socket")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	payload := `{"session_id":"foreign","cwd":"/tmp","hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"rm -rf build"}}`
+	var out strings.Builder
+	start := time.Now()
+	handled := RunApproveCLI([]string{"--agent-approve", "--tool", "claude", "--data-dir", dir},
+		strings.NewReader(payload), &out)
+	elapsed := time.Since(start)
+	if !handled {
+		t.Fatal("the client mode was not handled")
+	}
+	if out.Len() != 0 {
+		t.Fatalf("a foreign server got an answer printed: %q", out.String())
+	}
+	if elapsed > time.Second {
+		t.Fatalf("the client waited %v on a foreign server", elapsed)
 	}
 }
 
