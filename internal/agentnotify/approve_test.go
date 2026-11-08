@@ -414,3 +414,85 @@ func TestExtractAsk(t *testing.T) {
 		}
 	}
 }
+
+// The entries Rakko writes must match each tool's documented shape. This
+// reads the files back rather than trusting the writer's intent.
+func TestApproveEntryShapes(t *testing.T) {
+	home, data := t.TempDir(), t.TempDir()
+	exe := "/Applications/Rakko.app/Contents/MacOS/Rakko"
+	for _, tool := range []Tool{ToolClaude, ToolCodex, ToolQwen, ToolDevin, ToolCopilot,
+		ToolFactory, ToolAntigravity, ToolOpencode, ToolPi} {
+		if err := ConnectApprove(home, data, exe, tool); err != nil {
+			t.Fatalf("%s: %v", tool, err)
+		}
+	}
+	commandIn := func(v any) string {
+		switch x := v.(type) {
+		case []any:
+			if len(x) == 0 {
+				return ""
+			}
+			item, _ := x[0].(map[string]any)
+			if inner, ok := item["hooks"].([]any); ok && len(inner) > 0 {
+				h, _ := inner[0].(map[string]any)
+				s, _ := h["command"].(string)
+				return s
+			}
+			if s, ok := item["command"].(string); ok {
+				return s
+			}
+			s, _ := item["bash"].(string)
+			return s
+		}
+		return ""
+	}
+	for _, tc := range []struct {
+		tool  Tool
+		event string
+	}{
+		{ToolClaude, "PermissionRequest"}, {ToolCodex, "PermissionRequest"},
+		{ToolQwen, "PermissionRequest"}, {ToolDevin, "PermissionRequest"},
+		{ToolFactory, "PreToolUse"},
+	} {
+		doc := readJSONFile(t, ApproveConfigPath(home, tc.tool))
+		hooks, _ := doc["hooks"].(map[string]any)
+		if tc.tool == ToolFactory {
+			hooks = doc // Droid's hooks.json is bare when it exists
+			if _, ok := doc["PreToolUse"]; !ok {
+				hooks, _ = doc["hooks"].(map[string]any)
+			}
+		}
+		cmd := commandIn(hooks[tc.event])
+		if !strings.Contains(cmd, "--agent-approve --tool "+string(tc.tool)) {
+			t.Errorf("%s %s command %q", tc.tool, tc.event, cmd)
+		}
+	}
+
+	copilot := readJSONFile(t, ApproveConfigPath(home, ToolCopilot))
+	chooks, _ := copilot["hooks"].(map[string]any)
+	if cmd := commandIn(chooks["permissionRequest"]); !strings.Contains(cmd, "--agent-approve --tool copilot") {
+		t.Fatalf("copilot command %q", cmd)
+	}
+	anti := readJSONFile(t, ApproveConfigPath(home, ToolAntigravity))
+	member, _ := anti["rakko-agent-approval"].(map[string]any)
+	if cmd := commandIn(member["PreToolUse"]); !strings.Contains(cmd, "--agent-approve --tool antigravity") {
+		t.Fatalf("antigravity command %q", cmd)
+	}
+
+	for _, tool := range []Tool{ToolOpencode, ToolPi} {
+		body, err := os.ReadFile(ApproveConfigPath(home, tool))
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(body)
+		if !strings.Contains(text, "--agent-approve") {
+			t.Errorf("%s module missing the client call", tool)
+		}
+		if tool == ToolOpencode && (!strings.Contains(text, "Plugin.define") || !strings.Contains(text, `ctx.permission.hook("evaluate"`)) {
+			t.Errorf("opencode module is not the V2 plugin shape")
+		}
+		if tool == ToolPi && !strings.Contains(text, `pi.on("tool_call"`) {
+			t.Errorf("pi module does not hook tool_call")
+		}
+	}
+}
