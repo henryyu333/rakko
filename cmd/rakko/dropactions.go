@@ -362,17 +362,6 @@ func (a *shelf) dropZoneSnap(over bool) []string {
 		d.on, _ = a.dropZoneShow()
 		return d.files
 	}
-	// The guide's scripted demo stands the zone up without a real drag: the
-	// demo file is the set, and its own clock lands it. A chip held by the
-	// pointer keeps the guide page instead — the zone would hide the chip.
-	if a.onb != nil && a.onb.demoOn && !a.onb.chipDrag && !a.onb.tried {
-		if name := a.onb.sampleName(a.appLoc()); len(d.files) != 1 || d.files[0] != name {
-			d.files = []string{name}
-			d.class = classifyDrop(d.files)
-		}
-		d.on, _ = a.dropZoneShow()
-		return d.files
-	}
 	if raw := os.Getenv("RAKKO_DEBUG_DROP_FILES"); raw != "" {
 		if !slices.Equal(d.files, dropDebugFiles()) {
 			d.files = dropDebugFiles()
@@ -533,9 +522,7 @@ func (a *shelf) dropTrayCell(c *ui.Context, paths []string) {
 		if otter {
 			a.startDropCatch(row)
 		}
-		if err := a.receive(drop.Data); err == nil && a.onboardingPending() {
-			a.onboardingCatch()
-		}
+		a.receive(drop.Data)
 	}
 }
 

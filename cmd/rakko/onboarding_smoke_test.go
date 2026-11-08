@@ -5,9 +5,9 @@ package main
 // Real first launch, end to end: the built app, a temporary data directory
 // without settings.json, the live notch window. The test launches the app
 // itself (so the real startup path decides that a fresh install owes the
-// guide), walks it with real key and pointer events, and screenshots its
-// own window — by CGWindowID, so another Rakko on the same screen can never
-// be mistaken for this one. Gated by RAKKO_BASKET_SMOKE=1 and run through
+// guide), walks it with real key events, and screenshots its own window —
+// by CGWindowID, so another Rakko on the same screen can never be mistaken
+// for this one. Gated by RAKKO_BASKET_SMOKE=1 and run through
 // native-gate.sh; shots land in /tmp/Rakko-onboarding/shots.
 //
 // The move step is pointed at a temporary "Applications" folder through
@@ -15,9 +15,7 @@ package main
 // so nothing is ever moved into the real /Applications or ~/Downloads.
 
 import (
-	"encoding/json"
 	"fmt"
-	"image/png"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -27,11 +25,9 @@ import (
 
 	"github.com/ebitengine/purego"
 	"github.com/egoist/mygo"
-	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/mac"
 	"rakko/internal/settings"
-	"rakko/locales"
 )
 
 const onboardingShotDir = "/tmp/Rakko-onboarding/shots"
@@ -52,7 +48,9 @@ func TestOnboardingFirstLaunchNative(t *testing.T) {
 	time.Sleep(300 * time.Millisecond)
 	t.Logf("primary=%+v cursor=%+v want=%+v displays=%+v", primary.Bounds, mygo.Screen.CursorScreenPoint(), want, displayBounds())
 
-	// A copy that already lives in an Applications folder: three steps.
+	// A copy that already lives in an Applications folder: two steps, the
+	// intro and the permissions. 开始使用 on the permissions retires the
+	// guide and folds the panel to the notch with the ready capsule.
 	tmp := t.TempDir()
 	appsBundle := buildRakkoBundle(t, tmp, "Applications")
 	data := filepath.Join(tmp, "data")
@@ -64,34 +62,15 @@ func TestOnboardingFirstLaunchNative(t *testing.T) {
 	run.press(t, 36 /* Return */)
 	time.Sleep(700 * time.Millisecond)
 	run.shot(t, "native-onboarding-perms")
-	run.press(t, 36)
-	time.Sleep(700 * time.Millisecond)
-	run.shot(t, "native-onboarding-try")
-
-	// Drag the sample chip into the panel: the real drag path, then the
-	// file lands in the tray. A click is the fallback the design offers.
-	// The shell's place inside the window differs by display (a notchless
-	// screen hangs the panel under the menu bar), so it is measured from
-	// a capture instead of assumed.
-	shell := shellRect(t, run.shot(t, "native-onboarding-try"), run.frame)
-	t.Logf("shell in window %+v", shell)
-	chip := chipRect(t)
-	cx := float32(run.frame.X) + shell.X + chip.X + chip.W/2
-	cy := float32(run.frame.Y) + shell.Y + chip.Y + chip.H/2
-	run.drag(t, cx, cy, float32(run.frame.X)+shell.X+shell.W/2, float32(run.frame.Y)+shell.Y+shell.H-40)
-	if !waitTrayItems(t, data, 1, 3*time.Second) {
-		run.click(t, cx, cy)
-		if !waitTrayItems(t, data, 1, 3*time.Second) {
-			t.Fatalf("neither the chip drag nor its click landed a file; app log:\n%s", run.log())
-		}
-		t.Log("the chip click landed the sample after the drag missed")
+	run.press(t, 36 /* Return: 开始使用 */)
+	if !waitFor(t, 5*time.Second, func() bool {
+		saved, err := settings.Load(data)
+		return err == nil && !saved.Onboarding.Pending && saved.Onboarding.Step == ""
+	}) {
+		t.Fatalf("the permissions step did not retire the guide; app log:\n%s", run.log())
 	}
 	time.Sleep(1200 * time.Millisecond)
-	run.shot(t, "native-onboarding-finish")
-
-	run.press(t, 36)
-	time.Sleep(900 * time.Millisecond)
-	run.shot(t, "native-onboarding-capsule")
+	run.shot(t, "native-onboarding-ready")
 	saved, err := settings.Load(data)
 	if err != nil {
 		t.Fatalf("settings after the guide: %v", err)
@@ -383,82 +362,6 @@ func (r *appRun) shot(t *testing.T, name string) string {
 
 // --- input ----------------------------------------------------------------
 
-// chipRect is the sample chip's box inside the panel window: measured by
-// laying the same guide out headlessly, so the pointer lands on the real
-// chip whatever the system language does to line heights.
-func chipRect(t *testing.T) ui.Rect {
-	t.Helper()
-	a := &shelf{settings: settings.Default(), thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{}}
-	a.settings.Onboarding = settings.OnboardingSettings{Pending: true}
-	a.onb = &onboardingFeature{host: a, origin: originInstalled}
-	a.onb.step = len(a.onb.steps()) - 1
-	a.registerPage(a.onb)
-	a.tab, a.tabFrom, a.level, a.visible = pageOnboarding, pageOnboarding, 2, true
-	a.locale = mygo.App.Locale()
-	v := ui.NewTester(a.view, sheetW, sheetH)
-	v.SetLocale(mygo.App.Locale())
-	v.Frame()
-	v.Frame()
-	name := a.onb.sampleName(locales.In(mygo.App.Locale()))
-	r, ok := v.Find(name)
-	if !ok {
-		t.Fatalf("the chip %q is not in the layout", name)
-	}
-	return r
-}
-
-// shellRect is where the 440 x 250 page shell sits inside a window
-// capture: the opaque bounding box of the shot, in window points. The
-// transparent envelope around it depends on the display (a notch vs. the
-// menu bar), so the smoke measures rather than assumes.
-type shellBox struct {
-	X, Y, W, H float32
-}
-
-func shellRect(t *testing.T, shot string, frame mygo.Rectangle) shellBox {
-	t.Helper()
-	f, err := os.Open(shot)
-	if err != nil {
-		t.Fatal(err)
-	}
-	img, decErr := png.Decode(f)
-	f.Close()
-	if decErr != nil {
-		t.Fatalf("decoding %s: %v", shot, decErr)
-	}
-	minX, minY, maxX, maxY := img.Bounds().Max.X, img.Bounds().Max.Y, 0, 0
-	for y := img.Bounds().Min.Y; y < img.Bounds().Max.Y; y++ {
-		for x := img.Bounds().Min.X; x < img.Bounds().Max.X; x++ {
-			r, _, _, a := img.At(x, y).RGBA()
-			if r == 0 && a == 0 {
-				continue
-			}
-			if x < minX {
-				minX = x
-			}
-			if x > maxX {
-				maxX = x
-			}
-			if y < minY {
-				minY = y
-			}
-			if y > maxY {
-				maxY = y
-			}
-		}
-	}
-	if maxX <= minX || maxY <= minY {
-		t.Fatalf("%s: the window capture is empty", shot)
-	}
-	scale := float64(img.Bounds().Dx()) / float64(frame.Width)
-	return shellBox{
-		X: float32(float64(minX) / scale),
-		Y: float32(float64(minY) / scale),
-		W: float32(float64(maxX+1-minX) / scale),
-		H: float32(float64(maxY+1-minY) / scale),
-	}
-}
-
 func waitFor(t *testing.T, d time.Duration, ok func() bool) bool {
 	t.Helper()
 	deadline := time.Now().Add(d)
@@ -469,26 +372,6 @@ func waitFor(t *testing.T, d time.Duration, ok func() bool) bool {
 		time.Sleep(100 * time.Millisecond)
 	}
 	return ok()
-}
-
-// waitTrayItems waits until the data directory's state.json holds n items.
-func waitTrayItems(t *testing.T, data string, n int, d time.Duration) bool {
-	t.Helper()
-	return waitFor(t, d, func() bool {
-		raw, err := os.ReadFile(filepath.Join(data, "state.json"))
-		if err != nil {
-			return false
-		}
-		var st struct {
-			Items []struct {
-				Path string `json:"path"`
-			} `json:"items"`
-		}
-		if json.Unmarshal(raw, &st) != nil {
-			return false
-		}
-		return len(st.Items) >= n
-	})
 }
 
 // rakkoPIDs lists the processes launched from bundle, and only those.

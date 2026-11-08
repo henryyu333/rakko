@@ -2146,16 +2146,11 @@ func galleryGroupN() []galleryItem {
 			o.moveErr = errGalleryMove
 		})},
 		{ID: "N7", Group: g, Title: "第三步", State: "权限 · 三项未开", Build: build(originInstalled, 1, nil)},
-		{ID: "N8", Group: g, Title: "第四步", State: "试一试 · 示例文件与演示", Build: build(originInstalled, 2, nil)},
-		{ID: "N9", Group: g, Title: "第四步", State: "拖到投放区 · 松开放入", Build: build(originInstalled, 2, func(_ *testing.T, o *onboardingFeature) { o.demoOn = true })},
-		{ID: "N10", Group: g, Title: "完成", State: "文件已在托盘 · 开始使用", Build: build(originInstalled, 2, func(_ *testing.T, o *onboardingFeature) {
-			o.tried = true
-		})},
-		{ID: "N11", Group: g, Title: "第三步", State: "权限 · 三项已开", Build: build(originInstalled, 1, func(t *testing.T, o *onboardingFeature) {
+		{ID: "N8", Group: g, Title: "第三步", State: "权限 · 三项已开", Build: build(originInstalled, 1, func(t *testing.T, o *onboardingFeature) {
 			allPermissionsOn(t)
 		})},
-		{ID: "N12", Group: g, Title: "跳过", State: "完成胶囊 · 随时点刘海呼出", Notch: true, Build: galleryCapsule("随时点刘海呼出", "Click the notch anytime", statusInfo)},
-		{ID: "N13", Group: g, Title: "完成", State: "完成胶囊 · Rakko 已就绪", Notch: true, Build: galleryCapsule("Rakko 已就绪", "Rakko is ready", statusOK)},
+		{ID: "N9", Group: g, Title: "跳过", State: "完成胶囊 · 随时点刘海呼出", Notch: true, Build: galleryCapsule("随时点刘海呼出", "Click the notch anytime", statusInfo)},
+		{ID: "N10", Group: g, Title: "完成", State: "完成胶囊 · Rakko 已就绪", Notch: true, Build: galleryCapsule("Rakko 已就绪", "Rakko is ready", statusOK)},
 	}
 }
 

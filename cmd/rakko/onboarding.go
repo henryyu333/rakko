@@ -5,10 +5,10 @@ package main
 // The first-launch guide: a page the panel shows instead of the search bar
 // on a fresh install, walking the user through where Rakko lives, moving it
 // to /Applications when it was launched from a download or a disk image,
-// the three system permissions, and one file dropped into the tray. It is
-// drawn with the panel's own surfaces — the band, the action row and the
-// real drop zone — because the guide's only job is teaching what the real
-// shelf looks like.
+// and the three system permissions. The permissions are the last step: the
+// app is ready to use once they are offered. It is drawn with the panel's
+// own surfaces — the band and the action row — because the guide's only job
+// is teaching what the real shelf looks like.
 //
 // Lifecycle: a launch that found no settings.json owes the guide (main.go),
 // which is written as onboarding.pending. Pending shows the guide, hides the
@@ -19,9 +19,6 @@ package main
 // the step to resume at, so the relaunched app opens on the permissions.
 import (
 	"fmt"
-	"image"
-	"image/color"
-	"image/png"
 	"io"
 	"log"
 	"os"
@@ -32,7 +29,6 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
-	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/mac"
@@ -52,7 +48,6 @@ const (
 	onbStepIntro = "intro"
 	onbStepMove  = "move"
 	onbStepPerms = "perms"
-	onbStepTry   = "try"
 )
 
 // runOrigin is where the running bundle lives, which decides whether the
@@ -78,43 +73,34 @@ type onboardingFeature struct {
 	moving     bool      // a move is running in the background
 	moveErr    error     // the move's last failure, shown on the row
 	relaunchAt time.Time // a successful move quits to reopen at this moment
-	tried      bool      // the tray already got a file (demo or real)
-	sample     string    // the generated sample file's path, once written
-	sampleErr  error
-
-	// The demo chip's drag: the offset it is dragged by while the pointer
-	// holds it, and the scripted run's clock. demoOn mirrors a real file
-	// drag's flag for dropZoneSnap.
-	chipOff  ui.Point
-	chipDrag bool
-	demoAt   time.Time
-	demoOn   bool
 }
 
 // newOnboarding builds the guide for this launch: the run location is
-// probed once, the step resumes where settings left it, and a step the
-// current location no longer offers (a saved "move" on an already-moved
-// bundle) folds to the step after it.
+// probed once, the step resumes where settings left it, and a saved step
+// the current run no longer offers (a saved "move" on an already-moved
+// bundle, or a name a later build dropped) folds to the last step the
+// guide has.
 func newOnboarding(host *shelf) *onboardingFeature {
 	o := &onboardingFeature{host: host, origin: onboardingOrigin()}
 	steps := o.steps()
 	want := host.settings.Onboarding.Step
 	o.step = 0
+	if want == "" {
+		return o
+	}
 	for i, name := range steps {
 		if name == want {
 			o.step = i
-			break
+			return o
 		}
 	}
-	if want != "" && steps[o.step] != want {
-		// The saved step is gone (the bundle moved since): resume at the
-		// step it left for.
-		o.step = len(steps) - 1
-		for i, name := range steps {
-			if name == want || stepAfter(want) == name {
-				o.step = i
-				break
-			}
+	// The saved step is gone: resume at the step it left for, or at the
+	// last one when the name itself no longer exists.
+	o.step = len(steps) - 1
+	for i, name := range steps {
+		if stepAfter(want) == name {
+			o.step = i
+			break
 		}
 	}
 	return o
@@ -128,20 +114,18 @@ func stepAfter(name string) string {
 		return onbStepMove
 	case onbStepMove:
 		return onbStepPerms
-	case onbStepPerms:
-		return onbStepTry
 	default:
 		return ""
 	}
 }
 
 // steps is the guide's own order: the move step only exists for a bundle
-// that should not stay where it runs.
+// that should not stay where it runs, and the permissions are last.
 func (o *onboardingFeature) steps() []string {
 	if o.origin == originInstalled {
-		return []string{onbStepIntro, onbStepPerms, onbStepTry}
+		return []string{onbStepIntro, onbStepPerms}
 	}
-	return []string{onbStepIntro, onbStepMove, onbStepPerms, onbStepTry}
+	return []string{onbStepIntro, onbStepMove, onbStepPerms}
 }
 
 func (o *onboardingFeature) current() string { return o.steps()[o.step] }
@@ -203,12 +187,6 @@ func (a *shelf) onboardingPending() bool {
 	return a.settings.Onboarding.Pending
 }
 
-// onboardingTried reports whether the try step already landed a file: the
-// guide's last state, where the page capsule comes back.
-func (a *shelf) onboardingTried() bool {
-	return a.onb != nil && a.onb.tried
-}
-
 // onboardingDone clears the pending flag: the guide never comes back for
 // this install. The step clears with it.
 func (a *shelf) onboardingDone() {
@@ -247,26 +225,6 @@ func (a *shelf) onboardingSkip() {
 	a.petStart()
 }
 
-// onboardingCatch marks the try step done by whatever landed in the tray —
-// the demo file or a real drag — while the guide's page is the one that
-// accepted it. It plays the real catch: the zone keeps the otter's hug for
-func (a *shelf) onboardingCatch() {
-	if a.onb == nil || a.onb.tried {
-		return
-	}
-	a.onb.tried = true
-	a.onb.demoOn = false
-	a.onb.chipDrag = false
-	a.drop.done = true
-	a.catchDrop(-1, -1)
-	// The capsule under the panel returns for the finish block, the same
-	// moment the design brings it back. Pending stays until 开始使用:
-	// the guide is still owed, only its last step answered.
-	if a.win != nil {
-		a.win.Invalidate()
-	}
-}
-
 // --- page ------------------------------------------------------------------
 
 func (o *onboardingFeature) id() pageID    { return pageOnboarding }
@@ -288,10 +246,8 @@ func (o *onboardingFeature) actions(c *ui.Context) []ui.Element { return nil }
 
 // body draws the whole page area the sheet gives a full-bleed page: the
 // 22pt action row (progress dots and 跳过), then the 144pt step over a 30pt
-// button row, all inside the 416-pt content box. The page ignores live: the
-// scripted demo's clock runs on the view (shelf.view), because the real drop
-// zone replaces this page while the demo plays.
-func (o *onboardingFeature) body(c *ui.Context, over bool, live bool) ui.Element {
+// button row, all inside the 416-pt content box.
+func (o *onboardingFeature) body(c *ui.Context, _ bool, _ bool) ui.Element {
 	l := loc(c)
 	ui.Column(c.Key("onb")).FillWidth().Grow(1).Children(func() {
 		o.actionRow(c, l)
@@ -304,8 +260,6 @@ func (o *onboardingFeature) body(c *ui.Context, over bool, live bool) ui.Element
 				o.stepMove(c, l)
 			case onbStepPerms:
 				o.stepPerms(c, l)
-			case onbStepTry:
-				o.stepTry(c, l, live)
 			}
 		})
 		o.buttonRow(c, l)
@@ -318,8 +272,7 @@ func (o *onboardingFeature) body(c *ui.Context, over bool, live bool) ui.Element
 const onbStepH = 144
 
 // actionRow is the page's own 22pt row: the step dots on the left, 跳过 on
-// the right. A finished guide keeps the dots and drops the skip — the
-// only way out is 开始使用.
+// the right.
 func (o *onboardingFeature) actionRow(c *ui.Context, l locales.Messages) {
 	a := o.host
 	row := ui.Row(c.Key("onb-acts")).Height(pageActionH).FillWidth().AlignItems(ui.Center)
@@ -328,7 +281,7 @@ func (o *onboardingFeature) actionRow(c *ui.Context, l locales.Messages) {
 			for i := range o.steps() {
 				dot := ui.Box(c.Key(i)).Height(5).Radius(3)
 				switch {
-				case i < o.step || (o.last() && o.tried):
+				case i < o.step:
 					dot.Width(5).Background(progress.Alpha(0.45))
 				case i == o.step:
 					dot.Width(15).Background(progress.Alpha(0.82))
@@ -338,18 +291,16 @@ func (o *onboardingFeature) actionRow(c *ui.Context, l locales.Messages) {
 			}
 		})
 		ui.Box(c.Key("onb-acts-mid")).Grow(1)
-		if !(o.last() && o.tried) {
-			skip := ui.ButtonBase(c.Key("onb-skip")).Height(20).Padding(0, 6, 0, 6).Radius(10).
-				Label(l.OnboardingSkip()).Tooltip(l.OnboardingSkip()).Center()
-			if skip.Hovered() {
-				skip.Background(fill1)
-			}
-			skip.Children(func() {
-				ui.Text(c, l.OnboardingSkip()).FontSize(10.5).FontWeight(600).TextColor(ink2)
-			})
-			if skip.Clicked() {
-				a.onboardingSkip()
-			}
+		skip := ui.ButtonBase(c.Key("onb-skip")).Height(20).Padding(0, 6, 0, 6).Radius(10).
+			Label(l.OnboardingSkip()).Tooltip(l.OnboardingSkip()).Center()
+		if skip.Hovered() {
+			skip.Background(fill1)
+		}
+		skip.Children(func() {
+			ui.Text(c, l.OnboardingSkip()).FontSize(10.5).FontWeight(600).TextColor(ink2)
+		})
+		if skip.Clicked() {
+			a.onboardingSkip()
 		}
 	})
 }
@@ -523,165 +474,14 @@ func (o *onboardingFeature) stepPerms(c *ui.Context, l locales.Messages) {
 	})
 }
 
-// stepTry is 试一试: the sample file's chip, which the pointer can drag
-// across the panel — past the point a real drag would cross, the real drop
-// zone takes over and the release lands the file — the autoplay button
-// beside it, and the finish block once the tray has the file.
-func (o *onboardingFeature) stepTry(c *ui.Context, l locales.Messages, live bool) {
-	if o.tried {
-		ui.Row(c.Key("onb-done")).FillWidth().Grow(1).AlignItems(ui.Center).Gap(16).Children(func() {
-			if otter := otterImage(otterHappy); otter != nil {
-				ui.Column(c.Key("onb-otter")).Width(84).Height(112).Children(func() {
-					ui.Box(c).Grow(1)
-					ui.Image(c.Key("img"), otter).Width(84).Height(84).Fit(ui.Contain)
-				})
-			}
-			ui.Column(c.Key("onb-tx")).Gap(6).Children(func() {
-				panelLabel(c, "onb-done-title", l.OnboardingDoneTitle(), 15, 650).TextColor(ink)
-				panelLabel(c, "onb-done-note", l.OnboardingDoneNote(), 13, 0).TextColor(ink2)
-			})
-		})
-		return
-	}
-	ui.Column(c.Key("onb-try")).FillWidth().Grow(1).Children(func() {
-		panelLabel(c, "onb-try-title", l.OnboardingTryTitle(), 15, 650).TextColor(ink)
-		panelLabel(c, nil, l.OnboardingTryLead(), 13, 0).TextColor(ink2).Margin(2, 0, 10, 0)
-		ui.Row(c.Key("onb-chips")).Gap(8).AlignItems(ui.Center).Children(func() {
-			name := o.sampleName(l)
-			chip := ui.Row(c.Key("onb-chip")).Height(34).Radius(10).Padding(0, 12, 0, 10).Gap(8).
-				AlignItems(ui.Center).Background(ui.RGBA(255, 255, 255, 0.08)).
-				Border(0.5, ui.RGBA(255, 255, 255, 0.12)).Label(name).Tooltip(name)
-			chip.Cursor(ui.CursorGrab)
-			chip.Children(func() {
-				ui.Icon(c, fileSymbol).Size(15, 15).TextColor(ink2)
-				panelLabel(c, "onb-chip-name", name, 11.5, 0).TextColor(ink)
-			})
-			chip.Draggable(&o.chipOff, ui.DraggableOptions{
-				Snap: ui.Nearest(ui.Point{}),
-			})
-			if live {
-				o.trackChip(c, chip)
-			}
-			// A click that never became a drag plays the demo, as the
-			// prototype's chip does.
-			if chip.Clicked() && o.demoAt.IsZero() {
-				o.demoAt = c.Now()
-			}
-			play := ui.ButtonBase(c.Key("onb-play")).Size(30, 30).Radius(15).Center().
-				Label(l.OnboardingTryDemo()).Tooltip(l.OnboardingTryDemo())
-			if play.Hovered() {
-				play.Background(fill1)
-			} else {
-				play.Background(fill2)
-			}
-			play.Children(func() {
-				ui.Icon(c, playSymbol).Size(11, 11).TextColor(ink2)
-			})
-			if play.Clicked() && o.demoAt.IsZero() {
-				o.demoAt = c.Now()
-			}
-		})
-		switch {
-		case o.sampleErr != nil:
-			panelLabel(c, "onb-sample-err", l.OnboardingTryFailed(o.sampleErr.Error()), 11, 0).
-				TextColor(danger).Margin(8, 0, 0, 0)
-		default:
-			panelLabel(c, nil, l.OnboardingTryNote(), 11, 0).TextColor(ink3).Margin(8, 0, 0, 0)
-		}
-	})
-}
-
-// trackChip watches the chip's drag: while the pointer holds it and moves,
-// the real drop zone comes up (the same frame a Finder drag would), and
-// letting go lands the sample on the tray — the chip lives inside the
-// panel's clip, so every place the drag can reach counts as over the zone.
-func (o *onboardingFeature) trackChip(c *ui.Context, chip ui.Element) {
-	a := o.host
-	if chip.Dragging() {
-		// The page stays while the chip is held: the zone would replace
-		// it and take the chip (and its release) with it. The release is
-		// what lands the file.
-		o.chipDrag = true
-		o.demoOn = false
-		c.AnimationFrame()
-		return
-	}
-	if _, _, ended := chip.DragEnded(); ended && o.chipDrag {
-		o.chipDrag = false
-		o.demoOn = false
-		a.onboardingDemoDrop()
-		return
-	}
-	if o.chipDrag {
-		// The press ended without a drag-end event (a cancelled press):
-		// the chip returns where it started.
-		o.chipDrag = false
-		o.demoOn = false
-		o.chipOff = ui.Point{}
-	}
-}
-
-// demoTick runs the scripted drag the play button arms: the zone comes up
-// as if a file hovered, then the sample lands. Reduce Motion skips the
-// staged timing — the file lands on the click.
-func (o *onboardingFeature) demoTick(c *ui.Context) {
-	if o.demoAt.IsZero() || o.tried {
-		return
-	}
-	elapsed := c.Now().Sub(o.demoAt)
-	switch {
-	case reduceMotion(c):
-		o.demoAt = time.Time{}
-		o.host.onboardingDemoDrop()
-	case elapsed < 120*time.Millisecond:
-		c.After(120*time.Millisecond - elapsed)
-	case elapsed < 700*time.Millisecond:
-		o.demoOn = true
-		c.After(700*time.Millisecond - elapsed)
-	default:
-		o.demoAt = time.Time{}
-		o.host.onboardingDemoDrop()
-	}
-}
-
-// onboardingDemoDrop lands the sample file on the tray exactly like a
-// real release: the zone's own receive path, then the catch.
-func (a *shelf) onboardingDemoDrop() {
-	o := a.onb
-	if o == nil || o.tried {
-		return
-	}
-	o.demoOn = false
-	path, err := o.ensureSample()
-	if err != nil {
-		o.sampleErr = err
-		a.report(err)
-		if a.win != nil {
-			a.win.Invalidate()
-		}
-		return
-	}
-	data, err := transfer.FileData(path)
-	if err != nil {
-		o.sampleErr = err
-		a.report(err)
-		return
-	}
-	if err := a.receive(data); err != nil {
-		return
-	}
-	a.onboardingCatch()
-}
-
-// buttonRow is the 30pt row under the step area: 上一步 on the left only
-// past the first step and never on the finish block, the primary action on
-// the right — 继续 / 移到「应用程序」 / 完成 / 开始使用.
+// buttonRow is the 30pt row under the step area: 上一步 on the left past
+// the first step, the primary action on the right — 继续 / 移到「应用程序」
+// / 开始使用.
 func (o *onboardingFeature) buttonRow(c *ui.Context, l locales.Messages) {
 	a := o.host
-	finished := o.last() && o.tried
 	ui.Row(c.Key("onb-btns")).FillWidth().Height(30).AlignItems(ui.Center).Justify(ui.End).Gap(4).Children(func() {
 		ui.Box(c.Key("onb-btns-grow")).Grow(1)
-		if o.step > 0 && !finished {
+		if o.step > 0 {
 			back := ui.ButtonBase(c.Key("onb-back")).Height(28).Padding(0, 10, 0, 10).Radius(14).
 				Label(l.OnboardingBack()).Tooltip(l.OnboardingBack()).Center()
 			if back.Hovered() {
@@ -696,12 +496,10 @@ func (o *onboardingFeature) buttonRow(c *ui.Context, l locales.Messages) {
 		}
 		var label string
 		switch {
-		case finished:
-			label = l.OnboardingStart()
 		case a.perm.stage == permissionRelaunch:
 			label = l.PermRelaunchButton()
-		case o.current() == onbStepTry:
-			label = l.OnboardingDone()
+		case o.last():
+			label = l.OnboardingStart()
 		case o.current() == onbStepMove && !o.moved:
 			if o.moveErr != nil {
 				label = l.OnboardingMoveRetry()
@@ -728,10 +526,10 @@ func (o *onboardingFeature) buttonRow(c *ui.Context, l locales.Messages) {
 		})
 		if primary.Clicked() && !o.moving {
 			switch {
-			case finished:
-				a.onboardingFinish()
 			case a.perm.stage == permissionRelaunch:
 				a.relaunchShelf()
+			case o.last():
+				a.onboardingFinish()
 			case o.current() == onbStepMove && !o.moved:
 				a.onboardingMove()
 			default:
@@ -785,7 +583,7 @@ func (a *shelf) onboardingKey(key string) {
 }
 
 // primary is what the primary button does, for → and ⏎: the move on the
-// step that offers it, 开始使用 on the finish block, otherwise the next step.
+// step that offers it, 开始使用 on the last step, otherwise the next step.
 func (o *onboardingFeature) primary() {
 	switch {
 	case o.last():
@@ -1174,64 +972,8 @@ func copyOnboardingFile(src, dest string, mode os.FileMode) error {
 	return out.Close()
 }
 
-// --- the sample file ----------------------------------------------------------
-
-// sampleName is the chip's file name in the panel's language: today's
-// date, like the screenshots macOS writes.
-func (o *onboardingFeature) sampleName(l locales.Messages) string {
-	return l.OnboardingSampleName(time.Now().Format("2006-01-02"))
-}
-
-// ensureSample writes the demo file once, into the data directory's own
-// onboarding folder: a real, user-removable picture that lands on the tray
-// exactly like a dragged one.
-func (o *onboardingFeature) ensureSample() (string, error) {
-	a := o.host
-	if o.sample != "" {
-		if _, err := os.Stat(o.sample); err == nil {
-			return o.sample, nil
-		}
-	}
-	name := o.sampleName(a.appLoc())
-	dir := filepath.Join(a.dataDir, "onboarding")
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "", err
-	}
-	path := filepath.Join(dir, name)
-	if _, err := os.Stat(path); err == nil {
-		o.sample = path
-		return path, nil
-	}
-	img := image.NewRGBA(image.Rect(0, 0, 640, 400))
-	for y := range 400 {
-		for x := range 640 {
-			img.Set(x, y, color.RGBA{
-				uint8(30 + 60*float64(x)/640),
-				uint8(60 + 80*float64(y)/400),
-				uint8(140 + 80*float64(x+y)/1040),
-				255,
-			})
-		}
-	}
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if err != nil {
-		return "", err
-	}
-	if err := png.Encode(f, img); err != nil {
-		f.Close()
-		os.Remove(path)
-		return "", err
-	}
-	if err := f.Close(); err != nil {
-		return "", err
-	}
-	o.sample = path
-	return path, nil
-}
-
 // Symbols the guide borrows or adds.
 var (
 	arrowRightSymbol = symbol(`<path d="M4 12h15M14 7l5 5-5 5"/>`)
 	folderSymbol     = symbol(`<path d="M3 6.5h6l2 2.5h10V18a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18z"/>`)
-	playSymbol       = symbol(`<path d="M8 5.5l11 6.5-11 6.5z"/>`)
 )

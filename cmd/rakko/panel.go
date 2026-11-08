@@ -429,11 +429,6 @@ func (a *shelf) view(c *ui.Context) {
 		}
 	}
 	a.fb.follow(a, now)
-	// The guide's scripted demo runs on the view's clock, not on its page:
-	// the zone replaces the page mid-demo, and the clock must outlive it.
-	if a.onb != nil {
-		a.onb.demoTick(c)
-	}
 	if f := &a.fb; f.text != "" && f.pillW == 0 {
 		f.pillW = f.measure(c)
 	}
@@ -723,7 +718,7 @@ func (a *shelf) view(c *ui.Context) {
 	// capsule spring on their own channels; the shell reads the bar's
 	// drawn width (shellSize), the frame and the hit test the sheet's.
 	homeTarget, resultsTarget, navTarget := a.homeBoxW(), a.resultsTargetH(), float32(0)
-	if a.visible && !(a.snap.panel || a.snap.drawn) && !(a.onboardingPending() && !a.onboardingTried()) {
+	if a.visible && !(a.snap.panel || a.snap.drawn) && !a.onboardingPending() {
 		navTarget = 1
 	}
 	homeWd, resultsH, navK := homeTarget, resultsTarget, navTarget
@@ -977,11 +972,7 @@ func (a *shelf) view(c *ui.Context) {
 	if drop, ok := ui.DropData(zone, opts); ok {
 		a.drop.done = true
 		if !a.homeTakesNoDrop() {
-			if err := a.receive(drop.Data); err == nil && a.onboardingPending() {
-				// A real file released anywhere on the guide's page
-				// answers its try step, like a release on the tray row.
-				a.onboardingCatch()
-			}
+			a.receive(drop.Data)
 		}
 		if !a.visible {
 			a.show(false)

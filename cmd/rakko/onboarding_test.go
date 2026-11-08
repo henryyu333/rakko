@@ -4,7 +4,7 @@ package main
 
 // The first-launch guide: where the bundle runs, the move that settles it in
 // /Applications, the pending bit that survives restarts, the page that owns
-// the panel while it is owed, and the two ways the try step lands a file.
+// the panel while it is owed, and the permissions step that ends it.
 
 import (
 	"errors"
@@ -260,15 +260,20 @@ func TestOnboardingStepsFollowTheRunLocation(t *testing.T) {
 		origin runOrigin
 		want   []string
 	}{
-		{originInstalled, []string{onbStepIntro, onbStepPerms, onbStepTry}},
-		{originDownloads, []string{onbStepIntro, onbStepMove, onbStepPerms, onbStepTry}},
-		{originDiskImage, []string{onbStepIntro, onbStepMove, onbStepPerms, onbStepTry}},
-		{originTranslocated, []string{onbStepIntro, onbStepMove, onbStepPerms, onbStepTry}},
+		{originInstalled, []string{onbStepIntro, onbStepPerms}},
+		{originDownloads, []string{onbStepIntro, onbStepMove, onbStepPerms}},
+		{originDiskImage, []string{onbStepIntro, onbStepMove, onbStepPerms}},
+		{originTranslocated, []string{onbStepIntro, onbStepMove, onbStepPerms}},
 	} {
 		o := &onboardingFeature{origin: tt.origin}
 		got := o.steps()
 		if strings.Join(got, ",") != strings.Join(tt.want, ",") {
 			t.Errorf("origin %v: steps = %v, want %v", tt.origin, got, tt.want)
+		}
+		// The permissions are the last step in both flows.
+		o.step = len(got) - 1
+		if !o.last() || o.current() != onbStepPerms {
+			t.Errorf("origin %v: last step = %q (last=%v), want %q", tt.origin, o.current(), o.last(), onbStepPerms)
 		}
 	}
 }
@@ -283,6 +288,8 @@ func TestOnboardingResumesAfterTheStepItLeft(t *testing.T) {
 		{"a move still pending", "/Users/me/Downloads/Rakko.app/Contents/MacOS/rakko", onbStepMove, onbStepMove},
 		{"the move was finished by a launch from Applications", "/Applications/Rakko.app/Contents/MacOS/rakko", onbStepMove, onbStepPerms},
 		{"a saved permissions step", "/Applications/Rakko.app/Contents/MacOS/rakko", onbStepPerms, onbStepPerms},
+		{"a saved try step from an earlier build", "/Applications/Rakko.app/Contents/MacOS/rakko", "try", onbStepPerms},
+		{"a saved try step on a bundle that still has to move", "/Users/me/Downloads/Rakko.app/Contents/MacOS/rakko", "try", onbStepPerms},
 		{"a fresh install", "/Applications/Rakko.app/Contents/MacOS/rakko", "", onbStepIntro},
 	}
 	for _, tt := range cases {
@@ -334,24 +341,77 @@ func TestOnboardingFinishAndSkipPersist(t *testing.T) {
 	}
 }
 
-func TestOnboardingTryKeepsPendingForStartUsing(t *testing.T) {
-	a, _ := onboardingShelf(t)
-	a.onb.step = len(a.onb.steps()) - 1
-	a.onb.tried = false
-	a.onboardingCatch()
-	if !a.onb.tried {
-		t.Fatal("the try step was not marked done")
-	}
-	if !a.settings.Onboarding.Pending {
-		t.Fatal("the guide closed itself before 开始使用")
-	}
-	if !a.onb.last() {
-		t.Fatal("the try step is not the last one")
+// The guide writes nothing of its own into the data directory: no sample
+// picture, no onboarding folder. Walking every step and finishing leaves
+// only the settings file the app itself saves.
+func TestOnboardingWritesNoFilesIntoTheDataDir(t *testing.T) {
+	a, view := onboardingShelf(t)
+	for i := range a.onb.steps() {
+		a.onb.step = i
+		view.Frame()
+		view.Frame()
 	}
 	a.onboardingFinish()
-	if a.settings.Onboarding.Pending {
-		t.Fatal("开始使用 did not retire the guide")
+	var names []string
+	err := filepath.WalkDir(a.dataDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if path == a.dataDir {
+			return nil
+		}
+		names = append(names, d.Name())
+		if d.IsDir() || strings.HasSuffix(d.Name(), ".png") {
+			t.Errorf("the guide wrote %s into the data directory", path)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
+	for _, name := range names {
+		if name != settings.FileName {
+			t.Errorf("the data directory holds %q, want only %q", name, settings.FileName)
+		}
+	}
+}
+
+// The permissions step is the guide's last: 开始使用 — the button and ⏎ / →
+// — retires the guide and folds the panel to the notch with the ready
+// capsule on it.
+func TestOnboardingPermsStepStartsUsing(t *testing.T) {
+	t.Run("button", func(t *testing.T) {
+		a, view := onboardingShelf(t)
+		a.onb.step = len(a.onb.steps()) - 1
+		if !a.onb.last() || a.onb.current() != onbStepPerms {
+			t.Fatalf("last step = %q, want %q", a.onb.current(), onbStepPerms)
+		}
+		view.Frame()
+		view.Frame()
+		if !view.HasText("上一步") {
+			t.Fatalf("上一步 is missing from the permissions step; texts %v", view.Texts())
+		}
+		if err := view.Click("开始使用"); err != nil {
+			t.Fatalf("start using: %v", err)
+		}
+		if a.settings.Onboarding.Pending || a.settings.Onboarding.Step != "" {
+			t.Fatalf("开始使用 left the guide owed: %+v", a.settings.Onboarding)
+		}
+		if a.status != "Rakko 已就绪" {
+			t.Fatalf("status = %q, want the ready capsule", a.status)
+		}
+	})
+	t.Run("key", func(t *testing.T) {
+		a, _ := onboardingShelf(t)
+		a.onb.step = len(a.onb.steps()) - 1
+		a.onboardingKey("Enter")
+		if a.settings.Onboarding.Pending || a.settings.Onboarding.Step != "" {
+			t.Fatalf("⏎ left the guide owed: %+v", a.settings.Onboarding)
+		}
+		if a.status != "Rakko 已就绪" {
+			t.Fatalf("status = %q, want the ready capsule", a.status)
+		}
+	})
 }
 
 func TestOnboardingPageOwnsEveryOpening(t *testing.T) {
@@ -379,16 +439,16 @@ func TestOnboardingPageOwnsEveryOpening(t *testing.T) {
 	}
 }
 
-func TestOnboardingCapsuleWaitsForTheFinishBlock(t *testing.T) {
+func TestOnboardingCapsuleStaysHiddenWhilePending(t *testing.T) {
 	a, view := onboardingShelf(t)
 	view.Frame()
 	if a.fx.navK != 0 {
 		t.Fatalf("the page capsule showed during the guide: navK=%v", a.fx.navK)
 	}
-	a.onb.tried = true
+	a.onboardingDone()
 	view.Frame()
 	if a.fx.navK != 1 {
-		t.Fatalf("the capsule did not come back for the finish block: navK=%v", a.fx.navK)
+		t.Fatalf("the capsule did not come back once the guide retired: navK=%v", a.fx.navK)
 	}
 }
 
@@ -417,29 +477,6 @@ func TestOnboardingPermissionRowAsksOnlyItsOwn(t *testing.T) {
 	}
 }
 
-func TestOnboardingDemoDropLandsTheSampleInTheTray(t *testing.T) {
-	a, view := onboardingShelf(t)
-	a.onb.step = len(a.onb.steps()) - 1
-	view.Frame()
-	a.onboardingDemoDrop()
-	if !a.onb.tried {
-		t.Fatal("the demo drop did not complete the try step")
-	}
-	if len(a.store.Items) != 1 {
-		t.Fatalf("the tray holds %d items, want the sample", len(a.store.Items))
-	}
-	if got := a.store.Items[0].Path; !strings.HasSuffix(got, ".png") {
-		t.Fatalf("the demo file is %q", got)
-	}
-	view.Frame()
-	if !view.HasText("就这些") {
-		t.Fatalf("the finish block did not draw; texts %v", view.Texts())
-	}
-	if !view.HasText("开始使用") {
-		t.Fatalf("开始使用 is missing from the finish block; texts %v", view.Texts())
-	}
-}
-
 func TestEnglishOnboardingPagesSayEnglishAndFit(t *testing.T) {
 	a, view := onboardingShelf(t)
 	a.locale = "en"
@@ -453,40 +490,6 @@ func TestEnglishOnboardingPagesSayEnglishAndFit(t *testing.T) {
 		where := string(a.onb.current())
 		assertNoHan(t, where, view.Texts())
 		assertPageFits(t, view, where, drain(), a.sheetTop())
-	}
-}
-
-func TestOnboardingSampleIsRemovableAndNamedForItsDay(t *testing.T) {
-	a, _ := onboardingShelf(t)
-	o := a.onb
-	dir := filepath.Join(a.dataDir, "onboarding")
-	first, err := o.ensureSample()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if filepath.Dir(first) != dir {
-		t.Fatalf("the sample went to %s, want %s", filepath.Dir(first), dir)
-	}
-	if !strings.Contains(filepath.Base(first), time.Now().Format("2006-01-02")) {
-		t.Fatalf("the sample name %q does not carry today's date", filepath.Base(first))
-	}
-	// A second call reuses the same file instead of writing another.
-	second, err := o.ensureSample()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if second != first {
-		t.Fatalf("ensureSample wrote a second file: %q vs %q", second, first)
-	}
-	if err := os.Remove(first); err != nil {
-		t.Fatal(err)
-	}
-	third, err := o.ensureSample()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if third != first {
-		t.Fatalf("a removed sample was not rewritten: %q vs %q", third, first)
 	}
 }
 
@@ -508,29 +511,6 @@ func TestOnboardingIsOwedOnlyForAFreshInstall(t *testing.T) {
 		if got := onboardingOwed(tt.fresh, tt.err, tt.save); got != tt.want {
 			t.Errorf("%s: onboardingOwed = %v, want %v", tt.name, got, tt.want)
 		}
-	}
-}
-
-// A click on the sample chip (no drag) plays the demo, as the prototype's
-// chip does: the pointer path the panel really receives.
-func TestOnboardingChipClickPlaysTheDemo(t *testing.T) {
-	a, view := onboardingShelf(t)
-	a.onb.step = len(a.onb.steps()) - 1
-	view.Frame()
-	view.Frame()
-	name := a.onb.sampleName(a.appLoc())
-	if err := view.Click(name); err != nil {
-		t.Fatalf("chip click: %v", err)
-	}
-	if a.onb.demoAt.IsZero() {
-		t.Fatal("the chip click did not arm the demo")
-	}
-
-	// The demo's clock lands the file on its last phase.
-	view.Advance(900 * time.Millisecond)
-	view.Frame()
-	if !a.onb.tried || len(a.store.Items) != 1 {
-		t.Fatalf("the demo did not land the sample: tried=%v items=%d", a.onb.tried, len(a.store.Items))
 	}
 }
 

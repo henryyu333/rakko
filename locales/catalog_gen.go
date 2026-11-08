@@ -1101,16 +1101,6 @@ func (msgs Messages) OnboardingContinue() string {
 	return Catalog.Format(msgs.locale, "onboardingContinue", nil)
 }
 
-// OnboardingDone says "完成"
-// in the language the app shows.
-func OnboardingDone() string { return In(i18n.Locale()).OnboardingDone() }
-
-// OnboardingDone says "完成"
-// in the language of msgs.
-func (msgs Messages) OnboardingDone() string {
-	return Catalog.Format(msgs.locale, "onboardingDone", nil)
-}
-
 // OnboardingStart says "开始使用"
 // in the language the app shows.
 func OnboardingStart() string { return In(i18n.Locale()).OnboardingStart() }
@@ -1289,86 +1279,6 @@ func OnboardingPermsNote() string { return In(i18n.Locale()).OnboardingPermsNote
 // in the language of msgs.
 func (msgs Messages) OnboardingPermsNote() string {
 	return Catalog.Format(msgs.locale, "onboardingPermsNote", nil)
-}
-
-// OnboardingTryTitle says "试一试"
-// in the language the app shows.
-func OnboardingTryTitle() string { return In(i18n.Locale()).OnboardingTryTitle() }
-
-// OnboardingTryTitle says "试一试"
-// in the language of msgs.
-func (msgs Messages) OnboardingTryTitle() string {
-	return Catalog.Format(msgs.locale, "onboardingTryTitle", nil)
-}
-
-// OnboardingTryLead says "把文件拖进来。"
-// in the language the app shows.
-func OnboardingTryLead() string { return In(i18n.Locale()).OnboardingTryLead() }
-
-// OnboardingTryLead says "把文件拖进来。"
-// in the language of msgs.
-func (msgs Messages) OnboardingTryLead() string {
-	return Catalog.Format(msgs.locale, "onboardingTryLead", nil)
-}
-
-// OnboardingTryDemo says "演示"
-// in the language the app shows.
-func OnboardingTryDemo() string { return In(i18n.Locale()).OnboardingTryDemo() }
-
-// OnboardingTryDemo says "演示"
-// in the language of msgs.
-func (msgs Messages) OnboardingTryDemo() string {
-	return Catalog.Format(msgs.locale, "onboardingTryDemo", nil)
-}
-
-// OnboardingTryNote says "松手就收进托盘。"
-// in the language the app shows.
-func OnboardingTryNote() string { return In(i18n.Locale()).OnboardingTryNote() }
-
-// OnboardingTryNote says "松手就收进托盘。"
-// in the language of msgs.
-func (msgs Messages) OnboardingTryNote() string {
-	return Catalog.Format(msgs.locale, "onboardingTryNote", nil)
-}
-
-// OnboardingTryFailed says "示例文件没造出来：{error}"
-// in the language the app shows.
-func OnboardingTryFailed(error string) string { return In(i18n.Locale()).OnboardingTryFailed(error) }
-
-// OnboardingTryFailed says "示例文件没造出来：{error}"
-// in the language of msgs.
-func (msgs Messages) OnboardingTryFailed(error string) string {
-	return Catalog.Format(msgs.locale, "onboardingTryFailed", map[string]any{"error": error})
-}
-
-// OnboardingSampleName says "截图 {date}.png"
-// in the language the app shows.
-func OnboardingSampleName(date string) string { return In(i18n.Locale()).OnboardingSampleName(date) }
-
-// OnboardingSampleName says "截图 {date}.png"
-// in the language of msgs.
-func (msgs Messages) OnboardingSampleName(date string) string {
-	return Catalog.Format(msgs.locale, "onboardingSampleName", map[string]any{"date": date})
-}
-
-// OnboardingDoneTitle says "就这些"
-// in the language the app shows.
-func OnboardingDoneTitle() string { return In(i18n.Locale()).OnboardingDoneTitle() }
-
-// OnboardingDoneTitle says "就这些"
-// in the language of msgs.
-func (msgs Messages) OnboardingDoneTitle() string {
-	return Catalog.Format(msgs.locale, "onboardingDoneTitle", nil)
-}
-
-// OnboardingDoneNote says "文件已经在托盘里，点刘海就能看到。"
-// in the language the app shows.
-func OnboardingDoneNote() string { return In(i18n.Locale()).OnboardingDoneNote() }
-
-// OnboardingDoneNote says "文件已经在托盘里，点刘海就能看到。"
-// in the language of msgs.
-func (msgs Messages) OnboardingDoneNote() string {
-	return Catalog.Format(msgs.locale, "onboardingDoneNote", nil)
 }
 
 // OnboardingReady says "Rakko 已就绪"
