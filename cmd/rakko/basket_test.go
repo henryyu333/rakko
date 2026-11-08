@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"rakko/internal/agentnotify"
+
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
@@ -23,6 +25,12 @@ import (
 // (CGWindowListCopyWindowInfo) and screenshotted. The test instance uses a
 // temporary data dir and never touches ~/Library/Application Support/Rakko.
 func TestMain(m *testing.M) {
+	// The approval smoke runs this same test binary as the hook client, so
+	// the server and the client are one file and the peer check passes for
+	// the same reason it does in the installed app.
+	if agentnotify.RunApproveCLI(os.Args[1:], os.Stdin, os.Stdout) {
+		os.Exit(0)
+	}
 	// The agent-notify code reads a home directory; tests get a temporary
 	// one so no test can see the real ~/.claude, ~/.codex or any other
 	// tool configuration.
