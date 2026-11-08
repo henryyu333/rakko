@@ -89,7 +89,7 @@ It lives in the menu bar, has no Dock icon, keeps everything on your Mac, and ne
 **AI usage** (optional, off by default)
 - Turn it on in Settings → AI Usage → Show AI Usage in the Notch and the panel gains one more page icon. The page fits one screen and never scrolls: the left column holds a double-ring card per tool — outer ring weekly, inner ring 5-hour — and the right column holds this Mac's total token usage over Today / 7D / 30D / All, as four numbers (tokens, requests, cost, cache hits) and one chart. Hover a card for its plan, reset times, the even-pace mark and any per-model weekly limits; hover a number for its parts.
 - Quotas show how much is used by default; switch to what is left in Settings → AI Usage → Quota Shown. The same page has one switch per quota source — Claude Code and Codex. The AI Usage card on Tools reads the same quotas: at 1 × 1 it draws one double ring — outer weekly, inner 5-hour — around the mark of the tool with the least left; hover it for the numbers. At 2 × 1 it keeps the ring beside its name.
-- The Claude Code quota comes from Claude Code itself: Rakko runs your installed Claude Code's `/usage` command, so the numbers match what Claude Code reports. Claude Code must be installed; Rakko never downloads it. The Codex quota reads the login Codex already saved on this Mac and sends it only to chatgpt.com.
+- The Claude Code quota comes from Claude Code itself: Rakko runs your installed Claude Code's `/usage` command, so the numbers match what Claude Code reports. Claude Code must be installed; Rakko never downloads it. When Claude Code on this Mac is signed out, the Claude card says Not Signed In with a Sign In button: it opens Claude's sign-in page in your browser and keeps that sign-in in Rakko's own folder (`~/Library/Application Support/Rakko/claude/`), apart from your Claude Code's. Rakko reads the quota with its own sign-in when it has one, and with your Claude Code's otherwise. The Codex quota reads the login Codex already saved on this Mac and sends it only to chatgpt.com.
 - Opening the page or pressing refresh reads the quota (Claude Code at most once every 30 seconds); while the page stays open, Claude Code is read again every 5–15 minutes, and only after you used it. The last reading is kept, so the page shows it right after a restart.
 - Local usage is found on its own: the session records of omp, Claude Code, Codex, pi, opencode and Grok are read where those tools keep them. The AI Usage page shows a combined total; the weekly report also shows the available sources.
 
@@ -143,6 +143,12 @@ A tool counts as installed only by files it writes itself, so a stray `~/.claude
 - Press `⌃⌥O`, use the menu-bar icon → Capture Text, or tap its card, then drag over any part of the screen: the text in it is recognized on this Mac, copied to the clipboard and kept in the Clipboard list, marked Capture Text.
 - Needs Screen Recording permission — see [Optional](#optional).
 
+**Screenshot**
+- Press `⌃⌥A`, use the menu-bar icon → Screenshot, or tap the Screenshot card (add it from the + on Tools). Every screen freezes; hover a window and click to take it, or drag out an area, then adjust it with the eight handles or the arrow keys. A magnifier helps while you choose.
+- Mark it up: rectangle, arrow, pen, mosaic brush, text and numbered steps, in five colors and three sizes; ⇧ keeps lines straight and boxes square, `⌘Z` / `⇧⌘Z` undo and redo.
+- ⏎, a double-click or `⌘C` copies the picture (and adds it to the Clipboard list, marked Screenshot); `⌘S` saves it where macOS saves screenshots; Recognize Text copies the text in it; Pin to Desktop keeps it floating on the desktop until Rakko quits. Esc steps back one level at a time.
+- Needs Screen Recording permission — see [Optional](#optional).
+
 **Live activities**
 - Plug in the charger and the notch widens for a few seconds: a bolt on the left, a green level bar and the percentage on the right. It also tells you once when the battery is full, and once at 20 % and 10 % while on battery.
 - Connect Bluetooth headphones and the notch shows their name with the system symbol for the model. When macOS reports a level for each part, the left bud, right bud and case each get an icon, a battery ring and the percentage, the ring turning red at 20 % or below. The notice shows again when they disconnect.
@@ -169,7 +175,7 @@ A tool counts as installed only by files it writes itself, so a stray `~/.claude
 - Reduce Transparency draws the panel pure black; Reduce Motion keeps the fades and drops the travel and bounce. Secondary text — times, counts, captions — is drawn brighter than before, so it stays readable on black.
 - Every page switch is one fade: the page you leave fades out while the new page fades in. Over the open panel the pointer stays a plain arrow.
 - Settings… is a normal window with a sidebar: General (Open at Login, Language, automatic updates with Check Now), Appearance (notch style, island position, desktop otter, live activities, snap windows), Tray, Clipboard, AI Usage (display, quota, Agent Completion), Shortcuts, System Permissions and About. The sidebar's footer says whether every permission is on; About holds the version, Check Now, the source link and the data folder. Every control applies at once.
-- Thirteen global shortcuts live in Settings → Shortcuts, in three groups: Global Shortcuts (Show / Hide `⌃⌥Space`, Clipboard Search `⌃⌥V`, Open Tray, App Switcher), Playback (Play / Pause, Previous Track, Next Track) and Tools (Capture Text `⌃⌥O`, Open Tools, Open AI Usage, Toggle Keep Awake, New Note, Show or Hide the Otter). Only the three with defaults start set; every other row says Not Set. Click a row and press the new keys: a key with ⌃, ⌥ or ⌘ saves at once; F1–F12, the arrows, Home, End, PageUp, PageDown and Insert work alone or with ⇧; a key that types text asks first — "X" will be taken from every app — with Use Anyway or Cancel. Delete clears the row, Esc cancels, and a combination another app already holds leaves the previous one in place.
+- Fourteen global shortcuts live in Settings → Shortcuts, in three groups: Global Shortcuts (Show / Hide `⌃⌥Space`, Clipboard Search `⌃⌥V`, Open Tray, App Switcher), Playback (Play / Pause, Previous Track, Next Track) and Tools (Capture Text `⌃⌥O`, Screenshot `⌃⌥A`, Open Tools, Open AI Usage, Toggle Keep Awake, New Note, Show or Hide the Otter). Only the four with defaults start set; every other row says Not Set. Click a row and press the new keys: a key with ⌃, ⌥ or ⌘ saves at once; F1–F12, the arrows, Home, End, PageUp, PageDown and Insert work alone or with ⇧; a key that types text asks first — "X" will be taken from every app — with Use Anyway or Cancel. Delete clears the row, Esc cancels, and a combination another app already holds leaves the previous one in place.
 - Pressing Clipboard Search, Open Tray, Open Tools or Open AI Usage while that page is already showing closes the panel. With AI Usage off, its shortcut opens Settings → AI Usage.
 - Updates are checked against this repository's GitHub releases. Rakko tells you when one is out and installs it only when you say so. Settings → General → Updates is where it lives: the last check's time and result, Check Now, and — once a version is downloaded — a Restart button; the pill at the bottom of the panel offers the same restart.
 
@@ -211,7 +217,7 @@ From then on Rakko opens normally. If macOS ever says the app **is damaged**, do
 - **System permissions**: Settings → System Permissions lists the three permissions with their state, and its last row is one switch; you can also right-click the menu-bar icon → Turn On System Permissions (3 missing)… — the number is how many are still off. Turning it on walks you through three System Settings pages in turn: Full Disk Access, Accessibility, then Screen Recording. Turn Rakko on in each (on the Full Disk Access page, press + and choose Rakko, or drag in the Rakko that Finder shows), and Rakko moves to the next one by itself; at the end, click Reopen Rakko. macOS requires you to switch on each one yourself. Coming from the app's earlier name asks for them once more (see below). Official Rakko releases keep the grants across later updates; a build you compile yourself is signed afresh each time and may ask again.
 - **Full Disk Access**: files dragged in from Downloads, Desktop, Documents or iCloud Drive no longer bring up a "Rakko would like to access files…" dialog.
 - **Accessibility** (notch drop protection): while you drag toward the notch, the pointer stays in the drop area instead of hitting the very top edge of the screen.
-- **Screen Recording** (Capture Text): only the area you select is captured, text is recognized on this Mac, and the shot is not kept.
+- **Screen Recording** (Capture Text, Screenshot): Capture Text keeps only the area you select, recognizes its text on this Mac and does not keep the shot; Screenshot freezes the screens on this Mac and keeps nothing until you copy, save or pin it.
 - **Uninstall**: right-click the menu-bar icon → Quit, then move Rakko from Applications to the Trash. To also delete your saved items, remove `~/Library/Application Support/Rakko/`.
 
 ### Coming from ShelfU
@@ -244,6 +250,7 @@ Coming from the older Shelf app? Rakko copies from `Application Support/Shelf/` 
 | Control music | On Home: previous, play-pause and next, or drag the progress bar to skip; the lyrics button is at its bottom left, and the 2 × 2 music card on Tools keeps the volume bar |
 | Pin, remove, Quick Look, AirDrop | Right-click an item (Space also opens Quick Look) |
 | Copy text from the screen | Press `⌃⌥O` and drag over the text |
+| Take a screenshot | Press `⌃⌥A`, pick a window or drag an area, mark it up, then ⏎ to copy or `⌘S` to save |
 | Convert a picture or a PDF | Right-click a picture → Convert to; right-click several pictures → Merge into One PDF; right-click a PDF → Convert to → Word (Extract Text), or PNG (One per Page) / JPEG (One per Page) |
 | Shrink a picture, zip files | Right-click a picture → Resize Images and pick 2560 / 1600 / 800 px; right-click files or folders → Compress to zip |
 | Run a tool card | Open Tools, then tap a card for the selected shelf items or drop files on it |
@@ -359,7 +366,7 @@ Rakko 是住在 Mac 刘海里的工具：它把摄像头周围那块黑色刘海
 **AI 用量**（可选，默认关闭）
 - 在 设置… →「AI 用量」→「在刘海里显示 AI 用量」打开后，顶栏会多出一个页面图标。整页一屏看全，不用滚动：左栏是 Claude Code、Codex 的套餐额度卡（每张卡内外双圈：外圈每周、内圈 5 小时），右栏是这台电脑上的 token 用量总量——今天 / 7 天 / 30 天 / 全部，四个数字（Token、请求、费用、缓存命中）和一根柱图。悬停额度卡可以看到套餐名、重置时间、均匀消耗标记和按模型的每周额度；悬停数字可以看到它的组成部分。
 - 额度默认显示「已用」；可以在 设置… →「AI 用量」→「额度显示」改成「剩余」。同一页里每个额度来源各有一个开关（Claude Code、Codex）。工具页的 AI 用量卡用同一份额度数据：1×1 只画一个双圈——外圈每周、内圈 5 小时——中间是剩余额度最少的那个工具的标志，鼠标悬停看具体数字；2×1 仍是圈在左、名字在右。
-- Claude Code 的额度由 Claude Code 自己给出：Rakko 运行你装好的 Claude Code 的 `/usage` 命令，所以数字和 Claude Code 显示的一致。需要先装好 Claude Code，Rakko 不会替你下载。Codex 的额度读取 Codex 保存在本机的登录信息，只发给 chatgpt.com。
+- Claude Code 的额度由 Claude Code 自己给出：Rakko 运行你装好的 Claude Code 的 `/usage` 命令，所以数字和 Claude Code 显示的一致。需要先装好 Claude Code，Rakko 不会替你下载。本机 Claude Code 没有登录时，Claude 卡片显示「未登录」和「登录」按钮：点了会在浏览器里打开 Claude 的登录页，登录结果只存在 Rakko 自己的目录（`~/Library/Application Support/Rakko/claude/`），不碰你自己的 Claude Code；Rakko 有自己的登录就用它查额度，没有就用你 Claude Code 的登录。Codex 的额度读取 Codex 保存在本机的登录信息，只发给 chatgpt.com。
 - 打开这一页或点刷新时会查询额度（Claude Code 最多 30 秒查一次）；页面一直开着时，只有你用过 Claude Code 才会每 5–15 分钟再查一次。上次的结果会保存，重启后打开就能看到。
 - 本机用量自己去找：omp、Claude Code、Codex、pi、opencode、Grok 各自的会话记录在它们自己的位置被读取。AI 用量页显示合计；每周简报也会显示可读取的来源。
 
@@ -413,6 +420,12 @@ Rakko 是住在 Mac 刘海里的工具：它把摄像头周围那块黑色刘海
 - 按 `⌃⌥O`、右键菜单栏图标 →「框选文字」，或点它的卡片，然后在屏幕上框一块区域：里面的文字在本机识别后直接复制到剪贴板，并记进剪贴板页，来源显示「框选文字」。
 - 需要「屏幕录制」权限，见下面的[可选](#可选)。
 
+**截图**
+- 按 `⌃⌥A`、右键菜单栏图标 →「截图」，或点「截图」卡片（在工具页的「+」里添加）。所有屏幕先定格；鼠标移到窗口上单击就选中这个窗口，也可以拖出一块区域，再用八个把手或方向键微调。选择时有放大镜帮你对准。
+- 标注：矩形、箭头、画笔、马赛克笔刷、文字、序号，五种颜色三种粗细；按住 ⇧ 画直线和正方形，`⌘Z` / `⇧⌘Z` 撤销和重做。
+- 回车、双击或 `⌘C` 复制图片（同时记进剪贴板页，来源显示「截图」）；`⌘S` 保存到系统截图的保存位置；「识别文字」直接复制图里的文字；「钉到桌面」让它浮在桌面上，退出 Rakko 前一直在。Esc 一级一级往回退。
+- 需要「屏幕录制」权限，见下面的[可选](#可选)。
+
 **实时活动**
 - 插上电源时，刘海向两边变宽几秒：左边是闪电图标，右边是绿色电量条和电量数字。充满时提醒一次；不插电时，电量降到 20% 和 10% 各提醒一次。
 - 蓝牙耳机连上时，刘海显示耳机名字和对应型号的系统图标；系统给出各部件电量时，左耳、右耳和充电盒各有一个图标、一圈电量环和百分比，电量 20% 及以下时电量环变红。断开时也会提示一次。
@@ -439,7 +452,7 @@ Rakko 是住在 Mac 刘海里的工具：它把摄像头周围那块黑色刘海
 - 打开「减少透明度」时面板画成纯黑；「减少动态效果」时只保留淡入淡出。时间、计数、说明这类次要文字在纯黑上更容易看清。
 - 页面之间用同一种切换：旧页淡出，新页淡入。指针在展开的面板上始终是普通箭头。
 - 设置… 是一个带侧栏的普通窗口：通用（开机时自动启动、语言、自动更新和「现在检查」）、外形与提示（刘海样式、灵动岛位置、桌宠、实时活动、拖窗口分屏）、托盘、剪贴板、AI 用量（显示、额度、Agent 完成提醒）、快捷键、系统权限和关于。侧栏底部显示权限状态；关于页有版本号、「现在检查」、源代码链接和数据文件夹。改完立即生效。
-- 设置… → 快捷键 里有十三个全局快捷键，分三组：「全局快捷键」（显示 / 收起 `⌃⌥Space`、剪贴板搜索 `⌃⌥V`、打开托盘、应用切换）、「播放」（播放 / 暂停、上一首、下一首）、「工具」（框选文字 `⌃⌥O`、打开工具页、打开 AI 用量、保持唤醒开 / 关、新建便利贴、放出 / 收回海獭）。除显示 / 收起、剪贴板搜索、框选文字外，其余初始都是「未设置」。点一下那一行，按新的组合键：带 ⌃、⌥ 或 ⌘ 的立即保存；F1–F12、方向键、Home、End、PageUp、PageDown、Insert 可以单用，也可以加 ⇧；会打字的键先问一句「X」会在所有应用里被截走，再选「仍然使用」或「取消」。Delete 清空，Esc 取消；组合被其他应用占用时，保留原来的组合并提示。
+- 设置… → 快捷键 里有十四个全局快捷键，分三组：「全局快捷键」（显示 / 收起 `⌃⌥Space`、剪贴板搜索 `⌃⌥V`、打开托盘、应用切换）、「播放」（播放 / 暂停、上一首、下一首）、「工具」（框选文字 `⌃⌥O`、截图 `⌃⌥A`、打开工具页、打开 AI 用量、保持唤醒开 / 关、新建便利贴、放出 / 收回海獭）。除显示 / 收起、剪贴板搜索、框选文字、截图外，其余初始都是「未设置」。点一下那一行，按新的组合键：带 ⌃、⌥ 或 ⌘ 的立即保存；F1–F12、方向键、Home、End、PageUp、PageDown、Insert 可以单用，也可以加 ⇧；会打字的键先问一句「X」会在所有应用里被截走，再选「仍然使用」或「取消」。Delete 清空，Esc 取消；组合被其他应用占用时，保留原来的组合并提示。
 - 页面已经打开时，再按剪贴板搜索、打开托盘、打开工具页或打开 AI 用量，就收起面板；AI 用量页关着时，「打开 AI 用量」打开 设置… →「AI 用量」。
 - 新版本从本仓库的 GitHub Releases 检查；有更新时会提示你，你点了才会安装。更新的信息都在 设置… → 通用 →「更新」里：上次检查的时间和结果、「现在检查」，下载好后还有「重新启动」按钮；面板底部的小胶囊也会提示，并给出同样的重新启动。
 
@@ -481,7 +494,7 @@ Rakko 是免费软件，没有经过 Apple 公证，所以 macOS 会让你确认
 - **系统权限**：设置… → 系统权限 里列出三项权限的状态，最后一行是一个开关；也可以右键菜单栏图标 →「开启系统权限」。打开开关后，Rakko 依次打开系统设置里的三页：「完整磁盘访问」「辅助功能」「屏幕录制」。在每页打开 Rakko 的开关（「完整磁盘访问」这一页要点 + 选 Rakko，或把访达里选中的 Rakko 拖进列表），Rakko 会自动走到下一项；最后点「重新打开 Rakko」。macOS 要求每一项都由你自己打开。从旧名字换过来时要再开一次（见下）；Rakko 的正式发布版在之后更新时保留授权，自己编译的构建每次签名都会变，可能要重新开启。
 - **完整磁盘访问**：从「下载」「桌面」「文稿」或 iCloud 云盘拖文件进来时，不再弹出「Rakko 想要取用……中的文件」。
 - **辅助功能**（刘海拖放保护）：拖着东西靠近刘海时，指针会停在托盘的接收区里，不会顶到屏幕最上沿。
-- **屏幕录制**（框选文字）：只截取你框选的那一块，文字在本机识别，不保存截图。
+- **屏幕录制**（框选文字、截图）：框选文字只截取你框选的那一块，文字在本机识别，不保存截图；截图在本机定格屏幕，你复制、保存或钉到桌面之前什么都不留。
 - **卸载**：右键菜单栏图标 → 退出 Rakko，再把“应用程序”里的 Rakko 移到废纸篓。如果连保存的内容也要删除，删掉 `~/Library/Application Support/Rakko/` 文件夹。
 
 ### 从 ShelfU 升级
@@ -514,6 +527,7 @@ macOS 会把 Rakko 当成一个新应用，所以升级后系统权限和「开�
 | 控制音乐 | 在首页：上一首 / 播放暂停 / 下一首，拖动进度条跳转；歌词按钮在左下角，音量条在工具页 2×2 的音乐卡片上 |
 | 置顶、移除、快速查看、隔空投送 | 右键项目（快速查看也可以直接按空格） |
 | 框选屏幕文字 | 按 `⌃⌥O`，框住要复制的文字 |
+| 截图 | 按 `⌃⌥A`，选窗口或拖出区域，标注后回车复制或 `⌘S` 保存 |
 | 用工具卡 | 打开「工具」页，点按卡片处理托盘里选中的项目，或把文件拖到卡片上 |
 | 排列小组件或卡片 | 长按「工具」页的卡片或小组件进入编辑；把它们拖出面板就固定到桌面 |
 | 转换图片格式、转 PDF 或 Word | 右键图片 →「转换为」；多张图片右键 →「合并为一个 PDF」；右键 PDF →「转换为」Word 或每页一张图片 |
