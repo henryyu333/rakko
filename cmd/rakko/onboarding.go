@@ -789,7 +789,15 @@ var (
 		}
 		return exe, nil
 	}
-	onbHome = os.UserHomeDir
+	// onbHome is where ~/Downloads is looked for. RAKKO_ONBOARDING_HOME
+	// points it at a temporary tree for the native smoke, so a copy can
+	// "run from Downloads" without touching the real folder.
+	onbHome = func() (string, error) {
+		if dir := os.Getenv("RAKKO_ONBOARDING_HOME"); dir != "" {
+			return dir, nil
+		}
+		return os.UserHomeDir()
+	}
 	// onbApplicationsDir is where the move lands. /Applications in the app;
 	// RAKKO_ONBOARDING_APPS points it at a temporary folder for the native
 	// smoke, so no test can move anything into the real Applications.

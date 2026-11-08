@@ -108,6 +108,9 @@ func TestOnboardingFirstLaunchNative(t *testing.T) {
 		t.Fatal(err)
 	}
 	data2 := filepath.Join(tmp2, "data")
+	// The temp tree stands in for the home directory, so the Downloads
+	// rule sees <tmp2>/Downloads as ~/Downloads.
+	t.Setenv("RAKKO_ONBOARDING_HOME", tmp2)
 	proc2 := launchRakko(t, loadBundle, data2, apps2)
 	shotScreen(t, primary, "native-onboarding-downloads-intro")
 	pressKey(t, 36)
