@@ -32,6 +32,19 @@ type Settings struct {
 	// AutoCheckUpdates checks the GitHub release feed for a newer version
 	// in the background.
 	AutoCheckUpdates bool `json:"autoCheckUpdates"`
+	// UpdateAutoInstall downloads and stages a found version without
+	// asking, so only the ready-to-restart window appears. Off by default:
+	// the notes live only in the found window.
+	UpdateAutoInstall bool `json:"updateAutoInstall"`
+	// UpdateSkippedVersion is the version 跳过这个版本 declined; automatic
+	// checks never prompt for it again.
+	UpdateSkippedVersion string `json:"updateSkippedVersion"`
+	// UpdateRemindVersion is the version 稍后提醒我 deferred, until
+	// UpdateRemindUntil.
+	UpdateRemindVersion string `json:"updateRemindVersion"`
+	// UpdateRemindUntil is when the 稍后提醒我 quiet period ends, in unix
+	// seconds of the local clock; 0 means no quiet period.
+	UpdateRemindUntil int64 `json:"updateRemindUntil"`
 	// RemoveAfterDrag takes an item off the tray once it was dragged out
 	// and dropped; pinned items stay.
 	RemoveAfterDrag bool `json:"removeAfterDrag"`

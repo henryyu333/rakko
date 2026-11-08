@@ -2081,6 +2081,232 @@ func (msgs Messages) UpdateInstall(version string) string {
 	return Catalog.Format(msgs.locale, "updateInstall", map[string]any{"version": version})
 }
 
+// UpdateWindowTitle says "软件更新"
+// in the language the app shows.
+func UpdateWindowTitle() string { return In(i18n.Locale()).UpdateWindowTitle() }
+
+// UpdateWindowTitle says "软件更新"
+// in the language of msgs.
+func (msgs Messages) UpdateWindowTitle() string {
+	return Catalog.Format(msgs.locale, "updateWindowTitle", nil)
+}
+
+// UpdateFoundTitle says "新版本的 Rakko 已经发布"
+// in the language the app shows.
+func UpdateFoundTitle() string { return In(i18n.Locale()).UpdateFoundTitle() }
+
+// UpdateFoundTitle says "新版本的 Rakko 已经发布"
+// in the language of msgs.
+func (msgs Messages) UpdateFoundTitle() string {
+	return Catalog.Format(msgs.locale, "updateFoundTitle", nil)
+}
+
+// UpdateFoundBody says "Rakko {version} 可供下载，您现在的版本是 {current}。要现在下载吗？"
+// in the language the app shows.
+func UpdateFoundBody(version string, current string) string {
+	return In(i18n.Locale()).UpdateFoundBody(version, current)
+}
+
+// UpdateFoundBody says "Rakko {version} 可供下载，您现在的版本是 {current}。要现在下载吗？"
+// in the language of msgs.
+func (msgs Messages) UpdateFoundBody(version string, current string) string {
+	return Catalog.Format(msgs.locale, "updateFoundBody", map[string]any{"version": version, "current": current})
+}
+
+// UpdateAutoInstallRow says "以后自动下载并安装更新"
+// in the language the app shows.
+func UpdateAutoInstallRow() string { return In(i18n.Locale()).UpdateAutoInstallRow() }
+
+// UpdateAutoInstallRow says "以后自动下载并安装更新"
+// in the language of msgs.
+func (msgs Messages) UpdateAutoInstallRow() string {
+	return Catalog.Format(msgs.locale, "updateAutoInstallRow", nil)
+}
+
+// UpdateSkipVersion says "跳过这个版本"
+// in the language the app shows.
+func UpdateSkipVersion() string { return In(i18n.Locale()).UpdateSkipVersion() }
+
+// UpdateSkipVersion says "跳过这个版本"
+// in the language of msgs.
+func (msgs Messages) UpdateSkipVersion() string {
+	return Catalog.Format(msgs.locale, "updateSkipVersion", nil)
+}
+
+// UpdateLater says "稍后提醒我"
+// in the language the app shows.
+func UpdateLater() string { return In(i18n.Locale()).UpdateLater() }
+
+// UpdateLater says "稍后提醒我"
+// in the language of msgs.
+func (msgs Messages) UpdateLater() string {
+	return Catalog.Format(msgs.locale, "updateLater", nil)
+}
+
+// UpdateInstallNow says "安装更新"
+// in the language the app shows.
+func UpdateInstallNow() string { return In(i18n.Locale()).UpdateInstallNow() }
+
+// UpdateInstallNow says "安装更新"
+// in the language of msgs.
+func (msgs Messages) UpdateInstallNow() string {
+	return Catalog.Format(msgs.locale, "updateInstallNow", nil)
+}
+
+// UpdateUpdatingWindowTitle says "正在更新 Rakko"
+// in the language the app shows.
+func UpdateUpdatingWindowTitle() string { return In(i18n.Locale()).UpdateUpdatingWindowTitle() }
+
+// UpdateUpdatingWindowTitle says "正在更新 Rakko"
+// in the language of msgs.
+func (msgs Messages) UpdateUpdatingWindowTitle() string {
+	return Catalog.Format(msgs.locale, "updateUpdatingWindowTitle", nil)
+}
+
+// UpdateDownloadingShort says "正在下载更新…"
+// in the language the app shows.
+func UpdateDownloadingShort() string { return In(i18n.Locale()).UpdateDownloadingShort() }
+
+// UpdateDownloadingShort says "正在下载更新…"
+// in the language of msgs.
+func (msgs Messages) UpdateDownloadingShort() string {
+	return Catalog.Format(msgs.locale, "updateDownloadingShort", nil)
+}
+
+// UpdateDownloadBytes says "{downloaded} / {total}"
+// in the language the app shows.
+func UpdateDownloadBytes(downloaded string, total string) string {
+	return In(i18n.Locale()).UpdateDownloadBytes(downloaded, total)
+}
+
+// UpdateDownloadBytes says "{downloaded} / {total}"
+// in the language of msgs.
+func (msgs Messages) UpdateDownloadBytes(downloaded string, total string) string {
+	return Catalog.Format(msgs.locale, "updateDownloadBytes", map[string]any{"downloaded": downloaded, "total": total})
+}
+
+// UpdateCancel says "取消"
+// in the language the app shows.
+func UpdateCancel() string { return In(i18n.Locale()).UpdateCancel() }
+
+// UpdateCancel says "取消"
+// in the language of msgs.
+func (msgs Messages) UpdateCancel() string {
+	return Catalog.Format(msgs.locale, "updateCancel", nil)
+}
+
+// UpdateReadyShort says "可以开始安装了"
+// in the language the app shows.
+func UpdateReadyShort() string { return In(i18n.Locale()).UpdateReadyShort() }
+
+// UpdateReadyShort says "可以开始安装了"
+// in the language of msgs.
+func (msgs Messages) UpdateReadyShort() string {
+	return Catalog.Format(msgs.locale, "updateReadyShort", nil)
+}
+
+// UpdateInstallAndRelaunch says "安装并重启应用"
+// in the language the app shows.
+func UpdateInstallAndRelaunch() string { return In(i18n.Locale()).UpdateInstallAndRelaunch() }
+
+// UpdateInstallAndRelaunch says "安装并重启应用"
+// in the language of msgs.
+func (msgs Messages) UpdateInstallAndRelaunch() string {
+	return Catalog.Format(msgs.locale, "updateInstallAndRelaunch", nil)
+}
+
+// UpdateUpToDateTitle says "Rakko 已是最新版本"
+// in the language the app shows.
+func UpdateUpToDateTitle() string { return In(i18n.Locale()).UpdateUpToDateTitle() }
+
+// UpdateUpToDateTitle says "Rakko 已是最新版本"
+// in the language of msgs.
+func (msgs Messages) UpdateUpToDateTitle() string {
+	return Catalog.Format(msgs.locale, "updateUpToDateTitle", nil)
+}
+
+// UpdateUpToDateMeta says "{version} · 今天 {time} 检查"
+// in the language the app shows.
+func UpdateUpToDateMeta(version string, time_ string) string {
+	return In(i18n.Locale()).UpdateUpToDateMeta(version, time_)
+}
+
+// UpdateUpToDateMeta says "{version} · 今天 {time} 检查"
+// in the language of msgs.
+func (msgs Messages) UpdateUpToDateMeta(version string, time_ string) string {
+	return Catalog.Format(msgs.locale, "updateUpToDateMeta", map[string]any{"version": version, "time": time_})
+}
+
+// UpdateFailedTitle says "检查更新失败"
+// in the language the app shows.
+func UpdateFailedTitle() string { return In(i18n.Locale()).UpdateFailedTitle() }
+
+// UpdateFailedTitle says "检查更新失败"
+// in the language of msgs.
+func (msgs Messages) UpdateFailedTitle() string {
+	return Catalog.Format(msgs.locale, "updateFailedTitle", nil)
+}
+
+// UpdateFailedDetail says "连不上更新服务器，请检查网络。"
+// in the language the app shows.
+func UpdateFailedDetail() string { return In(i18n.Locale()).UpdateFailedDetail() }
+
+// UpdateFailedDetail says "连不上更新服务器，请检查网络。"
+// in the language of msgs.
+func (msgs Messages) UpdateFailedDetail() string {
+	return Catalog.Format(msgs.locale, "updateFailedDetail", nil)
+}
+
+// UpdateReadOnlyDetail says "Rakko 在只读位置，先移到「应用程序」文件夹。"
+// in the language the app shows.
+func UpdateReadOnlyDetail() string { return In(i18n.Locale()).UpdateReadOnlyDetail() }
+
+// UpdateReadOnlyDetail says "Rakko 在只读位置，先移到「应用程序」文件夹。"
+// in the language of msgs.
+func (msgs Messages) UpdateReadOnlyDetail() string {
+	return Catalog.Format(msgs.locale, "updateReadOnlyDetail", nil)
+}
+
+// UpdateRetry says "重试"
+// in the language the app shows.
+func UpdateRetry() string { return In(i18n.Locale()).UpdateRetry() }
+
+// UpdateRetry says "重试"
+// in the language of msgs.
+func (msgs Messages) UpdateRetry() string {
+	return Catalog.Format(msgs.locale, "updateRetry", nil)
+}
+
+// UpdateOK says "好"
+// in the language the app shows.
+func UpdateOK() string { return In(i18n.Locale()).UpdateOK() }
+
+// UpdateOK says "好"
+// in the language of msgs.
+func (msgs Messages) UpdateOK() string {
+	return Catalog.Format(msgs.locale, "updateOK", nil)
+}
+
+// UpdateCheckingShort says "正在检查更新…"
+// in the language the app shows.
+func UpdateCheckingShort() string { return In(i18n.Locale()).UpdateCheckingShort() }
+
+// UpdateCheckingShort says "正在检查更新…"
+// in the language of msgs.
+func (msgs Messages) UpdateCheckingShort() string {
+	return Catalog.Format(msgs.locale, "updateCheckingShort", nil)
+}
+
+// UpdateAutoInstallSettingsRow says "自动下载并安装更新"
+// in the language the app shows.
+func UpdateAutoInstallSettingsRow() string { return In(i18n.Locale()).UpdateAutoInstallSettingsRow() }
+
+// UpdateAutoInstallSettingsRow says "自动下载并安装更新"
+// in the language of msgs.
+func (msgs Messages) UpdateAutoInstallSettingsRow() string {
+	return Catalog.Format(msgs.locale, "updateAutoInstallSettingsRow", nil)
+}
+
 // ServiceMenuUnavailable says "服务菜单不可用：{err}"
 // in the language the app shows.
 func ServiceMenuUnavailable(err string) string { return In(i18n.Locale()).ServiceMenuUnavailable(err) }

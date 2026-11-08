@@ -543,3 +543,41 @@ func TestShortcutSettingsNewKeys(t *testing.T) {
 		t.Fatalf("new shortcuts did not round-trip: %+v, %v", loaded.Shortcuts, err)
 	}
 }
+
+// The update window's keys default to asking: automatic install off, no
+// skipped version, no quiet period. A file without them (every install
+// before the window) keeps those defaults; saved values round-trip.
+func TestUpdateWindowKeys(t *testing.T) {
+	def := Default()
+	if def.UpdateAutoInstall || def.UpdateSkippedVersion != "" ||
+		def.UpdateRemindVersion != "" || def.UpdateRemindUntil != 0 {
+		t.Fatalf("update window defaults = %+v", def)
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, FileName), []byte(`{}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.UpdateAutoInstall || s.UpdateSkippedVersion != "" ||
+		s.UpdateRemindVersion != "" || s.UpdateRemindUntil != 0 {
+		t.Fatalf("missing keys did not fall back to the defaults: %+v", s)
+	}
+	want := def
+	want.UpdateAutoInstall = true
+	want.UpdateSkippedVersion = "1.14.0"
+	want.UpdateRemindVersion = "1.15.0"
+	want.UpdateRemindUntil = 1_760_000_000
+	if err := Save(dir, want); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("saved update keys did not round-trip:\n got %+v\nwant %+v", got, want)
+	}
+}
