@@ -8230,3 +8230,365 @@ func ShotFailed() string { return In(i18n.Locale()).ShotFailed() }
 func (msgs Messages) ShotFailed() string {
 	return Catalog.Format(msgs.locale, "shotFailed", nil)
 }
+
+// SettingsApprovalGroup says "Agent 审批"
+// in the language the app shows.
+func SettingsApprovalGroup() string { return In(i18n.Locale()).SettingsApprovalGroup() }
+
+// SettingsApprovalGroup says "Agent 审批"
+// in the language of msgs.
+func (msgs Messages) SettingsApprovalGroup() string {
+	return Catalog.Format(msgs.locale, "settingsApprovalGroup", nil)
+}
+
+// SettingsApprovalRow says "在刘海审批 Agent 请求"
+// in the language the app shows.
+func SettingsApprovalRow() string { return In(i18n.Locale()).SettingsApprovalRow() }
+
+// SettingsApprovalRow says "在刘海审批 Agent 请求"
+// in the language of msgs.
+func (msgs Messages) SettingsApprovalRow() string {
+	return Catalog.Format(msgs.locale, "settingsApprovalRow", nil)
+}
+
+// SettingsApprovalCaption says "打开会在下列工具里加入审批 hook，关闭时移除"
+// in the language the app shows.
+func SettingsApprovalCaption() string { return In(i18n.Locale()).SettingsApprovalCaption() }
+
+// SettingsApprovalCaption says "打开会在下列工具里加入审批 hook，关闭时移除"
+// in the language of msgs.
+func (msgs Messages) SettingsApprovalCaption() string {
+	return Catalog.Format(msgs.locale, "settingsApprovalCaption", nil)
+}
+
+// SettingsApprovalNone says "没有可审批的 Agent"
+// in the language the app shows.
+func SettingsApprovalNone() string { return In(i18n.Locale()).SettingsApprovalNone() }
+
+// SettingsApprovalNone says "没有可审批的 Agent"
+// in the language of msgs.
+func (msgs Messages) SettingsApprovalNone() string {
+	return Catalog.Format(msgs.locale, "settingsApprovalNone", nil)
+}
+
+// LiveApprovalAllow says "允许"
+// in the language the app shows.
+func LiveApprovalAllow() string { return In(i18n.Locale()).LiveApprovalAllow() }
+
+// LiveApprovalAllow says "允许"
+// in the language of msgs.
+func (msgs Messages) LiveApprovalAllow() string {
+	return Catalog.Format(msgs.locale, "liveApprovalAllow", nil)
+}
+
+// LiveApprovalHold says "按住允许"
+// in the language the app shows.
+func LiveApprovalHold() string { return In(i18n.Locale()).LiveApprovalHold() }
+
+// LiveApprovalHold says "按住允许"
+// in the language of msgs.
+func (msgs Messages) LiveApprovalHold() string {
+	return Catalog.Format(msgs.locale, "liveApprovalHold", nil)
+}
+
+// LiveApprovalAgain says "再按一次 ⌘↩"
+// in the language the app shows.
+func LiveApprovalAgain() string { return In(i18n.Locale()).LiveApprovalAgain() }
+
+// LiveApprovalAgain says "再按一次 ⌘↩"
+// in the language of msgs.
+func (msgs Messages) LiveApprovalAgain() string {
+	return Catalog.Format(msgs.locale, "liveApprovalAgain", nil)
+}
+
+// LiveApprovalDeny says "拒绝"
+// in the language the app shows.
+func LiveApprovalDeny() string { return In(i18n.Locale()).LiveApprovalDeny() }
+
+// LiveApprovalDeny says "拒绝"
+// in the language of msgs.
+func (msgs Messages) LiveApprovalDeny() string {
+	return Catalog.Format(msgs.locale, "liveApprovalDeny", nil)
+}
+
+// LiveApprovalTerminal says "在终端处理"
+// in the language the app shows.
+func LiveApprovalTerminal() string { return In(i18n.Locale()).LiveApprovalTerminal() }
+
+// LiveApprovalTerminal says "在终端处理"
+// in the language of msgs.
+func (msgs Messages) LiveApprovalTerminal() string {
+	return Catalog.Format(msgs.locale, "liveApprovalTerminal", nil)
+}
+
+// LiveApprovalCancel says "取消"
+// in the language the app shows.
+func LiveApprovalCancel() string { return In(i18n.Locale()).LiveApprovalCancel() }
+
+// LiveApprovalCancel says "取消"
+// in the language of msgs.
+func (msgs Messages) LiveApprovalCancel() string {
+	return Catalog.Format(msgs.locale, "liveApprovalCancel", nil)
+}
+
+// LiveApprovalAllowed says "已允许"
+// in the language the app shows.
+func LiveApprovalAllowed() string { return In(i18n.Locale()).LiveApprovalAllowed() }
+
+// LiveApprovalAllowed says "已允许"
+// in the language of msgs.
+func (msgs Messages) LiveApprovalAllowed() string {
+	return Catalog.Format(msgs.locale, "liveApprovalAllowed", nil)
+}
+
+// LiveApprovalDenied says "已拒绝"
+// in the language the app shows.
+func LiveApprovalDenied() string { return In(i18n.Locale()).LiveApprovalDenied() }
+
+// LiveApprovalDenied says "已拒绝"
+// in the language of msgs.
+func (msgs Messages) LiveApprovalDenied() string {
+	return Catalog.Format(msgs.locale, "liveApprovalDenied", nil)
+}
+
+// LiveApprovalExpired says "已超时 · 已交回终端"
+// in the language the app shows.
+func LiveApprovalExpired() string { return In(i18n.Locale()).LiveApprovalExpired() }
+
+// LiveApprovalExpired says "已超时 · 已交回终端"
+// in the language of msgs.
+func (msgs Messages) LiveApprovalExpired() string {
+	return Catalog.Format(msgs.locale, "liveApprovalExpired", nil)
+}
+
+// LiveApprovalTerminalDone says "已在终端处理"
+// in the language the app shows.
+func LiveApprovalTerminalDone() string { return In(i18n.Locale()).LiveApprovalTerminalDone() }
+
+// LiveApprovalTerminalDone says "已在终端处理"
+// in the language of msgs.
+func (msgs Messages) LiveApprovalTerminalDone() string {
+	return Catalog.Format(msgs.locale, "liveApprovalTerminalDone", nil)
+}
+
+// LiveApprovalAge says "已等 {n} 秒"
+// in the language the app shows.
+func LiveApprovalAge(n string) string { return In(i18n.Locale()).LiveApprovalAge(n) }
+
+// LiveApprovalAge says "已等 {n} 秒"
+// in the language of msgs.
+func (msgs Messages) LiveApprovalAge(n string) string {
+	return Catalog.Format(msgs.locale, "liveApprovalAge", map[string]any{"n": n})
+}
+
+// LiveApprovalMore says "{n, plural, other {还有 {n} 个文件}}"
+// in the language the app shows.
+func LiveApprovalMore(n int) string { return In(i18n.Locale()).LiveApprovalMore(n) }
+
+// LiveApprovalMore says "{n, plural, other {还有 {n} 个文件}}"
+// in the language of msgs.
+func (msgs Messages) LiveApprovalMore(n int) string {
+	return Catalog.Format(msgs.locale, "liveApprovalMore", map[string]any{"n": n})
+}
+
+// LiveApprovalReason says "告诉它换个做法（可选）"
+// in the language the app shows.
+func LiveApprovalReason() string { return In(i18n.Locale()).LiveApprovalReason() }
+
+// LiveApprovalReason says "告诉它换个做法（可选）"
+// in the language of msgs.
+func (msgs Messages) LiveApprovalReason() string {
+	return Catalog.Format(msgs.locale, "liveApprovalReason", nil)
+}
+
+// RiskDelete says "会删除文件"
+// in the language the app shows.
+func RiskDelete() string { return In(i18n.Locale()).RiskDelete() }
+
+// RiskDelete says "会删除文件"
+// in the language of msgs.
+func (msgs Messages) RiskDelete() string {
+	return Catalog.Format(msgs.locale, "riskDelete", nil)
+}
+
+// RiskNetwork says "会联网 / 下载"
+// in the language the app shows.
+func RiskNetwork() string { return In(i18n.Locale()).RiskNetwork() }
+
+// RiskNetwork says "会联网 / 下载"
+// in the language of msgs.
+func (msgs Messages) RiskNetwork() string {
+	return Catalog.Format(msgs.locale, "riskNetwork", nil)
+}
+
+// RiskInstall says "会安装软件包"
+// in the language the app shows.
+func RiskInstall() string { return In(i18n.Locale()).RiskInstall() }
+
+// RiskInstall says "会安装软件包"
+// in the language of msgs.
+func (msgs Messages) RiskInstall() string {
+	return Catalog.Format(msgs.locale, "riskInstall", nil)
+}
+
+// RiskAdmin says "需要管理员权限"
+// in the language the app shows.
+func RiskAdmin() string { return In(i18n.Locale()).RiskAdmin() }
+
+// RiskAdmin says "需要管理员权限"
+// in the language of msgs.
+func (msgs Messages) RiskAdmin() string {
+	return Catalog.Format(msgs.locale, "riskAdmin", nil)
+}
+
+// RiskHistory says "强制推送 / 改写历史"
+// in the language the app shows.
+func RiskHistory() string { return In(i18n.Locale()).RiskHistory() }
+
+// RiskHistory says "强制推送 / 改写历史"
+// in the language of msgs.
+func (msgs Messages) RiskHistory() string {
+	return Catalog.Format(msgs.locale, "riskHistory", nil)
+}
+
+// RiskPipeShell says "管道进 shell"
+// in the language the app shows.
+func RiskPipeShell() string { return In(i18n.Locale()).RiskPipeShell() }
+
+// RiskPipeShell says "管道进 shell"
+// in the language of msgs.
+func (msgs Messages) RiskPipeShell() string {
+	return Catalog.Format(msgs.locale, "riskPipeShell", nil)
+}
+
+// RiskPublish says "会发布 / 部署"
+// in the language the app shows.
+func RiskPublish() string { return In(i18n.Locale()).RiskPublish() }
+
+// RiskPublish says "会发布 / 部署"
+// in the language of msgs.
+func (msgs Messages) RiskPublish() string {
+	return Catalog.Format(msgs.locale, "riskPublish", nil)
+}
+
+// AskRunCommand says "想运行一个命令"
+// in the language the app shows.
+func AskRunCommand() string { return In(i18n.Locale()).AskRunCommand() }
+
+// AskRunCommand says "想运行一个命令"
+// in the language of msgs.
+func (msgs Messages) AskRunCommand() string {
+	return Catalog.Format(msgs.locale, "askRunCommand", nil)
+}
+
+// AskEditFiles says "{n, plural, other {想修改 {n} 个文件}}"
+// in the language the app shows.
+func AskEditFiles(n int) string { return In(i18n.Locale()).AskEditFiles(n) }
+
+// AskEditFiles says "{n, plural, other {想修改 {n} 个文件}}"
+// in the language of msgs.
+func (msgs Messages) AskEditFiles(n int) string {
+	return Catalog.Format(msgs.locale, "askEditFiles", map[string]any{"n": n})
+}
+
+// AskEditFile says "想修改文件"
+// in the language the app shows.
+func AskEditFile() string { return In(i18n.Locale()).AskEditFile() }
+
+// AskEditFile says "想修改文件"
+// in the language of msgs.
+func (msgs Messages) AskEditFile() string {
+	return Catalog.Format(msgs.locale, "askEditFile", nil)
+}
+
+// AskRead says "想读取文件"
+// in the language the app shows.
+func AskRead() string { return In(i18n.Locale()).AskRead() }
+
+// AskRead says "想读取文件"
+// in the language of msgs.
+func (msgs Messages) AskRead() string {
+	return Catalog.Format(msgs.locale, "askRead", nil)
+}
+
+// AskFetch says "想访问 {host}"
+// in the language the app shows.
+func AskFetch(host string) string { return In(i18n.Locale()).AskFetch(host) }
+
+// AskFetch says "想访问 {host}"
+// in the language of msgs.
+func (msgs Messages) AskFetch(host string) string {
+	return Catalog.Format(msgs.locale, "askFetch", map[string]any{"host": host})
+}
+
+// AskFetchAny says "想访问一个网址"
+// in the language the app shows.
+func AskFetchAny() string { return In(i18n.Locale()).AskFetchAny() }
+
+// AskFetchAny says "想访问一个网址"
+// in the language of msgs.
+func (msgs Messages) AskFetchAny() string {
+	return Catalog.Format(msgs.locale, "askFetchAny", nil)
+}
+
+// AskSearch says "想搜索网页"
+// in the language the app shows.
+func AskSearch() string { return In(i18n.Locale()).AskSearch() }
+
+// AskSearch says "想搜索网页"
+// in the language of msgs.
+func (msgs Messages) AskSearch() string {
+	return Catalog.Format(msgs.locale, "askSearch", nil)
+}
+
+// AskMCP says "想调用 {server} 的工具"
+// in the language the app shows.
+func AskMCP(server string) string { return In(i18n.Locale()).AskMCP(server) }
+
+// AskMCP says "想调用 {server} 的工具"
+// in the language of msgs.
+func (msgs Messages) AskMCP(server string) string {
+	return Catalog.Format(msgs.locale, "askMCP", map[string]any{"server": server})
+}
+
+// AskSubtask says "想启动一个子任务"
+// in the language the app shows.
+func AskSubtask() string { return In(i18n.Locale()).AskSubtask() }
+
+// AskSubtask says "想启动一个子任务"
+// in the language of msgs.
+func (msgs Messages) AskSubtask() string {
+	return Catalog.Format(msgs.locale, "askSubtask", nil)
+}
+
+// AskPermission says "想申请更多权限"
+// in the language the app shows.
+func AskPermission() string { return In(i18n.Locale()).AskPermission() }
+
+// AskPermission says "想申请更多权限"
+// in the language of msgs.
+func (msgs Messages) AskPermission() string {
+	return Catalog.Format(msgs.locale, "askPermission", nil)
+}
+
+// AskUse says "想使用 {tool}"
+// in the language the app shows.
+func AskUse(tool string) string { return In(i18n.Locale()).AskUse(tool) }
+
+// AskUse says "想使用 {tool}"
+// in the language of msgs.
+func (msgs Messages) AskUse(tool string) string {
+	return Catalog.Format(msgs.locale, "askUse", map[string]any{"tool": tool})
+}
+
+// LiveStatusAgentAsk says "{agent} 请求：{what}"
+// in the language the app shows.
+func LiveStatusAgentAsk(agent string, what string) string {
+	return In(i18n.Locale()).LiveStatusAgentAsk(agent, what)
+}
+
+// LiveStatusAgentAsk says "{agent} 请求：{what}"
+// in the language of msgs.
+func (msgs Messages) LiveStatusAgentAsk(agent string, what string) string {
+	return Catalog.Format(msgs.locale, "liveStatusAgentAsk", map[string]any{"agent": agent, "what": what})
+}
