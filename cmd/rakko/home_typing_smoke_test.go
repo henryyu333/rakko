@@ -128,17 +128,19 @@ func typeIntoHomeEvery(t *testing.T, text string, gap time.Duration) bool {
 	return homeKeys(t, text, gap)
 }
 
-// takeHomeKeyboard makes sure this app is frontmost and the bar's field
+// takeHomeKeyboard makes sure this app is frontmost and the bar's window
 // has the keyboard before a chunk of typing; activation is asynchronous
-// and another app can have taken the front after the index answered.
+// and another app can have taken the front after the index answered. The
+// window must be the key one too: an app can be frontmost while its panel
+// is still becoming key, and a key posted into that gap goes nowhere.
 func takeHomeKeyboard(t *testing.T, a *shelf) bool {
 	t.Helper()
-	front := func() bool {
+	ready := func() bool {
 		var ok bool
-		onMain(func() { ok = mac.FrontmostPID() == mac.OwnPID() })
+		onMain(func() { ok = mac.FrontmostPID() == mac.OwnPID() && a.win.IsFocused() })
 		return ok
 	}
-	if waitFront := waitMain(300*time.Millisecond, front); waitFront {
+	if waitFront := waitMain(300*time.Millisecond, ready); waitFront {
 		return true
 	}
 	for range 3 {
@@ -146,7 +148,7 @@ func takeHomeKeyboard(t *testing.T, a *shelf) bool {
 			mac.ActivateSelf()
 			a.win.Focus()
 		})
-		if waitMain(700*time.Millisecond, front) {
+		if waitMain(700*time.Millisecond, ready) {
 			return true
 		}
 	}
@@ -162,37 +164,80 @@ func homeSettled(a *shelf) bool {
 
 // waitHomeQuery waits until the expected text has an answer on screen: the
 // index finished (or the sheet said 没有找到) and its sheet finished
-// growing.
+// growing. The field belongs to the test only until another app — or a
+// person — types into it: homeWait puts the expected text back rather than
+// reading a changed field as a slow index.
 func waitHomeQuery(t *testing.T, a *shelf, want string) bool {
 	t.Helper()
-	if !waitMain(8*time.Second, func() bool {
-		return a.homeQuery == want && !a.homeSearching()
-	}) {
+	if !homeWait(t, a, want, 8*time.Second, func() bool { return !a.homeSearching() }) {
 		return false
 	}
-	return waitMain(2*time.Second, func() bool {
+	return homeWait(t, a, want, 2*time.Second, func() bool {
 		return !a.fx.openMoving && !a.homeSearching()
 	})
 }
 
+// homeWait polls cond in slices while the field holds want. A keystroke
+// from outside the test changes the text, and the sheet then answers that
+// text; the field is set back and the wait goes on, so a stray key is
+// logged instead of timing out as an unanswered query. cond runs on the
+// main thread.
+func homeWait(t *testing.T, a *shelf, want string, d time.Duration, cond func() bool) bool {
+	t.Helper()
+	deadline := time.Now().Add(d)
+	for {
+		left := time.Until(deadline)
+		if left <= 0 {
+			return false
+		}
+		var got string
+		if waitMain(min(left, 100*time.Millisecond), func() bool {
+			got = a.homeQuery
+			return got == want && cond()
+		}) {
+			return true
+		}
+		if got != want {
+			t.Logf("the field holds %q outside the test, want %q: setting it back", got, want)
+			onMain(func() {
+				a.homeQuery = want
+				a.homeQueryChanged()
+			})
+			deadline = time.Now().Add(d)
+		}
+	}
+}
+
 // typeHomeChunk types text into the field, retaking the keyboard first,
-// and falls back to setting the text directly when no key could be posted
-// (a focus flake must not type into another app). It reports whether the
-// keys really went in.
-func typeHomeChunk(t *testing.T, a *shelf, text string, gap time.Duration, state func()) bool {
+// and falls back to setting the field when no key landed: a focus flake or
+// another app taking the keyboard must neither type into another app nor
+// leave the wait above watching text the test did not set. It reports
+// whether the keys really went in.
+func typeHomeChunk(t *testing.T, a *shelf, text string, gap time.Duration, want string) bool {
 	t.Helper()
 	start := time.Now()
 	typed := takeHomeKeyboard(t, a) && typeIntoHomeEvery(t, text, gap)
 	end := time.Now()
 	t.Logf("chunk %q start_us=%d end_us=%d typed=%v", text, start.UnixMicro(), end.UnixMicro(), typed)
-	if typed {
+	if typed && waitMain(500*time.Millisecond, func() bool { return a.homeQuery == want }) {
 		return true
 	}
-	t.Logf("keys %q did not reach the field: setting the state directly", text)
-	if state != nil {
-		onMain(state)
-	}
+	var got string
+	onMain(func() { got = a.homeQuery })
+	t.Logf("keys %q left the field on %q, want %q: setting it directly", text, got, want)
+	onMain(func() {
+		a.homeQuery = want
+		a.homeQueryChanged()
+	})
 	return false
+}
+
+// homeSpotNow reads the field and the query state for a failure message.
+func homeSpotNow(a *shelf) (string, homeSpotState) {
+	var q string
+	var st homeSpotState
+	onMain(func() { q, st = a.homeQuery, a.homeSpot })
+	return q, st
 }
 
 func TestSmokeHomeTypingMotion(t *testing.T) {
@@ -241,33 +286,38 @@ func TestSmokeHomeTypingMotion(t *testing.T) {
 		// One keystroke has to reach the screen inside 100 ms: the field
 		// changes its text on the key event, and the bar's own width and
 		// the sheet follow without waiting for the debounce.
+		landed := false
 		if takeHomeKeyboard(t, a) {
 			meter.reset()
 			t0 := time.Now()
-			typedFirst := typeIntoHomeEvery(t, "r", 0)
-			if typedFirst {
+			posted := typeIntoHomeEvery(t, "r", 0)
+			landed = posted && waitMain(500*time.Millisecond, func() bool { return a.homeQuery == "r" })
+			t.Logf("chunk %q start_us=%d end_us=%d typed=%v", "r", t0.UnixMicro(), time.Now().UnixMicro(), landed)
+			if landed {
 				typed++
+				if d := meter.firstAfter(t0, 200*time.Millisecond); d < 0 || d > 100*time.Millisecond {
+					t.Errorf("rep %d: the first keystroke repainted after %v, want inside 100ms", rep, d)
+				} else {
+					t.Logf("rep %d: first keystroke repainted after %v", rep, d.Round(time.Millisecond))
+				}
 			}
-			t.Logf("chunk %q start_us=%d end_us=%d typed=%v", "r", t0.UnixMicro(), time.Now().UnixMicro(), typedFirst)
-			if d := meter.firstAfter(t0, 200*time.Millisecond); d < 0 || d > 100*time.Millisecond {
-				t.Errorf("rep %d: the first keystroke repainted after %v, want inside 100ms", rep, d)
-			} else {
-				t.Logf("rep %d: first keystroke repainted after %v", rep, d.Round(time.Millisecond))
-			}
-		} else {
+		}
+		if !landed {
+			t.Logf("the first keystroke did not reach the field: setting %q directly", "r")
 			onMain(setQuery("r"))
 			direct++
 		}
 		// Let the index answer between keys: the sheet appears while the
 		// bar is still being typed into.
 		time.Sleep(400 * time.Millisecond)
-		if !typeHomeChunk(t, a, "akko", 140*time.Millisecond, setQuery("rakko")) {
+		if !typeHomeChunk(t, a, "akko", 140*time.Millisecond, "rakko") {
 			direct++
 		} else {
 			typed++
 		}
 		if !waitHomeQuery(t, a, "rakko") {
-			t.Fatalf("rep %d: the long query never answered: %+v", rep, a.homeSpot)
+			q, st := homeSpotNow(a)
+			t.Fatalf("rep %d: the long query never answered: field=%q spot=%+v", rep, q, st)
 		}
 		// A pause at rest. The old code dropped its envelope here and the
 		// next result change resized the drawn panel; the fix holds one
@@ -278,46 +328,49 @@ func TestSmokeHomeTypingMotion(t *testing.T) {
 		// changes the sheet while the panel is fully open.
 		for _, q := range []string{"rakk", "rak"} {
 			q := q
-			if !typeHomeChunk(t, a, "\b", 0, setQuery(q)) {
+			if !typeHomeChunk(t, a, "\b", 0, q) {
 				direct++
 			} else {
 				typed++
 			}
 			if !waitHomeQuery(t, a, q) {
-				t.Fatalf("rep %d: the query %q never answered", rep, q)
+				got, st := homeSpotNow(a)
+				t.Fatalf("rep %d: the query %q never answered: field=%q spot=%+v", rep, q, got, st)
 			}
 			time.Sleep(700 * time.Millisecond)
 		}
-		if !typeHomeChunk(t, a, "\b\b\b", 130*time.Millisecond, setQuery("")) {
+		if !typeHomeChunk(t, a, "\b\b\b", 130*time.Millisecond, "") {
 			direct++
 		} else {
 			typed++
 		}
 		if !waitMain(3*time.Second, func() bool { return a.homeQuery == "" }) {
-			t.Fatalf("rep %d: the field never cleared: %q", rep, a.homeQuery)
+			got, st := homeSpotNow(a)
+			t.Fatalf("rep %d: the field never cleared: field=%q spot=%+v", rep, got, st)
 		}
 		time.Sleep(500 * time.Millisecond)
 
 		// A second, shorter query with a pause after each key: batches
 		// arrive while the sheet is still open.
-		if !typeHomeChunk(t, a, "t", 0, setQuery("t")) {
+		if !typeHomeChunk(t, a, "t", 0, "t") {
 			direct++
 		} else {
 			typed++
 		}
 		time.Sleep(400 * time.Millisecond)
-		if !typeHomeChunk(t, a, "r", 0, setQuery("tr")) {
+		if !typeHomeChunk(t, a, "r", 0, "tr") {
 			direct++
 		} else {
 			typed++
 		}
 		if !waitHomeQuery(t, a, "tr") {
-			t.Fatalf("rep %d: the short query never answered", rep)
+			got, st := homeSpotNow(a)
+			t.Fatalf("rep %d: the short query never answered: field=%q spot=%+v", rep, got, st)
 		}
 		// The sheet is settled again, exactly the moment the video's
 		// shrunk/grown frames appeared.
 		time.Sleep(800 * time.Millisecond)
-		if !typeHomeChunk(t, a, "\b\b", 130*time.Millisecond, setQuery("")) {
+		if !typeHomeChunk(t, a, "\b\b", 130*time.Millisecond, "") {
 			direct++
 		} else {
 			typed++
