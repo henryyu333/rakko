@@ -177,7 +177,6 @@ type shelf struct {
 	monitorGen        atomic.Uint64
 	monitorRunFn      func() // set at start; breaks the wake→tick init cycle
 	activeTickerStop  func()
-	idleTickerStop    func()
 	wakeMainFn        func(func())
 	pointerNear       bool      // the pointer is on a watched surface
 	lastMoveAt        time.Time // last move event, for the gate poll window

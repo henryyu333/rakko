@@ -17,10 +17,6 @@ import (
 	"rakko/internal/mac"
 )
 
-// idlePollInterval is the resting cadence. Module gates and status clocks
-// live at 0.5 s or slower; a background clipboard poller handles copies.
-const idlePollInterval = 500 * time.Millisecond
-
 // idleDragPoll is the fallback read of the drag pasteboard while the shell
 // is at rest. Every drag moves again after its first event, so a missed
 // first event is recovered by the next one; this only bounds the case where
@@ -262,10 +258,6 @@ func (a *shelf) scheduleMonitor(now time.Time) {
 		return
 	}
 	if a.monitorActive(now) {
-		if a.idleTickerStop != nil {
-			a.idleTickerStop()
-			a.idleTickerStop = nil
-		}
 		if a.activeTickerStop == nil {
 			a.activeTickerStop = mac.StartMainTicker(pointerInterval, func() { a.monitorRun() })
 		}
@@ -275,9 +267,14 @@ func (a *shelf) scheduleMonitor(now time.Time) {
 		a.activeTickerStop()
 		a.activeTickerStop = nil
 	}
-	if a.idleTickerStop == nil {
-		a.idleTickerStop = mac.StartMainTicker(idlePollInterval, func() { a.monitorRun() })
-	}
+	gen := a.monitorGen.Add(1)
+	delay := a.monitorDelay(now)
+	mac.AfterMainOnce(delay, func() {
+		if a.quitting || a.monitorGen.Load() != gen {
+			return
+		}
+		a.monitorRun()
+	})
 }
 
 // postMain delivers fn to the main run loop. Tests replace wakeMainFn to
