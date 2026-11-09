@@ -35,7 +35,9 @@ const ocrProgressDelay = 250 * time.Millisecond
 // capture and the permission request are replaced; the worker goroutine and
 // the main-thread dispatch mirror convertWork/convertDispatch.
 var (
-	ocrPreflight  = mac.ScreenCaptureAllowed
+	// ScreenCapturePreflight, not the request path's check: showing the
+	// permission card must never clear a screen-recording record.
+	ocrPreflight  = mac.ScreenCapturePreflight
 	ocrGrant      = mac.RequestScreenCapture
 	ocrCapture    = captureRegion
 	ocrWork       = func(fn func()) { go fn() }

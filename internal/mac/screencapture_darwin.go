@@ -29,12 +29,12 @@ var (
 	cgRequestScreenCaptureAccess   func() bool
 )
 
-// tccutilResetDone limits the stale-record reset to the first failed
-// preflight per process. It runs there — while the permission sheet is
-// drawn, before the user can grant — because CGPreflightScreenCaptureAccess
-// caches its answer for the process's lifetime: a user who grants in
-// System Settings and then presses 「打开系统设置」 still reads false, so a
-// reset on that click would wipe the grant it was meant to repair.
+// tccutilResetDone limits the stale-record reset to one per process. It
+// runs only on the user-initiated request path, and only while nothing
+// proves the grant is already live: CGPreflightScreenCaptureAccess caches
+// its answer for the process's lifetime, so a user who grants in System
+// Settings still reads false, and an unconditional reset on the request
+// would wipe the grant it was meant to repair.
 // tccutilReset and openURL are seams for the tests, which must never
 // spawn either.
 var (
@@ -64,27 +64,9 @@ func ScreenCapturePreflight() bool {
 	return cgPreflightScreenCaptureAccess()
 }
 
-// ScreenCaptureAllowed is the permission check used by the user-initiated
-// request path. A false answer clears this app's stale record — one that
-// grants nothing to the current build and suppresses the system prompt —
-// at most once per process, and only while nothing proves the grant is
-// already live. WindowServer returning other apps' window titles is that
-// proof: the reset would delete the grant the user just made, so it never
-// runs then; the panel tells the user to reopen ShelfU instead.
-func ScreenCaptureAllowed() bool {
-	if ScreenCapturePreflight() {
-		return true
-	}
-	if windowTitlesProveGrant() {
-		return false
-	}
-	resetStaleScreenCaptureRecord()
-	return false
-}
-
 // resetStaleScreenCaptureRecord clears this app's TCC record once per
 // process. A later call does nothing, so a grant cannot be cleared twice;
-// only the first failed preflight of a process can reach it.
+// only the first user-initiated request of a process can reach it.
 func resetStaleScreenCaptureRecord() {
 	if !tccutilResetDone.CompareAndSwap(false, true) {
 		return
@@ -98,10 +80,10 @@ func resetStaleScreenCaptureRecord() {
 // RequestScreenCapture is the user-initiated path to grant the
 // permission: macOS is asked to prompt or register the app, and System
 // Settings is opened on the 屏幕录制 pane. The stale-record reset lives
-// with the failed preflight (ScreenCaptureAllowed), so this call never
-// wipes a grant the user just made. It reports whether the permission
-// was already active; an already-trusted call leaves the settings page
-// alone.
+// only in this path, never in the read-only preflight: a false answer
+// there would delete a grant the user just made, so the reset waits until
+// the user actually asks. It reports whether the permission was already
+// active; an already-trusted call leaves the settings page alone.
 //
 // A grant proven by window titles is already active even though this
 // process's cached preflight still says no: nothing is asked and nothing

@@ -6,13 +6,12 @@ import (
 	"testing"
 )
 
-// The stale-record reset runs on the first failed preflight, before the
-// user can grant — never on a 「打开系统设置」 click:
-// CGPreflightScreenCaptureAccess caches its false answer until relaunch,
-// so a click after the user granted in Settings still reads false, and a
-// reset there would wipe the grant it was meant to repair. The seams
-// stub every spawned binary and the CG calls.
-func TestScreenCaptureResetRunsOnFailedPreflight(t *testing.T) {
+// The stale-record reset runs on the user-initiated request path, once per
+// process, and never on a read-only preflight: CGPreflightScreenCaptureAccess
+// caches its false answer until relaunch, so a probe after the user granted
+// in Settings still reads false, and a reset there would wipe the grant it
+// was meant to repair. The seams stub every spawned binary and the CG calls.
+func TestRequestScreenCaptureResetsStaleRecordOnce(t *testing.T) {
 	var resets, opens, requests int
 	oldReset, oldOpen, oldID := tccutilReset, openURL, requestBundleID
 	oldPre, oldReq := cgPreflightScreenCaptureAccess, cgRequestScreenCaptureAccess
@@ -33,23 +32,26 @@ func TestScreenCaptureResetRunsOnFailedPreflight(t *testing.T) {
 		tccutilResetDone.Store(oldDone)
 	})
 
-	if ScreenCaptureAllowed() {
-		t.Fatal("untrusted stub reported trusted")
-	}
-	if resets != 1 {
-		t.Fatalf("failed preflight did not reset the stale record: resets=%d", resets)
-	}
-	// Same process, user grants in Settings then clicks 打开系统设置:
-	// preflight still answers false (process cache) — the request asks
-	// and opens the pane but never resets again.
 	if RequestScreenCapture() {
 		t.Fatal("untrusted stub reported trusted")
 	}
 	if resets != 1 {
-		t.Fatalf("the grant button reset the fresh grant: resets=%d", resets)
+		t.Fatalf("the request did not clear the stale record: resets=%d", resets)
 	}
 	if requests != 1 || opens != 1 {
 		t.Fatalf("request skipped request/open: requests=%d opens=%d", requests, opens)
+	}
+	// Same process, a second click: the grant made meanwhile still reads
+	// false from the cached preflight, but the record is never cleared
+	// twice.
+	if RequestScreenCapture() {
+		t.Fatal("untrusted stub reported trusted")
+	}
+	if resets != 1 {
+		t.Fatalf("the second request reset the fresh grant: resets=%d", resets)
+	}
+	if requests != 2 || opens != 2 {
+		t.Fatalf("second request skipped request/open: requests=%d opens=%d", requests, opens)
 	}
 }
 
@@ -82,21 +84,6 @@ func TestScreenCaptureResetSparesLiveGrant(t *testing.T) {
 		tccutilResetDone.Store(oldDone)
 	})
 
-	if ScreenCaptureAllowed() {
-		t.Fatal("a request path must not report the cached-false answer as allowed")
-	}
-	if resets != 0 {
-		t.Fatalf("the live grant was cleared: resets=%d", resets)
-	}
-	// Nothing needed the one-shot reset, so it stays armed: a genuinely
-	// stale record later in this process can still be cleared once.
-	if tccutilResetDone.Load() {
-		t.Fatal("the reset was consumed although the grant was proven live")
-	}
-
-	// The same call from the request path: no reset, no second request —
-	// the grant exists — but the pane still opens so the user sees the
-	// switch is on.
 	if RequestScreenCapture() {
 		t.Fatal("a live-but-cached grant reported the request as already active")
 	}
@@ -108,6 +95,11 @@ func TestScreenCaptureResetSparesLiveGrant(t *testing.T) {
 	}
 	if opens != 1 {
 		t.Fatalf("the request path did not open the 屏幕录制 pane: opens=%d", opens)
+	}
+	// Nothing needed the one-shot reset, so it stays armed: a genuinely
+	// stale record later in this process can still be cleared once.
+	if tccutilResetDone.Load() {
+		t.Fatal("the reset was consumed although the grant was proven live")
 	}
 }
 

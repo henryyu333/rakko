@@ -6,12 +6,15 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/egoist/mygo/ui"
+
+	"rakko/internal/mac"
 )
 
 // ocrSeams swaps every injectable of screenocr.go and puts them back when
@@ -41,6 +44,17 @@ type recordClipFunc func(text string) error
 
 func (f recordClipFunc) writeText(text string) error { return f(text) }
 func (f recordClipFunc) writeImage([]byte) error     { return nil }
+
+// 审查复现：框选文字的预检必须是只读的 mac.ScreenCapturePreflight。旧实现
+// 用的是会清 TCC 记录的 mac.ScreenCaptureAllowed，预检 false 时就把用户刚
+// 授予的屏幕录制权限删掉。清记录只留在用户点「打开系统设置」的申请路径里。
+func TestOCRPreflightIsReadOnly(t *testing.T) {
+	got := reflect.ValueOf(ocrPreflight).Pointer()
+	want := reflect.ValueOf(mac.ScreenCapturePreflight).Pointer()
+	if got != want {
+		t.Fatal("the OCR preflight is not the read-only mac.ScreenCapturePreflight: a failed probe would clear a fresh grant")
+	}
+}
 
 // 无权限 → 说明卡：预检 false 时展开面板、出说明卡，绝不调用截屏或申请。
 func TestScreenOCRWithoutPermissionShowsSheet(t *testing.T) {
