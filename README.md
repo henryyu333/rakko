@@ -19,8 +19,8 @@
 </p>
 
 <p align="center">
-  Apple Silicon · macOS 13+ · Free and open source · <a href="#install">Install guide</a> · <a href="https://github.com/henryyu333/rakko/releases/latest">All downloads</a><br>
-  Apple Silicon 芯片 · macOS 13 或以上 · 免费开源 · <a href="#安装">安装说明</a> · <a href="https://github.com/henryyu333/rakko/releases/latest">全部下载</a>
+  Apple Silicon · macOS 13+ · Free and open source · <a href="https://rakko-yu.pages.dev">Website</a> · <a href="#install">Install guide</a> · <a href="https://github.com/henryyu333/rakko/releases/latest">All downloads</a><br>
+  Apple Silicon 芯片 · macOS 13 或以上 · 免费开源 · <a href="https://rakko-yu.pages.dev">官网</a> · <a href="#安装">安装说明</a> · <a href="https://github.com/henryyu333/rakko/releases/latest">全部下载</a>
 </p>
 
 <p align="center">
