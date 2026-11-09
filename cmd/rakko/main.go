@@ -161,6 +161,9 @@ func main() {
 		if a.stopDragObservation != nil {
 			a.stopDragObservation()
 		}
+		if a.stopAppearanceObs != nil {
+			a.stopAppearanceObs()
+		}
 		if a.clip != nil {
 			a.clip.stop()
 		}
@@ -255,6 +258,10 @@ func (a *shelf) ready(show bool) {
 		a.mouseDown(inside, button, mygo.Screen.CursorScreenPoint())
 	})
 	a.stopDragObservation = mac.ObserveLeftMouseDragged(a.pointerDragged)
+	a.stopAppearanceObs = mac.ObserveAccessibilityChange(func() {
+		a.appearanceAt = time.Time{}
+		a.wakeMonitor()
+	})
 	a.win.OnClose(func(e *mygo.CloseEvent) {
 		if !a.quitting {
 			e.PreventDefault()

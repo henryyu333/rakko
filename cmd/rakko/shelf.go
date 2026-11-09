@@ -138,6 +138,7 @@ type shelf struct {
 	onbKeysHeld                                                 map[string]bool // the guide's held Left/Right/Enter
 	selection                                                   selection
 	stopMouseObservation, stopDragObservation                   func()
+	stopAppearanceObs                                           func()
 	leftSince                                                   time.Time
 	hidePending                                                 bool // a press outside waited for the drop catch to finish
 	topInset                                                    int

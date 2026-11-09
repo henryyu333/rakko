@@ -220,7 +220,6 @@ func TestMonitorDeadlines(t *testing.T) {
 			a.pins = []*pinItem{{edge: pinLeft, expanded: true, leftAt: now.Add(-500 * time.Millisecond)}}
 		}, pinHideDelay - 500*time.Millisecond},
 		{"pet-happy", func(a *shelf) { a.pet = &petWindow{}; a.happyUntil = now.Add(4 * time.Second) }, 4 * time.Second},
-		{"appearance", func(a *shelf) { a.appearanceAt = now.Add(-10 * time.Millisecond) }, appearancePoll - 10*time.Millisecond},
 		{"update", func(a *shelf) { a.updateNext = now.Add(10 * time.Second) }, 10 * time.Second},
 	}
 	for _, c := range cases {

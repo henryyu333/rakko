@@ -194,9 +194,6 @@ func (a *shelf) monitorDeadline(now time.Time) time.Time {
 			add(sleepy)
 		}
 	}
-	if !a.appearanceAt.IsZero() {
-		add(a.appearanceAt.Add(appearancePoll))
-	}
 	if !a.updateNext.IsZero() {
 		add(a.updateNext)
 	}
