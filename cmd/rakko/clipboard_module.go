@@ -191,7 +191,7 @@ func (m *clipboardModule) startBackground() {
 		return
 	}
 	m.background = true
-	board, stop := m.board, m.host.stop
+	stop := m.host.stop
 	go func() {
 		t := time.NewTicker(clipPollInterval)
 		defer t.Stop()
@@ -200,7 +200,7 @@ func (m *clipboardModule) startBackground() {
 			case <-stop:
 				return
 			case now := <-t.C:
-				count := board.changeCount()
+				count := m.backgroundCount()
 				m.bgMu.Lock()
 				changed := count != m.bgCount
 				if changed {
@@ -213,6 +213,15 @@ func (m *clipboardModule) startBackground() {
 			}
 		}
 	}()
+}
+
+// backgroundCount is the worker-thread counter read. The system pasteboard
+// scalar needs no autorelease pool; the stress run in phase3 covers it.
+func (m *clipboardModule) backgroundCount() int64 {
+	if _, ok := m.board.(systemClipReader); ok {
+		return mac.ClipboardChangeCountFast()
+	}
+	return m.board.changeCount()
 }
 
 // takeBackground hands the latest background observation to the main

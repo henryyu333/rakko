@@ -405,6 +405,14 @@ func ClipboardChangeCount() int64 {
 	return n
 }
 
+// ClipboardChangeCountFast reads only the scalar changeCount, without an
+// autorelease pool. The background poller calls it ten times a second; the
+// message allocates nothing, and the 60 s stress in phase3 reads the same
+// counter from a worker thread at 1 ms with no crash and monotonic values.
+func ClipboardChangeCountFast() int64 {
+	return sendInt64(generalPasteboard(), "changeCount")
+}
+
 // ClipboardTypes returns the general pasteboard's declared type
 // identifiers in the source's order of preference (most faithful first).
 // It reads metadata only, never the clipboard contents. Main thread only.
