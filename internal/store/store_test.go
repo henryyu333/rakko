@@ -3416,6 +3416,34 @@ func TestConvertedStaleAbsolutePathFindsSameName(t *testing.T) {
 	}
 }
 
+// 审查复现：state.json 不存在时无从判断引用关系，Open 不清理 converted——
+// 否则 state 丢失（或刚装好）的目录里，唯一的转换产物会被当孤儿删掉。
+func TestOpenWithoutStateKeepsConverted(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, convertedDirName)
+	if err := os.MkdirAll(filepath.Join(dir, "folder"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	keep := filepath.Join(dir, "output.pdf")
+	if err := os.WriteFile(keep, []byte("o"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, stateFileName)); !os.IsNotExist(err) {
+		t.Fatalf("the fixture must not carry state.json: %v", err)
+	}
+	s, err := Open(root)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer s.Close()
+	if _, err := os.Stat(keep); err != nil {
+		t.Fatalf("a converted output was cleaned without state: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "folder")); err != nil {
+		t.Fatalf("a converted folder was cleaned without state: %v", err)
+	}
+}
+
 // Open 清理 converted 目录里无人引用的文件与文件夹（转换中断的残留），
 // 被引用的文件、文件夹及目录之外的一切都原样保留。
 func TestOpenCleansOrphanedConverted(t *testing.T) {

@@ -225,8 +225,9 @@ func Open(root string) (*Store, error) {
 	data, err := os.ReadFile(s.statePath())
 	if err != nil {
 		if os.IsNotExist(err) {
+			// 没有 state.json 就无从判断哪个产物还被引用：不清理，
+			// 免得把唯一的转换输出当孤儿删掉。全新目录本来就是空的。
 			ok = true
-			s.cleanOrphanedConverted()
 			return s, nil
 		}
 		return nil, fmt.Errorf("store: reading %s: %w", stateFileName, err)
