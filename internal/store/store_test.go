@@ -3375,6 +3375,47 @@ func TestRemoveFileItemInsideConvertedKeepsFile(t *testing.T) {
 	}
 }
 
+// 审查复现：state.json 里的转换项仍指向旧的绝对路径、该路径已不存在，
+// 但当前 converted 目录里有同名产物时，必须解析到它——既不标 Missing，
+// 也不在 Open 的孤儿清理里把它当孤儿删掉。
+func TestConvertedStaleAbsolutePathFindsSameName(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, imagesDirName), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, convertedDirName), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// 旧数据目录下的路径，那条数据目录已经搬走。
+	stale := filepath.Join(t.TempDir(), "moved-away", "report.pdf")
+	real := filepath.Join(realRoot(t, root), convertedDirName, filepath.Base(stale))
+	if err := os.WriteFile(real, []byte("out"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sf := stateFile{Version: stateVersion, Items: []Item{{
+		ID: "cv", Kind: KindFile, Path: stale, Converted: true,
+	}}}
+	data, _ := json.Marshal(sf)
+	if err := os.WriteFile(filepath.Join(root, stateFileName), data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := Open(root)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer s.Close()
+	if len(s.Items) != 1 || s.Items[0].Missing {
+		t.Fatalf("the same-name output was not adopted: %+v", s.Items)
+	}
+	if want := filepath.Join(s.ConvertedDir(), filepath.Base(stale)); s.Items[0].Path != want {
+		t.Fatalf("resolved path = %q, want %q", s.Items[0].Path, want)
+	}
+	if _, err := os.Stat(real); err != nil {
+		t.Fatalf("the adopted output was cleaned as an orphan: %v", err)
+	}
+}
+
 // Open 清理 converted 目录里无人引用的文件与文件夹（转换中断的残留），
 // 被引用的文件、文件夹及目录之外的一切都原样保留。
 func TestOpenCleansOrphanedConverted(t *testing.T) {

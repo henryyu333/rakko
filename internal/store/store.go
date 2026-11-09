@@ -340,8 +340,22 @@ func (s *Store) resolveConvertedPath(stored string) string {
 	}
 	if filepath.IsAbs(stored) {
 		clean := filepath.Clean(stored)
-		if resolved, err := filepath.EvalSymlinks(clean); err == nil && s.convertedPath(resolved) {
-			return filepath.Join(s.convertedDir(), filepath.Base(resolved))
+		resolved, err := filepath.EvalSymlinks(clean)
+		if err == nil {
+			if s.convertedPath(resolved) {
+				return filepath.Join(s.convertedDir(), filepath.Base(resolved))
+			}
+			return clean
+		}
+		// 旧绝对路径已经失效（数据目录搬家、旧版本的迁移前缀不一致）
+		// 时，当前 converted 目录里的同名直接子项就是这条记录的产物：
+		// 转换产物和受管图片一样，稳定身份是文件名。否则这条记录会被
+		// 标成 Missing，同名文件还会在 Open 的孤儿清理里被删掉。
+		if s.convertedDirReal() {
+			candidate := filepath.Join(s.convertedDir(), filepath.Base(clean))
+			if _, lerr := os.Lstat(candidate); lerr == nil {
+				return candidate
+			}
 		}
 		return clean
 	}
