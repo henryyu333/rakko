@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.14.0
+
+- **更省电**：Rakko 闲着时几乎不再占用 CPU。本机实测：空闲时 CPU 从约 3.3% 降到 0.6%，每秒唤醒次数从约 76 次降到 3–4 次，能耗约为原来的七分之一；播放音乐时 CPU 也从约 5.7% 降到 3.2%。
+- 刘海展开更快一些。
+- 剪贴板改在后台检测，不再占用界面线程；复制后约 0.1 秒内记下。
+
+### English
+
+- **Lighter on battery**: Rakko now barely touches the CPU while idle. Measured on a test Mac: idle CPU dropped from about 3.3% to 0.6%, wakeups from about 76 to 3–4 per second, and energy impact to about one seventh; with music playing, CPU dropped from about 5.7% to 3.2%.
+- The notch opens a little faster.
+- The clipboard is checked in the background instead of on the interface thread; a copy is recorded within about 0.1 seconds.
+
 ## 1.13.8
 
 - **Agent 审批**：Claude Code、Codex、Qwen Code、Devin、opencode 要权限时，刘海里直接弹出审批卡：一句人话说明要做什么，有风险时标出来，展开能看完整命令；可以允许、拒绝（附一句原因）或交回终端。Copilot CLI、Droid、Antigravity、pi 只在高风险操作时弹卡。45 秒没处理就交回终端，从不替你自动允许。在 设置 → AI →「Agent 审批」开启，默认关闭。
