@@ -247,6 +247,3 @@ func StartMainTicker(interval time.Duration, fn func()) (stop func()) {
 		})
 	}
 }
-
-// MainLoopAvailable reports whether the run-loop bindings loaded.
-func MainLoopAvailable() bool { return loadMainLoop() == nil }
