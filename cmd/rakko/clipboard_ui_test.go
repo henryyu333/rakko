@@ -736,6 +736,32 @@ func TestClipboardNewerChangeSupersedesPending(t *testing.T) {
 	}
 }
 
+// 审查复现：后台轮询已记下更旧的 changeCount（bgPending）而主线程还没取走时，
+// ShelfU 自己写剪贴板并 skipCurrent；下一次 tick 不能拿那个旧计数把 m.count
+// 退回，再把自己刚写的内容收进历史。
+func TestClipboardSkipCurrentDropsStaleBackgroundCount(t *testing.T) {
+	a, m, board := clipModuleShelf(t)
+	now := time.Unix(1_700_000_000, 0)
+	m.background = true
+	// The poller saw a change just before ShelfU's own write.
+	board.serial++
+	m.bgMu.Lock()
+	m.bgCount, m.bgAt, m.bgPending = board.serial, now, true
+	m.bgMu.Unlock()
+
+	// ShelfU writes the pasteboard itself, then marks it handled.
+	board.serial++
+	board.formats, board.value = []string{"public.utf8-plain-text"}, "written by ShelfU"
+	m.skipCurrent()
+	m.tick(now.Add(30 * time.Millisecond))
+	if len(a.store.Items) != 0 {
+		t.Fatalf("ShelfU's own write was recorded: %+v", a.store.Items)
+	}
+	if m.bgPending {
+		t.Fatal("skipCurrent left the poller's stale observation pending")
+	}
+}
+
 // skipCurrent 连等待中的变化一起清掉：ShelfU 自己写剪贴板后不再回头收它。
 func TestClipboardSkipCurrentClearsPending(t *testing.T) {
 	a, m, board := clipModuleShelf(t)

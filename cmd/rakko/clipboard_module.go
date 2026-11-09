@@ -351,11 +351,20 @@ func (a *shelf) warmClipApp(bundle string) {
 
 // skipCurrent marks the clipboard's current contents as handled; used after
 // ShelfU itself writes to the clipboard so the copy is not recorded again.
-// A change still pending from before the write is dropped with it.
+// A change still pending from before the write is dropped with it, and so is
+// the poller's older observation: otherwise the next tick would take that
+// count, roll m.count back and record the copy ShelfU just wrote.
 // Safe on a nil module in shelves that have not started monitoring yet.
 func (m *clipboardModule) skipCurrent() {
-	if m != nil {
-		m.count = m.board.changeCount()
-		m.pending = nil
+	if m == nil {
+		return
+	}
+	count := m.board.changeCount()
+	m.count = count
+	m.pending = nil
+	if m.background {
+		m.bgMu.Lock()
+		m.bgCount, m.bgPending = count, false
+		m.bgMu.Unlock()
 	}
 }
