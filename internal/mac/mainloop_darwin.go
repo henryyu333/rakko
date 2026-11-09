@@ -88,9 +88,12 @@ var (
 	wakeQueue   mainWakeQueue
 
 	tickerMu      sync.Mutex
-	tickerCbs     = map[uintptr]uintptr{}
+	tickerFns     = map[uintptr]func(){}
+	tickerCb      uintptr
 	deadlineMu    sync.Mutex
 	deadlineTimer uintptr
+	deadlineCb    uintptr
+	deadlineJob   func()
 )
 
 func loadMainLoop() error {
@@ -130,6 +133,28 @@ func loadMainLoop() error {
 			}
 		})
 		mainRunLoop = mlGetMain()
+
+		tickerCb = purego.NewCallback(func(t uintptr, _ uintptr) {
+			tickerMu.Lock()
+			fn := tickerFns[t]
+			tickerMu.Unlock()
+			if fn != nil {
+				fn()
+			}
+		})
+		deadlineCb = purego.NewCallback(func(t uintptr, _ uintptr) {
+			releaseCF(t)
+			deadlineMu.Lock()
+			if deadlineTimer == t {
+				deadlineTimer = 0
+			}
+			fn := deadlineJob
+			deadlineJob = nil
+			deadlineMu.Unlock()
+			if fn != nil {
+				fn()
+			}
+		})
 
 		sourceCb := purego.NewCallback(func(uintptr) {
 			for {
@@ -171,25 +196,16 @@ func AfterMainOnce(d time.Duration, fn func()) {
 		return
 	}
 	var tc cfRunLoopTimerContext
-	var timer, cb uintptr
-	cb = purego.NewCallback(func(t uintptr, _ uintptr) {
-		releaseCF(t)
-		deadlineMu.Lock()
-		if deadlineTimer == t {
-			deadlineTimer = 0
-		}
-		deadlineMu.Unlock()
-		fn()
-	})
 	deadlineMu.Lock()
 	old := deadlineTimer
 	deadlineTimer = 0
+	deadlineJob = fn
 	deadlineMu.Unlock()
 	if old != 0 {
 		mlTimerInvalidate(old)
 		releaseCF(old)
 	}
-	timer = mlTimerCreate(0, mlTime()+d.Seconds(), 0, 0, 0, cb, &tc)
+	timer := mlTimerCreate(0, mlTime()+d.Seconds(), 0, 0, 0, deadlineCb, &tc)
 	if timer == 0 {
 		return
 	}
@@ -210,14 +226,12 @@ func StartMainTicker(interval time.Duration, fn func()) (stop func()) {
 		return func() {}
 	}
 	var tc cfRunLoopTimerContext
-	var timer, cb uintptr
-	cb = purego.NewCallback(func(uintptr, uintptr) { fn() })
-	timer = mlTimerCreate(0, mlTime()+interval.Seconds(), interval.Seconds(), 0, 0, cb, &tc)
+	timer := mlTimerCreate(0, mlTime()+interval.Seconds(), interval.Seconds(), 0, 0, tickerCb, &tc)
 	if timer == 0 {
 		return func() {}
 	}
 	tickerMu.Lock()
-	tickerCbs[timer] = cb
+	tickerFns[timer] = fn
 	tickerMu.Unlock()
 	for _, mode := range modes {
 		mlAddTimer(mainRunLoop, timer, mode)
@@ -228,7 +242,7 @@ func StartMainTicker(interval time.Duration, fn func()) (stop func()) {
 			mlTimerInvalidate(timer)
 			releaseCF(timer)
 			tickerMu.Lock()
-			delete(tickerCbs, timer)
+			delete(tickerFns, timer)
 			tickerMu.Unlock()
 		})
 	}
