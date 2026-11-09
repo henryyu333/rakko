@@ -801,6 +801,31 @@ func TestEmptyDirAndPermSetup(t *testing.T) {
 	}
 }
 
+// 审查复现：.lock 是软链接时，打开数据目录既不跟随链接、也不截断它的
+// 目标；正常的不存在 / 普通文件两种情况不受影响（上面的锁测试覆盖）。
+func TestLockFileSymlinkNotFollowed(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(t.TempDir(), "victim.txt")
+	content := "precious\n"
+	if err := os.WriteFile(target, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, lockFileName)
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	if s, err := Open(root); err == nil {
+		s.Close()
+		t.Fatal("Open followed a symlinked .lock")
+	}
+	if got, err := os.ReadFile(target); err != nil || string(got) != content {
+		t.Fatalf("the symlink target was rewritten: %q, %v", got, err)
+	}
+	if fi, err := os.Lstat(link); err != nil || fi.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("the .lock symlink was disturbed: %v", err)
+	}
+}
+
 // 同一数据目录只能被一个打开着的 Store 使用；
 // 第二个实例必须明确失败而不是共享写入；不同目录互不影响；Close 或
 // 进程退出后可以重新打开（flock 由内核在 fd 关闭时释放，无永久残留）。

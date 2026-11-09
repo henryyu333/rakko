@@ -466,9 +466,21 @@ func writeFileNew(path string, data []byte) error {
 // contract: one live handle per directory.
 func lockRoot(root string) (*os.File, error) {
 	lockPath := filepath.Join(root, lockFileName)
-	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600)
+	// O_NOFOLLOW: a .lock that is a symlink is refused outright, so the
+	// open can never reach — and the truncate below never rewrite — the
+	// file it points at.
+	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR|syscall.O_NOFOLLOW, 0o600)
 	if err != nil {
+		if errors.Is(err, syscall.ELOOP) {
+			return nil, fmt.Errorf("store: lock file %s is a symlink; refusing to follow it", lockPath)
+		}
 		return nil, fmt.Errorf("store: opening lock file: %w", err)
+	}
+	// Anything but a regular file (a device, a FIFO) has no meaningful
+	// truncate and is not ours to lock.
+	if fi, serr := f.Stat(); serr != nil || !fi.Mode().IsRegular() {
+		f.Close()
+		return nil, fmt.Errorf("store: lock file %s is not a regular file", lockPath)
 	}
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		f.Close()
