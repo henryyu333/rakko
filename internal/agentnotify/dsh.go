@@ -122,11 +122,20 @@ func addDSHPatch(raw []byte, entry, module string) (out []byte, changed, noFinal
 		return raw, false, false, false, nil
 	}
 	if off := emptyFlowOffset(raw); off >= 0 {
+		// The block ends with a newline, so it replaces the token's whole
+		// line: removing it puts "[]\n" back, or "[]" when the token ended
+		// the file without one.
+		tail := raw[off+2:]
+		if nl := bytes.IndexByte(tail, '\n'); nl >= 0 {
+			tail = tail[nl+1:]
+		} else {
+			tail, noFinalNewline = nil, true
+		}
 		res := make([]byte, 0, len(raw)+len(dshPatchBlock(entry, module)))
 		res = append(res, raw[:off]...)
 		res = append(res, dshPatchBlock(entry, module)...)
-		res = append(res, raw[off+2:]...)
-		return res, true, false, true, nil
+		res = append(res, tail...)
+		return res, true, noFinalNewline, true, nil
 	}
 	if line := firstYAMLLine(raw); line != "" &&
 		!strings.HasPrefix(line, "- ") && line != "-" {
@@ -172,16 +181,31 @@ func removeDSHPatch(raw []byte, entry string, rec originRecord) (out []byte, cha
 			pos = nextLine(raw, pos)
 		}
 	}
-	res := make([]byte, 0, len(raw)-(end-start)+2)
-	res = append(res, raw[:start]...)
-	if rec.FlowEmpty {
-		res = append(res, "[]"...)
+	rest := make([]byte, 0, len(raw)-(end-start))
+	rest = append(rest, raw[:start]...)
+	rest = append(rest, raw[end:]...)
+	res := make([]byte, 0, len(rest)+2)
+	res = append(res, rest[:start]...)
+	if rec.FlowEmpty && !dshHasPatchBlock(rest) {
+		// The empty flow sequence comes back only once Rakko's last block is
+		// gone. With the other surface still installed the layer must stay a
+		// list, and a second "[]" beside it would not be YAML. The block took
+		// the token's line ending with it, so the newline comes back too; a
+		// token that ended the file has none, which NoFinalNewline strips.
+		res = append(res, "[]\n"...)
 	}
-	res = append(res, raw[end:]...)
+	res = append(res, rest[start:]...)
 	if rec.NoFinalNewline && end == len(raw) && len(res) > 0 && res[len(res)-1] == '\n' {
 		res = res[:len(res)-1]
 	}
 	return res, true, nil
+}
+
+// dshHasPatchBlock reports whether raw still holds one of Rakko's patch
+// entries.
+func dshHasPatchBlock(raw []byte) bool {
+	return bytes.Contains(raw, []byte(dshPatchMarker(dshEntryCompletion))) ||
+		bytes.Contains(raw, []byte(dshPatchMarker(dshEntryApproval)))
 }
 
 // lineText returns the line at start without its newline.
@@ -323,8 +347,7 @@ func disconnectDSHPatch(s spec, home, dataDir, entry, path string, approve bool)
 			out = nil
 		}
 		plan := filePlan{data: out, mode: mode.Perm(), changed: true}
-		if !bytes.Contains(out, []byte(dshPatchMarker(dshEntryCompletion))) &&
-			!bytes.Contains(out, []byte(dshPatchMarker(dshEntryApproval))) {
+		if !dshHasPatchBlock(out) {
 			// Both surfaces are gone: the file is the user's again, and the
 			// record of its original shape has nothing left to restore.
 			plan.after = func() { forgetOrigin(dataDir, patch) }

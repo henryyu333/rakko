@@ -142,6 +142,69 @@ func TestDshCreatesAndRemovesItsLayer(t *testing.T) {
 	}
 }
 
+// TestDshTwoSurfacesOnEmptyFlow: a layer that held only "[]" takes one block
+// per surface. Switching off one keeps the layer a list — the "[]" must not
+// come back beside the other block — and switching off the second restores
+// the original bytes, whichever order the two switches go off in.
+func TestDshTwoSurfacesOnEmptyFlow(t *testing.T) {
+	home, dataDir := testHome(t), testDataDir(t)
+	patch, _, _ := dshTestPaths(t, home)
+	for _, original := range []string{"[]\n", "# keep me\n[]\n"} {
+		for _, first := range []string{"completion", "approval"} {
+			writeFile(t, patch, original)
+			if err := Connect(home, dataDir, exePath, ToolDsh); err != nil {
+				t.Fatalf("%q/%s first: connect: %v", original, first, err)
+			}
+			if err := ConnectApprove(home, dataDir, exePath, ToolDsh); err != nil {
+				t.Fatalf("%q/%s first: connect approve: %v", original, first, err)
+			}
+			// Both blocks are in the file and the token is gone.
+			if body := readFile(t, patch); strings.Contains(body, "[]") {
+				t.Fatalf("%q: the empty sequence survived both connects:\n%s", original, body)
+			}
+			if first == "completion" {
+				if err := Disconnect(home, dataDir, ToolDsh); err != nil {
+					t.Fatalf("%q: disconnect completion: %v", original, err)
+				}
+			} else {
+				if err := DisconnectApprove(home, dataDir, ToolDsh); err != nil {
+					t.Fatalf("%q: disconnect approval: %v", original, err)
+				}
+			}
+			// The other surface is still installed: the layer holds its block
+			// and nothing that would make it invalid YAML.
+			body := readFile(t, patch)
+			if strings.Contains(body, "[]") {
+				t.Fatalf("%q/%s first: \"[]\" came back beside the other block:\n%s", original, first, body)
+			}
+			want := dshPatchMarker(dshEntryApproval)
+			if first == "approval" {
+				want = dshPatchMarker(dshEntryCompletion)
+			}
+			if !strings.Contains(body, want) {
+				t.Fatalf("%q/%s first: the other block is gone:\n%s", original, first, body)
+			}
+			if got, _ := Status(home, ToolDsh); first == "approval" && got != StateInjected {
+				t.Fatalf("%q/%s first: status = %v, want injected", original, first, got)
+			}
+			// The second switch takes the last block away; the layer is the
+			// user's again, byte for byte.
+			if first == "completion" {
+				if err := DisconnectApprove(home, dataDir, ToolDsh); err != nil {
+					t.Fatalf("%q: disconnect approval: %v", original, err)
+				}
+			} else {
+				if err := Disconnect(home, dataDir, ToolDsh); err != nil {
+					t.Fatalf("%q: disconnect completion: %v", original, err)
+				}
+			}
+			if after := readFile(t, patch); after != original {
+				t.Fatalf("%q/%s first: layer became %q", original, first, after)
+			}
+		}
+	}
+}
+
 // TestDshRefusesAnUnknownDocument: a layer that is not a top-level list is
 // not guessed at, and no module is left behind.
 func TestDshRefusesAnUnknownDocument(t *testing.T) {
