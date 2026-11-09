@@ -381,7 +381,7 @@ func ApproveOutput(tool Tool, decision, message string) string {
 			Decision string `json:"decision"`
 			Reason   string `json:"reason"`
 		}{"deny", msg})
-	case ToolOpencode, ToolPi:
+	case ToolOpencode, ToolPi, ToolHermes:
 		if allow {
 			return marshal(struct {
 				Decision string `json:"decision"`

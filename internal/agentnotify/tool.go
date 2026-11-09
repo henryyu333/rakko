@@ -36,6 +36,7 @@ const (
 	ToolFactory     Tool = "droid"
 	ToolKiro        Tool = "kiro"
 	ToolAugment     Tool = "auggie"
+	ToolHermes      Tool = "hermes"
 )
 
 // Kind says how a tool takes Rakko's entry.
@@ -52,6 +53,10 @@ const (
 	// KindNamed is a shared JSON document keyed by hook name, where Rakko
 	// owns one member (Antigravity's hooks.json).
 	KindNamed
+	// KindHermes is Hermes's Python plugin directory plus the few lines in
+	// its YAML config that enable the plugin and select its approval
+	// transport. Both are Rakko's, and both go away with the switch.
+	KindHermes
 )
 
 // spec is one tool's installation surface.
@@ -396,6 +401,22 @@ var specs = []spec{
 		events:  []string{"PromptSubmit", "Stop"},
 		timeout: 5000,
 	},
+	{
+		// Hermes Agent: a Python plugin of Rakko's own in ~/.hermes/plugins,
+		// enabled from the profile's config.yaml. Its approval transport is
+		// selected in the same file, so a tool-triggered prompt becomes a
+		// Rakko card only when Hermes itself was going to ask.
+		tool: ToolHermes,
+		name: "Hermes",
+		kind: KindHermes,
+		detect: func(home string) []string {
+			return []string{hermesConfigPath(home), join(hermesHome(home), "hermes-agent")}
+		},
+		config: func(home string) string { return hermesConfigPath(home) },
+		approve: &approveSpec{
+			event: "pre_approval_request", timeout: approveTimeout,
+		},
+	},
 }
 
 // specFor returns the tool's surface.
@@ -506,7 +527,7 @@ func DisplayPath(home string, tool Tool) string {
 func DoneEvent(event string) bool {
 	switch event {
 	case "Stop", "StopFailure", "AfterAgent", "session.idle", "agent_end", "agent_settled", "session_stop",
-		"stop", "agentStop":
+		"stop", "agentStop", "post_llm_call":
 		return true
 	}
 	return false

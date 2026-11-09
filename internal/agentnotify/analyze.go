@@ -256,7 +256,7 @@ func Analyze(tool Tool, toolName string, input json.RawMessage) (Analysis, bool)
 // tool's own flow.
 func NeedsHuman(tool Tool, a Analysis) bool {
 	switch tool {
-	case ToolClaude, ToolCodex, ToolQwen, ToolDevin, ToolOpencode:
+	case ToolClaude, ToolCodex, ToolQwen, ToolDevin, ToolOpencode, ToolHermes:
 		return true
 	case ToolCopilot, ToolFactory, ToolAntigravity, ToolPi:
 		if len(a.Risks) > 0 || a.ToolName == "ask_permission" {
@@ -272,7 +272,7 @@ func NeedsHuman(tool Tool, a Analysis) bool {
 // prompted. The card is the whole point; there is no risk filter.
 func toolClassA(tool Tool) bool {
 	switch tool {
-	case ToolClaude, ToolCodex, ToolQwen, ToolDevin, ToolOpencode:
+	case ToolClaude, ToolCodex, ToolQwen, ToolDevin, ToolOpencode, ToolHermes:
 		return true
 	}
 	return false

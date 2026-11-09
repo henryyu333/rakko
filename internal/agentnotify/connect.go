@@ -118,6 +118,8 @@ func Status(home string, tool Tool) (State, string) {
 		return StateError, err.Error()
 	}
 	switch s.kind {
+	case KindHermes:
+		return statusHermes(home)
 	case KindModule:
 		if !existed {
 			return StateNotInjected, ""
@@ -161,6 +163,8 @@ func Connect(home, dataDir, exe string, tool Tool) error {
 		return fmt.Errorf("agentnotify: %s has no hook channel", tool)
 	}
 	switch s.kind {
+	case KindHermes:
+		return connectHermes(s, home, dataDir, exe)
 	case KindModule:
 		return writeModule(s, home, dataDir, exe)
 	case KindNamed:
@@ -178,6 +182,8 @@ func Disconnect(home, dataDir string, tool Tool) error {
 		return fmt.Errorf("agentnotify: %s has no hook channel", tool)
 	}
 	switch s.kind {
+	case KindHermes:
+		return disconnectHermes(s, home, dataDir)
 	case KindModule:
 		return removeModule(s, home, dataDir)
 	case KindNamed:

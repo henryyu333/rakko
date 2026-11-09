@@ -29,6 +29,9 @@ var (
 	geminiColor = ui.Hex("#3186FF") // Gemini spark blue
 	qwenColor   = ui.Hex("#615CED") // Qwen's brand violet
 	kiroColor   = ui.Hex("#9046FF") // kiro.dev icon's tile
+	// Hermes: a winged H, drawn for the 16 pt row mark. The anime favicon
+	// reads as a blob at this size.
+	hermesLogo = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="white" d="M5.2 4h2.5v6.1h8.6V4h2.5v16h-2.5v-7.6H7.7V20H5.2z"/><path fill="white" d="M4.9 5 1.3 2.9l.5 3.3 3.1 1.2zM19.1 5l3.6-2.1-.5 3.3-3.1 1.2z"/></svg>`))
 )
 
 // agentLogo is a tool's mark, its colour, and the icon box that shows the
@@ -67,6 +70,8 @@ func agentLogo(t agentnotify.Tool) (*ui.SVG, ui.Color, float32) {
 		return factoryLogo, ink, settingsRowMark * 508 / 338
 	case agentnotify.ToolAugment:
 		return augmentLogo, ink, settingsRowMark
+	case agentnotify.ToolHermes:
+		return hermesLogo, ink, settingsRowMark
 	}
 	return nil, ink, settingsRowMark
 }

@@ -48,8 +48,8 @@ func TestApproveTimeouts(t *testing.T) {
 			t.Errorf("%s: no approval event", tool)
 		}
 	}
-	if n != 9 {
-		t.Fatalf("%d approvable tools, want 9 (claude, codex, copilot, devin, antigravity, opencode, pi, qwen, droid)", n)
+	if n != 10 {
+		t.Fatalf("%d approvable tools, want 10 (claude, codex, copilot, devin, antigravity, opencode, pi, qwen, droid, hermes)", n)
 	}
 }
 

@@ -21,6 +21,8 @@ func ConnectApprove(home, dataDir, exe string, tool Tool) error {
 	}
 	ap := s.approve
 	switch s.kind {
+	case KindHermes:
+		return connectHermesApprove(s, home, dataDir, exe)
 	case KindNamed:
 		if ap.member == "" {
 			return fmt.Errorf("agentnotify: %s has no approval member", tool)
@@ -43,6 +45,8 @@ func DisconnectApprove(home, dataDir string, tool Tool) error {
 	}
 	ap := s.approve
 	switch s.kind {
+	case KindHermes:
+		return disconnectHermesApprove(s, home, dataDir)
 	case KindNamed:
 		return disconnectNamedMember(s, home, dataDir, ap.member)
 	case KindModule:
@@ -68,6 +72,8 @@ func StatusApprove(home string, tool Tool) (State, string) {
 	}
 	ap := s.approve
 	switch s.kind {
+	case KindHermes:
+		return statusHermesApprove(home)
 	case KindModule:
 		path := ApproveConfigPath(home, tool)
 		raw, existed, _, err := readConfig(path)

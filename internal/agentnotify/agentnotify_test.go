@@ -11,6 +11,10 @@ import (
 
 func testHome(t *testing.T) string {
 	t.Helper()
+	// Hermes and Codex can move their whole surface under an environment
+	// override; a developer's setting must not make a test inspect (or
+	// write) their real profile.
+	t.Setenv("HERMES_HOME", "")
 	return t.TempDir()
 }
 
