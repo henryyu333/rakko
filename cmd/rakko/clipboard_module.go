@@ -191,6 +191,7 @@ func (m *clipboardModule) startBackground() {
 		return
 	}
 	m.background = true
+	mac.PrimeClipboardChangeCount()
 	stop := m.host.stop
 	go func() {
 		t := time.NewTicker(clipPollInterval)

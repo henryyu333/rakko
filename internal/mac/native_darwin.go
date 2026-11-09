@@ -405,12 +405,36 @@ func ClipboardChangeCount() int64 {
 	return n
 }
 
-// ClipboardChangeCountFast reads only the scalar changeCount, without an
-// autorelease pool. The background poller calls it ten times a second; the
-// message allocates nothing, and the 60 s stress in phase3 reads the same
-// counter from a worker thread at 1 ms with no crash and monotonic values.
+// Cached general pasteboard for worker-thread polling. +generalPasteboard
+// returns an autoreleased object, so resolve and retain it once inside a
+// pool; the background poller then sends only changeCount to this object.
+// Releasing a pool on every poll would defeat the point, and sending
+// +generalPasteboard off the main thread without one leaks the autoreleased
+// object (OBJC_DEBUG_MISSING_POOLS reports it).
+var (
+	fastPasteboardOnce sync.Once
+	fastPasteboard     id
+)
+
+func cachedGeneralPasteboard() id {
+	fastPasteboardOnce.Do(func() {
+		withPool(func() {
+			fastPasteboard = send(generalPasteboard(), "retain")
+		})
+	})
+	return fastPasteboard
+}
+
+// PrimeClipboardChangeCount resolves and retains the general pasteboard on
+// the main thread before the background poller starts.
+func PrimeClipboardChangeCount() { cachedGeneralPasteboard() }
+
+// ClipboardChangeCountFast reads only the scalar changeCount from a cached,
+// retained pasteboard. Safe on a worker thread: the message returns an
+// integer and allocates no autoreleased object. The phase3 stress and the
+// OBJC_DEBUG_MISSING_POOLS subprocess test cover it.
 func ClipboardChangeCountFast() int64 {
-	return sendInt64(generalPasteboard(), "changeCount")
+	return sendInt64(cachedGeneralPasteboard(), "changeCount")
 }
 
 // ClipboardTypes returns the general pasteboard's declared type
