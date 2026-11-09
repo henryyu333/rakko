@@ -949,21 +949,21 @@ func (msgs Messages) PermScreenShort() string {
 	return Catalog.Format(msgs.locale, "permScreenShort", nil)
 }
 
-// PermScreenGloss says "框选文字"
+// PermScreenGloss says "框选文字、截图"
 // in the language the app shows.
 func PermScreenGloss() string { return In(i18n.Locale()).PermScreenGloss() }
 
-// PermScreenGloss says "框选文字"
+// PermScreenGloss says "框选文字、截图"
 // in the language of msgs.
 func (msgs Messages) PermScreenGloss() string {
 	return Catalog.Format(msgs.locale, "permScreenGloss", nil)
 }
 
-// PermScreenDetail says "只在你框选时截取所选区域，在本机识别"
+// PermScreenDetail says "只在你框选文字或截图时截取所选区域，在本机处理"
 // in the language the app shows.
 func PermScreenDetail() string { return In(i18n.Locale()).PermScreenDetail() }
 
-// PermScreenDetail says "只在你框选时截取所选区域，在本机识别"
+// PermScreenDetail says "只在你框选文字或截图时截取所选区域，在本机处理"
 // in the language of msgs.
 func (msgs Messages) PermScreenDetail() string {
 	return Catalog.Format(msgs.locale, "permScreenDetail", nil)
