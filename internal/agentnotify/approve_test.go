@@ -48,8 +48,8 @@ func TestApproveTimeouts(t *testing.T) {
 			t.Errorf("%s: no approval event", tool)
 		}
 	}
-	if n != 10 {
-		t.Fatalf("%d approvable tools, want 10 (claude, codex, copilot, devin, antigravity, opencode, pi, qwen, droid, hermes)", n)
+	if n != 11 {
+		t.Fatalf("%d approvable tools, want 11 (claude, codex, copilot, devin, antigravity, opencode, pi, qwen, droid, hermes, dsh)", n)
 	}
 }
 
@@ -260,6 +260,8 @@ func TestApproveOutputs(t *testing.T) {
 		{ToolAntigravity, antigravityAllow, antigravityDeny, `{"decision":"allow"}`},
 		{ToolOpencode, `{"decision":"allow"}`, `{"decision":"deny","message":"` + reason + `"}`, ""},
 		{ToolPi, `{"decision":"allow"}`, `{"decision":"deny","message":"` + reason + `"}`, ""},
+		{ToolHermes, `{"decision":"allow"}`, `{"decision":"deny","message":"` + reason + `"}`, ""},
+		{ToolDsh, `{"decision":"allow"}`, `{"decision":"deny","message":"` + reason + `"}`, ""},
 	}
 	for _, tc := range cases {
 		if got := ApproveOutput(tc.tool, DecisionAllow, ""); got != tc.allow {

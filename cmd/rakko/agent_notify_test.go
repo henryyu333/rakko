@@ -32,6 +32,8 @@ func agentShelf(t *testing.T) (*shelf, string, string) {
 	// setting must not make a test inspect (or write) their configuration.
 	t.Setenv("CODEX_HOME", "")
 	t.Setenv("HERMES_HOME", "")
+	// dsh does the same with $DSH_HOME.
+	t.Setenv("DSH_HOME", "")
 	origHome, origExe, origMain := agentNotifyHome, agentNotifyExe, agentRunOnMain
 	agentNotifyHome = func() (string, error) { return home, nil }
 	agentNotifyExe = func() (string, error) {

@@ -139,6 +139,53 @@ export default function (pi) {
 }
 `
 
+// dshModule is DeepSeek Harness's completion plugin. dsh publishes each
+// committed session event; a completed turn is a finished task, and a
+// subagent's session is skipped so a delegated turn does not announce.
+const dshModule = `// ` + moduleMarker + `: written by Rakko. Removed when its switch is off.
+import { existsSync } from "node:fs";
+import { spawn } from "node:child_process";
+
+const EXE = __RAKKO_EXE__;
+const DATA = __RAKKO_DATA__;
+const TOOL = __RAKKO_TOOL__;
+` + sendHelper + `
+function textOf(message) {
+  if (!message || !Array.isArray(message.content)) return "";
+  for (const block of message.content) {
+    if (block && block.type === "text" && typeof block.text === "string") return block.text;
+  }
+  return "";
+}
+
+export default function (ctx) {
+  const tasks = new Map();
+  try {
+    ctx.on("session/event", (session, event) => {
+      try {
+        if (!session || !event) return;
+        const header = session.header || {};
+        if (header.origin === "subagent" || (header.delegationDepth || 0) > 0) return;
+        if (event.type === "user/message") {
+          // dsh also appends workspace instructions, runtime context and the
+          // skill catalog as user-role messages. Only a real user message
+          // (source.kind "user") names the task.
+          const data = event.data || {};
+          if (data.source && typeof data.source.kind === "string" && data.source.kind !== "user") return;
+          tasks.set(session.id, textOf(data));
+          return;
+        }
+        if (event.type !== "turn/end") return;
+        const reason = event.data && event.data.reason;
+        if (!reason || reason.kind !== "completed") return;
+        rakkoSend("session_stop", String(session.id), header.cwd || "", tasks.get(session.id) || "");
+        tasks.delete(session.id);
+      } catch (_) {}
+    });
+  } catch (_) {}
+}
+`
+
 // copilotHooks is GitHub Copilot CLI's hook file. Its payloads name no
 // event, so each command says which one it is.
 const copilotHooks = `{

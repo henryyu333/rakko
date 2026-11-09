@@ -381,7 +381,7 @@ func ApproveOutput(tool Tool, decision, message string) string {
 			Decision string `json:"decision"`
 			Reason   string `json:"reason"`
 		}{"deny", msg})
-	case ToolOpencode, ToolPi, ToolHermes:
+	case ToolOpencode, ToolPi, ToolHermes, ToolDsh:
 		if allow {
 			return marshal(struct {
 				Decision string `json:"decision"`
@@ -544,6 +544,83 @@ export default function (pi) {
       }
       return;
     });
+  } catch (_) {}
+}
+`
+
+// dshApproveModule answers DeepSeek Harness's approval/request waterfall.
+// dsh asks only when it was going to prompt (a sandbox escalation or an
+// ask decision from its own policy), and the module claims the request
+// only with a real answer from Rakko: "allow" grants this one call,
+// "deny" rejects it, and anything else — no app, no answer in 45 s, an
+// error — calls next(), handing the request back to dsh's own channel.
+// The request carries no tool arguments, so the module remembers each
+// tool/call event and hands Rakko the same tool name and input shape the
+// shell hooks use.
+const dshApproveModule = `// ` + approveModuleMarker + `: written by Rakko. Removed when its switch is off.
+import { existsSync } from "node:fs";
+import { execFile } from "node:child_process";
+
+const EXE = __RAKKO_EXE__;
+const DATA = __RAKKO_DATA__;
+const TOOL = __RAKKO_TOOL__;
+const CALL_TTL = 10 * 60 * 1000;
+
+function askRakko(payload, signal) {
+  return new Promise((resolve) => {
+    if (!existsSync(EXE)) return resolve(null);
+    const args = ["--agent-approve", "--tool", TOOL];
+    if (DATA) args.push("--data-dir", DATA);
+    const options = { timeout: 57000, maxBuffer: 1 << 20 };
+    if (signal) options.signal = signal;
+    const child = execFile(EXE, args, options, (err, out) => {
+      if (err || !out) return resolve(null);
+      try { resolve(JSON.parse(out)); } catch { resolve(null); }
+    });
+    child.stdin.on("error", () => {});
+    child.stdin.end(JSON.stringify(payload));
+  });
+}
+
+export default function (ctx) {
+  const calls = new Map();
+  try {
+    ctx.on("session/event", (session, event) => {
+      try {
+        const data = event && event.data;
+        if (!event || event.type !== "tool/call" || !data || !data.callId) return;
+        const id = String(data.callId);
+        calls.set(id, data);
+        const timer = setTimeout(() => calls.delete(id), CALL_TTL);
+        if (timer.unref) timer.unref();
+      } catch (_) {}
+    }, true);
+    ctx.on("approval/request", (request, next) => {
+      try {
+        if (!request || !request.agent) return next();
+        const call = request.callId === void 0 ? void 0 : calls.get(String(request.callId));
+        let input = {};
+        if (call && typeof call.arguments === "string") {
+          try { input = JSON.parse(call.arguments); } catch (_) {}
+        }
+        const session = request.agent.session || {};
+        const header = session.header || {};
+        return askRakko({
+          hook_event_name: "approval/request",
+          tool_name: request.toolName || (call && call.name) || "",
+          tool_input: input,
+          cwd: header.cwd || "",
+          session_id: String(session.id || ""),
+        }, request.signal).then((d) => {
+          if (!d) return next();
+          if (d.decision === "allow") return "allowed-once";
+          if (d.decision === "deny") return "rejected";
+          return next();
+        }, () => next());
+      } catch (_) {
+        return next();
+      }
+    }, true);
   } catch (_) {}
 }
 `

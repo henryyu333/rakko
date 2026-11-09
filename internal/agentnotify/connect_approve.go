@@ -31,6 +31,9 @@ func ConnectApprove(home, dataDir, exe string, tool Tool) error {
 			func(string) string { return ApproveCommand(exe, tool, dataDir) })
 	case KindModule:
 		return writeApproveModule(s, home, dataDir, exe)
+	case KindPatch:
+		return connectDSHPatch(s, home, dataDir, exe, dshEntryApproval,
+			ApproveConfigPath(home, tool), ap.module, true)
 	default:
 		return connectApproveHooks(s, home, dataDir, exe)
 	}
@@ -51,6 +54,9 @@ func DisconnectApprove(home, dataDir string, tool Tool) error {
 		return disconnectNamedMember(s, home, dataDir, ap.member)
 	case KindModule:
 		return removeApproveModule(s, home, dataDir)
+	case KindPatch:
+		return disconnectDSHPatch(s, home, dataDir, dshEntryApproval,
+			ApproveConfigPath(home, tool), true)
 	default:
 		var first error
 		for _, path := range s.candidates(home) {
@@ -87,6 +93,8 @@ func StatusApprove(home string, tool Tool) (State, string) {
 			return StateInjected, ""
 		}
 		return StateError, path + " was not written by Rakko"
+	case KindPatch:
+		return statusDSHPatch(s, home, dshEntryApproval, ApproveConfigPath(home, tool))
 	case KindNamed:
 		path := s.config(home)
 		raw, existed, _, err := readConfig(path)

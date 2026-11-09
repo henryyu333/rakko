@@ -37,6 +37,7 @@ const (
 	ToolKiro        Tool = "kiro"
 	ToolAugment     Tool = "auggie"
 	ToolHermes      Tool = "hermes"
+	ToolDsh         Tool = "dsh"
 )
 
 // Kind says how a tool takes Rakko's entry.
@@ -57,6 +58,10 @@ const (
 	// its YAML config that enable the plugin and select its approval
 	// transport. Both are Rakko's, and both go away with the switch.
 	KindHermes
+	// KindPatch is a module of Rakko's own registered by one insertion entry
+	// in the tool's home-level YAML patch layer, which every profile of the
+	// tool composes over its own (dsh's $DSH_HOME/cordis.patch.yml).
+	KindPatch
 )
 
 // spec is one tool's installation surface.
@@ -94,6 +99,9 @@ type spec struct {
 	// also lists other files an earlier switch-on may have written to;
 	// switching off cleans them too.
 	also func(home string) []string
+	// patch is the home-level YAML patch layer of a KindPatch tool. One
+	// insertion entry per module is appended there.
+	patch func(home string) string
 	// approve describes the tool's "approve for the user" channel. nil
 	// means the tool only announces completions.
 	approve *approveSpec
@@ -415,6 +423,32 @@ var specs = []spec{
 		config: func(home string) string { return hermesConfigPath(home) },
 		approve: &approveSpec{
 			event: "pre_approval_request", timeout: approveTimeout,
+		},
+	},
+	{
+		// DeepSeek Harness (dsh) composes every profile with the home-level
+		// patch layer, so one Rakko-owned module per surface there covers
+		// web, desktop and headless sessions without touching the user's
+		// profile files. The approval module answers dsh's own
+		// approval/request waterfall, which fires only when dsh was going to
+		// ask. Written against @deepseek-ai/dsh 0.2.2-rc.1.
+		tool: ToolDsh,
+		name: "DeepSeek Harness",
+		kind: KindPatch,
+		detect: func(home string) []string {
+			return paths(dshHome(home), "profiles", "sessions", ".credentials.yaml")
+		},
+		config: func(home string) string {
+			return dshModulePath(home, dshEntryCompletion)
+		},
+		module: dshModule,
+		patch:  dshPatchPath,
+		approve: &approveSpec{
+			event: "approval/request", timeout: approveTimeout,
+			config: func(home string) string {
+				return dshModulePath(home, dshEntryApproval)
+			},
+			module: dshApproveModule,
 		},
 	},
 }

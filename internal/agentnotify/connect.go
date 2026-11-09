@@ -140,6 +140,8 @@ func Status(home string, tool Tool) (State, string) {
 			return StateInjected, ""
 		}
 		return StateNotInjected, ""
+	case KindPatch:
+		return statusDSHPatch(s, home, dshEntryCompletion, s.config(home))
 	default:
 		if !existed {
 			return StateNotInjected, ""
@@ -169,6 +171,8 @@ func Connect(home, dataDir, exe string, tool Tool) error {
 		return writeModule(s, home, dataDir, exe)
 	case KindNamed:
 		return connectNamed(s, home, dataDir, exe)
+	case KindPatch:
+		return connectDSHPatch(s, home, dataDir, exe, dshEntryCompletion, s.config(home), s.module, false)
 	default:
 		return connectHooks(s, home, dataDir, exe)
 	}
@@ -188,6 +192,8 @@ func Disconnect(home, dataDir string, tool Tool) error {
 		return removeModule(s, home, dataDir)
 	case KindNamed:
 		return disconnectNamed(s, home, dataDir)
+	case KindPatch:
+		return disconnectDSHPatch(s, home, dataDir, dshEntryCompletion, s.config(home), false)
 	default:
 		return disconnectHooks(s, home, dataDir)
 	}
@@ -905,6 +911,11 @@ type originRecord struct {
 	Created  bool `json:"created,omitempty"`
 	Blank    bool `json:"blank,omitempty"`
 	BackedUp bool `json:"backedUp,omitempty"`
+	// NoFinalNewline and FlowEmpty describe dsh's patch layer, where Rakko
+	// appends a block: the file had no trailing newline, or held only the
+	// empty flow sequence "[]". Removing the block puts both back.
+	NoFinalNewline bool `json:"noFinalNewline,omitempty"`
+	FlowEmpty      bool `json:"flowEmpty,omitempty"`
 }
 
 type connectState struct {

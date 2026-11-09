@@ -27,6 +27,7 @@ func agentInstall(t *testing.T, home string, tools ...agentnotify.Tool) {
 		agentnotify.ToolClaude: ".claude/projects",
 		agentnotify.ToolCodex:  ".codex/sessions",
 		agentnotify.ToolGemini: ".gemini/tmp",
+		agentnotify.ToolDsh:    ".dsh/profiles",
 	}
 	for _, tool := range tools {
 		if err := os.MkdirAll(filepath.Join(home, dirs[tool]), 0o700); err != nil {
@@ -225,4 +226,81 @@ func TestAgentSettingsScreenshot(t *testing.T) {
 		t.Fatalf("%s encode: %v", out, err)
 	}
 	t.Logf("wrote %s", out)
+}
+
+// TestDshSettingsScreenshot renders both DeepSeek Harness rows: the
+// completion row and the approval row, each with its switch. Gated by
+// RAKKO_DSH_SHOT=1; the PNG lands in /tmp/Rakko-dsh/.
+func TestDshSettingsScreenshot(t *testing.T) {
+	if os.Getenv("RAKKO_DSH_SHOT") != "1" {
+		t.Skip("set RAKKO_DSH_SHOT=1 to write the DeepSeek Harness render")
+	}
+	a, home, _ := agentShelf(t)
+	agentInstall(t, home, agentnotify.ToolDsh)
+	a.setAgentNotify(true)
+	a.setApproval(true)
+	view := ui.NewTester(a.settingsView, settingsWidth, settingsHeight)
+	view.Frame()
+	openSettingsPage(t, view, "AI")
+	for range 60 {
+		r, ok := view.Find("DeepSeek Harness")
+		if ok && r.W > 0 && r.H > 0 && r.Y > 40 && r.Y+r.H+140 <= settingsHeight {
+			break
+		}
+		view.Scroll(settingsWidth/2, settingsHeight/2, 0, 60)
+		view.Frame()
+	}
+	view.SetScale(2)
+	view.Frame()
+	view.Frame()
+
+	const out = "/tmp/Rakko-dsh/dsh-settings.png"
+	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	file, err := os.Create(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	if err := png.Encode(file, view.Image()); err != nil {
+		t.Fatalf("%s encode: %v", out, err)
+	}
+	t.Logf("wrote %s", out)
+}
+
+// TestDshSwitchWritesAndRemovesItsLayer: the group switch installs both
+// dsh surfaces and the modules, and switching off leaves no Rakko file in
+// dsh's home.
+func TestDshSwitchWritesAndRemovesItsLayer(t *testing.T) {
+	a, home, _ := agentShelf(t)
+	agentInstall(t, home, agentnotify.ToolDsh)
+	a.setAgentNotify(true)
+	a.setApproval(true)
+	patch := filepath.Join(home, ".dsh", "cordis.patch.yml")
+	completion := filepath.Join(home, ".dsh", "rakko", "rakko-agent-completion.mjs")
+	approval := filepath.Join(home, ".dsh", "rakko", "rakko-agent-approval.mjs")
+	if !containsMarker(readOrEmpty(t, completion)) {
+		t.Fatal("the completion module was not written")
+	}
+	if !strings.Contains(readOrEmpty(t, approval), "--agent-approve") {
+		t.Fatal("the approval module was not written")
+	}
+	if !strings.Contains(readOrEmpty(t, patch), "rakko-agent-completion") {
+		t.Fatalf("the layer has no completion entry:\n%s", readOrEmpty(t, patch))
+	}
+	if st, _, _ := a.agentFeature().settingRow(agentnotify.ToolDsh); st != agentnotify.StateInjected {
+		t.Fatalf("completion row = %v, want 已注入", st)
+	}
+	if st, _ := a.approvalFeature().settingRow(agentnotify.ToolDsh); st != agentnotify.StateInjected {
+		t.Fatalf("approval row = %v, want 已注入", st)
+	}
+
+	a.setApproval(false)
+	a.setAgentNotify(false)
+	for _, path := range []string{patch, completion, approval} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("%s survived the switch: %v", path, err)
+		}
+	}
 }
