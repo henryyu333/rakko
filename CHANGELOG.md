@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.14.1
+
+- **Agent 完成提醒和审批支持 Hermes Agent 与 DeepSeek Harness**：在 设置 → AI 里分别打开。审批只在它们本来就要问你时弹卡；45 秒没处理或 Rakko 没在运行，就交回它们自己的审批流程，从不替你自动允许。关掉开关时，Rakko 写进它们配置里的内容会全部移除。
+- 首次启动引导和「系统权限」里，「屏幕录制」的说明补上了截图。
+
+### English
+
+- **Agent completion notices and approvals now support Hermes Agent and DeepSeek Harness**: turn each on in Settings → AI. A card appears only when the tool was going to ask you anyway; after 45 seconds, or when Rakko is not running, the request goes back to the tool's own approval flow, and nothing is ever allowed for you. Turning a switch off removes everything Rakko wrote into the tool's configuration.
+- The Screen Recording permission text in the first-launch guide and System Permissions now mentions screenshots.
+
 ## 1.14.0
 
 - **更省电**：Rakko 闲着时几乎不再占用 CPU。本机实测：空闲时 CPU 从约 3.3% 降到 0.6%，每秒唤醒次数从约 76 次降到 3–4 次，能耗约为原来的七分之一；播放音乐时 CPU 也从约 5.7% 降到 3.2%。
