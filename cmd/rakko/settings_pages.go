@@ -758,9 +758,9 @@ func (a *shelf) updateCaption(l locales.Messages) string {
 	switch {
 	case a.updateChecking:
 		return l.UpdateChecking()
-	case a.updateInstalling:
+	case a.updateInstalling && a.update != nil:
 		return l.UpdateDownloading(a.update.Version)
-	case a.updateInstalled:
+	case a.updateInstalled && a.update != nil:
 		return l.UpdateInstalled(a.update.Version)
 	case a.updateLastCheck.IsZero():
 		return l.SettingsUpdateNever()

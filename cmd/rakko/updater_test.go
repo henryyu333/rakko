@@ -249,6 +249,69 @@ func TestCheckedUpdateKeepsInFlightInstall(t *testing.T) {
 	}
 }
 
+// An up-to-date check while an install runs or a version waits for the
+// restart keeps the update: the menu and the settings row report the
+// version those paths are working with.
+func TestCheckedUpdateNilKeepsInstallState(t *testing.T) {
+	stubUpdater(t)
+	a := updateShelf()
+	up := &mygo.Update{Version: "1.2.3"}
+	a.update, a.updateInstalling = up, true
+	a.checkedUpdate(false, nil, nil)
+	if a.update != up || !a.updateInstalling {
+		t.Fatal("an up-to-date check dropped the update being installed")
+	}
+	if item := a.updateMenu(); !strings.Contains(item.Label, "1.2.3") {
+		t.Fatalf("menu label = %q, want the version being installed", item.Label)
+	}
+	if got := a.updateCaption(locales.In("zh-Hans")); !strings.Contains(got, "1.2.3") {
+		t.Fatalf("caption = %q, want the version being installed", got)
+	}
+
+	a.updateInstalling, a.updateInstalled = false, true
+	a.checkedUpdate(false, nil, nil)
+	if a.update != up || !a.updateInstalled {
+		t.Fatal("an up-to-date check dropped the staged update")
+	}
+	if got := a.updateCaption(locales.In("zh-Hans")); !strings.Contains(got, "1.2.3") {
+		t.Fatalf("caption = %q, want the staged version", got)
+	}
+}
+
+// The readers never dereference a missing offer: with only the install
+// flags set they fall back to a state without a version instead of
+// crashing.
+func TestUpdateReadersWithoutOffer(t *testing.T) {
+	a := updateShelf()
+	a.updateInstalling = true
+	if item := a.updateMenu(); item.Label == "" {
+		t.Fatal("the menu lost its label while installing without an offer")
+	}
+	if got := a.updateCaption(locales.In("zh-Hans")); got == "" {
+		t.Fatal("the caption is empty while installing without an offer")
+	}
+	a.updateInstalling, a.updateInstalled = false, true
+	if item := a.updateMenu(); item.Label == "" {
+		t.Fatal("the menu lost its label with a staged version but no offer")
+	}
+	if got := a.updateCaption(locales.In("zh-Hans")); got == "" {
+		t.Fatal("the caption is empty with a staged version but no offer")
+	}
+}
+
+// A found face whose offer vanished (a background check found nothing new
+// while the window was open) draws an empty body rather than dereferencing
+// the missing update.
+func TestFoundFaceWithoutOffer(t *testing.T) {
+	a := updateShelf()
+	a.updateWinStage = updateStageFound
+	v := ui.NewTester(a.updateView, updateFoundW, updateFoundH)
+	v.Frame()
+	if texts := v.Texts(); len(texts) != 0 {
+		t.Fatalf("the face drew %v without an offer", texts)
+	}
+}
+
 func TestCheckedUpdateNilAndError(t *testing.T) {
 	stubUpdater(t)
 	a := updateShelf()

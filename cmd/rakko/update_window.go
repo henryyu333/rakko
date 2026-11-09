@@ -192,6 +192,12 @@ func updateIcon(c *ui.Context, size float32) {
 // updateFoundBody is the tall face: headline, one version sentence, the
 // notes card, the auto-install checkbox and the three actions.
 func (a *shelf) updateFoundBody(c *ui.Context, l locales.Messages, p updatePalette) {
+	if a.update == nil {
+		// The offer the face announced is gone (a background check found
+		// nothing new while the window was open): there is no version or
+		// notes left to draw.
+		return
+	}
 	ui.Column(c.Key("found")).Fill().Padding(18, 22, 20, 22).Children(func() {
 		ui.Row(c.Key("head")).Gap(16).Children(func() {
 			updateIcon(c, 56)

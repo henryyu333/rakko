@@ -191,7 +191,12 @@ func (a *shelf) checkedUpdate(user bool, up *mygo.Update, err error) {
 		return
 	}
 	if up == nil {
-		a.update = nil
+		// A check that finds nothing new must not drop the version an
+		// install in flight or a staged one is working with: both read
+		// a.update for the version they report.
+		if !a.updateInstalling && !a.updateInstalled {
+			a.update = nil
+		}
 		if user {
 			a.updateSetStage(updateStageLatest)
 			a.openUpdateWindow()
@@ -434,7 +439,7 @@ func (a *shelf) updateMenu() *mygo.MenuItem {
 		return &mygo.MenuItem{Label: l.UpdateRestartToFinish(), Click: func(*mygo.MenuItem, *mygo.Window) {
 			relaunchApp()
 		}}
-	case a.updateInstalling:
+	case a.updateInstalling && a.update != nil:
 		label := l.UpdateInstalling(a.update.Version)
 		if a.updateProgress > 0 {
 			label = l.UpdateInstallingPercent(a.update.Version, int(a.updateProgress*100))
