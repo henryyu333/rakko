@@ -472,12 +472,27 @@ func (a *shelf) frameCoverAppsPop(r mygo.Rectangle, ph float32) mygo.Rectangle {
 // the overlay asks for.
 var setNativeWindowFrame = mac.SetWindowFrame
 
-// syncWindowFrame applies the target frame, but never over a canvas that
-// has drawn content: mygo presents a resized surface's previous canvas
-// stretched into the new frame for one display frame, so a shell drawn at
-// the old size would flash enlarged (issue #5). One transparent frame goes
-// up first; the resize waits until it has been built, and the view that
-// follows it draws in the new canvas.
+// resizeStretches reports whether applying r would present the canvas that
+// is on the window enlarged. That is the only resize mygo's one-frame old
+// canvas can make visible: a shrink scales it down under the resting
+// capsule's own picture, which covers it.
+func (a *shelf) resizeStretches(r mygo.Rectangle) bool {
+	return r.Width > a.frame.Width || r.Height > a.frame.Height
+}
+
+// syncWindowFrame applies the target frame. Only one canvas must not be
+// resized over: the island style's resting capsule, when the resize grows
+// the window. mygo presents a resized surface's previous canvas stretched
+// into the new frame, so the enlarged capsule would flash as one oversized
+// black block (issue #5). While that capsule is what the window shows and
+// the new frame is larger, one transparent frame goes up first and the
+// native resize waits until it has been built; the capsule's picture
+// window keeps the resting capsule on screen meanwhile. Every other
+// resize lands directly, as it did before issue #5: a transparent frame
+// before all of them blanked the drawn shell (notification card, wings,
+// peek, open panel) for one display frame and moved every resize a frame
+// late. A shrink scales the old canvas down invisibly, including the fold
+// back onto the capsule.
 func (a *shelf) syncWindowFrame() {
 	if a.win == nil || a.settingFrame {
 		return
@@ -510,11 +525,11 @@ func (a *shelf) syncWindowFrame() {
 		a.win.Invalidate()
 		return
 	}
-	if !a.blankReady {
-		// Ask for one transparent frame. Its defer queues this call again
-		// through Update, after the frame's pass has committed, so the
-		// native resize lands on a blank canvas rather than on the idle
-		// capsule or the last drawn shell.
+	if a.island && a.idleIslandDrawn && !a.blankReady && a.resizeStretches(r) {
+		// Ask for one transparent frame over the resting capsule. Its defer
+		// queues this call again through Update, after the frame's pass has
+		// committed, so the native resize lands on a blank canvas rather
+		// than on the capsule picture.
 		if !a.blankQueued {
 			a.blankQueued = true
 			a.blankFrame = true
@@ -1345,14 +1360,20 @@ func (a *shelf) show(edge bool) {
 	// Raise the surface to the envelope the whole panel fits in now, so no
 	// spring resizes it. The idle canvas is not blank in island style — it
 	// holds the capsule and its app entry — so an opening that changes the
-	// native frame draws one transparent frame first: mygo presents a
-	// resized surface's previous canvas stretched into the new frame, and
-	// the capsule would flash as one oversized black block (issue #5).
+	// native frame while that capsule is on screen draws one transparent
+	// frame first: mygo presents a resized surface's previous canvas
+	// stretched into the new frame, and the capsule would flash as one
+	// oversized black block (issue #5). The resting capsule's picture keeps
+	// the capsule visible over that frame. Any other canvas (the notch's
+	// empty strip, a peek pill, an open panel) resizes directly.
 	a.beginSurfaceHold()
-	if a.win != nil && a.winH != 0 && !a.blankReady && a.targetFrame() != a.frame {
-		a.blankQueued, a.blankFrame = true, true
+	idleCapsule := a.island && a.idleIslandDrawn
+	if idleCapsule && a.win != nil && a.winH != 0 && !a.blankReady {
+		if target := a.targetFrame(); target != a.frame && a.resizeStretches(target) {
+			a.blankQueued, a.blankFrame = true, true
+		}
 	}
-	if a.island {
+	if idleCapsule {
 		// Keep the resting capsule picture over the blank frame that
 		// precedes the panel's new size; the first shell frame hides it.
 		a.showMainIdleCapsule()

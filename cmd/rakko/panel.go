@@ -371,11 +371,19 @@ func (a *shelf) view(c *ui.Context) {
 		// blank frame first.
 		a.blankReady = false
 	}
+	// idleDrawn records whether this frame left the island's resting
+	// capsule as the window's canvas: the one picture mygo would stretch
+	// into a new native frame (issue #5). Blank frames keep the previous
+	// answer — they covered that same canvas.
+	idleDrawn := false
 	defer func() {
 		a.buildingView = false
 		if frameTrace != nil && a.win != nil {
 			w, h := c.Size()
 			frameTrace(w, h, a.win.Bounds(), blank)
+		}
+		if !blank {
+			a.idleIslandDrawn = idleDrawn
 		}
 		if blank && a.win != nil {
 			// The blank frame has been built; let the pass commit, then
@@ -612,6 +620,9 @@ func (a *shelf) view(c *ui.Context) {
 			}
 			e := a.appsEntryButton(c, "apps-island-entry", appEntryW)
 			e.Absolute().Right((frameW-baseW)/2 + 4).Top(float32(a.islandTop + (islandIdleH-appEntryW)/2))
+			// This canvas is the resting capsule; a resize now would flash
+			// its old canvas stretched (issue #5, see syncWindowFrame).
+			idleDrawn = true
 		} else {
 			a.syncMousePassThrough()
 			if accepts {
