@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.14.3
+
+- 修复 1.14.2 引入的刘海动画卡顿：通知卡、实时活动、悬停探出、展开面板等状态切换时，内容不再整帧消失一下，动画恢复流畅。
+
+### English
+
+- Fixes notch animations that stuttered in 1.14.2: switching between notification cards, live activities, the hover peek and the open panel no longer blanks the content for a frame, and the motion is smooth again.
+
 ## 1.14.2
 
 - 刘海样式选「灵动岛」时，展开面板不再闪一帧放大的黑色方块（#5）。
