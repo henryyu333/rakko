@@ -2,6 +2,7 @@
 
 ## 1.14.2
 
+- 刘海样式选「灵动岛」时，展开面板不再闪一帧放大的黑色方块（#5）。
 - 关掉 DeepSeek Harness 的提醒或审批其中一个开关时，不再把它的 `cordis.patch.yml` 写坏。
 - 检查更新时正好在安装或等待重启，不再崩溃。
 - 框选文字时如果还没有屏幕录制权限，不再把刚开好的权限清掉。
@@ -10,6 +11,7 @@
 
 ### English
 
+- With Notch Style set to Dynamic Island, opening the panel no longer flashes an oversized black block for one frame (#5).
 - Switching off one of DeepSeek Harness's notice or approval switches no longer leaves its `cordis.patch.yml` broken.
 - Rakko no longer crashes when an update check lands while an update is installing or waiting for a restart.
 - Selecting text on screen without Screen Recording permission no longer clears a grant you had just made.
