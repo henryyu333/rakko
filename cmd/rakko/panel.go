@@ -350,9 +350,10 @@ func (a *shelf) sheetTop() int {
 }
 
 // frameTrace, when a test sets it, sees every frame the overlay built: the
-// canvas the frame was laid out in and the native frame at that moment. Nil
-// in production.
-var frameTrace func(canvasW, canvasH float32, native mygo.Rectangle)
+// canvas the frame was laid out in, the native frame at that moment, and
+// whether the frame is the transparent one drawn before a native resize.
+// Nil in production.
+var frameTrace func(canvasW, canvasH float32, native mygo.Rectangle, blank bool)
 
 // view 画三种状态：空闲（完全不可见）、探头（悬停播放器、下拉箭头或拖拽
 // 提示）、展开（纯黑面板从刘海里长出来）。单元测试里 a.win 为 nil，
@@ -363,11 +364,32 @@ func (a *shelf) view(c *ui.Context) {
 	// the sheet's target height, the view and the frame geometry all ask
 	// for the same rows.
 	a.homeRowsOK = false
+	blank := a.blankFrame
+	a.blankFrame = false
+	if !blank {
+		// Content is on the canvas again: a resize must ask for a new
+		// blank frame first.
+		a.blankReady = false
+	}
 	defer func() {
 		a.buildingView = false
 		if frameTrace != nil && a.win != nil {
 			w, h := c.Size()
-			frameTrace(w, h, a.win.Bounds())
+			frameTrace(w, h, a.win.Bounds(), blank)
+		}
+		if blank && a.win != nil {
+			// The blank frame has been built; let the pass commit, then
+			// apply the resize that waited for it. Update runs on the next
+			// main-loop pass and rebuilds the content afterwards.
+			a.blankReady = true
+			if a.blankQueued {
+				a.blankQueued = false
+				a.win.Update(func() {
+					if a.win != nil && !a.win.IsDestroyed() {
+						a.syncWindowFrame()
+					}
+				})
+			}
 		}
 	}()
 	// A page that got switched off (or a stale id) must not stay current:
@@ -407,6 +429,14 @@ func (a *shelf) view(c *ui.Context) {
 	// 常驻窗口是 Transparent 的：mygo 根元素默认画满主题背景，必须改成
 	// 全透明，否则整个窗口会一直盖着一块主题色灰板。
 	c.Root().Background(ui.Transparent)
+	if blank {
+		// A transparent frame before a native resize: mygo stretches the
+		// canvas that was presented when the surface changes size, so it
+		// must hold nothing (see syncWindowFrame). Keep building the whole
+		// frame — the springs and the content fade advance on it — and
+		// paint it away at the root.
+		c.Root().Opacity(0)
+	}
 	opts := transfer.DropOptions{Formats: []transfer.Format{transfer.FileList, transfer.URIList, transfer.PNG, transfer.Text}, Operations: transfer.Copy}
 	now := c.Now()
 	// What a closed panel has to say grows out of the notch (feedback.go);
@@ -587,6 +617,9 @@ func (a *shelf) view(c *ui.Context) {
 					a.receive(drop.Data)
 				}
 			}
+			// The notch style draws nothing when idle: the canvas is
+			// already blank, so a resize may land on it directly.
+			blank = true
 			return
 		}
 	}

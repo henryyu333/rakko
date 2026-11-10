@@ -364,7 +364,7 @@ func TestSmokeOpenPanelKeepsOneFrame(t *testing.T) {
 	step("level 1", func() { a.setLevel(1) })
 	var frames atomic.Int64
 	onMain(func() {
-		frameTrace = func(float32, float32, mygo.Rectangle) { frames.Add(1) }
+		frameTrace = func(float32, float32, mygo.Rectangle, bool) { frames.Add(1) }
 	})
 	onMain(func() { a.hide(hidePassive) })
 	if !waitMain(4*time.Second, func() bool {

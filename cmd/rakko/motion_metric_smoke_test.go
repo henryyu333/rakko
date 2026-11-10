@@ -46,6 +46,7 @@ type motionFrame struct {
 	sizeMoving           bool
 	progress, peekProg   float32
 	visible              bool
+	blank                bool
 }
 
 type motionMeter struct {
@@ -59,7 +60,7 @@ type motionMeter struct {
 
 // frame is the view seam's callback; it runs on the main thread at the end
 // of every built frame.
-func (m *motionMeter) frame(canvasW, canvasH float32, native mygo.Rectangle) {
+func (m *motionMeter) frame(canvasW, canvasH float32, native mygo.Rectangle, blank bool) {
 	now := time.Now()
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -74,6 +75,7 @@ func (m *motionMeter) frame(canvasW, canvasH float32, native mygo.Rectangle) {
 		tabK:       m.a.tabPhase(now),
 		openMoving: fx.openMoving, sizeMoving: fx.sizeMoving,
 		progress: m.a.progress, peekProg: m.a.peekProgress, visible: m.a.visible,
+		blank: blank,
 	})
 }
 
@@ -114,7 +116,7 @@ func saveMotionFrames(t *testing.T, dir, name string, rows []motionFrame) string
 	out := csv.NewWriter(f)
 	head := []string{"rep", "phase", "ms", "canvas_w", "canvas_h", "win_x", "win_y", "win_w", "win_h",
 		"shell_w", "shell_h", "open_k", "level_k", "peek_k", "reveal_k", "home_w", "results_h", "nav_k", "tab_k",
-		"open_moving", "size_moving", "progress", "peek_progress", "visible"}
+		"open_moving", "size_moving", "progress", "peek_progress", "visible", "blank"}
 	if err := out.Write(head); err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +129,7 @@ func saveMotionFrames(t *testing.T, dir, name string, rows []motionFrame) string
 			fmt.Sprintf("%.5f", r.openK), fmt.Sprintf("%.5f", r.levelK), fmt.Sprintf("%.5f", r.peekK),
 			fmt.Sprintf("%.5f", r.revealK), fmt.Sprintf("%.2f", r.homeW), fmt.Sprintf("%.2f", r.resultsH),
 			fmt.Sprintf("%.5f", r.navK), fmt.Sprintf("%.5f", r.tabK), fmt.Sprint(r.openMoving), fmt.Sprint(r.sizeMoving),
-			fmt.Sprintf("%.5f", r.progress), fmt.Sprintf("%.5f", r.peekProg), fmt.Sprint(r.visible),
+			fmt.Sprintf("%.5f", r.progress), fmt.Sprintf("%.5f", r.peekProg), fmt.Sprint(r.visible), fmt.Sprint(r.blank),
 		}
 		if err := out.Write(row); err != nil {
 			t.Fatal(err)

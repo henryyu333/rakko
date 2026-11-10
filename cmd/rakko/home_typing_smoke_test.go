@@ -34,7 +34,7 @@ type typingMeter struct {
 	when []time.Time
 }
 
-func (m *typingMeter) frame(_, _ float32, _ mygo.Rectangle) {
+func (m *typingMeter) frame(_, _ float32, _ mygo.Rectangle, _ bool) {
 	now := time.Now()
 	m.mu.Lock()
 	m.when = append(m.when, now)

@@ -467,6 +467,16 @@ func (a *shelf) frameCoverAppsPop(r mygo.Rectangle, ph float32) mygo.Rectangle {
 	return r
 }
 
+// setNativeWindowFrame is the seam tests use to observe every native resize
+// the overlay asks for.
+var setNativeWindowFrame = mac.SetWindowFrame
+
+// syncWindowFrame applies the target frame, but never over a canvas that
+// has drawn content: mygo presents a resized surface's previous canvas
+// stretched into the new frame for one display frame, so a shell drawn at
+// the old size would flash enlarged (issue #5). One transparent frame goes
+// up first; the resize waits until it has been built, and the view that
+// follows it draws in the new canvas.
 func (a *shelf) syncWindowFrame() {
 	if a.win == nil || a.settingFrame {
 		return
@@ -491,9 +501,30 @@ func (a *shelf) syncWindowFrame() {
 		}
 		return
 	}
+	if a.winH == 0 {
+		// A headless or placeholder surface has no native frame; nothing
+		// can be stretched, so the cached target is all there is.
+		a.frame = r
+		a.win.Invalidate()
+		return
+	}
+	if !a.blankReady {
+		// Ask for one transparent frame. Its defer queues this call again
+		// through Update, after the frame's pass has committed, so the
+		// native resize lands on a blank canvas rather than on the idle
+		// capsule or the last drawn shell.
+		if !a.blankQueued {
+			a.blankQueued = true
+			a.blankFrame = true
+			a.win.Invalidate()
+		}
+		return
+	}
+	a.blankQueued = false
+	a.blankReady = false
 	a.settingFrame = true
 	defer func() { a.settingFrame = false }()
-	mac.SetWindowFrame(a.winH, r.X, r.Y, r.Width, r.Height)
+	setNativeWindowFrame(a.winH, r.X, r.Y, r.Width, r.Height)
 	a.frame = r
 	// The shell moved with the window, so the pointer may now be on it (a
 	// display change recentres the overlay under a still pointer) or off
@@ -1309,10 +1340,16 @@ func (a *shelf) show(edge bool) {
 		a.resetHomeSearch()
 		a.warmSpotlight()
 	}
-	// The surface was blank before this opening (or holds the previous
-	// envelope): raise it to the envelope the whole panel fits in now,
-	// while nothing of the opening is drawn yet, so no spring resizes it.
+	// Raise the surface to the envelope the whole panel fits in now, so no
+	// spring resizes it. The idle canvas is not blank in island style — it
+	// holds the capsule and its app entry — so an opening that changes the
+	// native frame draws one transparent frame first: mygo presents a
+	// resized surface's previous canvas stretched into the new frame, and
+	// the capsule would flash as one oversized black block (issue #5).
 	a.beginSurfaceHold()
+	if a.win != nil && a.winH != 0 && !a.blankReady && a.targetFrame() != a.frame {
+		a.blankQueued, a.blankFrame = true, true
+	}
 	a.contentFrom = a.fx.revealK
 	prevFrame := a.frame
 	a.syncMousePassThrough()

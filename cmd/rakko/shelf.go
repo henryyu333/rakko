@@ -43,6 +43,7 @@ type shelf struct {
 	frameHold                                                   mygo.Rectangle // envelope held while something is drawn; zero = none
 	settingFrame                                                bool
 	buildingView, frameQueued                                   bool // defer native resize until the current UI frame has painted
+	blankFrame, blankQueued, blankReady                         bool // draw one blank frame before a native resize
 	animationStart                                              time.Time
 	animationFrom, progress                                     float32
 	level                                                       int       // drawn level: 1 search bar (76), 2 page (250)
