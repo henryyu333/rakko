@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.14.2
+
+- 关掉 DeepSeek Harness 的提醒或审批其中一个开关时，不再把它的 `cordis.patch.yml` 写坏。
+- 检查更新时正好在安装或等待重启，不再崩溃。
+- 框选文字时如果还没有屏幕录制权限，不再把刚开好的权限清掉。
+- 数据目录搬家或状态文件丢失后，图片 / PDF 转换的结果不再被误删。
+- Rakko 自己写进剪贴板的内容，不再偶尔被记进剪贴板历史。
+
+### English
+
+- Switching off one of DeepSeek Harness's notice or approval switches no longer leaves its `cordis.patch.yml` broken.
+- Rakko no longer crashes when an update check lands while an update is installing or waiting for a restart.
+- Selecting text on screen without Screen Recording permission no longer clears a grant you had just made.
+- Converted images and PDFs are no longer deleted after the data folder moves or its state file goes missing.
+- What Rakko itself puts on the clipboard no longer shows up in clipboard history now and then.
+
 ## 1.14.1
 
 - **Agent 完成提醒和审批支持 Hermes Agent 与 DeepSeek Harness**：在 设置 → AI 里分别打开。审批只在它们本来就要问你时弹卡；45 秒没处理或 Rakko 没在运行，就交回它们自己的审批流程，从不替你自动允许。关掉开关时，Rakko 写进它们配置里的内容会全部移除。
