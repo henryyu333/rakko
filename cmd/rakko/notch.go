@@ -31,6 +31,7 @@ func (a *shelf) place(p mygo.Point) {
 	}
 	a.syncDragGuard()
 	a.syncIdleIslands()
+	a.syncMainIdleCapsule()
 }
 
 // displayNearest is the display lookup placeAt measures from. The app always
@@ -481,6 +482,7 @@ func (a *shelf) syncWindowFrame() {
 	if a.win == nil || a.settingFrame {
 		return
 	}
+	a.syncMainIdleCapsule()
 	r := a.targetFrame()
 	if r == a.frame {
 		return
@@ -1349,6 +1351,11 @@ func (a *shelf) show(edge bool) {
 	a.beginSurfaceHold()
 	if a.win != nil && a.winH != 0 && !a.blankReady && a.targetFrame() != a.frame {
 		a.blankQueued, a.blankFrame = true, true
+	}
+	if a.island {
+		// Keep the resting capsule picture over the blank frame that
+		// precedes the panel's new size; the first shell frame hides it.
+		a.showMainIdleCapsule()
 	}
 	a.contentFrom = a.fx.revealK
 	prevFrame := a.frame

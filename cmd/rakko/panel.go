@@ -391,6 +391,9 @@ func (a *shelf) view(c *ui.Context) {
 				})
 			}
 		}
+		if a.win != nil {
+			a.syncMainIdleCapsuleVisibility(blank)
+		}
 	}()
 	// A page that got switched off (or a stale id) must not stay current:
 	// fold back to the tray before anything reads a.tab.

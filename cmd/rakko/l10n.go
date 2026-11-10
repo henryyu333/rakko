@@ -158,6 +158,9 @@ func (a *shelf) retitleWindows() {
 			isl.win.SetTitle(m.WindowIsland())
 		}
 	}
+	if a.mainIdle != nil && a.mainIdle.win != nil {
+		a.mainIdle.win.SetTitle(m.WindowIsland())
+	}
 	if a.rn != nil && a.rn.win != nil {
 		a.rn.win.SetTitle(a.renameTitle(len(a.rn.items)))
 	}

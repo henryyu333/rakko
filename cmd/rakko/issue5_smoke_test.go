@@ -39,8 +39,9 @@ func TestSmokeOpeningResizesOnABlankFrame(t *testing.T) {
 	}
 
 	type resize struct {
-		frame mygo.Rectangle
-		blank bool
+		frame   mygo.Rectangle
+		blank   bool
+		covered bool
 	}
 	var mu sync.Mutex
 	var frames []bool
@@ -55,8 +56,9 @@ func TestSmokeOpeningResizesOnABlankFrame(t *testing.T) {
 			mu.Lock()
 			lastBlank := len(frames) > 0 && frames[len(frames)-1]
 			resizes = append(resizes, resize{
-				frame: mygo.Rectangle{X: x, Y: y, Width: w, Height: hgt},
-				blank: lastBlank,
+				frame:   mygo.Rectangle{X: x, Y: y, Width: w, Height: hgt},
+				blank:   lastBlank,
+				covered: a.mainIdle != nil && a.mainIdle.shown,
 			})
 			mu.Unlock()
 			mac.SetWindowFrame(h, x, y, w, hgt)
@@ -105,6 +107,9 @@ func TestSmokeOpeningResizesOnABlankFrame(t *testing.T) {
 		if !r.blank {
 			t.Fatalf("resize %d to %+v landed on a drawn canvas: the previous frame was not blank (frames %v)", i, r.frame, frames)
 		}
+		if !r.covered {
+			t.Fatalf("resize %d to %+v had no resting capsule over the blank frame", i, r.frame)
+		}
 	}
-	t.Logf("open/close cycle: %d native resizes, every one after a blank frame", len(resizes))
+	t.Logf("open/close cycle: %d native resizes, every one after a blank frame covered by the capsule", len(resizes))
 }

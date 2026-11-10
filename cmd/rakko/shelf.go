@@ -157,6 +157,8 @@ type shelf struct {
 	ownPress                                                    bool             // a left press is held in our own window
 	dispID                                                      int64
 	idleIslands                                                 []*idleIslandWindow
+	mainIdle                                                    *mainIdleCapsule // the resident display's resting capsule picture
+	mainIdleHideQueued                                          bool             // its hide waits for the frame that drew the shell
 	peeking                                                     bool
 	peekProgress, peekFrom                                      float32
 	peekAnimStart                                               time.Time
