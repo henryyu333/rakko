@@ -2,7 +2,7 @@
   "name": "Rakko",
   "slug": "rakko",
   "identifier": "local.y3.rakko",
-  "version": "1.14.2",
+  "version": "1.14.3",
   "updates": {
     "publicKey": "U392UXk3CKWS5zmlwlygGPnVbOppcJHEMJEeKXXBbAo=",
     "github": "henryyu333/rakko"
