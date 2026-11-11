@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.14.5
+
+- **倒计时和秒表**：在工具页的「+」目录里添加。倒计时有 1–60 分钟预设，也能自己输入时分秒；刘海收起时在摄像头两侧显示剩余时间，时间到弹出卡片并响铃，点「重复」或「停止」才收起。秒表精确到秒。
+- **首页显示当前时间**：没在放歌时，首页大字显示当前时间和日期；放歌时，时间在左上角。跟随系统时区和 12 / 24 小时制。
+
+### English
+
+- **Timer and stopwatch**: add them from the Tools page's + catalogue. The timer has presets from 1 to 60 minutes or takes your own hours, minutes and seconds; with the notch closed it shows the time left beside the camera, and when it runs out a card drops from the notch and rings until you choose Repeat or Stop. The stopwatch counts to the second.
+- **Current time on Home**: with nothing playing, Home shows the time in large type above the date; while music plays, the time sits at the top left. It follows your Mac's time zone and 12- or 24-hour setting.
+
 ## 1.14.4
 
 - 刘海样式选「灵动岛」时，打开搜索再收起，面板不再先整块往上跳一下才缩回；灵动岛被拖离屏幕顶边后，搜索面板也不再比胶囊低一截（#6）。

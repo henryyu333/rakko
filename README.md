@@ -78,7 +78,7 @@ It lives in the menu bar, has no Dock icon, keeps everything on your Mac, and ne
 - Hover the notch while music plays and it grows two small wings: the cover on the left, a moving equalizer and App Switcher button on the right. Nothing drops down over your windows. The cover and equalizer open Search; the App Switcher button opens the app wings.
 - Home is the player while something plays or stays paused: the cover, the title and artist, an equalizer that moves while the track plays, a progress bar you drag to skip with the elapsed time on its left and what is left on its right, previous, play-pause and next, and the lyrics button at the bottom left.
 - The lyrics button opens a column beside the player and the page widens to 640. Synced lyrics scroll there with the current line bold; Rakko asks lrclib.net first and NetEase Cloud Music when lrclib.net has none or is busy. While the lookup runs the column says Finding lyrics…, a finished lookup with nothing to show says No lyrics found for this song, and a failed one says Lyrics are unavailable right now and tries again after 30 seconds. The column is closed on a fresh install and the choice is remembered; only an open column asks for lyrics.
-- With nothing playing Home shows the otter — asleep after ten quiet minutes — with today's date and weekday, and up to three lines: the newest agent turn running or just finished (only while Agent Completion notices are on), how many files the Tray holds, and either how much Keep Awake time is left or the tightest AI quota.
+- With nothing playing Home shows the otter — asleep after ten quiet minutes — with the current time in large type (your Mac's time zone and 12- or 24-hour setting) and the date and weekday under it, then up to three lines: the newest agent turn running or just finished (only while Agent Completion notices are on), how many files the Tray holds, and either how much Keep Awake time is left or the tightest AI quota. While a song plays, the current time sits at the top left of Home.
 - The music widget is still a card on the Tools page: at 2 × 2 it is the full player with the volume bar for your default output device, at 2 × 1 the cover, title, artist and the transport buttons, at 1 × 1 the cover with a play/pause button on it. A tap on the card itself, beside its own buttons, opens Home.
 
 **Weekly report**
@@ -128,6 +128,11 @@ A tool counts as installed only by files it writes itself, so a stray `~/.claude
 **Stay awake**
 - Right-click the menu-bar icon → Keep Awake and your Mac won't fall asleep for 30 minutes, 1, 2 or 4 hours, or until you turn it off. Tick Keep Screen On to keep the display awake as well.
 - While it is on, every open page shows a moon in its top row: hover it for the time left, click it to end the hold.
+
+**Timer and stopwatch**
+- Add Timer and Stopwatch from the Tools page's + catalogue. The timer offers 1, 3, 5, 10, 15, 30 and 60 minutes; click the big number to type your own hours, minutes and seconds (↑/↓ or the scroll wheel adjust, ⏎ starts, Esc leaves), up to 23:59:59. Pause, resume or cancel from the card; a tap on the 1 × 1 card starts the length you last used. The stopwatch counts to the second, pauses and resets.
+- With the notch closed, a running timer shows its ring and the time left beside the camera, ahead of the music wings. When it reaches zero a card drops from the notch with Repeat and Stop while the Glass sound plays; the sound stops by itself after a minute, the card stays until you answer. With the panel open, a Stop capsule waits in the top row instead.
+- Both keep counting while the Mac sleeps; a timer that ran out during sleep rings on wake. Nothing is kept after you quit Rakko.
 
 **Search bar and pages**
 - A click on the notch (or `⌃⌥Space`) grows a black search bar out of it and puts the keyboard in its field. Type to search this Mac: the sheet under the bar lists the Tray, the Clipboard and your sticky notes first, then apps, folders, files and actions. A row is two lines — the name (pictures show a thumbnail), then the folder it lives in, the app it came from and the time, or the time. ↑/↓ chooses a row, ⏎ opens it (or copies the text, brings up the note, or runs the action), and ⌘⏎ shows a file in the Finder. The action bar inside the sheet's last row names both keys: Open ↩, and Show in Finder ⌘↩ for files, folders and apps.
@@ -370,7 +375,7 @@ Rakko 是住在 Mac 刘海里的工具：它把摄像头周围那块黑色刘海
 - 放音乐时把鼠标移到刘海上，左边是封面，右边是跳动的音频条和独立的应用切换按钮，不会向下盖住窗口。点封面、音频条打开搜索条；点应用按钮展开应用两翼。
 - 有歌在放、或者只是暂停着，首页就是播放器：封面、歌名和歌手，播放时音频条在跳动，可拖动跳转的进度条左边是已经播了多久、右边是还剩多久，中间是上一首 / 播放暂停 / 下一首，左下角是歌词按钮。
 - 点左下角的歌词按钮，播放器右边多出一栏歌词，页面加宽到 640。同步歌词在这里滚动，当前一行是粗体；先问 lrclib.net，它没有或太忙时再问网易云音乐。找的时候写「正在找歌词…」，找不到写「没有找到这首歌的歌词」，取不到写「歌词暂时取不到」，30 秒后再试。全新安装时这一栏是关着的，开关记在 `settings.json` 的 `lyrics` 里；只有打开它才会去查歌词。
-- 没有歌在放时，首页是海獭陪着你——安静十分钟后它打瞌睡——旁边是今天的日期和星期，下面最多三行：最近一轮 agent 是正在做还是刚做完（只在打开「Agent 完成提醒」时出现）、托盘里有多少个文件、保持唤醒还剩多久；没有开启保持唤醒时，这一行是剩余最少的那个 AI 额度（AI 用量页关着时不显示）。
+- 没有歌在放时，首页是海獭陪着你——安静十分钟后它打瞌睡——旁边是大字的当前时间（跟随系统时区和 12 / 24 小时制），下面一行是日期和星期，再往下最多三行：最近一轮 agent 是正在做还是刚做完（只在打开「Agent 完成提醒」时出现）、托盘里有多少个文件、保持唤醒还剩多久；没有开启保持唤醒时，这一行是剩余最少的那个 AI 额度（AI 用量页关着时不显示）。有歌在放时，当前时间在首页左上角。
 - 音乐小组件仍留在工具页：2×2 是完整播放器，带系统默认输出设备的音量条；2×1 显示封面、歌名、歌手和上一首 / 播放暂停 / 下一首；1×1 只有封面，上面盖着播放 / 暂停按钮。点卡片本身（不是卡片上的按钮）打开首页。
 
 **每周简报**
@@ -420,6 +425,11 @@ Rakko 是住在 Mac 刘海里的工具：它把摄像头周围那块黑色刘海
 **保持唤醒**
 - 右键菜单栏图标 →「保持唤醒」，选 30 分钟、1 小时、2 小时、4 小时或「一直（直到关闭）」，这段时间里 Mac 不会自动睡眠；勾选「屏幕也保持亮着」，屏幕也不会熄灭。
 - 开启后，打开任何一页都能在顶栏看到一个月亮图标：鼠标停在上面看剩余时间，点一下结束。
+
+**倒计时与秒表**
+- 在工具页的「+」目录里添加「倒计时」和「秒表」。倒计时有 1、3、5、10、15、30、60 分钟预设；点大号数字可以自己输入时、分、秒（↑↓ 或滚轮调整，回车开始，Esc 退出），最长 23:59:59。卡片上可以暂停、继续、取消；点 1×1 的卡片按上次用过的时长开始。秒表精确到秒，可以暂停和归零。
+- 刘海收起时，倒计时在摄像头两侧显示进度环和剩余时间，优先于播放音乐的两翼。时间到，刘海里弹出卡片，带「重复」和「停止」，同时响起系统的 Glass 提示音；响满一分钟自动静音，卡片一直留着等你点。面板开着时，改成顶栏的「停止」胶囊。
+- Mac 睡眠时照样计时，睡眠中到点的倒计时醒来就提醒。退出 Rakko 后两个计时都清空。
 
 **搜索条与页面**
 - 点刘海（或按 `⌃⌥Space`）从刘海里长出一条黑色搜索条，键盘直接进输入框。输入就能搜整台 Mac：下方结果面板先列托盘、剪贴板、便利贴，再列应用、文件夹、文件和动作；每一行是两行字——名字（图片在最左边显示缩略图），下面是所在文件夹 / 来源应用 · 时间 / 时间。`↑`/`↓` 选择，回车打开（文字则复制，便利贴则打开它的窗口，动作则执行），`⌘回车` 在 Finder 中显示。面板最后一行的动作条把两个键写出来：「打开 ↩」，文件和文件夹、应用还有「在 Finder 中显示 ⌘↩」。
