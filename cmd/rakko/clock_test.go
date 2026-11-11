@@ -95,6 +95,9 @@ func TestTimerAlertStaysAcrossPanelNoticesAndApproval(t *testing.T) {
 	if !a.clockAlarmUp(now.Add(time.Minute)) {
 		t.Fatal("the alert does not own the closed notch")
 	}
+	if !a.liveClickable(now.Add(time.Minute)) {
+		t.Fatal("the alert's buttons would be swallowed by the shell's open handler")
+	}
 	// Opening the panel hides the closed card (its band chip replaces it)
 	// and clearing live events must not touch the alert.
 	a.visible = true
