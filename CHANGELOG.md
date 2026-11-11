@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.14.4
+
+- 刘海样式选「灵动岛」时，打开搜索再收起，面板不再先整块往上跳一下才缩回；灵动岛被拖离屏幕顶边后，搜索面板也不再比胶囊低一截（#6）。
+
+### English
+
+- With Notch Style set to Dynamic Island, closing the search panel no longer jumps the whole panel up before it folds back, and an island dragged away from the top edge no longer opens its search panel a step below the capsule (#6).
+
 ## 1.14.3
 
 - 修复 1.14.2 引入的刘海动画卡顿：通知卡、实时活动、悬停探出、展开面板等状态切换时，内容不再整帧消失一下，动画恢复流畅。
