@@ -556,3 +556,95 @@ func TestClockDoneChipStopsAtTheSearchBar(t *testing.T) {
 		t.Fatalf("the search bar's stop capsule left phase %v", m.phase)
 	}
 }
+
+// TestClockBandFitsTheNotchEars: a 180pt notch leaves about 112pt in each
+// ear, so two full clock readings cannot share the right ear. The notch
+// puts the countdown beside the left ear and the stopwatch on the right;
+// the island's continuous body keeps both on the right. Neither reading
+// may be compressed below its single-chip width.
+func TestClockBandFitsTheNotchEars(t *testing.T) {
+	l := locales.In("zh-Hans")
+	now := time.Date(2026, 11, 11, 9, 41, 0, 0, time.Local)
+	build := func(island, withTimer, withWatch bool) (*shelf, *ui.Tester) {
+		var a *shelf
+		if island {
+			a = islandShelf(true, settings.ShellStyleIsland)
+		} else {
+			a = motionShelf()
+			a.settings = settings.Default()
+		}
+		a.level, a.visible, a.progress = 2, true, 1
+		a.tab = pageTray
+		a.ensurePages()
+		a.registerClockModules()
+		m := a.clock
+		m.now = func() time.Time { return now }
+		m.playSound = func() {}
+		m.stopSound = func() {}
+		if withTimer {
+			m.startTimer(now, 5*time.Minute)
+		}
+		if withWatch {
+			m.watchRun, m.watchStart = true, now.Add(-754*time.Second)
+		}
+		a.locale = "zh-Hans"
+		view := ui.NewTester(a.view, sheetW+2*earR, panelTestH)
+		view.SetLocale("zh-Hans")
+		view.Frame()
+		view.Frame()
+		return a, view
+	}
+	timerLabel := l.TimerChipLabel("5:00")
+	watchLabel := l.StopwatchElapsed("12:34")
+
+	// The same capsules alone: the widths below are what an unconstrained
+	// capsule takes.
+	_, tv := build(false, true, false)
+	timerAlone, ok := tv.Find(timerLabel)
+	if !ok {
+		t.Fatal("no countdown chip alone")
+	}
+	_, wv := build(false, false, true)
+	watchAlone, ok := wv.Find(watchLabel)
+	if !ok {
+		t.Fatal("no stopwatch chip alone")
+	}
+
+	// Island: one continuous body has room for both without shrinking.
+	_, iv := build(true, true, true)
+	timerIsland, ok := iv.Find(timerLabel)
+	if !ok {
+		t.Fatal("no countdown chip on the island")
+	}
+	watchIsland, ok := iv.Find(watchLabel)
+	if !ok {
+		t.Fatal("no stopwatch chip on the island")
+	}
+	if timerIsland.W < timerAlone.W-0.5 || watchIsland.W < watchAlone.W-0.5 {
+		t.Fatalf("island capsules were compressed: %+v %+v (alone %+v %+v)",
+			timerIsland, watchIsland, timerAlone, watchAlone)
+	}
+
+	// Notch: full readings, countdown left of the housing, stopwatch right.
+	a, view := build(false, true, true)
+	timerEl, ok := view.Find(timerLabel)
+	if !ok {
+		t.Fatal("no countdown chip under the notch")
+	}
+	watchEl, ok := view.Find(watchLabel)
+	if !ok {
+		t.Fatal("no stopwatch chip under the notch")
+	}
+	if timerEl.W < timerAlone.W-0.5 || watchEl.W < watchAlone.W-0.5 {
+		t.Fatalf("notch capsules were compressed: %+v %+v (alone %+v %+v)",
+			timerEl, watchEl, timerAlone, watchAlone)
+	}
+	center := float32(sheetW+2*earR) / 2
+	halfHousing := float32(a.notchW+2*6) / 2
+	if timerEl.X+timerEl.W > center-halfHousing+1 {
+		t.Fatalf("countdown chip reaches the camera housing: %+v", timerEl)
+	}
+	if watchEl.X < center+halfHousing-1 {
+		t.Fatalf("stopwatch chip starts under the camera housing: %+v", watchEl)
+	}
+}

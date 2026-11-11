@@ -189,7 +189,13 @@ func TestClockSmokeStates(t *testing.T) {
 			})
 			shoot("07-band-stop")
 			onMain(func() {
+				a.clock.startTimer(time.Now(), 5*time.Minute)
+				a.clock.watchRun, a.clock.watchStart = true, time.Now().Add(-754*time.Second)
+			})
+			shoot("08-band-both")
+			onMain(func() {
 				a.clock.stopTimer(time.Now())
+				a.clock.resetWatch()
 				a.hide(hidePassive)
 			})
 			settle(a, 500*time.Millisecond)

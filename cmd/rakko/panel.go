@@ -1107,9 +1107,17 @@ func (a *shelf) bandRow(c *ui.Context) {
 	// own presses. Their boxes are kept from this frame for the next one.
 	a.bandBegin(row.Bounds())
 	row.Children(func() {
-		left := ui.Row(c.Key("band-left")).Grow(1).MinWidth(0).AlignItems(ui.Center)
+		acts := a.liveActivities()
+		// A 180pt notch leaves each ear about 112pt. Two clock capsules do
+		// not fit in one ear (their readings would ellipsize), so the
+		// countdown moves to the left ear beside the camera housing.
+		leftIdx, _ := a.clockBandSplit(acts)
+		left := ui.Row(c.Key("band-left")).Grow(1).MinWidth(0).Gap(1).AlignItems(ui.Center)
 		left.Children(func() {
-			if a.tab == pageHome && a.np != nil && a.np.hasTrack() {
+			switch {
+			case leftIdx >= 0:
+				a.bandAdd(acts[leftIdx].chip(c))
+			case a.tab == pageHome && a.np != nil && a.np.hasTrack():
 				ui.Text(c, homeClockText(tloc(c), c.Now())).SingleLine().FontSize(13).FontWeight(600).
 					FontFeatures("tnum").TextColor(ink2)
 				c.After(nextMinute(c.Now()))
@@ -1121,7 +1129,10 @@ func (a *shelf) bandRow(c *ui.Context) {
 			ui.Box(c.Key("band-housing")).Width(float32(a.notchW + 2*6)).Shrink(0)
 		}
 		ui.Row(c.Key("band-right")).Grow(1).MinWidth(0).Gap(1).AlignItems(ui.Center).Justify(ui.End).Children(func() {
-			for _, act := range a.liveActivities() {
+			for i, act := range acts {
+				if i == leftIdx {
+					continue
+				}
 				a.bandAdd(act.chip(c))
 			}
 		})
@@ -1443,6 +1454,26 @@ func (a *shelf) dropBar(c *ui.Context, name, count, hint string) {
 			panelLabel(c, nil, hint, 10.5, 600).TextColor(ink3)
 		}
 	})
+}
+
+// clockBandSplit picks the countdown for the left ear when both clocks
+// run under the notch style: one visible ear cannot hold both readings,
+// while the island's continuous pill can. It returns the countdown's
+// index in acts, or -1.
+func (a *shelf) clockBandSplit(acts []liveActivity) (int, bool) {
+	if a.island || a.notchW <= 0 {
+		return -1, false
+	}
+	timerIdx, watch := -1, false
+	for i, act := range acts {
+		switch act.(type) {
+		case timerChip:
+			timerIdx = i
+		case stopwatchChip:
+			watch = true
+		}
+	}
+	return timerIdx, timerIdx >= 0 && watch
 }
 
 // liveActivities are the modules with something under way, in module

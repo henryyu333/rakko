@@ -1432,6 +1432,23 @@ func galleryGroupF() []galleryItem {
 			m.watchRun, m.watchStart = true, now.Add(-754*time.Second)
 		})},
 		{ID: "F33", Group: g, Title: "顶栏胶囊", State: "时间到 · 橙色停止", Build: tools(card("timer", 2, 1), timerDone)},
+		{ID: "F34", Group: g, Title: "顶栏胶囊", State: "刘海 180 · 倒计时左耳、秒表右耳", Notch: true, Build: func(t *testing.T, lang string) galleryRender {
+			a := galleryShelf(galleryEmptyStore(t), t.TempDir())
+			a.notchW, a.notchH = 180, 32
+			a.level, a.visible, a.progress = 2, true, 1
+			a.tab = pageTray
+			a.ensurePages()
+			a.registerClockModules()
+			now := time.Date(2026, 11, 11, 9, 41, 0, 0, time.Local)
+			m := a.clock
+			m.now = func() time.Time { return now }
+			m.playSound = func() {}
+			m.stopSound = func() {}
+			m.startTimer(now, 5*time.Minute)
+			m.watchRun, m.watchStart = true, now.Add(-754*time.Second)
+			a.locale = lang
+			return galleryRender{view: galleryPanel(t, lang, a, sheetW+2*earR, panelTestH)}
+		}},
 	}
 }
 
