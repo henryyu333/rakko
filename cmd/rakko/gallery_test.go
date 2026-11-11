@@ -838,6 +838,15 @@ func galleryGroupB() []galleryItem {
 		{ID: "B2", Group: g, Title: "搜索条", State: "输入中 · 加宽并显示光标", Notch: true, Build: bar("git merge --ff-only", true, mac.ScopeAll)},
 		{ID: "B19", Group: g, Title: "搜索条", State: "应用模式 · 空框带 Tab 键帽", Notch: true, Build: bar("", false, mac.ScopeApps)},
 		{ID: "B20", Group: g, Title: "搜索条", State: "文件模式 · 有输入无键帽", Notch: true, Build: bar("git merge --ff-only", true, mac.ScopeFiles)},
+		{ID: "B21", Group: g, Title: "搜索条", State: "时间到 · 黑色顶栏的停止胶囊", Notch: true, Build: func(t *testing.T, lang string) galleryRender {
+			a := galleryShelf(galleryEmptyStore(t), t.TempDir())
+			a.level, a.visible, a.progress = 1, true, 1
+			now := time.Date(2026, 11, 11, 9, 41, 0, 0, time.Local)
+			m := galleryClockAt(a, now)
+			m.phase, m.dur, m.doneAt, m.ringing = timerDone, 5*time.Minute, now, true
+			a.locale = lang
+			return galleryRender{view: galleryPanel(t, lang, a, homeW+2*earR, homeShellH+navGap+navH+4)}
+		}},
 		{ID: "B3", Group: g, Title: "结果表", State: "各分组都有命中 · 选中一行", Build: results(func(t *testing.T, a *shelf, lang string) { a.homeSel = 1 })},
 		{ID: "B4", Group: g, Title: "结果表", State: "悬停一行", Build: func(t *testing.T, lang string) galleryRender {
 			r := results(nil)(t, lang)

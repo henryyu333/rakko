@@ -294,12 +294,12 @@ func (a *shelf) ready(show bool) {
 	a.np = &nowPlayingModule{host: a}
 	a.modules = append(a.modules, a.np)
 	a.conv = &converter{host: a}
-	a.clock = newClockModule(a)
+	a.modules = append(a.modules, a.conv)
+	a.registerClockModules()
 	a.dl = newDownloadsModule(a)
 	// The strip keeps the first two activities. The converter's cancel
 	// control comes first, then the countdown and the stopwatch; the
 	// download chip follows them.
-	a.modules = append(a.modules, a.conv, timerChip{a.clock}, stopwatchChip{a.clock})
 	a.modules = append(a.modules, a.dl, &leavingModule{host: a}, &ocrIndex{host: a})
 	// After the converter: a running conversion's only cancel control must
 	// not be displaced.

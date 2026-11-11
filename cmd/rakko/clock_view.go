@@ -143,13 +143,8 @@ func (a *shelf) toolTimerBody(c *ui.Context, card ui.Element, span int, surf too
 				a.timerEditRow(c, m)
 			} else {
 				numCol := ink
-				if m != nil {
-					switch m.phase {
-					case timerRunning, timerDone:
-						numCol = warning
-					case timerPaused:
-						numCol = ink2
-					}
+				if m != nil && m.phase == timerPaused {
+					numCol = ink2
 				}
 				text := clockText(timerDefaultDur)
 				if m != nil {
@@ -388,7 +383,7 @@ func (a *shelf) toolTimerNarrow(c *ui.Context, card ui.Element, m *clockModule, 
 			}
 			return
 		}
-		col := warning
+		col := ink
 		if m.phase == timerPaused {
 			col = ink2
 		}
@@ -540,10 +535,9 @@ func (t timerChip) chip(c *ui.Context) ui.Element {
 	}
 	paused := m.phase == timerPaused
 	frac := m.timerFracAt(now)
-	col, text := warning, ui.Hex(timerWarnText)
-	bg := warning.Alpha(0.18)
+	col, text := warning, ink
 	if paused {
-		col, text, bg = warning.Alpha(0.45), ink3, fill1
+		col, text = warning.Alpha(0.45), ink3
 	}
 	remain := clockTextCeil(m.timerRemainAt(now))
 	label := l.TimerChipLabel(remain)
@@ -551,7 +545,7 @@ func (t timerChip) chip(c *ui.Context) ui.Element {
 		label = l.TimerChipPausedLabel(remain)
 	}
 	chip := ui.Row(c.Key("timer-chip")).Height(chipH).Radius(chipH/2).
-		Padding(0, 9, 0, 6).Gap(5).AlignItems(ui.Center).Background(bg).
+		Padding(0, 9, 0, 6).Gap(5).AlignItems(ui.Center).Background(fill1).
 		Label(label).Tooltip(label)
 	chip.Children(func() {
 		clockRing(c, "timer-chip-ring", 13, timerRingChip, frac, col, fill3)

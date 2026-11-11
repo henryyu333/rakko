@@ -334,7 +334,14 @@ func (a *shelf) overBelow(p mygo.Point) bool {
 func (a *shelf) homeBar(c *ui.Context, w float32) {
 	l := loc(c)
 	ui.Column(c.Key("home")).Width(w).Height(float32(bandH + homeBarH)).Children(func() {
-		ui.Box(c.Key("home-band")).Height(bandH)
+		// The search bar's black strip is the band at this level: a ringing
+		// countdown keeps its 停止 capsule here too, so the alert always has
+		// its stop control while the panel is open.
+		band := ui.Row(c.Key("home-band")).Height(bandH).FillWidth().
+			Padding(0, sheetPadX, 0, sheetPadX).AlignItems(ui.Center).Justify(ui.End)
+		if a.clock != nil && a.clock.alarmUp() {
+			band.Children(func() { timerChip{m: a.clock}.chip(c) })
+		}
 		row := ui.Row(c.Key("home-row")).Height(homeBarH).FillWidth().Padding(4, 16, 10, 18).Gap(10).AlignItems(ui.Center)
 		row.Children(func() {
 			ui.Icon(c, searchSymbol).Size(17, 17).TextColor(ink3)

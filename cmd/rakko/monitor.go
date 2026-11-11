@@ -310,6 +310,14 @@ func (a *shelf) wakeMonitor() {
 	})
 }
 
+// tickModules advances every registered module once; monitorTick calls it
+// on each pass so a module never owns a goroutine of its own.
+func (a *shelf) tickModules(now time.Time) {
+	for _, m := range a.modules {
+		m.tick(now)
+	}
+}
+
 // monitorTick is the old 30 ms body, unchanged in order: modules first,
 // then the shell's own animation and pointer work. The pointer is sampled
 // once for the whole pass.
@@ -321,9 +329,7 @@ func (a *shelf) monitorTick(now time.Time) {
 	defer func() { a.pointerTickValid = false }()
 
 	active := a.monitorActive(now)
-	for _, m := range a.modules {
-		m.tick(now)
-	}
+	a.tickModules(now)
 	a.refreshAppearance(now)
 	// The idle pass only exists for the clipboard poll and the shell's own
 	// clocks. Pointer and drag work runs at the active cadence, or as a

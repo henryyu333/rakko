@@ -82,6 +82,14 @@ func newClockModule(host *shelf) *clockModule {
 	return &clockModule{host: host, dur: timerDefaultDur, lastStarted: timerDefaultDur}
 }
 
+// registerClockModules puts the clock into the shell's module list: the
+// countdown's deadline runs on the shared tick, and the two capsules sit
+// right after the converter's cancel control.
+func (a *shelf) registerClockModules() {
+	a.clock = newClockModule(a)
+	a.modules = append(a.modules, a.clock, timerChip{a.clock}, stopwatchChip{a.clock})
+}
+
 // timerChip is the countdown's band capsule: a live activity of its own so
 // the stopwatch chip can sit beside it.
 type timerChip struct{ m *clockModule }

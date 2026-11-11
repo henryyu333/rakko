@@ -24,7 +24,19 @@ import (
 	"rakko/internal/mac"
 )
 
-const clockShotDir = "/tmp/Rakko-clock-omp/smoke"
+// clockShotDir is where this run's pictures and frame CSVs go: the
+// caller's RAKKO_CLOCK_SHOTS, or a temporary folder the log names.
+func clockShotDir(t *testing.T) string {
+	t.Helper()
+	dir := os.Getenv("RAKKO_CLOCK_SHOTS")
+	if dir == "" {
+		dir = filepath.Join(t.TempDir(), "clock-shots")
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
 
 // clockFrame is one built frame's shell while a clock shape is on screen.
 type clockFrame struct {
@@ -34,7 +46,7 @@ type clockFrame struct {
 	blank bool
 }
 
-func clockShot(t *testing.T, a *shelf, name string) {
+func clockShot(t *testing.T, a *shelf, dir, name string) {
 	t.Helper()
 	if a.win == nil {
 		t.Fatal("no notch window")
@@ -46,10 +58,7 @@ func clockShot(t *testing.T, a *shelf, name string) {
 	time.Sleep(120 * time.Millisecond)
 	onMain(a.syncWindowFrame)
 	time.Sleep(80 * time.Millisecond)
-	if err := os.MkdirAll(clockShotDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	path := filepath.Join(clockShotDir, name+".png")
+	path := filepath.Join(dir, name+".png")
 	if out, err := exec.Command("screencapture", "-x", "-o", fmt.Sprintf("-l%d", num), path).CombinedOutput(); err != nil {
 		t.Fatalf("%s: screencapture failed (%v): %s", name, err, out)
 	}
@@ -60,6 +69,8 @@ func TestClockSmokeStates(t *testing.T) {
 	if os.Getenv("RAKKO_BASKET_SMOKE") != "1" {
 		t.Skip("set RAKKO_BASKET_SMOKE=1 to run the native window smoke test")
 	}
+	dir := clockShotDir(t)
+	t.Logf("clock shots -> %s", dir)
 	for _, style := range []struct {
 		name   string
 		island bool
@@ -115,7 +126,7 @@ func TestClockSmokeStates(t *testing.T) {
 			defer onMain(func() { peekKindTrace = nil })
 			shoot := func(name string) {
 				time.Sleep(650 * time.Millisecond) // the grow-out spring
-				clockShot(t, a, style.name+"-"+name)
+				clockShot(t, a, dir, style.name+"-"+name)
 			}
 			var ww, wh, aw, ah float32
 			onMain(func() {
@@ -144,7 +155,7 @@ func TestClockSmokeStates(t *testing.T) {
 				a.setPeek(false)
 			})
 			settle(a, 500*time.Millisecond)
-			clockShot(t, a, style.name+"-03-canceled")
+			clockShot(t, a, dir, style.name+"-03-canceled")
 
 			motionClosed(a)
 			settle(a, 500*time.Millisecond)
@@ -165,7 +176,7 @@ func TestClockSmokeStates(t *testing.T) {
 				a.setPeek(false)
 			})
 			settle(a, 500*time.Millisecond)
-			clockShot(t, a, style.name+"-06-stopped")
+			clockShot(t, a, dir, style.name+"-06-stopped")
 
 			onMain(func() {
 				mark("chip", peekChevron)
@@ -213,14 +224,14 @@ func TestClockSmokeStates(t *testing.T) {
 				if miss != 0 {
 					t.Errorf("%s-%s: %d frames drew another shape instead of the clock", style.name, name, miss)
 				}
-				writeClockFrames(t, style.name+"-"+name, frames)
+				writeClockFrames(t, dir, style.name+"-"+name, frames)
 			}
 		})
 	}
 }
 
 // writeClockFrames leaves the per-frame sizes beside the screenshots.
-func writeClockFrames(t *testing.T, name string, frames []clockFrame) {
+func writeClockFrames(t *testing.T, dir, name string, frames []clockFrame) {
 	t.Helper()
 	sort.Slice(frames, func(i, j int) bool { return frames[i].ms < frames[j].ms })
 	var b []byte
@@ -228,7 +239,7 @@ func writeClockFrames(t *testing.T, name string, frames []clockFrame) {
 	for _, f := range frames {
 		b = append(b, []byte(fmt.Sprintf("%.1f,%.0f,%.0f,%.3f,%v\n", f.ms, f.w, f.h, f.peekK, f.blank))...)
 	}
-	if err := os.WriteFile(filepath.Join(clockShotDir, "frames-"+name+".csv"), b, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "frames-"+name+".csv"), b, 0o644); err != nil {
 		t.Fatal(err)
 	}
 }

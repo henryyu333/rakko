@@ -24,10 +24,8 @@ func clockShelf() (*shelf, *clockModule) {
 	a := motionShelf()
 	a.settings = settings.Default()
 	a.tab = pageTools
-	m := newClockModule(a)
-	a.clock = m
-	a.modules = []module{m, timerChip{m}, stopwatchChip{m}}
-	return a, m
+	a.registerClockModules()
+	return a, a.clock
 }
 
 func TestTimerStartPauseResumeCancel(t *testing.T) {
@@ -498,5 +496,63 @@ func TestClockDoneChipStops(t *testing.T) {
 	view.Frame()
 	if m.phase != timerIdle {
 		t.Fatalf("the stop chip left phase %v", m.phase)
+	}
+}
+
+// TestClockRegistrationDrivesTheDeadline exercises the production
+// registration: registerClockModules is the function ready() calls, and
+// tickModules is the dispatch monitorTick runs. No test shelf fills in
+// modules or calls clockModule.tick by hand.
+func TestClockRegistrationDrivesTheDeadline(t *testing.T) {
+	a := &shelf{settings: settings.Default()}
+	a.registerClockModules()
+	if a.clock == nil {
+		t.Fatal("registerClockModules did not create the clock")
+	}
+	played := 0
+	a.clock.playSound = func() { played++ }
+	a.clock.stopSound = func() {}
+	now := time.Date(2026, 11, 11, 9, 41, 0, 0, time.Local)
+	a.clock.startTimer(now, time.Minute)
+	a.tickModules(now.Add(time.Minute))
+	if a.clock.phase != timerDone || played != 1 {
+		t.Fatalf("shared tick at the deadline: phase=%v played=%d", a.clock.phase, played)
+	}
+	if !a.clock.alarmUp() {
+		t.Fatal("the shared tick did not leave the alert up")
+	}
+	a.tickModules(now.Add(2 * time.Minute))
+	if a.clock.ringing {
+		t.Fatal("the shared tick did not mute the alert after a minute")
+	}
+}
+
+// TestClockDoneChipStopsAtTheSearchBar: the open panel's level-1 bar also
+// carries the ringing capsule, so 停止 is reachable before opening a page.
+func TestClockDoneChipStopsAtTheSearchBar(t *testing.T) {
+	a := motionShelf()
+	a.settings = settings.Default()
+	a.level, a.visible, a.progress = 1, true, 1
+	a.registerClockModules()
+	now := time.Date(2026, 11, 11, 9, 41, 0, 0, time.Local)
+	m := a.clock
+	m.now = func() time.Time { return now }
+	m.playSound = func() {}
+	m.stopSound = func() {}
+	m.startTimer(now, time.Minute)
+	m.finish(now)
+	view := ui.NewTester(a.view, homeW+2*earR, homeShellH+navGap+navH+4)
+	view.SetLocale("zh-Hans")
+	view.Frame()
+	view.Frame()
+	if !view.HasText("停止") {
+		t.Fatal("the search bar's band has no 停止 capsule")
+	}
+	if err := view.Click("停止"); err != nil {
+		t.Fatalf("停止 on the search bar: %v", err)
+	}
+	view.Frame()
+	if m.phase != timerIdle {
+		t.Fatalf("the search bar's stop capsule left phase %v", m.phase)
 	}
 }
