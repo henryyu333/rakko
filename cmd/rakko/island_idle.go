@@ -166,7 +166,7 @@ func (a *shelf) syncMainIdleCapsuleVisibility(blank bool) {
 			a.hideMainIdleCapsuleSoon()
 		}
 	case a.peeking || a.apps.on || a.fx.peekK > 0.01 || a.fb.drawn || a.fb.retracting ||
-		a.liveUp() || a.dragging || a.pointerDrag || a.islandDrag:
+		a.liveUp() || a.clockAlarmFree() || a.dragging || a.pointerDrag || a.islandDrag:
 		a.hideMainIdleCapsuleSoon()
 	case a.fx.w <= float32(islandIdleW+4) && a.fx.h <= float32(islandIdleH+4):
 		// The closing shell has folded back onto the capsule: the picture
@@ -192,7 +192,7 @@ func (a *shelf) hideMainIdleCapsuleSoon() {
 		// An idle or capsule-sized closing frame may have taken over while
 		// this hide waited; the picture stays for those.
 		if !a.visible && !a.peeking && !a.apps.on && a.fx.peekK <= 0.01 &&
-			!a.fb.drawn && !a.fb.retracting && !a.liveUp() &&
+			!a.fb.drawn && !a.fb.retracting && !a.liveUp() && !a.clockAlarmFree() &&
 			!a.dragging && !a.pointerDrag && !a.islandDrag &&
 			a.fx.w <= float32(islandIdleW+4) && a.fx.h <= float32(islandIdleH+4) {
 			return

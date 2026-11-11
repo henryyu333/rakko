@@ -560,6 +560,9 @@ func (a *shelf) liveUp() bool {
 // belongs to the view and not to the shell's open handler: the download
 // completion (opens the tray) and the agent completion (dismisses).
 func (a *shelf) liveClickable(now time.Time) bool {
+	if a.clockAlarmUp(now) {
+		return true // 重复 and 停止 are the alert's own buttons
+	}
 	if !a.live.shown || now.After(a.live.until) {
 		return false
 	}

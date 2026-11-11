@@ -168,6 +168,12 @@ func (a *shelf) mutateToolsChanged(fn func(*layout.Layout) bool) bool {
 // resetToolsEdit ends editing and the picker; called on hide and on
 // leaving the page so re-entry starts clean.
 func (a *shelf) resetToolsEdit() {
+	if a.clock != nil && a.clock.editing() {
+		a.clock.endEdit()
+		if a.visible && a.focusMode {
+			a.leaveFocusMode()
+		}
+	}
 	if p := a.toolsPage(); p != nil {
 		p.closeDragPreview()
 		p.editing, p.picking, p.press = false, false, nil
@@ -706,6 +712,10 @@ func cardSizes(id string) [][2]int {
 		case "recent", "clip":
 			return [][2]int{{2, 1}, {2, 2}, {1, 1}}
 		case "note":
+			return [][2]int{{1, 1}, {2, 1}}
+		case "timer":
+			return [][2]int{{2, 1}, {1, 1}}
+		case "stopwatch":
 			return [][2]int{{1, 1}, {2, 1}}
 		}
 	}

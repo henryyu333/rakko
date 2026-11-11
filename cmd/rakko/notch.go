@@ -605,11 +605,21 @@ func (a *shelf) peekSize() (w, h float32) {
 	}
 	// Charging, headphones and a finished download take the notch while
 	// their words are up; a running download holds the wings below them.
-	if ev, ok := a.liveNow(now, a.liveAllow()); ok {
-		return a.liveShape(ev)
+	// The countdown's 时间到 card outranks every notice but an approval
+	// card, and its wings outrank playing music behind a download.
+	if ev, ok := a.liveNow(now, a.liveAllow() && !a.clockAlarmFree()); ok {
+		if ev.kind == liveAgentAsk || !a.clockAlarmUp(now) {
+			return a.liveShape(ev)
+		}
+	}
+	if a.clockAlarmUp(now) {
+		return a.timerAlarmSize()
 	}
 	if a.downloadRunning() {
 		return a.downloadShape()
+	}
+	if a.clock != nil && a.clock.timerWingsUp() && !a.visible {
+		return a.timerWingsSize()
 	}
 	if a.np != nil && a.np.showsPlayer() {
 		return a.wingsSize()
@@ -887,7 +897,7 @@ func (a *shelf) syncMousePassThrough() {
 func (a *shelf) overlayWanted() bool {
 	return a.visible || a.fx.openK > 0.02 || a.dragging || a.pointerDrag || a.islandDrag ||
 		a.peeking || a.peekProgress > 0.01 || a.fb.drawn || a.fb.retracting ||
-		a.appsModeOn() || a.liveUp()
+		a.appsModeOn() || a.liveUp() || a.clockAlarmFree()
 }
 
 // pointerSample is the pointer a monitoring pass reads: the caller caches

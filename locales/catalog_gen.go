@@ -8492,3 +8492,213 @@ func LiveStatusAgentAsk(agent string, what string) string {
 func (msgs Messages) LiveStatusAgentAsk(agent string, what string) string {
 	return Catalog.Format(msgs.locale, "liveStatusAgentAsk", map[string]any{"agent": agent, "what": what})
 }
+
+// CardTimer says "倒计时"
+// in the language the app shows.
+func CardTimer() string { return In(i18n.Locale()).CardTimer() }
+
+// CardTimer says "倒计时"
+// in the language of msgs.
+func (msgs Messages) CardTimer() string {
+	return Catalog.Format(msgs.locale, "cardTimer", nil)
+}
+
+// CardStopwatch says "秒表"
+// in the language the app shows.
+func CardStopwatch() string { return In(i18n.Locale()).CardStopwatch() }
+
+// CardStopwatch says "秒表"
+// in the language of msgs.
+func (msgs Messages) CardStopwatch() string {
+	return Catalog.Format(msgs.locale, "cardStopwatch", nil)
+}
+
+// TimerChipLabel says "剩余 {time}"
+// in the language the app shows.
+func TimerChipLabel(time_ string) string { return In(i18n.Locale()).TimerChipLabel(time_) }
+
+// TimerChipLabel says "剩余 {time}"
+// in the language of msgs.
+func (msgs Messages) TimerChipLabel(time_ string) string {
+	return Catalog.Format(msgs.locale, "timerChipLabel", map[string]any{"time": time_})
+}
+
+// TimerChipPausedLabel says "已暂停 · 剩余 {time}"
+// in the language the app shows.
+func TimerChipPausedLabel(time_ string) string { return In(i18n.Locale()).TimerChipPausedLabel(time_) }
+
+// TimerChipPausedLabel says "已暂停 · 剩余 {time}"
+// in the language of msgs.
+func (msgs Messages) TimerChipPausedLabel(time_ string) string {
+	return Catalog.Format(msgs.locale, "timerChipPausedLabel", map[string]any{"time": time_})
+}
+
+// TimerChipDone says "倒计时 · 时间到"
+// in the language the app shows.
+func TimerChipDone() string { return In(i18n.Locale()).TimerChipDone() }
+
+// TimerChipDone says "倒计时 · 时间到"
+// in the language of msgs.
+func (msgs Messages) TimerChipDone() string {
+	return Catalog.Format(msgs.locale, "timerChipDone", nil)
+}
+
+// TimerStart says "开始"
+// in the language the app shows.
+func TimerStart() string { return In(i18n.Locale()).TimerStart() }
+
+// TimerStart says "开始"
+// in the language of msgs.
+func (msgs Messages) TimerStart() string {
+	return Catalog.Format(msgs.locale, "timerStart", nil)
+}
+
+// TimerPause says "暂停"
+// in the language the app shows.
+func TimerPause() string { return In(i18n.Locale()).TimerPause() }
+
+// TimerPause says "暂停"
+// in the language of msgs.
+func (msgs Messages) TimerPause() string {
+	return Catalog.Format(msgs.locale, "timerPause", nil)
+}
+
+// TimerResume says "继续"
+// in the language the app shows.
+func TimerResume() string { return In(i18n.Locale()).TimerResume() }
+
+// TimerResume says "继续"
+// in the language of msgs.
+func (msgs Messages) TimerResume() string {
+	return Catalog.Format(msgs.locale, "timerResume", nil)
+}
+
+// TimerCancel says "取消"
+// in the language the app shows.
+func TimerCancel() string { return In(i18n.Locale()).TimerCancel() }
+
+// TimerCancel says "取消"
+// in the language of msgs.
+func (msgs Messages) TimerCancel() string {
+	return Catalog.Format(msgs.locale, "timerCancel", nil)
+}
+
+// TimerStop says "停止"
+// in the language the app shows.
+func TimerStop() string { return In(i18n.Locale()).TimerStop() }
+
+// TimerStop says "停止"
+// in the language of msgs.
+func (msgs Messages) TimerStop() string {
+	return Catalog.Format(msgs.locale, "timerStop", nil)
+}
+
+// TimerRepeat says "重复"
+// in the language the app shows.
+func TimerRepeat() string { return In(i18n.Locale()).TimerRepeat() }
+
+// TimerRepeat says "重复"
+// in the language of msgs.
+func (msgs Messages) TimerRepeat() string {
+	return Catalog.Format(msgs.locale, "timerRepeat", nil)
+}
+
+// TimerTimeUp says "时间到"
+// in the language the app shows.
+func TimerTimeUp() string { return In(i18n.Locale()).TimerTimeUp() }
+
+// TimerTimeUp says "时间到"
+// in the language of msgs.
+func (msgs Messages) TimerTimeUp() string {
+	return Catalog.Format(msgs.locale, "timerTimeUp", nil)
+}
+
+// TimerMinutes says "{n, number, ::group-off} 分钟"
+// in the language the app shows.
+func TimerMinutes(n int) string { return In(i18n.Locale()).TimerMinutes(n) }
+
+// TimerMinutes says "{n, number, ::group-off} 分钟"
+// in the language of msgs.
+func (msgs Messages) TimerMinutes(n int) string {
+	return Catalog.Format(msgs.locale, "timerMinutes", map[string]any{"n": n})
+}
+
+// TimerPreset says "{n, number, ::group-off} 分钟"
+// in the language the app shows.
+func TimerPreset(n int) string { return In(i18n.Locale()).TimerPreset(n) }
+
+// TimerPreset says "{n, number, ::group-off} 分钟"
+// in the language of msgs.
+func (msgs Messages) TimerPreset(n int) string {
+	return Catalog.Format(msgs.locale, "timerPreset", map[string]any{"n": n})
+}
+
+// TimerRemaining says "剩余 {time}"
+// in the language the app shows.
+func TimerRemaining(time_ string) string { return In(i18n.Locale()).TimerRemaining(time_) }
+
+// TimerRemaining says "剩余 {time}"
+// in the language of msgs.
+func (msgs Messages) TimerRemaining(time_ string) string {
+	return Catalog.Format(msgs.locale, "timerRemaining", map[string]any{"time": time_})
+}
+
+// TimerCustomLabel says "自定义时长"
+// in the language the app shows.
+func TimerCustomLabel() string { return In(i18n.Locale()).TimerCustomLabel() }
+
+// TimerCustomLabel says "自定义时长"
+// in the language of msgs.
+func (msgs Messages) TimerCustomLabel() string {
+	return Catalog.Format(msgs.locale, "timerCustomLabel", nil)
+}
+
+// StopwatchElapsed says "秒表 · 已用 {time}"
+// in the language the app shows.
+func StopwatchElapsed(time_ string) string { return In(i18n.Locale()).StopwatchElapsed(time_) }
+
+// StopwatchElapsed says "秒表 · 已用 {time}"
+// in the language of msgs.
+func (msgs Messages) StopwatchElapsed(time_ string) string {
+	return Catalog.Format(msgs.locale, "stopwatchElapsed", map[string]any{"time": time_})
+}
+
+// StopwatchPaused says "秒表 · 已暂停 {time}"
+// in the language the app shows.
+func StopwatchPaused(time_ string) string { return In(i18n.Locale()).StopwatchPaused(time_) }
+
+// StopwatchPaused says "秒表 · 已暂停 {time}"
+// in the language of msgs.
+func (msgs Messages) StopwatchPaused(time_ string) string {
+	return Catalog.Format(msgs.locale, "stopwatchPaused", map[string]any{"time": time_})
+}
+
+// StopwatchReset says "归零"
+// in the language the app shows.
+func StopwatchReset() string { return In(i18n.Locale()).StopwatchReset() }
+
+// StopwatchReset says "归零"
+// in the language of msgs.
+func (msgs Messages) StopwatchReset() string {
+	return Catalog.Format(msgs.locale, "stopwatchReset", nil)
+}
+
+// HomeClock says "{t, time, ::jm}"
+// in the language the app shows.
+func HomeClock(t time.Time) string { return In(i18n.Locale()).HomeClock(t) }
+
+// HomeClock says "{t, time, ::jm}"
+// in the language of msgs.
+func (msgs Messages) HomeClock(t time.Time) string {
+	return Catalog.Format(msgs.locale, "homeClock", map[string]any{"t": t})
+}
+
+// HomeDateLine says "{t, date, ::MMMMd} {t, date, ::EEEE}"
+// in the language the app shows.
+func HomeDateLine(t time.Time) string { return In(i18n.Locale()).HomeDateLine(t) }
+
+// HomeDateLine says "{t, date, ::MMMMd} {t, date, ::EEEE}"
+// in the language of msgs.
+func (msgs Messages) HomeDateLine(t time.Time) string {
+	return Catalog.Format(msgs.locale, "homeDateLine", map[string]any{"t": t})
+}

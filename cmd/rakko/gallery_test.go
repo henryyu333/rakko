@@ -522,6 +522,22 @@ func galleryGroupA() []galleryItem {
 			a.peeking, a.peekProgress, a.peekFrom = true, 1, 1
 			return galleryRender{view: galleryPanel(t, lang, a, 800, 560)}
 		}},
+		{ID: "A24", Group: g, Title: "倒计时两翼", State: "进行中 · 左环与剩余时间", Notch: true,
+			Build: galleryClockPeek(false, func(m *clockModule, now time.Time) {
+				m.phase, m.dur, m.end = timerRunning, 5*time.Minute, now.Add(252*time.Second)
+			})},
+		{ID: "A25", Group: g, Title: "倒计时两翼", State: "暂停 · 环与数字变暗", Notch: true,
+			Build: galleryClockPeek(false, func(m *clockModule, now time.Time) {
+				m.phase, m.dur, m.remain = timerPaused, 5*time.Minute, 187*time.Second
+			})},
+		{ID: "A26", Group: g, Title: "时间到", State: "响铃 · 沙漏摆动 · 重复与停止", Notch: true,
+			Build: galleryClockPeek(false, func(m *clockModule, now time.Time) {
+				m.phase, m.dur, m.doneAt, m.ringing = timerDone, 5*time.Minute, now, true
+			})},
+		{ID: "A27", Group: g, Title: "时间到", State: "响满 1 分钟 · 自动静音，卡片仍留", Notch: true,
+			Build: galleryClockPeek(false, func(m *clockModule, now time.Time) {
+				m.phase, m.dur, m.doneAt, m.ringing = timerDone, 5*time.Minute, now.Add(-timerRingFor), false
+			})},
 	}
 }
 
@@ -553,6 +569,39 @@ func galleryLive(makeEvent func(lang string) liveEvent) func(t *testing.T, lang 
 		a.pushLive(makeEvent(lang), 5*time.Second, time.Now())
 		a.peeking, a.peekProgress, a.peekFrom = true, 1, 1
 		return galleryRender{view: galleryPanel(t, lang, a, sheetW, 120)}
+	}
+}
+
+// galleryClockAt gives a shelf a clock frozen at now: the cards, chips
+// and the closed notch read the same second in every frame.
+func galleryClockAt(a *shelf, now time.Time) *clockModule {
+	m := newClockModule(a)
+	m.now = func() time.Time { return now }
+	a.clock = m
+	return m
+}
+
+// galleryClockPeek renders the closed notch with a countdown state.
+func galleryClockPeek(island bool, setup func(m *clockModule, now time.Time)) func(t *testing.T, lang string) galleryRender {
+	return func(t *testing.T, lang string) galleryRender {
+		var a *shelf
+		if island {
+			a = islandShelf(true, settings.ShellStyleIsland)
+		} else {
+			a = liveShelf()
+		}
+		now := time.Date(2026, 11, 11, 9, 41, 0, 0, time.Local)
+		m := galleryClockAt(a, now)
+		a.modules = []module{m, timerChip{m}, stopwatchChip{m}}
+		if setup != nil {
+			setup(m, now)
+		}
+		a.peeking, a.peekProgress, a.peekFrom = true, 1, 1
+		w := 500
+		if island {
+			w = 460
+		}
+		return galleryRender{view: galleryPanel(t, lang, a, w, 130)}
 	}
 }
 
@@ -642,8 +691,40 @@ func galleryGroupC() []galleryItem {
 			view.Frame()
 			return galleryRender{view: view}
 		}},
-		{ID: "C10", Group: g, Title: "无音乐", State: "没有状态行 · 只有日期与海獭", Art: true, Build: func(t *testing.T, lang string) galleryRender {
+		{ID: "C10", Group: g, Title: "无音乐", State: "大字当前时间 · 日期与星期在第二行", Art: true, Build: func(t *testing.T, lang string) galleryRender {
 			a, view, _ := homeShelf(t, nil)
+			a.locale = lang
+			view.SetLocale(lang)
+			view.SetScale(galleryScale)
+			view.Frame()
+			view.Frame()
+			return galleryRender{view: view}
+		}},
+		{ID: "C13", Group: g, Title: "无音乐", State: "时间大字与日期行 · 本机没有海獭素材", Build: func(t *testing.T, lang string) galleryRender {
+			a, view, _ := homeShelf(t, nil)
+			a.locale = lang
+			view.SetLocale(lang)
+			view.SetScale(galleryScale)
+			view.Frame()
+			view.Frame()
+			return galleryRender{view: view}
+		}},
+		{ID: "C11", Group: g, Title: "播放器", State: "顶栏左耳显示当前时间", Build: func(t *testing.T, lang string) galleryRender {
+			st := homeTrack()
+			a, view, _ := homeShelf(t, &st)
+			a.np.art, a.np.artColor = shotArt(), ui.Hex("#D86B9E")
+			a.locale = lang
+			view.SetLocale(lang)
+			view.SetScale(galleryScale)
+			view.Frame()
+			view.Frame()
+			return galleryRender{view: view}
+		}},
+		{ID: "C12", Group: g, Title: "播放器", State: "灵动岛 · 左耳时间位置相同", Build: func(t *testing.T, lang string) galleryRender {
+			st := homeTrack()
+			a, view, _ := homeShelf(t, &st)
+			a.island = true
+			a.np.art, a.np.artColor = shotArt(), ui.Hex("#D86B9E")
 			a.locale = lang
 			view.SetLocale(lang)
 			view.SetScale(galleryScale)
@@ -1245,6 +1326,48 @@ func galleryGroupF() []galleryItem {
 			a.drop = dropZoneState{files: paths, class: class, loaded: true}
 		}
 	}
+	clock := func(fill func(m *clockModule, now time.Time)) func(t *testing.T, a *shelf, p *toolsPage, lang string) {
+		return func(t *testing.T, a *shelf, p *toolsPage, lang string) {
+			now := time.Date(2026, 11, 11, 9, 41, 0, 0, time.Local)
+			m := galleryClockAt(a, now)
+			a.modules = []module{m, timerChip{m}, stopwatchChip{m}}
+			if fill != nil {
+				fill(m, now)
+			}
+		}
+	}
+	hover := func(build func(t *testing.T, lang string) galleryRender) func(t *testing.T, lang string) galleryRender {
+		return func(t *testing.T, lang string) galleryRender {
+			r := build(t, lang)
+			r.view.Move(60, 100)
+			r.view.Frame()
+			r.view.Frame()
+			return r
+		}
+	}
+	timerRun := clock(func(m *clockModule, now time.Time) {
+		m.phase, m.dur, m.end = timerRunning, 5*time.Minute, now.Add(252*time.Second)
+	})
+	timerPaused := clock(func(m *clockModule, now time.Time) {
+		m.phase, m.dur, m.remain = timerPaused, 5*time.Minute, 187*time.Second
+	})
+	timerLong := clock(func(m *clockModule, now time.Time) {
+		m.phase, m.dur, m.end = timerRunning, 64*time.Minute, now.Add(3723*time.Second)
+	})
+	timerEdit := clock(func(m *clockModule, now time.Time) {
+		e := &timerEdit{h: 0, m: 25, s: 0, field: 1}
+		e.raw = e.text()
+		m.edit = e
+	})
+	watchRun := clock(func(m *clockModule, now time.Time) {
+		m.watchRun, m.watchStart = true, now.Add(-754*time.Second)
+	})
+	watchPaused := clock(func(m *clockModule, now time.Time) {
+		m.watchElapsed = 754 * time.Second
+	})
+	timerDone := clock(func(m *clockModule, now time.Time) {
+		m.phase, m.dur, m.doneAt, m.ringing = timerDone, 5*time.Minute, now, true
+	})
 	def := layout.DefaultWith(true).Cards
 	return []galleryItem{
 		{ID: "F1", Group: g, Title: "工具页", State: "默认网格", Build: tools(def, nil)},
@@ -1275,6 +1398,31 @@ func galleryGroupF() []galleryItem {
 		{ID: "F14", Group: g, Title: "工具页", State: "拖入时 · 动作格高亮可接受", Build: tools(def, drag(classImages, "封面.png", "照片 02.png"))},
 		{ID: "F15", Group: g, Title: "工具页", State: "拖入时 · 不接受的动作格变暗", Build: tools(def, drag(classArchives, "素材备份.zip"))},
 		{ID: "F16", Group: g, Title: "工具页", State: "转换中忙碌 · 仅点击被拒，界面无变化", Build: tools(def, busy)},
+		{ID: "F17", Group: g, Title: "倒计时", State: "2×1 · 空闲 5:00 与预设", Build: tools(card("timer", 2, 1), clock(nil))},
+		{ID: "F18", Group: g, Title: "倒计时", State: "2×1 · 自定义时长编辑", Build: tools(card("timer", 2, 1), timerEdit)},
+		{ID: "F19", Group: g, Title: "倒计时", State: "2×1 · 进行中 4:12", Build: tools(card("timer", 2, 1), timerRun)},
+		{ID: "F20", Group: g, Title: "倒计时", State: "2×1 · 暂停 3:07", Build: tools(card("timer", 2, 1), timerPaused)},
+		{ID: "F21", Group: g, Title: "倒计时", State: "2×1 · 超过 1 小时 1:02:03", Build: tools(card("timer", 2, 1), timerLong)},
+		{ID: "F22", Group: g, Title: "倒计时", State: "1×1 · 空闲 5 分钟", Build: tools(card("timer", 1, 1), clock(nil))},
+		{ID: "F23", Group: g, Title: "倒计时", State: "1×1 · 进行中 · 悬停的 ×", Build: hover(tools(card("timer", 1, 1), timerRun))},
+		{ID: "F24", Group: g, Title: "倒计时", State: "1×1 · 暂停", Build: tools(card("timer", 1, 1), timerPaused)},
+		{ID: "F25", Group: g, Title: "倒计时", State: "编辑模式 · 图形与名称", Build: tools(card("timer", 2, 1), func(t *testing.T, a *shelf, p *toolsPage, lang string) {
+			p.editing, p.editAt = true, time.Now()
+		})},
+		{ID: "F26", Group: g, Title: "秒表", State: "2×1 · 空闲 0:00", Build: tools(card("stopwatch", 2, 1), clock(nil))},
+		{ID: "F27", Group: g, Title: "秒表", State: "2×1 · 进行中 12:34", Build: tools(card("stopwatch", 2, 1), watchRun)},
+		{ID: "F28", Group: g, Title: "秒表", State: "2×1 · 暂停 · 归零", Build: tools(card("stopwatch", 2, 1), watchPaused)},
+		{ID: "F29", Group: g, Title: "秒表", State: "1×1 · 空闲", Build: tools(card("stopwatch", 1, 1), clock(nil))},
+		{ID: "F30", Group: g, Title: "秒表", State: "1×1 · 进行中", Build: tools(card("stopwatch", 1, 1), watchRun)},
+		{ID: "F31", Group: g, Title: "秒表", State: "1×1 · 暂停 · 归零角标", Build: tools(card("stopwatch", 1, 1), watchPaused)},
+		{ID: "F32", Group: g, Title: "顶栏胶囊", State: "倒计时与秒表（面板打开）", Build: tools(card("timer", 2, 1), func(t *testing.T, a *shelf, p *toolsPage, lang string) {
+			now := time.Date(2026, 11, 11, 9, 41, 0, 0, time.Local)
+			m := galleryClockAt(a, now)
+			a.modules = []module{timerChip{m}, stopwatchChip{m}}
+			m.phase, m.dur, m.end = timerRunning, 5*time.Minute, now.Add(252*time.Second)
+			m.watchRun, m.watchStart = true, now.Add(-754*time.Second)
+		})},
+		{ID: "F33", Group: g, Title: "顶栏胶囊", State: "时间到 · 橙色停止", Build: tools(card("timer", 2, 1), timerDone)},
 	}
 }
 
@@ -1952,6 +2100,14 @@ func galleryGroupL() []galleryItem {
 		{ID: "L6", Group: g, Title: "灵动岛", State: "其他显示器上的空闲胶囊", Build: func(t *testing.T, lang string) galleryRender {
 			return galleryRender{view: galleryView(t, lang, idleIslandView, islandIdleW, islandIdleH)}
 		}},
+		{ID: "L7", Group: g, Title: "灵动岛", State: "倒计时进行中 · 环与剩余时间", Notch: true,
+			Build: galleryClockPeek(true, func(m *clockModule, now time.Time) {
+				m.phase, m.dur, m.end = timerRunning, 5*time.Minute, now.Add(252*time.Second)
+			})},
+		{ID: "L8", Group: g, Title: "灵动岛", State: "时间到 · 340 × 52 整颗胶囊", Notch: true,
+			Build: galleryClockPeek(true, func(m *clockModule, now time.Time) {
+				m.phase, m.dur, m.doneAt, m.ringing = timerDone, 5*time.Minute, now, true
+			})},
 	}
 }
 

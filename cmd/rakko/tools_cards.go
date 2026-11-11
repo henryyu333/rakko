@@ -98,6 +98,8 @@ func toolCatalog() []toolCardDef {
 		{id: "clip", kind: cardWidget, title: "剪贴板最新", icon: clipNavSymbol, span: 2, accepts: never, available: always},
 		{id: "note", kind: cardWidget, title: "便利贴", icon: noteSymbol, span: 1, variableSpan: true, accepts: never, available: always},
 		{id: "usage", kind: cardWidget, title: "AI 用量", icon: gaugeSymbol, span: 1, accepts: never, available: usageAvailable},
+		{id: "timer", kind: cardWidget, title: "倒计时", icon: timerGlyph, span: 2, variableSpan: true, accepts: never, available: always},
+		{id: "stopwatch", kind: cardWidget, title: "秒表", icon: watchGlyph, span: 1, variableSpan: true, accepts: never, available: always},
 	}
 }
 
@@ -168,6 +170,10 @@ func (d *toolCardDef) name(l locales.Messages) string {
 		return l.CardNote()
 	case "usage":
 		return l.AiUsage()
+	case "timer":
+		return l.CardTimer()
+	case "stopwatch":
+		return l.CardStopwatch()
 	}
 	return d.title
 }
@@ -202,6 +208,12 @@ func (a *shelf) toolCard(c *ui.Context, spec layout.Card, surf toolCardSurface, 
 	}
 	if def != nil && def.id == "note" {
 		title = a.noteLabel(loc(c))
+	}
+	if def != nil && def.id == "timer" {
+		title = a.clock.timerCardTitle(loc(c))
+	}
+	if def != nil && def.id == "stopwatch" {
+		title = a.clock.watchCardTitle(loc(c))
 	}
 	key := "tc-" + spec.ID
 	if len(keySfx) > 0 {
@@ -327,6 +339,10 @@ func (a *shelf) toolCardBody(c *ui.Context, card ui.Element, def *toolCardDef, s
 		a.noteBody(c, card, span, surf)
 	case "usage":
 		a.toolUsageBody(c, card, span)
+	case "timer":
+		a.toolTimerBody(c, card, span, surf)
+	case "stopwatch":
+		a.toolStopwatchBody(c, card, span, surf)
 	default:
 		card.Center().Gap(5).Children(func() {
 			ui.Icon(c, def.icon).Size(20, 20).TextColor(ink)
@@ -447,6 +463,13 @@ func (a *shelf) runToolCard(id string) bool {
 	if def == nil {
 		return false
 	}
+	if a.clock != nil && a.clock.editing() {
+		// The first tap outside the editor only closes it; it does not
+		// also run this card's action.
+		a.clock.endEdit()
+		a.leaveFocusMode()
+		return true
+	}
 	switch def.id {
 	case "ocr":
 		a.startScreenOCR() // 开始框选（设计 §5）；面板会先收起
@@ -475,6 +498,18 @@ func (a *shelf) runToolCard(id string) bool {
 			return true
 		}
 		return false
+	case "timer":
+		if a.clock == nil {
+			return false
+		}
+		a.clock.toggleTimer(a.clock.clock())
+		return true
+	case "stopwatch":
+		if a.clock == nil {
+			return false
+		}
+		a.clock.toggleWatch(a.clock.clock())
+		return true
 	}
 	items := a.toolCardTargets(id)
 	if len(items) == 0 {

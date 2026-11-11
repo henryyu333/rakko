@@ -86,6 +86,10 @@ const (
 	// peekApps is the app switcher: pinned seats on the left wing, other
 	// running apps and 「更多」 on the right, with its own popover below.
 	peekApps
+	// peekTimerWings is the running countdown's ring and remaining time;
+	// peekAlarm is its unanswered 时间到 card.
+	peekTimerWings
+	peekAlarm
 )
 
 // shellMotion is what view() drew last: the drawn shell's size, for the

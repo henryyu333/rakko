@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -449,7 +450,6 @@ func homeLineOpacity(i, cur int, scrollY, pad, viewH float32) float32 {
 // B): the otter on the left — standing, or asleep after a quiet spell —
 // and today's date with a few lines of what is going on beside it.
 func (p *homePage) idleBody(c *ui.Context, w float32) ui.Element {
-	l := loc(c)
 	now := c.Now()
 	pose := petIdle
 	if a := p.host; !a.lastAct.IsZero() && now.Sub(a.lastAct) > otterSleepyAfter {
@@ -467,8 +467,9 @@ func (p *homePage) idleBody(c *ui.Context, w float32) ui.Element {
 		}
 		ui.Column(c.Key("home-today")).Grow(1).MinWidth(0).Gap(12).Children(func() {
 			ui.Column(c.Key("home-date")).Gap(2).Children(func() {
-				ui.Text(c, l.HomeDate(now)).SingleLine().FontSize(26).FontWeight(700).TextColor(ink)
-				ui.Text(c, l.HomeWeekday(now)).SingleLine().FontSize(13).TextColor(ink2)
+				ui.Text(c, homeClockText(tloc(c), now)).SingleLine().FontSize(26).FontWeight(700).
+					FontFeatures("tnum").TextColor(ink)
+				ui.Text(c, tloc(c).HomeDateLine(now)).SingleLine().FontSize(13).TextColor(ink2)
 			})
 			p.statusLines(c, now)
 			if p.host.weekly != nil {
@@ -476,8 +477,28 @@ func (p *homePage) idleBody(c *ui.Context, w float32) ui.Element {
 			}
 		})
 	})
-	c.After(time.Minute) // the date, the otter's pose and the times move on
+	c.After(nextMinute(now)) // the clock, the otter's pose and the times move on
 	return ui.Box(c).Size(0, 0)
+}
+
+// homeClockText is the current time in l's format. Chinese hour cycles
+// write the day period against the hour ("下午9:47"); the design keeps the
+// space macOS's Clock shows, so the one this page draws adds it.
+func homeClockText(l locales.Messages, now time.Time) string {
+	s := l.HomeClock(now)
+	for _, period := range []string{"凌晨", "早上", "上午", "中午", "下午", "晚上"} {
+		if rest, ok := strings.CutPrefix(s, period); ok && rest != "" && rest[0] >= '0' && rest[0] <= '9' {
+			return period + " " + rest
+		}
+	}
+	return s
+}
+
+// nextMinute is the wait until the wall clock's next whole minute: the
+// home clock repaints on the minute's own boundary, not 60s after the
+// page appeared.
+func nextMinute(now time.Time) time.Duration {
+	return now.Truncate(time.Minute).Add(time.Minute).Sub(now)
 }
 
 // statusLines are at most three lines under the date: the newest agent

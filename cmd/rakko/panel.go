@@ -5,6 +5,7 @@ package main
 import (
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 	"time"
 
@@ -401,6 +402,10 @@ func (a *shelf) focusDropNow() int {
 // Nil in production.
 var frameTrace func(canvasW, canvasH float32, native mygo.Rectangle, blank bool)
 
+// peekKindTrace, when a test sets it, sees the shape peekView chose for
+// the frame it just built. Nil in production.
+var peekKindTrace func(peekKind)
+
 // view 画三种状态：空闲（完全不可见）、探头（悬停播放器、下拉箭头或拖拽
 // 提示）、展开（纯黑面板从刘海里长出来）。单元测试里 a.win 为 nil，
 // 直接按完整展开态渲染。
@@ -524,17 +529,19 @@ func (a *shelf) view(c *ui.Context) {
 		a.fb.schedule(c, now)
 	}
 	// The realtime queue advances here too, so a notice grows the shell on
-	// its own and folds it back when its hold ends.
-	_, liveUp := a.liveNow(now, a.liveAllow())
+	// its own and folds it back when its hold ends. The countdown's alert
+	// holds the queue back: those notices wait behind it.
+	_, liveUp := a.liveNow(now, a.liveAllow() && !a.clockAlarmFree())
 	if liveUp {
 		c.After(max(a.live.until.Sub(now), 0) + 10*time.Millisecond)
 	}
+	alarmUp := a.clockAlarmUp(now)
 	downloadUp := a.downloadRunning()
 	openTarget, peekTarget := float32(0), float32(0)
 	if a.visible {
 		openTarget = 1
 	}
-	if a.peeking || a.apps.on || capsule || liveUp || downloadUp {
+	if a.peeking || a.apps.on || capsule || liveUp || alarmUp || downloadUp {
 		peekTarget = 1
 	}
 	// Keep one native drop target across all states. The transparent root does
@@ -1100,7 +1107,14 @@ func (a *shelf) bandRow(c *ui.Context) {
 	// own presses. Their boxes are kept from this frame for the next one.
 	a.bandBegin(row.Bounds())
 	row.Children(func() {
-		ui.Box(c.Key("band-left")).Grow(1).MinWidth(0)
+		left := ui.Row(c.Key("band-left")).Grow(1).MinWidth(0).AlignItems(ui.Center)
+		left.Children(func() {
+			if a.tab == pageHome && a.np != nil && a.np.hasTrack() {
+				ui.Text(c, homeClockText(tloc(c), c.Now())).SingleLine().FontSize(13).FontWeight(600).
+					FontFeatures("tnum").TextColor(ink2)
+				c.After(nextMinute(c.Now()))
+			}
+		})
 		if a.notchW > 0 && !a.island {
 			// The camera housing splits the band only when the shell is the
 			// notch shape; the island floats below it with no gap to cut.
@@ -1432,23 +1446,50 @@ func (a *shelf) dropBar(c *ui.Context, name, count, hint string) {
 }
 
 // liveActivities are the modules with something under way, in module
-// order, at most chipMax: the band's left ear has room for two chips.
-// While the playing page is on screen its own controls and artwork show
-// the track, so the now-playing chip would repeat it; the remaining
-// activities move up to fill the slot.
+// order, at most chipMax: the band's right ear has room for two chips.
+// The converter's 取消 is registered before the clocks, and the clocks
+// before the download and keep-awake widgets, so a running job keeps the
+// first slot. While the playing page is on screen its own controls and
+// artwork show the track, so the now-playing chip would repeat it; the
+// remaining activities move up to fill the slot.
 func (a *shelf) liveActivities() []liveActivity {
 	var acts []liveActivity
+	clocked := false
 	onHome := a.tab == pageHome
 	for _, m := range a.modules {
 		if _, ok := m.(*nowPlayingModule); ok && onHome {
 			continue
 		}
-		if act, ok := m.(liveActivity); ok && act.live() {
-			acts = append(acts, act)
-			if len(acts) == chipMax {
-				break
-			}
+		act, ok := m.(liveActivity)
+		if !ok || !act.live() {
+			continue
 		}
+		switch act.(type) {
+		case timerChip, stopwatchChip:
+			clocked = true
+		}
+		acts = append(acts, act)
+	}
+	// While a clock is under way the strip follows the design's order:
+	// the converter's 取消, then the countdown, the stopwatch, and only
+	// then the other activities. With no clock the module order is left
+	// exactly as it was.
+	if clocked {
+		rank := func(act liveActivity) int {
+			switch act.(type) {
+			case *converter:
+				return 0
+			case timerChip:
+				return 1
+			case stopwatchChip:
+				return 2
+			}
+			return 3
+		}
+		sort.SliceStable(acts, func(i, j int) bool { return rank(acts[i]) < rank(acts[j]) })
+	}
+	if len(acts) > chipMax {
+		acts = acts[:chipMax]
 	}
 	return acts
 }
@@ -1702,6 +1743,12 @@ func (a *shelf) peekView(c *ui.Context, shellW, shellH, openK, peekK, shake floa
 			// agree), and the wings take the shape back when the toast
 			// is done.
 			kind = peekCapsule
+		case liveOK && liveEv.kind == liveAgentAsk:
+			// The permission card is the one thing the countdown's alert
+			// yields to; it comes back when the card is answered.
+			kind = peekLiveCapsule
+		case a.clockAlarmUp(now):
+			kind = peekAlarm
 		case liveOK:
 			// A charging / headphone / download notice covers the wings
 			// for its own hold; the persistent download owns them after.
@@ -1726,12 +1773,19 @@ func (a *shelf) peekView(c *ui.Context, shellW, shellH, openK, peekK, shake floa
 			kind = peekApps
 		case a.downloadRunning():
 			kind = peekDownload
+		case a.clock != nil && a.clock.timerWingsUp():
+			// The countdown's wings outrank a loaded track: both its
+			// sides are the timer while it runs.
+			kind = peekTimerWings
 		case a.np != nil && a.np.showsPlayer():
 			kind = peekWings
 		default:
 			kind = peekChevron
 		}
 		a.fx.peekKind = kind
+		if peekKindTrace != nil {
+			peekKindTrace(kind)
+		}
 	}
 	if !folding {
 		// The entry lives only where it is drawn — the chevron band, the
@@ -1757,6 +1811,24 @@ func (a *shelf) peekView(c *ui.Context, shellW, shellH, openK, peekK, shake floa
 			return
 		}
 		a.liveView(c, shellW, shellH, peekK, liveEv)
+		return
+	case peekAlarm:
+		if !a.clockAlarmUp(now) {
+			return
+		}
+		pw, ph := a.timerAlarmSize()
+		clip := ui.Column(c.Key("alarm-clip")).Width(shellW).Height(shellH).Clip().AlignItems(ui.Center).
+			Margin(float32(a.sheetTop()), 0, 0, 0)
+		clip.Children(func() { a.timerAlarmView(c, pw, ph, peekK) })
+		return
+	case peekTimerWings:
+		if a.clock == nil || !a.clock.timerWingsUp() {
+			return
+		}
+		pw, ph := a.timerWingsSize()
+		clip := ui.Column(c.Key("timer-clip")).Width(shellW).Height(shellH).Clip().AlignItems(ui.Center).
+			Margin(float32(a.sheetTop()), 0, 0, 0)
+		clip.Children(func() { a.timerWings(c, pw, ph, peekK) })
 		return
 	case peekDownload:
 		if !a.downloadRunning() {
