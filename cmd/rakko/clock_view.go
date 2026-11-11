@@ -51,6 +51,33 @@ var (
 // timerPresets are the 2 × 1 card's minute choices.
 var timerPresets = []int{1, 3, 5, 10, 15, 30, 60}
 
+// clockReadingSize is the largest 600-weight tabular size whose reading
+// fits avail: short readings keep base, long ones shrink a point at a time
+// instead of taking an ellipsis. The card's buttons keep their fixed sizes
+// because the reading gives up width first.
+func clockReadingSize(c *ui.Context, text string, avail, base float32) float32 {
+	if avail <= 0 {
+		return base
+	}
+	size := base
+	for ; size > 12; size-- {
+		w, _ := c.MeasureText(0, ui.Span{Text: text, Size: size, Weight: 600, Features: "tnum"})
+		if w <= avail {
+			return size
+		}
+	}
+	return size
+}
+
+// clockCardWidth is the card's box width on a surface: the tool grid's
+// cell or the desktop pin's window.
+func clockCardWidth(span int, surf toolCardSurface) float32 {
+	if surf == cardDesktop {
+		return float32(pinCardWidth("", span))
+	}
+	return toolColW(span)
+}
+
 // clockBadgeLeft is the 1 × 1 card's top-right badge offset: the card is
 // sized after its content is built, so a Right() would resolve against the
 // page; the two surfaces' widths are known here instead.
@@ -95,6 +122,27 @@ func clockCircle(c *ui.Context, key string, size float32, bg ui.Color, glyph *ui
 		ui.Icon(c, glyph).Size(gs, gs).TextColor(fg)
 	})
 	return b
+}
+
+// clockCancelBadge is the 1 × 1 countdown's × : hover-only on the tools
+// page, and drawn inside a desktop pin's own card box.
+func (a *shelf) clockCancelBadge(c *ui.Context, m *clockModule) ui.Element {
+	btn := clockCircle(c, "timer-11-cancel", 18, fill2, clockCloseSym, 11, ink2, loc(c).TimerCancel())
+	clockSwallow(btn)
+	if btn.Clicked() {
+		m.stopTimer(m.clock())
+	}
+	return btn
+}
+
+// clockResetBadge is the paused stopwatch's ↺ .
+func (a *shelf) clockResetBadge(c *ui.Context, m *clockModule) ui.Element {
+	btn := clockCircle(c, "watch-11-reset", 18, fill2, clockResetSym, 11, ink2, loc(c).StopwatchReset())
+	clockSwallow(btn)
+	if btn.Clicked() {
+		m.resetWatch()
+	}
+	return btn
 }
 
 // clockRail is the countdown's remaining track; dimmed while paused.
@@ -150,14 +198,18 @@ func (a *shelf) toolTimerBody(c *ui.Context, card ui.Element, span int, surf too
 				if m != nil {
 					text = clockTextCeil(m.timerRemainAt(now))
 				}
-				size := float32(26)
-				if len(text) > 5 { // h:mm:ss is wider than the row allows at 26
-					size = 20
+				// The row's fixed parts: glyph 16, its gaps, the two
+				// buttons and the number's 2pt side padding. A long reading
+				// shrinks instead of pushing them out.
+				fixed := float32(16 + 30 + 3*7 + 4)
+				if m != nil && (m.phase == timerRunning || m.phase == timerPaused) {
+					fixed = 16 + 26 + 30 + 4*7 + 4
 				}
+				avail := clockCardWidth(2, surf) - 24 - fixed
+				size := clockReadingSize(c, text, avail, 26)
 				num := ui.Box(c.Key("timer-num")).Height(30).Center().Padding(0, 2, 0, 2)
 				num.Children(func() {
-					ui.Text(c, text).SingleLine().FontSize(size).FontWeight(600).
-						FontFeatures("tnum").TextColor(numCol)
+					fitText(c, text, size, 600, avail).FontFeatures("tnum").TextColor(numCol)
 				})
 				if m != nil && m.phase == timerIdle && surf == cardPanel {
 					clockSwallow(num)
@@ -387,21 +439,18 @@ func (a *shelf) toolTimerNarrow(c *ui.Context, card ui.Element, m *clockModule, 
 		if m.phase == timerPaused {
 			col = ink2
 		}
-		ui.Text(c, clockTextCeil(m.timerRemainAt(now))).SingleLine().FontSize(20).
-			FontWeight(600).FontFeatures("tnum").TextColor(col)
+		text := clockTextCeil(m.timerRemainAt(now))
+		avail := clockCardWidth(1, surf) - 8
+		size := clockReadingSize(c, text, avail, 20)
+		fitText(c, text, size, 600, avail).FontFeatures("tnum").TextColor(col)
 		clockRail(c, "timer-11-rail", m.timerFracAt(now), m.phase == timerPaused).
 			Width(56).Margin(9, 0, 0, 0)
 	})
-	if m == nil || (m.phase != timerRunning && m.phase != timerPaused) {
+	if surf != cardDesktop || m == nil || (m.phase != timerRunning && m.phase != timerPaused) {
 		return
 	}
 	if card.Hovered() {
-		cancel := clockCircle(c, "timer-11-cancel", 18, fill2, clockCloseSym, 11, ink2, l.TimerCancel()).
-			Absolute().Top(6).Left(clockBadgeLeft(surf))
-		clockSwallow(cancel)
-		if cancel.Clicked() {
-			m.stopTimer(m.clock())
-		}
+		a.clockCancelBadge(c, m).Absolute().Top(6).Left(clockBadgeLeft(surf))
 	}
 }
 
@@ -442,8 +491,13 @@ func (a *shelf) toolStopwatchBody(c *ui.Context, card ui.Element, span int, surf
 			if m != nil {
 				text = clockText(m.watchElapsedAt(now))
 			}
-			ui.Text(c, text).SingleLine().FontSize(26).FontWeight(600).
-				FontFeatures("tnum").TextColor(numCol)
+			fixed := float32(16 + 30 + 3*7)
+			if m != nil && !m.watchRun && m.watchElapsed > 0 {
+				fixed = 16 + 26 + 30 + 4*7
+			}
+			avail := clockCardWidth(2, surf) - 24 - fixed
+			size := clockReadingSize(c, text, avail, 26)
+			fitText(c, text, size, 600, avail).FontFeatures("tnum").TextColor(numCol)
 			ui.Box(c.Key("watch-gap")).Grow(1)
 			switch {
 			case m == nil || (!m.watchRun && m.watchElapsed == 0):
@@ -489,18 +543,15 @@ func (a *shelf) toolStopwatchNarrow(c *ui.Context, card ui.Element, m *clockModu
 			col, glyph = ink2, ink3
 		}
 		ui.Icon(c, watchGlyph).Size(16, 16).TextColor(glyph)
-		ui.Text(c, clockText(m.watchElapsedAt(now))).SingleLine().FontSize(20).
-			FontWeight(600).FontFeatures("tnum").TextColor(col).Margin(6, 0, 0, 0)
+		text := clockText(m.watchElapsedAt(now))
+		avail := clockCardWidth(1, surf) - 8
+		size := clockReadingSize(c, text, avail, 20)
+		fitText(c, text, size, 600, avail).FontFeatures("tnum").TextColor(col).Margin(6, 0, 0, 0)
 	})
-	if m == nil || m.watchRun || m.watchElapsed == 0 {
+	if surf != cardDesktop || m == nil || m.watchRun || m.watchElapsed == 0 {
 		return
 	}
-	reset := clockCircle(c, "watch-11-reset", 18, fill2, clockResetSym, 11, ink2, l.StopwatchReset()).
-		Absolute().Top(6).Left(clockBadgeLeft(surf))
-	clockSwallow(reset)
-	if reset.Clicked() {
-		m.resetWatch()
-	}
+	a.clockResetBadge(c, m).Absolute().Top(6).Left(clockBadgeLeft(surf))
 }
 
 // --- band chips ---

@@ -410,6 +410,9 @@ func (p *toolsPage) toolCell(c *ui.Context, cell toolCell, editing, live bool) {
 		p.toolEditChrome(c, card, cell, spec, live)
 	default:
 		card.Absolute().Left(cell.x).Top(cell.y).Width(cell.w).Height(cell.h)
+		if live && !editing {
+			p.clockCardBadges(c, card, spec)
+		}
 	}
 	if live {
 		p.toolCardInput(c, card, cell, editing, live)
@@ -425,6 +428,35 @@ func surfFor(editing bool) toolCardSurface {
 		return cardEdit
 	}
 	return cardPanel
+}
+
+// clockCardBadges adds the 1 × 1 clocks' corner control after the card has
+// its place. An absolute child built before positioning resolves against
+// the stage instead of the card, which put a second card's badge over the
+// first; the desktop pin fills its own window, so its badge stays in the
+// card body.
+func (p *toolsPage) clockCardBadges(c *ui.Context, card ui.Element, spec layout.Card) {
+	a := p.host
+	if a.clock == nil || spec.Cols() != 1 || spec.Height() != 1 {
+		return
+	}
+	switch spec.ID {
+	case "timer":
+		m := a.clock
+		if m.phase != timerRunning && m.phase != timerPaused {
+			return
+		}
+		if !card.Hovered() {
+			return
+		}
+		card.Children(func() { a.clockCancelBadge(c, m).Absolute().Top(6).Right(6) })
+	case "stopwatch":
+		m := a.clock
+		if m.watchRun || m.watchElapsed == 0 {
+			return
+		}
+		card.Children(func() { a.clockResetBadge(c, m).Absolute().Top(6).Right(6) })
+	}
 }
 
 // toolLiftedCard draws the dragged copy above the grid at the pointer.

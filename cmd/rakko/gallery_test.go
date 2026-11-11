@@ -1377,6 +1377,14 @@ func galleryGroupF() []galleryItem {
 	timerDone := clock(func(m *clockModule, now time.Time) {
 		m.phase, m.dur, m.doneAt, m.ringing = timerDone, 5*time.Minute, now, true
 	})
+	longClock := func() func(t *testing.T, a *shelf, p *toolsPage, lang string) {
+		return func(t *testing.T, a *shelf, p *toolsPage, lang string) {
+			now := time.Date(2026, 11, 11, 9, 41, 0, 0, time.Local)
+			m := galleryClockAt(a, now)
+			m.phase, m.dur, m.end = timerRunning, 24*time.Hour, now.Add(23*time.Hour+59*time.Minute+59*time.Second)
+			m.watchElapsed = 23*time.Hour + 59*time.Minute + 58*time.Second
+		}
+	}
 	def := layout.DefaultWith(true).Cards
 	return []galleryItem{
 		{ID: "F1", Group: g, Title: "工具页", State: "默认网格", Build: tools(def, nil)},
@@ -1432,6 +1440,12 @@ func galleryGroupF() []galleryItem {
 			m.watchRun, m.watchStart = true, now.Add(-754*time.Second)
 		})},
 		{ID: "F33", Group: g, Title: "顶栏胶囊", State: "时间到 · 橙色停止", Build: tools(card("timer", 2, 1), timerDone)},
+		{ID: "F35", Group: g, Title: "长读数", State: "2×1 · 23:59:59 与 23:59:58", Build: tools([]layout.Card{
+			{ID: "timer", Span: 2, Rows: 1}, {ID: "stopwatch", Span: 2, Rows: 1},
+		}, longClock())},
+		{ID: "F36", Group: g, Title: "长读数", State: "1×1 · 23:59:59 与 23:59:58", Build: tools([]layout.Card{
+			{ID: "timer", Span: 1, Rows: 1}, {ID: "stopwatch", Span: 1, Rows: 1},
+		}, longClock())},
 		{ID: "F34", Group: g, Title: "顶栏胶囊", State: "刘海 180 · 倒计时左耳、秒表右耳", Notch: true, Build: func(t *testing.T, lang string) galleryRender {
 			a := galleryShelf(galleryEmptyStore(t), t.TempDir())
 			a.notchW, a.notchH = 180, 32

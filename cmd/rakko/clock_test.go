@@ -8,6 +8,8 @@ package main
 // card catalogue's two new entries.
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -646,5 +648,111 @@ func TestClockBandFitsTheNotchEars(t *testing.T) {
 	}
 	if watchEl.X < center+halfHousing-1 {
 		t.Fatalf("stopwatch chip starts under the camera housing: %+v", watchEl)
+	}
+}
+
+// TestClockLongReadingsFitEveryCard: the countdown's 23:59:59 and the
+// stopwatch's long readings must paint whole in both card sizes and on a
+// desktop pin, with the buttons still in their places. fitText reports a
+// reading that would be cut, at the size the card actually draws it.
+func TestClockLongReadingsFitEveryCard(t *testing.T) {
+	old := fitIssue
+	var notes []string
+	fitIssue = func(msg string) { notes = append(notes, msg) }
+	t.Cleanup(func() { fitIssue = old })
+	check := func(where string) {
+		t.Helper()
+		for _, note := range notes {
+			if strings.Contains(note, "23:59") {
+				t.Errorf("%s: %s", where, note)
+			}
+		}
+		notes = nil
+	}
+
+	now := time.Date(2026, 11, 11, 9, 41, 0, 0, time.Local)
+	shelfFor := func(cards []layout.Card) *shelf {
+		a := &shelf{
+			dataDir: t.TempDir(), settings: settings.Default(), level: 2, visible: true, tab: pageTools,
+			thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{}, appNames: map[string]string{},
+		}
+		a.ensurePages()
+		a.toolsLay = &layout.Layout{Version: layout.Version, Cards: cards}
+		// The cards need the module's state; the band chips are not part of
+		// this measurement, so they stay out of modules.
+		a.clock = newClockModule(a)
+		m := a.clock
+		m.now = func() time.Time { return now }
+		m.playSound = func() {}
+		m.stopSound = func() {}
+		m.phase, m.dur, m.end = timerRunning, 24*time.Hour, now.Add(23*time.Hour+59*time.Minute+59*time.Second)
+		m.watchElapsed = 23*time.Hour + 59*time.Minute + 58*time.Second
+		return a
+	}
+	for _, cards := range [][]layout.Card{
+		{{ID: "timer", Span: 2, Rows: 1}, {ID: "stopwatch", Span: 2, Rows: 1}},
+		{{ID: "timer", Span: 1, Rows: 1}, {ID: "stopwatch", Span: 1, Rows: 1}},
+	} {
+		a := shelfFor(cards)
+		view := ui.NewTester(a.view, sheetW+2*earR, panelTestH)
+		view.SetLocale("zh-Hans")
+		view.Frame()
+		view.Frame()
+		check(fmt.Sprintf("panel %dx1", cards[0].Span))
+	}
+
+	// Pins: the same bodies at their desktop sizes still paint whole.
+	a := shelfFor(nil)
+	for _, spec := range []layout.Card{
+		{ID: "timer", Span: 2, Rows: 1}, {ID: "timer", Span: 1, Rows: 1},
+		{ID: "stopwatch", Span: 2, Rows: 1}, {ID: "stopwatch", Span: 1, Rows: 1},
+	} {
+		w := int(clockCardWidth(spec.Cols(), cardDesktop))
+		h := int(toolRowH(spec.Height()))
+		view := ui.NewTester(func(c *ui.Context) {
+			a.toolCard(c, spec, cardDesktop).Width(float32(w)).Height(float32(h))
+		}, w, h)
+		view.SetLocale("zh-Hans")
+		view.Frame()
+		view.Frame()
+		check(fmt.Sprintf("pin %s %dx1", spec.ID, spec.Cols()))
+	}
+}
+
+// TestClockPausedBadgeStaysOnItsCard: the stopwatch's ↺ belongs to its own
+// card, not to the stage origin that an absolute child built before the
+// card was placed used to resolve against.
+func TestClockPausedBadgeStaysOnItsCard(t *testing.T) {
+	a := &shelf{
+		dataDir: t.TempDir(), settings: settings.Default(), level: 2, visible: true, tab: pageTools,
+		thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{}, appNames: map[string]string{},
+	}
+	a.ensurePages()
+	a.toolsLay = &layout.Layout{Version: layout.Version, Cards: []layout.Card{
+		{ID: "timer", Span: 1, Rows: 1}, {ID: "stopwatch", Span: 1, Rows: 1},
+	}}
+	now := time.Date(2026, 11, 11, 9, 41, 0, 0, time.Local)
+	a.clock = newClockModule(a)
+	m := a.clock
+	m.now = func() time.Time { return now }
+	m.playSound = func() {}
+	m.stopSound = func() {}
+	m.startTimer(now, 5*time.Minute)
+	m.watchElapsed = 754 * time.Second
+	l := locales.In("zh-Hans")
+	view := ui.NewTester(a.view, sheetW+2*earR, panelTestH)
+	view.SetLocale("zh-Hans")
+	view.Frame()
+	view.Frame()
+	card, ok := view.Find(l.StopwatchPaused("12:34"))
+	if !ok {
+		t.Fatal("no paused stopwatch card")
+	}
+	badge, ok := view.Find(l.StopwatchReset())
+	if !ok {
+		t.Fatal("no reset badge")
+	}
+	if badge.X < card.X || badge.X+badge.W > card.X+card.W {
+		t.Fatalf("reset badge %+v is not inside the stopwatch card %+v", badge, card)
 	}
 }
