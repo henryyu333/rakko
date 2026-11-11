@@ -217,7 +217,11 @@ func (a *shelf) openFrame(tw, th, resultsH float32) mygo.Rectangle {
 // upward side reaches from the panel's top (plus headroom) down to just
 // under the island; the downward one keeps the drawn shell's row.
 func (a *shelf) openFrameIn(place panelPlacement, tw, th, resultsH float32, headroom int) mygo.Rectangle {
-	top := a.sheetTop()
+	// The envelope is measured at the row the keyboard state settles on: the
+	// search drop is eased over a few frames, and a frame measured with the
+	// row it passes through would be 33pt short of the panel it ends up
+	// holding (issue #6).
+	top := a.sheetTopSettled()
 	ears := a.earWidth()
 	up := a.shellUp()
 	y := a.frameTop()

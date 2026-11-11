@@ -4,6 +4,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -331,22 +332,67 @@ func (a *shelf) currentLevel() int {
 // menu bar's level, which draws over the empty black band). An island
 // holding the keyboard drops below the menu bar instead.
 func (a *shelf) sheetTop() int {
+	return a.sheetTopAt(a.focusDropNow())
+}
+
+// sheetTopAt is sheetTop with an explicit search drop. The drawn shell
+// reads the drop the ease has reached (focusDropNow); the window envelope
+// reads the row the keyboard state settles on (sheetTopSettled).
+func (a *shelf) sheetTopAt(drop int) int {
 	// The island floats below the screen's top edge; the hardware notch
 	// path starts at it. A panel that grows upward moves the window's top
 	// above the island, so the anchor's local row gains that offset.
 	top := a.islandTop
 	if a.island {
 		top += a.y - a.frameTop()
-	}
-	if a.focusMode && a.island {
-		focusTop := max(a.topInset, menuBarMinH) + headerTopGap
-		if a.island {
-			// The search drop is measured from the screen's top edge.
-			focusTop += a.y - a.frameTop()
-		}
-		top = max(top, focusTop)
+		top += drop
 	}
 	return top
+}
+
+// sheetTopSettled is where the shell comes to rest at the current keyboard
+// state. The native frame is measured with it: the envelope has to hold the
+// settled panel for the whole session, not the row the drop eases through.
+func (a *shelf) sheetTopSettled() int {
+	return a.sheetTopAt(a.focusDropSettled())
+}
+
+// focusDrop is how far an island's shell drops below its own top row while
+// the window holds the keyboard at the menu bar's level: the search field
+// and the pages have to clear the bar the window now sits under. The row it
+// must clear is measured on screen from the display's top edge, so an island
+// dragged below the menu bar needs no drop at all — it used to drop 33pt of
+// its own window's rows whatever row it sat on, which jumped the panel on
+// every open and fold (issue #6). Pure; unit-tested.
+func focusDrop(dispTop, topInset, anchorTop int) int {
+	return max(dispTop+max(topInset, menuBarMinH)+headerTopGap-anchorTop, 0)
+}
+
+// focusDropOnScreen is focusDrop measured on this display, drop and all.
+func (a *shelf) focusDropOnScreen() int {
+	if !a.island {
+		// The notch style grows the sheet out of the hardware housing: its
+		// band row is the empty strip the menu bar draws over.
+		return 0
+	}
+	return focusDrop(a.dispBounds.Y, a.topInset, a.anchorScreenTop())
+}
+
+// focusDropSettled is the drop the current keyboard state settles at, for
+// the window envelope.
+func (a *shelf) focusDropSettled() int {
+	if !a.focusMode {
+		return 0
+	}
+	return a.focusDropOnScreen()
+}
+
+// focusDropNow is the drop the shell drawn now takes: focusK eases between
+// the two rows (focusDropStep) so no frame moves the shell's top in one
+// jump. It reads no focusMode on purpose — the ease is what carries the
+// drop back to zero after the keyboard is handed back.
+func (a *shelf) focusDropNow() int {
+	return int(math.Round(float64(a.focusDropOnScreen()) * float64(a.fx.focusK)))
 }
 
 // frameTrace, when a test sets it, sees every frame the overlay built: the
@@ -585,6 +631,20 @@ func (a *shelf) view(c *ui.Context) {
 			a.fb.retracting = false
 		}
 	}
+	// The search drop runs on its own channel: the shell's top eases down
+	// onto the row below the menu bar while the window holds the keyboard,
+	// and back up when it lets go — never in one frame (issue #6). The frame
+	// envelope keeps the settled row for the whole session (openFrameIn), so
+	// this only moves what is drawn and hit-tested.
+	focusTarget := float32(0)
+	if a.focusMode && a.island {
+		focusTarget = 1
+	}
+	if a.win == nil || reduceMotion(c) {
+		a.fx.focusK = zone.Jump("focus-drop", focusTarget)
+	} else {
+		a.fx.focusK = min(max(zone.AnimateTo("focus-drop", focusTarget, focusDropAnim), 0), 1)
+	}
 	// 真实窗口的彻底空闲态：刘海样式什么都不画，常驻窗口完全不可见；
 	// 灵动岛空闲时一直画那颗 120 × 30 的胶囊，让用户知道往哪儿移鼠标。
 	// 阈值与上面的静止吸附一致（亚点级），收起最后一段平滑落位、看不出跳变。
@@ -607,6 +667,8 @@ func (a *shelf) view(c *ui.Context) {
 		a.fx.peekW, a.fx.peekH = 0, 0
 		a.fx.peek, a.fx.openMoving, a.fx.sizeMoving, a.fb.drawn = false, false, false, false
 		a.fx.openK, a.fx.peekK = 0, 0
+		// A resting capsule is back on its own row: no keyboard, no drop.
+		a.fx.focusK = 0
 		a.snap.drawn = false // the fold out of the snap box is over
 		a.fb.clearExpired(now, true)
 		if a.island {

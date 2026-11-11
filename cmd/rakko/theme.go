@@ -125,7 +125,39 @@ var (
 	retractSpring = ui.Animation{Spring: ui.SpringOptions{Duration: 300 * time.Millisecond, Bounce: 0}}
 	shakeSpring   = ui.Animation{Spring: ui.SpringOptions{Duration: 300 * time.Millisecond, Bounce: 0}}
 	fadeAnimation = ui.Animation{Duration: durFade, Ease: ui.EaseOut}
+	// focusDropAnim carries the island's search drop between its own row and
+	// the row below the menu bar: 33pt on a bare screen, and it has to travel
+	// them without a single frame jumping (issue #6). A spring puts most of
+	// its distance into the first frames (the 220ms close spring moved 6pt of
+	// it in one), so the channel runs on a trapezoid instead: at 60Hz its
+	// fastest frame moves the shell's top 2.5pt, and it rests before the fold
+	// does.
+	focusDropAnim = ui.Animation{Duration: 280 * time.Millisecond, Ease: focusDropEase}
 )
+
+// focusDropEase is focusDropAnim's curve, a trapezoid in normalized time: a
+// short start, a steady middle, a short stop. Its slope never exceeds
+// 1/(1-ramp) = 1.28, so 33pt over 280ms peaks at 151pt/s — under 3pt in
+// one 60Hz frame. Pure; unit-tested.
+func focusDropEase(t float32) float32 {
+	const ramp = float32(0.22)
+	if t <= 0 {
+		return 0
+	}
+	if t >= 1 {
+		return 1
+	}
+	v := 1 / (1 - ramp)
+	switch {
+	case t < ramp:
+		return v * t * t / (2 * ramp)
+	case t <= 1-ramp:
+		return v * (t - ramp/2)
+	default:
+		u := 1 - t
+		return 1 - v*u*u/(2*ramp)
+	}
+}
 
 // reduceMotion reports whether motion should collapse to fades only.
 func reduceMotion(c *ui.Context) bool { return c.Preferences().ReduceMotion }
