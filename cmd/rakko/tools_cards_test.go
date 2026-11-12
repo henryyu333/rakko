@@ -735,21 +735,30 @@ func TestToolUsageCardHintFollowsQuotaLeft(t *testing.T) {
 	}
 }
 
-// TestToolUsageWideCardShowsRemaining: the 2×1 quota card's main value and
-// its rails are the tightest window's remaining share (v2 §3), regardless
-// of the usage page's used/left setting, and its accessible name says so.
+// TestToolUsageWideCardShowsRemaining: the 2×1 quota card's main value is
+// the tightest window's remaining share (not the 5-hour window's alone, and
+// not the page's used share). The test locates the hero text exactly, not a
+// substring of the accessible name.
 func TestToolUsageWideCardShowsRemaining(t *testing.T) {
 	now := time.Date(2026, 10, 19, 12, 0, 0, 0, time.Local)
 	codex := windowUsed(okQuota(aiusage.ToolCodex, "Plus", now), 0, 20)
-	claude := windowUsed(okQuota(aiusage.ToolClaude, "Pro", now), 0, 80)
+	claude := windowUsed(okQuota(aiusage.ToolClaude, "Pro", now), 0, 50)
+	claude = windowUsed(claude, 1, 90) // weekly remaining 10%, tighter than the 5-hour 50%
 	fx := usageCardFixture(t, false, codex, claude)
 	fx.a.toolsLay = &layout.Layout{Version: layout.Version, Cards: []layout.Card{{ID: "usage", Span: 2, Rows: 1}}}
 	fx.view.Frame()
 	fx.view.Frame()
-	if !fx.view.HasText("20%") {
-		t.Fatalf("the 2×1 card does not show the tightest remaining 20%%: %v", fx.view.Texts())
+	// The exact string belongs to the hero row's own label, not to the
+	// long accessible name (which contains "10% 剩余" as a substring).
+	if _, ok := fx.view.Find("10%"); !ok {
+		t.Fatalf("the 2×1 main value is not the tightest remaining 10%%: %v", fx.view.Texts())
 	}
-	if !fx.view.HasText("Claude Code · 5 小时 20% 剩余 · 每周 70% 剩余") {
-		t.Fatalf("the 2×1 card's accessible name does not say remaining: %v", fx.view.Texts())
+	if !fx.view.HasText("Claude Code · 5 小时 50% 剩余 · 每周 10% 剩余") {
+		t.Fatalf("the 2×1 card's accessible name is not remaining: %v", fx.view.Texts())
+	}
+	heroPct, weekPct, fivePct, have := fx.a.usageWideShares()
+	if !have || heroPct != 10 || weekPct != 10 || fivePct != 50 {
+		t.Fatalf("the 2×1 shares = hero %v, week %v, five %v (have %v); want 10/10/50",
+			heroPct, weekPct, fivePct, have)
 	}
 }

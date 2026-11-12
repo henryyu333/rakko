@@ -88,6 +88,7 @@ func (p *toolsPage) toolLibrary(c *ui.Context, live bool) {
 			})
 		})
 	})
+	p.libraryRect = box.Bounds()
 }
 
 // libTile is one 56pt library tile: the card's default width (66 or 138),

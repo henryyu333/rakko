@@ -93,13 +93,13 @@ type toolsPage struct {
 
 	// The resize gesture, the library's own scroll position and the card
 	// context menu (nil while closed).
-	rs         *toolResize
-	libScroll  ui.ScrollState
-	menu       *toolMenu
-	lp         *toolLibPress
-	chromeAt   time.Time // first frame in editing, for the chrome's pop
-	libraryTop float32   // drawer's top in the grid's content coordinates
-	stageWNow  float32   // the drawn grid width, for hit tests outside grid()
+	rs          *toolResize
+	libScroll   ui.ScrollState
+	menu        *toolMenu
+	lp          *toolLibPress
+	chromeAt    time.Time // first frame in editing, for the chrome's pop
+	libraryRect ui.Rect   // the drawn drawer's window rectangle
+	stageWNow   float32   // the drawn grid width, for hit tests outside grid()
 	// reduceMotion is the window's preference, cached for the input paths
 	// that run outside a build.
 	reduceMotion bool
@@ -527,7 +527,6 @@ func (p *toolsPage) body(c *ui.Context, _ bool, live bool) ui.Element {
 		p.viewport = scroll.Bounds()
 		// The visible drawer is drawn over the shell; the grid keeps this
 		// spacer so a card can never sit under the drawer.
-		p.libraryTop = p.host.pageShellH() - toolLibraryH - p.viewport.Y + p.scroll.Y
 		scroll.PointerPosition() // pointer tracking: the wheel and the rails
 		scroll.Children(func() {
 			// A box in normal flow carries the grid's real height: an
@@ -572,14 +571,16 @@ func (p *toolsPage) overLibrary() bool {
 	if d == nil || p.viewport.H <= 0 {
 		return false
 	}
-	// The drawer is a full-width band at the shell's bottom: the grid's
-	// content x runs from -sheetPadX to stageW+sheetPadX there, and the
-	// band is exactly toolLibraryH high. A point below it or beside it is
-	// outside the panel, not a removal.
-	x0 := float32(-sheetPadX)
-	x1 := p.stageWNow + float32(sheetPadX)
-	y0, y1 := p.libraryTop, p.libraryTop+toolLibraryH
-	return d.px >= x0 && d.px <= x1 && d.py >= y0 && d.py <= y1
+	// Use the drawer's own drawn window rectangle, converted into the
+	// grid's content coordinates. Building it from pageShellH alone missed
+	// the panel's top offset (38pt on an island) and shifted every hit.
+	r := p.libraryRect
+	if r.W <= 0 || r.H <= 0 {
+		return false
+	}
+	x0 := r.X - p.viewport.X + p.scroll.X
+	y0 := r.Y - p.viewport.Y + p.scroll.Y
+	return d.px >= x0 && d.px <= x0+r.W && d.py >= y0 && d.py <= y0+r.H
 }
 
 // toolSlot is the dashed placeholder at the cell the dragged card would

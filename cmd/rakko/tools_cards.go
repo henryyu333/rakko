@@ -961,29 +961,17 @@ func (a *shelf) toolUsageBody(c *ui.Context, card ui.Element, span int, surf too
 			fitText(c, loc(c).AiUsage(), 12, 600, 70).TextColor(ink2)
 			ui.Box(c).Grow(1)
 			hero := loc(c).NoData()
-			if ok {
-				if wd := five; wd != nil {
-					hero = quotaPctText(a.usage.windowShown(*wd))
-				} else if week != nil {
-					hero = quotaPctText(a.usage.windowShown(*week))
-				}
+			if heroPct, _, _, have := a.usageWideShares(); have {
+				hero = quotaPctText(heroPct)
 			}
 			a.cardHero(c, card, "usage-hero", hero, 26, 22, w-2*cardPad-18-7-70-7, ink2, false)
 		})
 		foot := ui.Column(c.Key("usage-rails")).Absolute().Left(cardPad).Right(cardPad).
 			Bottom(cardPad).Height(cardCtrlH).Justify(ui.Center).Gap(5)
 		foot.Children(func() {
-			var weekFrac, fiveFrac float32
-			if a.usage != nil {
-				if week != nil {
-					weekFrac = float32(a.usage.windowLeft(*week)) / 100
-				}
-				if five != nil {
-					fiveFrac = float32(a.usage.windowLeft(*five)) / 100
-				}
-			}
-			cardRail(c, "usage-week-rail", weekFrac, success).FillWidth()
-			cardRail(c, "usage-five-rail", fiveFrac, warning).FillWidth()
+			_, weekPct, fivePct, _ := a.usageWideShares()
+			cardRail(c, "usage-week-rail", float32(weekPct)/100, success).FillWidth()
+			cardRail(c, "usage-five-rail", float32(fivePct)/100, warning).FillWidth()
 		})
 
 	})
@@ -1053,6 +1041,33 @@ func (a *shelf) usageCardLabel(c *ui.Context) string {
 		parts = append(parts, l.UsageWindowWeekly()+" "+a.usage.shownShort(l, *week))
 	}
 	return strings.Join(parts, " · ")
+}
+
+// usageWideShares are the 2 × 1 card's values: the tightest window's
+// remaining share for the hero, and the weekly and 5-hour remaining shares
+// for the two rails. They ignore the usage page's used/left setting by
+// design (v2 §3).
+func (a *shelf) usageWideShares() (hero, week, five float64, ok bool) {
+	if a.usage == nil {
+		return 0, 0, 0, false
+	}
+	f, w, _, have := a.usage.leastWindow()
+	if !have {
+		return 0, 0, 0, false
+	}
+	hero = 100
+	if f != nil {
+		five = a.usage.windowLeft(*f)
+		hero = min(hero, five)
+	}
+	if w != nil {
+		week = a.usage.windowLeft(*w)
+		hero = min(hero, week)
+	}
+	if f == nil && w == nil {
+		return 0, 0, 0, false
+	}
+	return hero, week, five, true
 }
 
 // usageCardLeftLabel is the accessible name of the 2 × 1 card: its visible

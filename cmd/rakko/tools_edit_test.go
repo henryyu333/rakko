@@ -504,3 +504,95 @@ func TestToolsMenuPinUsesTheCardHeight(t *testing.T) {
 		t.Fatalf("the menu pin stored %d rows, want 2", it.rows)
 	}
 }
+
+// TestToolsLibraryHitRectFollowsTheIslandTop: the drawer is drawn 38pt
+// below the window's top on an island. Its hit rectangle must use that
+// drawn position: a release on the grid's last row sorts, and a release on
+// the drawer's bottom removes, instead of the two swapping places.
+func TestToolsLibraryHitRectFollowsTheIslandTop(t *testing.T) {
+	withPinDisplays(t, pinTestDisplays)
+	oldOpen := pinOpenWindow
+	pinOpenWindow = func(*pinItem) {}
+	t.Cleanup(func() { pinOpenWindow = oldOpen })
+
+	newPage := func(t *testing.T) (*shelf, *toolsPage, *ui.Tester) {
+		a := islandShelf(true, settings.ShellStyleIsland)
+		a.dataDir = t.TempDir()
+		a.tab, a.level, a.visible = pageTools, 2, true
+		a.ensurePages()
+		a.toolsLay = &layout.Layout{Version: layout.Version, Cards: []layout.Card{{ID: "ocr"}, {ID: "zip"}}}
+		p := a.toolsPage()
+		p.editing = true
+		view := toolsTester(a)
+		view.Frame()
+		view.Frame()
+		view.Advance(300 * time.Millisecond)
+		view.Frame()
+		return a, p, view
+	}
+	toWindow := func(p *toolsPage, x, y float32) (float32, float32) {
+		return p.viewport.X + x - p.scroll.X, p.viewport.Y + y - p.scroll.Y
+	}
+	drag := func(t *testing.T, view *ui.Tester, fromX, fromY, toX, toY float32) {
+		view.Press(fromX, fromY)
+		view.Move(toX, toY)
+		view.Frame()
+		view.Release(toX, toY)
+		view.Frame()
+	}
+
+	t.Run("last row sorts", func(t *testing.T) {
+		a, p, view := newPage(t)
+		var cell toolCell
+		for _, c := range p.grid().cells {
+			if c.id == "zip" {
+				cell = c
+			}
+		}
+		zip, ok := view.Find("打成 zip")
+		if !ok {
+			t.Fatalf("zip missing: %v", view.Texts())
+		}
+		// The bottom of the last grid row: inside the grid, below the
+		// drawer's real top, but above the wrongly-offset old top.
+		_, ty := toWindow(p, cell.x+cell.w/2, cell.y+cell.h-6)
+		drag(t, view, zip.X+zip.W/2, zip.Y+zip.H/2, p.viewport.X+cell.x+cell.w/2, ty)
+		found := false
+		for _, c := range a.toolsLayout().Cards {
+			if c.ID == "zip" {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("the last-row drop removed zip instead of sorting: %v", idsOf(a.toolsLayout().Cards))
+		}
+		if len(a.pins) != 0 {
+			t.Fatalf("the last-row drop pinned zip: %d pins", len(a.pins))
+		}
+	})
+
+	t.Run("drawer bottom removes", func(t *testing.T) {
+		a, p, view := newPage(t)
+		zip, ok := view.Find("打成 zip")
+		if !ok {
+			t.Fatalf("zip missing: %v", view.Texts())
+		}
+		// The drawer's drawn bottom, from the shell's own top offset.
+		shellTop := float32(a.sheetTop())
+		contentBottom := shellTop + a.pageShellH() - p.viewport.Y + p.scroll.Y
+		x, ty := toWindow(p, toolColW(2)/2, contentBottom-10)
+		drag(t, view, zip.X+zip.W/2, zip.Y+zip.H/2, x, ty)
+		found := false
+		for _, c := range a.toolsLayout().Cards {
+			if c.ID == "zip" {
+				found = true
+			}
+		}
+		if found {
+			t.Fatalf("the drawer-bottom drop did not remove zip: %v", idsOf(a.toolsLayout().Cards))
+		}
+		if len(a.pins) != 0 {
+			t.Fatalf("the drawer-bottom drop pinned zip instead of removing it: %d pins", len(a.pins))
+		}
+	})
+}
