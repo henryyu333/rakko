@@ -76,6 +76,17 @@ func TestToolLadderMatchesDesign(t *testing.T) {
 		{"5×2 plus a 2×1 timer", plus, 5, 2, 2, 545.5, 250},
 		{"6×3 nine cards", six, 6, 3, 3, 651, 340},
 		{"6×3 scrolls past three rows", full, 6, 4, 3, 651, 340},
+		// The winning rung can be wider than the cells use: the panel is
+		// trimmed to the used columns, not the rung's.
+		{"4×2 rung trimmed to 3 columns", []layout.Card{
+			card("playing", 2, 2), card("ocr", 1, 1),
+		}, 3, 2, 2, 334.5, 250},
+		{"4×2 rung trimmed to one 2×2 card", []layout.Card{
+			card("playing", 2, 2),
+		}, 3, 2, 2, 334.5, 250},
+		{"2×1 timer beside the player uses all four", []layout.Card{
+			card("timer", 2, 1), card("playing", 2, 2),
+		}, 4, 2, 2, 440, 250},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

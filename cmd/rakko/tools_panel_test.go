@@ -93,15 +93,6 @@ func TestToolsPanelFollowsCards(t *testing.T) {
 	}
 }
 
-// widthOutsideTest keeps gofmt honest about the interface assertion; it
-// is a compile-time claim the page implements pageWidth, not a runtime flag.
-func (p *toolsPage) widthOutsideTest() bool {
-	var _ pageWidth = p
-	var _ pageHeight = p
-	var _ pageEnvelope = p
-	return true
-}
-
 // TestToolsPanelSpringsToTheNewBox drives the frame clock: a packing
 // change moves the shell on the 300 ms level curve, never in one frame,
 // while the native window's envelope stays put.

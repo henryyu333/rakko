@@ -127,38 +127,52 @@ func packToolCards(cards []layout.Card, cols int, skip func(string) bool, editin
 	return cells
 }
 
-// toolGridAt packs cards into an exact column count and reports the rows
-// the packing used and the rows actually drawn.
+// toolGridAt packs cards into exactly cols columns and reports the rows
+// the packing used and the rows actually drawn. The caller decides when
+// to trim the shell to the columns that packing touched (toolGridFor); a
+// locked reorder drag keeps cols as given.
 func toolGridAt(cards []layout.Card, cols int, skip func(string) bool, editing bool) toolGrid {
 	cols = max(toolMinCols, min(cols, toolMaxCols))
 	cells := packToolCards(cards, cols, skip, editing)
 	rows := 1
+	for _, cell := range cells {
+		rows = max(rows, int(math.Round(float64(cell.y+cell.h+toolCellGap)/float64(toolCellH+toolCellGap))))
+	}
+	return toolGrid{cells: cells, cols: cols, rows: rows, vis: min(rows, toolMaxRows)}
+}
+
+// toolGridUsedCols is the number of columns the packed cells touch.
+func toolGridUsedCols(cells []toolCell) int {
 	used := 0
 	pitch := toolCellW + toolCellGap
 	for _, cell := range cells {
-		rows = max(rows, int(math.Round(float64(cell.y+cell.h+toolCellGap)/float64(toolCellH+toolCellGap))))
 		used = max(used, int(math.Round(float64(cell.x+cell.w+toolCellGap)/float64(pitch))))
 	}
-	return toolGrid{cells: cells, cols: max(cols, max(toolMinCols, used)), rows: rows, vis: min(rows, toolMaxRows)}
+	return used
 }
 
-// toolGridFor picks the panel's columns for cards: the first ladder rung
-// that holds every card and is at least minCols wide, trimmed to the
-// columns actually used. With nothing left to pack it keeps the smallest
-// panel. Past the last rung the six-column grid shows three rows and
-// scrolls.
+// toolGridFor picks the panel's box for cards: the first ladder rung that
+// holds every card and is at least minCols wide, packed at that rung and
+// then trimmed to the columns the cells touch (never under three). minCols
+// is the band's requirement and always wins the trim. With nothing left to
+// pack the smallest panel stays. Past the last rung the six-column grid
+// shows three rows and scrolls.
 func toolGridFor(cards []layout.Card, skip func(string) bool, editing bool, minCols int) toolGrid {
 	minCols = max(toolMinCols, min(minCols, toolMaxCols))
+	finish := func(g toolGrid) toolGrid {
+		g.cols = max(minCols, max(toolMinCols, toolGridUsedCols(g.cells)))
+		return g
+	}
 	for _, rung := range toolLadder {
 		if rung[0] < minCols {
 			continue
 		}
 		g := toolGridAt(cards, rung[0], skip, editing)
 		if g.rows <= rung[1] {
-			return g
+			return finish(g)
 		}
 	}
-	return toolGridAt(cards, toolMaxCols, skip, editing)
+	return finish(toolGridAt(cards, toolMaxCols, skip, editing))
 }
 
 // toolVirtualCards is the list the grid would have if the dragged card
