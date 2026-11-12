@@ -351,12 +351,49 @@ func pad2(v int) string {
 // card: the reading itself was the way in (v3 §5).
 func (a *shelf) timerEditCard(c *ui.Context, card ui.Element, m *clockModule, surf toolCardSurface) {
 	card.Children(func() {
-		box := ui.Box(c.Key("timer-edit")).Absolute().Left(cardPad).Right(cardPad).
-			Top(cardPad + 2).Height(30)
+		e := m.edit
+		l := loc(c)
+		// The top row keeps the skeleton: the countdown's glyph, then the
+		// three editable fields (v3 §5 keeps the old editor inside the new
+		// card).
+		a.cardGlyphLead(c, card, "timer-edit-lead", timerGlyph, 16, 16, ink2).
+			Absolute().Left(cardPad).Top(12)
+		box := ui.Box(c.Key("timer-edit")).Absolute().Left(cardPad + 22).Right(cardPad).
+			Top(8).Height(34)
 		box.Children(func() {
 			a.timerEditRow(c, m)
 		})
-
+		// The action row stays the idle card's: the presets select a
+		// length into the editor and the warning play starts the typed
+		// one. Before this, the edit state had no way to start with the
+		// mouse at all.
+		foot := a.cardFoot(c, card, "timer-edit-foot")
+		foot.Children(func() {
+			chips := ui.Row(c.Key("timer-edit-presets")).Grow(1).Gap(3).AlignItems(ui.Center)
+			chips.Children(func() {
+				cur := e.value()
+				for _, minutes := range timerPresets {
+					d := time.Duration(minutes) * time.Minute
+					chip := a.cardChip(c, "timer-p"+strconv.Itoa(minutes),
+						strconv.Itoa(minutes), cur == d, false)
+					if chip.Clicked() {
+						e.h = int(d / time.Hour)
+						e.m = int(d % time.Hour / time.Minute)
+						e.s = int(d % time.Minute / time.Second)
+						e.raw, e.fresh = e.text(), false
+						m.refresh()
+					}
+				}
+			})
+			start := a.cardRound(c, "timer-edit-start", cardCtrlH, cardButtonPrimary,
+				clockPlaySym, 12, l.TimerStart())
+			if start.Clicked() {
+				if d := e.value(); d > 0 {
+					m.startTimer(m.clock(), d)
+					a.leaveFocusMode()
+				}
+			}
+		})
 	})
 }
 

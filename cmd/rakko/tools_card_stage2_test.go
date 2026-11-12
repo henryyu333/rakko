@@ -208,3 +208,77 @@ func TestTimerHeroRollsChangedDigits(t *testing.T) {
 		t.Fatalf("the roll did not land on 6:00; texts %v", view.Texts())
 	}
 }
+
+// TestTimerEditCardStartsFromPlay: entering the custom length editor keeps
+// the new skeleton — glyph + three fields on the header, presets and the
+// warning ▶ in the action row — and ▶ starts the typed length with the
+// mouse. Before this, the edit state had no start control at all.
+func TestTimerEditCardStartsFromPlay(t *testing.T) {
+	a, m, now := stage2Shelf(t, []layout.Card{{ID: "timer", Span: 2, Rows: 1}})
+	view := toolsTester(a)
+	view.Frame()
+	view.Frame()
+	hero, ok := view.Find("5:00")
+	if !ok {
+		t.Fatalf("the idle reading is missing; texts %v", view.Texts())
+	}
+	view.ClickAt(hero.X+hero.W/2, hero.Y+hero.H/2)
+	view.Frame()
+	if m.edit == nil {
+		t.Fatalf("the reading did not open the editor; texts %v", view.Texts())
+	}
+	preset, ok := view.Find("10")
+	if !ok {
+		t.Fatalf("the edit state lost its presets; texts %v", view.Texts())
+	}
+	view.ClickAt(preset.X+preset.W/2, preset.Y+preset.H/2)
+	view.Frame()
+	if m.edit == nil {
+		t.Fatal("choosing a preset closed the editor")
+	}
+	if got := m.edit.value(); got != 10*time.Minute {
+		t.Fatalf("the preset set %v in the editor, want 10 minutes", got)
+	}
+	start, ok := view.Find(a.appLoc().TimerStart())
+	if !ok {
+		t.Fatalf("the edit state has no ▶; texts %v", view.Texts())
+	}
+	view.ClickAt(start.X+start.W/2, start.Y+start.H/2)
+	view.Frame()
+	if m.phase != timerRunning || !m.end.Equal(now.Add(10*time.Minute)) {
+		t.Fatalf("▶ started phase %v end %v, want 10 minutes from now", m.phase, m.end)
+	}
+	if m.edit != nil {
+		t.Fatal("starting from the editor left it open")
+	}
+}
+
+// TestCardHeroRollRequestsFrames: a changed hero value keeps asking for
+// frames until the 150–280 ms roll/fade lands, and stops afterwards. A
+// preset click has no other animation to carry the repaint, so without
+// this the digits freeze mid-flight.
+func TestCardHeroRollRequestsFrames(t *testing.T) {
+	a, m, _ := stage2Shelf(t, []layout.Card{{ID: "timer", Span: 2, Rows: 1}})
+	view := toolsTester(a)
+	view.Frame()
+	view.Frame()
+	if view.FramePending() {
+		t.Fatal("a settled card still asks for a frame")
+	}
+	m.dur = 10 * time.Minute
+	m.refresh()
+	view.Frame()
+	if !view.FramePending() {
+		t.Fatal("the hero change did not ask for the next frame")
+	}
+	view.Advance(100 * time.Millisecond)
+	view.Frame()
+	if !view.FramePending() {
+		t.Fatal("the roll stopped asking for frames mid-flight")
+	}
+	view.Advance(300 * time.Millisecond)
+	view.Frame()
+	if view.FramePending() {
+		t.Fatal("the settled hero still asks for frames")
+	}
+}

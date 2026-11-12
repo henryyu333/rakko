@@ -906,7 +906,7 @@ func (a *shelf) toolClipBody(c *ui.Context, card ui.Element, span int, surf tool
 		}
 		a.cardGlyphLead(c, card, "clip-lead", clipNavSymbol, 18, 18, ink2).
 			Absolute().Left(cardPad).Top(cardPad)
-		block := cardClipText(c, text, w-2*cardPad)
+		block := cardClipText(c, text)
 		if !ok {
 			block = ui.Text(c, text).FontSize(10.5).TextColor(ink3).MaxLines(2).Label(text)
 		}

@@ -487,6 +487,12 @@ func (a *shelf) cardHero(c *ui.Context, card ui.Element, key, text string, base,
 		p = float32(elapsed) / float32(rollDur)
 	}
 	eased := ui.EaseOut(p)
+	if p < 1 {
+		// The roll/fade is the only movement here: ask for the next frame,
+		// or a preset click that changes no other animation would leave
+		// the digits frozen mid-flight.
+		c.AnimationFrame()
+	}
 
 	// A paused reading's colons blink on a 1.6 s step (v2 §2), unless the
 	// desktop asks for less motion.
@@ -547,11 +553,9 @@ func (a *shelf) cardHero(c *ui.Context, card ui.Element, key, text string, base,
 
 // cardClipText is a small two-line text block for the 1 × 1 cards: 11pt
 // semibold, at most two lines, with the full content in the label.
-func cardClipText(c *ui.Context, text string, avail float32) ui.Element {
-	t := ui.Text(c, text).FontSize(11).FontWeight(600).LineHeight(1.35).MaxLines(2).
+func cardClipText(c *ui.Context, text string) ui.Element {
+	return ui.Text(c, text).FontSize(11).FontWeight(600).LineHeight(1.35).MaxLines(2).
 		Ellipsis("…").Label(text)
-	_ = avail
-	return t
 }
 
 // cardRail is a thin meter: a fill3 track and col's share from the left.
