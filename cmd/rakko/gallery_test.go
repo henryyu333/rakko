@@ -1380,7 +1380,7 @@ func galleryGroupF() []galleryItem {
 	watchPaused := clock(func(m *clockModule, now time.Time) {
 		m.watchElapsed = 754 * time.Second
 	})
-	timerDone := clock(func(m *clockModule, now time.Time) {
+	timerDoneState := clock(func(m *clockModule, now time.Time) {
 		m.phase, m.dur, m.doneAt, m.ringing = timerDone, 5*time.Minute, now, true
 	})
 	longClock := func() func(t *testing.T, a *shelf, p *toolsPage, lang string) {
@@ -1404,7 +1404,7 @@ func galleryGroupF() []galleryItem {
 		{ID: "F9", Group: g, Title: "便利贴", State: "1×1 · 图标与名称", Build: tools(card("note", 1, 1), nil)},
 		{ID: "F10", Group: g, Title: "AI 用量", State: "1×1", Build: tools(card("usage", 1, 1), nil)},
 		{ID: "F11", Group: g, Title: "AI 用量", State: "2×1 · 双环与剩余额度", Build: tools(card("usage", 2, 1), nil)},
-		{ID: "F12", Group: g, Title: "工具页", State: "编辑模式 · ⊖、尺寸手柄与虚线添加格", Build: tools(func() []layout.Card {
+		{ID: "F12", Group: g, Title: "工具页", State: "编辑模式 · 左上图形、左下名称、⊖ 与尺寸手柄", Build: tools(func() []layout.Card {
 			var out []layout.Card
 			for _, c := range def {
 				if c.ID != "zip" {
@@ -1420,7 +1420,9 @@ func galleryGroupF() []galleryItem {
 		})},
 		{ID: "F14", Group: g, Title: "工具页", State: "拖入时 · 动作格高亮可接受", Build: tools(def, drag(classImages, "封面.png", "照片 02.png"))},
 		{ID: "F15", Group: g, Title: "工具页", State: "拖入时 · 不接受的动作格变暗", Build: tools(def, drag(classArchives, "素材备份.zip"))},
-		{ID: "F16", Group: g, Title: "工具页", State: "转换中忙碌 · 仅点击被拒，界面无变化", Build: tools(def, busy)},
+		{ID: "F16", Group: g, Title: "工具页", State: "转换中 · 对应卡片转圈，点击被拒", Build: tools([]layout.Card{
+			{ID: "tojpeg"}, {ID: "zip"}, {ID: "awake"}, {ID: "ocr"},
+		}, busy)},
 		{ID: "F17", Group: g, Title: "倒计时", State: "2×1 · 空闲 5:00 与预设", Build: tools(card("timer", 2, 1), clock(nil))},
 		{ID: "F18", Group: g, Title: "倒计时", State: "2×1 · 自定义时长编辑", Build: tools(card("timer", 2, 1), timerEdit)},
 		{ID: "F19", Group: g, Title: "倒计时", State: "2×1 · 进行中 4:12", Build: tools(card("timer", 2, 1), timerRun)},
@@ -1445,7 +1447,7 @@ func galleryGroupF() []galleryItem {
 			m.phase, m.dur, m.end = timerRunning, 5*time.Minute, now.Add(252*time.Second)
 			m.watchRun, m.watchStart = true, now.Add(-754*time.Second)
 		})},
-		{ID: "F33", Group: g, Title: "顶栏胶囊", State: "时间到 · 橙色停止", Build: tools(card("timer", 2, 1), timerDone)},
+		{ID: "F33", Group: g, Title: "顶栏胶囊", State: "时间到 · 橙色停止", Build: tools(card("timer", 2, 1), timerDoneState)},
 		{ID: "F35", Group: g, Title: "长读数", State: "2×1 · 23:59:59 与 23:59:58", Build: tools([]layout.Card{
 			{ID: "timer", Span: 2, Rows: 1}, {ID: "stopwatch", Span: 2, Rows: 1},
 		}, longClock())},
@@ -1473,6 +1475,27 @@ func galleryGroupF() []galleryItem {
 			{ID: "recent", Span: 2, Rows: 1}, {ID: "note", Span: 2, Rows: 1}, {ID: "topdf"}, {ID: "fit1m"},
 			{ID: "shot"}, {ID: "extract"}, {ID: "resize"},
 		}, nil)},
+		// The rest of the component × size × state matrix (v2 §3).
+		{ID: "F43", Group: g, Title: "保持唤醒", State: "2×1 · 进行中 · 42:00 与时长胶囊", Build: tools(card("awake", 2, 1), nil)},
+		{ID: "F44", Group: g, Title: "保持唤醒", State: "2×2 · 大数字与 24 格刻度", Build: tools(card("awake", 2, 2), nil)},
+		{ID: "F45", Group: g, Title: "保持唤醒", State: "1×1 · 关闭", Build: tools(card("awake", 1, 1), func(t *testing.T, a *shelf, p *toolsPage, lang string) {
+			a.awake = nil
+		})},
+		{ID: "F46", Group: g, Title: "保持唤醒", State: "2×1 · 一直", Build: tools(card("awake", 2, 1), func(t *testing.T, a *shelf, p *toolsPage, lang string) {
+			a.awake.duration, a.awake.until = 0, time.Time{}
+		})},
+		{ID: "F47", Group: g, Title: "倒计时", State: "2×1 · 时间到 · 实心停止与 +1 分钟", Build: tools(card("timer", 2, 1), clock(func(m *clockModule, now time.Time) {
+			m.phase, m.dur, m.doneAt, m.ringing = timerDone, 5*time.Minute, now, true
+		}))},
+		{ID: "F48", Group: g, Title: "倒计时", State: "1×1 · 时间到", Build: tools(card("timer", 1, 1), clock(func(m *clockModule, now time.Time) {
+			m.phase, m.dur, m.doneAt, m.ringing = timerDone, 5*time.Minute, now, true
+		}))},
+		{ID: "F49", Group: g, Title: "工具页", State: "拖入可接受 · 蓝底、蓝图形、数量角标", Build: tools(def, drag(classImages, "封面.png", "照片 02.png"))},
+		{ID: "F50", Group: g, Title: "最近文件", State: "1×1 · 图形、数量与两张缩略图", Build: tools(card("recent", 1, 1), nil)},
+		{ID: "F51", Group: g, Title: "剪贴板最新", State: "1×1 · 两行内容", Build: tools(card("clip", 1, 1), nil)},
+		{ID: "F52", Group: g, Title: "动作卡", State: "转换中 · 图形 14 与蓝色转圈", Build: tools([]layout.Card{
+			{ID: "tojpeg"}, {ID: "zip"},
+		}, busy)},
 		{ID: "F34", Group: g, Title: "顶栏胶囊", State: "刘海 180 · 倒计时左耳、秒表右耳", Notch: true, Build: func(t *testing.T, lang string) galleryRender {
 			a := galleryShelf(galleryEmptyStore(t), t.TempDir())
 			a.notchW, a.notchH = 180, 32

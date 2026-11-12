@@ -4805,6 +4805,46 @@ func (msgs Messages) AwakeTapStart() string {
 	return Catalog.Format(msgs.locale, "awakeTapStart", nil)
 }
 
+// AwakeChip30m says "30 分"
+// in the language the app shows.
+func AwakeChip30m() string { return In(i18n.Locale()).AwakeChip30m() }
+
+// AwakeChip30m says "30 分"
+// in the language of msgs.
+func (msgs Messages) AwakeChip30m() string {
+	return Catalog.Format(msgs.locale, "awakeChip30m", nil)
+}
+
+// AwakeChip1h says "1 时"
+// in the language the app shows.
+func AwakeChip1h() string { return In(i18n.Locale()).AwakeChip1h() }
+
+// AwakeChip1h says "1 时"
+// in the language of msgs.
+func (msgs Messages) AwakeChip1h() string {
+	return Catalog.Format(msgs.locale, "awakeChip1h", nil)
+}
+
+// AwakeChip2h says "2 时"
+// in the language the app shows.
+func AwakeChip2h() string { return In(i18n.Locale()).AwakeChip2h() }
+
+// AwakeChip2h says "2 时"
+// in the language of msgs.
+func (msgs Messages) AwakeChip2h() string {
+	return Catalog.Format(msgs.locale, "awakeChip2h", nil)
+}
+
+// AwakeChip4h says "4 时"
+// in the language the app shows.
+func AwakeChip4h() string { return In(i18n.Locale()).AwakeChip4h() }
+
+// AwakeChip4h says "4 时"
+// in the language of msgs.
+func (msgs Messages) AwakeChip4h() string {
+	return Catalog.Format(msgs.locale, "awakeChip4h", nil)
+}
+
 // AwakeAlways says "一直"
 // in the language the app shows.
 func AwakeAlways() string { return In(i18n.Locale()).AwakeAlways() }
@@ -8561,6 +8601,16 @@ func TimerPause() string { return In(i18n.Locale()).TimerPause() }
 // in the language of msgs.
 func (msgs Messages) TimerPause() string {
 	return Catalog.Format(msgs.locale, "timerPause", nil)
+}
+
+// TimerPlusOne says "+1 分钟"
+// in the language the app shows.
+func TimerPlusOne() string { return In(i18n.Locale()).TimerPlusOne() }
+
+// TimerPlusOne says "+1 分钟"
+// in the language of msgs.
+func (msgs Messages) TimerPlusOne() string {
+	return Catalog.Format(msgs.locale, "timerPlusOne", nil)
 }
 
 // TimerResume says "继续"

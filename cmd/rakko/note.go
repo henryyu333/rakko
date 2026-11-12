@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"rakko/internal/layout"
 	"rakko/internal/mac"
 	"rakko/internal/note"
 	"rakko/locales"
@@ -595,50 +596,47 @@ func (a *shelf) noteLabel(l locales.Messages) string {
 	return l.CardNote()
 }
 
-// noteBody draws the card's content: the 1 × 1 form is the glyph and the
-// name; the wide form — 2 × 1 in the grid, every pinned card — is the
-// heading and up to three lines of preview.
+// noteBody draws the card's content (v2 §3): the 1 × 1 form is the glyph
+// and the name; the wide form — 2 × 1 in the grid, every pinned card — is
+// the heading row and up to three lines of preview, starting at the
+// skeleton's 34pt line under the header.
 func (a *shelf) noteBody(c *ui.Context, card ui.Element, span int, surf toolCardSurface) {
-	def := toolCardDefFor("note")
-	wide := span > 1 || surf == cardDesktop
-	n := a.noteSession()
-	title, lines := "", []string(nil)
-	if n != nil {
-		if t := note.Title(n.text); t != "" {
-			title = t
+	card.Children(func() {
+		def := toolCardDefFor("note")
+		wide := span > 1 || surf == cardDesktop
+		n := a.noteSession()
+		title, lines := "", []string(nil)
+		if n != nil {
+			if t := note.Title(n.text); t != "" {
+				title = t
+			}
+			lines = note.Preview(n.text, notePreviewN)
 		}
-		lines = note.Preview(n.text, notePreviewN)
-	}
-	if !wide {
-		card.Center().Gap(5).Children(func() {
-			ui.Icon(c, def.icon).Size(20, 20).TextColor(ink)
-			fitText(c, def.name(loc(c)), 12, 600, toolColW(span)-8).TextColor(ink)
+		if !wide {
+			glyph := a.cardGlyphLead(c, card, "note-lead", def.icon, 20, 20, ink2)
+			glyph.Absolute().Left(cardPad).Top(cardPad)
+			fitText(c, def.name(loc(c)), 12, 600, toolColW(1)-2*cardPad).TextColor(ink).
+				Absolute().Left(cardPad).Bottom(cardPad)
+			return
+		}
+		w := cardW(layout.Card{ID: "note", Span: span}, surf)
+		top := ui.Row(c.Key("note-head")).Absolute().Left(cardPad).Right(cardPad).
+			Top(cardPad).Height(18).AlignItems(ui.Center).Gap(6)
+		top.Children(func() {
+			ui.Icon(c, def.icon).Size(16, 16).TextColor(ink2)
+			name := title
+			if name == "" {
+				name = def.name(loc(c))
+			}
+			fitText(c, name, 12, 600, w-2*cardPad-22).TextColor(ink).Label(name)
 		})
-		return
-	}
-	// The pin is 278 wide whatever the grid span was; the grid cell is
-	// toolColW(span). 12pt padding each side, 14pt glyph, 6pt gap.
-	avail := func() float32 {
-		if surf == cardDesktop {
-			return pinCardW2 - 24 - 20
-		}
-		return toolColW(span) - 24 - 20
-	}()
-	card.Padding(0, 12, 0, 12).Justify(ui.Center).Children(func() {
-		ui.Column(c.Key("note-lines")).FillWidth().Gap(3).Children(func() {
-			ui.Row(c.Key("note-head")).AlignItems(ui.Center).Gap(6).Children(func() {
-				ui.Icon(c, def.icon).Size(14, 14).TextColor(ink)
-				name := title
-				if name == "" {
-					name = def.name(loc(c))
-				}
-				fitText(c, name, 12, 600, avail).TextColor(ink).Label(name)
-			})
+		ui.Column(c.Key("note-lines")).Absolute().Left(12).Right(12).Top(34).Gap(1).Children(func() {
 			for i, line := range lines {
 				ui.Text(c.Key("note-line-"+string(rune('a'+i))), line).SingleLine().
 					FontSize(11).LineHeight(1.45).TextColor(ink2).Label(line)
 			}
 		})
+
 	})
 }
 

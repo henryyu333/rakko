@@ -294,7 +294,7 @@ func TestToolsMusicCardIsTheFullPlayer(t *testing.T) {
 			t.Fatalf("the 2×2 card lacks %q; texts %v", label, view.Texts())
 		}
 	}
-	card, ok := view.Find("playing") // the card's own accessibility label
+	card, ok := view.Find(a.appLoc().Music()) // the card's own accessibility label
 	if !ok {
 		t.Fatal("the music card is not on screen")
 	}
@@ -619,7 +619,7 @@ func usageCardBodyImage(t *testing.T, a *shelf) *image.RGBA {
 	view := ui.NewTester(func(c *ui.Context) {
 		ui.Column(c).Size(float32(w), float32(h)).Background(ui.RGB(10, 10, 12)).Children(func() {
 			card := ui.Column(c).Size(float32(w), float32(h))
-			a.toolUsageBody(c, card, 1)
+			a.toolUsageBody(c, card, 1, cardPanel)
 		})
 	}, w, h)
 	view.Frame()
@@ -663,7 +663,7 @@ func TestToolUsageCard1x1DrawsNoText(t *testing.T) {
 		okQuota(aiusage.ToolCodex, "Plus", now), okQuota(aiusage.ToolClaude, "Pro", now))
 	view := ui.NewTester(func(c *ui.Context) {
 		card := ui.Column(c).Size(toolColW(1), float32(toolCellH))
-		fx.a.toolUsageBody(c, card, 1)
+		fx.a.toolUsageBody(c, card, 1, cardPanel)
 	}, int(toolColW(1)), toolCellH)
 	if texts := view.Texts(); len(texts) > 0 {
 		t.Fatalf("the 1 × 1 AI 用量 card must draw no text; texts=%v", texts)

@@ -1074,7 +1074,7 @@ func TestPinFailedRemovalKeepsPlacement(t *testing.T) {
 func TestPinChildControlsKeepContextMenu(t *testing.T) {
 	withPinDisplays(t, pinTestDisplays)
 	for _, tc := range []struct{ id, label string }{
-		{"awake", "30 分钟"}, {"playing", "暂停"}, {"recent", "menu-thumb.png"},
+		{"awake", "30 分"}, {"playing", "暂停"}, {"recent", "menu-thumb.png"},
 	} {
 		t.Run(tc.id, func(t *testing.T) {
 			a := &shelf{store: mustStore(t), dataDir: t.TempDir()}

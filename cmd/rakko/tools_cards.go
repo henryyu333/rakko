@@ -23,6 +23,7 @@ package main
 import (
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -201,6 +202,12 @@ const (
 func (a *shelf) toolCard(c *ui.Context, spec layout.Card, surf toolCardSurface, keySfx ...string) ui.Element {
 	def := toolCardDefFor(spec.ID)
 	title := spec.ID
+	if def != nil {
+		title = def.name(loc(c))
+	}
+	if def != nil && def.id == "awake" {
+		title += " · " + a.awakeHero(a.awake, time.Now(), loc(c))
+	}
 	if def != nil && def.id == "usage" {
 		// The 1 × 1 card carries no text, so its numbers live in the
 		// accessible name and the hover tip (the same string).
@@ -225,9 +232,7 @@ func (a *shelf) toolCard(c *ui.Context, spec layout.Card, surf toolCardSurface, 
 		// still shows where the card would be.
 		return card.Background(fill1)
 	}
-	if def.id == "usage" {
-		card.Tooltip(title)
-	}
+	card.Tooltip(title)
 	// Dragged files hover: action cards that take this class are drop
 	// targets with the accent treatment; the rest dim to 38% (design §1)
 	// and stay out of the drop's way, so a release falls through to the
@@ -242,37 +247,57 @@ func (a *shelf) toolCard(c *ui.Context, spec layout.Card, surf toolCardSurface, 
 		class = classMixed
 	}
 	accepts := hovering && def.accepts(class)
-	var hot bool
-	if surf != cardEdit && accepts {
-		_, hot = ui.DataDragOver(card, dropCellOpts)
+	// Every action card the dragged files fit takes the accent treatment
+	// while the drag is live; the one under the pointer also grows to
+	// 1.03 (v2 §4).
+	hot := dragPaint && accepts
+	over := false
+	if hot && surf != cardEdit {
+		_, over = ui.DataDragOver(card, dropCellOpts)
+		over = over || card.Hovered()
 	}
-	switch {
-	case hot:
-		card.Background(accent16).Border(1.5, accent.Alpha(0.9))
-	default:
-		card.Background(fill1)
+	busy := def.kind == cardAction && a.toolCardBusy(def.id)
+	if accepts && dragPaint {
+		// The count moved from the old subtitle into the tip and the
+		// accessible name when it became the corner badge.
+		title += " · " + a.toolCardSub(loc(c), def, class)
+		card.Label(title).Tooltip(title)
 	}
+	bg := fill1
+	if card.Hovered() {
+		bg = cardHover
+	}
+	if hot {
+		bg = accent16
+	}
+	card.Background(card.AnimateColor("bg", bg, ui.Animation{Duration: 200 * time.Millisecond, Ease: ui.EaseOut}))
+	// The pointer presses the card to 0.97 (100 ms); a card with files
+	// it accepts over it grows to 1.03 on a light spring (200 ms).
 	if a.win != nil && !c.Preferences().ReduceMotion {
-		target := float32(1)
-		if hot {
-			target = 1.03
+		target, anim := float32(1), ui.Animation{Duration: 100 * time.Millisecond, Ease: ui.EaseOut}
+		switch {
+		case over:
+			target, anim = 1.03, ui.Animation{Spring: ui.SpringOptions{Duration: 200 * time.Millisecond, Bounce: 0.15}}
+		case card.Pressed():
+			target = 0.97
 		}
-		scale := card.AnimateTo("hot", target, ui.Animation{Spring: ui.SpringOptions{Duration: 200 * time.Millisecond, Bounce: 0.15}})
+		scale := card.AnimateTo("press", target, anim)
 		card.Scale(scale, scale).TransformOrigin(0.5, 0.5)
-	} else if hot {
-		card.Scale(1.03, 1.03).TransformOrigin(0.5, 0.5)
+	} else {
+		switch {
+		case over:
+			card.Scale(1.03, 1.03).TransformOrigin(0.5, 0.5)
+		case card.Pressed():
+			card.Scale(0.97, 0.97).TransformOrigin(0.5, 0.5)
+		}
 	}
-	if (dragPaint && toolCardDimmed(def, class)) || (surf == cardPanel && def.kind == cardAction && a.conv != nil && a.conv.busy()) {
+	if dragPaint && toolCardDimmed(def, class) && !busy {
 		card.Disabled(true).Opacity(0.38)
 	}
 	if surf == cardEdit {
 		a.toolCardEditBody(c, card, def, spec)
 	} else {
-		sub := ""
-		if dragPaint && def.kind == cardAction {
-			sub = a.toolCardSub(loc(c), def, class)
-		}
-		a.toolCardBody(c, card, def, sub, spec, surf)
+		a.toolCardBody(c, card, def, cardPaint{hot: hot, count: n, busy: busy}, spec, surf)
 	}
 	if accepts && surf != cardEdit {
 		if drop, ok := ui.DropData(card, dropCellOpts); ok {
@@ -282,43 +307,36 @@ func (a *shelf) toolCard(c *ui.Context, spec layout.Card, surf toolCardSurface, 
 	return card
 }
 
-// toolCardEditBody is the card's editing form (design §2): glyph and
-// name, no live controls — the widget cards collapse to their name so a
-// pause button can't fire while the card wobbles. The music card's 2 × 2
-// rectangle is the exception: its player is the card's whole content, so
-// it keeps the live rows (inset past the ⊖ badge and the size handle),
-// and only a press outside those rows starts a reorder. Two-span widgets
-// carry the 小组件 subtitle the mock shows.
+// toolCardEditBody is the card's editing form (v2 §6): the status
+// graphic at the top left and the name at the bottom left, no live
+// controls — a pause button must not fire while the card is dragged.
+// The music card's 2 × 2 rectangle is the exception: its player is the
+// card's whole content, so it keeps the live rows (inset past the ⊖ badge
+// and the size handle), and only a press outside those rows starts a
+// reorder.
 func (a *shelf) toolCardEditBody(c *ui.Context, card ui.Element, def *toolCardDef, spec layout.Card) {
-	if def.id == "playing" && spec.Height() > 1 {
-		a.toolPlayingTall(c, card, cardEdit)
-		return
-	}
-	card.Center().Gap(5).Children(func() {
-		ui.Icon(c, def.icon).Size(20, 20).TextColor(ink)
-		fitText(c, def.name(loc(c)), 12, 600, toolColW(def.span)-8).TextColor(ink)
-		if def.span == 2 && def.kind == cardWidget {
-			panelLabel(c, nil, loc(c).Widgets(), 10, 0).TextColor(ink3)
+	card.Children(func() {
+		if def.id == "playing" && spec.Height() > 1 {
+			a.toolPlayingTall(c, card, cardEdit)
+			return
 		}
+		glyph := a.cardGlyphLead(c, card, "edit-lead", def.icon, 20, 20, ink2)
+		glyph.Absolute().Left(cardPad).Top(cardPad)
+		fitText(c, def.name(loc(c)), 12, 600, toolColW(spec.Cols())-2*cardPad).
+			TextColor(ink).Absolute().Left(cardPad).Bottom(cardPad)
+
 	})
 }
 
-// toolCardBody is the live content: action cards centre glyph + name +
-// subtitle, widgets lay out per card. While files hover the panel the
-// action's subtitle becomes the dragged count (design §1: 副标题换成拖
-// 入的数量).
-func (a *shelf) toolCardBody(c *ui.Context, card ui.Element, def *toolCardDef, sub string, spec layout.Card, surf toolCardSurface) {
-	span, rows := spec.Cols(), spec.Height()
+// toolCardBody is the live content: every widget draws through the shared
+// skeleton in tools_card_view.go. paint carries the page's transient
+// picture (an accepted file drag, the card's own conversion).
+func (a *shelf) toolCardBody(c *ui.Context, card ui.Element, def *toolCardDef, paint cardPaint, spec layout.Card, surf toolCardSurface) {
 	if def.kind == cardAction {
-		card.Center().Gap(5).Children(func() {
-			ui.Icon(c, def.icon).Size(20, 20).TextColor(ink)
-			fitText(c, def.name(loc(c)), 12, 600, toolColW(span)-8).TextColor(ink)
-			if sub != "" {
-				fitText(c, sub, 10, 0, toolColW(span)-8).TextColor(ink3)
-			}
-		})
+		a.toolActionBody(c, card, def, paint, spec, surf)
 		return
 	}
+	span, rows := spec.Cols(), spec.Height()
 	switch def.id {
 	case "playing":
 		if rows > 1 {
@@ -328,27 +346,52 @@ func (a *shelf) toolCardBody(c *ui.Context, card ui.Element, def *toolCardDef, s
 		if surf == cardDesktop {
 			span = 2
 		}
-		a.toolPlayingBody(c, card, span)
+		a.toolPlayingBody(c, card, span, surf)
 	case "awake":
-		a.toolAwakeBody(c, card, span)
+		a.toolAwakeBody(c, card, span, rows, surf)
 	case "recent":
-		a.toolRecentBody(c, card)
+		a.toolRecentBody(c, card, span, surf)
 	case "clip":
-		a.toolClipBody(c, card)
+		a.toolClipBody(c, card, span, surf)
 	case "note":
 		a.noteBody(c, card, span, surf)
 	case "usage":
-		a.toolUsageBody(c, card, span)
+		a.toolUsageBody(c, card, span, surf)
 	case "timer":
 		a.toolTimerBody(c, card, span, surf)
 	case "stopwatch":
 		a.toolStopwatchBody(c, card, span, surf)
 	default:
-		card.Center().Gap(5).Children(func() {
-			ui.Icon(c, def.icon).Size(20, 20).TextColor(ink)
-			panelLabel(c, nil, def.name(loc(c)), 12, 600).TextColor(ink)
-		})
+		glyph := a.cardGlyphLead(c, card, "def-lead", def.icon, 20, 20, ink2)
+		glyph.Absolute().Left(cardPad).Top(cardPad)
+		fitText(c, def.name(loc(c)), 12, 600, cardW(spec, surf)-2*cardPad).
+			TextColor(ink).Absolute().Left(cardPad).Bottom(cardPad)
 	}
+}
+
+// toolActionBody is the action card: the glyph at the top left, the name
+// at the bottom left (v2 §3), and — while files it accepts hover it — a
+// blue glyph and the corner count badge.
+func (a *shelf) toolActionBody(c *ui.Context, card ui.Element, def *toolCardDef, paint cardPaint, spec layout.Card, surf toolCardSurface) {
+	card.Children(func() {
+		w := cardW(spec, surf)
+		if paint.busy {
+			a.cardSpinner(c, "act-spin", def.icon).Absolute().Left(cardPad).Top(cardPad)
+		} else {
+			col := ink2
+			if paint.hot {
+				col = cardAccentText
+			}
+			a.cardGlyphLead(c, card, "act-lead", def.icon, 20, 20, col).
+				Absolute().Left(cardPad).Top(cardPad)
+		}
+		if paint.hot && paint.count > 0 {
+			a.cardCountBadge(c, "act-count", paint.count)
+		}
+		fitText(c, def.name(loc(c)), 12, 600, w-2*cardPad).TextColor(ink).
+			Absolute().Left(cardPad).Bottom(cardPad)
+
+	})
 }
 
 // toolCardDragPaint reports whether a card is painted by the panel's file
@@ -621,143 +664,164 @@ func (a *shelf) latestClipboardItem() (store.Item, bool) {
 	return items[0], true
 }
 
-// awakeRemain is the 保持唤醒 card's subtitle: the countdown for timed
-// holds, 一直 for the open-ended one, 关 while off.
-func (a *shelf) awakeRemain(l locales.Messages) string {
-	m := a.awake
+// awakeHero is the keep-awake main value: the time left on a timed hold,
+// ∞ for the open-ended one, and the off word. It replaced the old 「剩余
+// 42:00」 subtitle; the ring alone says the hold is on.
+func (a *shelf) awakeHero(m *awakeModule, now time.Time, l locales.Messages) string {
 	if m == nil || !m.active() {
 		return l.AwakeOff()
 	}
-	if m.duration == 0 {
-		return l.AwakeAlways()
+	if m.until.IsZero() {
+		return "∞"
 	}
-	return homeAwakeRemain(l, m, time.Now())
+	rem := m.until.Sub(now)
+	if rem < 0 {
+		rem = 0
+	}
+	return mac.FormatClock(rem.Seconds())
 }
 
-// toolAwakeBody is the 保持唤醒 widget: the 1-column form centres
-// glyph + name + state with the on-dot in the corner; the 2-column form
-// goes horizontal and adds the duration pills (design §3: 2 列时多出
-// 30 分钟 / 1 / 2 / 4 小时 / 一直 选择).
-func (a *shelf) toolAwakeBody(c *ui.Context, card ui.Element, span int) {
-	if span == 1 {
-		a.toolAwakeBodyNarrow(c, card)
-		return
-	}
-	a.toolAwakeBodyWide(c, card)
-}
-
-// toolAwakeBodyNarrow is the 1-column form.
-func (a *shelf) toolAwakeBodyNarrow(c *ui.Context, card ui.Element) {
-	m := a.awake
-	on := m != nil && m.active()
-	card.Center().Gap(5).Children(func() {
-		ui.Icon(c, cupSymbol).Size(20, 20).TextColor(ink)
-		panelLabel(c, nil, loc(c).KeepAwake(), 12, 600).TextColor(ink)
-		panelLabel(c, nil, a.awakeRemain(loc(c)), 10, 0).TextColor(ink3)
-		if on {
-			ui.Box(c.Key("on-dot")).Absolute().Top(8).Right(8).Size(6, 6).Radius(3).Background(awakeWarn)
+// awakeFrac is the keep-awake ring's remaining share.
+func (a *shelf) awakeFrac(m *awakeModule, now time.Time) float32 {
+	if m == nil || !m.active() || m.duration <= 0 {
+		if m != nil && m.active() {
+			return 1
 		}
-	})
+		return 0
+	}
+	rem := m.until.Sub(now)
+	return min(max(float32(rem)/float32(m.duration), 0), 1)
 }
 
-// toolAwakeBodyWide is the 2-column form, adding the duration pills.
-func (a *shelf) toolAwakeBodyWide(c *ui.Context, card ui.Element) {
-	m := a.awake
-	on := m != nil && m.active()
-	card.Padding(0, 12, 0, 12).Justify(ui.Center).Children(func() {
-		ui.Column(c).FillWidth().Children(func() {
-			ui.Row(c).AlignItems(ui.Center).Gap(10).FillWidth().Children(func() {
-				ui.Icon(c, cupSymbol).Size(20, 20).TextColor(ink)
-				ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
-					panelLabel(c, nil, loc(c).KeepAwake(), 12, 600).TextColor(ink)
-					panelLabel(c, nil, a.awakeRemain(loc(c)), 10, 0).TextColor(ink3)
-				})
-				if on {
-					ui.Box(c.Key("on-dot")).Size(6, 6).Radius(3).Background(awakeWarn)
-				}
-			})
-			ui.Row(c.Key("awake-chips")).Gap(6).Margin(8, 0, 0, 0).Children(func() {
-				for _, d := range awakeChipSpans {
-					a.awakeChip(c, fmt.Sprintf("chip-%d", d/time.Minute), awakeChipLabel(loc(c), d), d)
-				}
-			})
+// toolAwakeBody is the 保持唤醒 widget in its three forms (v2 §3): 1 × 1
+// is the ring and the remaining time, 2 × 1 adds the duration chips, and
+// 2 × 2 is the big reading over the 24-cell scale with the chips below.
+// The old orange dot is gone: the ring itself says the hold is on.
+func (a *shelf) toolAwakeBody(c *ui.Context, card ui.Element, span, rows int, surf toolCardSurface) {
+	card.Children(func() {
+		m := a.awake
+		l := loc(c)
+		now := time.Now()
+		if m != nil {
+			now = m.clock()
+		}
+		phase := cardAwakePhase(m)
+		text := a.awakeHero(m, now, l)
+		frac := a.awakeFrac(m, now)
+		w := cardW(layout.Card{ID: "awake", Span: span, Rows: rows}, surf)
+
+		if span < 2 {
+			a.cardRingLead(c, card, "awake-lead", 22, frac, phase, cupSymbol).
+				Absolute().Left(cardPad).Top(cardPad)
+			a.cardHero(c, card, "awake-hero", text, 22, 16, w-2*cardPad, cardHeroColor(phase), false).
+				Absolute().Left(cardPad).Bottom(cardPad)
+			return
+		}
+
+		top := a.cardTop(c, card, "awake-top")
+		top.Children(func() {
+			a.cardRingLead(c, card, "awake-lead", 24, frac, phase, cupSymbol)
+			fitText(c, l.KeepAwake(), 12, 600, 70).TextColor(ink2)
+			if rows < 2 {
+				ui.Box(c).Grow(1)
+				a.cardHero(c, card, "awake-hero", text, 26, 22, w-2*cardPad-24-7-70-7, cardHeroColor(phase), false)
+			}
 		})
+		if rows > 1 {
+			a.cardHero(c, card, "awake-hero", text, cardHeroBig, cardHeroBig, w-24, cardHeroColor(phase), false).
+				Absolute().Left(12).Top(52)
+			a.cardTicks(c, "awake-ticks", frac).Absolute().Left(12).Right(12).Bottom(44)
+		}
+		a.awakeChips(c, card, m, now)
+
 	})
 }
 
-// awakeChipSpans are the 保持唤醒 cards' duration pills, shortest first;
-// 0 is 一直. The tray menu lists the same choices in its own file.
+// awakeChipSpans are the 保持唤醒 cards' duration choices, shortest
+// first; 0 is 一直. The tray menu lists the same choices in its own file.
 var awakeChipSpans = []time.Duration{30 * time.Minute, time.Hour, 2 * time.Hour, 4 * time.Hour, 0}
 
-// awakeChipLabel is the pill name of span d.
+// awakeChipLabel is the chip name of span d.
 func awakeChipLabel(l locales.Messages, d time.Duration) string {
 	switch d {
 	case 30 * time.Minute:
-		return l.Awake30m()
+		return l.AwakeChip30m()
 	case time.Hour:
-		return l.Awake1h()
+		return l.AwakeChip1h()
 	case 2 * time.Hour:
-		return l.Awake2h()
+		return l.AwakeChip2h()
 	case 4 * time.Hour:
-		return l.Awake4h()
+		return l.AwakeChip4h()
 	}
-	return l.AwakeAlways()
+	return "∞" // the design's open-ended chip; the card label names the state
 }
 
-// awakeChip is one duration pill of the 2-column 保持唤醒 card; the held
-// span (or 一直) gets the accent fill.
-func (a *shelf) awakeChip(c *ui.Context, key, label string, d time.Duration) {
-	m := a.awake
-	on := m != nil && m.active() && m.duration == d
-	chip := ui.Row(c.Key(key)).Height(20).Padding(0, 9, 0, 9).Radius(10).AlignItems(ui.Center).Label(label)
-	if on {
-		chip.Background(accent)
-	} else {
-		chip.Background(fill2)
-	}
-	chip.Children(func() {
-		t := panelLabel(c, nil, label, 10, 600)
-		if on {
-			t.TextColor(ink)
-		} else {
-			t.TextColor(ink2)
-		}
-	})
-	chip.HandleInput(func(ev ui.InputEvent) bool {
-		// The chip answers the press, not the card: the card's
-		// HandleInput is the innermost otherwise and swallows it,
-		// so a tap on 30 分钟 would toggle one hour instead.
-		return ev.Button == 0 && ev.Kind >= ui.InputPointerDown && ev.Kind <= ui.InputPointerMove
-	})
-	if chip.Clicked() && m != nil {
-		if on {
-			m.stop(time.Now())
-		} else {
-			m.start(time.Now(), d)
-		}
-	}
-}
-
-// toolRecentBody is the 最近文件 widget: title + hint on the left, up to
-// three newest tray thumbnails on the right; each thumb drags out like
-// its tray tile (design §3).
-func (a *shelf) toolRecentBody(c *ui.Context, card ui.Element) {
-	card.Padding(0, 10, 0, 10).Justify(ui.Center).Children(func() {
-		ui.Row(c).AlignItems(ui.Center).Gap(8).FillWidth().Children(func() {
-			ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
-				panelLabel(c, nil, loc(c).RecentFiles(), 12, 600).TextColor(ink)
-			})
-			ui.Row(c.Key("recent-thumbs")).Gap(4).AlignItems(ui.Center).Children(func() {
-				items := a.itemsFor(pageTray)
-				show := items[:min(3, len(items))]
-				for _, it := range show {
-					a.recentThumbAt(c, it, 30)
-				}
-				if len(show) == 0 {
-					ui.Icon(c, docSymbol).Size(20, 20).TextColor(ink3)
+// awakeChips is the duration row: 30 分 / 1、2、4 时 / 一直, the held span
+// in the warning tone. The row is the card's action row.
+func (a *shelf) awakeChips(c *ui.Context, card ui.Element, m *awakeModule, now time.Time) {
+	card.Children(func() {
+		on := m != nil && m.active()
+		foot := a.cardFoot(c, card, "awake-chips-row")
+		foot.Children(func() {
+			row := ui.Row(c.Key("awake-chips")).Grow(1).Gap(3).AlignItems(ui.Center)
+			row.Children(func() {
+				for _, d := range awakeChipSpans {
+					label := awakeChipLabel(loc(c), d)
+					spans := d
+					chip := a.cardChip(c, fmt.Sprintf("awake-chip-%d", d/time.Minute), label,
+						on && m.duration == spans, true)
+					if chip.Clicked() && m != nil {
+						if on && m.duration == spans {
+							m.stop(time.Now())
+						} else {
+							m.start(now, spans)
+						}
+					}
 				}
 			})
 		})
+
+	})
+}
+
+// toolRecentBody is the 最近文件 widget (v2 §3): the header row, then a
+// row of the five newest tray thumbnails. The 1 × 1 form keeps the glyph
+// and two thumbnails, with the count in the corner.
+func (a *shelf) toolRecentBody(c *ui.Context, card ui.Element, span int, surf toolCardSurface) {
+	card.Children(func() {
+		items := a.itemsFor(pageTray)
+		wide := span > 1 || surf == cardDesktop
+		w := cardW(layout.Card{ID: "recent", Span: span}, surf)
+		if wide {
+			top := a.cardTop(c, card, "recent-top")
+			top.Children(func() {
+				a.cardGlyphLead(c, card, "recent-lead", docSymbol, 18, 18, ink2)
+				fitText(c, loc(c).RecentFiles(), 12, 600, w-2*cardPad-25).TextColor(ink2)
+			})
+			row := ui.Row(c.Key("recent-thumbs")).Absolute().Left(cardPad).Right(cardPad).
+				Bottom(cardPad).Height(30).Gap(6).AlignItems(ui.Center)
+			row.Children(func() {
+				show := items[:min(5, len(items))]
+				for _, it := range show {
+					a.recentThumbAt(c, it, 30)
+				}
+			})
+			return
+		}
+		a.cardGlyphLead(c, card, "recent-lead", docSymbol, 18, 18, ink2).
+			Absolute().Left(cardPad).Top(cardPad)
+		if len(items) > 0 {
+			ui.Text(c, strconv.Itoa(len(items))).SingleLine().FontSize(10.5).FontWeight(600).
+				TextColor(ink3).Absolute().Right(cardPad).Top(cardPad)
+		}
+		row := ui.Row(c.Key("recent-thumbs")).Absolute().Left(cardPad).Bottom(cardPad).
+			Height(30).Gap(4).AlignItems(ui.Center)
+		row.Children(func() {
+			for _, it := range items[:min(2, len(items))] {
+				a.recentThumbAt(c, it, 30)
+			}
+		})
+
 	})
 }
 
@@ -770,9 +834,13 @@ func (a *shelf) recentThumb(c *ui.Context, item store.Item) {
 }
 
 // recentThumbAt is recentThumb for a widget-driven size (the home canvas
-// uses 24/26pt thumbs).
+// uses 24/26pt thumbs, the card rows 30).
 func (a *shelf) recentThumbAt(c *ui.Context, item store.Item, size float32) {
-	thumb := ui.Row(c.Key(fmt.Sprintf("recent-%s-%g", item.ID, size))).Size(size, size).Radius(8).Center().Clip().
+	rad := float32(8)
+	if size == 30 {
+		rad = 7
+	}
+	thumb := ui.Row(c.Key(fmt.Sprintf("recent-%s-%g", item.ID, size))).Size(size, size).Radius(rad).Center().Clip().
 		Label(itemTitle(item))
 	if !item.Missing {
 		thumb.HandleInput(func(ev ui.InputEvent) bool {
@@ -802,62 +870,105 @@ func (a *shelf) recentThumbAt(c *ui.Context, item store.Item, size float32) {
 	}
 }
 
-// toolClipBody is the 剪贴板最新 widget. The surface wires its copy action.
-func (a *shelf) toolClipBody(c *ui.Context, card ui.Element) {
-	card.Padding(0, 12, 0, 12).Justify(ui.Center).Children(func() {
-		ui.Row(c).AlignItems(ui.Center).Gap(10).FillWidth().Children(func() {
-			ui.Row(c.Key("clip-ic")).Size(36, 36).Radius(10).Background(fill2).Center().Children(func() {
-				ui.Icon(c, clipNavSymbol).Size(16, 16).TextColor(ink2)
-			})
-			ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
-				if it, ok := a.latestClipboardItem(); ok {
-					ui.Text(c, itemTitle(it)).SingleLine().FontSize(12).FontWeight(600).TextColor(ink)
-				} else {
-					panelLabel(c, nil, loc(c).LatestClip(), 12, 600).TextColor(ink)
-					panelLabel(c, nil, loc(c).NoClipItems(), 10, 0).TextColor(ink3)
+// toolClipBody is the 剪贴板最新 widget (v2 §3): the header row and the
+// newest capture, or — in 1 × 1 — the capture alone under the glyph.
+func (a *shelf) toolClipBody(c *ui.Context, card ui.Element, span int, surf toolCardSurface) {
+	card.Children(func() {
+		l := loc(c)
+		wide := span > 1 || surf == cardDesktop
+		w := cardW(layout.Card{ID: "clip", Span: span}, surf)
+		it, ok := a.latestClipboardItem()
+		text := itemTitle(it)
+		if !ok {
+			text = l.NoClipItems()
+		}
+		if wide {
+			top := a.cardTop(c, card, "clip-top")
+			top.Children(func() {
+				a.cardGlyphLead(c, card, "clip-lead", clipNavSymbol, 18, 18, ink2)
+				fitText(c, l.LatestClip(), 12, 600, w-2*cardPad-25-70).TextColor(ink2)
+				ui.Box(c).Grow(1)
+				if ok {
+					ui.Text(c, relativeTime(l, it.CreatedAt, c.Now())).SingleLine().
+						FontSize(10.5).TextColor(ink3)
 				}
 			})
-		})
+			row := ui.Row(c.Key("clip-text")).Absolute().Left(cardPad).Right(cardPad).
+				Bottom(cardPad).Height(20).AlignItems(ui.Center)
+			row.Children(func() {
+				t := ui.Text(c, text).SingleLine().FontSize(12).FontWeight(600).
+					TextColor(ink).Label(text)
+				if !ok {
+					t.TextColor(ink3).FontSize(10)
+				}
+			})
+			return
+		}
+		a.cardGlyphLead(c, card, "clip-lead", clipNavSymbol, 18, 18, ink2).
+			Absolute().Left(cardPad).Top(cardPad)
+		block := cardClipText(c, text, w-2*cardPad)
+		if !ok {
+			block = ui.Text(c, text).FontSize(10.5).TextColor(ink3).MaxLines(2).Label(text)
+		}
+		block.Absolute().Left(cardPad).Right(cardPad).Bottom(cardPad)
+
 	})
 }
 
-// toolUsageBody is the AI 用量 widget. The 1 × 1 card is only the
-// least-remaining tool's double ring — the page's quota ring at 64pt,
-// centred, no text at all. The 2 × 1 card keeps the ring beside the name
-// and the remaining percent, as it always has. With no quota data the
-// rings are bare and the mark is the gauge (design §3).
-func (a *shelf) toolUsageBody(c *ui.Context, card ui.Element, span int) {
-	var five, week *aiusage.Window
-	var tool aiusage.Tool
-	stale, ok := false, false
-	if a.usage != nil {
-		five, week, tool, ok = a.usage.leastWindow()
-		if ok {
-			_, stale = a.usage.quotaShown(tool)
+// toolUsageBody is the AI 用量 widget (v2 §3). The 1 × 1 card is only
+// the least-remaining tool's double ring — the page's quota ring at 64pt,
+// centred, no text at all. The 2 × 1 card is the hero share plus the two
+// thin rails: weekly green and 5-hour orange. With no quota data the
+// rails are bare and the hero says so.
+func (a *shelf) toolUsageBody(c *ui.Context, card ui.Element, span int, surf toolCardSurface) {
+	card.Children(func() {
+		var five, week *aiusage.Window
+		var tool aiusage.Tool
+		stale, ok := false, false
+		if a.usage != nil {
+			five, week, tool, ok = a.usage.leastWindow()
+			if ok {
+				_, stale = a.usage.quotaShown(tool)
+			}
 		}
-	}
-	if span < 2 {
-		card.Center().Children(func() {
-			a.toolUsageRing(c, toolUsageRingSize, tool, five, week, stale, ok)
-		})
-		return
-	}
-	card.Padding(0, 12, 0, 12).Justify(ui.Center).Children(func() {
-		ui.Row(c).AlignItems(ui.Center).Gap(10).FillWidth().Children(func() {
-			a.toolUsageRing(c, toolUsageRingSizeWide, tool, five, week, false, false)
-			ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
-				panelLabel(c, nil, loc(c).AiUsage(), 12, 600).TextColor(ink)
-				sub := loc(c).NoData()
-				if ok {
-					w := five
-					if w == nil {
-						w = week
-					}
-					sub = loc(c).PercentLeft(fmt.Sprintf("%.0f", max(0, 100-w.UsedPct)))
-				}
-				panelLabel(c, nil, sub, 10, 0).TextColor(ink3)
+		if span < 2 {
+			card.Center().Children(func() {
+				a.toolUsageRing(c, toolUsageRingSize, tool, five, week, stale, ok)
 			})
+			return
+		}
+		w := cardW(layout.Card{ID: "usage", Span: span}, surf)
+		top := a.cardTop(c, card, "usage-top")
+		top.Children(func() {
+			a.cardGlyphLead(c, card, "usage-lead", gaugeSymbol, 18, 18, ink2)
+			fitText(c, loc(c).AiUsage(), 12, 600, 70).TextColor(ink2)
+			ui.Box(c).Grow(1)
+			hero := loc(c).NoData()
+			if ok {
+				if wd := five; wd != nil {
+					hero = quotaPctText(a.usage.windowShown(*wd))
+				} else if week != nil {
+					hero = quotaPctText(a.usage.windowShown(*week))
+				}
+			}
+			a.cardHero(c, card, "usage-hero", hero, 26, 22, w-2*cardPad-18-7-70-7, ink2, false)
 		})
+		foot := ui.Column(c.Key("usage-rails")).Absolute().Left(cardPad).Right(cardPad).
+			Bottom(cardPad).Height(cardCtrlH).Justify(ui.Center).Gap(5)
+		foot.Children(func() {
+			var weekFrac, fiveFrac float32
+			if a.usage != nil {
+				if week != nil {
+					weekFrac = float32(a.usage.windowShown(*week)) / 100
+				}
+				if five != nil {
+					fiveFrac = float32(a.usage.windowShown(*five)) / 100
+				}
+			}
+			cardRail(c, "usage-week-rail", weekFrac, success).FillWidth()
+			cardRail(c, "usage-five-rail", fiveFrac, warning).FillWidth()
+		})
+
 	})
 }
 
@@ -971,6 +1082,7 @@ func (a *shelf) toolPlayingTall(c *ui.Context, card ui.Element, surf toolCardSur
 					ui.Text(c, meta).SingleLine().FontSize(10.5).TextColor(ink3)
 				}
 			})
+			a.cardEqBars(c, "tc-np-eq", st.Playing, 4, 12)
 		})
 		a.toolPlayingTallBars(c, st, 18)
 	})
@@ -1044,54 +1156,74 @@ func (a *shelf) toolPlayingTallBars(c *ui.Context, st mac.NowPlayingState, ctrlG
 	a.volumeRow(c, "tc-np-vol", 12, 6)
 }
 
-// toolPlayingBody is the 正在播放 widget: 52pt cover, title and
-// 歌手 · 应用 meta, and the transport buttons — the activity strip's
-// parts in card form (design §3: 按钮就地控制). No track collapses to a
-// quiet name-only card.
-func (a *shelf) toolPlayingBody(c *ui.Context, card ui.Element, span int) {
-	m := a.np
-	if m == nil {
-		card.Center().Gap(5).Children(func() {
-			ui.Icon(c, musicSymbol).Size(20, 20).TextColor(ink3)
-			panelLabel(c, nil, loc(c).NowPlaying(), 12, 600).TextColor(ink3)
-		})
-		return
-	}
-	st, ok := m.track()
-	if !ok {
-		card.Center().Gap(5).Children(func() {
-			ui.Icon(c, musicSymbol).Size(20, 20).TextColor(ink3)
-			panelLabel(c, nil, loc(c).NowPlaying(), 12, 600).TextColor(ink)
-			panelLabel(c, nil, loc(c).NothingPlaying(), 10, 0).TextColor(ink3)
-		})
-		return
-	}
-	if span == 1 {
-		card.Center().Children(func() {
-			ui.Box(c.Key("tc-np-compact")).Size(52, 52).Center().Children(func() {
+// toolPlayingBody is the 正在播放 widget. The 2 × 1 form is the cover,
+// the title and meta, and the transport (v2 §3's own 2 × 1 body; the
+// 205pt card has no room for the beat bars too). The 1 × 1 form is the
+// new skeleton: the 32pt cover at the top left, the beat bars at the top
+// right, the song title at the bottom left — not the old single large
+// cover.
+func (a *shelf) toolPlayingBody(c *ui.Context, card ui.Element, span int, surf toolCardSurface) {
+	card.Children(func() {
+		m := a.np
+		if m == nil {
+			a.playingEmpty(c, card, span, surf)
+			return
+		}
+		st, ok := m.track()
+		if !ok {
+			a.playingEmpty(c, card, span, surf)
+			return
+		}
+		w := cardW(specFor(span), surf)
+		if span == 1 {
+			ui.Box(c.Key("tc-np-art-box")).Absolute().Left(cardPad).Top(cardPad).Size(32, 32).Children(func() {
+				m.coverArt(c, "tc-np-art", 32, 8)
+			})
+			a.cardEqBars(c, "tc-np-eq", st.Playing, 3, 10).Absolute().Right(cardPad).Top(12)
+			fitText(c, st.Title, 11.5, 600, w-2*cardPad).TextColor(ink).
+				Absolute().Left(cardPad).Bottom(cardPad)
+			return
+		}
+		card.Padding(0, 12, 0, 12).Justify(ui.Center).Children(func() {
+			ui.Row(c).AlignItems(ui.Center).Gap(10).FillWidth().Children(func() {
 				m.coverArt(c, "tc-np-art", 52, 10)
-				ui.Box(c.Key("tc-np-overlay")).Absolute().Top(10).Left(10).
-					Size(32, 32).Radius(16).Background(ui.RGBA(0, 0, 0, 0.6)).Center().Children(func() {
-					m.controlButton(c, "tc-np-toggle", toggleSymbol(st.Playing), playPauseText(loc(c), st.Playing), mac.NPPlayPause, 32, 18)
+				ui.Column(c).Grow(1).MinWidth(0).Gap(2).Justify(ui.Center).Children(func() {
+					ui.Text(c, st.Title).SingleLine().FontSize(12).FontWeight(600).TextColor(ink)
+					if meta := m.cardMeta(st); meta != "" {
+						ui.Text(c, meta).SingleLine().FontSize(10).TextColor(ink3)
+					}
+				})
+				ui.Row(c.Key("tc-np-ctl")).Gap(10).AlignItems(ui.Center).Children(func() {
+					m.controlButton(c, "tc-np-prev", prevFill, loc(c).PreviousTrack(), mac.NPPrevious, 15, 15)
+					m.controlButton(c, "tc-np-toggle", toggleSymbol(st.Playing), playPauseLabel(st.Playing), mac.NPPlayPause, 15, 15)
+					m.controlButton(c, "tc-np-next", nextFill, loc(c).NextTrack(), mac.NPNext, 15, 15)
 				})
 			})
 		})
-		return
-	}
-	card.Padding(0, 12, 0, 12).Justify(ui.Center).Children(func() {
-		ui.Row(c).AlignItems(ui.Center).Gap(10).FillWidth().Children(func() {
-			m.coverArt(c, "tc-np-art", 52, 10)
-			ui.Column(c).Grow(1).MinWidth(0).Gap(2).Justify(ui.Center).Children(func() {
-				ui.Text(c, st.Title).SingleLine().FontSize(12).FontWeight(600).TextColor(ink)
-				if meta := m.cardMeta(st); meta != "" {
-					ui.Text(c, meta).SingleLine().FontSize(10).TextColor(ink3)
-				}
-			})
-			ui.Row(c.Key("tc-np-ctl")).Gap(10).AlignItems(ui.Center).Children(func() {
-				m.controlButton(c, "tc-np-prev", prevFill, loc(c).PreviousTrack(), mac.NPPrevious, 15, 15)
-				m.controlButton(c, "tc-np-toggle", toggleSymbol(st.Playing), playPauseLabel(st.Playing), mac.NPPlayPause, 15, 15)
-				m.controlButton(c, "tc-np-next", nextFill, loc(c).NextTrack(), mac.NPNext, 15, 15)
-			})
+
+	})
+}
+
+// playingEmpty is the music card before any track: the skeleton's
+// glyph + name.
+func (a *shelf) playingEmpty(c *ui.Context, card ui.Element, span int, surf toolCardSurface) {
+	card.Children(func() {
+		w := cardW(specFor(span), surf)
+		if span == 1 {
+			a.cardGlyphLead(c, card, "np-lead", musicSymbol, 20, 20, ink3).Absolute().Left(cardPad).Top(cardPad)
+			fitText(c, loc(c).NowPlaying(), 12, 600, w-2*cardPad).TextColor(ink2).
+				Absolute().Left(cardPad).Bottom(cardPad)
+			return
+		}
+		top := a.cardTop(c, card, "np-top")
+		top.Children(func() {
+			a.cardGlyphLead(c, card, "np-lead", musicSymbol, 20, 20, ink3)
+			fitText(c, loc(c).NowPlaying(), 12, 600, w-2*cardPad-27).TextColor(ink2)
 		})
+		foot := a.cardFoot(c, card, "np-foot")
+		foot.Children(func() {
+			ui.Text(c, loc(c).NothingPlaying()).SingleLine().FontSize(10).TextColor(ink3)
+		})
+
 	})
 }

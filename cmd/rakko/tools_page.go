@@ -82,6 +82,8 @@ type toolsPage struct {
 	skipClick bool   // the last release was a suppressed press, not a tap
 	jiggleID  string // card shaking for 无可执行项
 	jiggleAt  time.Time
+	tapX      float32 // the last card tap's press, in stage content space
+	tapY      float32
 
 	// A reorder drag pins the grid's columns where it began and may only
 	// add rows: the panel must not follow the pointer sideways.
@@ -583,8 +585,6 @@ func (p *toolsPage) toolCell(c *ui.Context, cell toolCell, editing, live bool) {
 		card.Absolute().Left(cx).Top(cy).Width(cell.w).Height(cell.h)
 		if editing {
 			p.toolEditChrome(c, card, cell, spec, live)
-		} else if live {
-			p.clockCardBadges(c, card, spec)
 		}
 	}
 	if live {
@@ -601,35 +601,6 @@ func surfFor(editing bool) toolCardSurface {
 		return cardEdit
 	}
 	return cardPanel
-}
-
-// clockCardBadges adds the 1 × 1 clocks' corner control after the card has
-// its place. An absolute child built before positioning resolves against
-// the stage instead of the card, which put a second card's badge over the
-// first; the desktop pin fills its own window, so its badge stays in the
-// card body.
-func (p *toolsPage) clockCardBadges(c *ui.Context, card ui.Element, spec layout.Card) {
-	a := p.host
-	if a.clock == nil || spec.Cols() != 1 || spec.Height() != 1 {
-		return
-	}
-	switch spec.ID {
-	case "timer":
-		m := a.clock
-		if m.phase != timerRunning && m.phase != timerPaused {
-			return
-		}
-		if !card.Hovered() {
-			return
-		}
-		card.Children(func() { a.clockCancelBadge(c, m).Absolute().Top(6).Right(6) })
-	case "stopwatch":
-		m := a.clock
-		if m.watchRun || m.watchElapsed == 0 {
-			return
-		}
-		card.Children(func() { a.clockResetBadge(c, m).Absolute().Top(6).Right(6) })
-	}
 }
 
 // toolLiftedCard draws the dragged copy above the grid at the pointer.
@@ -712,6 +683,7 @@ func (p *toolsPage) toolCardInput(c *ui.Context, card ui.Element, cell toolCell,
 				return true
 			}
 			p.skipClick = d.suppress // a moved press never becomes a tap
+			p.tapX, p.tapY = d.downX, d.downY
 			p.press = nil
 			return true
 		}
@@ -731,7 +703,7 @@ func (p *toolsPage) toolCardInput(c *ui.Context, card ui.Element, cell toolCell,
 		if p.skipClick {
 			p.skipClick = false
 		} else {
-			p.toolCardTapped(cell.id)
+			p.toolCardTappedAt(cell.id, cell, p.tapX, p.tapY)
 		}
 	}
 }
@@ -759,6 +731,18 @@ func (p *toolsPage) toolCardTapped(id string) {
 	}
 	p.jiggleID, p.jiggleAt = id, time.Now()
 	a.toolCardTapFeedback()
+}
+
+// toolCardTappedAt is a click with its press position: the 2 × 1
+// countdown's idle reading opens the custom length editor, while a press
+// elsewhere on the card starts it (v3 §5). Pins keep the plain tap.
+func (p *toolsPage) toolCardTappedAt(id string, cell toolCell, x, y float32) {
+	if id == "timer" && p.host.clock != nil && p.host.clock.phase == timerIdle &&
+		cell.w > toolColW(1)+1 && y <= cell.y+cardPad+cardRowH+4 && x >= cell.x+cell.w*0.45 {
+		p.host.clock.beginEdit(p.host.clock.clock())
+		return
+	}
+	p.toolCardTapped(id)
 }
 
 // toolCardTapFeedback is shared by tools-page and desktop-card taps.

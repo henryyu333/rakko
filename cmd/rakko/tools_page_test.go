@@ -629,7 +629,7 @@ func TestToolsGridDrawsNoEdgeBlur(t *testing.T) {
 	if p.scroll.MaxY <= 0 {
 		t.Fatalf("the default grid does not scroll: MaxY=%.0f", p.scroll.MaxY)
 	}
-	card, ok := view.Find("playing")
+	card, ok := view.Find(a.appLoc().Music())
 	if !ok {
 		t.Fatal("the music card is not on screen")
 	}
@@ -646,7 +646,7 @@ func TestToolsGridDrawsNoEdgeBlur(t *testing.T) {
 	if got := p.scroll.Y; got != cut {
 		t.Fatalf("the grid did not scroll to %.0f: Y=%.0f", cut, got)
 	}
-	edgeCard, ok := view.Find("playing")
+	edgeCard, ok := view.Find(a.appLoc().Music())
 	if !ok {
 		t.Fatal("the music card left the grid")
 	}

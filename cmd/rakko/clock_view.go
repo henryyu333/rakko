@@ -14,6 +14,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"rakko/internal/layout"
 	"rakko/locales"
 )
 
@@ -45,6 +46,7 @@ var (
 	clockPlaySym  = fillSymbol(`<path d="M7.5 4.8v14.4L19.2 12z"/>`)
 	clockPauseSym = fillSymbol(`<rect x="6.2" y="4.8" width="4" height="14.4" rx="1.2"/><rect x="13.8" y="4.8" width="4" height="14.4" rx="1.2"/>`)
 	clockResetSym = symbol(`<path d="M5.2 12.5A6.8 6.8 0 1 0 7.4 7"/><path d="M5 4.2V8h3.8"/>`)
+	clockStopSym  = fillSymbol(`<rect x="6" y="6" width="12" height="12" rx="2.5"/>`)
 	clockCloseSym = symbol(`<path d="M7.5 7.5l9 9M16.5 7.5l-9 9"/>`)
 )
 
@@ -78,20 +80,9 @@ func clockCardWidth(span int, surf toolCardSurface) float32 {
 	return toolColW(span)
 }
 
-// clockBadgeLeft is the 1 × 1 card's top-right badge offset: the card is
-// sized after its content is built, so a Right() would resolve against the
-// page; the two surfaces' widths are known here instead.
-func clockBadgeLeft(surf toolCardSurface) float32 {
-	w := toolColW(1)
-	if surf == cardDesktop {
-		w = pinCardW
-	}
-	return w - 18 - 6
-}
-
 // clockSwallow makes an element the press target of its own control: it
 // keeps the down and the moves from starting a card press behind it, and
-// leaves the release to Clicked, as awakeChip does.
+// leaves the release to Clicked, as the chips do.
 func clockSwallow(el ui.Element) ui.Element {
 	el.HandleInput(func(ev ui.InputEvent) bool {
 		return ev.Button == 0 && ev.Kind >= ui.InputPointerDown && ev.Kind <= ui.InputPointerMove
@@ -114,200 +105,133 @@ func clockRing(c *ui.Context, key string, size, stroke, frac float32, col, track
 	return box
 }
 
-// clockCircle is a round icon button.
-func clockCircle(c *ui.Context, key string, size float32, bg ui.Color, glyph *ui.SVG, gs float32, fg ui.Color, label string) ui.Element {
-	b := ui.Box(c.Key(key)).Size(size, size).Radius(size / 2).Center().
-		Background(bg).Label(label).Tooltip(label)
-	b.Children(func() {
-		ui.Icon(c, glyph).Size(gs, gs).TextColor(fg)
-	})
-	return b
-}
-
-// clockCancelBadge is the 1 × 1 countdown's × : hover-only on the tools
-// page, and drawn inside a desktop pin's own card box.
-func (a *shelf) clockCancelBadge(c *ui.Context, m *clockModule) ui.Element {
-	btn := clockCircle(c, "timer-11-cancel", 18, fill2, clockCloseSym, 11, ink2, loc(c).TimerCancel())
-	clockSwallow(btn)
-	if btn.Clicked() {
-		m.stopTimer(m.clock())
+// cardTimerFrac is the countdown ring's share, quantized to the reading's
+// seconds so the 450 ms linear advance plays once per second with the
+// digits, as the design has it.
+func cardTimerFrac(m *clockModule, now time.Time) float32 {
+	if m == nil || m.dur <= 0 {
+		return 0
 	}
-	return btn
+	rem := m.timerRemainAt(now)
+	secs := int64(math.Ceil(rem.Seconds()))
+	return min(max(float32(secs)/float32(m.dur.Seconds()), 0), 1)
 }
 
-// clockResetBadge is the paused stopwatch's ↺ .
-func (a *shelf) clockResetBadge(c *ui.Context, m *clockModule) ui.Element {
-	btn := clockCircle(c, "watch-11-reset", 18, fill2, clockResetSym, 11, ink2, loc(c).StopwatchReset())
-	clockSwallow(btn)
-	if btn.Clicked() {
-		m.resetWatch()
-	}
-	return btn
+// cardWatchFrac is the stopwatch ring's minute share, quantized to whole
+// seconds.
+func cardWatchFrac(elapsed time.Duration) float32 {
+	secs := int64(elapsed / time.Second)
+	return float32(secs%60) / 60
 }
 
-// clockRail is the countdown's remaining track; dimmed while paused.
-func clockRail(c *ui.Context, key string, frac float32, dim bool) ui.Element {
-	box := ui.Box(c.Key(key)).Height(4).Radius(2)
-	box.Draw(func(p *ui.Painter, r ui.Rect) {
-		p.FillPath(liveRoundPath(r.X, r.Y, r.W, r.H, 2), fill3)
-		if frac <= 0 {
+// toolTimerBody draws the countdown card (v2 §2–3, v3 §5). The 2 × 1
+// form: the ring and name on the header, the reading on its right, and
+// the action row below. Idle shows the minute presets and a ▶; choosing
+// a preset only selects it (accent chip, the reading rolls to it), and ▶
+// starts. The 1 × 1 form keeps the last chosen length and puts ▶ in the
+// corner.
+func (a *shelf) toolTimerBody(c *ui.Context, card ui.Element, span int, surf toolCardSurface) {
+	card.Children(func() {
+		m := a.clock
+		l := loc(c)
+		now := placeholderNow()
+		if m != nil {
+			now = m.clock()
+		}
+		if span == 1 {
+			a.toolTimerNarrow(c, card, m, surf, now, l)
 			return
 		}
-		col := warning
-		if dim {
-			col = warning.Alpha(0.45)
+		if m != nil && m.edit != nil {
+			a.timerEditCard(c, card, m, surf)
+			return
 		}
-		p.FillPath(liveRoundPath(r.X, r.Y, max(2, r.W*frac), r.H, 2), col)
-	})
-	return box
-}
-
-// toolTimerBody draws the countdown card in its 2 × 1 and 1 × 1 forms.
-func (a *shelf) toolTimerBody(c *ui.Context, card ui.Element, span int, surf toolCardSurface) {
-	m := a.clock
-	l := loc(c)
-	now := placeholderNow()
-	if m != nil {
-		now = m.clock()
-	}
-	if span == 1 {
-		a.toolTimerNarrow(c, card, m, surf, now, l)
-		return
-	}
-	card.Padding(10, 12, 10, 12).Children(func() {
-		row := ui.Row(c.Key("timer-row")).FillWidth().Height(30).Gap(7).AlignItems(ui.Center)
-		row.Children(func() {
-			glyphCol := ink3
-			switch {
-			case m == nil:
-			case m.phase == timerRunning || m.phase == timerDone:
-				glyphCol = warning
-			case m.phase == timerPaused:
-				glyphCol = ink3
-			}
-			ui.Icon(c, timerGlyph).Size(16, 16).TextColor(glyphCol)
-
-			if m != nil && m.edit != nil {
-				a.timerEditRow(c, m)
+		phase := cardTimerPhase(m)
+		frac := float32(1)
+		text := clockText(timerDefaultDur)
+		if m != nil {
+			frac = cardTimerFrac(m, now)
+			text = clockTextCeil(m.timerRemainAt(now))
+		}
+		w := cardW(layout.Card{ID: "timer", Span: 2}, surf)
+		top := a.cardTop(c, card, "timer-top")
+		top.Children(func() {
+			if phase == cardDone {
+				a.cardSwingingGlyph(c, card, "timer-lead", timerGlyph, 18)
 			} else {
-				numCol := ink
-				if m != nil && m.phase == timerPaused {
-					numCol = ink2
-				}
-				text := clockText(timerDefaultDur)
-				if m != nil {
-					text = clockTextCeil(m.timerRemainAt(now))
-				}
-				// The row's fixed parts: glyph 16, its gaps, the two
-				// buttons and the number's 2pt side padding. A long reading
-				// shrinks instead of pushing them out.
-				fixed := float32(16 + 30 + 3*7 + 4)
-				if m != nil && (m.phase == timerRunning || m.phase == timerPaused) {
-					fixed = 16 + 26 + 30 + 4*7 + 4
-				}
-				avail := clockCardWidth(2, surf) - 24 - fixed
-				size := clockReadingSize(c, text, avail, 26)
-				num := ui.Box(c.Key("timer-num")).Height(30).Center().Padding(0, 2, 0, 2)
-				num.Children(func() {
-					fitText(c, text, size, 600, avail).FontFeatures("tnum").TextColor(numCol)
-				})
-				if m != nil && m.phase == timerIdle && surf == cardPanel {
-					clockSwallow(num)
-					if num.Clicked() {
-						m.beginEdit(m.clock())
-					}
-				}
-				num.Label(l.TimerCustomLabel())
+				a.cardRingLead(c, card, "timer-lead", 24, frac, phase, timerGlyph)
 			}
-
-			ui.Box(c.Key("timer-gap")).Grow(1)
-
-			if m == nil || m.phase == timerIdle {
-				btn := clockCircle(c, "timer-start", 30, accent, clockPlaySym, 13, ink, l.TimerStart())
-				clockSwallow(btn)
-				if btn.Clicked() && m != nil {
+			fitText(c, l.CardTimer(), 12, 600, 42).TextColor(ink2)
+			ui.Box(c).Grow(1)
+			a.cardHero(c, card, "timer-hero", text, 26, 22, w-2*cardPad-24-7-42-7,
+				cardHeroColor(phase), phase == cardPaused)
+		})
+		foot := a.cardFoot(c, card, "timer-foot")
+		foot.Children(func() {
+			switch phase {
+			case cardIdle:
+				chips := ui.Row(c.Key("timer-presets")).Grow(1).Gap(3).AlignItems(ui.Center)
+				chips.Children(func() {
+					for _, minutes := range timerPresets {
+						d := time.Duration(minutes) * time.Minute
+						on := m != nil && m.dur == d
+						chip := a.cardChip(c, "timer-p"+strconv.Itoa(minutes),
+							strconv.Itoa(minutes), on, false)
+						if chip.Clicked() && m != nil {
+							if m.edit != nil {
+								m.endEdit()
+								a.leaveFocusMode()
+							}
+							m.dur = d
+							m.refresh()
+						}
+					}
+				})
+				start := a.cardRound(c, "timer-start", cardCtrlH, cardButtonPrimary,
+					clockPlaySym, 12, l.TimerStart())
+				if start.Clicked() && m != nil {
 					m.startTimer(m.clock(), m.dur)
 				}
-			} else if m.phase == timerDone {
-				btn := clockCircle(c, "timer-cancel", 30, fill2, clockCloseSym, 13, ink2, l.TimerStop())
-				clockSwallow(btn)
-				if btn.Clicked() {
+			case cardDone:
+				stop := a.cardPill(c, "timer-stop", l.TimerStop(), func(fg ui.Color) {
+					ui.Icon(c, clockStopSym).Size(11, 11).TextColor(fg)
+				}, cardButtonSolid, true)
+				if stop.Clicked() && m != nil {
 					m.stopTimer(m.clock())
 				}
-			} else {
-				cancel := clockCircle(c, "timer-cancel", 26, fill1, clockCloseSym, 12, ink2, l.TimerCancel())
-				clockSwallow(cancel)
-				if cancel.Clicked() {
-					m.stopTimer(m.clock())
+				plus := a.cardPill(c, "timer-plus", l.TimerPlusOne(), nil, cardButtonSecondary, false)
+				if plus.Clicked() && m != nil {
+					m.addMinute(m.clock())
 				}
-				var btn ui.Element
-				if m.phase == timerPaused {
-					btn = clockCircle(c, "timer-resume", 30, accent, clockPlaySym, 13, ink, l.TimerResume())
-				} else {
-					btn = clockCircle(c, "timer-pause", 30, fill2, clockPauseSym, 12, ink, l.TimerPause())
+			default:
+				resume := phase == cardPaused
+				label := l.TimerPause()
+				if resume {
+					label = l.TimerResume()
 				}
-				clockSwallow(btn)
-				if btn.Clicked() {
-					if m.phase == timerPaused {
+				toggle := a.cardPill(c, "timer-toggle", label, func(fg ui.Color) {
+					a.cardSwapIcon(c, card, "timer-swap", !resume, 12, fg)
+				}, cardButtonPrimary, false)
+				if toggle.Clicked() && m != nil {
+					if resume {
 						m.resumeTimer(m.clock())
 					} else {
 						m.pauseTimer(m.clock())
 					}
 				}
+				plus := a.cardPill(c, "timer-plus", l.TimerPlusOne(), nil, cardButtonSecondary, false)
+				if plus.Clicked() && m != nil {
+					m.addMinute(m.clock())
+				}
+				ui.Box(c).Grow(1)
+				cancel := a.cardRound(c, "timer-cancel", cardCtrlH, cardButtonSecondary,
+					clockCloseSym, 12, l.TimerCancel())
+				if cancel.Clicked() && m != nil {
+					m.stopTimer(m.clock())
+				}
 			}
 		})
-		ui.Box(c.Key("timer-mid")).Grow(1)
-		row2 := ui.Row(c.Key("timer-foot")).FillWidth().Height(20).AlignItems(ui.Center)
-		row2.Children(func() {
-			if m != nil && (m.phase == timerRunning || m.phase == timerPaused || m.phase == timerDone) {
-				a.timerRail(c, m, now)
-			} else {
-				a.timerPresets(c, m)
-			}
-		})
-	})
-}
 
-// timerRail is the running card's bottom progress.
-func (a *shelf) timerRail(c *ui.Context, m *clockModule, now time.Time) {
-	rail := clockRail(c, "timer-progress", m.timerFracAt(now), m.phase == timerPaused)
-	rail.Grow(1).Label(loc(c).TimerRemaining(clockTextCeil(m.timerRemainAt(now))))
-}
-
-// timerPresets is the idle card's row of minute choices.
-func (a *shelf) timerPresets(c *ui.Context, m *clockModule) {
-	l := loc(c)
-	row := ui.Row(c.Key("timer-presets")).Grow(1).Gap(3)
-	row.Children(func() {
-		for _, minutes := range timerPresets {
-			on := m != nil && m.dur == time.Duration(minutes)*time.Minute
-			chip := ui.Row(c.Key("timer-p" + strconv.Itoa(minutes))).Grow(1).Height(20).MinWidth(0).
-				Radius(6).Center().Label(l.TimerPreset(minutes))
-			if on {
-				chip.Background(accent)
-			} else {
-				chip.Background(fill1)
-			}
-			chip.Children(func() {
-				t := ui.Text(c, strconv.Itoa(minutes)).SingleLine().FontSize(10.5).
-					FontWeight(600).FontFeatures("tnum")
-				if on {
-					t.TextColor(ink)
-				} else {
-					t.TextColor(ink2)
-				}
-			})
-			clockSwallow(chip)
-			if chip.Clicked() && m != nil {
-				d := time.Duration(minutes) * time.Minute
-				if m.edit != nil {
-					m.endEdit()
-					a.leaveFocusMode()
-				}
-				m.dur = d
-				m.refresh()
-			}
-		}
 	})
 }
 
@@ -423,135 +347,201 @@ func pad2(v int) string {
 	return strconv.Itoa(v)
 }
 
-// toolTimerNarrow is the 1 × 1 countdown: icon and name when idle, the
-// big remaining time and its rail while it runs.
+// timerEditCard puts the three-field custom length editor in the 2 × 1
+// card: the reading itself was the way in (v3 §5).
+func (a *shelf) timerEditCard(c *ui.Context, card ui.Element, m *clockModule, surf toolCardSurface) {
+	card.Children(func() {
+		box := ui.Box(c.Key("timer-edit")).Absolute().Left(cardPad).Right(cardPad).
+			Top(cardPad + 2).Height(30)
+		box.Children(func() {
+			a.timerEditRow(c, m)
+		})
+
+	})
+}
+
+// addMinute extends the countdown by one minute; a finished alarm goes
+// back to running (v2 §3's +1 分钟).
+func (m *clockModule) addMinute(now time.Time) {
+	switch m.phase {
+	case timerRunning, timerPaused:
+		remain := m.timerRemainAt(now) + time.Minute
+		if m.phase == timerPaused {
+			m.remain = remain
+		} else {
+			m.end = now.Add(remain)
+		}
+		m.dur = max(m.dur, remain)
+		m.refresh()
+	case timerDone:
+		m.stopAlert()
+		m.phase = timerRunning
+		m.end = now.Add(time.Minute)
+		m.dur = max(m.dur, time.Minute)
+		m.refresh()
+	}
+}
+
+// toolTimerNarrow is the 1 × 1 countdown: the 22pt ring at the top left,
+// the value at the bottom left and one ▶/❙❙/stop button in the corner.
+// Idle shows the last chosen length; the whole card starts it.
 func (a *shelf) toolTimerNarrow(c *ui.Context, card ui.Element, m *clockModule, surf toolCardSurface, now time.Time, l locales.Messages) {
-	card.Center().Children(func() {
-		if m == nil || m.phase == timerIdle {
-			ui.Icon(c, timerGlyph).Size(20, 20).TextColor(ink)
-			panelLabel(c, nil, l.CardTimer(), 12, 600).Margin(4, 0, 0, 0).TextColor(ink)
-			if m != nil {
-				panelLabel(c, nil, timerDurationSub(l, m.lastStarted), 10, 0).Margin(2, 0, 0, 0).TextColor(ink3)
+	card.Children(func() {
+		phase := cardTimerPhase(m)
+		frac := float32(0)
+		text := clockText(timerDefaultDur)
+		if m != nil {
+			frac = cardTimerFrac(m, now)
+			text = clockTextCeil(m.timerRemainAt(now))
+			if phase == cardIdle {
+				text = clockText(m.dur)
 			}
+		}
+		w := cardW(layout.Card{ID: "timer", Span: 1}, surf)
+		if phase == cardDone {
+			a.cardSwingingGlyph(c, card, "timer-lead", timerGlyph, 18).
+				Absolute().Left(cardPad).Top(cardPad)
+		} else {
+			a.cardRingLead(c, card, "timer-lead", 22, frac, phase, timerGlyph).
+				Absolute().Left(cardPad).Top(cardPad)
+		}
+		a.cardHero(c, card, "timer-hero", text, 22, 16, w-2*cardPad, cardHeroColor(phase),
+			phase == cardPaused).Absolute().Left(cardPad).Bottom(cardPad)
+		tr := a.cardTR(c, card, "timer-11-ctl")
+		tr.Children(func() {
+			switch phase {
+			case cardIdle:
+				btn := a.cardRound(c, "timer-11-start", 22, cardButtonPrimary,
+					clockPlaySym, 10, l.TimerStart())
+				if btn.Clicked() && m != nil {
+					m.startTimer(m.clock(), m.dur)
+				}
+			case cardRunning:
+				btn := a.cardSwapRound(c, card, "timer-11-toggle", true, 22, l.TimerPause())
+				if btn.Clicked() && m != nil {
+					m.pauseTimer(m.clock())
+				}
+			case cardPaused:
+				btn := a.cardSwapRound(c, card, "timer-11-toggle", false, 22, l.TimerResume())
+				if btn.Clicked() && m != nil {
+					m.resumeTimer(m.clock())
+				}
+			case cardDone:
+				btn := a.cardRound(c, "timer-11-stop", 22, cardButtonSolid,
+					clockStopSym, 10, l.TimerStop())
+				if btn.Clicked() && m != nil {
+					m.stopTimer(m.clock())
+				}
+			}
+		})
+
+	})
+}
+
+// toolStopwatchBody draws the stopwatch card (v2 §3). The 2 × 1 form has
+// the ring and name on the header and the transport in the action row;
+// the 1 × 1 form puts pause / reset / play in the corner.
+func (a *shelf) toolStopwatchBody(c *ui.Context, card ui.Element, span int, surf toolCardSurface) {
+	card.Children(func() {
+		m := a.clock
+		l := loc(c)
+		now := placeholderNow()
+		if m != nil {
+			now = m.clock()
+		}
+		if span == 1 {
+			a.toolStopwatchNarrow(c, card, m, surf, now, l)
 			return
 		}
-		col := ink
-		if m.phase == timerPaused {
-			col = ink2
+		phase := cardWatchPhase(m)
+		elapsed := time.Duration(0)
+		if m != nil {
+			elapsed = m.watchElapsedAt(now)
 		}
-		text := clockTextCeil(m.timerRemainAt(now))
-		avail := clockCardWidth(1, surf) - 8
-		size := clockReadingSize(c, text, avail, 20)
-		fitText(c, text, size, 600, avail).FontFeatures("tnum").TextColor(col)
-		clockRail(c, "timer-11-rail", m.timerFracAt(now), m.phase == timerPaused).
-			Width(56).Margin(9, 0, 0, 0)
-	})
-	if surf != cardDesktop || m == nil || (m.phase != timerRunning && m.phase != timerPaused) {
-		return
-	}
-	if card.Hovered() {
-		a.clockCancelBadge(c, m).Absolute().Top(6).Left(clockBadgeLeft(surf))
-	}
-}
-
-// timerDurationSub is the 1 × 1 idle subtitle: 「5 分钟」 for whole
-// minutes, the clock for anything else.
-func timerDurationSub(l locales.Messages, d time.Duration) string {
-	if d > 0 && d%time.Minute == 0 && d <= time.Hour {
-		return l.TimerMinutes(int(d / time.Minute))
-	}
-	return clockText(d)
-}
-
-// toolStopwatchBody draws the stopwatch card in its 1 × 1 and 2 × 1 forms.
-func (a *shelf) toolStopwatchBody(c *ui.Context, card ui.Element, span int, surf toolCardSurface) {
-	m := a.clock
-	l := loc(c)
-	now := placeholderNow()
-	if m != nil {
-		now = m.clock()
-	}
-	if span == 1 {
-		a.toolStopwatchNarrow(c, card, m, surf, now, l)
-		return
-	}
-	card.Padding(0, 12, 0, 12).Justify(ui.Center).Children(func() {
-		row := ui.Row(c.Key("watch-row")).FillWidth().Height(30).Gap(7).AlignItems(ui.Center)
-		row.Children(func() {
-			glyphCol := ink3
-			numCol := ink3
-			if m != nil && (m.watchRun || m.watchElapsed > 0) {
-				glyphCol, numCol = ink, ink
-				if !m.watchRun {
-					glyphCol, numCol = ink3, ink2
-				}
-			}
-			ui.Icon(c, watchGlyph).Size(16, 16).TextColor(glyphCol)
-			text := clockText(0)
-			if m != nil {
-				text = clockText(m.watchElapsedAt(now))
-			}
-			fixed := float32(16 + 30 + 3*7)
-			if m != nil && !m.watchRun && m.watchElapsed > 0 {
-				fixed = 16 + 26 + 30 + 4*7
-			}
-			avail := clockCardWidth(2, surf) - 24 - fixed
-			size := clockReadingSize(c, text, avail, 26)
-			fitText(c, text, size, 600, avail).FontFeatures("tnum").TextColor(numCol)
-			ui.Box(c.Key("watch-gap")).Grow(1)
-			switch {
-			case m == nil || (!m.watchRun && m.watchElapsed == 0):
-				btn := clockCircle(c, "watch-start", 30, accent, clockPlaySym, 13, ink, l.TimerStart())
-				clockSwallow(btn)
-				if btn.Clicked() && m != nil {
+		frac := cardWatchFrac(elapsed)
+		text := clockText(elapsed)
+		w := cardW(layout.Card{ID: "stopwatch", Span: 2}, surf)
+		top := a.cardTop(c, card, "watch-top")
+		top.Children(func() {
+			a.cardRingLead(c, card, "watch-lead", 24, frac, phase, watchGlyph)
+			fitText(c, l.CardStopwatch(), 12, 600, 42).TextColor(ink2)
+			ui.Box(c).Grow(1)
+			a.cardHero(c, card, "watch-hero", text, 26, 22, w-2*cardPad-24-7-42-7,
+				cardHeroColor(phase), phase == cardPaused)
+		})
+		foot := a.cardFoot(c, card, "watch-foot")
+		foot.Children(func() {
+			switch phase {
+			case cardIdle:
+				start := a.cardPill(c, "watch-start", l.TimerStart(), func(fg ui.Color) {
+					ui.Icon(c, clockPlaySym).Size(12, 12).TextColor(fg)
+				}, cardButtonPrimary, false)
+				if start.Clicked() && m != nil {
 					m.startWatch(m.clock())
 				}
-			case m.watchRun:
-				btn := clockCircle(c, "watch-pause", 30, fill2, clockPauseSym, 12, ink, l.TimerPause())
-				clockSwallow(btn)
-				if btn.Clicked() {
+			case cardRunning:
+				pause := a.cardPill(c, "watch-pause", l.TimerPause(), func(fg ui.Color) {
+					a.cardSwapIcon(c, card, "watch-swap", true, 12, fg)
+				}, cardButtonPrimary, false)
+				if pause.Clicked() && m != nil {
 					m.pauseWatch(m.clock())
 				}
-			default:
-				reset := clockCircle(c, "watch-reset", 26, fill1, clockResetSym, 14, ink2, l.StopwatchReset())
-				clockSwallow(reset)
-				if reset.Clicked() {
+			case cardPaused:
+				play := a.cardPill(c, "watch-resume", l.TimerResume(), func(fg ui.Color) {
+					a.cardSwapIcon(c, card, "watch-swap", false, 12, fg)
+				}, cardButtonPrimary, false)
+				if play.Clicked() && m != nil {
+					m.resumeWatch(m.clock())
+				}
+				reset := a.cardPill(c, "watch-reset", l.StopwatchReset(), func(fg ui.Color) {
+					ui.Icon(c, clockResetSym).Size(12, 12).TextColor(fg)
+				}, cardButtonSecondary, false)
+				if reset.Clicked() && m != nil {
 					m.resetWatch()
 				}
-				btn := clockCircle(c, "watch-resume", 30, accent, clockPlaySym, 13, ink, l.TimerResume())
-				clockSwallow(btn)
-				if btn.Clicked() {
+			}
+		})
+
+	})
+}
+
+// toolStopwatchNarrow is the 1 × 1 stopwatch: ring and value, and in the
+// paused state ↺ beside ▶ in the corner.
+func (a *shelf) toolStopwatchNarrow(c *ui.Context, card ui.Element, m *clockModule, surf toolCardSurface, now time.Time, l locales.Messages) {
+	card.Children(func() {
+		phase := cardWatchPhase(m)
+		elapsed := time.Duration(0)
+		if m != nil {
+			elapsed = m.watchElapsedAt(now)
+		}
+		frac := cardWatchFrac(elapsed)
+		w := cardW(layout.Card{ID: "stopwatch", Span: 1}, surf)
+		a.cardRingLead(c, card, "watch-lead", 22, frac, phase, watchGlyph).
+			Absolute().Left(cardPad).Top(cardPad)
+		a.cardHero(c, card, "watch-hero", clockText(elapsed), 22, 16, w-2*cardPad,
+			cardHeroColor(phase), phase == cardPaused).Absolute().Left(cardPad).Bottom(cardPad)
+		tr := a.cardTR(c, card, "watch-11-ctl")
+		tr.Children(func() {
+			switch phase {
+			case cardRunning:
+				btn := a.cardSwapRound(c, card, "watch-11-toggle", true, 22, l.TimerPause())
+				if btn.Clicked() && m != nil {
+					m.pauseWatch(m.clock())
+				}
+			case cardPaused:
+				reset := a.cardRound(c, "watch-11-reset", 22, cardButtonSecondary,
+					clockResetSym, 11, l.StopwatchReset())
+				if reset.Clicked() && m != nil {
+					m.resetWatch()
+				}
+				btn := a.cardSwapRound(c, card, "watch-11-toggle", false, 22, l.TimerResume())
+				if btn.Clicked() && m != nil {
 					m.resumeWatch(m.clock())
 				}
 			}
 		})
-	})
-}
 
-// toolStopwatchNarrow is the 1 × 1 stopwatch: icon and name when idle,
-// the elapsed time while it runs, and a reset badge while paused.
-func (a *shelf) toolStopwatchNarrow(c *ui.Context, card ui.Element, m *clockModule, surf toolCardSurface, now time.Time, l locales.Messages) {
-	card.Center().Children(func() {
-		if m == nil || (!m.watchRun && m.watchElapsed == 0) {
-			ui.Icon(c, watchGlyph).Size(20, 20).TextColor(ink)
-			panelLabel(c, nil, l.CardStopwatch(), 12, 600).Margin(4, 0, 0, 0).TextColor(ink)
-			return
-		}
-		col := ink
-		glyph := ink
-		if !m.watchRun {
-			col, glyph = ink2, ink3
-		}
-		ui.Icon(c, watchGlyph).Size(16, 16).TextColor(glyph)
-		text := clockText(m.watchElapsedAt(now))
-		avail := clockCardWidth(1, surf) - 8
-		size := clockReadingSize(c, text, avail, 20)
-		fitText(c, text, size, 600, avail).FontFeatures("tnum").TextColor(col).Margin(6, 0, 0, 0)
 	})
-	if surf != cardDesktop || m == nil || m.watchRun || m.watchElapsed == 0 {
-		return
-	}
-	a.clockResetBadge(c, m).Absolute().Top(6).Left(clockBadgeLeft(surf))
 }
 
 // --- band chips ---

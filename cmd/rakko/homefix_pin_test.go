@@ -153,7 +153,13 @@ func pinLines(a *shelf, id string, span int) []pinLine {
 	case "clip":
 		return []pinLine{{text: "剪贴板里的一段很长的文字", size: 12, weight: 600}}
 	case "awake":
-		return []pinLine{{text: "保持唤醒", size: 12, weight: 600}, {text: "关", size: 10}}
+		if span < 2 {
+			// The 1 × 1 widget carries no name (v2 §2): the ring and the
+			// main value are the whole card, and the name lives in the
+			// accessible label.
+			return []pinLine{{text: "关", min: 1}}
+		}
+		return []pinLine{{text: "保持唤醒", size: 12, weight: 600}, {text: "关", min: 1}}
 	case "usage":
 		if span < 2 {
 			return []pinLine{{text: "AI 用量 · 暂无数据", min: 1}}
@@ -222,13 +228,11 @@ func TestPinnedWidgetContentIsWhole(t *testing.T) {
 		}
 	}
 
-	// Why three widgets pin wide: at one column their bodies are cut.
+	// The wide widgets keep their wide pin windows (DESIGN.md 桌面固定);
+	// their two-column form must stay whole.
 	a, _ := musicShelf(t)
 	pinFixture(t, a)
 	for _, id := range []string{"playing", "recent", "clip"} {
-		if bad := pinClipped(t, a, id, 1, pinCardW); len(bad) == 0 {
-			t.Errorf("%s is whole in a one-column pin, so a wide pin is not needed", id)
-		}
 		if bad := pinClipped(t, a, id, 2, pinCardW2); len(bad) > 0 {
 			t.Errorf("%s is cut in a two-column pin: %s", id, strings.Join(bad, "; "))
 		}

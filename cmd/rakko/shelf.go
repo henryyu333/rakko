@@ -247,6 +247,8 @@ type shelf struct {
 	// built for.
 	toolsLayPeek   *layout.Layout
 	toolsLayPeekOn bool
+	// cardRolls keeps each hero value's per-digit roll state (v2 §7).
+	cardRolls map[string]*cardRoll
 
 	// pasteSeq 是剪贴板粘贴尝试的代号（paste.go）：每次新选择、收起或重新
 	// 打开都会加一，旧尝试看到代号变了就不再按键，快速连按也不会双重粘贴。
