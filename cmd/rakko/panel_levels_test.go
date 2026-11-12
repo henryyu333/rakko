@@ -297,6 +297,11 @@ func TestEveryPageFitsTheContentBox(t *testing.T) {
 		for i := range rows {
 			rows[i].X += earR // the shell sits in the tester's ear margin
 		}
+		if state.editing {
+			// The card library is a full-width band over the shell's
+			// bottom edge, outside the clipped page content.
+			rows = append(rows, ui.Rect{X: earR, Y: a.pageShellH() - toolLibraryH, W: a.pageShellW(), H: toolLibraryH})
+		}
 		assertPageFitsRows(t, tv, state.name, drain(), rows)
 	}
 	p.editing = false

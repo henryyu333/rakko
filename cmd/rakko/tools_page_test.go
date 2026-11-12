@@ -564,8 +564,7 @@ func TestToolsEditBadgeIsVisibleAndClickableAtGridEdges(t *testing.T) {
 		t.Run(edge, func(t *testing.T) {
 			a := &shelf{tab: pageTools, visible: true, store: mustStore(t)}
 			p := a.toolsPage()
-			// Editing appends the + tile, which can take another column:
-			// size the surface after the state that sets the panel.
+			// Size the surface after the state that sets the shell.
 			p.editing = true
 			view := toolsTester(a)
 			view.SetPreferences(ui.Preferences{ReduceMotion: true})
@@ -579,9 +578,10 @@ func TestToolsEditBadgeIsVisibleAndClickableAtGridEdges(t *testing.T) {
 			if r.W != 18 || r.H != 18 {
 				t.Errorf("remove badge lost part of its circle: visible=%+v", r)
 			}
-			v := p.viewport
-			if r.X < v.X || r.Y < v.Y || r.X+r.W > v.X+v.W || r.Y+r.H > v.Y+v.H {
-				t.Errorf("remove badge is clipped: badge=%+v viewport=%+v", r, v)
+			// The badge hangs over the card's corner in the page overlay:
+			// it must be whole inside the shell, not the scroll viewport.
+			if r.X < earR || r.Y < 0 || r.X+r.W > earR+a.pageShellW() || r.Y+r.H > a.pageShellH() {
+				t.Errorf("remove badge is clipped by the shell: badge=%+v shell=%v×%v", r, a.pageShellW(), a.pageShellH())
 			}
 			// The badge belongs to the grid's first card, whatever that is
 			// (the widgets lead the default layout now).

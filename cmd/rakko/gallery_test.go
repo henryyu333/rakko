@@ -1503,6 +1503,17 @@ func galleryGroupF() []galleryItem {
 		{ID: "F53", Group: g, Title: "编辑交互", State: "右键菜单 · 尺寸形状与页面动作", Build: tools(card("awake", 1, 1), func(t *testing.T, a *shelf, p *toolsPage, lang string) {
 			p.menu = &toolMenu{id: "awake", x: 28, y: 10}
 		})},
+		{ID: "F55", Group: g, Title: "工具页", State: "3 列 · 编辑 · 满宽卡片库", Build: tools([]layout.Card{
+			{ID: "ocr"}, {ID: "zip"},
+		}, func(t *testing.T, a *shelf, p *toolsPage, lang string) {
+			p.editing = true
+		})},
+		{ID: "F56", Group: g, Title: "工具页", State: "6 列 · 编辑 · 满宽卡片库", Build: tools([]layout.Card{
+			{ID: "playing", Span: 2, Rows: 2}, {ID: "awake"}, {ID: "usage"}, {ID: "ocr"}, {ID: "zip"},
+			{ID: "timer", Span: 2, Rows: 1}, {ID: "stopwatch"}, {ID: "clip", Span: 2, Rows: 1}, {ID: "airdrop"},
+		}, func(t *testing.T, a *shelf, p *toolsPage, lang string) {
+			p.editing = true
+		})},
 		{ID: "F54", Group: g, Title: "编辑交互", State: "弧形把手拖动 · 蓝色橡皮筋与吸附中的卡片", Build: tools(card("awake", 1, 1), func(t *testing.T, a *shelf, p *toolsPage, lang string) {
 			p.editing = true
 			p.rs = &toolResize{id: "awake", orig: layout.Card{ID: "awake", Span: 1, Rows: 1},

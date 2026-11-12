@@ -93,11 +93,12 @@ type toolsPage struct {
 
 	// The resize gesture, the library's own scroll position and the card
 	// context menu (nil while closed).
-	rs        *toolResize
-	libScroll ui.ScrollState
-	menu      *toolMenu
-	lp        *toolLibPress
-	chromeAt  time.Time // first frame in editing, for the chrome's pop
+	rs         *toolResize
+	libScroll  ui.ScrollState
+	menu       *toolMenu
+	lp         *toolLibPress
+	chromeAt   time.Time // first frame in editing, for the chrome's pop
+	libraryTop float32   // drawer's top in the grid's content coordinates
 	// reduceMotion is the window's preference, cached for the input paths
 	// that run outside a build.
 	reduceMotion bool
@@ -493,6 +494,9 @@ func (p *toolsPage) body(c *ui.Context, _ bool, live bool) ui.Element {
 	return ui.Column(c.Key("tools-stage")).Grow(1).MinHeight(0).Children(func() {
 		scroll := ui.Scroll(c.Key("cards")).Grow(1).MinHeight(0).TrackScroll(&p.scroll)
 		p.viewport = scroll.Bounds()
+		// The visible drawer is drawn over the shell; the grid keeps this
+		// spacer so a card can never sit under the drawer.
+		p.libraryTop = p.host.pageShellH() - toolLibraryH - p.viewport.Y + p.scroll.Y
 		scroll.PointerPosition() // pointer tracking: the wheel and the rails
 		scroll.Children(func() {
 			// A box in normal flow carries the grid's real height: an
@@ -520,7 +524,7 @@ func (p *toolsPage) body(c *ui.Context, _ bool, live bool) ui.Element {
 			})
 		})
 		if editing {
-			p.toolLibrary(c, live)
+			ui.Box(c.Key("library-space")).FillWidth().Height(toolLibraryH)
 		}
 		if d != nil && d.dragging && p.preview.window() == nil {
 			layer := ui.Column(c.Key("tools-lift")).Absolute().Left(0).Top(0).Right(0).Bottom(0).IgnoreInput(true)
@@ -537,7 +541,7 @@ func (p *toolsPage) overLibrary() bool {
 	if d == nil || p.viewport.H <= 0 {
 		return false
 	}
-	return d.py > p.scroll.Y+p.viewport.H+2
+	return d.py >= p.libraryTop
 }
 
 // toolSlot is the dashed placeholder at the cell the dragged card would
@@ -565,18 +569,7 @@ func (p *toolsPage) toolCell(c *ui.Context, cell toolCell, editing, live bool) {
 	if d != nil && d.fresh && d.id == cell.id {
 		return
 	}
-	spec := layout.Card{ID: cell.id, Span: 1, Rows: 1}
-	if def := toolCardDefFor(cell.id); def != nil {
-		spec.Span, spec.Rows = def.span, def.rows
-	}
-	for _, cc := range a.toolsLayout().Cards {
-		if cc.ID == cell.id {
-			spec.Span, spec.Rows = cc.Cols(), cc.Height()
-		}
-	}
-	if p.rs != nil && p.rs.id == cell.id {
-		spec.Span, spec.Rows = p.rs.cur[0], p.rs.cur[1]
-	}
+	spec := p.cardSpec(cell)
 	parked := d != nil && d.id == cell.id && (d.dragging || d.settling)
 	card := a.toolCard(c, spec, surfFor(editing))
 	cx, cy := cell.x, cell.y
@@ -604,9 +597,6 @@ func (p *toolsPage) toolCell(c *ui.Context, cell toolCell, editing, live bool) {
 			cy = card.AnimateTo("cy", cell.y, toolMoveSpring)
 		}
 		card.Absolute().Left(cx).Top(cy).Width(cell.w).Height(cell.h)
-		if editing {
-			p.toolEditChrome(c, card, cell, spec, cx, cy, live)
-		}
 	}
 	if live {
 		p.toolCardInput(c, card, cell, cx, cy, editing, live)
@@ -932,93 +922,131 @@ func (p *toolsPage) toolSettle(c *ui.Context, card ui.Element, d *toolPress) {
 	}
 }
 
-// toolEditChrome is the editing overlay on one card: the ⊖ badge at the
-// top left and — for a card with sizes to choose from — the arc handle at
-// the bottom right. Both pop from 0.2 over 220 ms (Bounce 0.15) when
-// editing begins (v2 §7, v3 §1).
-func (p *toolsPage) toolEditChrome(c *ui.Context, card ui.Element, cell toolCell, spec layout.Card, ox, oy float32, live bool) {
+// toolChrome draws the editing chrome over the whole shell: the ⊖ badge
+// at each card's top-left, nine points outside it so it never covers the
+// editing glyph, and the arc handle inside the bottom-right corner. The
+// page content clips at the grid's first row and column, and a badge at
+// the card's corner would be cut there; drawing the chrome over the shell
+// keeps the 18pt square whole. The layer only shows cards whose whole
+// rectangle is inside the scrolled viewport.
+func (p *toolsPage) toolChrome(c *ui.Context, live bool) {
+	if !p.editing || !live {
+		return
+	}
 	a, l := p.host, loc(c)
+	// A 1pt anchor carries the shared 220ms pop; a full-size layer would
+	// sit between the cards and the pointer and swallow their presses.
+	clock := ui.Box(c.Key("chrome-clock")).Absolute().Left(0).Top(0).Size(1, 1).IgnoreInput(true)
 	pop := float32(1)
 	if !reduceMotion(c) && !p.chromeAt.IsZero() {
 		if c.Now().Equal(p.chromeAt) {
-			card.Jump("chrome", 0)
+			clock.Jump("chrome", 0)
 		}
-		pop = card.AnimateTo("chrome", 1, ui.Animation{Spring: ui.SpringOptions{Duration: 220 * time.Millisecond, Bounce: 0.15}})
+		pop = clock.AnimateTo("chrome", 1, ui.Animation{Spring: ui.SpringOptions{Duration: 220 * time.Millisecond, Bounce: 0.15}})
 		if pop < 1 {
 			c.AnimationFrame()
 		}
 	}
-	card.Children(func() {
-		minus := ui.ButtonBase(c.Key("minus-"+cell.id)).Absolute().Left(2).Top(2).Size(18, 18).
+	top := toolsContentTop()
+	for _, cell := range p.grid().cells {
+		if d := p.press; d != nil && d.id == cell.id && (d.dragging || d.settling) {
+			continue // the lifted copy carries the card, not its chrome
+		}
+		y := cell.y - p.scroll.Y
+		if p.viewport.H > 0 && (y < 0 || y+cell.h > p.viewport.H+0.5) {
+			continue // never float the chrome over the action row or the drawer
+		}
+		spec := p.cardSpec(cell)
+		x := sheetPadX + cell.x
+		sy := top + y
+		minus := ui.ButtonBase(c.Key("minus-"+cell.id)).Absolute().Left(x-9).Top(sy-9).Size(18, 18).
 			Radius(9).Center().Background(surfaceBadge).Border(1.5, surface).
 			Label(l.Remove()).Tooltip(l.Remove()).Scale(pop, pop).Opacity(pop)
 		minus.Children(func() {
 			ui.Icon(c, minusSymbol).Size(8, 8).TextColor(ink)
 		})
-		if live {
-			minus.HandleInput(func(ev ui.InputEvent) bool {
-				if ev.Kind == ui.InputPointerUp {
-					if a.mutateToolsChanged(func(l *layout.Layout) bool {
-						l.RemoveCard(cell.id)
-						return true
-					}) {
-						p.press, p.menu, p.rs = nil, nil, nil
-					}
+		minus.HandleInput(func(ev ui.InputEvent) bool {
+			if ev.Kind == ui.InputPointerUp {
+				if a.mutateToolsChanged(func(l *layout.Layout) bool {
+					l.RemoveCard(cell.id)
+					return true
+				}) {
+					p.press, p.menu, p.rs = nil, nil, nil
 				}
-				return true // swallow the down too, so no card press starts
-			})
-			minus.PointerPosition()
-		}
+			}
+			return true // swallow the down too, so no card press starts
+		})
+		minus.PointerPosition()
 		if len(cardSizes(cell.id)) < 2 {
-			return
+			continue
 		}
-		handle := ui.Box(c.Key("size-"+cell.id)).Absolute().Right(5).Bottom(5).Size(18, 18).
+		hx, hy := x+cell.w-5-18, sy+cell.h-5-18
+		handle := ui.Box(c.Key("size-"+cell.id)).Absolute().Left(hx).Top(hy).Size(18, 18).
 			Label(l.ToolsResize()).Tooltip(l.ToolsResize()).Scale(pop, pop).Opacity(pop)
 		handle.Draw(func(pt *ui.Painter, r ui.Rect) {
 			col := ui.RGBA(255, 255, 255, 0.62)
 			if handle.Hovered() || (p.rs != nil && p.rs.id == cell.id) {
 				col = ink
 			}
-			// design .handle: the 18-unit arc scaled to 12pt
-			s := r.W / 18
+			// the design's 18-unit arc: 3pt round stroke, white 62%
 			var arc ui.Path
-			arc.MoveTo(r.X+15*s, r.Y+4.5*s).LineTo(r.X+15*s, r.Y+6.5*s).
-				QuadTo(r.X+15*s, r.Y+15*s, r.X+6.5*s, r.Y+15*s).LineTo(r.X+4.5*s, r.Y+15*s)
-			pt.StrokePath(&arc, 3*s, col)
+			arc.MoveTo(r.X+15, r.Y+4.5).LineTo(r.X+15, r.Y+6.5).
+				QuadTo(r.X+15, r.Y+15, r.X+6.5, r.Y+15).LineTo(r.X+4.5, r.Y+15)
+			pt.StrokePath(&arc, 3, col)
 			var cap ui.Path
-			cap.Circle(r.X+15*s, r.Y+4.5*s, 1.5*s)
+			cap.Circle(r.X+15, r.Y+4.5, 1.5)
 			pt.FillPath(&cap, col)
-			cap.Circle(r.X+4.5*s, r.Y+15*s, 1.5*s)
+			cap.Circle(r.X+4.5, r.Y+15, 1.5)
 			pt.FillPath(&cap, col)
 		})
-		if live {
-			hx, hy := handle.Bounds().X, handle.Bounds().Y
-			handle.HandleInput(func(ev ui.InputEvent) bool {
-				wx, wy := float32(hx)+ev.X, float32(hy)+ev.Y
-				switch ev.Kind {
-				case ui.InputPointerDown:
-					if ev.Button != 0 {
-						return false
-					}
-					p.beginResize(cell.id, spec, cell, wx, wy)
-					return true
-				case ui.InputPointerMove:
-					if p.rs != nil && p.rs.id == cell.id {
-						p.moveResize(wx, wy)
-						return true
-					}
-				case ui.InputPointerUp:
-					if p.rs != nil && p.rs.id == cell.id {
-						p.endResize()
-						return true
-					}
+		bx, by := handle.Bounds().X, handle.Bounds().Y
+		handle.HandleInput(func(ev ui.InputEvent) bool {
+			wx, wy := float32(bx)+ev.X, float32(by)+ev.Y
+			switch ev.Kind {
+			case ui.InputPointerDown:
+				if ev.Button != 0 {
+					return false
 				}
-				return false
-			})
-			handle.PointerPosition()
-		}
-	})
+				p.beginResize(cell.id, spec, cell, wx, wy)
+				return true
+			case ui.InputPointerMove:
+				if p.rs != nil && p.rs.id == cell.id {
+					p.moveResize(wx, wy)
+					return true
+				}
+			case ui.InputPointerUp:
+				if p.rs != nil && p.rs.id == cell.id {
+					p.endResize()
+					return true
+				}
+			}
+			return false
+		})
+		handle.PointerPosition()
+	}
 }
+
+// cardSpec is the card's rectangle now: the layout's, or the transient
+// resize rectangle while the handle drags.
+func (p *toolsPage) cardSpec(cell toolCell) layout.Card {
+	spec := layout.Card{ID: cell.id, Span: 1, Rows: 1}
+	if def := toolCardDefFor(cell.id); def != nil {
+		spec.Span, spec.Rows = def.span, def.rows
+	}
+	for _, cc := range p.host.toolsLayout().Cards {
+		if cc.ID == cell.id {
+			spec.Span, spec.Rows = cc.Cols(), cc.Height()
+		}
+	}
+	if p.rs != nil && p.rs.id == cell.id {
+		spec.Span, spec.Rows = p.rs.cur[0], p.rs.cur[1]
+	}
+	return spec
+}
+
+// toolsContentTop is the page content's y inside the panel shell: the
+// band, the action row and the gap (the tab body has no top padding).
+func toolsContentTop() float32 { return bandH + pageActionH + actionsGap }
 
 // cardSizes are the rectangles a card cycles through with its handle, the
 // card's current one first.

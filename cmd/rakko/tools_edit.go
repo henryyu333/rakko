@@ -75,8 +75,8 @@ func (p *toolsPage) toolLibrary(c *ui.Context, live bool) {
 	if catch {
 		bg = ui.RGBA(255, 69, 58, 0.14)
 	}
-	box := ui.Column(c.Key("tool-drawer")).FillWidth().Height(toolLibraryH).
-		Background(bg).Padding(12, 12, 12, 12)
+	box := ui.Column(c.Key("tool-drawer")).Absolute().Left(0).Right(0).Bottom(0).
+		Height(toolLibraryH).Background(bg).Padding(12, 12, 12, 12)
 	box.Children(func() {
 		sc := ui.ScrollBoth(c.Key("lib-scroll")).FillWidth().Height(56).TrackScroll(&p.libScroll)
 		sc.Children(func() {
@@ -112,10 +112,10 @@ func (p *toolsPage) libTile(c *ui.Context, def toolCardDef, live bool) {
 	tile.Children(func() {
 		ui.Icon(c, def.icon).Size(16, 16).TextColor(ink2)
 		ui.Box(c).Grow(1)
-		// The English names outgrow the 66pt tile at one line; two lines
-		// keep the whole name instead of an ellipsis.
+		// The design's tile names stay on one line; the full name is in
+		// the label and tooltip.
 		ui.Text(c, name).FontSize(10.5).FontWeight(600).LineHeight(1.15).
-			MaxLines(2).Ellipsis("…").TextColor(ink2).Label(name)
+			SingleLine().Ellipsis("…").TextColor(ink2).Label(name)
 	})
 	if !live {
 		return
@@ -393,9 +393,14 @@ func menuHeight(sizes int) float32 {
 // overlay draws the card menu over the whole shell: the page content's
 // clip is only as tall as the shell's content, too short for the menu.
 func (p *toolsPage) overlay(c *ui.Context, live bool) {
-	if live {
-		p.toolMenuView(c, live)
+	if !live {
+		return
 	}
+	p.toolChrome(c, live)
+	if p.editing {
+		p.toolLibrary(c, live) // the full-width drawer over the shell's bottom
+	}
+	p.toolMenuView(c, live)
 }
 
 // toolMenuView draws the card menu: the size shapes (smallest area first,
@@ -434,7 +439,7 @@ func (p *toolsPage) toolMenuView(c *ui.Context, live bool) {
 	// The menu lives in the shell's coordinates (the page overlay): the
 	// page content's own clip is 200 pt tall, too short for the menu.
 	x := m.x + sheetPadX
-	y := m.y + bandH + bodyGap + pageActionH + actionsGap
+	y := m.y + toolsContentTop()
 	x = min(max(x, 4), max(a.pageShellW()-w-4, 4))
 	y = min(max(y, 4), max(a.pageShellH()-h-4, 4))
 	ui.Box(c.Key("menu-backdrop")).Absolute().Left(0).Top(0).Right(0).Bottom(0).

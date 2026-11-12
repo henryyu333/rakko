@@ -319,6 +319,7 @@ func (a *shelf) toolCardEditBody(c *ui.Context, card ui.Element, def *toolCardDe
 			return
 		}
 		glyph := a.cardGlyphLead(c, card, "edit-lead", def.icon, 20, 20, ink2)
+		glyph.Label("edit-glyph:" + def.id)
 		glyph.Absolute().Left(cardPad).Top(cardPad)
 		fitText(c, def.name(loc(c)), 12, 600, toolColW(spec.Cols())-2*cardPad).
 			TextColor(ink).Absolute().Left(cardPad).Bottom(cardPad)

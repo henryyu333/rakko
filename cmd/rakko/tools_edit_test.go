@@ -6,8 +6,8 @@ package main
 // page; the tester drives the same pointer handlers the window does.
 
 import (
+	"math"
 	"testing"
-
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -264,5 +264,41 @@ func TestToolsLegacySizeKeepsItsShape(t *testing.T) {
 	}
 	if p.menu == nil {
 		t.Fatal("the menu did not open")
+	}
+}
+
+// TestToolsEditChromeClearsTheGlyph: the ⊖ badge sits at the card's
+// corner, clear of the editing glyph, and its 18pt square stays inside
+// the shell even in the first row and the first column.
+func TestToolsEditChromeClearsTheGlyph(t *testing.T) {
+	// The music 2 × 2 keeps its live player in editing (v2 §6); its cover
+	// sits at 20pt, clear of the badge like every edit glyph.
+	for _, id := range []string{"awake", "ocr", "zip", "fit1m", "note", "recent", "clip", "timer", "stopwatch"} {
+		t.Run(id, func(t *testing.T) {
+			a, _, view := editPage(t, []layout.Card{{ID: id}})
+			view.Advance(300 * time.Millisecond) // the chrome's 220ms pop
+			view.Frame()
+			minus, ok := view.Find(a.appLoc().Remove())
+			if !ok {
+				t.Fatalf("the ⊖ badge is missing; texts %v", view.Texts())
+			}
+			glyph, ok := view.Find("edit-glyph:" + id)
+			if !ok {
+				t.Fatalf("the %s edit glyph is missing", id)
+			}
+			if minus.X < glyph.X+glyph.W && glyph.X < minus.X+minus.W &&
+				minus.Y < glyph.Y+glyph.H && glyph.Y < minus.Y+minus.H {
+				t.Fatalf("the ⊖ badge %+v covers the glyph %+v", minus, glyph)
+			}
+			// The 220ms pop's spring overshoots a hair past 1 at rest;
+			// the badge is 18pt before its scale.
+			if math.Abs(float64(minus.W-18)) > 0.1 || math.Abs(float64(minus.H-18)) > 0.1 {
+				t.Fatalf("the ⊖ badge = %v×%v, want 18×18", minus.W, minus.H)
+			}
+			if minus.X < earR || minus.Y < 0 ||
+				minus.X+minus.W > earR+a.pageShellW() || minus.Y+minus.H > a.pageShellH() {
+				t.Fatalf("the ⊖ badge %+v is clipped by the shell", minus)
+			}
+		})
 	}
 }
