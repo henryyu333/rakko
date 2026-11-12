@@ -338,3 +338,26 @@ func TestTimerActionRowFadesOnPhaseChange(t *testing.T) {
 		t.Fatalf("the new action row appeared at once: early=%d settled=%d", early, settled)
 	}
 }
+
+// TestAwakeRingSettlesBetweenWholeSeconds: a running timed hold's ring
+// must use a whole-second target like the countdown and stopwatch, so the
+// 450ms interpolation lands and a visible card stops requesting frames.
+func TestAwakeRingSettlesBetweenWholeSeconds(t *testing.T) {
+	a, _, _ := stage2Shelf(t, []layout.Card{{ID: "awake"}})
+	base := time.Date(2026, 11, 13, 9, 0, 0, 0, time.Local)
+	now := base
+	a.awake = &awakeModule{host: a, id: 1, duration: time.Hour,
+		until: base.Add(42*time.Minute + 990*time.Millisecond),
+		now:   func() time.Time { return now }}
+	view := toolsTester(a)
+	view.Frame()
+	view.Frame()
+	// Stay between the rounded second (42:01) and the whole-second ring
+	// target while the 450ms interpolation lands.
+	view.Advance(470 * time.Millisecond)
+	now = base.Add(470 * time.Millisecond)
+	view.Frame()
+	if view.FramePending() {
+		t.Fatal("the awake ring still asks for frames between whole seconds")
+	}
+}

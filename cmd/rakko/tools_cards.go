@@ -22,6 +22,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -692,8 +693,14 @@ func (a *shelf) awakeFrac(m *awakeModule, now time.Time) float32 {
 		}
 		return 0
 	}
-	rem := m.until.Sub(now)
-	return min(max(float32(rem)/float32(m.duration), 0), 1)
+	// Quantize to whole seconds like the countdown and stopwatch rings:
+	// a continuous target restarts the 450ms interpolation every frame and
+	// keeps a visible card repainting forever.
+	secs := int64(math.Ceil(m.until.Sub(now).Seconds()))
+	if secs < 0 {
+		secs = 0
+	}
+	return min(max(float32(secs)/float32(m.duration.Seconds()), 0), 1)
 }
 
 // toolAwakeBody is the 保持唤醒 widget in its three forms (v2 §3): 1 × 1
