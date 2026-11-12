@@ -173,7 +173,7 @@ func cardName(c *ui.Context, key string, name string, col ui.Color, avail float3
 // (v2 §2). The arc fades between states over 250 ms and advances over
 // 450 ms linearly, as the design's ring does.
 func (a *shelf) cardRingLead(c *ui.Context, card ui.Element, key string, size, frac float32, phase cardPhase, glyph *ui.SVG) ui.Element {
-	box := ui.Box(c.Key(key)).Size(size, size)
+	box := ui.Box(c.Key(key)).Size(size, size).Center()
 	targetAlpha := cardRingAlpha(phase)
 	alpha := targetAlpha
 	shownFrac := frac
