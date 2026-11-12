@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.15.0
+
+- **工具页重做**：面板跟着卡片多少变大变小（3–6 列、1–3 行），不再固定 440 × 250。所有卡片换成同一套排法：左上图形和进度环、一个大数字、底行按钮；进行中是橙色，暂停时数字变灰，数字变化时逐位滚动。
+- **编辑更直接**：卡片不再摆动；拖动时卡片随手倾斜，落点先出现虚线格。拖卡片右下角的弧形把手改尺寸，或右键卡片选尺寸。添加卡片改成编辑时面板底部的卡片库，点一下或拖进去；把卡片拖回卡片库就是移除。
+- 倒计时先选预设再点 ▶ 开始；AI 用量 2×1 显示剩得最少的额度窗口；拖文件进来时，能处理的卡片显示文件数量。
+
+### English
+
+- **Tools, rebuilt**: the panel now grows and shrinks with its cards (3–6 columns, 1–3 rows) instead of staying 440 × 250. Every card shares one layout — a glyph and progress ring at the top left, one big number, buttons along the bottom; running is orange, paused greys the number, and changing digits roll.
+- **Easier editing**: cards no longer wobble; a lifted card tilts with your hand and a dashed cell shows where it will land. Drag the arc in a card's corner to resize it, or right-click it for its sizes. Adding a card now happens in the card library at the bottom of the panel while editing — tap or drag; drag a card back onto the library to remove it.
+- The timer starts with ▶ after you pick a preset; AI Usage at 2 × 1 shows the tighter quota window; while you drag files over Tools, the cards that can take them show the count.
+
 ## 1.14.5
 
 - **倒计时和秒表**：在工具页的「+」目录里添加。倒计时有 1–60 分钟预设，也能自己输入时分秒；刘海收起时在摄像头两侧显示剩余时间，时间到弹出卡片并响铃，点「重复」或「停止」才收起。秒表精确到秒。
