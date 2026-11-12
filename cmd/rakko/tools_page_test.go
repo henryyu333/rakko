@@ -27,7 +27,7 @@ func TestToolsPageRenders(t *testing.T) {
 	}
 	defer s.Close()
 	a := &shelf{store: s, tab: pageTools, visible: true}
-	view := ui.NewTester(a.view, sheetW, panelTestH)
+	view := toolsTester(a)
 	if !view.HasText("工具") {
 		t.Fatal("the back row did not show 工具")
 	}
@@ -99,7 +99,7 @@ func TestToolsPageEditMode(t *testing.T) {
 	}
 	defer s.Close()
 	a := &shelf{store: s, tab: pageTools, visible: true, dataDir: t.TempDir()}
-	view := ui.NewTester(a.view, sheetW, panelTestH)
+	view := toolsTester(a)
 	if err := view.Click("编辑"); err != nil {
 		t.Fatalf("pencil button missing: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestToolsPagePicker(t *testing.T) {
 		t.Fatal("tools page missing")
 	}
 	p.editing, p.picking = true, true
-	view := ui.NewTester(a.view, sheetW, panelTestH)
+	view := toolsTester(a)
 	if !view.HasText("卡片目录") {
 		t.Fatal("picker title missing")
 	}
@@ -297,7 +297,7 @@ func TestToolsStillLongPressEntersEdit(t *testing.T) {
 	}
 	defer s.Close()
 	a := &shelf{store: s, tab: pageTools, visible: true}
-	view := ui.NewTester(a.view, sheetW, panelTestH)
+	view := toolsTester(a)
 	r, ok := view.Find("框选文字")
 	if !ok {
 		t.Fatal("ocr card missing")
@@ -349,7 +349,7 @@ func TestToolsSettleEndsWhenFlightNeverMoves(t *testing.T) {
 		{ID: "ocr"}, {ID: "fit1m"}, {ID: "topdf"}, {ID: "zip"},
 		{ID: "tojpeg"}, {ID: "toword"}, {ID: "extract"}, {ID: "resize"},
 	}}
-	view := ui.NewTester(a.view, sheetW, panelTestH)
+	view := toolsTester(a)
 	view.SetPreferences(ui.Preferences{ReduceMotion: true})
 	r, ok := view.Find("打成 zip")
 	if !ok {
@@ -383,14 +383,15 @@ func TestToolsSettleEndsWhenFlightNeverMoves(t *testing.T) {
 	view.Release(next.X+40, next.Y+20)
 }
 
-// toolsOverflowLayout is a 3-row grid (9 action cards): the third row is
-// beyond the two the fixed stage shows, so the grid scrolls.
+// toolsOverflowLayout is every card the catalogue can place: at six
+// columns that takes a fourth row, past the three the panel shows, so the
+// grid scrolls.
 func toolsOverflowLayout() layout.Layout {
-	return layout.Layout{Version: layout.Version, Cards: []layout.Card{
-		{ID: "ocr"}, {ID: "fit1m"}, {ID: "topdf"}, {ID: "zip"},
-		{ID: "tojpeg"}, {ID: "toword"}, {ID: "extract"}, {ID: "resize"},
-		{ID: "airdrop"},
-	}}
+	var cards []layout.Card
+	for _, def := range toolCatalog() {
+		cards = append(cards, layout.Card{ID: def.id, Span: max(1, def.span), Rows: max(1, def.rows)})
+	}
+	return layout.Layout{Version: layout.Version, Cards: cards}
 }
 
 // The grid past the two visible rows must scroll: the cards are
@@ -407,7 +408,7 @@ func TestToolsGridScrollsPastThreeRows(t *testing.T) {
 	a := &shelf{store: s, tab: pageTools, visible: true}
 	l := toolsOverflowLayout()
 	a.toolsLay = &l
-	view := ui.NewTester(a.view, sheetW, panelTestH)
+	view := toolsTester(a)
 	p := a.toolsPage()
 	first, ok := view.Find("打成 zip")
 	if !ok {
@@ -449,11 +450,11 @@ func TestToolsDropInVisibleGridCommits(t *testing.T) {
 	a := &shelf{store: s, tab: pageTools, visible: true}
 	l := toolsOverflowLayout()
 	a.toolsLay = &l
-	view := ui.NewTester(a.view, sheetW, panelTestH)
+	view := toolsTester(a)
 	p := a.toolsPage()
 	p.editing = true
 	view.Frame()
-	stage := float32(contentH)
+	stage := pageContentHeight(p)
 	if p.scroll.MaxY <= 28 {
 		t.Fatalf("fixture did not overflow the content box enough: %+v", p.scroll)
 	}
@@ -553,7 +554,7 @@ func TestToolsExactFitGridDoesNotScroll(t *testing.T) {
 		{ID: "ocr"}, {ID: "fit1m"}, {ID: "topdf"}, {ID: "zip"},
 		{ID: "tojpeg"}, {ID: "toword"}, {ID: "extract"}, {ID: "resize"},
 	}}
-	view := ui.NewTester(a.view, sheetW, panelTestH)
+	view := toolsTester(a)
 	p := a.toolsPage()
 	view.Frame()
 	if p.scroll.MaxY != 0 {
@@ -565,10 +566,12 @@ func TestToolsEditBadgeIsVisibleAndClickableAtGridEdges(t *testing.T) {
 	for _, edge := range []string{"top", "left"} {
 		t.Run(edge, func(t *testing.T) {
 			a := &shelf{tab: pageTools, visible: true, store: mustStore(t)}
-			view := ui.NewTester(a.view, sheetW, panelTestH)
-			view.SetPreferences(ui.Preferences{ReduceMotion: true})
 			p := a.toolsPage()
+			// Editing appends the + tile, which can take another column:
+			// size the surface after the state that sets the panel.
 			p.editing = true
+			view := toolsTester(a)
+			view.SetPreferences(ui.Preferences{ReduceMotion: true})
 			view.Frame()
 			r, ok := view.Find("移除")
 			if !ok {
@@ -619,7 +622,7 @@ func TestToolsGridDrawsNoEdgeBlur(t *testing.T) {
 			l.AddCardSize(def.id, def.span, max(1, def.rows))
 		}
 	})
-	view := ui.NewTester(a.view, sheetW, panelTestH)
+	view := toolsTester(a)
 	view.Frame()
 	view.Frame()
 	p := a.toolsPage()
@@ -671,7 +674,7 @@ func TestToolsPickerRowsShareTheColumns(t *testing.T) {
 	a := &shelf{store: s, tab: pageTools, visible: true, dataDir: t.TempDir()}
 	p := a.toolsPage()
 	p.editing, p.picking = true, true
-	view := ui.NewTester(a.view, sheetW, panelTestH)
+	view := toolsTester(a)
 	view.Frame()
 
 	group := p.pickerGroups()[0]
@@ -693,9 +696,10 @@ func TestToolsPickerRowsShareTheColumns(t *testing.T) {
 		t.Fatalf("the column gap is %v, want the grid's 4", got)
 	}
 	// Both cells end inside the card: no row overflows its column, which
-	// would put the size label under the neighbouring row.
-	if right.X+right.W > sheetW-16 {
-		t.Fatalf("the second column ends at %v, past the card", right.X+right.W)
+	// would put the size label under the neighbouring row. The card ends
+	// at the shell's right edge on this surface.
+	if right.X+right.W > a.pageShellW() {
+		t.Fatalf("the second column ends at %v, past the card (shell %v)", right.X+right.W, a.pageShellW())
 	}
 
 	// Point at the left row's top inner edge: the hover fill covers that

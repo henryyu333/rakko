@@ -457,6 +457,12 @@ func (a *shelf) view(c *ui.Context) {
 	// A page that got switched off (or a stale id) must not stay current:
 	// fold back to the tray before anything reads a.tab.
 	a.normalizeTab()
+	// The tools page's box is read by the shell before the page is drawn.
+	// Load its arrangement first so the first open is sized from the
+	// layout the user really has, not the defaults.
+	if a.visible && a.currentLevel() == 2 && a.tab == pageTools {
+		_ = a.toolsLayout()
+	}
 	// The close fade has run its course: retire the view state now so the
 	// next opening starts fresh.
 	if !a.visible && !a.closeAt.IsZero() && c.Now().Sub(a.closeAt) >= closeFade {
@@ -861,9 +867,24 @@ func (a *shelf) view(c *ui.Context) {
 		}
 	}
 	a.fx.homeW, a.fx.resultsH, a.fx.navK = homeWd, resultsH, navK
+	// A page's own box can change under an open shell: the tools page
+	// grows with its cards and the home page widens to its lyrics. The
+	// size follows on the level's 300 ms curve (design §2), so the shell
+	// opens from the notch around that page and never jumps while the
+	// user adds or removes a card.
+	pageW, pageH := a.pageShellW(), a.pageShellH()
+	if a.win == nil || reduceMotion(c) || !expanded || !a.visible ||
+		openK == 0 || a.fx.pageW <= 0 || a.fx.pageH <= 0 {
+		pageW = zone.Jump("page-w", pageW)
+		pageH = zone.Jump("page-h", pageH)
+	} else {
+		pageW = zone.AnimateTo("page-w", pageW, levelSpring)
+		pageH = zone.AnimateTo("page-h", pageH, levelSpring)
+	}
+	a.fx.pageW, a.fx.pageH = pageW, pageH
 	// 刘海壳尺寸在三态间插值：硬件刘海 ←→ 探头胶囊 ←→ 搜索条 ←→ 页面
 	// （shellSize 是几何的唯一来源）。
-	shellW, shellH := a.shellSize(openK, levelK, peekK, peekW, peekH)
+	shellW, shellH := a.shellSizeAt(openK, levelK, peekK, peekW, peekH, pageW, pageH)
 	shellW, shellH = max(shellW, 0), max(shellH, 0)
 	// The frame follows the drawn shell while the springs are in flight (see
 	// desiredFrame): the opening overshoots, and a shape morph can be larger
@@ -871,7 +892,8 @@ func (a *shelf) view(c *ui.Context) {
 	a.fx.w, a.fx.h = shellW, shellH
 	a.fx.openK, a.fx.peekK = openK, peekK
 	a.fx.openMoving = a.win != nil && (!zone.Settled("open") || !zone.Settled("level") ||
-		!zone.Settled("home-w") || !zone.Settled("results-h") || !zone.Settled("nav"))
+		!zone.Settled("home-w") || !zone.Settled("results-h") || !zone.Settled("nav") ||
+		!zone.Settled("page-w") || !zone.Settled("page-h"))
 	// The surface keeps the wide envelope for the whole time the panel is
 	// open, not only while its springs run (targetFrame decides when it may
 	// drop). Returning to the shell's exact box at rest looks harmless, but
@@ -1422,12 +1444,15 @@ func (a *shelf) nextWarmPage(now time.Time) {
 	}
 }
 
-// sheetFrame stacks a page's own top row, the gap and the fixed content box.
+// sheetFrame stacks a page's own top row, the gap and its content box —
+// the current page's, so a transient zone on the tools page fills the
+// panel width the page asked for.
 func (a *shelf) sheetFrame(c *ui.Context, back, body func()) {
+	p := a.currentPage()
 	ui.Column(c.Key("page-frame")).FillWidth().Grow(1).MinHeight(0).Children(func() {
 		back()
 		ui.Box(c.Key("page-gap")).Height(pageActionsGap)
-		ui.Column(c.Key("page-content")).Width(contentW).Height(contentH).Clip().Children(body)
+		ui.Column(c.Key("page-content")).Width(pageBoxW(p)).Height(pageContentHeight(p)).Clip().Children(body)
 	})
 }
 

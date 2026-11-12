@@ -172,15 +172,20 @@ func fitSink(t *testing.T) (drain func() []string) {
 // pageRows are the three rows a sheet page draws in: the menu-bar row, the
 // back row (返回行 — audited like any other row, not skipped) and the 396 ×
 // 174 content box. A text outside all three has escaped its parent.
-func pageRows(top int) []ui.Rect {
-	x := float32((sheetW - contentW) / 2)
+func pageRows(top int) []ui.Rect { return pageRowsAt(sheetW, sheetH, top) }
+
+// pageRowsAt is pageRows for a page whose shell is w × h: the tools page
+// hugs its cards, so its rows move and grow with the packing.
+func pageRowsAt(w, h float32, top int) []ui.Rect {
+	inner := w - 2*sheetPadX
+	content := h - bandH - bodyGap - padBottom - pageActionH - actionsGap
 	return []ui.Rect{
-		{X: 0, Y: float32(top), W: sheetW, H: bandH},
-		{X: x, Y: float32(top + bandH), W: contentW, H: pageActionH},
-		{X: x, Y: float32(top + bandH + pageActionH + actionsGap), W: contentW, H: contentH},
-		// The page capsule hangs under the sheet: its buttons are labels of
+		{X: 0, Y: float32(top), W: w, H: bandH},
+		{X: sheetPadX, Y: float32(top + bandH), W: inner, H: pageActionH},
+		{X: sheetPadX, Y: float32(top + bandH + pageActionH + actionsGap), W: inner, H: content},
+		// The page capsule hangs under the shell: its buttons are labels of
 		// this frame too, on their own glass row.
-		{X: 0, Y: float32(top + sheetH + navGap), W: sheetW, H: navH},
+		{X: 0, Y: float32(top) + h + navGap, W: w, H: navH},
 	}
 }
 
@@ -204,10 +209,16 @@ func pageRows(top int) []ui.Rect {
 // above only.
 func assertPageFits(t *testing.T, view *ui.Tester, page string, notes []string, top int) {
 	t.Helper()
+	assertPageFitsRows(t, view, page, notes, pageRows(top))
+}
+
+// assertPageFitsRows is assertPageFits for a page whose rows are not the
+// sheet's (the tools page's box follows its cards).
+func assertPageFitsRows(t *testing.T, view *ui.Tester, page string, notes []string, rows []ui.Rect) {
+	t.Helper()
 	for _, note := range notes {
 		t.Errorf("%s: %s", page, note)
 	}
-	rows := pageRows(top)
 	seen := map[string]bool{}
 	for _, text := range view.Texts() {
 		if seen[text] {
@@ -250,37 +261,46 @@ func TestEveryPageFitsTheContentBox(t *testing.T) {
 	a, view := levelShelf(t)
 	a.visible, a.level = true, 2
 	drain := fitSink(t)
-	for _, id := range []pageID{pageTray, pageClipboard, pageTools} {
+	for _, id := range []pageID{pageTray, pageClipboard} {
 		a.setTab(id)
 		view.Frame()
 		drain() // the first frame has no boxes to measure yet
 		view.Frame()
 		assertPageFits(t, view, string(id), drain(), a.sheetTop())
 	}
-	// The tools page's edit grid and its open catalogue draw their own
-	// labels and rows; both states fit too.
+	// The tools page hugs its cards, so every state is audited at the box
+	// that state asks for (editing's + tile can add a column; the wider
+	// grid can add a row).
 	a.setTab(pageTools)
 	p := a.toolsPage()
 	for _, state := range []struct {
 		name          string
 		editing, pick bool
 	}{
+		{"tools", false, false},
 		{"tools-edit", true, false},
 		{"tools-picker", true, true},
 	} {
 		p.editing, p.picking = state.editing, state.pick
-		view.Frame()
+		tv := toolsTester(a)
+		tv.Frame()
 		drain()
-		view.Frame()
+		tv.Frame()
 		// The state must really be on screen, or the audit proves nothing.
 		want := "完成"
-		if state.pick {
+		if !state.editing && !state.pick {
+			want = "工具"
+		} else if state.pick {
 			want = "卡片目录"
 		}
-		if !view.HasText(want) {
-			t.Fatalf("%s: the page did not draw its state (%q missing); texts %v", state.name, want, view.Texts())
+		if !tv.HasText(want) {
+			t.Fatalf("%s: the page did not draw its state (%q missing); texts %v", state.name, want, tv.Texts())
 		}
-		assertPageFits(t, view, state.name, drain(), a.sheetTop())
+		rows := pageRowsAt(a.pageShellW(), a.pageShellH(), a.sheetTop())
+		for i := range rows {
+			rows[i].X += earR // the shell sits in the tester's ear margin
+		}
+		assertPageFitsRows(t, tv, state.name, drain(), rows)
 	}
 	p.editing, p.picking = false, false
 }

@@ -362,11 +362,16 @@ func TestClockCustomEditTypesAndStarts(t *testing.T) {
 	m := newClockModule(a)
 	m.now = func() time.Time { return now }
 	a.clock = m
-	view := ui.NewTester(a.view, sheetW+2*earR, panelTestH)
+	view := toolsTester(a)
 	view.Frame()
 	view.Frame()
-	// The number sits after the glyph in the 2 × 1 card at (12, 64).
-	view.ClickAt(70, 79)
+	// The number sits after the glyph in the 2 × 1 card; click it where
+	// the page put it.
+	num, ok := view.Find("5:00")
+	if !ok {
+		t.Fatal("the idle countdown's number is missing")
+	}
+	view.ClickAt(num.X+num.W/2, num.Y+num.H/2)
 	view.Frame()
 	if m.edit == nil {
 		t.Fatal("clicking the number did not open the editor")

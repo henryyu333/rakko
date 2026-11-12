@@ -28,10 +28,9 @@ const toolsShotDir = "/tmp/shelf-A"
 func shotToolsPage(t *testing.T, a *shelf, name string, setup func()) {
 	t.Helper()
 	onMain(func() {
-		a.tab = pageTools
-		if !a.visible {
-			a.show(false)
-		}
+		// showPage raises the panel and lands on the tools page; setting
+		// only the tab left these shots on the search bar.
+		a.showPage(pageTools)
 		if setup != nil {
 			setup()
 		}

@@ -4,7 +4,8 @@ package main
 
 // The 工具 page: one grid holding the action cards and the widgets. Cards
 // come from layout.json (internal/layout); drawing and per-card behaviour
-// live in tools_cards.go. This file owns the four-column packing, the
+// live in tools_cards.go. This file owns the adaptive packing (three to
+// six columns, one to three drawn rows), the
 // long-press / drag-to-reorder gestures, the editing chrome (⊖ badge, size
 // handle, wobble, the + tile), the card catalogue, and the page's own
 // actions (the pencil, 完成).
@@ -24,15 +25,18 @@ import (
 const (
 	pageTools pageID = "tools" // 工具：用户排版的卡片页
 
-	toolCols      = 4  // 4 列网格
-	toolCellH     = 84 // 单行高（两行正好填满 174）
-	toolCellGap   = 6  // 卡片间距
-	toolStageW    = contentW
 	toolPickRowH  = 30 // 目录行高（design §3 .pi 30px）
 	toolDragSlop  = 6  // 普通态拖动超过此距离作废点击
 	toolJiggle    = 300 * time.Millisecond
 	toolWobbleDeg = 0.7 // 编辑摆动 ±0.7°
+	// toolLibraryH reserves the card library the editing pass adds under
+	// the grid; the window envelope already holds it.
+	toolLibraryH = 80
 )
+
+// toolMoveSpring moves cards to their new cells after the panel's packing
+// changes: 300 ms, Bounce 0.15 (design §2).
+var toolMoveSpring = ui.Animation{Spring: ui.SpringOptions{Duration: 300 * time.Millisecond, Bounce: 0.15}}
 
 // toolCell is one card's position in content coordinates.
 type toolCell struct {
@@ -78,6 +82,11 @@ type toolsPage struct {
 	skipClick bool   // the last release was a suppressed press, not a tap
 	jiggleID  string // card shaking for 无可执行项
 	jiggleAt  time.Time
+
+	// A reorder drag pins the grid's columns where it began and may only
+	// add rows: the panel must not follow the pointer sideways.
+	dragCols int
+	dragRows int
 }
 
 func (p *toolsPage) id() pageID    { return pageTools }
@@ -94,6 +103,153 @@ func (a *shelf) toolsPage() *toolsPage {
 		return p
 	}
 	return nil
+}
+
+// gridCards is the card list the grid packs now: the stored order, or the
+// order a reorder drag previews. It records the preview's insertion index
+// so the release commits the cell the pointer last meant.
+func (p *toolsPage) gridCards() ([]layout.Card, int) {
+	l := p.host.toolsLayoutNow()
+	d := p.press
+	if d == nil || !p.editing || !d.dragging {
+		return l.Cards, 0
+	}
+	cols := p.dragCols
+	if cols <= 0 {
+		cols = toolMinCols
+	}
+	if ins := toolInsertIndex(l.Cards, cols, d.id, d.index, d.px, d.py); ins >= 0 {
+		d.index = ins
+		return toolVirtualCards(l.Cards, d.id, ins), cols
+	}
+	return l.Cards, cols
+}
+
+// grid is the packing the page shows: the narrowest ladder rung that holds
+// the cards, widened for the band's ears. A reorder drag pins its starting
+// columns and may only grow rows.
+func (p *toolsPage) grid() toolGrid {
+	cards, locked := p.gridCards()
+	if locked > 0 {
+		g := toolGridAt(cards, locked, p.host.inactiveWidget, p.editing)
+		if p.dragRows > g.rows {
+			g.rows, g.vis = p.dragRows, min(p.dragRows, toolMaxRows)
+		}
+		return g
+	}
+	return toolGridFor(cards, p.host.inactiveWidget, p.editing, p.bandMinCols())
+}
+
+// width is the shell width the page needs now (pageWidth).
+func (p *toolsPage) width() float32 { return toolPanelW(p.grid().cols) }
+
+// height is the shell height the page needs now (pageHeight). The card
+// library of the editing pass is not drawn yet; the window envelope
+// reserves it through maxSize.
+func (p *toolsPage) height() float32 { return toolPanelH(p.grid().vis) }
+
+// maxSize is the largest shell the page can ask for, for the session
+// frame: six columns, three rows, and the 80pt card library under them.
+func (p *toolsPage) maxSize() (float32, float32) {
+	return toolPanelW(toolMaxCols), toolPanelH(toolMaxRows) + toolLibraryH
+}
+
+// bandMinCols is the narrowest panel that still leaves the band wide
+// enough for its live chips. The band has priority over the cards' own
+// width: a countdown or stopwatch that would ellipsize widens the panel,
+// and the extra columns stay empty.
+func (p *toolsPage) bandMinCols() int {
+	need := p.bandEarNeed()
+	for cols := toolMinCols; cols <= toolMaxCols; cols++ {
+		if p.host.bandEarW(toolPanelW(cols)) >= need {
+			return cols
+		}
+	}
+	return toolMaxCols
+}
+
+// bandEarNeed is the wider of the band's two ears: the chips it must hold
+// and the gaps between them, as the band splits them now.
+func (p *toolsPage) bandEarNeed() float32 {
+	a := p.host
+	acts := a.liveActivities()
+	leftIdx, _ := a.clockBandSplit(acts)
+	var leftW, rightW float32
+	var leftN, rightN int
+	for i, act := range acts {
+		w := a.toolChipW(act)
+		if w <= 0 {
+			continue
+		}
+		if i == leftIdx {
+			leftW, leftN = leftW+w, leftN+1
+		} else {
+			rightW, rightN = rightW+w, rightN+1
+		}
+	}
+	if leftN > 1 {
+		leftW += float32(leftN - 1)
+	}
+	if rightN > 1 {
+		rightW += float32(rightN - 1)
+	}
+	return max(leftW, rightW)
+}
+
+// bandEarW is the width one ear of the band has inside a panel that wide:
+// the shell minus its padding, split by the camera housing when the style
+// has one. The island's continuous band has no housing.
+func (a *shelf) bandEarW(panelW float32) float32 {
+	inner := panelW - 2*sheetPadX
+	if a.notchW > 0 && !a.island {
+		inner -= float32(a.notchW + 2*6)
+	}
+	return max(inner/2, 0)
+}
+
+// toolChipW estimates a live chip's drawn width. The band is laid out
+// before the font is measured; this estimate leaves 3pt of slack per chip
+// so the width the panel reserves never ellipsizes the real text.
+func (a *shelf) toolChipW(act liveActivity) float32 {
+	l := a.appLoc()
+	switch t := act.(type) {
+	case timerChip:
+		m := t.m
+		if m == nil {
+			return 0
+		}
+		if m.phase == timerDone {
+			return 9 + 9 + 13 + 5 + liveTextWidth(l.TimerStop(), 11.5) + 3
+		}
+		text := clockTextCeil(m.timerRemainAt(m.clock()))
+		return 9 + 6 + 13 + 5 + liveTextWidth(text, 11.5) + 3
+	case stopwatchChip:
+		m := t.m
+		if m == nil {
+			return 0
+		}
+		text := clockText(m.watchElapsedAt(m.clock()))
+		return 8 + 5 + 13 + 5 + liveTextWidth(text, 11.5) + 3
+	case *converter:
+		if t.cancelOpen {
+			return 2 + 2 + liveTextWidth(l.ConvCancel(), 9.5) + 3
+		}
+		return 2 + 2 + 16 + 3
+	case *downloadsModule:
+		f := t.progress().file
+		text := downloadPercent(f)
+		if f.total <= 0 {
+			text = downloadMegabytes(f.done)
+		}
+		return 3 + 7 + 16 + 4 + liveTextWidth(text, 9.5) + 3
+	case *nowPlayingModule:
+		return 2 + 2 + 16 + 3 + 10 + 3 + 18 + 3
+	case *awakeModule:
+		return chipH
+	}
+	// An unknown live module draws whatever it wants; reserve a full ear
+	// for it rather than clipping it.
+	return 112
 }
 
 // toolsLayout is the persisted arrangement. It loads lazily from
@@ -117,6 +273,23 @@ func (a *shelf) toolsLayout() layout.Layout {
 	}
 	a.toolsLay.Inactive = a.inactiveWidget
 	return *a.toolsLay
+}
+
+// toolsLayoutNow is the arrangement the page packs for sizing. The session
+// frame asks every page for its box on every frame, long before the tools
+// page is drawn, so this must not create or repair layout.json: it peeks
+// at the loaded copy (or the defaults) and lets the page body do the one
+// real load when the page is on screen.
+func (a *shelf) toolsLayoutNow() layout.Layout {
+	if a.toolsLay != nil {
+		return *a.toolsLay
+	}
+	on := a.settings.AIUsage.Enabled
+	if a.toolsLayPeek == nil || a.toolsLayPeekOn != on {
+		l := layout.DefaultWith(on)
+		a.toolsLayPeek, a.toolsLayPeekOn = &l, on
+	}
+	return *a.toolsLayPeek
 }
 
 // inactiveWidget reports widgets that are in layout.json but take no cell
@@ -178,6 +351,7 @@ func (a *shelf) resetToolsEdit() {
 		p.closeDragPreview()
 		p.editing, p.picking, p.press = false, false, nil
 		p.jiggleID = ""
+		p.dragCols, p.dragRows = 0, 0
 		if a.win != nil {
 			a.win.Invalidate()
 		}
@@ -298,34 +472,25 @@ func (p *toolsPage) pickable() bool {
 // hasFreeCell reports whether the dashed + tile has a cell on the grid.
 func (p *toolsPage) hasFreeCell() bool {
 	cards := p.host.toolsLayout().Cards
-	return len(packToolCards(cards, p.host.inactiveWidget, true)) >
-		len(packToolCards(cards, p.host.inactiveWidget, false))
+	cols := p.bandMinCols()
+	return len(packToolCards(cards, cols, p.host.inactiveWidget, true)) >
+		len(packToolCards(cards, cols, p.host.inactiveWidget, false))
 }
 
-// body is the fixed content box: the catalogue while picking, else the
-// card grid.
+// body is the page's content box: the catalogue while picking, else the
+// card grid at the width its packing needs.
 func (p *toolsPage) body(c *ui.Context, _ bool, live bool) ui.Element {
-	a := p.host
 	if p.picking {
 		return p.pickerBody(c, live)
 	}
-	l := a.toolsLayout()
+	g := p.grid()
 	editing := p.editing
 	d := p.press
-	// The dragged card's slot is virtual: the list it would have if the
-	// pointer released now.
-	cards := l.Cards
-	if d != nil && editing && (d.dragging || d.settling) {
-		if ins := toolInsertIndex(l.Cards, d.id, d.index, d.px, d.py); ins >= 0 {
-			d.index = ins
-			cards = toolVirtualCards(l.Cards, d.id, ins)
-		}
-	}
-	cells := packToolCards(cards, a.inactiveWidget, editing)
 	contentH := float32(0)
-	for _, cell := range cells {
+	for _, cell := range g.cells {
 		contentH = max(contentH, cell.y+cell.h)
 	}
+	stageW := float32(g.cols)*toolCellW + float32(g.cols-1)*toolCellGap
 	return ui.Column(c.Key("tools-stage")).Grow(1).MinHeight(0).Children(func() {
 		scroll := ui.Scroll(c.Key("cards")).Grow(1).MinHeight(0).TrackScroll(&p.scroll)
 		p.viewport = scroll.Bounds()
@@ -339,9 +504,9 @@ func (p *toolsPage) body(c *ui.Context, _ bool, live bool) ui.Element {
 			// A box in normal flow carries the grid's real height: an
 			// absolute child of the scroll itself counts toward neither
 			// the scrollable content nor the offset, so a grid past the
-			// second row could neither scroll nor be reached.
-			ui.Box(c.Key("cards-stack")).Width(toolStageW).Height(contentH).Children(func() {
-				for _, cell := range cells {
+			// visible rows could neither scroll nor be reached.
+			ui.Box(c.Key("cards-stack")).Width(stageW).Height(contentH).Children(func() {
+				for _, cell := range g.cells {
 					// The grid never blurs: the cards are the content, and
 					// a row cut by the viewport stays as sharp as the rest
 					// (the tray and clipboard pages keep the edge melt).
@@ -391,31 +556,39 @@ func (p *toolsPage) toolCell(c *ui.Context, cell toolCell, editing, live bool) {
 	d := p.press
 	parked := d != nil && d.id == cell.id && (d.dragging || d.settling)
 	card := a.toolCard(c, spec, surfFor(editing))
+	cx, cy := cell.x, cell.y
 	switch {
 	case parked && d.settling:
 		p.toolSettle(card, d)
 		card.Absolute().Width(cell.w).Height(cell.h)
+		cx, cy = d.cardX, d.cardY
 	case parked:
 		// The parked element stays the pointer's press target; its
 		// animated slot position converts card-local events to stage
 		// coordinates.
-		cx := card.AnimateTo("cx", cell.x, ui.Snappy)
-		cy := card.AnimateTo("cy", cell.y, ui.Snappy)
+		cx = card.AnimateTo("cx", cell.x, ui.Snappy)
+		cy = card.AnimateTo("cy", cell.y, ui.Snappy)
 		d.cardX, d.cardY = cx, cy
 		card.Absolute().Left(cx).Top(cy).Width(cell.w).Height(cell.h).Opacity(0)
-	case editing:
-		card.Absolute().Width(cell.w).Height(cell.h)
-		card.Left(card.AnimateTo("cx", cell.x, ui.Snappy)).
-			Top(card.AnimateTo("cy", cell.y, ui.Snappy))
-		p.toolEditChrome(c, card, cell, spec, live)
 	default:
-		card.Absolute().Left(cell.x).Top(cell.y).Width(cell.w).Height(cell.h)
-		if live && !editing {
+		// A card follows a re-packed grid on the design's 300 ms spring;
+		// Reduce Motion puts it in its new cell at once.
+		if reduceMotion(c) {
+			card.Jump("cx", cell.x)
+			card.Jump("cy", cell.y)
+		} else {
+			cx = card.AnimateTo("cx", cell.x, toolMoveSpring)
+			cy = card.AnimateTo("cy", cell.y, toolMoveSpring)
+		}
+		card.Absolute().Left(cx).Top(cy).Width(cell.w).Height(cell.h)
+		if editing {
+			p.toolEditChrome(c, card, cell, spec, live)
+		} else if live {
 			p.clockCardBadges(c, card, spec)
 		}
 	}
 	if live {
-		p.toolCardInput(c, card, cell, editing, live)
+		p.toolCardInput(c, card, cell, cx, cy, editing, live)
 	}
 	if !parked {
 		p.toolCardWobble(c, card, cell, editing)
@@ -473,8 +646,10 @@ func (p *toolsPage) toolLiftedCard(c *ui.Context, d toolPress) {
 
 // toolCardInput wires the pointer: down starts a press, move past the
 // slop reorders in edit or kills the click outside it, up drops or lands,
-// and the long-press deadline turns editing on.
-func (p *toolsPage) toolCardInput(c *ui.Context, card ui.Element, cell toolCell, editing, live bool) {
+// and the long-press deadline turns editing on. ox, oy are the card's
+// drawn position: a card still springing into its cell must map the press
+// from where it is painted, not from the cell it is heading for.
+func (p *toolsPage) toolCardInput(c *ui.Context, card ui.Element, cell toolCell, ox, oy float32, editing, live bool) {
 	a := p.host
 	card.PointerPosition() // interactive: a hit-test and tracking target
 	card.HandleInput(func(ev ui.InputEvent) bool {
@@ -485,10 +660,10 @@ func (p *toolsPage) toolCardInput(c *ui.Context, card ui.Element, cell toolCell,
 			}
 			d := &toolPress{
 				id: cell.id, downAt: ev.Time,
-				downX: cell.x + ev.X, downY: cell.y + ev.Y,
-				px: cell.x + ev.X, py: cell.y + ev.Y,
+				downX: ox + ev.X, downY: oy + ev.Y,
+				px: ox + ev.X, py: oy + ev.Y,
 				grabDX: ev.X, grabDY: ev.Y,
-				cardX: cell.x, cardY: cell.y,
+				cardX: ox, cardY: oy,
 			}
 			p.press = d
 			c.AnimationFrame() // the long-press deadline needs frames
@@ -501,7 +676,7 @@ func (p *toolsPage) toolCardInput(c *ui.Context, card ui.Element, cell toolCell,
 			}
 			d.px, d.py = d.cardX+ev.X, d.cardY+ev.Y
 			if d.dragging {
-				if ins := toolInsertIndex(a.toolsLayout().Cards, d.id, d.index, d.px, d.py); ins >= 0 {
+				if ins := toolInsertIndex(a.toolsLayout().Cards, p.dragCols, d.id, d.index, d.px, d.py); ins >= 0 {
 					d.index = ins
 				}
 				return true
@@ -510,8 +685,12 @@ func (p *toolsPage) toolCardInput(c *ui.Context, card ui.Element, cell toolCell,
 				return true
 			}
 			if p.editing {
+				// The grid's width is pinned where the drag began: only
+				// rows may grow while the pointer moves.
+				g := p.grid()
+				p.dragCols, p.dragRows = g.cols, g.rows
 				d.dragging = true
-				d.index = toolInsertIndex(a.toolsLayout().Cards, d.id, -1, d.px, d.py)
+				d.index = toolInsertIndex(a.toolsLayout().Cards, p.dragCols, d.id, -1, d.px, d.py)
 				if d.index < 0 {
 					d.index = len(a.toolsLayout().Cards) - 1
 				}
@@ -607,16 +786,18 @@ func (p *toolsPage) toolCardDrop(d *toolPress, cursor mygo.Point) {
 	// grid it cannot see.
 	viewH := p.viewport.H
 	if viewH <= 0 {
-		viewH = contentH
+		viewH = pageContentHeight(p)
 	}
-	inside := d.px >= 0 && d.px <= toolStageW &&
+	inside := d.px >= 0 && d.px <= p.stageW() &&
 		d.py >= p.scroll.Y-0.5 && d.py <= p.scroll.Y+viewH+0.5
 	target := toolCell{id: d.id, x: d.cardX, y: d.cardY}
 	if inside {
 		if ins := d.index; ins >= 0 {
 			a.mutateTools(func(l *layout.Layout) { l.MoveCard(d.id, ins) })
-			// The committed cell is where the settle flight aims.
-			for _, cell := range packToolCards(a.toolsLayout().Cards, a.inactiveWidget, true) {
+			// The drop ends the pinned width: the panel follows the
+			// committed packing, and the settle flight aims at its cell.
+			p.dragCols, p.dragRows = 0, 0
+			for _, cell := range toolGridFor(a.toolsLayout().Cards, a.inactiveWidget, true, p.bandMinCols()).cells {
 				if cell.id == d.id {
 					target = cell
 				}
@@ -659,7 +840,14 @@ func (p *toolsPage) toolCardDrop(d *toolPress, cursor mygo.Point) {
 		}
 	}
 	d.settling, d.dragging = true, false
+	p.dragCols, p.dragRows = 0, 0
 	d.settleX, d.settleY = target.x, target.y
+}
+
+// stageW is the grid's content width in the packing it shows now.
+func (p *toolsPage) stageW() float32 {
+	g := p.grid()
+	return float32(g.cols)*toolCellW + float32(g.cols-1)*toolCellGap
 }
 
 // toolSettle animates the released card from the pointer to its cell.

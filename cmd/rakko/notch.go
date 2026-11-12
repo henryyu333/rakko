@@ -320,7 +320,7 @@ func (a *shelf) sessionFrame() mygo.Rectangle {
 	}
 	add(homeTypingW, float32(homeShellH), resultsMaxH, pageH)
 	for _, p := range a.enabledPages() {
-		w := pageShellWidth(p)
+		w, h := pageShellWidth(p), pageShellHeight(p)
 		if p.id() == pageHome {
 			// The home page widens to its lyrics column when a track gains
 			// lyrics while the panel is open; the envelope holds its widest
@@ -328,7 +328,14 @@ func (a *shelf) sessionFrame() mygo.Rectangle {
 			// under the drawn page.
 			w = max(w, homeLyricsW)
 		}
-		add(w, pageShellHeight(p), 0, pageShellHeight(p))
+		if env, ok := p.(pageEnvelope); ok {
+			// The tools page grows and shrinks with its cards; the frame
+			// holds its largest packing so none of those moves resizes
+			// the native window under a spring.
+			mw, mh := env.maxSize()
+			w, h = max(w, mw), max(h, mh)
+		}
+		add(w, h, 0, h)
 	}
 	add(snapW, snapH, 0, pageH)
 	return r
@@ -652,6 +659,13 @@ func (a *shelf) wingsSize() (w, h float32) {
 // animates them per display frame and substitutes final ones in headless
 // tests.
 func (a *shelf) shellSize(openK, levelK, peekK, peekW, peekH float32) (w, h float32) {
+	return a.shellSizeAt(openK, levelK, peekK, peekW, peekH, a.pageShellW(), a.pageShellH())
+}
+
+// shellSizeAt is shellSize for the page size the shell has drawn right
+// now: a page whose packing changed sizes under the open shell, so view()
+// animates that size instead of reading the target straight in.
+func (a *shelf) shellSizeAt(openK, levelK, peekK, peekW, peekH, pageW, pageH float32) (w, h float32) {
 	baseW, baseH := a.anchorSize()
 	// The search bar widens while a query is typed; the shell takes the
 	// width view() drew, or the target before the first frame.
@@ -659,8 +673,8 @@ func (a *shelf) shellSize(openK, levelK, peekK, peekW, peekH float32) (w, h floa
 	if barW <= 0 {
 		barW = a.homeBoxW()
 	}
-	lvlW := barW + (a.pageShellW()-barW)*levelK
-	lvlH := float32(homeShellH) + (a.pageShellH()-float32(homeShellH))*levelK
+	lvlW := barW + (pageW-barW)*levelK
+	lvlH := float32(homeShellH) + (pageH-float32(homeShellH))*levelK
 	if a.snap.panel || a.snap.drawn {
 		// The arrangement panel is its own box; it never morphs through
 		// the sheet's size.
@@ -1210,9 +1224,10 @@ func (a *shelf) setPeek(peek bool) {
 	}
 }
 
-// panelH is the open panel's fixed height: the arrangement panel while a
-// window-drag session owns the shell, otherwise the sheet's 250. Both come
-// from layout constants, never from page content.
+// panelH is the open panel's height: the arrangement panel while a
+// window-drag session owns the shell, otherwise the current page's (the
+// sheet's 250 for most pages; the tools page grows and shrinks with its
+// rows).
 func (a *shelf) panelH() int {
 	if a.snap.panel || a.snap.drawn {
 		return snapH
@@ -1220,37 +1235,42 @@ func (a *shelf) panelH() int {
 	return int(a.pageShellH())
 }
 
-// pageShellW is the open panel's width for the page on screen: 440 for
-// every page but the home page, which asks for 640 beside its lyrics. The
-// shell path, the window frame and the page layout all read this one
-// number, so a track gaining lyrics cannot leave the shell and its content
-// on different widths.
+// pageShellW is the open panel's width for the page on screen: the tools
+// page's card grid (334.5–651), 640 for the home page beside its lyrics,
+// 440 for every other page. The shell path, the window frame and the page
+// layout all read this one number, so a page whose box changes cannot
+// leave the shell and its content on different widths.
 func (a *shelf) pageShellW() float32 { return pageShellWidth(a.currentPage()) }
 
-// pageShellH is the open panel's height for the page on screen: the sheet's
-// 250 for every page but a reading page (the 每周简报 asks for 600). The
-// shell path, the window frame and the page layout all read this number.
+// pageShellH is the open panel's height for the page on screen: the tools
+// page's rows (160/250/340), the sheet's 250 for every other page but a
+// reading page (the 每周简报 asks for 600). The shell path, the window
+// frame and the page layout all read this number.
 func (a *shelf) pageShellH() float32 { return pageShellHeight(a.currentPage()) }
 
 // pageShellWidth is pageShellW for a page that may not be current: the
-// outgoing picture of a switch keeps its own width while it fades.
+// outgoing picture of a switch keeps its own width while it fades. A page
+// that asks for a width gets exactly it — the tools page is narrower
+// than the sheet when it holds only a few cards.
 func pageShellWidth(p panelPage) float32 {
 	if p == nil {
 		return sheetW
 	}
 	if w, ok := p.(pageWidth); ok {
-		return max(sheetW, w.width())
+		return max(w.width(), 0)
 	}
 	return sheetW
 }
 
-// pageShellHeight is pageShellH for a page that may not be current.
+// pageShellHeight is pageShellH for a page that may not be current. A page
+// that asks for a height gets exactly it; the tools page shrinks below the
+// sheet's 250 with one row of cards.
 func pageShellHeight(p panelPage) float32 {
 	if p == nil {
 		return sheetH
 	}
 	if h, ok := p.(pageHeight); ok {
-		return max(sheetH, h.height())
+		return max(h.height(), 0)
 	}
 	return sheetH
 }

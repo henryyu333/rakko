@@ -45,18 +45,28 @@ type panelPage interface {
 }
 
 // pageWidth is a page whose shell is not the sheet's 440 points: the home
-// page widens to 640 beside its lyrics. A page without it uses sheetW and
-// the 416 × 174 content box every other page shares.
+// page widens to 640 beside its lyrics, and the tools page hugs its card
+// grid from 334.5 to 651. A page without it uses sheetW and the 416 × 174
+// content box every other page shares.
 type pageWidth interface {
 	width() float32
 }
 
-// pageHeight is a page whose shell is taller than the sheet's 250: the
-// 每周简报 reads at 560 × 600, as its prototype does. A page without it
-// keeps sheetH; a page with it must be fullBleed (it owns the whole page
-// area, since the shared 174pt content box cannot grow).
+// pageHeight is a page whose shell is not the sheet's 250: the 每周简报
+// reads at 560 × 600, as its prototype does, and the tools page is 160,
+// 250 or 340 with its rows. A page without it keeps sheetH. The page's
+// content box is whatever is left below the band and the action row, so a
+// page only needs fullBleed when it draws over that action row too.
 type pageHeight interface {
 	height() float32
+}
+
+// pageEnvelope is a page whose shell can grow past the size it asks for
+// right now (the tools page gains columns and rows as cards are added).
+// The session frame holds the envelope so a resize never lands under a
+// spring.
+type pageEnvelope interface {
+	maxSize() (w, h float32)
 }
 
 // pageBleed is a page that owns its whole 200pt page area: no action row

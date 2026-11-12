@@ -240,6 +240,13 @@ type shelf struct {
 	// 文件读不通时界面用默认布局，但禁止任何写回以免覆盖可恢复原件。
 	toolsLay       *layout.Layout
 	toolsLayBroken bool
+	// toolsLayPeek is the default arrangement the page packs for sizing
+	// before toolsLay is loaded (the session frame asks every page for its
+	// box every frame; building the default each time would allocate in
+	// the frame path). toolsLayPeekOn records the AI-usage setting it was
+	// built for.
+	toolsLayPeek   *layout.Layout
+	toolsLayPeekOn bool
 
 	// pasteSeq 是剪贴板粘贴尝试的代号（paste.go）：每次新选择、收起或重新
 	// 打开都会加一，旧尝试看到代号变了就不再按键，快速连按也不会双重粘贴。

@@ -18,6 +18,7 @@ import (
 	"image/color"
 	"image/draw"
 	"image/png"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1316,7 +1317,12 @@ func galleryGroupF() []galleryItem {
 			if tweak != nil {
 				tweak(t, a, a.toolsPage(), lang)
 			}
-			return galleryRender{view: galleryPanel(t, lang, a, sheetW+2*earR, panelTestH)}
+			// The tools page hugs its cards: size the picture after the
+			// tweak, at the shell the page asks for plus the ears and the
+			// nav capsule hung under it.
+			w := int(math.Ceil(float64(a.pageShellW()))) + 2*earR
+			h := int(math.Ceil(float64(a.pageShellH()))) + navGap + navH + 2
+			return galleryRender{view: galleryPanel(t, lang, a, w, h)}
 		}
 	}
 	busy := func(t *testing.T, a *shelf, p *toolsPage, lang string) {
@@ -1446,6 +1452,27 @@ func galleryGroupF() []galleryItem {
 		{ID: "F36", Group: g, Title: "长读数", State: "1×1 · 23:59:59 与 23:59:58", Build: tools([]layout.Card{
 			{ID: "timer", Span: 1, Rows: 1}, {ID: "stopwatch", Span: 1, Rows: 1},
 		}, longClock())},
+		// The size ladder of tools-v3 §2: each rung's own box.
+		{ID: "F37", Group: g, Title: "面板尺寸", State: "3×1 · 两张动作卡 · 334.5 × 160", Build: tools([]layout.Card{
+			{ID: "ocr"}, {ID: "zip"},
+		}, nil)},
+		{ID: "F38", Group: g, Title: "面板尺寸", State: "4×1 · 四张 1×1 · 440 × 160", Build: tools([]layout.Card{
+			{ID: "ocr"}, {ID: "zip"}, {ID: "awake"}, {ID: "airdrop"},
+		}, nil)},
+		{ID: "F39", Group: g, Title: "面板尺寸", State: "4×2 · 默认 5 张 · 440 × 250", Build: tools(def, nil)},
+		{ID: "F40", Group: g, Title: "面板尺寸", State: "5×2 · 加 2×1 倒计时 · 545.5 × 250", Build: tools(append(
+			append([]layout.Card{}, def...), layout.Card{ID: "timer", Span: 2, Rows: 1},
+		), nil)},
+		{ID: "F41", Group: g, Title: "面板尺寸", State: "6×3 · 9 张 · 651 × 340", Build: tools([]layout.Card{
+			{ID: "playing", Span: 2, Rows: 2}, {ID: "awake"}, {ID: "usage"}, {ID: "ocr"}, {ID: "zip"},
+			{ID: "timer", Span: 2, Rows: 1}, {ID: "stopwatch"}, {ID: "clip", Span: 2, Rows: 1}, {ID: "airdrop"},
+		}, nil)},
+		{ID: "F42", Group: g, Title: "面板尺寸", State: "6×3 · 16 张 · 651 × 340 · 页内滚动", Build: tools([]layout.Card{
+			{ID: "playing", Span: 2, Rows: 2}, {ID: "awake"}, {ID: "usage"}, {ID: "ocr"}, {ID: "zip"},
+			{ID: "timer", Span: 2, Rows: 1}, {ID: "stopwatch"}, {ID: "clip", Span: 2, Rows: 1}, {ID: "airdrop"},
+			{ID: "recent", Span: 2, Rows: 1}, {ID: "note", Span: 2, Rows: 1}, {ID: "topdf"}, {ID: "fit1m"},
+			{ID: "shot"}, {ID: "extract"}, {ID: "resize"},
+		}, nil)},
 		{ID: "F34", Group: g, Title: "顶栏胶囊", State: "刘海 180 · 倒计时左耳、秒表右耳", Notch: true, Build: func(t *testing.T, lang string) galleryRender {
 			a := galleryShelf(galleryEmptyStore(t), t.TempDir())
 			a.notchW, a.notchH = 180, 32

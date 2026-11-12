@@ -5,6 +5,7 @@ package main
 // Shared test seams.
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -20,6 +21,17 @@ import (
 // panelTestH is a headless panel surface's height: the sheet and the page
 // capsule hung under it, so a test can click the capsule's page buttons.
 const panelTestH = sheetH + navGap + navH + 2
+
+// toolsTester is a headless surface at the tools page's current shell box,
+// plus the ear corners and the page capsule hung under it. The page hugs
+// its cards, so the surface has to be built after whatever state changes
+// its packing (a card added, editing on) — a fixed 440 × 298 surface would
+// clip a wider or taller panel.
+func toolsTester(a *shelf) *ui.Tester {
+	w := int(math.Ceil(float64(a.pageShellW()))) + 2*earR
+	h := int(math.Ceil(float64(a.pageShellH()))) + navGap + navH + 2
+	return ui.NewTester(a.view, w, h)
+}
 
 // fakeVolume is the replaceable volume seam: tests never touch the
 // machine's real output volume.

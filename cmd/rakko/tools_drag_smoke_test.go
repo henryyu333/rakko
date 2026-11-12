@@ -203,10 +203,15 @@ func TestToolsNativeDragOutStaysVisible(t *testing.T) {
 		t.Skip("native window smoke requires RAKKO_BASKET_SMOKE=1")
 	}
 	arena, area := newSmokePointerArena(t)
+	// Centre the notch on the arena: the window frame is the session
+	// envelope (wide enough for the tools page's largest packing), so a
+	// 440-wide placement would push it off the left of the arena and the
+	// real mouse targets would fall outside the test windows.
 	a := &shelf{store: mustStore(t), dataDir: t.TempDir(), tab: pageTools, level: 2, visible: true,
 		progress: 1, topInset: 32, notchW: 180, notchH: 32, hasNotch: true,
-		x: area.X + 24, y: area.Y + 24, dispBounds: mygo.Screen.PrimaryDisplay().Bounds}
-	a.notchX, a.notchY = a.x+(sheetW-180)/2, a.y
+		x: area.X + area.Width/2 - sheetW/2, y: area.Y + 24,
+		dispBounds: mygo.Screen.PrimaryDisplay().Bounds}
+	a.notchX, a.notchY = area.X+area.Width/2-90, a.y
 	var panelNum, arenaNum int
 	onMain(func() {
 		a.newNotchWindow()
@@ -342,16 +347,28 @@ func TestToolsNativeDragOutStaysVisible(t *testing.T) {
 			t.Error("cancelling a drag persisted a pin")
 		}
 	})
+	// Esc leaves editing, so the panel springs back from the wider edit
+	// box to the resting one; let that settle before the next press lands
+	// on the cards.
+	time.Sleep(400 * time.Millisecond)
 	// A new long press can still drag out and commit.
 	postMouse(t, float64(start.X), float64(start.Y), 5, 1)
 	held = true
 	time.Sleep(durLongPress + 250*time.Millisecond)
-	postMouse(t, float64(end.X), float64(end.Y), 6)
-	time.Sleep(100 * time.Millisecond)
+	for i := 1; i <= 12; i++ {
+		x := start.X + (end.X-start.X)*i/12
+		y := start.Y + (end.Y-start.Y)*i/12
+		postMouse(t, float64(x), float64(y), 6)
+	}
+	// The preview window is created on the main thread and listed by
+	// WindowServer a beat later; wait for it instead of sampling once.
 	previewNum = 0
-	for _, w := range ownSmokeWindows(t) {
-		if w.ID != panelNum && w.ID != arenaNum && w.Onscreen && isDragCardWindow(w) && insideRect(end, w.Frame) {
-			previewNum = w.ID
+	for deadline := time.Now().Add(time.Second); previewNum == 0 && time.Now().Before(deadline); {
+		time.Sleep(50 * time.Millisecond)
+		for _, w := range ownSmokeWindows(t) {
+			if w.ID != panelNum && w.ID != arenaNum && w.Onscreen && isDragCardWindow(w) && insideRect(end, w.Frame) {
+				previewNum = w.ID
+			}
 		}
 	}
 	if previewNum == 0 {

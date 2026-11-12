@@ -32,7 +32,7 @@ func toolsFixture(t *testing.T) (*shelf, *ui.Tester) {
 	}
 	t.Cleanup(func() { s.Close() })
 	a := &shelf{store: s, dataDir: t.TempDir(), tab: pageTools, level: 2, visible: true}
-	return a, ui.NewTester(a.view, sheetW, panelTestH)
+	return a, toolsTester(a)
 }
 
 // TestWidgetCardTapRunsItsAction: a whole-card tap on a widget does what
@@ -99,9 +99,11 @@ func TestToolsDropBelowTheViewportPins(t *testing.T) {
 	a.settings = settingsForTest()
 	a.x, a.y = 400, 0
 	a.frame = mygo.Rectangle{X: a.x, Y: a.y, Width: sheetW, Height: sheetH}
+	l := toolsOverflowLayout()
+	a.toolsLay = &l
 	p := a.toolsPage()
 	p.editing = true
-	view := ui.NewTester(a.view, sheetW, panelTestH)
+	view := toolsTester(a)
 	view.Frame()
 	view.Frame()
 	if p.viewport.H <= 0 || p.scroll.MaxY <= 0 {
@@ -124,27 +126,29 @@ func TestToolsDropBelowTheViewportPins(t *testing.T) {
 // TestToolsPickerScrolls: with every card removed the catalogue is taller
 // than the page, and its rows scroll inside the card instead of being cut.
 func TestToolsPickerScrolls(t *testing.T) {
-	a, view := toolsFixture(t)
+	a, _ := toolsFixture(t)
 	a.toolsLay = &layout.Layout{Version: layout.Version, Cards: []layout.Card{{ID: "ocr"}}}
 	p := a.toolsPage()
 	p.editing, p.picking = true, true
+	// The one-card page is 160pt tall, so the catalogue's box is 84pt: size
+	// the surface after the state that asks for it.
+	view := toolsTester(a)
 	view.Frame()
 	view.Frame()
 	last, ok := view.Find("隔空投送")
 	if !ok {
 		t.Fatalf("the catalogue is missing its last row; texts %v", view.Texts())
 	}
-	bodyBottom := float32(a.sheetTop() + bandH + pageActionH + actionsGap + contentH)
-	// With no scrolling the last row would be laid out below the page (the
-	// rows add up to far more than 174pt) and cut off; inside a scroll it
-	// starts inside the box.
-	if last.Y >= bodyBottom {
-		t.Fatalf("the last catalogue row at %+v is below the page (bottom %.0f): the list does not scroll",
-			last, bodyBottom)
+	// With no scrolling the row list would spill past the 84pt box and the
+	// later rows could never be reached; inside a scroll a wheel over the
+	// list pulls them up. (The last row starts below the clipped box,
+	// where a wheel itself would never reach it.)
+	first, ok := view.Find(p.pickerGroups()[0][0].name(a.appLoc()))
+	if !ok {
+		t.Fatal("the catalogue's first row is missing")
 	}
-	// The list really moves: a wheel over it pulls the later rows up.
 	before := last.Y
-	view.Scroll(last.X+last.W/2, last.Y+last.H/2, 0, 120)
+	view.Scroll(first.X+first.W/2, first.Y+first.H/2, 0, 200)
 	view.Frame()
 	view.Frame()
 	after, ok := view.Find("隔空投送")

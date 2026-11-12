@@ -116,6 +116,11 @@ func TestMonitorIdleHasNoCadence(t *testing.T) {
 func TestMonitorPointerNearWakes(t *testing.T) {
 	oldCursor := cursorPoint
 	t.Cleanup(func() { cursorPoint = oldCursor })
+	// The probe drives the pointer path only; the live hardware button
+	// would otherwise wake the cadence on its own.
+	oldDown := dragLeftDown
+	dragLeftDown = func() bool { return false }
+	t.Cleanup(func() { dragLeftDown = oldDown })
 	a := monitorShelf()
 	p := mygo.Point{X: 100, Y: 800}
 	cursorPoint = func() mygo.Point { return p }

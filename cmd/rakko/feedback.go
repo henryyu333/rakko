@@ -104,6 +104,7 @@ type shellMotion struct {
 	resultsH           float32 // the drawn results sheet's height under the search bar (0 = none)
 	navK               float32 // how far the page capsule is shown: 0 hidden, 1 settled
 	homeW              float32 // the drawn search bar's width (0 = not drawn yet)
+	pageW, pageH       float32 // the drawn page box the shell is sized from (0 = not drawn yet)
 	revealK            float32 // the content's drawn opacity: the open spring's, or the close fade's
 	focusK             float32 // how far the island's search drop has been taken: 0 = its own row
 	peekKind           peekKind

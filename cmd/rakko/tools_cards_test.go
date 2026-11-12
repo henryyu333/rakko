@@ -243,7 +243,7 @@ func musicCardShelf(t *testing.T) (*shelf, *ui.Tester, *fakeVolume, *stubNowPlay
 	a.vol = vol
 	s.mod.host = a
 	a.np = s.mod
-	view := ui.NewTester(a.view, sheetW, panelTestH)
+	view := toolsTester(a)
 	view.Frame()
 	view.Frame()
 	return a, view, vol, s
