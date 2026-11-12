@@ -16,6 +16,7 @@ import (
 
 	"rakko/internal/layout"
 	"rakko/internal/mac"
+	"rakko/internal/settings"
 	"rakko/internal/store"
 )
 
@@ -1134,5 +1135,51 @@ func TestPinCloseWriteFailureKeepsWindow(t *testing.T) {
 	it.onClose(ev)
 	if !ev.DefaultPrevented() || it.win != w || len(a.pins) != 1 {
 		t.Fatal("a failed put-back allowed the native close or lost its window")
+	}
+}
+
+// TestDragPreviewCommitClearsTilt: the transient window becomes the
+// committed pin; its preview flag and speed tilt must not survive into the
+// card's resting view.
+func TestDragPreviewCommitClearsTilt(t *testing.T) {
+	it := &pinItem{cardID: "ocr", preview: true, tilt: 4.5}
+	pv := &dragPreview{it: it}
+	got := pv.take()
+	if got != it {
+		t.Fatalf("take returned %p, want the preview item %p", got, it)
+	}
+	if got.preview || got.tilt != 0 {
+		t.Fatalf("the committed pin kept preview=%v tilt=%v", got.preview, got.tilt)
+	}
+}
+
+// TestAwakePinUsesTheCompactDesktopLayout: the 2×2 awake card's desktop
+// pin is 84pt high. Its reading and its duration chips must fit that
+// height without the 2×2 grid offsets overlapping or clipping them.
+func TestAwakePinUsesTheCompactDesktopLayout(t *testing.T) {
+	a := &shelf{dataDir: t.TempDir(), settings: settings.Default()}
+	fixed := time.Date(2026, 11, 12, 9, 0, 0, 0, time.Local)
+	a.awake = &awakeModule{host: a, id: mac.PowerAssertionID(1),
+		duration: time.Hour, until: fixed.Add(42 * time.Minute),
+		now: func() time.Time { return fixed }}
+	w := pinCardWidth("awake", 2)
+	it := &pinItem{owner: a, cardID: "awake", span: 2, rows: 2, cardW: w, expanded: true,
+		frame: mygo.Rectangle{Width: w, Height: pinCardH}}
+	tr := ui.NewTester(it.view, w, pinCardH)
+	tr.Frame()
+	tr.Frame()
+	hero, ok := tr.Find("42:00")
+	if !ok {
+		t.Fatalf("the pinned awake has no 42:00 reading: %v", tr.Texts())
+	}
+	chip, ok := tr.Find(a.appLoc().AwakeChip30m())
+	if !ok {
+		t.Fatalf("the pinned awake has no 30m chip: %v", tr.Texts())
+	}
+	if hero.Y < 0 || hero.Y+hero.H > pinCardH || chip.Y < 0 || chip.Y+chip.H > pinCardH {
+		t.Fatalf("the pinned awake clips: reading=%+v chip=%+v in %dpt", hero, chip, pinCardH)
+	}
+	if hero.Y < chip.Y+chip.H && chip.Y < hero.Y+hero.H {
+		t.Fatalf("the pinned awake's reading %+v overlaps its chips %+v", hero, chip)
 	}
 }

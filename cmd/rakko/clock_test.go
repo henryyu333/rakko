@@ -761,3 +761,20 @@ func TestClockPausedBadgeStaysOnItsCard(t *testing.T) {
 		t.Fatalf("reset badge %+v is not inside the stopwatch card %+v", badge, card)
 	}
 }
+
+// TestTimerCardTapStartsTheShownLength: the 1×1 idle card shows m.dur and
+// its ▶ starts m.dur; a tap anywhere else on the card must start the same
+// length, not a stale earlier start value.
+func TestTimerCardTapStartsTheShownLength(t *testing.T) {
+	a := &shelf{}
+	m := newClockModule(a)
+	m.dur = 10 * time.Minute
+	now := time.Date(2026, 11, 12, 9, 0, 0, 0, time.Local)
+	m.toggleTimer(now)
+	if m.phase != timerRunning {
+		t.Fatalf("the card tap left the timer in phase %v", m.phase)
+	}
+	if got := m.end.Sub(now); got != 10*time.Minute {
+		t.Fatalf("the card tap started %v, want the displayed 10m", got)
+	}
+}

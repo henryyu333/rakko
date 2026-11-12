@@ -209,6 +209,13 @@ func (f *usageFeature) windowShown(w aiusage.Window) float64 {
 	return used
 }
 
+// windowLeft is the remaining share regardless of the page's used/left
+// setting. The tools card's 2 × 1 main value is the tightest remaining
+// share by v2 §3, and its rails use the same meaning.
+func (f *usageFeature) windowLeft(w aiusage.Window) float64 {
+	return 100 - max(0, min(100, w.UsedPct))
+}
+
 // quotaPctText prints a share as Magpie does: whole numbers unchanged,
 // anything else with one decimal. "41%" and "12.5%".
 func quotaPctText(v float64) string {

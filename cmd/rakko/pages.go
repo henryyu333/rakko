@@ -67,6 +67,9 @@ type pageHeight interface {
 // spring.
 type pageEnvelope interface {
 	maxSize() (w, h float32)
+	// maxSizeWithin is the largest page size whose height fits limit, for
+	// an island side with less room than the absolute maximum.
+	maxSizeWithin(limit float32) (w, h float32)
 }
 
 // pageOverlay is a page's transient chrome (the card menu) drawn over the

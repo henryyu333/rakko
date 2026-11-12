@@ -60,13 +60,12 @@ type clockModule struct {
 	playSound func()
 	stopSound func()
 
-	phase       timerPhase
-	dur         time.Duration
-	end         time.Time
-	remain      time.Duration // the frozen remainder while paused
-	doneAt      time.Time     // when the countdown reached zero
-	ringing     bool          // the sound still loops
-	lastStarted time.Duration // the 1 × 1 start length
+	phase   timerPhase
+	dur     time.Duration
+	end     time.Time
+	remain  time.Duration // the frozen remainder while paused
+	doneAt  time.Time     // when the countdown reached zero
+	ringing bool          // the sound still loops
 
 	edit *timerEdit
 
@@ -79,7 +78,7 @@ type clockModule struct {
 
 // newClockModule wires the clocks into the shell.
 func newClockModule(host *shelf) *clockModule {
-	return &clockModule{host: host, dur: timerDefaultDur, lastStarted: timerDefaultDur}
+	return &clockModule{host: host, dur: timerDefaultDur}
 }
 
 // registerClockModules puts the clock into the shell's module list: the
@@ -147,17 +146,17 @@ func (m *clockModule) startTimer(now time.Time, d time.Duration) {
 	m.stopAlert()
 	m.edit = nil
 	m.phase, m.dur, m.end = timerRunning, d, now.Add(d)
-	m.lastStarted = d
 	m.remain = 0
 	m.refresh()
 }
 
-// toggleTimer is a tap on the card or the chip: idle starts the last
-// length, running pauses, paused resumes, and the unanswered alert stops.
+// toggleTimer is a tap on the card or the chip: idle starts the length
+// the card shows, running pauses, paused resumes, and the unanswered alert
+// stops.
 func (m *clockModule) toggleTimer(now time.Time) {
 	switch m.phase {
 	case timerIdle:
-		m.startTimer(now, m.lastStarted)
+		m.startTimer(now, m.dur)
 	case timerRunning:
 		m.pauseTimer(now)
 	case timerPaused:

@@ -1998,6 +1998,16 @@ func galleryGroupJ() []galleryItem {
 				expanded: false, frame: mygo.Rectangle{Width: pinStripW, Height: pinStripH}})
 			return galleryRender{view: galleryView(t, lang, it.view, pinStripW, pinStripH)}
 		}},
+		{ID: "JP1", Group: g, Title: "固定卡片", State: "278 · 保持唤醒 2×2 · 84pt 紧凑布局", Build: func(t *testing.T, lang string) galleryRender {
+			a := galleryShelf(galleryEmptyStore(t), t.TempDir())
+			fixed := time.Date(2026, 11, 12, 9, 0, 0, 0, time.Local)
+			a.awake = &awakeModule{host: a, id: mac.PowerAssertionID(1), duration: time.Hour,
+				until: fixed.Add(42 * time.Minute), now: func() time.Time { return fixed }}
+			it := a.pinRegister(&pinItem{cardID: "awake", span: 2, rows: 2, cardW: pinCardW2,
+				display: 1, edge: pinFree, expanded: true,
+				frame: mygo.Rectangle{Width: pinCardW2, Height: pinCardH}})
+			return galleryRender{view: galleryView(t, lang, func(c *ui.Context) { it.view(c) }, pinCardW2, pinCardH)}
+		}},
 		{ID: "J5", Group: g, Title: "便利贴窗口", State: "空", Build: note("", "", false)},
 		{ID: "J6", Group: g, Title: "便利贴窗口", State: "有内容", Build: note(
 			"# 周五发版前\n– 改 README\n– 跑一遍回归测试\n– 更新截图\n\n发版后在群里说一声。",

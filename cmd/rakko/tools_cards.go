@@ -207,9 +207,13 @@ func (a *shelf) toolCard(c *ui.Context, spec layout.Card, surf toolCardSurface, 
 		title += " · " + a.awakeHero(a.awake, time.Now(), loc(c))
 	}
 	if def != nil && def.id == "usage" {
-		// The 1 × 1 card carries no text, so its numbers live in the
-		// accessible name and the hover tip (the same string).
-		title = a.usageCardLabel(c)
+		// The 1 × 1 card carries no text and follows the page's used/left
+		// setting; the 2 × 1 value is always the tightest remaining share.
+		if spec.Cols() > 1 {
+			title = a.usageCardLeftLabel(c)
+		} else {
+			title = a.usageCardLabel(c)
+		}
 	}
 	if def != nil && def.id == "note" {
 		title = a.noteLabel(loc(c))
@@ -716,6 +720,20 @@ func (a *shelf) toolAwakeBody(c *ui.Context, card ui.Element, span, rows int, su
 				Absolute().Left(cardPad).Bottom(cardPad)
 			return
 		}
+		if surf == cardDesktop {
+			// The pinned card is one 84pt row: the 2 × 2 grid offsets (a
+			// 52pt reading and a separate tick strip) would collide with
+			// the chip row. Use the 2 × 1 header + chips instead.
+			top := a.cardTop(c, card, "awake-top")
+			top.Children(func() {
+				a.cardRingLead(c, card, "awake-lead", 24, frac, phase, cupSymbol)
+				fitText(c, l.KeepAwake(), 12, 600, 70).TextColor(ink2)
+				ui.Box(c).Grow(1)
+				a.cardHero(c, card, "awake-hero", text, 26, 22, w-2*cardPad-24-7-70-7, cardHeroColor(phase), false)
+			})
+			a.awakeChips(c, card, m, now)
+			return
+		}
 
 		top := a.cardTop(c, card, "awake-top")
 		top.Children(func() {
@@ -958,10 +976,10 @@ func (a *shelf) toolUsageBody(c *ui.Context, card ui.Element, span int, surf too
 			var weekFrac, fiveFrac float32
 			if a.usage != nil {
 				if week != nil {
-					weekFrac = float32(a.usage.windowShown(*week)) / 100
+					weekFrac = float32(a.usage.windowLeft(*week)) / 100
 				}
 				if five != nil {
-					fiveFrac = float32(a.usage.windowShown(*five)) / 100
+					fiveFrac = float32(a.usage.windowLeft(*five)) / 100
 				}
 			}
 			cardRail(c, "usage-week-rail", weekFrac, success).FillWidth()
@@ -1033,6 +1051,28 @@ func (a *shelf) usageCardLabel(c *ui.Context) string {
 	}
 	if week != nil {
 		parts = append(parts, l.UsageWindowWeekly()+" "+a.usage.shownShort(l, *week))
+	}
+	return strings.Join(parts, " · ")
+}
+
+// usageCardLeftLabel is the accessible name of the 2 × 1 card: its visible
+// value and rails are the remaining share regardless of the usage page's
+// used/left setting, so the name says 剩余 too.
+func (a *shelf) usageCardLeftLabel(c *ui.Context) string {
+	l := loc(c)
+	if a.usage == nil {
+		return l.AiUsage() + " · " + l.NoData()
+	}
+	five, week, tool, ok := a.usage.leastWindow()
+	if !ok {
+		return l.AiUsage() + " · " + l.NoData()
+	}
+	parts := []string{toolName(tool)}
+	if five != nil {
+		parts = append(parts, l.UsageWindowFive()+" "+l.UsageShownLeft(quotaPctText(a.usage.windowLeft(*five))))
+	}
+	if week != nil {
+		parts = append(parts, l.UsageWindowWeekly()+" "+l.UsageShownLeft(quotaPctText(a.usage.windowLeft(*week))))
 	}
 	return strings.Join(parts, " · ")
 }

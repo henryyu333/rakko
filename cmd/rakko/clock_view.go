@@ -230,6 +230,7 @@ func (a *shelf) toolTimerBody(c *ui.Context, card ui.Element, span int, surf too
 					m.stopTimer(m.clock())
 				}
 			}
+			a.cardFootIn(c, card, "timer", phase, foot)
 		})
 
 	})
@@ -537,6 +538,7 @@ func (a *shelf) toolStopwatchBody(c *ui.Context, card ui.Element, span int, surf
 					m.resetWatch()
 				}
 			}
+			a.cardFootIn(c, card, "watch", phase, foot)
 		})
 
 	})

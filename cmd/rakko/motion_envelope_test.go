@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo"
 
+	"rakko/internal/layout"
 	"rakko/internal/settings"
 )
 
@@ -101,3 +102,29 @@ type envelopeTallPage struct {
 func (p *envelopeTallPage) id() pageID      { return "tall" }
 func (p *envelopeTallPage) label() string   { return "高页面" }
 func (p *envelopeTallPage) height() float32 { return 950 }
+
+// TestIslandEnvelopeReservesTheToolsWidthOnItsSide: with 340–420pt below
+// the island, the tools page's editing maximum (420) does not fit that
+// side, but the 651pt six-column width still must. The envelope uses the
+// tallest tools page that fits the current side, so adding cards to six
+// columns never resizes the window mid-spring.
+func TestIslandEnvelopeReservesTheToolsWidthOnItsSide(t *testing.T) {
+	syntheticDisplays(t, false, false)
+	a := islandShelf(false, settings.ShellStyleIsland)
+	a.visible, a.level, a.tab = true, 2, pageTools
+	a.ensurePages()
+	// Start on a small page: the envelope must already reserve the width
+	// the page can reach, not only its current desired frame.
+	a.toolsLay = &layout.Layout{Version: layout.Version, Cards: []layout.Card{{ID: "ocr"}, {ID: "zip"}}}
+	a.y = a.workArea().Y + a.workArea().Height - 360 - a.islandTop
+	a.frame = mygo.Rectangle{}
+	if got := a.panelPlacement(); got.Up {
+		t.Fatalf("the panel is not downward: %+v", got)
+	}
+	env := a.sessionFrame()
+	target := a.openFrame(toolPanelW(toolMaxCols), toolPanelH(toolMaxRows), 0)
+	if !(env.X <= target.X && env.Y <= target.Y &&
+		env.X+env.Width >= target.X+target.Width && env.Y+env.Height >= target.Y+target.Height) {
+		t.Fatalf("the envelope %+v does not cover a 6-column tools page at %+v", env, target)
+	}
+}

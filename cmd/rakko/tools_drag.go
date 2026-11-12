@@ -60,6 +60,11 @@ func (p *dragPreview) close() {
 func (p *dragPreview) take() *pinItem {
 	it := p.window()
 	p.it = nil
+	if it != nil {
+		// The transparent preview becomes a committed pin: its speed tilt
+		// and preview-only look must end with the gesture.
+		it.preview, it.tilt = false, 0
+	}
 	return it
 }
 

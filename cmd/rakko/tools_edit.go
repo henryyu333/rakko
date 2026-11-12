@@ -179,13 +179,16 @@ func (p *toolsPage) beginFreshDrag(def toolCardDef, wx, wy float32) {
 	p.closeMenu()
 	p.closeDragPreview()
 	spec := layout.Card{ID: def.id, Span: def.span, Rows: max(1, def.rows)}
+	// Read the grid before the press exists: grid() treats a dragging
+	// press as a locked-width preview, and an unset lock falls back to the
+	// 3-column minimum.
+	g := p.grid()
 	p.press = &toolPress{
 		id: def.id, fresh: true, spec: spec,
 		downAt: time.Now(), dragging: true,
 		grabDX: toolColW(spec.Cols()) / 2, grabDY: toolRowH(spec.Height()) / 2,
 		index: len(p.host.toolsLayoutNow().Cards),
 	}
-	g := p.grid()
 	p.dragCols, p.dragRows = g.cols, g.rows
 	p.moveFreshDrag(wx, wy)
 }
@@ -223,7 +226,9 @@ func (p *toolsPage) endFreshDrag() {
 	if d == nil || !d.fresh {
 		return
 	}
-	if d.index < 0 || p.overLibrary() {
+	inside := d.px >= 0 && d.px <= p.stageWNow &&
+		d.py >= p.scroll.Y && d.py <= p.scroll.Y+p.viewport.H
+	if d.index < 0 || p.overLibrary() || !inside {
 		p.press = nil
 		p.dragCols, p.dragRows = 0, 0
 		if p.host.win != nil {
@@ -561,7 +566,9 @@ func (p *toolsPage) pinFromMenu(id string) {
 	disp := a.dispID
 	x := int(float32(a.frame.X) + p.viewport.X + cell.x)
 	y := int(float32(a.frame.Y) + p.viewport.Y + cell.y - p.scroll.Y)
-	frame := mygo.Rectangle{X: x, Y: y, Width: pinCardWidth(id, spec.Cols()), Height: int(cell.h)}
+	// A pin's window is always one card row high; the row span is stored in
+	// pinItem.rows by commitPin for a return to the grid.
+	frame := mygo.Rectangle{X: x, Y: y, Width: pinCardWidth(id, spec.Cols()), Height: pinCardH}
 	frame = pinClamp(frame, pinArea(disp))
 	a.addPin(id, spec.Cols(), disp, pinFree, false, frame)
 }

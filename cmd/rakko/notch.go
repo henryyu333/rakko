@@ -330,9 +330,19 @@ func (a *shelf) sessionFrame() mygo.Rectangle {
 		}
 		if env, ok := p.(pageEnvelope); ok {
 			// The tools page grows and shrinks with its cards; the frame
-			// holds its largest packing so none of those moves resizes
-			// the native window under a spring.
+			// holds its largest packing that fits the side the panel is
+			// on, so neither adding cards nor editing resizes the native
+			// window under a spring.
 			mw, mh := env.maxSize()
+			if a.island {
+				limit := float32(a.workArea().Y + a.workArea().Height - a.anchorScreenTop())
+				if up {
+					limit = float32(a.anchorScreenTop() - a.workArea().Y)
+				}
+				if limit > 0 {
+					mw, mh = env.maxSizeWithin(limit)
+				}
+			}
 			w, h = max(w, mw), max(h, mh)
 		}
 		add(w, h, 0, h)

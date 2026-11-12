@@ -734,3 +734,22 @@ func TestToolUsageCardHintFollowsQuotaLeft(t *testing.T) {
 		}
 	}
 }
+
+// TestToolUsageWideCardShowsRemaining: the 2×1 quota card's main value and
+// its rails are the tightest window's remaining share (v2 §3), regardless
+// of the usage page's used/left setting, and its accessible name says so.
+func TestToolUsageWideCardShowsRemaining(t *testing.T) {
+	now := time.Date(2026, 10, 19, 12, 0, 0, 0, time.Local)
+	codex := windowUsed(okQuota(aiusage.ToolCodex, "Plus", now), 0, 20)
+	claude := windowUsed(okQuota(aiusage.ToolClaude, "Pro", now), 0, 80)
+	fx := usageCardFixture(t, false, codex, claude)
+	fx.a.toolsLay = &layout.Layout{Version: layout.Version, Cards: []layout.Card{{ID: "usage", Span: 2, Rows: 1}}}
+	fx.view.Frame()
+	fx.view.Frame()
+	if !fx.view.HasText("20%") {
+		t.Fatalf("the 2×1 card does not show the tightest remaining 20%%: %v", fx.view.Texts())
+	}
+	if !fx.view.HasText("Claude Code · 5 小时 20% 剩余 · 每周 70% 剩余") {
+		t.Fatalf("the 2×1 card's accessible name does not say remaining: %v", fx.view.Texts())
+	}
+}

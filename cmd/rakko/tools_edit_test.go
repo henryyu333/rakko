@@ -7,6 +7,7 @@ package main
 
 import (
 	"math"
+	"slices"
 	"testing"
 	"time"
 
@@ -300,5 +301,206 @@ func TestToolsEditChromeClearsTheGlyph(t *testing.T) {
 				t.Fatalf("the ⊖ badge %+v is clipped by the shell", minus)
 			}
 		})
+	}
+}
+
+// TestToolsDropBelowThePanelPins: only the library's own rectangle is a
+// removal target. A card released below the panel or beside the library
+// is still a drag-out and pins; it must not be deleted from layout.json.
+func TestToolsDropBelowThePanelPins(t *testing.T) {
+	withPinDisplays(t, pinTestDisplays)
+	oldOpen := pinOpenWindow
+	pinOpenWindow = func(*pinItem) {}
+	t.Cleanup(func() { pinOpenWindow = oldOpen })
+
+	for _, tc := range []struct {
+		name string
+		at   func(a *shelf, ear float32) (x, y int)
+	}{
+		{"below", func(a *shelf, ear float32) (int, int) { return int(ear + 100), int(a.pageShellH()) + 8 }},
+		{"beside", func(a *shelf, ear float32) (int, int) { return int(ear) - 6, int(a.pageShellH()) - 40 }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a, _, view := editPage(t, []layout.Card{{ID: "ocr"}, {ID: "zip"}})
+			card, ok := view.Find("框选文字")
+			if !ok {
+				t.Fatal("the ocr card is missing")
+			}
+			x, y := tc.at(a, earR)
+			view.Press(card.X+card.W/2, card.Y+card.H/2)
+			view.Move(float32(x), float32(y))
+			view.Frame()
+			view.Release(float32(x), float32(y))
+			view.Frame()
+			if len(a.pins) != 1 || a.pins[0].cardID != "ocr" {
+				t.Fatalf("the drop deleted ocr without pinning it: %d pins, cards %v", len(a.pins), idsOf(a.toolsLayout().Cards))
+			}
+		})
+	}
+}
+
+// TestToolsResizeHandleSurvivesReflow: a corner drag that re-packs its card
+// out of the visible rows must still receive the release and write the
+// chosen size. The handle cannot disappear mid-gesture.
+func TestToolsResizeHandleSurvivesReflow(t *testing.T) {
+	withPinDisplays(t, pinTestDisplays)
+	oldOpen := pinOpenWindow
+	pinOpenWindow = func(*pinItem) {}
+	t.Cleanup(func() { pinOpenWindow = oldOpen })
+
+	cards := []layout.Card{
+		{ID: "ocr"}, {ID: "zip"}, {ID: "topdf"}, {ID: "tojpeg"}, {ID: "toword"},
+		{ID: "extract"}, {ID: "resize"}, {ID: "airdrop"}, {ID: "shot"}, {ID: "fit1m"},
+		{ID: "note"}, {ID: "awake"},
+	}
+	a, p, view := editPage(t, cards)
+	view.Advance(300 * time.Millisecond) // the chrome's 220ms pop
+	view.Frame()
+	var awakeCell toolCell
+	for _, cell := range p.grid().cells {
+		if cell.id == "awake" {
+			awakeCell = cell
+		}
+	}
+	// The awake is the last cell; its arc handle's centre, from the same
+	// shell/content geometry the chrome uses.
+	hx := earR + sheetPadX + awakeCell.x + awakeCell.w - 14
+	hy := toolsContentTop() + awakeCell.y - p.scroll.Y + awakeCell.h - 14
+	view.Press(hx, hy)
+	view.Move(hx+200, hy+180)
+	view.Frame()
+	rs := p.rs
+	var movedCell toolCell
+	for _, cell := range p.grid().cells {
+		if cell.id == "awake" {
+			movedCell = cell
+		}
+	}
+	t.Logf("during: rs=%+v viewport=%+v awakeCell=%+v movedCell=%+v shell=%v", rs, p.viewport, awakeCell, movedCell, a.pageShellH())
+	if rs == nil {
+		t.Fatal("the handle press did not start a resize")
+	}
+	view.Release(hx+200, hy+180)
+	view.Frame()
+	if p.rs != nil {
+		t.Fatalf("the resize never ended: %+v", p.rs)
+	}
+	var got layout.Card
+	for _, c := range a.toolsLayout().Cards {
+		if c.ID == "awake" {
+			got = c
+		}
+	}
+	if got.Cols() != 2 || got.Height() != 2 {
+		t.Fatalf("the release did not write 2×2: %+v", got)
+	}
+}
+
+// TestToolsFreshDragKeepsTheGridWidth: starting a library drag must use
+// the grid's current columns, not the minimum 3 the drag lock would fall
+// back to before it is recorded.
+func TestToolsFreshDragKeepsTheGridWidth(t *testing.T) {
+	nine := []layout.Card{
+		{ID: "playing", Span: 2, Rows: 2}, {ID: "awake"}, {ID: "usage"}, {ID: "ocr"}, {ID: "zip"},
+		{ID: "timer", Span: 2, Rows: 1}, {ID: "stopwatch"}, {ID: "clip", Span: 2, Rows: 1}, {ID: "airdrop"},
+	}
+	a, p, view := editPage(t, nine)
+	wantCols := p.grid().cols
+	wantW := a.pageShellW()
+	if wantCols < 6 {
+		t.Fatalf("the fixture is not a 6-column page: %d columns", wantCols)
+	}
+	tile, ok := view.Find("截图")
+	if !ok {
+		t.Fatalf("the shot tile is missing: %v", view.Texts())
+	}
+	view.Press(tile.X+tile.W/2, tile.Y+tile.H/2)
+	view.Move(tile.X+tile.W/2+30, tile.Y+tile.H/2)
+	view.Frame()
+	if got := p.dragCols; got != wantCols {
+		t.Fatalf("the fresh drag locked %d columns, want %d", got, wantCols)
+	}
+	if got := a.pageShellW(); got != wantW {
+		t.Fatalf("the fresh drag shrank the shell to %v, want %v", got, wantW)
+	}
+}
+
+// TestToolsFreshDropOutsideTheGridCancels: a library tile released outside
+// the visible grid is a cancelled drag, not a card appended at the nearest
+// cell. Only a release over the grid adds.
+func TestToolsFreshDropOutsideTheGridCancels(t *testing.T) {
+	a, _, view := editPage(t, []layout.Card{{ID: "ocr"}, {ID: "zip"}})
+	tile, ok := view.Find("截图")
+	if !ok {
+		t.Fatalf("the shot tile is missing: %v", view.Texts())
+	}
+	// Above the grid, in the action row: inside the panel, outside the
+	// scroll viewport.
+	view.Press(tile.X+tile.W/2, tile.Y+tile.H/2)
+	view.Move(tile.X+tile.W/2, 10)
+	view.Release(tile.X+tile.W/2, 10)
+	view.Frame()
+	if slices.ContainsFunc(a.toolsLayout().Cards, func(c layout.Card) bool { return c.ID == "shot" }) {
+		t.Fatalf("a drop outside the grid added shot: %v", idsOf(a.toolsLayout().Cards))
+	}
+}
+
+// TestToolsDragKeepsItsTallestRows: once a drag needs three rows, moving
+// the card back to a two-row spot during the same gesture must not shrink
+// the panel and the drawer under the pointer.
+func TestToolsDragKeepsItsTallestRows(t *testing.T) {
+	a, p, _ := editPage(t, []layout.Card{
+		{ID: "awake", Span: 2, Rows: 2}, {ID: "ocr"}, {ID: "zip"}, {ID: "topdf"},
+		{ID: "tojpeg"}, {ID: "toword"}, {ID: "extract"}, {ID: "resize"},
+	})
+	g0 := p.grid()
+	if g0.cols != 6 || g0.rows != 2 {
+		t.Fatalf("the fixture is %d×%d, want 6 columns and 2 rows", g0.cols, g0.rows)
+	}
+	var front toolCell
+	for _, cell := range g0.cells {
+		if cell.id == "awake" {
+			front = cell
+		}
+	}
+	// The end position after the seven singles: the first free 2×2 is at
+	// row 1, columns 1–2.
+	p.press = &toolPress{id: "awake", dragging: true, px: 207, py: 177}
+	p.dragCols, p.dragRows = g0.cols, g0.rows
+	gEnd := p.grid()
+	t.Logf("end: idx=%d grid=%+v", p.press.index, gEnd)
+	if got := gEnd.rows; got != 3 {
+		t.Fatalf("the back position needs 3 rows, got %d", got)
+	}
+	p.press.px, p.press.py = front.x+front.w/2, front.y+front.h/2
+	if got := p.grid().rows; got != 3 {
+		t.Fatalf("the panel shrank to %d rows while the pointer returned to the front", got)
+	}
+	if got := a.pageShellH(); got != 420 {
+		t.Fatalf("the shell shrank to %v during the drag, want 420", got)
+	}
+}
+
+// TestToolsMenuPinUsesTheCardHeight: pinning a 2×2 card from the menu must
+// create the same 84pt window as a drag-out and remember its row span for
+// a return to the tools page.
+func TestToolsMenuPinUsesTheCardHeight(t *testing.T) {
+	withPinDisplays(t, pinTestDisplays)
+	oldOpen := pinOpenWindow
+	pinOpenWindow = func(*pinItem) {}
+	t.Cleanup(func() { pinOpenWindow = oldOpen })
+
+	a, p, view := editPage(t, []layout.Card{{ID: "playing", Span: 2, Rows: 2}, {ID: "ocr"}})
+	view.Frame()
+	p.pinFromMenu("playing")
+	if len(a.pins) != 1 {
+		t.Fatalf("the menu did not pin playing: %d pins", len(a.pins))
+	}
+	it := a.pins[0]
+	if it.frame.Height != pinCardH {
+		t.Fatalf("the menu pin is %dpt high, want %d", it.frame.Height, pinCardH)
+	}
+	if it.rows != 2 {
+		t.Fatalf("the menu pin stored %d rows, want 2", it.rows)
 	}
 }

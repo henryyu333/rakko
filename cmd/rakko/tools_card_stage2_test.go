@@ -7,6 +7,7 @@ package main
 // busy spinner, and the per-digit value roll.
 
 import (
+	"image"
 	"testing"
 	"time"
 
@@ -280,5 +281,60 @@ func TestCardHeroRollRequestsFrames(t *testing.T) {
 	view.Frame()
 	if view.FramePending() {
 		t.Fatal("the settled hero still asks for frames")
+	}
+}
+
+// brightIn returns how many pixels in r read as ink (luminance > 120).
+func brightIn(img *image.RGBA, r ui.Rect) int {
+	n := 0
+	x0, y0 := int(r.X), int(r.Y)
+	x1, y1 := int(r.X+r.W), int(r.Y+r.H)
+	for y := y0; y < y1; y++ {
+		for x := x0; x < x1; x++ {
+			if x < img.Bounds().Min.X || x >= img.Bounds().Max.X ||
+				y < img.Bounds().Min.Y || y >= img.Bounds().Max.Y {
+				continue
+			}
+			c := img.RGBAAt(x, y)
+			if (int(c.R)+int(c.G)+int(c.B))/3 > 120 {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+// TestTimerActionRowFadesOnPhaseChange: starting the countdown swaps the
+// idle row for pause/plus/cancel. The rebuilt row must fade in and lift
+// over 240ms (v2 §7), not appear at full strength in one frame.
+func TestTimerActionRowFadesOnPhaseChange(t *testing.T) {
+	a, m, now := stage2Shelf(t, []layout.Card{{ID: "timer", Span: 2, Rows: 1}})
+	view := toolsTester(a)
+	view.Frame()
+	view.Frame()
+	l := a.appLoc()
+	start, ok := view.Find(l.TimerStart())
+	if !ok {
+		t.Fatalf("▶ is missing: %v", view.Texts())
+	}
+	view.ClickAt(start.X+start.W/2, start.Y+start.H/2)
+	view.Frame()
+	if m.phase != timerRunning {
+		t.Fatalf("▶ did not start the timer: %v", m.phase)
+	}
+	pause, ok := view.Find(l.TimerPause())
+	if !ok {
+		t.Fatalf("the running row has no pause: %v", view.Texts())
+	}
+	early := brightIn(view.Image(), pause)
+	view.Advance(300 * time.Millisecond)
+	view.Frame()
+	settled := brightIn(view.Image(), pause)
+	_ = now
+	if settled == 0 {
+		t.Fatalf("the pause label never drew: %+v", pause)
+	}
+	if early*2 >= settled {
+		t.Fatalf("the new action row appeared at once: early=%d settled=%d", early, settled)
 	}
 }
