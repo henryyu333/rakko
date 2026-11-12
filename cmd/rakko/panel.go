@@ -1076,6 +1076,9 @@ func (a *shelf) view(c *ui.Context) {
 				inner.Children(func() {
 					a.bandRow(c)
 					a.tabBody(c, over)
+					if o, ok := a.currentPage().(pageOverlay); ok {
+						o.overlay(c, true)
+					}
 				})
 			})
 		})

@@ -682,7 +682,7 @@ func (a *shelf) cardFootIn(c *ui.Context, card ui.Element, key string, phase car
 		return
 	}
 	k := card.AnimateTo("foot-k-"+key, target, ui.Animation{Duration: 240 * time.Millisecond, Ease: ui.EaseOut})
-	d := float32(math.Abs(float64(k - target)))
+	d := min(max(float32(math.Abs(float64(k-target))), 0), 1)
 	if d < 0.001 {
 		return
 	}

@@ -72,6 +72,9 @@ func (it *pinItem) view(c *ui.Context) {
 		// The card keeps its grid rectangle's rows: the music player draws
 		// its full 2 × 2 form in the pin, not the 2 × 1 strip's.
 		card := a.toolCard(c, layout.Card{ID: it.cardID, Span: it.span, Rows: it.rows}, cardDesktop).Fill()
+		if it.preview && it.tilt != 0 {
+			card.Rotate(it.tilt).TransformOrigin(0.5, 0.5)
+		}
 		if !it.jiggleAt.IsZero() && !c.Preferences().ReduceMotion {
 			k := float64(c.Now().Sub(it.jiggleAt)) / float64(toolJiggle)
 			if k < 1 {

@@ -103,8 +103,7 @@ const (
 	durCloseFade = 120 * time.Millisecond // 收起时内容先淡出
 	durPeek      = 160 * time.Millisecond // 探头形态之间
 	durCapsule   = 380 * time.Millisecond // 完成胶囊长出
-	durWobble    = 520 * time.Millisecond // 编辑摆动一圈
-	durSettle    = 240 * time.Millisecond // 松手吸附
+	durSettle    = 300 * time.Millisecond // 松手吸附
 	durLongPress = 500 * time.Millisecond // 长按进入编辑
 	durFade      = 150 * time.Millisecond // 减少动态效果时唯一保留的淡入淡出
 	durToast     = 2500 * time.Millisecond

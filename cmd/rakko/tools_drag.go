@@ -4,6 +4,7 @@ package main
 
 import (
 	"math"
+	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -12,6 +13,9 @@ import (
 )
 
 func (p *toolsPage) dragSpec(id string) layout.Card {
+	if p.press != nil && p.press.fresh && p.press.id == id {
+		return p.press.spec
+	}
 	for _, spec := range p.host.toolsLayout().Cards {
 		if spec.ID == id {
 			return spec
@@ -64,7 +68,7 @@ func (p *dragPreview) take() *pinItem {
 // copy still fits the page's content box, where the page draws it and the
 // window must stay out of the way. Both pages share it: the tools grid and
 // the home canvas differ only in where their content box is.
-func (a *shelf) syncDragPreview(pv *dragPreview, id string, span, cardW int, grabDX, grabDY, srcW, srcH float32, cursor mygo.Point, inside bool) {
+func (a *shelf) syncDragPreview(pv *dragPreview, id string, span, cardW int, grabDX, grabDY, srcW, srcH float32, cursor mygo.Point, inside bool, tilt float32) {
 	if inside || a.winH == 0 {
 		pv.close()
 		return
@@ -73,12 +77,13 @@ func (a *shelf) syncDragPreview(pv *dragPreview, id string, span, cardW int, gra
 	frame := pinClamp(pinFrameUnder(cursor, grabDX, grabDY, srcW, srcH, cardW), pinArea(display))
 	if pv.it == nil {
 		pv.it = &pinItem{owner: a, cardID: id, span: span, cardW: cardW,
-			display: display, edge: pinFree, expanded: true, frame: frame}
+			display: display, edge: pinFree, expanded: true, preview: true, tilt: tilt, frame: frame}
 		pinOpenPreview(pv.it)
 		return
 	}
-	pv.it.display, pv.it.frame = display, frame
+	pv.it.display, pv.it.frame, pv.it.tilt = display, frame, tilt
 	pv.it.applyFrame()
+	pv.it.invalidate()
 }
 
 func (p *toolsPage) closeDragPreview() { p.preview.close() }
@@ -120,6 +125,12 @@ func (p *toolsPage) syncDragPreview(cursor mygo.Point) {
 		p.preview.close()
 		return
 	}
+	if p.editing && p.overLibrary() {
+		// Over the drawer the card is being removed, not pinned: no
+		// desktop preview window there.
+		p.preview.close()
+		return
+	}
 	spec := p.dragSpec(d.id)
 	// The preview follows the card's real rectangle: a 2 × 2 widget is
 	// 174pt tall, so the copy leaves the page (and the preview opens) where
@@ -131,5 +142,9 @@ func (p *toolsPage) syncDragPreview(cursor mygo.Point) {
 	vx, vy := float32(a.frame.X)+v.X, float32(a.frame.Y)+v.Y
 	inside := !previewLeaves(p.viewport, left-vx, top-vy, w, h)
 	cardW := pinCardWidth(d.id, spec.Cols())
-	a.syncDragPreview(&p.preview, d.id, spec.Cols(), cardW, d.grabDX, d.grabDY, w, h, cursor, inside)
+	tilt := p.dragTilt(time.Now())
+	if p.reduceMotion {
+		tilt = 0
+	}
+	a.syncDragPreview(&p.preview, d.id, spec.Cols(), cardW, d.grabDX, d.grabDY, w, h, cursor, inside, tilt)
 }

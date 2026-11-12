@@ -69,6 +69,13 @@ type pageEnvelope interface {
 	maxSize() (w, h float32)
 }
 
+// pageOverlay is a page's transient chrome (the card menu) drawn over the
+// whole shell after the band and the page: the content box clips, but a
+// context menu may cover the band and the action row.
+type pageOverlay interface {
+	overlay(c *ui.Context, live bool)
+}
+
 // pageBleed is a page that owns its whole 200pt page area: no action row
 // above the content, no shared 174pt box. The home page uses it so the
 // player sits in the middle of the page, as the design has it.

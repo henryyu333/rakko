@@ -1322,7 +1322,9 @@ func galleryGroupF() []galleryItem {
 			// nav capsule hung under it.
 			w := int(math.Ceil(float64(a.pageShellW()))) + 2*earR
 			h := int(math.Ceil(float64(a.pageShellH()))) + navGap + navH + 2
-			return galleryRender{view: galleryPanel(t, lang, a, w, h)}
+			view := galleryPanel(t, lang, a, w, h)
+			gallerySettle(view) // the editing chrome's 220 ms pop and the springs
+			return galleryRender{view: view}
 		}
 	}
 	busy := func(t *testing.T, a *shelf, p *toolsPage, lang string) {
@@ -1413,10 +1415,12 @@ func galleryGroupF() []galleryItem {
 			}
 			return out
 		}(), func(t *testing.T, a *shelf, p *toolsPage, lang string) {
-			p.editing, p.editAt = true, time.Now()
+			p.editing = true
 		})},
-		{ID: "F13", Group: g, Title: "工具页", State: "卡片目录 · 添加卡片", Build: tools(def, func(t *testing.T, a *shelf, p *toolsPage, lang string) {
-			p.picking = true
+		{ID: "F13", Group: g, Title: "工具页", State: "编辑 · 底部卡片库（横向滚动）", Build: tools([]layout.Card{
+			{ID: "ocr"}, {ID: "zip"},
+		}, func(t *testing.T, a *shelf, p *toolsPage, lang string) {
+			p.editing = true
 		})},
 		{ID: "F14", Group: g, Title: "工具页", State: "拖入时 · 动作格高亮可接受", Build: tools(def, drag(classImages, "封面.png", "照片 02.png"))},
 		{ID: "F15", Group: g, Title: "工具页", State: "拖入时 · 不接受的动作格变暗", Build: tools(def, drag(classArchives, "素材备份.zip"))},
@@ -1429,10 +1433,10 @@ func galleryGroupF() []galleryItem {
 		{ID: "F20", Group: g, Title: "倒计时", State: "2×1 · 暂停 3:07", Build: tools(card("timer", 2, 1), timerPaused)},
 		{ID: "F21", Group: g, Title: "倒计时", State: "2×1 · 超过 1 小时 1:02:03", Build: tools(card("timer", 2, 1), timerLong)},
 		{ID: "F22", Group: g, Title: "倒计时", State: "1×1 · 空闲 5 分钟", Build: tools(card("timer", 1, 1), clock(nil))},
-		{ID: "F23", Group: g, Title: "倒计时", State: "1×1 · 进行中 · 悬停的 ×", Build: hover(tools(card("timer", 1, 1), timerRun))},
+		{ID: "F23", Group: g, Title: "倒计时", State: "1×1 · 进行中", Build: hover(tools(card("timer", 1, 1), timerRun))},
 		{ID: "F24", Group: g, Title: "倒计时", State: "1×1 · 暂停", Build: tools(card("timer", 1, 1), timerPaused)},
 		{ID: "F25", Group: g, Title: "倒计时", State: "编辑模式 · 图形与名称", Build: tools(card("timer", 2, 1), func(t *testing.T, a *shelf, p *toolsPage, lang string) {
-			p.editing, p.editAt = true, time.Now()
+			p.editing = true
 		})},
 		{ID: "F26", Group: g, Title: "秒表", State: "2×1 · 空闲 0:00", Build: tools(card("stopwatch", 2, 1), clock(nil))},
 		{ID: "F27", Group: g, Title: "秒表", State: "2×1 · 进行中 12:34", Build: tools(card("stopwatch", 2, 1), watchRun)},
@@ -1496,6 +1500,14 @@ func galleryGroupF() []galleryItem {
 		{ID: "F52", Group: g, Title: "动作卡", State: "转换中 · 图形 14 与蓝色转圈", Build: tools([]layout.Card{
 			{ID: "tojpeg"}, {ID: "zip"},
 		}, busy)},
+		{ID: "F53", Group: g, Title: "编辑交互", State: "右键菜单 · 尺寸形状与页面动作", Build: tools(card("awake", 1, 1), func(t *testing.T, a *shelf, p *toolsPage, lang string) {
+			p.menu = &toolMenu{id: "awake", x: 28, y: 10}
+		})},
+		{ID: "F54", Group: g, Title: "编辑交互", State: "弧形把手拖动 · 蓝色橡皮筋与吸附中的卡片", Build: tools(card("awake", 1, 1), func(t *testing.T, a *shelf, p *toolsPage, lang string) {
+			p.editing = true
+			p.rs = &toolResize{id: "awake", orig: layout.Card{ID: "awake", Span: 1, Rows: 1},
+				cur: [2]int{2, 1}, cellX: 0, cellY: 0, bandW: 190, bandH: 90}
+		})},
 		{ID: "F34", Group: g, Title: "顶栏胶囊", State: "刘海 180 · 倒计时左耳、秒表右耳", Notch: true, Build: func(t *testing.T, lang string) galleryRender {
 			a := galleryShelf(galleryEmptyStore(t), t.TempDir())
 			a.notchW, a.notchH = 180, 32

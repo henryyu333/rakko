@@ -544,3 +544,14 @@ func LoadQuietWith(dir string, aiUsage bool) Layout {
 	}
 	return l
 }
+
+// InsertCardSize places id at at in the grid (clamped), with a column and
+// row span. It is how a card dragged in from the library keeps the slot
+// the user chose instead of appending.
+func (l *Layout) InsertCardSize(id string, span, rows, at int) {
+	if id == "" || l.hasCard(id) {
+		return
+	}
+	at = max(0, min(at, len(l.Cards)))
+	l.Cards = slices.Insert(l.Cards, at, Card{ID: id, Span: clampSpan(span), Rows: clampRows(rows)})
+}

@@ -274,24 +274,21 @@ func TestEveryPageFitsTheContentBox(t *testing.T) {
 	a.setTab(pageTools)
 	p := a.toolsPage()
 	for _, state := range []struct {
-		name          string
-		editing, pick bool
+		name    string
+		editing bool
 	}{
-		{"tools", false, false},
-		{"tools-edit", true, false},
-		{"tools-picker", true, true},
+		{"tools", false},
+		{"tools-edit", true},
 	} {
-		p.editing, p.picking = state.editing, state.pick
+		p.editing = state.editing
 		tv := toolsTester(a)
 		tv.Frame()
 		drain()
 		tv.Frame()
 		// The state must really be on screen, or the audit proves nothing.
-		want := "完成"
-		if !state.editing && !state.pick {
-			want = "工具"
-		} else if state.pick {
-			want = "卡片目录"
+		want := "工具"
+		if state.editing {
+			want = "完成"
 		}
 		if !tv.HasText(want) {
 			t.Fatalf("%s: the page did not draw its state (%q missing); texts %v", state.name, want, tv.Texts())
@@ -302,7 +299,7 @@ func TestEveryPageFitsTheContentBox(t *testing.T) {
 		}
 		assertPageFitsRows(t, tv, state.name, drain(), rows)
 	}
-	p.editing, p.picking = false, false
+	p.editing = false
 }
 
 // usageStates draws the AI 用量 page in the states the local panel and the

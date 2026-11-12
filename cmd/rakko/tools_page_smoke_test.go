@@ -71,15 +71,11 @@ func TestToolsPageScreenshots(t *testing.T) {
 	}
 	// 1. The normal grid.
 	shotToolsPage(t, a, "tools-grid", nil)
-	// 2. Edit mode: wobbling cards, ⊖ badges, span handle, + slot.
+	// 2. Edit mode: the ⊖ badges, the arc handles and the card library.
 	shotToolsPage(t, a, "tools-edit", func() {
-		p.editing, p.editAt = true, time.Now()
+		p.editing = true
 	})
-	// 3. The catalogue picker.
-	shotToolsPage(t, a, "tools-picker", func() {
-		p.picking = true
-	})
-	onMain(func() { p.picking, p.editing = false, true })
+	onMain(func() { p.editing = true })
 	// 4. Files hovering the tools tab: accepting cards glow, others dim,
 	// the drop zone stays off (design §1).
 	t.Setenv("RAKKO_DEBUG_DROP_FILES", strings.Join([]string{img}, string(filepath.ListSeparator)))

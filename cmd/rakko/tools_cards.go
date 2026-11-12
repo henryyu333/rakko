@@ -50,7 +50,7 @@ const (
 // defaults to (variableSpan cards toggle 1/2 in edit mode), what file
 // classes it accepts and how a drop maps to the drop zone's action.
 // accepts answers for a classifyDrop result; available keeps a card out
-// of the picker while its feature is off (AI 用量 follows its setting).
+// of the library while its feature is off (AI 用量 follows its setting).
 type toolCardDef struct {
 	id           string
 	kind         cardKind
@@ -71,14 +71,12 @@ var (
 	plusSymbol     = symbol(`<path d="M12 5v14M5 12h14"/>`)
 	pencilSymbol   = symbol(`<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 7l4 4"/>`)
 	// ocrSymbol 由 screenocr.go（任务 C）提供，这里直接用。
-	// minusSymbol / spanSymbol are the edit-mode chrome: the ⊖ badge and
-	// the variable-span handle.
+	// minusSymbol is the edit-mode ⊖ badge.
 	minusSymbol = symbol(`<path d="M5 12h14"/>`)
-	spanSymbol  = symbol(`<path d="M4 9h7M4 15h10M17 5v14M20 8l-3-3-3 3M20 16l-3 3-3-3"/>`)
 	awakeWarn   = warning // 保持唤醒的橙点（设计稿 var(--warn)）
 )
 
-// toolCatalog is every card in picker order: actions first, then
+// toolCatalog is every card in library order: actions first, then
 // widgets (design §3's rows in order). 框选文字 leads the actions and
 // the default layout's first cell (design §1's first grid).
 func toolCatalog() []toolCardDef {

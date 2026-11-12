@@ -13,7 +13,7 @@ func TestPackToolCardsSpans(t *testing.T) {
 		{ID: "a", Span: 1}, {ID: "b", Span: 2}, {ID: "c", Span: 1},
 		{ID: "d", Span: 2}, {ID: "e", Span: 2},
 	}
-	cells := packToolCards(cards, 4, nil, false)
+	cells := packToolCards(cards, 4, nil)
 	if len(cells) != 5 {
 		t.Fatalf("cells = %d", len(cells))
 	}
@@ -90,7 +90,7 @@ func TestToolLadderMatchesDesign(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			g := toolGridFor(tc.cards, nil, false, 0)
+			g := toolGridFor(tc.cards, nil, 0)
 			if g.cols != tc.cols || g.rows != tc.rows || g.vis != tc.vis {
 				t.Fatalf("grid = %d cols, %d rows, %d vis; want %d, %d, %d",
 					g.cols, g.rows, g.vis, tc.cols, tc.rows, tc.vis)
@@ -120,7 +120,7 @@ func TestToolLadderMatchesDesign(t *testing.T) {
 // own width, and the extra columns stay empty.
 func TestToolGridMinCols(t *testing.T) {
 	cards := []layout.Card{{ID: "a"}, {ID: "b"}}
-	g := toolGridFor(cards, nil, false, 4)
+	g := toolGridFor(cards, nil, 4)
 	if g.cols != 4 || g.rows != 1 || g.vis != 1 {
 		t.Fatalf("minCols 4 grid = %+v, want 4 columns one row", g)
 	}
@@ -128,31 +128,9 @@ func TestToolGridMinCols(t *testing.T) {
 		t.Fatalf("panel width = %v, want 440", got)
 	}
 	// Trimming never goes under three even with a single card.
-	g = toolGridFor(cards[:1], nil, false, 0)
+	g = toolGridFor(cards[:1], nil, 0)
 	if g.cols != toolMinCols {
 		t.Fatalf("single card grid = %d columns, want the 3-column floor", g.cols)
-	}
-}
-
-func TestPackToolCardsPlus(t *testing.T) {
-	// Edit mode appends the + slot after the last card, wrapping to the
-	// next row when the row is full.
-	cards := []layout.Card{{ID: "a", Span: 1}, {ID: "b", Span: 1}, {ID: "c", Span: 1}, {ID: "d", Span: 1}}
-	cells := packToolCards(cards, 4, nil, true)
-	last := cells[len(cells)-1]
-	if !last.plus || last.y != toolCellH+toolCellGap {
-		t.Fatalf("+ = %+v, want it on row 1", last)
-	}
-	cells = packToolCards(cards[:3], 4, nil, true)
-	last = cells[len(cells)-1]
-	if !last.plus || last.y != 0 || last.x != 3*(toolColW(1)+toolCellGap) {
-		t.Fatalf("+ = %+v, want column 3 of row 0", last)
-	}
-	// Normal mode never has it.
-	for _, cell := range packToolCards(cards, 4, nil, false) {
-		if cell.plus {
-			t.Fatal("+ slot without edit mode")
-		}
 	}
 }
 
@@ -211,7 +189,7 @@ func TestToolInsertIndexSpans(t *testing.T) {
 func TestDefaultLayoutFitsTwoRows(t *testing.T) {
 	viewport := float32(2*toolCellH + toolCellGap)
 	for _, aiUsage := range []bool{true, false} {
-		cells := packToolCards(layout.DefaultWith(aiUsage).Cards, 4, nil, false)
+		cells := packToolCards(layout.DefaultWith(aiUsage).Cards, 4, nil)
 		if len(cells) != 5 {
 			t.Fatalf("aiUsage %v: cells = %d, want 5", aiUsage, len(cells))
 		}
@@ -252,7 +230,7 @@ func TestDefaultLayoutFitsTwoRows(t *testing.T) {
 func TestToolsGridHoldsTallWidgets(t *testing.T) {
 	l := mustLayout(t)
 	withNil := func(string) bool { return false }
-	cells := packToolCards(l.Cards, 4, withNil, false)
+	cells := packToolCards(l.Cards, 4, withNil)
 	var playing, awake toolCell
 	for _, c := range cells {
 		switch c.id {

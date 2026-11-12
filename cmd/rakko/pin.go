@@ -100,6 +100,8 @@ type pinItem struct {
 	grabY     int
 	wantKill  bool // a menu asked to remove it; pinTick does the destroy
 	putBack   bool // …and whether the card returns to the tools page
+	preview   bool // the transient drag window, not a committed pin
+	tilt      float32
 	win       *mygo.Window
 }
 

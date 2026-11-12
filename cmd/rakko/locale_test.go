@@ -106,18 +106,20 @@ func TestEnglishPanelPagesHaveNoChineseAndFit(t *testing.T) {
 		assertPageFits(t, view, string(id), drain(), a.sheetTop())
 	}
 
-	// The tools catalogue says English too.
+	// The tools editing drawer says English too.
 	a.setTab(pageTools)
 	if p := a.toolsPage(); p != nil {
-		p.editing, p.picking = true, true
-		view.Frame()
+		p.editing = true
+		tv := toolsTester(a)
+		tv.SetLocale("en")
+		tv.Frame()
 		drain() // the first frame of the state has no boxes yet
-		view.Frame()
-		assertNoHan(t, "tools-picker", view.Texts())
+		tv.Frame()
+		assertNoHan(t, "tools-library", tv.Texts())
 		if notes := drain(); len(notes) > 0 {
-			t.Errorf("tools-picker: %v", notes)
+			t.Errorf("tools-library: %v", notes)
 		}
-		p.editing, p.picking = false, false
+		p.editing = false
 	}
 }
 

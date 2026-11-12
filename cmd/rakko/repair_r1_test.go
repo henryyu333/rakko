@@ -123,43 +123,6 @@ func TestToolsDropBelowTheViewportPins(t *testing.T) {
 	}
 }
 
-// TestToolsPickerScrolls: with every card removed the catalogue is taller
-// than the page, and its rows scroll inside the card instead of being cut.
-func TestToolsPickerScrolls(t *testing.T) {
-	a, _ := toolsFixture(t)
-	a.toolsLay = &layout.Layout{Version: layout.Version, Cards: []layout.Card{{ID: "ocr"}}}
-	p := a.toolsPage()
-	p.editing, p.picking = true, true
-	// The one-card page is 160pt tall, so the catalogue's box is 84pt: size
-	// the surface after the state that asks for it.
-	view := toolsTester(a)
-	view.Frame()
-	view.Frame()
-	last, ok := view.Find("隔空投送")
-	if !ok {
-		t.Fatalf("the catalogue is missing its last row; texts %v", view.Texts())
-	}
-	// With no scrolling the row list would spill past the 84pt box and the
-	// later rows could never be reached; inside a scroll a wheel over the
-	// list pulls them up. (The last row starts below the clipped box,
-	// where a wheel itself would never reach it.)
-	first, ok := view.Find(p.pickerGroups()[0][0].name(a.appLoc()))
-	if !ok {
-		t.Fatal("the catalogue's first row is missing")
-	}
-	before := last.Y
-	view.Scroll(first.X+first.W/2, first.Y+first.H/2, 0, 200)
-	view.Frame()
-	view.Frame()
-	after, ok := view.Find("隔空投送")
-	if !ok {
-		t.Fatal("the last row vanished after scrolling")
-	}
-	if after.Y >= before {
-		t.Fatalf("the wheel did not scroll the catalogue: %+v -> %+v", before, after.Y)
-	}
-}
-
 // TestPinnedWideWidgetsKeepTwoColumns: the desktop form of the music,
 // recent-file and clipboard widgets is 278pt even when the card sits in one
 // grid column; a card that fits 136pt stays 136.

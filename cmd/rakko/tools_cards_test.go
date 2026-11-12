@@ -357,7 +357,7 @@ func TestToolsMusicCardIsTheFullPlayer(t *testing.T) {
 func TestToolsMusicCardEditingKeepsThePlayer(t *testing.T) {
 	a, view, vol, _ := musicCardShelf(t)
 	p := a.toolsPage()
-	p.editing, p.editAt = true, time.Now()
+	p.editing = true
 	view.Frame()
 	view.Frame()
 	for _, label := range []string{"播放进度", "音量", "上一首", "下一首"} {

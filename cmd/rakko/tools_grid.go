@@ -81,11 +81,11 @@ type toolGrid struct {
 // rows top to bottom. skip names cards that take no space right now (a
 // widget whose feature is off): their cells read as free, their entries
 // stay. editing appends the dashed + slot.
-func packToolCards(cards []layout.Card, cols int, skip func(string) bool, editing bool) []toolCell {
+func packToolCards(cards []layout.Card, cols int, skip func(string) bool) []toolCell {
 	cols = max(toolMinCols, min(cols, toolMaxCols))
 	taken := map[[2]int]bool{}
 	var cells []toolCell
-	place := func(id string, span, rows int, plus bool) {
+	place := func(id string, span, rows int) {
 		span, rows = max(1, min(span, cols)), max(1, min(rows, 2))
 		for y := 0; ; y++ {
 			for x := 0; x+span <= cols; x++ {
@@ -106,10 +106,10 @@ func packToolCards(cards []layout.Card, cols int, skip func(string) bool, editin
 					}
 				}
 				cells = append(cells, toolCell{
-					id: id, plus: plus,
-					x: float32(x) * (toolCellW + toolCellGap),
-					y: float32(y) * (toolCellH + toolCellGap),
-					w: toolColW(span), h: toolRowH(rows),
+					id: id,
+					x:  float32(x) * (toolCellW + toolCellGap),
+					y:  float32(y) * (toolCellH + toolCellGap),
+					w:  toolColW(span), h: toolRowH(rows),
 				})
 				return
 			}
@@ -119,10 +119,7 @@ func packToolCards(cards []layout.Card, cols int, skip func(string) bool, editin
 		if skip != nil && skip(card.ID) {
 			continue
 		}
-		place(card.ID, card.Cols(), card.Height(), false)
-	}
-	if editing {
-		place("", 1, 1, true)
+		place(card.ID, card.Cols(), card.Height())
 	}
 	return cells
 }
@@ -131,9 +128,9 @@ func packToolCards(cards []layout.Card, cols int, skip func(string) bool, editin
 // the packing used and the rows actually drawn. The caller decides when
 // to trim the shell to the columns that packing touched (toolGridFor); a
 // locked reorder drag keeps cols as given.
-func toolGridAt(cards []layout.Card, cols int, skip func(string) bool, editing bool) toolGrid {
+func toolGridAt(cards []layout.Card, cols int, skip func(string) bool) toolGrid {
 	cols = max(toolMinCols, min(cols, toolMaxCols))
-	cells := packToolCards(cards, cols, skip, editing)
+	cells := packToolCards(cards, cols, skip)
 	rows := 1
 	for _, cell := range cells {
 		rows = max(rows, int(math.Round(float64(cell.y+cell.h+toolCellGap)/float64(toolCellH+toolCellGap))))
@@ -157,7 +154,7 @@ func toolGridUsedCols(cells []toolCell) int {
 // is the band's requirement and always wins the trim. With nothing left to
 // pack the smallest panel stays. Past the last rung the six-column grid
 // shows three rows and scrolls.
-func toolGridFor(cards []layout.Card, skip func(string) bool, editing bool, minCols int) toolGrid {
+func toolGridFor(cards []layout.Card, skip func(string) bool, minCols int) toolGrid {
 	minCols = max(toolMinCols, min(minCols, toolMaxCols))
 	finish := func(g toolGrid) toolGrid {
 		g.cols = max(minCols, max(toolMinCols, toolGridUsedCols(g.cells)))
@@ -167,12 +164,12 @@ func toolGridFor(cards []layout.Card, skip func(string) bool, editing bool, minC
 		if rung[0] < minCols {
 			continue
 		}
-		g := toolGridAt(cards, rung[0], skip, editing)
+		g := toolGridAt(cards, rung[0], skip)
 		if g.rows <= rung[1] {
 			return finish(g)
 		}
 	}
-	return finish(toolGridAt(cards, toolMaxCols, skip, editing))
+	return finish(toolGridAt(cards, toolMaxCols, skip))
 }
 
 // toolVirtualCards is the list the grid would have if the dragged card
@@ -222,8 +219,37 @@ func toolInsertIndex(cards []layout.Card, cols int, dragID string, current int, 
 	best, bestD := -1, float64(math.MaxFloat64)
 	for i := 0; i <= len(cards)-1; i++ {
 		virtual := toolVirtualCards(cards, dragID, i)
-		for _, cell := range packToolCards(virtual, cols, nil, false) {
+		for _, cell := range packToolCards(virtual, cols, nil) {
 			if cell.id != dragID {
+				continue
+			}
+			dx := px - (cell.x + cell.w/2)
+			dy := py - (cell.y + cell.h/2)
+			d := float64(dx*dx + dy*dy)
+			if d < bestD || (d == bestD && i == current) {
+				best, bestD = i, d
+			}
+		}
+	}
+	return best
+}
+
+// toolInsertIndexFresh is toolInsertIndex for a card that is not in the
+// list yet (dragged in from the library): the candidate list is the cards
+// with id inserted at each index.
+func toolInsertIndexFresh(cards []layout.Card, cols int, spec layout.Card, current int, px, py float32) int {
+	if spec.ID == "" {
+		return -1
+	}
+	cols = max(toolMinCols, min(cols, toolMaxCols))
+	best, bestD := -1, float64(math.MaxFloat64)
+	for i := 0; i <= len(cards); i++ {
+		v := make([]layout.Card, 0, len(cards)+1)
+		v = append(v, cards[:i]...)
+		v = append(v, spec)
+		v = append(v, cards[i:]...)
+		for _, cell := range packToolCards(v, cols, nil) {
+			if cell.id != spec.ID {
 				continue
 			}
 			dx := px - (cell.x + cell.w/2)

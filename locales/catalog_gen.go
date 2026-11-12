@@ -5025,6 +5025,46 @@ func (msgs Messages) ToolsEdit() string {
 	return Catalog.Format(msgs.locale, "toolsEdit", nil)
 }
 
+// ToolsMenuEdit is the tools page's toolsMenuEdit string.
+func ToolsMenuEdit() string { return In(i18n.Locale()).ToolsMenuEdit() }
+
+// ToolsMenuEdit is the tools page's toolsMenuEdit string.
+func (msgs Messages) ToolsMenuEdit() string {
+	return Catalog.Format(msgs.locale, "toolsMenuEdit", nil)
+}
+
+// ToolsMenuDone is the tools page's toolsMenuDone string.
+func ToolsMenuDone() string { return In(i18n.Locale()).ToolsMenuDone() }
+
+// ToolsMenuDone is the tools page's toolsMenuDone string.
+func (msgs Messages) ToolsMenuDone() string {
+	return Catalog.Format(msgs.locale, "toolsMenuDone", nil)
+}
+
+// ToolsMenuPin is the tools page's toolsMenuPin string.
+func ToolsMenuPin() string { return In(i18n.Locale()).ToolsMenuPin() }
+
+// ToolsMenuPin is the tools page's toolsMenuPin string.
+func (msgs Messages) ToolsMenuPin() string {
+	return Catalog.Format(msgs.locale, "toolsMenuPin", nil)
+}
+
+// ToolsMenuRemove is the tools page's toolsMenuRemove string.
+func ToolsMenuRemove() string { return In(i18n.Locale()).ToolsMenuRemove() }
+
+// ToolsMenuRemove is the tools page's toolsMenuRemove string.
+func (msgs Messages) ToolsMenuRemove() string {
+	return Catalog.Format(msgs.locale, "toolsMenuRemove", nil)
+}
+
+// ToolsResize is the tools page's toolsResize string.
+func ToolsResize() string { return In(i18n.Locale()).ToolsResize() }
+
+// ToolsResize is the tools page's toolsResize string.
+func (msgs Messages) ToolsResize() string {
+	return Catalog.Format(msgs.locale, "toolsResize", nil)
+}
+
 // ToolsAddCard says "添加卡片"
 // in the language the app shows.
 func ToolsAddCard() string { return In(i18n.Locale()).ToolsAddCard() }

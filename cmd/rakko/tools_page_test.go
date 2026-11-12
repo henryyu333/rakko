@@ -107,9 +107,12 @@ func TestToolsPageEditMode(t *testing.T) {
 	if p == nil || !p.editing {
 		t.Fatal("pencil did not enter edit mode")
 	}
-	// The + slot and a ⊖ badge must exist in edit mode.
-	if !view.HasText("添加卡片") {
-		t.Fatal("+ slot missing in edit mode")
+	// The drawer and the chrome must exist in edit mode.
+	if !view.HasText("最近文件") {
+		t.Fatalf("the editing drawer is missing; texts %v", view.Texts())
+	}
+	if !view.HasText("改尺寸") {
+		t.Fatal("the arc resize handle is missing")
 	}
 	if err := view.Click("完成"); err != nil {
 		t.Fatalf("完成 button missing: %v", err)
@@ -119,9 +122,10 @@ func TestToolsPageEditMode(t *testing.T) {
 	}
 }
 
-// TestToolsPagePicker covers the catalogue: + opens it, a new card adds,
-// 完成 closes back to editing.
-func TestToolsPagePicker(t *testing.T) {
+// TestToolsPageLibraryAddsCard: the editing drawer lists a card that is
+// not on the page; a click appends it to the layout and it leaves the
+// drawer. The old full-page catalogue is gone.
+func TestToolsPageLibraryAddsCard(t *testing.T) {
 	dir := t.TempDir()
 	s, err := store.Open(t.TempDir())
 	if err != nil {
@@ -130,30 +134,28 @@ func TestToolsPagePicker(t *testing.T) {
 	defer s.Close()
 	a := &shelf{store: s, tab: pageTools, visible: true, dataDir: dir}
 	p := a.toolsPage()
-	if p == nil {
-		t.Fatal("tools page missing")
-	}
-	p.editing, p.picking = true, true
+	p.editing = true
 	view := toolsTester(a)
-	if !view.HasText("卡片目录") {
-		t.Fatal("picker title missing")
+	if !view.HasText("截图") {
+		t.Fatalf("the drawer is missing its cards; texts %v", view.Texts())
 	}
-	if !view.HasText("隔空投送") {
-		t.Fatal("picker is missing catalog entries")
+	r, ok := view.Find("截图")
+	if !ok {
+		t.Fatal("the airdrop tile is missing")
 	}
-	// Placed cards are not listed: the catalogue only offers what is left.
-	// A fresh install's grid is 音乐, 保持唤醒, 压缩到 1 MB (AI 用量 is off
-	// here), 框选文字 and 打成 zip.
-	for _, placed := range []string{"音乐", "保持唤醒", "压缩到 1 MB", "框选文字", "打成 zip"} {
-		if view.HasText(placed) {
-			t.Fatalf("the catalogue still lists the placed card %q", placed)
-		}
+	view.ClickAt(r.X+r.W/2, r.Y+r.H/2)
+	view.Frame()
+	if !slices.ContainsFunc(a.toolsLayout().Cards, func(c layout.Card) bool { return c.ID == "shot" }) {
+		t.Fatalf("the tile click did not add the card: %v", idsOf(a.toolsLayout().Cards))
 	}
-	// Everything else is catalogue-only now, including the widgets the old
-	// default carried.
-	for _, added := range []string{"最近文件", "剪贴板最新", "隔空投送"} {
-		if !view.HasText(added) {
-			t.Fatalf("the catalogue lost the unplaced card %q", added)
+	if p.editing != true {
+		t.Fatal("adding a card left editing")
+	}
+	// The placed card is no longer offered (its name now reaches the
+	// grid, so the drawer's own list is the check).
+	for _, def := range p.libraryCards() {
+		if def.id == "shot" {
+			t.Fatal("the drawer still lists the placed card")
 		}
 	}
 }
@@ -314,19 +316,14 @@ func TestToolsStillLongPressEntersEdit(t *testing.T) {
 	}
 }
 
-// Esc inside the 「+」 catalogue only backs out to the edit grid (same as
-// 完成); editing ends on a second Esc.
-func TestToolsEscapeInPickerClosesPickerOnly(t *testing.T) {
+// Esc ends editing; the panel itself stays up.
+func TestToolsEscapeEndsEditing(t *testing.T) {
 	a := &shelf{tab: pageTools, visible: true}
 	p := a.toolsPage()
-	p.editing, p.picking = true, true
-	a.escape()
-	if !p.editing || p.picking {
-		t.Fatalf("Esc in the picker ended editing instead of the picker: editing=%v picking=%v", p.editing, p.picking)
-	}
+	p.editing = true
 	a.escape()
 	if p.editing {
-		t.Fatal("second Esc did not leave editing")
+		t.Fatal("Esc did not leave editing")
 	}
 	if !a.visible {
 		t.Fatal("Esc hid the panel")
@@ -454,7 +451,7 @@ func TestToolsDropInVisibleGridCommits(t *testing.T) {
 	p := a.toolsPage()
 	p.editing = true
 	view.Frame()
-	stage := pageContentHeight(p)
+	stage := p.viewport.H
 	if p.scroll.MaxY <= 28 {
 		t.Fatalf("fixture did not overflow the content box enough: %+v", p.scroll)
 	}
@@ -659,66 +656,5 @@ func TestToolsGridDrawsNoEdgeBlur(t *testing.T) {
 	t.Logf("contrast in the open %d, at the top edge %d", open, edge)
 	if edge*2 < open {
 		t.Fatalf("the tools grid melts at its top edge: %d there, %d in the open", edge, open)
-	}
-}
-
-// TestToolsPickerRowsShareTheColumns: each catalogue row owns its own
-// cell — half the card, rounded, hovered alone — and keeps its default
-// size at its own right edge instead of the row's outside.
-func TestToolsPickerRowsShareTheColumns(t *testing.T) {
-	s, err := store.Open(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	a := &shelf{store: s, tab: pageTools, visible: true, dataDir: t.TempDir()}
-	p := a.toolsPage()
-	p.editing, p.picking = true, true
-	view := toolsTester(a)
-	view.Frame()
-
-	group := p.pickerGroups()[0]
-	if len(group) < 2 {
-		t.Fatalf("the first group has %d rows", len(group))
-	}
-	left, ok := view.Find(group[0].name(a.appLoc()))
-	if !ok {
-		t.Fatalf("row %q missing", group[0].name(a.appLoc()))
-	}
-	right, ok := view.Find(group[1].name(a.appLoc()))
-	if !ok {
-		t.Fatalf("row %q missing", group[1].name(a.appLoc()))
-	}
-	if left.W != right.W {
-		t.Fatalf("columns are %v and %v wide", left.W, right.W)
-	}
-	if got := right.X - (left.X + left.W); got != 4 {
-		t.Fatalf("the column gap is %v, want the grid's 4", got)
-	}
-	// Both cells end inside the card: no row overflows its column, which
-	// would put the size label under the neighbouring row. The card ends
-	// at the shell's right edge on this surface.
-	if right.X+right.W > a.pageShellW() {
-		t.Fatalf("the second column ends at %v, past the card (shell %v)", right.X+right.W, a.pageShellW())
-	}
-
-	// Point at the left row's top inner edge: the hover fill covers that
-	// cell only. The same point in the right row stays as it was.
-	probe := func(r ui.Rect) (int, int) { return int(r.X + r.W*0.6), int(r.Y + 4) }
-	lx, ly := probe(left)
-	rx, ry := probe(right)
-	before := view.Image()
-	rc, gc, bc, _ := before.At(rx, ry).RGBA()
-	view.Move(left.X+left.W/2, left.Y+left.H/2)
-	view.Frame()
-	after := view.Image()
-	ar, ag, ab, _ := after.At(rx, ry).RGBA()
-	if ar != rc || ag != gc || ab != bc {
-		t.Fatal("hovering the left row tinted the right one")
-	}
-	lr, lg, lb, _ := after.At(lx, ly).RGBA()
-	br, bg, bb, _ := before.At(lx, ly).RGBA()
-	if lr == br && lg == bg && lb == bb {
-		t.Fatal("the left row did not show its own hover")
 	}
 }

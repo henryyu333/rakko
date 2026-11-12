@@ -1572,16 +1572,15 @@ func (a *shelf) escape() {
 		return
 	}
 	if a.tab == pageTools {
-		if p := a.toolsPage(); p != nil && (p.editing || p.picking) {
-			// Esc in the 「+」 catalogue only backs out to the edit grid —
-			// same as its 完成; outside it, Esc ends editing. Neither
-			// hides the panel.
-			if p.picking {
-				p.picking = false
-			} else {
-				p.closeDragPreview()
-				p.editing, p.press = false, nil
-			}
+		if p := a.toolsPage(); p != nil && p.menu != nil {
+			p.closeMenu()
+			return
+		}
+		if p := a.toolsPage(); p != nil && p.editing {
+			// Esc ends editing; the panel keeps its content.
+			p.closeDragPreview()
+			p.editing, p.press = false, nil
+			p.rs, p.menu = nil, nil
 			if a.win != nil {
 				a.win.Invalidate()
 			}
