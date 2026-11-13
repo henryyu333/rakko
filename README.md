@@ -19,8 +19,8 @@
 </p>
 
 <p align="center">
-  Apple Silicon · macOS 13+ · Free and open source · <a href="https://rakko-yu.pages.dev">Website</a> · <a href="#install">Install guide</a> · <a href="https://github.com/henryyu333/rakko/releases/latest">All downloads</a><br>
-  Apple Silicon 芯片 · macOS 13 或以上 · 免费开源 · <a href="https://rakko-yu.pages.dev">官网</a> · <a href="#安装">安装说明</a> · <a href="https://github.com/henryyu333/rakko/releases/latest">全部下载</a>
+  Apple Silicon · macOS 13+ · Free and open source · <a href="https://rakko-yu.pages.dev">Website</a> · <a href="#install">Install guide</a> · <a href="https://github.com/henryyu333/rakko/releases/latest">All downloads</a> · <a href="https://rakko-yu.pages.dev/support/">Buy me a coffee</a><br>
+  Apple Silicon 芯片 · macOS 13 或以上 · 免费开源 · <a href="https://rakko-yu.pages.dev">官网</a> · <a href="#安装">安装说明</a> · <a href="https://github.com/henryyu333/rakko/releases/latest">全部下载</a> · <a href="https://rakko-yu.pages.dev/support/">请我喝杯咖啡</a>
 </p>
 
 <p align="center">
@@ -324,6 +324,10 @@ go test -race -count=1 ./...
 
 MyGo reads the application package from `mygo.json`; the build command above also builds the native now-playing helper.
 
+## Support
+
+I make Rakko on my own, in my spare time. If it is useful to you, you can [buy me a coffee](https://rakko-yu.pages.dev/support/).
+
 ## License
 
 Rakko's source code is licensed under the Apache License, Version 2.0 (see [LICENSE](LICENSE)); the notices that must travel with it are in [NOTICE](NOTICE), and third-party software and marks in `resources/THIRD_PARTY_NOTICES.txt`.
@@ -619,6 +623,10 @@ go test -race -count=1 ./...
 ```
 
 MyGo 从 `mygo.json` 读取应用入口；上面的构建命令也会生成音乐播放使用的原生辅助模块。
+
+## 支持
+
+Rakko 是我一个人在业余时间做的。用着顺手的话，可以[请我喝杯咖啡](https://rakko-yu.pages.dev/support/)。
 
 ## 许可
 
