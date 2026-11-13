@@ -148,11 +148,14 @@ func (s *Store) Seed(start time.Time) error {
 }
 
 // MarkClicked records that the support page was opened from inside the app.
-// The flag only ever goes from false to true.
+// The flag only ever goes from false to true. A store with no first day
+// returns nil and writes nothing: without a start the days and the home line
+// never show, so a click means nothing yet — and writing it would leave a
+// file with no start, which the next launch reads as damaged.
 func (s *Store) MarkClicked() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.corrupt || s.clicked {
+	if s.corrupt || s.clicked || s.start == "" {
 		return nil
 	}
 	s.clicked = true
@@ -165,9 +168,11 @@ func (s *Store) MarkClicked() error {
 	return nil
 }
 
-// save writes the current state atomically. Callers hold mu.
+// save writes the current state atomically. Callers hold mu. A store with no
+// first day writes nothing: such a file would be read as damaged by the next
+// launch, so no path may produce one.
 func (s *Store) save() error {
-	if s.dir == "" {
+	if s.dir == "" || s.start == "" {
 		return nil
 	}
 	data, err := json.MarshalIndent(document{
