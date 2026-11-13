@@ -703,7 +703,7 @@ func (a *shelf) settingsAboutPage(c *ui.Context) {
 				}
 				ui.Text(c, text).SingleLine().FontSize(13).TextColor(ink2).Padding(6, 0, 0, 0)
 			}
-			ui.Row(c.Key("about-actions")).AlignItems(ui.Center).Gap(8).Padding(14, 0, 0, 0).Children(func() {
+			ui.Row(c.Key("about-actions")).AlignItems(ui.Center).Gap(8).Wrap().Padding(14, 0, 0, 0).Children(func() {
 				// The one check action on this page: the 更新 group below
 				// only reports what the last one found.
 				busy := a.updateChecking || a.updateInstalling || a.updateUnavailableReason() != ""

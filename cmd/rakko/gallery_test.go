@@ -2133,6 +2133,24 @@ func galleryGroupK() []galleryItem {
 			a.updateLastResult = updateResultLatest
 			a.companion = companionFor(t, a.dataDir, 128, true)
 		})},
+		{ID: "K19", Group: g, Title: "关于", State: "最小宽度 760 · 第 128 天", Wide: true, Build: func(t *testing.T, lang string) galleryRender {
+			stubSettingsSeams(t, false, nil, nil)
+			stubKeyboard(t)
+			stubPermissions(t)
+			a, view := newSettingsShelf(t)
+			view.SetSize(settingsMinWidth, settingsHeight)
+			a.settingsPage = settingsPageAbout
+			a.settings.AutoCheckUpdates = true
+			a.updateLastCheck = galleryTodayAt(9, 12)
+			a.updateLastResult = updateResultLatest
+			a.companion = companionFor(t, a.dataDir, 128, false)
+			a.locale = lang
+			view.SetLocale(lang)
+			view.SetScale(galleryScale)
+			view.Frame()
+			view.Frame()
+			return galleryRender{view: view}
+		}},
 		{ID: "K9", Group: g, Title: "快捷键", State: "录制中 · 按下新的组合键…", Wide: true, Build: page(settingsPageShortcuts, func(t *testing.T, a *shelf) {
 			a.settingsRecording = shortcutToggle
 		})},
