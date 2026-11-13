@@ -200,6 +200,88 @@ func TestStoreClickWriteFailure(t *testing.T) {
 	}
 }
 
+// TestStoreRequiresVersionAndStart treats a file that exists but lacks
+// either its version or a usable first day as damaged, not as a fresh
+// install: seeding it would replace whatever it once said.
+func TestStoreRequiresVersionAndStart(t *testing.T) {
+	payloads := []string{
+		`null`,
+		`{}`,
+		`{"version": 1}`,
+		`{"start": "2026-01-01"}`,
+		`{"version": 0, "start": "2026-01-01"}`,
+	}
+	for _, payload := range payloads {
+		dir := t.TempDir()
+		path := filepath.Join(dir, FileName)
+		original := []byte(payload)
+		if err := os.WriteFile(path, original, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		s, err := Open(dir)
+		if !errors.Is(err, ErrCorrupt) {
+			t.Errorf("%s: open error %v, want ErrCorrupt", payload, err)
+			continue
+		}
+		if !s.Corrupt() {
+			t.Errorf("%s: the store does not report corruption", payload)
+		}
+		if _, ok := s.Day(time.Now()); ok {
+			t.Errorf("%s: a corrupt store must not show a day", payload)
+		}
+		if err := s.Seed(time.Now()); err != nil {
+			t.Errorf("%s: seed returned %v", payload, err)
+		}
+		if err := s.MarkClicked(); err != nil {
+			t.Errorf("%s: click returned %v", payload, err)
+		}
+		after, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(after) != string(original) {
+			t.Errorf("%s: file was rewritten to %q", payload, after)
+		}
+	}
+}
+
+// TestStoreSeedWriteFailure keeps no first day when the file cannot be
+// written, and lets a later seed write it once the folder is writable.
+func TestStoreSeedWriteFailure(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.Local)
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o700) })
+	if err := s.Seed(start); err == nil {
+		t.Skip("this user can write to a read-only folder")
+	}
+	if s.Seeded() {
+		t.Fatal("a failed save must not keep the first day")
+	}
+	if _, ok := s.Day(time.Now()); ok {
+		t.Fatal("a failed save must not show a day")
+	}
+	if err := os.Chmod(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Seed(start); err != nil {
+		t.Fatal(err)
+	}
+	again, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if day, ok := again.Day(start); !ok || day != 1 {
+		t.Fatalf("the retried seed was not saved: day %d, ok %v", day, ok)
+	}
+}
+
 // TestStoreMemoryOnly covers the empty data directory the headless
 // fixtures use: state works, nothing is written.
 func TestStoreMemoryOnly(t *testing.T) {

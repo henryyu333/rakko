@@ -592,13 +592,13 @@ func (p *homePage) companionRow(c *ui.Context, now time.Time) func() {
 	if !ok {
 		return nil
 	}
-	milestone, show := companion.Milestone(day)
+	_, show := companion.Milestone(day)
 	if !show {
 		return nil
 	}
 	l := loc(c)
 	clicked := p.host.companionClicked()
-	days, second := l.CompanionDays(milestone), l.CompanionCoffee()
+	days, second := l.CompanionDays(day), l.CompanionCoffee()
 	if clicked {
 		second = l.CompanionThanks()
 	}

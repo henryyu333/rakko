@@ -51,8 +51,9 @@ type Store struct {
 
 // Open loads dir/companion.json. A missing file starts an unseeded store
 // (Seeded reports false) so the caller can pick the first day; a file that
-// cannot be decoded returns a store that refuses every write together with
-// ErrCorrupt. dir == "" keeps the state in memory only.
+// cannot be decoded, or that does not name both a known version and a
+// readable first day, returns a store that refuses every write together
+// with ErrCorrupt. dir == "" keeps the state in memory only.
 func Open(dir string) (*Store, error) {
 	s := &Store{dir: dir}
 	if dir == "" {
@@ -71,17 +72,15 @@ func Open(dir string) (*Store, error) {
 		s.corrupt = true
 		return s, fmt.Errorf("%w: %v", ErrCorrupt, err)
 	}
-	if d.Version > formatVersion {
+	if d.Version < 1 || d.Version > formatVersion {
 		s.corrupt = true
-		return s, fmt.Errorf("%w: version %d is newer than %d", ErrCorrupt, d.Version, formatVersion)
+		return s, fmt.Errorf("%w: version %d is not 1..%d", ErrCorrupt, d.Version, formatVersion)
 	}
-	if d.Start != "" {
-		if _, err := time.Parse(DateLayout, d.Start); err != nil {
-			s.corrupt = true
-			return s, fmt.Errorf("%w: start %q", ErrCorrupt, d.Start)
-		}
-		s.start = d.Start
+	if _, err := time.Parse(DateLayout, d.Start); err != nil {
+		s.corrupt = true
+		return s, fmt.Errorf("%w: start %q", ErrCorrupt, d.Start)
 	}
+	s.start = d.Start
 	s.clicked = d.Clicked
 	return s, nil
 }
@@ -132,7 +131,8 @@ func (s *Store) Day(now time.Time) (int, bool) {
 }
 
 // Seed stores the first day, unless a day is already known (or the file is
-// unreadable). The date is start's local calendar date.
+// unreadable). The date is start's local calendar date. A save that fails
+// keeps no first day, so the caller sees the same answer as the disk.
 func (s *Store) Seed(start time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -140,7 +140,11 @@ func (s *Store) Seed(start time.Time) error {
 		return nil
 	}
 	s.start = start.Format(DateLayout)
-	return s.save()
+	if err := s.save(); err != nil {
+		s.start = ""
+		return err
+	}
+	return nil
 }
 
 // MarkClicked records that the support page was opened from inside the app.

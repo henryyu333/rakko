@@ -72,7 +72,7 @@ func TestHomeCompanionWindows(t *testing.T) {
 			}
 			continue
 		}
-		days := fmt.Sprintf("Rakko 已陪伴你 %d 天", c.milestone)
+		days := fmt.Sprintf("Rakko 已陪伴你 %d 天", c.day)
 		if !view.HasText(days) || !view.HasText("请我喝杯咖啡") {
 			t.Errorf("day %d lacks %q and the ask; texts %s", c.day, days, texts)
 		}
@@ -358,6 +358,36 @@ func TestLoadCompanionFirstDay(t *testing.T) {
 	}
 	if string(after) != string(original) {
 		t.Fatalf("broken file was rewritten: %q", after)
+	}
+}
+
+// TestLoadCompanionDamagedFileLeavesItAlone says a file that exists but
+// cannot name both its version and a first day is reported and never
+// replaced by a guessed date, so a launch cannot rewrite it.
+func TestLoadCompanionDamagedFileLeavesItAlone(t *testing.T) {
+	now := time.Date(2026, 11, 13, 16, 0, 0, 0, time.Local)
+	for _, payload := range []string{`null`, `{}`, `{"version": 1}`, `{"start": "2026-01-01"}`} {
+		dir := t.TempDir()
+		path := filepath.Join(dir, companion.FileName)
+		original := []byte(payload)
+		if err := os.WriteFile(path, original, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		s, err := loadCompanion(dir, true, now)
+		if !errors.Is(err, companion.ErrCorrupt) {
+			t.Errorf("%s: load error %v, want ErrCorrupt", payload, err)
+			continue
+		}
+		if _, ok := s.Day(now); ok {
+			t.Errorf("%s: a damaged file must show no day", payload)
+		}
+		after, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(after) != string(original) {
+			t.Errorf("%s: file was rewritten to %q", payload, after)
+		}
 	}
 }
 
