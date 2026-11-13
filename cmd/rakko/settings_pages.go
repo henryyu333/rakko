@@ -696,6 +696,13 @@ func (a *shelf) settingsAboutPage(c *ui.Context) {
 			ui.Text(c, appName).SingleLine().FontSize(24).FontWeight(700).TextColor(ink)
 			ui.Text(c, l.SettingsAboutVersion(appVersion(), runtime.GOARCH)).SingleLine().
 				FontSize(12).TextColor(ink3).Padding(2, 0, 0, 0)
+			if days, ok := a.companionDay(c.Now()); ok {
+				text := l.CompanionAboutDays(days)
+				if a.companionClicked() {
+					text = l.CompanionAboutThanks(days)
+				}
+				ui.Text(c, text).SingleLine().FontSize(13).TextColor(ink2).Padding(6, 0, 0, 0)
+			}
 			ui.Row(c.Key("about-actions")).AlignItems(ui.Center).Gap(8).Padding(14, 0, 0, 0).Children(func() {
 				// The one check action on this page: the 更新 group below
 				// only reports what the last one found.
@@ -707,6 +714,7 @@ func (a *shelf) settingsAboutPage(c *ui.Context) {
 						a.report(err)
 					}
 				})
+				settingsButton(c, "coffee", l.CompanionAboutCoffee(), false, func() { a.openSupport() })
 			})
 		})
 	})

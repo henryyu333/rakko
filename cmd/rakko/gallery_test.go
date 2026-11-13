@@ -710,6 +710,26 @@ func galleryGroupC() []galleryItem {
 			view.Frame()
 			return galleryRender{view: view}
 		}},
+		{ID: "C14", Group: g, Title: "无音乐", State: "第 100 天 · 请我喝杯咖啡", Art: true, Build: func(t *testing.T, lang string) galleryRender {
+			a, view, _ := homeShotAgent(t, home(lang))
+			a.companion = companionFor(t, a.dataDir, 100, false)
+			a.locale = lang
+			view.SetLocale(lang)
+			view.SetScale(galleryScale)
+			view.Frame()
+			view.Frame()
+			return galleryRender{view: view}
+		}},
+		{ID: "C15", Group: g, Title: "无音乐", State: "第 365 天 · 点过以后只道谢", Art: true, Build: func(t *testing.T, lang string) galleryRender {
+			a, view, _ := homeShotAgent(t, home(lang))
+			a.companion = companionFor(t, a.dataDir, 365, true)
+			a.locale = lang
+			view.SetLocale(lang)
+			view.SetScale(galleryScale)
+			view.Frame()
+			view.Frame()
+			return galleryRender{view: view}
+		}},
 		{ID: "C11", Group: g, Title: "播放器", State: "顶栏左耳显示当前时间", Build: func(t *testing.T, lang string) galleryRender {
 			st := homeTrack()
 			a, view, _ := homeShelf(t, &st)
@@ -2100,6 +2120,18 @@ func galleryGroupK() []galleryItem {
 			a.settings.AutoCheckUpdates = true
 			a.updateLastCheck = galleryTodayAt(9, 12)
 			a.updateLastResult = updateResultLatest
+		})},
+		{ID: "K17", Group: g, Title: "关于", State: "第 128 天 · 请我喝杯咖啡", Wide: true, Build: page(settingsPageAbout, func(t *testing.T, a *shelf) {
+			a.settings.AutoCheckUpdates = true
+			a.updateLastCheck = galleryTodayAt(9, 12)
+			a.updateLastResult = updateResultLatest
+			a.companion = companionFor(t, a.dataDir, 128, false)
+		})},
+		{ID: "K18", Group: g, Title: "关于", State: "第 128 天 · 点过以后道谢", Wide: true, Build: page(settingsPageAbout, func(t *testing.T, a *shelf) {
+			a.settings.AutoCheckUpdates = true
+			a.updateLastCheck = galleryTodayAt(9, 12)
+			a.updateLastResult = updateResultLatest
+			a.companion = companionFor(t, a.dataDir, 128, true)
 		})},
 		{ID: "K9", Group: g, Title: "快捷键", State: "录制中 · 按下新的组合键…", Wide: true, Build: page(settingsPageShortcuts, func(t *testing.T, a *shelf) {
 			a.settingsRecording = shortcutToggle

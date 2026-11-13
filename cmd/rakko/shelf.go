@@ -14,6 +14,7 @@ import (
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
+	"rakko/internal/companion"
 	"rakko/internal/layout"
 	"rakko/internal/lyrics"
 	"rakko/internal/mac"
@@ -66,6 +67,7 @@ type shelf struct {
 	onb                                                         *onboardingFeature  // the first-launch guide; nil on an upgraded install
 	approval                                                    *approvalFeature    // nil until Agent 审批 or an approval request needs it
 	lyrCache                                                    *lyrics.Cache       // synced lyrics for the home page; nil until first used
+	companion                                                   *companion.Store    // the first day and the support click; nil before startup loads it
 	clip                                                        *clipboardModule    // nil until monitoring starts
 	awake                                                       *awakeModule        // nil until the app starts
 	clock                                                       *clockModule        // the countdown and stopwatch; nil in fixtures

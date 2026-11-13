@@ -114,6 +114,13 @@ func main() {
 		}
 	}
 	freshInstall := !settings.Exists(*dataDir)
+	// The first day of companionship is written once, so every later launch
+	// counts from the same date. A file that cannot be read stays untouched
+	// and this run shows no days.
+	comp, cerr := loadCompanion(*dataDir, freshInstall, time.Now())
+	if cerr != nil {
+		log.Printf("%s: 陪伴记录不可用，本次不显示陪伴天数：%v", appName, cerr)
+	}
 	prefs, perr := settings.Load(*dataDir)
 	// A launch that found no settings.json at all owes the first-launch
 	// guide; a launch that already owed it (a move or permission relaunch)
@@ -121,7 +128,7 @@ func main() {
 	// broken read never claims the install is new — that file is never
 	// rewritten behind the user's back.
 	prefs.Onboarding.Pending = onboardingOwed(freshInstall, perr, prefs.Onboarding.Pending)
-	a := &shelf{store: s, settings: prefs, dataDir: *dataDir, stop: make(chan struct{}), thumbnails: make(map[string]*ui.Bitmap), thumbPending: make(map[string]bool)}
+	a := &shelf{store: s, settings: prefs, dataDir: *dataDir, companion: comp, stop: make(chan struct{}), thumbnails: make(map[string]*ui.Bitmap), thumbPending: make(map[string]bool)}
 	// 剪贴板文字限额来自设置；小于 1 的值由 store 回落到默认 30。
 	s.SetTextLimit(prefs.ClipboardLimit)
 	if perr != nil {

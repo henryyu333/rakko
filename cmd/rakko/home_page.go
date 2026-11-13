@@ -19,6 +19,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"rakko/internal/companion"
 	"rakko/internal/lyrics"
 	"rakko/internal/mac"
 	"rakko/internal/store"
@@ -504,7 +505,9 @@ func nextMinute(now time.Time) time.Duration {
 // statusLines are at most three lines under the date: the newest agent
 // turn (running or just finished), how much the tray holds, and keep
 // awake's remaining time or else the tightest AI quota. A line only
-// appears when it has something to say.
+// appears when it has something to say. In a milestone week the support
+// line joins them and the last resident line (keep awake or quota) makes
+// room for it.
 func (p *homePage) statusLines(c *ui.Context, now time.Time) {
 	l := loc(c)
 	a := p.host
@@ -514,6 +517,7 @@ func (p *homePage) statusLines(c *ui.Context, now time.Time) {
 			ui.Text(c, text).SingleLine().FontSize(12.5).TextColor(ink2).Grow(1).MinWidth(0).Ellipsis("…")
 		})
 	}
+	var rows []func()
 	if a.settings.AgentNotify.Enabled {
 		running, done := a.agentFeature().snapshot(now)
 		var row agentRun
@@ -527,41 +531,110 @@ func (p *homePage) statusLines(c *ui.Context, now time.Time) {
 			text = l.HomeAgentDone(row.Tool.Name(), row.Task)
 		}
 		if text != "" {
-			line("home-agent", func() {
-				logo, tint, mark := agentLogo(row.Tool)
-				box := mark * 16 / settingsRowMark
-				ui.Box(c.Key("mark")).Size(16, 16).Children(func() {
-					off := (16 - box) / 2
-					ui.Icon(c, logo).Size(box, box).TextColor(tint).Absolute().Left(off).Top(off)
-				})
-			}, text)
+			rows = append(rows, func() {
+				line("home-agent", func() {
+					logo, tint, mark := agentLogo(row.Tool)
+					box := mark * 16 / settingsRowMark
+					ui.Box(c.Key("mark")).Size(16, 16).Children(func() {
+						off := (16 - box) / 2
+						ui.Icon(c, logo).Size(box, box).TextColor(tint).Absolute().Left(off).Top(off)
+					})
+				}, text)
+			})
 		}
 	}
 	if n := a.homeTrayCount(); n > 0 {
-		line("home-tray", func() { ui.Icon(c, trayNavSymbol).Size(14, 14).TextColor(ink3) }, l.HomeTrayCount(n))
-	}
-	if m := a.awake; m != nil && m.active() {
-		line("home-awake", func() { ui.Icon(c, cupSymbol).Size(14, 14).TextColor(ink3) },
-			l.AwakeLine(l.AwakeTitle(), homeAwakeRemain(l, m, now)))
-		return
-	}
-	if !a.settings.AIUsage.Enabled || a.usage == nil {
-		return
-	}
-	five, week, tool, ok := a.usage.leastWindow()
-	win := five
-	if win == nil {
-		win = week
-	}
-	if !ok || win == nil {
-		return
-	}
-	pct := int(math.Round(win.LeftPct()))
-	line("home-quota", func() {
-		ui.Box(c.Key("ring")).Size(13, 13).Draw(func(pt *ui.Painter, r ui.Rect) {
-			a.usage.drawWindowRing(pt, r, r.W/2-1.5, 2.5, win, usageFive, false, false)
+		rows = append(rows, func() {
+			line("home-tray", func() { ui.Icon(c, trayNavSymbol).Size(14, 14).TextColor(ink3) }, l.HomeTrayCount(n))
 		})
-	}, l.HomeQuotaLeft(toolName(tool), strconv.Itoa(pct)))
+	}
+	switch {
+	case a.awake != nil && a.awake.active():
+		rows = append(rows, func() {
+			line("home-awake", func() { ui.Icon(c, cupSymbol).Size(14, 14).TextColor(ink3) },
+				l.AwakeLine(l.AwakeTitle(), homeAwakeRemain(l, a.awake, now)))
+		})
+	case a.settings.AIUsage.Enabled && a.usage != nil:
+		five, week, tool, ok := a.usage.leastWindow()
+		win := five
+		if win == nil {
+			win = week
+		}
+		if ok && win != nil {
+			pct := int(math.Round(win.LeftPct()))
+			rows = append(rows, func() {
+				line("home-quota", func() {
+					ui.Box(c.Key("ring")).Size(13, 13).Draw(func(pt *ui.Painter, r ui.Rect) {
+						a.usage.drawWindowRing(pt, r, r.W/2-1.5, 2.5, win, usageFive, false, false)
+					})
+				}, l.HomeQuotaLeft(toolName(tool), strconv.Itoa(pct)))
+			})
+		}
+	}
+	if row := p.companionRow(c, now); row != nil {
+		if len(rows) >= 3 {
+			rows = rows[:2]
+		}
+		rows = append(rows, row)
+	}
+	for _, row := range rows {
+		row()
+	}
+}
+
+// companionRow is the support line for a milestone's seven days: the days
+// so far with a request, or — after the page was opened once — only
+// thanks. The whole line opens the page before the first click; after it,
+// nothing on it is clickable. The caller draws it as one of the status
+// lines; it is nil on every other day.
+func (p *homePage) companionRow(c *ui.Context, now time.Time) func() {
+	day, ok := p.host.companionDay(now)
+	if !ok {
+		return nil
+	}
+	milestone, show := companion.Milestone(day)
+	if !show {
+		return nil
+	}
+	l := loc(c)
+	clicked := p.host.companionClicked()
+	days, second := l.CompanionDays(milestone), l.CompanionCoffee()
+	if clicked {
+		second = l.CompanionThanks()
+	}
+	content := func() {
+		ui.Row(c.Key("row")).FillWidth().Gap(9).AlignItems(ui.Center).Children(func() {
+			ui.Row(c.Key("lead")).Size(16, 16).Center().Children(func() {
+				ui.Icon(c, companionHeart).Size(14, 14).TextColor(ink3)
+			})
+			ui.Row(c.Key("txt")).Gap(5).AlignItems(ui.Center).Grow(1).MinWidth(0).Children(func() {
+				ui.Text(c, days).SingleLine().FontSize(12.5).TextColor(ink2).Shrink(0)
+				ui.Text(c, "·").SingleLine().FontSize(12.5).TextColor(ink3)
+				if clicked {
+					ui.Text(c, second).SingleLine().FontSize(12.5).TextColor(ink2)
+					return
+				}
+				ui.Text(c, second).SingleLine().FontSize(12.5).FontWeight(600).TextColor(ink).
+					MinWidth(0).Ellipsis("…")
+			})
+		})
+	}
+	if clicked {
+		return func() {
+			ui.Row(c.Key("home-companion")).FillWidth().Children(content)
+		}
+	}
+	return func() {
+		b := ui.ButtonBase(c.Key("home-companion")).FillWidth().Radius(6).Padding(0, 0, 0, 0).
+			Label(days + " · " + second)
+		if b.Hovered() {
+			b.Background(fill1)
+		}
+		b.Children(content)
+		if b.Clicked() {
+			p.host.openSupport()
+		}
+	}
 }
 
 // homeAwakeRemain is awakeModule.remainText in the language of the page:

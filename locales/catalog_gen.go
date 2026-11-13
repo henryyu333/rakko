@@ -6319,6 +6319,66 @@ func (msgs Messages) HomeQuotaLeft(name string, pct string) string {
 	return Catalog.Format(msgs.locale, "homeQuotaLeft", map[string]any{"name": name, "pct": pct})
 }
 
+// CompanionDays says "Rakko 已陪伴你 {n, number, ::group-off} 天"
+// in the language the app shows.
+func CompanionDays(n int) string { return In(i18n.Locale()).CompanionDays(n) }
+
+// CompanionDays says "Rakko 已陪伴你 {n, number, ::group-off} 天"
+// in the language of msgs.
+func (msgs Messages) CompanionDays(n int) string {
+	return Catalog.Format(msgs.locale, "companionDays", map[string]any{"n": n})
+}
+
+// CompanionCoffee says "请我喝杯咖啡"
+// in the language the app shows.
+func CompanionCoffee() string { return In(i18n.Locale()).CompanionCoffee() }
+
+// CompanionCoffee says "请我喝杯咖啡"
+// in the language of msgs.
+func (msgs Messages) CompanionCoffee() string {
+	return Catalog.Format(msgs.locale, "companionCoffee", nil)
+}
+
+// CompanionThanks says "感谢你的支持"
+// in the language the app shows.
+func CompanionThanks() string { return In(i18n.Locale()).CompanionThanks() }
+
+// CompanionThanks says "感谢你的支持"
+// in the language of msgs.
+func (msgs Messages) CompanionThanks() string {
+	return Catalog.Format(msgs.locale, "companionThanks", nil)
+}
+
+// CompanionAboutDays says "已陪伴你 {n, number, ::group-off} 天"
+// in the language the app shows.
+func CompanionAboutDays(n int) string { return In(i18n.Locale()).CompanionAboutDays(n) }
+
+// CompanionAboutDays says "已陪伴你 {n, number, ::group-off} 天"
+// in the language of msgs.
+func (msgs Messages) CompanionAboutDays(n int) string {
+	return Catalog.Format(msgs.locale, "companionAboutDays", map[string]any{"n": n})
+}
+
+// CompanionAboutThanks says "已陪伴你 {n, number, ::group-off} 天 · 感谢你的支持"
+// in the language the app shows.
+func CompanionAboutThanks(n int) string { return In(i18n.Locale()).CompanionAboutThanks(n) }
+
+// CompanionAboutThanks says "已陪伴你 {n, number, ::group-off} 天 · 感谢你的支持"
+// in the language of msgs.
+func (msgs Messages) CompanionAboutThanks(n int) string {
+	return Catalog.Format(msgs.locale, "companionAboutThanks", map[string]any{"n": n})
+}
+
+// CompanionAboutCoffee says "请我喝杯咖啡"
+// in the language the app shows.
+func CompanionAboutCoffee() string { return In(i18n.Locale()).CompanionAboutCoffee() }
+
+// CompanionAboutCoffee says "请我喝杯咖啡"
+// in the language of msgs.
+func (msgs Messages) CompanionAboutCoffee() string {
+	return Catalog.Format(msgs.locale, "companionAboutCoffee", nil)
+}
+
 // PageClipboard says "剪贴板"
 // in the language the app shows.
 func PageClipboard() string { return In(i18n.Locale()).PageClipboard() }
