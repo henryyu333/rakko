@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os/exec"
 	"syscall"
-	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
@@ -20,8 +19,9 @@ type procGroup struct {
 }
 
 // startInGroup starts cmd in its own process group inside a job object.
-// The job kills what is left in it when its last handle closes, so a Rakko
-// that dies mid-run does not leak Claude Code.
+// Ending the job is what ends the tree; closing its handle on a run that
+// finished on its own leaves the run's own children — a browser the
+// sign-in opened, for one — alone, as the Unix session does.
 func startInGroup(cmd *exec.Cmd) (*procGroup, error) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_NEW_PROCESS_GROUP}
 	job, err := newJob()
@@ -56,19 +56,11 @@ func (g *procGroup) release() {
 	}
 }
 
-// newJob creates a job object that kills whatever is still in it when its
-// last handle closes, so a Rakko that dies mid-run leaves nothing behind.
+// newJob creates the job object that groups one run's process tree.
 func newJob() (windows.Handle, error) {
 	job, err := windows.CreateJobObject(nil, nil)
 	if err != nil {
 		return 0, fmt.Errorf("aiusage: creating a process job: %w", err)
-	}
-	var info windows.JOBOBJECT_EXTENDED_LIMIT_INFORMATION
-	info.BasicLimitInformation.LimitFlags = windows.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
-	if _, err := windows.SetInformationJobObject(job, windows.JobObjectExtendedLimitInformation,
-		uintptr(unsafe.Pointer(&info)), uint32(unsafe.Sizeof(info))); err != nil {
-		windows.CloseHandle(job)
-		return 0, fmt.Errorf("aiusage: setting up the process job: %w", err)
 	}
 	return job, nil
 }
