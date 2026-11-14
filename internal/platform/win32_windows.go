@@ -984,23 +984,16 @@ func windowText(h uintptr) string {
 
 func isToolWindow(h uintptr) bool { return windowExStyle(h)&wsExToolWindow != 0 }
 
-var (
-	exePathMu   sync.Mutex
-	exePathMemo = map[uint32]string{}
-)
-
-// processExe is the on-disk image of a process, memoized for the process
-// lifetime; the enumeration calls it once per window.
+// processExe is the on-disk image of a process, or "" when it cannot be
+// opened. It is asked every time: a process id is not an identity, because
+// Windows reuses the ids of exited processes, so a memo keyed by the id alone
+// would report the old image for whatever process takes the id next — the
+// frontmost app, the running-app list and a clipboard source would all name
+// the wrong program.
 func processExe(pid int) string {
 	if pid <= 0 {
 		return ""
 	}
-	exePathMu.Lock()
-	if p, ok := exePathMemo[uint32(pid)]; ok {
-		exePathMu.Unlock()
-		return p
-	}
-	exePathMu.Unlock()
 	h, _, _ := procOpenProcess.Call(0x1000 /* PROCESS_QUERY_LIMITED_INFORMATION */, 0, uintptr(pid))
 	if h == 0 {
 		return ""
@@ -1012,11 +1005,7 @@ func processExe(pid int) string {
 	if r == 0 {
 		return ""
 	}
-	p := windows.UTF16ToString(buf[:size])
-	exePathMu.Lock()
-	exePathMemo[uint32(pid)] = p
-	exePathMu.Unlock()
-	return p
+	return windows.UTF16ToString(buf[:size])
 }
 
 // processAUMID is the AppUserModelID of a packaged (Store/UWP) process, or
