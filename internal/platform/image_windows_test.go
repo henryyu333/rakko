@@ -499,3 +499,18 @@ func TestCaptureDisplayWritesTheDisplay(t *testing.T) {
 		t.Error("a missing display should fail")
 	}
 }
+
+func TestOCRCompactionKeepsLatinSpacing(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"框 选 文 字", "框选文字"},
+		{"Rakko 框 选", "Rakko 框选"},
+		{"ra kko 123", "ra kko 123"},
+		{"選 択 肢", "選択肢"},
+		{"가 나 다", "가나다"},
+	}
+	for _, c := range cases {
+		if got := ocrCompactCJK(c.in); got != c.want {
+			t.Errorf("ocrCompactCJK(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}

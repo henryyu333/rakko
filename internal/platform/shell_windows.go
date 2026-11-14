@@ -94,7 +94,30 @@ func picturesFolder() string {
 	if err != nil {
 		return ""
 	}
-	return os.ExpandEnv(v)
+	return expandShellPath(v)
+}
+
+// expandShellPath replaces %VAR% with the environment's value: the shell
+// stores the Pictures folder as a REG_EXPAND_SZ such as
+// "%USERPROFILE%\Pictures", and os.ExpandEnv only understands the Unix
+// $VAR form. An unknown variable is left in place, which makes the caller's
+// os.Stat fail and the default folder win.
+func expandShellPath(v string) string {
+	var b strings.Builder
+	for i := 0; i < len(v); i++ {
+		if v[i] == '%' {
+			if j := strings.IndexByte(v[i+1:], '%'); j >= 0 {
+				name := v[i+1 : i+1+j]
+				if val, ok := os.LookupEnv(name); ok {
+					b.WriteString(val)
+					i += j + 1
+					continue
+				}
+			}
+		}
+		b.WriteByte(v[i])
+	}
+	return b.String()
 }
 
 // CreationTime is the filesystem's creation time for path.
