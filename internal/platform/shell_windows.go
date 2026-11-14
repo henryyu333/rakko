@@ -64,10 +64,38 @@ func CanCaptureScreen() bool { return true }
 // RequestScreenCapture is a no-op on Windows: there is nothing to grant.
 func RequestScreenCapture() bool { return true }
 
-// ScreenshotFolder is where the system saves screenshots. Windows'
-// Snipping Tool saves to the Pictures folder; "" means the system default,
-// which the capture path resolves.
-func ScreenshotFolder() string { return "" }
+// ScreenshotFolder is where Windows' own tools save screenshots: the
+// Screenshots folder inside the user's Pictures folder, which follows a
+// redirected (OneDrive) Pictures location. A folder that does not exist is
+// "" — the system default, which the capture path resolves to the desktop,
+// exactly like a never-configured Mac.
+func ScreenshotFolder() string {
+	dir := picturesFolder()
+	if dir == "" {
+		return ""
+	}
+	shots := filepath.Join(dir, "Screenshots")
+	if fi, err := os.Stat(shots); err != nil || !fi.IsDir() {
+		return ""
+	}
+	return shots
+}
+
+// picturesFolder is the user's Pictures folder from the shell's own
+// redirection, or "" when the registry has no answer.
+func picturesFolder() string {
+	k, err := registry.OpenKey(registry.CURRENT_USER,
+		`Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders`, registry.QUERY_VALUE)
+	if err != nil {
+		return ""
+	}
+	defer k.Close()
+	v, _, err := k.GetStringValue("My Pictures")
+	if err != nil {
+		return ""
+	}
+	return os.ExpandEnv(v)
+}
 
 // CreationTime is the filesystem's creation time for path.
 func CreationTime(path string) (time.Time, bool) {
