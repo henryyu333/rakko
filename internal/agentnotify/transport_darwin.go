@@ -35,7 +35,7 @@ func openTransport(dataDir string) (*transport, error) {
 	}
 	return &transport{
 		ln: ln,
-		authorize: func(conn net.Conn) bool {
+		authorize: func(conn net.Conn, _ time.Time) bool {
 			uid, err := peerUID(conn)
 			return err == nil && uid == uint32(os.Getuid())
 		},

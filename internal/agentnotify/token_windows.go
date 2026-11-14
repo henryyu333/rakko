@@ -21,6 +21,9 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+// tokenTestHook is a test seam (see writeTokenFile).
+var tokenTestHook func(stage string) error
+
 const (
 	// tokenName is the token file inside the data directory.
 	tokenName = "agent-token"
@@ -58,21 +61,42 @@ func writeToken(dataDir string) ([]byte, error) {
 	if err := writeTokenFile(tmp, token, sid); err != nil {
 		return nil, err
 	}
-	from, err := windows.UTF16PtrFromString(tmp)
-	if err != nil {
-		_ = os.Remove(tmp)
-		return nil, err
-	}
-	to, err := windows.UTF16PtrFromString(final)
-	if err != nil {
-		_ = os.Remove(tmp)
-		return nil, err
-	}
-	if err := windows.MoveFileEx(from, to, windows.MOVEFILE_REPLACE_EXISTING|windows.MOVEFILE_WRITE_THROUGH); err != nil {
+	if err := replaceTokenFile(final, tmp); err != nil {
 		_ = os.Remove(tmp)
 		return nil, err
 	}
 	return token, nil
+}
+
+// procReplaceFileW swaps one file for another. MoveFileEx's replace refuses
+// a destination that anybody has open (ACCESS_DENIED even when the reader
+// shares delete), so a client reading the token while the app restarts could
+// make Listen fail; ReplaceFileW is the API meant for replacing a live file.
+var procReplaceFileW = windows.NewLazySystemDLL("kernel32.dll").NewProc("ReplaceFileW")
+
+func replaceTokenFile(final, tmp string) error {
+	to, err := windows.UTF16PtrFromString(final)
+	if err != nil {
+		return err
+	}
+	from, err := windows.UTF16PtrFromString(tmp)
+	if err != nil {
+		return err
+	}
+	r1, _, callErr := procReplaceFileW.Call(
+		uintptr(unsafe.Pointer(to)), uintptr(unsafe.Pointer(from)),
+		0, 0, 0, 0)
+	if r1 != 0 {
+		return nil
+	}
+	if errors.Is(callErr, windows.ERROR_FILE_NOT_FOUND) {
+		// Nothing to replace (the first start, or a token deleted by hand):
+		// a plain rename is all that is needed.
+		if _, statErr := os.Lstat(final); errors.Is(statErr, os.ErrNotExist) {
+			return windows.Rename(tmp, final)
+		}
+	}
+	return callErr
 }
 
 func writeTokenFile(path string, token []byte, sid string) error {
@@ -102,39 +126,60 @@ func writeTokenFile(path string, token []byte, sid string) error {
 		InheritHandle:      0,
 	}
 	h, err := createTokenFile(path, sa)
+	if err != nil && errors.Is(err, windows.ERROR_ACCESS_DENIED) {
+		// A leftover placeholder from a run that died before it could clean
+		// up still carries the empty DACL, so opening it is refused; the
+		// directory's own access rule lets this user delete it.
+		if os.Remove(path) == nil {
+			h, err = createTokenFile(path, sa)
+		}
+	}
 	if err != nil {
 		return err
 	}
-	defer windows.CloseHandle(h)
+	// Every failure closes the handle before removing the file: DeleteFile
+	// cannot remove a name whose handle is still open, and a leftover
+	// empty-DACL placeholder would block every later start.
+	fail := func(reason string, cause error) error {
+		windows.CloseHandle(h)
+		_ = os.Remove(path)
+		if cause != nil {
+			return fmt.Errorf("agentnotify: %s: %w", reason, cause)
+		}
+		return errors.New("agentnotify: " + reason)
+	}
+	// tokenTestHook is a test seam: it runs after the temporary file exists
+	// and before it is labelled, so a test can check what a failure there
+	// leaves behind. Production leaves it nil.
+	if tokenTestHook != nil {
+		if hookErr := tokenTestHook("created"); hookErr != nil {
+			return fail("the token file could not be prepared", hookErr)
+		}
+	}
 	sacl, _, err := full.SACL()
 	if err != nil || sacl == nil {
-		_ = os.Remove(path)
-		return errors.New("agentnotify: the token file could not be given its label")
+		return fail("the token file could not be given its label", err)
 	}
 	if err := windows.SetSecurityInfo(h, windows.SE_FILE_OBJECT,
 		windows.LABEL_SECURITY_INFORMATION, nil, nil, nil, sacl); err != nil {
-		_ = os.Remove(path)
-		return fmt.Errorf("agentnotify: the token file's integrity label: %w", err)
+		return fail("the token file's integrity label", err)
 	}
 	dacl, _, err := userDACL.DACL()
 	if err != nil || dacl == nil {
-		_ = os.Remove(path)
-		return errors.New("agentnotify: the token file has no access rule")
+		return fail("the token file has no access rule", err)
 	}
 	if err := windows.SetSecurityInfo(h, windows.SE_FILE_OBJECT,
 		windows.DACL_SECURITY_INFORMATION, nil, nil, dacl, nil); err != nil {
-		_ = os.Remove(path)
-		return fmt.Errorf("agentnotify: the token file's access rule: %w", err)
+		return fail("the token file's access rule", err)
 	}
 	var done uint32
 	if err := windows.WriteFile(h, token, &done, nil); err != nil {
-		_ = os.Remove(path)
-		return err
+		return fail("the token file could not be written", err)
 	}
 	if int(done) != len(token) {
-		_ = os.Remove(path)
-		return io.ErrShortWrite
+		return fail("the token file was written short", io.ErrShortWrite)
 	}
+	windows.CloseHandle(h)
 	return nil
 }
 
@@ -150,17 +195,36 @@ func createTokenFile(path string, sa *windows.SecurityAttributes) (windows.Handl
 		0, sa, windows.CREATE_ALWAYS, windows.FILE_ATTRIBUTE_NORMAL, 0)
 }
 
+// openToken opens the token for reading while allowing a concurrent atomic
+// replace: the writer renames over the file, and Windows refuses that rename
+// unless the reader also shares delete access.
+func openToken(path string) (windows.Handle, error) {
+	namep, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		return 0, err
+	}
+	return windows.CreateFile(namep, windows.GENERIC_READ,
+		windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE,
+		nil, windows.OPEN_EXISTING, windows.FILE_ATTRIBUTE_NORMAL, 0)
+}
+
 // readToken loads this run's token. A process that cannot read the file
 // (another account, or a low-integrity sandbox) is never admitted.
 func readToken(dataDir string) ([]byte, error) {
-	raw, err := os.ReadFile(filepath.Join(dataDir, tokenName))
+	h, err := openToken(filepath.Join(dataDir, tokenName))
 	if err != nil {
 		return nil, err
 	}
-	if len(raw) != tokenSize {
+	defer windows.CloseHandle(h)
+	buf := make([]byte, tokenSize+1)
+	var done uint32
+	if err := windows.ReadFile(h, buf, &done, nil); err != nil {
+		return nil, err
+	}
+	if int(done) != tokenSize {
 		return nil, errors.New("agentnotify: the token file is not a token")
 	}
-	return raw, nil
+	return buf[:done], nil
 }
 
 // currentUserSID names this process's user, the one account the pipe and the

@@ -382,6 +382,7 @@ func TestExtraInstanceCannotForgeADecision(t *testing.T) {
 		t.Skipf("the name cannot host a second instance here: %v", err)
 	}
 	impostor := &pipeListener{name: name, sd: sd, pending: h}
+	impostor.cond = sync.NewCond(&impostor.mu)
 	defer impostor.Close()
 	var mu sync.Mutex
 	var leaked []byte
@@ -457,6 +458,11 @@ func TestTokenFileDescriptor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Write twice, so the file that is inspected went through the atomic
+	// replace a restart performs.
+	if _, err := writeToken(dir); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := writeToken(dir); err != nil {
 		t.Fatal(err)
 	}
@@ -499,6 +505,10 @@ func TestTokenFileDescriptor(t *testing.T) {
 // default, but reading is not, so the no-read-up label is what closes it.
 func TestLowIntegrityCannotReadToken(t *testing.T) {
 	dir, _ := testPipe(t)
+	// Twice: the second start replaces the token atomically.
+	if _, err := writeToken(dir); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := writeToken(dir); err != nil {
 		t.Fatal(err)
 	}
@@ -703,7 +713,7 @@ func TestClientOpensWithIdentification(t *testing.T) {
 			return
 		}
 		defer conn.Close()
-		if !serverHandshake(conn, token) {
+		if !serverHandshake(conn, token, time.Now().Add(authTimeout)) {
 			levels <- 0
 			return
 		}
@@ -792,5 +802,309 @@ func TestPipeCarriesFramesWhole(t *testing.T) {
 	}
 	if err := <-werr; err != nil {
 		t.Fatalf("write: %v", err)
+	}
+}
+
+// A read that has registered but not yet handed itself to the kernel must
+// not be missed by Close's single cancel: both calls return.
+func TestCloseCoversSubmission(t *testing.T) {
+	_, name := testPipe(t)
+	ln, err := listenPipe(name, permissivePipeSD(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	accepted := make(chan net.Conn, 1)
+	go func() {
+		conn, err := ln.Accept()
+		if err == nil {
+			accepted <- conn
+		}
+	}()
+	client, err := dialPipe(name, 2*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := <-accepted
+	defer client.Close()
+
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	var once sync.Once
+	beforeSubmit = func() {
+		once.Do(func() {
+			close(entered)
+			<-release
+		})
+	}
+	defer func() { beforeSubmit = nil }()
+
+	readErr := make(chan error, 1)
+	go func() {
+		var b [4]byte
+		_, err := server.Read(b[:])
+		readErr <- err
+	}()
+	select {
+	case <-entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the read never reached submission")
+	}
+	closed := make(chan struct{})
+	go func() { server.Close(); close(closed) }()
+	time.Sleep(100 * time.Millisecond)
+	close(release)
+	select {
+	case err := <-readErr:
+		if err == nil {
+			t.Fatal("a cancelled read returned success")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("the read hung: Close missed the request")
+	}
+	select {
+	case <-closed:
+	case <-time.After(3 * time.Second):
+		t.Fatal("Close hung behind the read")
+	}
+}
+
+// Two concurrent reads each get their own bytes: the second waits its turn
+// instead of consuming the first one's completion.
+func TestConcurrentReadsAreSerialized(t *testing.T) {
+	client, server := pipePair(t)
+	defer client.Close()
+	defer server.Close()
+
+	results := make(chan byte, 2)
+	errs := make(chan error, 2)
+	for range 2 {
+		go func() {
+			var b [1]byte
+			_, err := server.Read(b[:])
+			errs <- err
+			results <- b[0]
+		}()
+	}
+	time.Sleep(100 * time.Millisecond)
+	_ = client.SetWriteDeadline(time.Now().Add(2 * time.Second))
+	if _, err := client.Write([]byte("ab")); err != nil {
+		t.Fatal(err)
+	}
+	got := []byte{<-results, <-results}
+	for range 2 {
+		if err := <-errs; err != nil {
+			t.Fatalf("read: %v", err)
+		}
+	}
+	if !(got[0] == 'a' && got[1] == 'b') && !(got[0] == 'b' && got[1] == 'a') {
+		t.Fatalf("reads returned %q", got)
+	}
+}
+
+// Two concurrent writes do not interleave: each payload arrives whole.
+func TestConcurrentWritesDoNotInterleave(t *testing.T) {
+	client, server := pipePair(t)
+	defer client.Close()
+	defer server.Close()
+
+	first := strings.Repeat("a", 4<<10)
+	second := strings.Repeat("b", 4<<10)
+	go func() { _, _ = client.Write([]byte(first)) }()
+	go func() { _, _ = client.Write([]byte(second)) }()
+	_ = server.SetReadDeadline(time.Now().Add(5 * time.Second))
+	got := make([]byte, len(first)+len(second))
+	if _, err := io.ReadFull(server, got); err != nil {
+		t.Fatal(err)
+	}
+	if string(got[:len(first)]) == first && string(got[len(first):]) == second {
+		return
+	}
+	if string(got[:len(second)]) == second && string(got[len(second):]) == first {
+		return
+	}
+	t.Fatal("the two writes interleaved")
+}
+
+// A deadline set while a read is already waiting takes effect: shortening
+// it ends the wait, clearing it lets the data through.
+func TestDeadlineChangesReachAWaitingRead(t *testing.T) {
+	client, server := pipePair(t)
+	defer client.Close()
+	defer server.Close()
+
+	type readResult struct {
+		b   byte
+		err error
+	}
+	start := func() <-chan readResult {
+		out := make(chan readResult, 1)
+		go func() {
+			var b [1]byte
+			_, err := server.Read(b[:])
+			out <- readResult{b[0], err}
+		}()
+		return out
+	}
+
+	// No deadline, then a short one.
+	waiting := start()
+	time.Sleep(100 * time.Millisecond)
+	if err := server.SetReadDeadline(time.Now().Add(100 * time.Millisecond)); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case r := <-waiting:
+		if !isTimeout(r.err) {
+			t.Fatalf("shortened deadline returned %v", r.err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("shortening the deadline did not end the wait")
+	}
+
+	// A long deadline, then cleared; the data must arrive without a timeout.
+	if err := server.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	waiting = start()
+	time.Sleep(100 * time.Millisecond)
+	if err := server.SetReadDeadline(time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(300 * time.Millisecond)
+	if _, err := client.Write([]byte("z")); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case r := <-waiting:
+		if r.err != nil || r.b != 'z' {
+			t.Fatalf("cleared deadline returned %q, %v", r.b, r.err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("the cleared deadline still timed out")
+	}
+}
+
+// A client that connects and then says nothing must not delay the next
+// client's event: admission runs on the connection, not the accept loop.
+func TestSilentClientDoesNotBlockTheNextOne(t *testing.T) {
+	dir, name := testPipe(t)
+	got := make(chan Event, 1)
+	srv, err := Listen(dir, func(ev Event) { got <- ev }, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Close()
+
+	silent, err := dialPipe(name, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer silent.Close()
+
+	start := time.Now()
+	forward(ToolClaude, dir, "", strings.NewReader(`{"session_id":"s1","prompt":"hi"}`))
+	select {
+	case <-got:
+		if elapsed := time.Since(start); elapsed > 1200*time.Millisecond {
+			t.Fatalf("the event waited %v behind a silent client", elapsed)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("a silent client blocked the next event")
+	}
+}
+
+// Close does not return until the cancelled accept has released its
+// instance, so the name can be created again at once.
+func TestListenerCloseReleasesTheName(t *testing.T) {
+	_, name := testPipe(t)
+	sd := permissivePipeSD(t)
+	first, err := listenPipe(name, sd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() {
+		_, _ = first.Accept()
+		close(done)
+	}()
+	time.Sleep(100 * time.Millisecond)
+	if err := first.Close(); err != nil {
+		t.Fatal(err)
+	}
+	second, err := listenPipe(name, sd)
+	if err != nil {
+		t.Fatalf("the name was still busy after Close: %v", err)
+	}
+	second.Close()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Accept did not return after Close")
+	}
+}
+
+// pipePair is a connected client and server.
+func pipePair(t *testing.T) (net.Conn, net.Conn) {
+	t.Helper()
+	_, name := testPipe(t)
+	ln, err := listenPipe(name, permissivePipeSD(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	accepted := make(chan net.Conn, 1)
+	go func() {
+		conn, err := ln.Accept()
+		if err == nil {
+			accepted <- conn
+		}
+	}()
+	client, err := dialPipe(name, 2*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case server := <-accepted:
+		return client, server
+	case <-time.After(2 * time.Second):
+		t.Fatal("the pipe was never accepted")
+	}
+	return nil, nil
+}
+
+// Reading the token must not refuse the writer's atomic replace: the
+// reader shares delete access.
+func TestTokenReadAllowsReplacement(t *testing.T) {
+	dir, _ := testPipe(t)
+	if _, err := writeToken(dir); err != nil {
+		t.Fatal(err)
+	}
+	h, err := openToken(filepath.Join(dir, tokenName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer windows.CloseHandle(h)
+	if _, err := writeToken(dir); err != nil {
+		t.Fatalf("a replace while the token is open for reading failed: %v", err)
+	}
+}
+
+// A failure between creating the temporary token and naming it leaves
+// nothing behind, and the next attempt starts clean.
+func TestTokenFailureLeavesNoPlaceholder(t *testing.T) {
+	dir, _ := testPipe(t)
+	old := tokenTestHook
+	tokenTestHook = func(string) error { return errors.New("injected") }
+	defer func() { tokenTestHook = old }()
+	if _, err := writeToken(dir); err == nil {
+		t.Fatal("the injected failure was ignored")
+	}
+	if _, err := os.Stat(filepath.Join(dir, tokenName+".new")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the temporary token file survived: %v", err)
+	}
+	tokenTestHook = nil
+	if _, err := writeToken(dir); err != nil {
+		t.Fatalf("a later start failed: %v", err)
 	}
 }

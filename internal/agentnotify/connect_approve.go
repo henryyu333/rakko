@@ -20,6 +20,7 @@ func ConnectApprove(home, dataDir, exe string, tool Tool) error {
 		return fmt.Errorf("agentnotify: %s has no approval channel", tool)
 	}
 	ap := s.approve
+	existedShim := shimExisted(dataDir, hookApproval, tool)
 	if err := prepareHookShim(hookApproval, s, dataDir, exe); err != nil {
 		return err
 	}
@@ -42,7 +43,7 @@ func ConnectApprove(home, dataDir, exe string, tool Tool) error {
 	default:
 		err = connectApproveHooks(s, home, dataDir, exe)
 	}
-	if err != nil {
+	if err != nil && !existedShim {
 		_ = removeShim(dataDir, hookApproval, tool)
 	}
 	return err
@@ -136,7 +137,7 @@ func StatusApprove(home string, tool Tool) (State, string) {
 		if _, derr := newJSONDoc(raw); derr != nil {
 			return StateError, derr.Error()
 		}
-		if carriesDocument(raw, tool, hookApproval) {
+		if carriesKind(raw, tool, hookApproval) {
 			return StateInjected, ""
 		}
 		return StateNotInjected, ""
@@ -217,5 +218,5 @@ func removeApproveModule(s spec, home, dataDir string) error {
 
 // ownsApprove reports whether a module file is Rakko's approval file.
 func ownsApprove(raw []byte, tool Tool) bool {
-	return bytes.Contains(raw, []byte(approveModuleMarker)) || carriesDocument(raw, tool, hookApproval)
+	return bytes.Contains(raw, []byte(approveModuleMarker)) || carriesKind(raw, tool, hookApproval)
 }

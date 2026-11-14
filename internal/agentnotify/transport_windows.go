@@ -85,8 +85,8 @@ func openTransport(dataDir string) (*transport, error) {
 	}
 	return &transport{
 		ln: ln,
-		authorize: func(conn net.Conn) bool {
-			return serverHandshake(conn, token)
+		authorize: func(conn net.Conn, deadline time.Time) bool {
+			return serverHandshake(conn, token, deadline)
 		},
 	}, nil
 }

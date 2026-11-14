@@ -82,7 +82,7 @@ func posixHookCommand(exe string, tool Tool, dataDir, event string) string {
 // moduleMarker in its header, a JSON hook file (Copilot CLI's, Kiro's) holds
 // Rakko's entry.
 func ownsModule(raw []byte, tool Tool) bool {
-	return bytes.Contains(raw, []byte(moduleMarker)) || carriesDocument(raw, tool, hookCompletion)
+	return bytes.Contains(raw, []byte(moduleMarker)) || carriesKind(raw, tool, hookCompletion)
 }
 
 // shellQuote quotes one word for /bin/sh so the shell hands it over
@@ -151,7 +151,7 @@ func Status(home string, tool Tool) (State, string) {
 		if _, derr := newJSONDoc(raw); derr != nil {
 			return StateError, derr.Error()
 		}
-		if carriesDocument(raw, tool, hookCompletion) {
+		if carriesKind(raw, tool, hookCompletion) {
 			return StateInjected, ""
 		}
 		return StateNotInjected, ""
@@ -168,6 +168,7 @@ func Connect(home, dataDir, exe string, tool Tool) error {
 	// The shim comes first: an entry that names it must never exist without
 	// it, and a path the tool's interpreter cannot quote leaves the tool's
 	// configuration untouched.
+	existedShim := shimExisted(dataDir, hookCompletion, tool)
 	if err := prepareHookShim(hookCompletion, s, dataDir, exe); err != nil {
 		return err
 	}
@@ -184,7 +185,9 @@ func Connect(home, dataDir, exe string, tool Tool) error {
 	default:
 		err = connectHooks(s, home, dataDir, exe)
 	}
-	if err != nil {
+	if err != nil && !existedShim {
+		// Only a shim this connect created is discarded: an older one may
+		// still be named by the configuration that was left untouched.
 		_ = removeShim(dataDir, hookCompletion, tool)
 	}
 	return err
@@ -226,7 +229,7 @@ func connectHooks(s spec, home, dataDir, exe string) error {
 		if derr != nil {
 			return filePlan{}, fmt.Errorf("agentnotify: %s: %w", path, derr)
 		}
-		if existed && !carriesDocument(raw, s.tool, hookCompletion) && isDedicated(s.tool) {
+		if existed && !carriesKind(raw, s.tool, hookCompletion) && isDedicated(s.tool) {
 			// The file is Rakko's own name; anything else in it is not ours
 			// to replace.
 			return filePlan{}, fmt.Errorf("agentnotify: %s exists and was not written by Rakko; left alone", path)

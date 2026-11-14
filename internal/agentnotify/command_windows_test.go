@@ -168,24 +168,29 @@ func TestHookEntriesUseEachToolsOwnForm(t *testing.T) {
 	}
 }
 
-// Qwen Code decides its shell at run time; Rakko decides from the same
-// inputs, so the entry is the one Qwen will actually hand to that shell.
-func TestQwenFollowsItsOwnShellChoice(t *testing.T) {
-	t.Setenv("MSYSTEM", "MINGW64")
-	t.Setenv("TERM", "xterm")
-	if e := hookEntryFor(testExe, ToolQwen, testData, ""); !strings.HasPrefix(e.fields[0].value, "if [ -x ") {
-		t.Fatalf("git bash entry = %q", e.fields[0].value)
-	}
-
-	t.Setenv("MSYSTEM", "")
-	t.Setenv("ComSpec", `C:\Program Files\PowerShell\7\pwsh.exe`)
-	if e := hookEntryFor(testExe, ToolQwen, testData, ""); !strings.HasPrefix(e.fields[0].value, "& '") {
-		t.Fatalf("powershell entry = %q", e.fields[0].value)
-	}
-
-	t.Setenv("ComSpec", `C:\Windows\System32\cmd.exe`)
-	if e := hookEntryFor(testExe, ToolQwen, testData, ""); !strings.HasPrefix(e.fields[0].value, `""`) {
-		t.Fatalf("cmd entry = %q", e.fields[0].value)
+// Qwen Code runs a hook with the interpreter its entry names, so the entry
+// says PowerShell and the command is one PowerShell runs — whatever shell
+// the user started Qwen from, and whatever Rakko was started from.
+func TestQwenPinsItsShell(t *testing.T) {
+	for _, env := range []struct{ msystem, comspec string }{
+		{"MINGW64", `C:\Windows\System32\cmd.exe`},
+		{"", `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`},
+		{"", `C:\Windows\System32\cmd.exe`},
+	} {
+		t.Setenv("MSYSTEM", env.msystem)
+		t.Setenv("COMSPEC", env.comspec)
+		e := hookEntryFor(testExe, ToolQwen, testData, "")
+		if len(e.fields) != 2 || e.fields[1].name != "shell" || e.fields[1].value != "powershell" {
+			t.Fatalf("qwen entry lacks its shell field: %+v", e.fields)
+		}
+		want := "& '" + shimPath(testData, hookCompletion, ToolQwen) + "'"
+		if e.fields[0].value != want {
+			t.Fatalf("qwen command = %q, want %q", e.fields[0].value, want)
+		}
+		if a := approveEntryFor(testExe, ToolQwen, testData); len(a.fields) != 2 ||
+			a.fields[1].name != "shell" || a.fields[1].value != "powershell" {
+			t.Fatalf("qwen approval lacks its shell field: %+v", a.fields)
+		}
 	}
 }
 
@@ -194,6 +199,7 @@ func TestQwenFollowsItsOwnShellChoice(t *testing.T) {
 // affected.
 func TestUnquotablePathsAreRefused(t *testing.T) {
 	home := t.TempDir()
+	redirectAppData(t, home)
 	exe := filepath.Join(t.TempDir(), "Rakko.exe")
 	for _, bad := range []string{"100%", "bang!", "caret^", `quote"`} {
 		dir := filepath.Join(t.TempDir(), bad)
@@ -293,24 +299,6 @@ func TestShimsCarryOddPathsAndPayloads(t *testing.T) {
 		t.Fatalf("powershell args = %q", ps.Args)
 	}
 
-	// Git Bash, the way Qwen Code runs a hook when it picks bash.
-	gitBash := `C:\Program Files\Git\bin\bash.exe`
-	if _, err := os.Stat(gitBash); err != nil {
-		t.Logf("skipping the Git Bash run: %v", err)
-		return
-	}
-	t.Setenv("MSYSTEM", "MINGW64")
-	line := hookEntryFor(exe, ToolQwen, dataDir, "").fields[0].value
-	bash := runArgs(t, []string{gitBash, "-c", line})
-	if bash.Stdin != payload {
-		t.Fatalf("bash stdin = %q", bash.Stdin)
-	}
-	// MSYS resolves the data directory through its forward-slash spelling;
-	// the bytes the app receives are the same path.
-	want := rakkoArgs(hookCompletion, ToolQwen, filepath.ToSlash(dataDir), "")
-	if !equalStrings(bash.Args, want) {
-		t.Fatalf("bash args = %q, want %q", bash.Args, want)
-	}
 }
 
 // A removed app changes nothing: the approval shim prints the tool's own
@@ -353,6 +341,7 @@ func TestConnectStatusDisconnectEveryTool(t *testing.T) {
 	for _, tool := range Tools() {
 		t.Run(string(tool), func(t *testing.T) {
 			home := t.TempDir()
+			redirectAppData(t, home)
 			dataDir := t.TempDir()
 			installHermes(t, home, tool)
 			if err := Connect(home, dataDir, exe, tool); err != nil {
@@ -388,6 +377,16 @@ func TestConnectStatusDisconnectEveryTool(t *testing.T) {
 			}
 		})
 	}
+}
+
+// redirectAppData points the AppData lookups at the temporary profile, so a
+// test never touches the machine's real Cursor, Kiro or Devin folders.
+func redirectAppData(t *testing.T, home string) {
+	t.Helper()
+	oldRoaming, oldLocal := roamingAppData, localAppData
+	roamingAppData = func() string { return filepath.Join(home, "AppData", "Roaming") }
+	localAppData = func() string { return filepath.Join(home, "AppData", "Local") }
+	t.Cleanup(func() { roamingAppData, localAppData = oldRoaming, oldLocal })
 }
 
 // snapshotTree renders every file under dir, so a second connect can be
@@ -458,6 +457,7 @@ func TestApprovalIsSeparateFromCompletion(t *testing.T) {
 		}
 		t.Run(string(tool), func(t *testing.T) {
 			home := t.TempDir()
+			redirectAppData(t, home)
 			dataDir := t.TempDir()
 			installHermes(t, home, tool)
 			if err := Connect(home, dataDir, exe, tool); err != nil {
@@ -498,6 +498,7 @@ func TestApprovalIsSeparateFromCompletion(t *testing.T) {
 func TestDisconnectingOneToolLeavesTheOthers(t *testing.T) {
 	exe := helperExe(t)
 	home := t.TempDir()
+	redirectAppData(t, home)
 	dataDir := t.TempDir()
 	for _, tool := range []Tool{ToolClaude, ToolCursor, ToolGrok} {
 		if err := Connect(home, dataDir, exe, tool); err != nil {
@@ -570,6 +571,7 @@ func TestCopilotUsesExecForm(t *testing.T) {
 	t.Setenv("HERMES_HOME", "")
 	exe := helperExe(t)
 	home := t.TempDir()
+	redirectAppData(t, home)
 	dataDir := t.TempDir()
 	if err := Connect(home, dataDir, exe, ToolCopilot); err != nil {
 		t.Fatal(err)
@@ -616,5 +618,237 @@ func TestCopilotUsesExecForm(t *testing.T) {
 				t.Fatalf("%s %s: args = %q", path, event, e.Args)
 			}
 		}
+	}
+}
+
+// A user's own hook that merely mentions a shim's file name is not Rakko's:
+// Connect adds Rakko's entry beside it and Disconnect leaves it alone.
+func TestUserEntriesMentioningRakkoAreNotOurs(t *testing.T) {
+	home := t.TempDir()
+	redirectAppData(t, home)
+	dataDir := t.TempDir()
+	exe := helperExe(t)
+	path := ConfigPath(home, ToolCursor)
+	user := `{
+  "version": 1,
+  "hooks": {
+    "stop": [
+      { "command": "echo agent-hook-cursor.cmd", "timeout": 5 },
+      { "exec": "C:\\Tools\\other.exe", "args": ["--agent-hook", "--tool", "cursor"], "timeout": 5 }
+    ]
+  }
+}
+`
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(user), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, note := Status(home, ToolCursor); got == StateInjected {
+		t.Fatalf("a user entry was mistaken for Rakko's (%s)", note)
+	}
+	if err := Connect(home, dataDir, exe, ToolCursor); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), "echo agent-hook-cursor.cmd") ||
+		!strings.Contains(string(body), `C:\\Tools\\other.exe`) {
+		t.Fatalf("connect removed a user's entry:\n%s", body)
+	}
+	if got, note := Status(home, ToolCursor); got != StateInjected {
+		t.Fatalf("Rakko's entry was not installed (%s)", note)
+	}
+	if err := Disconnect(home, dataDir, ToolCursor); err != nil {
+		t.Fatal(err)
+	}
+	body, err = os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), "echo agent-hook-cursor.cmd") ||
+		!strings.Contains(string(body), `C:\\Tools\\other.exe`) {
+		t.Fatalf("disconnect removed a user's entry:\n%s", body)
+	}
+	// Rakko's entry embeds the data directory; the user's mentions only the
+	// file name.
+	if strings.Contains(string(body), dataDir) {
+		t.Fatalf("disconnect left Rakko's entry behind:\n%s", body)
+	}
+}
+
+// A data directory ending in a backslash keeps it: the shim quotes the
+// argument by the native command-line rules.
+func TestShimKeepsTrailingBackslash(t *testing.T) {
+	exe := helperExe(t)
+	base := filepath.Join(t.TempDir(), "data dir")
+	if err := os.MkdirAll(base, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	dataDir := base + `\`
+	if err := writeShim(dataDir, hookCompletion, ToolGrok, exe,
+		rakkoArgs(hookCompletion, ToolGrok, dataDir, "")); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(shimPath(base, hookCompletion, ToolGrok))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"`+base+`\\"`) {
+		t.Fatalf("the trailing backslash was not doubled:\n%s", raw)
+	}
+	cmd := exec.Command("cmd.exe")
+	cmd.SysProcAttr = &syscall.SysProcAttr{CmdLine: "cmd.exe /d /s /c " +
+		cmdInvocation(shimPath(base, hookCompletion, ToolGrok))}
+	cmd.Stdin = strings.NewReader(`{}`)
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("shim: %v (%s)", err, out)
+	}
+	var got struct {
+		Args []string `json:"args"`
+	}
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatalf("%s: %v", out, err)
+	}
+	if n := len(got.Args); n < 5 || got.Args[n-1] != dataDir {
+		t.Fatalf("data directory reached the app as %q", got.Args)
+	}
+}
+
+// The shim's own text is UTF-8 and it switches the console to UTF-8 before
+// reading a path, so a Chinese directory works under a Chinese or a US code
+// page. The wrapper that sets the page lives at an ASCII path (its own text
+// cannot be UTF-8 yet); the Chinese data directory is inside the shim.
+func TestShimPathsSurviveConsoleCodePages(t *testing.T) {
+	exe := helperExe(t)
+	dataDir := filepath.Join(t.TempDir(), "数据 目录")
+	if err := os.MkdirAll(dataDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	shimDir := t.TempDir()
+	shim := filepath.Join(shimDir, shimName(hookCompletion, ToolGrok))
+	body := shimBody(hookCompletion, ToolGrok, exe,
+		rakkoArgs(hookCompletion, ToolGrok, dataDir, ""))
+	if err := os.WriteFile(shim, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	payload := `{"session_id":"s1","prompt":"你好"}`
+	for _, page := range []string{"936", "437"} {
+		t.Run("cp"+page, func(t *testing.T) {
+			wrapper := filepath.Join(shimDir, "run-"+page+".cmd")
+			script := "@echo off\r\nchcp " + page + " >nul\r\ncall \"" + shim + "\"\r\nexit /b %errorlevel%\r\n"
+			if err := os.WriteFile(wrapper, []byte(script), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			cmd := exec.Command("cmd.exe")
+			cmd.SysProcAttr = &syscall.SysProcAttr{CmdLine: "cmd.exe /d /c \"" + wrapper + "\""}
+			cmd.Stdin = strings.NewReader(payload)
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("shim under code page %s: %v (%s)", page, err, out)
+			}
+			var got struct {
+				Args  []string `json:"args"`
+				Stdin string   `json:"stdin"`
+			}
+			if err := json.Unmarshal(out, &got); err != nil {
+				t.Fatalf("output %q: %v", out, err)
+			}
+			if got.Stdin != payload {
+				t.Fatalf("payload changed: %q", got.Stdin)
+			}
+			if n := len(got.Args); n < 5 || got.Args[n-1] != dataDir {
+				t.Fatalf("data directory reached the app as %q", got.Args)
+			}
+		})
+	}
+}
+
+// A failed reconnect keeps the shim the tool's configuration still names.
+func TestFailedReconnectKeepsTheOldShim(t *testing.T) {
+	home := t.TempDir()
+	redirectAppData(t, home)
+	dataDir := t.TempDir()
+	exe := helperExe(t)
+
+	// A shim from an earlier successful connect.
+	if err := writeShim(dataDir, hookCompletion, ToolCodex, exe,
+		rakkoArgs(hookCompletion, ToolCodex, dataDir, "")); err != nil {
+		t.Fatal(err)
+	}
+	shim := shimPath(dataDir, hookCompletion, ToolCodex)
+	raw, err := os.ReadFile(shim)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Codex's configuration is unreadable, so the reconnect fails after the
+	// shim was rewritten.
+	path := ConfigPath(home, ToolCodex)
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(`{"hooks": `), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := Connect(home, dataDir, exe, ToolCodex); err == nil {
+		t.Fatal("Connect accepted an unreadable configuration")
+	}
+	if _, err := os.Stat(shim); err != nil {
+		t.Fatal("the failed reconnect deleted the shim the configuration names")
+	}
+	again, err := os.ReadFile(shim)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(again) != string(raw) {
+		t.Fatal("the failed reconnect changed the shim")
+	}
+
+	// A failed first connect leaves nothing behind.
+	home2 := t.TempDir()
+	dataDir2 := t.TempDir()
+	path2 := ConfigPath(home2, ToolCodex)
+	if err := os.MkdirAll(filepath.Dir(path2), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path2, []byte(`{"hooks": `), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := Connect(home2, dataDir2, exe, ToolCodex); err == nil {
+		t.Fatal("Connect accepted an unreadable configuration")
+	}
+	if _, err := os.Stat(shimPath(dataDir2, hookCompletion, ToolCodex)); err == nil {
+		t.Fatal("a failed first connect left a shim behind")
+	}
+}
+
+// The AppData lookups follow the environment, with the profile's default
+// spelling only as a fallback.
+func TestAppDataPathsFollowTheEnvironment(t *testing.T) {
+	home := t.TempDir()
+	roaming := filepath.Join(t.TempDir(), "Roaming")
+	local := filepath.Join(t.TempDir(), "Local")
+	oldRoaming, oldLocal := roamingAppData, localAppData
+	roamingAppData = func() string { return roaming }
+	localAppData = func() string { return local }
+	defer func() { roamingAppData, localAppData = oldRoaming, oldLocal }()
+
+	if got, want := devinConfigPath(home), filepath.Join(roaming, "devin", "config.json"); got != want {
+		t.Fatalf("devin config = %q, want %q", got, want)
+	}
+	paths := hostToolPaths(ToolCursor, home)
+	want := []string{filepath.Join(roaming, "Cursor"), filepath.Join(local, "Cursor")}
+	if len(paths) != len(want) || paths[0] != want[0] || paths[1] != want[1] {
+		t.Fatalf("cursor paths = %q, want %q", paths, want)
+	}
+
+	roamingAppData = func() string { return "" }
+	localAppData = func() string { return "" }
+	if got, want := devinConfigPath(home), filepath.Join(home, "AppData", "Roaming", "devin", "config.json"); got != want {
+		t.Fatalf("fallback devin config = %q, want %q", got, want)
 	}
 }

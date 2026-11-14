@@ -22,5 +22,8 @@ func prepareHookShim(hookKind, spec, string, string) error { return nil }
 // removeShim removes nothing on macOS.
 func removeShim(string, hookKind, Tool) error { return nil }
 
+// shimExisted is always false on macOS: there are no shims.
+func shimExisted(string, hookKind, Tool) bool { return false }
+
 // validateShimFallbacks has nothing to check away from cmd.exe.
 func validateShimFallbacks() error { return nil }

@@ -10,6 +10,16 @@ package agentnotify
 // Wire detail: byte mode, duplex, one instance per connection, and the
 // client opens with SECURITY_IDENTIFICATION so the server can never act as
 // the client.
+//
+// Concurrency: one read and one write may be in flight at a time, each with
+// its own completion event; a second same-direction call waits its turn, so
+// a completion is never delivered to the wrong caller and a large write
+// never interleaves. I/O is submitted while holding the mutex Close uses to
+// mark the connection closed, so a request registered but not yet submitted
+// cannot slip past the single CancelIoEx that Close issues. A deadline
+// change wakes a waiting caller through its own event, so shrinking,
+// extending or clearing a deadline takes effect on the operation already
+// waiting.
 
 import (
 	"errors"
@@ -33,16 +43,24 @@ type pipeAddr struct{ name string }
 func (a pipeAddr) Network() string { return "pipe" }
 func (a pipeAddr) String() string  { return a.name }
 
+// beforeSubmit is a test seam: it runs inside the critical section just
+// before an operation is handed to the kernel, so a test can hold open the
+// window in which Close must not miss the request. Production leaves it nil.
+var beforeSubmit func()
+
 // pipeListener accepts named-pipe clients. Every accepted connection gets
 // its own pipe instance; the first instance is created with
 // FILE_FLAG_FIRST_PIPE_INSTANCE, so a name another program owns fails here
 // instead of being silently shared.
 type pipeListener struct {
-	name    string
-	sd      *windows.SECURITY_DESCRIPTOR
+	name string
+	sd   *windows.SECURITY_DESCRIPTOR
+
 	mu      sync.Mutex
+	cond    *sync.Cond
 	pending windows.Handle // instance waiting for a client
 	waiting windows.Handle // instance Accept is blocked on
+	active  int            // Accept calls in progress
 	closed  bool
 }
 
@@ -53,10 +71,24 @@ func listenPipe(name string, sd *windows.SECURITY_DESCRIPTOR) (*pipeListener, er
 	if err != nil {
 		return nil, err
 	}
-	return &pipeListener{name: name, sd: sd, pending: h}, nil
+	l := &pipeListener{name: name, sd: sd, pending: h}
+	l.cond = sync.NewCond(&l.mu)
+	return l, nil
 }
 
 func (l *pipeListener) Accept() (net.Conn, error) {
+	l.mu.Lock()
+	l.active++
+	l.mu.Unlock()
+	defer func() {
+		l.mu.Lock()
+		l.active--
+		if l.active == 0 {
+			l.cond.Broadcast()
+		}
+		l.mu.Unlock()
+	}()
+
 	for {
 		h, err := l.nextInstance()
 		if err != nil {
@@ -113,6 +145,9 @@ func (l *pipeListener) Accept() (net.Conn, error) {
 	}
 }
 
+// Close stops accepting and does not return until the accept in flight has
+// released its pipe instance, so a stop followed at once by a start can
+// create the name again.
 func (l *pipeListener) Close() error {
 	l.mu.Lock()
 	if l.closed {
@@ -120,17 +155,24 @@ func (l *pipeListener) Close() error {
 		return nil
 	}
 	l.closed = true
-	pending, waiting := l.pending, l.waiting
+	pending := l.pending
 	l.pending = 0
+	waiting := l.waiting
 	l.mu.Unlock()
+
 	if pending != 0 {
 		windows.CloseHandle(pending)
 	}
 	if waiting != 0 {
-		// The blocked ConnectNamedPipe completes with an error, which wakes
-		// Accept; Accept owns the handle and closes it.
+		// The blocked ConnectNamedPipe completes with an error; Accept owns
+		// the handle and closes it before it decrements l.active.
 		_ = windows.CancelIoEx(waiting, nil)
 	}
+	l.mu.Lock()
+	for l.active > 0 {
+		l.cond.Wait()
+	}
+	l.mu.Unlock()
 	return nil
 }
 
@@ -206,12 +248,18 @@ func dialPipe(name string, timeout time.Duration) (net.Conn, error) {
 	}
 }
 
-// pipeConn is one connection on a named pipe.
+// pipeConn is one connection on a named pipe. One read and one write may be
+// in flight at a time; each direction has a completion event and an event
+// that wakes it when its deadline changes.
 type pipeConn struct {
 	h    windows.Handle
 	name string
-	rev  windows.Handle
-	wev  windows.Handle
+
+	rlock, wlock   sync.Mutex // serializes reads / whole writes
+	rcompletion    windows.Handle
+	wcompletion    windows.Handle
+	rdeadlineEvent windows.Handle
+	wdeadlineEvent windows.Handle
 
 	mu     sync.Mutex
 	cond   *sync.Cond
@@ -225,18 +273,29 @@ type pipeConn struct {
 }
 
 func newPipeConn(h windows.Handle, name string) (*pipeConn, error) {
-	rev, err := windows.CreateEvent(nil, 0, 0, nil)
-	if err != nil {
-		windows.CloseHandle(h)
-		return nil, err
+	var events [4]windows.Handle
+	for i := range events {
+		// The deadline events are manual-reset so a change made before the
+		// I/O starts is not lost; the completion events are auto-reset.
+		manual := uint32(0)
+		if i >= 2 {
+			manual = 1
+		}
+		ev, err := windows.CreateEvent(nil, manual, 0, nil)
+		if err != nil {
+			for _, done := range events[:i] {
+				windows.CloseHandle(done)
+			}
+			windows.CloseHandle(h)
+			return nil, err
+		}
+		events[i] = ev
 	}
-	wev, err := windows.CreateEvent(nil, 0, 0, nil)
-	if err != nil {
-		windows.CloseHandle(h)
-		windows.CloseHandle(rev)
-		return nil, err
+	c := &pipeConn{
+		h: h, name: name,
+		rcompletion: events[0], wcompletion: events[1],
+		rdeadlineEvent: events[2], wdeadlineEvent: events[3],
 	}
-	c := &pipeConn{h: h, name: name, rev: rev, wev: wev}
 	c.cond = sync.NewCond(&c.mu)
 	return c, nil
 }
@@ -245,13 +304,17 @@ func (c *pipeConn) Read(b []byte) (int, error) {
 	if len(b) == 0 {
 		return 0, nil
 	}
-	return c.xfer(b, true)
+	c.rlock.Lock()
+	defer c.rlock.Unlock()
+	return c.transfer(b, true)
 }
 
 func (c *pipeConn) Write(b []byte) (int, error) {
+	c.wlock.Lock()
+	defer c.wlock.Unlock()
 	total := 0
 	for total < len(b) {
-		n, err := c.xfer(b[total:], false)
+		n, err := c.transfer(b[total:], false)
 		total += n
 		if err != nil {
 			return total, err
@@ -263,43 +326,48 @@ func (c *pipeConn) Write(b []byte) (int, error) {
 	return total, nil
 }
 
-// xfer runs one overlapped read or write, honoring the direction's deadline.
-func (c *pipeConn) xfer(b []byte, read bool) (int, error) {
+// completionEvents is the direction's completion and deadline events.
+func (c *pipeConn) completionEvents(read bool) (done, changed windows.Handle) {
+	if read {
+		return c.rcompletion, c.rdeadlineEvent
+	}
+	return c.wcompletion, c.wdeadlineEvent
+}
+
+func (c *pipeConn) deadline(read bool) time.Time {
+	if read {
+		return c.rdl
+	}
+	return c.wdl
+}
+
+// transfer submits one overlapped read or write and waits for it.
+func (c *pipeConn) transfer(b []byte, read bool) (int, error) {
+	doneEv, _ := c.completionEvents(read)
+	ov := &windows.Overlapped{HEvent: doneEv}
+
 	c.mu.Lock()
 	if c.closed {
 		c.mu.Unlock()
 		return 0, io.ErrClosedPipe
 	}
-	dl, ev := c.rdl, c.rev
-	if !read {
-		dl, ev = c.wdl, c.wev
-	}
-	if !dl.IsZero() && !time.Now().Before(dl) {
+	if dl := c.deadline(read); !dl.IsZero() && !time.Now().Before(dl) {
 		c.mu.Unlock()
 		return 0, timeoutError{}
 	}
-	ov := &windows.Overlapped{HEvent: ev}
 	if read {
 		c.rop = ov
 	} else {
 		c.wop = ov
 	}
 	c.ops++
-	c.mu.Unlock()
-	defer func() {
-		c.mu.Lock()
-		if read {
-			c.rop = nil
-		} else {
-			c.wop = nil
-		}
-		c.ops--
-		if c.ops == 0 {
-			c.cond.Broadcast()
-		}
-		c.mu.Unlock()
-	}()
-
+	// The request is submitted before the mutex is released. Close marks the
+	// connection closed under the same mutex and only then cancels; a
+	// request that got in first is therefore always covered by that cancel,
+	// and a request that comes later never submits at all.
+	if beforeSubmit != nil {
+		beforeSubmit()
+	}
 	var done uint32
 	var err error
 	if read {
@@ -307,53 +375,100 @@ func (c *pipeConn) xfer(b []byte, read bool) (int, error) {
 	} else {
 		err = windows.WriteFile(c.h, b, &done, ov)
 	}
+	if err != nil && !errors.Is(err, windows.ERROR_IO_PENDING) {
+		c.clearOpLocked(read)
+		c.mu.Unlock()
+		return 0, pipeIOError(err, read)
+	}
+	c.mu.Unlock()
+
+	defer func() {
+		c.mu.Lock()
+		c.clearOpLocked(read)
+		c.mu.Unlock()
+	}()
 	if err == nil {
 		return int(done), nil
 	}
-	if !errors.Is(err, windows.ERROR_IO_PENDING) {
-		return 0, pipeIOError(err, read)
+	return c.await(ov, read)
+}
+
+func (c *pipeConn) clearOpLocked(read bool) {
+	if read {
+		c.rop = nil
+	} else {
+		c.wop = nil
 	}
-	wait := uint32(windows.INFINITE)
-	if !dl.IsZero() {
-		remain := time.Until(dl)
-		if remain <= 0 {
-			wait = 0
-		} else if ms := remain.Milliseconds(); ms <= 0 {
-			wait = 1
-		} else {
-			wait = uint32(ms)
+	c.ops--
+	if c.ops == 0 {
+		c.cond.Broadcast()
+	}
+}
+
+// await waits for one submitted operation, recomputing the wait whenever the
+// deadline changes.
+func (c *pipeConn) await(ov *windows.Overlapped, read bool) (int, error) {
+	doneEv, changed := c.completionEvents(read)
+	for {
+		c.mu.Lock()
+		closed := c.closed
+		dl := c.deadline(read)
+		c.mu.Unlock()
+
+		if closed {
+			c.abandon(ov)
+			return 0, io.ErrClosedPipe
 		}
-	}
-	status, werr := windows.WaitForSingleObject(ev, wait)
-	if werr != nil {
-		_ = windows.CancelIoEx(c.h, ov)
-		_ = windows.GetOverlappedResult(c.h, ov, &done, true)
-		return 0, werr
-	}
-	if status == uint32(windows.WAIT_TIMEOUT) {
-		_ = windows.CancelIoEx(c.h, ov)
-		_ = windows.GetOverlappedResult(c.h, ov, &done, true)
-		return 0, timeoutError{}
-	}
-	if gerr := windows.GetOverlappedResult(c.h, ov, &done, false); gerr != nil {
-		if errors.Is(gerr, windows.ERROR_OPERATION_ABORTED) {
-			c.mu.Lock()
-			closed := c.closed
-			expired := !c.rdl.IsZero() && !time.Now().Before(c.rdl)
-			if !read {
-				expired = !c.wdl.IsZero() && !time.Now().Before(c.wdl)
-			}
-			c.mu.Unlock()
-			switch {
-			case closed:
-				return 0, io.ErrClosedPipe
-			case expired:
+		wait := uint32(windows.INFINITE)
+		if !dl.IsZero() {
+			remain := time.Until(dl)
+			if remain <= 0 {
+				c.abandon(ov)
 				return 0, timeoutError{}
 			}
+			ms := uint32(remain.Milliseconds())
+			if ms == 0 {
+				ms = 1
+			}
+			wait = ms
 		}
-		return 0, pipeIOError(gerr, read)
+		status, werr := windows.WaitForMultipleObjects([]windows.Handle{doneEv, changed}, false, wait)
+		if werr != nil {
+			c.abandon(ov)
+			return 0, werr
+		}
+		switch uint32(status) {
+		case uint32(windows.WAIT_OBJECT_0):
+			var done uint32
+			err := windows.GetOverlappedResult(c.h, ov, &done, false)
+			if err == nil {
+				return int(done), nil
+			}
+			if errors.Is(err, windows.ERROR_OPERATION_ABORTED) {
+				// Cancelled by Close or by an expired deadline; the loop
+				// re-reads both and reports the right one.
+				continue
+			}
+			return 0, pipeIOError(err, read)
+		case uint32(windows.WAIT_OBJECT_0) + 1:
+			_ = windows.ResetEvent(changed)
+			continue
+		case uint32(windows.WAIT_TIMEOUT):
+			c.abandon(ov)
+			return 0, timeoutError{}
+		default:
+			c.abandon(ov)
+			return 0, errors.New("agentnotify: unexpected pipe wait result")
+		}
 	}
-	return int(done), nil
+}
+
+// abandon cancels one operation and waits for the kernel to let go of its
+// buffer.
+func (c *pipeConn) abandon(ov *windows.Overlapped) {
+	_ = windows.CancelIoEx(c.h, ov)
+	var done uint32
+	_ = windows.GetOverlappedResult(c.h, ov, &done, true)
 }
 
 // pipeIOError maps the pipe's end-of-file to io.EOF, which bufio and
@@ -377,8 +492,11 @@ func (c *pipeConn) Close() error {
 		}
 		c.mu.Unlock()
 		windows.CloseHandle(c.h)
-		windows.CloseHandle(c.rev)
-		windows.CloseHandle(c.wev)
+		for _, ev := range []windows.Handle{
+			c.rcompletion, c.wcompletion, c.rdeadlineEvent, c.wdeadlineEvent,
+		} {
+			windows.CloseHandle(ev)
+		}
 	})
 	return nil
 }
@@ -401,6 +519,10 @@ func (c *pipeConn) SetWriteDeadline(t time.Time) error {
 	return nil
 }
 
+// setDeadline records t and wakes the direction's waiter, so a deadline
+// moved earlier, later or away takes effect on the operation already
+// waiting. The waiter itself cancels the request if the new deadline is
+// already past.
 func (c *pipeConn) setDeadline(t time.Time, read bool) {
 	c.mu.Lock()
 	if read {
@@ -408,17 +530,16 @@ func (c *pipeConn) setDeadline(t time.Time, read bool) {
 	} else {
 		c.wdl = t
 	}
-	ov := c.rop
-	if !read {
-		ov = c.wop
+	var ev windows.Handle
+	if read {
+		ev = c.rdeadlineEvent
+	} else {
+		ev = c.wdeadlineEvent
 	}
 	closed := c.closed
 	c.mu.Unlock()
-	// An operation already running is waiting with the old timeout; when
-	// the new deadline is already past, cancelling it is what makes the
-	// deadline take effect.
-	if ov != nil && !closed && !t.IsZero() && !time.Now().Before(t) {
-		_ = windows.CancelIoEx(c.h, ov)
+	if ev != 0 && !closed {
+		_ = windows.SetEvent(ev)
 	}
 }
 

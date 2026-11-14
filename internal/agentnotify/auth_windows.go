@@ -35,8 +35,8 @@ const (
 	// message reflected back at its sender cannot verify.
 	authClientTag = "rakko-agent/1 client"
 	authServerTag = "rakko-agent/1 server"
-	// authTimeout bounds the whole handshake. It is inside the server's
-	// two-second framing budget and inside each client's dial budget.
+	// authTimeout caps the client's handshake when its dial budget is
+	// longer. The server always uses the framing budget it is handed.
 	authTimeout = 2 * time.Second
 )
 
@@ -51,11 +51,12 @@ func authMAC(token []byte, tag string, peer, own []byte) []byte {
 	return m.Sum(nil)
 }
 
-// serverHandshake admits one client. It writes only its nonce until the
-// client has proved it holds the token.
-func serverHandshake(conn net.Conn, token []byte) bool {
-	_ = conn.SetDeadline(time.Now().Add(authTimeout))
-	defer func() { _ = conn.SetDeadline(time.Time{}) }()
+// serverHandshake admits one client inside deadline, which is also the
+// budget for the frame that follows. It writes only its nonce until the
+// client has proved it holds the token, and leaves the deadline in place so
+// the first line cannot take a second budget of its own.
+func serverHandshake(conn net.Conn, token []byte, deadline time.Time) bool {
+	_ = conn.SetDeadline(deadline)
 
 	nonce := make([]byte, authNonceSize)
 	if _, err := rand.Read(nonce); err != nil {

@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -33,9 +32,7 @@ type windowsShell int
 const (
 	shellCmd windowsShell = iota
 	shellPowerShell
-	// shellBash is the Git Bash / MSYS2 shell Qwen Code picks when it runs
-	// inside one.
-	shellBash
+	
 )
 
 // toolShell is the interpreter that runs one tool's hook command on
@@ -59,29 +56,14 @@ func toolShell(tool Tool) windowsShell {
 		// spawns it with -NoProfile -NonInteractive -Command.
 		return shellPowerShell
 	case ToolQwen:
-		// Qwen Code decides at run time from MSYSTEM/TERM (Git Bash) and
-		// ComSpec (PowerShell), defaulting to cmd.exe; Rakko mirrors that
-		// decision from the same inputs.
-		return qwenShell()
+		// Qwen Code runs a hook with the interpreter its entry names in its
+		// own `shell` field; Rakko pins that field to PowerShell, so the
+		// entry works whatever shell Qwen was started from.
+		return shellPowerShell
 	}
 	// Claude Code, Copilot CLI and Auggie never reach here: their entries
 	// are argv. The rest run through cmd.exe, Windows' default command
 	// interpreter (Dev, Factory Droid, Grok, Kiro, Antigravity).
-	return shellCmd
-}
-
-// qwenShell mirrors Qwen Code's own getShellConfiguration for Windows.
-func qwenShell() windowsShell {
-	msystem := strings.ToUpper(os.Getenv("MSYSTEM"))
-	term := strings.ToLower(os.Getenv("TERM"))
-	if strings.HasPrefix(msystem, "MINGW") || strings.HasPrefix(msystem, "MSYS") ||
-		strings.Contains(term, "msys") || strings.Contains(term, "cygwin") {
-		return shellBash
-	}
-	comspec := strings.ToLower(os.Getenv("ComSpec"))
-	if strings.HasSuffix(comspec, "powershell.exe") || strings.HasSuffix(comspec, "pwsh.exe") {
-		return shellPowerShell
-	}
 	return shellCmd
 }
 
@@ -125,12 +107,7 @@ func hookEntryOS(exe string, tool Tool, dataDir, event string) hookEntry {
 			argv:   escapedArgs(tool, rakkoArgs(hookCompletion, tool, dataDir, event)),
 		}
 	}
-	if toolShell(tool) == shellBash {
-		return hookEntry{fields: []hookField{{
-			"command", posixEntryLine(hookCompletion, tool, exe, dataDir, event),
-		}}}
-	}
-	entry := hookEntry{fields: []hookField{{"command", shimInvocation(tool, hookCompletion, dataDir)}}}
+	entry := shellEntry(tool, hookCompletion, dataDir)
 	if tool == ToolCodex {
 		// commandWindows is Codex's Windows-only override; it runs in the
 		// same PowerShell as command, so both name the shim.
@@ -147,12 +124,7 @@ func approveEntryOS(exe string, tool Tool, dataDir string) hookEntry {
 			argv:   escapedArgs(tool, rakkoArgs(hookApproval, tool, dataDir, "")),
 		}
 	}
-	if toolShell(tool) == shellBash {
-		return hookEntry{fields: []hookField{{
-			"command", posixEntryLine(hookApproval, tool, exe, dataDir, ""),
-		}}}
-	}
-	return hookEntry{fields: []hookField{{"command", shimInvocation(tool, hookApproval, dataDir)}}}
+	return shellEntry(tool, hookApproval, dataDir)
 }
 
 // prepareHookShim writes the batch file a shell tool runs, and refuses a
@@ -165,18 +137,7 @@ func prepareHookShim(kind hookKind, s spec, dataDir, exe string) error {
 	if dataDir == "" {
 		return errors.New("agentnotify: " + string(s.tool) + " needs Rakko's data directory")
 	}
-	shell := toolShell(s.tool)
 	values := append([]string{exe, dataDir}, rakkoArgs(kind, s.tool, "", "")...)
-	if shell == shellBash {
-		// The entry is a POSIX shell line of its own; no shim file is
-		// involved, and single quotes keep every other byte literal.
-		for _, v := range values {
-			if strings.ContainsAny(v, "\r\n") {
-				return fmt.Errorf("agentnotify: %q cannot be written into a shell line", v)
-			}
-		}
-		return nil
-	}
 	// The shim's own body is a batch file, whatever interpreter runs it, so
 	// cmd.exe's rules decide what can be embedded.
 	for _, v := range values {
@@ -193,7 +154,7 @@ func prepareHookShim(kind hookKind, s spec, dataDir, exe string) error {
 
 // removeShim deletes one tool's shim, reporting nothing when it is absent.
 func removeShim(dataDir string, kind hookKind, tool Tool) error {
-	if !windowsShellTool(tool) || dataDir == "" || toolShell(tool) == shellBash {
+	if !windowsShellTool(tool) || dataDir == "" {
 		return nil
 	}
 	err := os.Remove(shimPath(dataDir, kind, tool))
@@ -201,6 +162,17 @@ func removeShim(dataDir string, kind hookKind, tool Tool) error {
 		return nil
 	}
 	return err
+}
+
+// shellEntry is a shell tool's entry: the shim named through its
+// interpreter, plus the interpreter where the tool reads one from the entry
+// (Qwen Code's per-hook `shell`).
+func shellEntry(tool Tool, kind hookKind, dataDir string) hookEntry {
+	entry := hookEntry{fields: []hookField{{"command", shimInvocation(tool, kind, dataDir)}}}
+	if tool == ToolQwen {
+		entry.fields = append(entry.fields, hookField{"shell", "powershell"})
+	}
+	return entry
 }
 
 // shimInvocation is the command line that runs a shim in the tool's own
@@ -211,33 +183,6 @@ func shimInvocation(tool Tool, kind hookKind, dataDir string) string {
 		return "& " + powerShellQuote(path)
 	}
 	return cmdInvocation(path)
-}
-
-// posixEntryLine is the entry Qwen Code needs when it runs hooks through Git
-// Bash: a POSIX shell line, with the Windows paths written the way MSYS
-// resolves them.
-func posixEntryLine(kind hookKind, tool Tool, exe, dataDir, event string) string {
-	exePath := filepath.ToSlash(exe)
-	call := shellQuote(exePath) + " " + posixArgs(kind, tool, dataDir, event)
-	line := "if [ -x " + shellQuote(exePath) + " ]; then " + call + "; "
-	if kind == hookApproval {
-		if fallback := ApproveFallback(tool); fallback != "" {
-			line += "else printf '%s' " + shellQuote(fallback) + "; "
-		}
-	}
-	return line + "fi"
-}
-
-func posixArgs(kind hookKind, tool Tool, dataDir, event string) string {
-	args := rakkoArgs(kind, tool, dataDir, event)
-	out := make([]string, len(args))
-	for i, a := range args {
-		if a == dataDir {
-			a = filepath.ToSlash(a)
-		}
-		out[i] = shellQuote(a)
-	}
-	return strings.Join(out, " ")
 }
 
 // escapedForTool escapes a value the tool itself expands. Auggie expands
@@ -287,11 +232,8 @@ func quotableFor(shell windowsShell, value string) bool {
 }
 
 func shellName(shell windowsShell) string {
-	switch shell {
-	case shellPowerShell:
+	if shell == shellPowerShell {
 		return "PowerShell"
-	case shellBash:
-		return "Git Bash"
 	}
 	return "cmd.exe"
 }

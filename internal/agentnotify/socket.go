@@ -90,13 +90,19 @@ type Server struct {
 	answered map[string]time.Time
 }
 
+// frameDeadline bounds the first line of a connection. On Windows the
+// admitted connection's handshake shares this budget, so a client has two
+// seconds in total to prove itself and say what it wants.
+const frameDeadline = 2 * time.Second
+
 // transport is the platform's listening end: a unix socket on macOS, a
 // named pipe on Windows. authorize decides whether an accepted connection
-// may send a frame at all (it may read a handshake first); cleanup runs once
-// the listener is closed.
+// may send a frame at all (it may read a handshake first, and deadline is
+// the end of the budget it must finish by); cleanup runs once the listener
+// is closed.
 type transport struct {
 	ln        net.Listener
-	authorize func(net.Conn) bool
+	authorize func(net.Conn, time.Time) bool
 	cleanup   func()
 }
 
@@ -149,21 +155,24 @@ func (s *Server) accept() {
 			time.Sleep(50 * time.Millisecond)
 			continue
 		}
-		// One user only: a connection that cannot prove it belongs to this
-		// account is closed without reading a byte of payload.
-		if s.t.authorize != nil && !s.t.authorize(conn) {
-			conn.Close()
-			continue
-		}
+		// Admission runs on the connection's own goroutine: a client that
+		// connects and then says nothing must not hold up the accept loop,
+		// which would cost the next, well-behaved client its dial budget.
 		go s.handle(conn)
 	}
 }
 
-// handle runs one connection: one line, then either a completion (no
-// reply) or an approval (one decision back).
+// handle runs one connection: admission, then one line, then either a
+// completion (no reply) or an approval (one decision back).
 func (s *Server) handle(conn net.Conn) {
 	defer conn.Close()
-	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	deadline := time.Now().Add(frameDeadline)
+	// One user only: a connection that cannot prove it belongs to this
+	// account is closed without reading a byte of payload.
+	if s.t.authorize != nil && !s.t.authorize(conn, deadline) {
+		return
+	}
+	_ = conn.SetReadDeadline(deadline)
 	line, err := bufio.NewReader(io.LimitReader(conn, forwardReadLimit)).ReadBytes('\n')
 	if err != nil {
 		return
