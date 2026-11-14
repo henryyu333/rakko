@@ -319,6 +319,15 @@ func wiAwait(op uintptr, what string) error {
 	}
 }
 
+// wiAwaitAndRelease waits for op and releases the caller's reference to
+// it. wiAwait reads the status through IAsyncInfo but the operation
+// itself still belongs to the caller: a render that only waits leaks the
+// async object and everything it holds until the process exits.
+func wiAwaitAndRelease(op uintptr, what string) error {
+	defer wiRelease(op)
+	return wiAwait(op, what)
+}
+
 // wiAwaitResult waits for op and returns its GetResults value, which the
 // caller releases.
 func wiAwaitResult(op uintptr, what string) (uintptr, error) {

@@ -191,7 +191,7 @@ func RenderPDFPage(src string, page int, dst string, format ImageFormat) error {
 			wiRelease(out)
 			return wiErr("PdfPage.RenderToStreamAsync", hr)
 		}
-		if err := wiAwait(op, "PdfPage.RenderToStreamAsync"); err != nil {
+		if err := wiAwaitAndRelease(op, "PdfPage.RenderToStreamAsync"); err != nil {
 			wiRelease(out)
 			return err
 		}
@@ -200,8 +200,7 @@ func RenderPDFPage(src string, page int, dst string, format ImageFormat) error {
 		if hr := wiQueryInterface(out, &wiIIDOutputStream, &sink); !wiFailed(hr) && sink != 0 {
 			var flushOp uintptr
 			if hr := wiInvoke(sink, outputStreamFlush, uintptr(unsafe.Pointer(&flushOp))); !wiFailed(hr) {
-				wiAwait(flushOp, "IOutputStream.FlushAsync")
-				wiRelease(flushOp)
+				_ = wiAwaitAndRelease(flushOp, "IOutputStream.FlushAsync")
 			}
 			wiRelease(sink)
 		}
