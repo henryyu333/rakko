@@ -61,10 +61,13 @@ const (
 // appsFolderEntries enumerates the Apps folder: every application the
 // Start Menu shows, packaged and desktop alike.
 func appsFolderEntries() ([]appEntry, error) {
-	// The enumeration is one COM apartment's work: keep it on one thread.
+	// The enumeration is one COM apartment's work: keep it on one thread
+	// and give the apartment back when it ends, so the thread can join
+	// another mode's apartment when Go reuses it.
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
-	winCOMInit()
+	leave, _ := enterCOMApartment(coinitApartmentThreaded)
+	defer leave()
 	var folder unsafe.Pointer
 	hr, _, _ := procSHGetKnownFolderItem.Call(
 		uintptr(unsafe.Pointer(&folderIDAppsFolder)), knownFolderFlagDefault, 0,

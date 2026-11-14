@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"image/png"
 	"math"
+	"runtime"
 	"testing"
 )
 
@@ -107,4 +108,36 @@ func TestHeadphoneIconIsATemplate(t *testing.T) {
 			t.Fatalf("part %d: template opaque=%v clear=%v, want both", part, opaque, clear)
 		}
 	}
+}
+
+// TestEnterCOMApartmentBalancesTheCount checks that the helper that
+// replaced the bare CoInitializeEx calls gives the apartment back: a
+// thread left in one makes the next user's other-mode request fail.
+func TestEnterCOMApartmentBalancesTheCount(t *testing.T) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	leave, ok := enterCOMApartment(coinitMultithreaded)
+	if !ok {
+		t.Fatal("a fresh test thread refused the MTA")
+	}
+	// A different mode is refused, and its no-op leave must not release
+	// the apartment this test owns: the count still answers S_FALSE.
+	other, otherOK := enterCOMApartment(coinitApartmentThreaded)
+	if otherOK {
+		t.Fatal("a thread already in the MTA accepted an STA")
+	}
+	other()
+	hr, _, _ := procCoInitializeEx.Call(0, coinitMultithreaded)
+	if code := int32(uint32(hr)); code != 1 {
+		t.Fatalf("after the refused STA CoInitializeEx answered 0x%08X, want S_FALSE: the refused call released an apartment it did not own", uint32(hr))
+	}
+	procCoUninitialize.Call() // the direct initialize above
+	leave()
+	// Every count this test added is gone: a fresh initialize is S_OK.
+	hr, _, _ = procCoInitializeEx.Call(0, coinitMultithreaded)
+	if code := int32(uint32(hr)); code != 0 {
+		t.Fatalf("after every leave CoInitializeEx answered 0x%08X, want S_OK: the count was not balanced", uint32(hr))
+	}
+	procCoUninitialize.Call()
 }

@@ -271,11 +271,20 @@ func abs64(v float64) float64 {
 func (h *NowPlayingHost) run(stop chan struct{}) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
+	defer close(h.done)
 	// A multithreaded apartment: this thread never pumps messages, and an
 	// apartment that does not pump would leave a broker-delivered async
 	// completion (the artwork stream does) stuck at Started forever.
-	procCoInitializeEx.Call(0, coinitMultithreaded)
-	defer close(h.done)
+	leave, ok := enterCOMApartment(coinitMultithreaded)
+	if !ok {
+		// The thread was handed to us already living in another apartment
+		// (an STA a search worker left behind, or a library that made it
+		// one). There is no way to turn that into the MTA this worker
+		// needs, so the host reports itself dead and the caller starts a
+		// new one on a fresh thread instead of stalling here.
+		return
+	}
+	defer leave()
 
 	mgr := npOpenManager(stop)
 	if mgr == nil {

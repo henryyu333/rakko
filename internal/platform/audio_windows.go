@@ -159,6 +159,23 @@ func winCOMInit() {
 	procCoInitializeEx.Call(0, coinitApartmentThreaded)
 }
 
+// rpcEChangedMode is the HRESULT CoInitializeEx answers when the thread
+// already lives in a different apartment.
+const rpcEChangedMode = 0x80010106
+
+// enterCOMApartment initializes the calling thread's COM apartment and
+// returns the leave call that balances it. ok is false when nothing was
+// initialized — the thread already lives in a different apartment — and
+// the returned leave is a no-op: uninitializing a count this call did not
+// add would tear down the apartment its real owner still uses.
+func enterCOMApartment(mode uintptr) (leave func(), ok bool) {
+	hr, _, _ := procCoInitializeEx.Call(0, mode)
+	if uint32(hr) == rpcEChangedMode || failedHR(hr) {
+		return func() {}, false
+	}
+	return func() { procCoUninitialize.Call() }, true
+}
+
 // newDeviceEnumerator creates the MMDevice enumerator on this thread.
 func newDeviceEnumerator() unsafe.Pointer {
 	var enum unsafe.Pointer

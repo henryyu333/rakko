@@ -93,9 +93,13 @@ func StartSearch(term string, scope SearchScope, limit int, emit func([]SearchHi
 	go func() {
 		// A COM apartment of its own: the OLE DB provider and the shell
 		// enumeration both need one, and the main thread's belongs to the UI.
+		// The thread returns to Go's pool, so it must leave the apartment
+		// it joined: a thread left in an STA makes the media worker's MTA
+		// request fail when it is reused.
 		runtime.LockOSThread()
 		defer runtime.UnlockOSThread()
-		procCoInitializeEx.Call(0, coinitApartmentThreaded)
+		leave, _ := enterCOMApartment(coinitApartmentThreaded)
+		defer leave()
 		w := newSearchSink(run, emit, limit)
 		if scope != ScopeFiles {
 			lower := strings.ToLower(term)
@@ -129,7 +133,8 @@ func WarmSearch() {
 		appListFresh()
 		runtime.LockOSThread()
 		defer runtime.UnlockOSThread()
-		procCoInitializeEx.Call(0, coinitApartmentThreaded)
+		leave, _ := enterCOMApartment(coinitApartmentThreaded)
+		defer leave()
 		_ = searchIndex("zzz-rakko-warmup-zzz", ScopeAll, newSearchSink(&SearchRun{}, func([]SearchHit) {}, 1))
 	}()
 }
