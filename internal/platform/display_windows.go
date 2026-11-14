@@ -13,7 +13,12 @@ package platform
 // so the island never hides behind the taskbar.
 
 import (
+	"fmt"
+	"sync"
+	"sync/atomic"
 	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
 // ScreenWindow is one ordinary on-screen window: its handle as the number,
@@ -71,35 +76,137 @@ func NotchTopInset(displayID int64) int {
 	return 0
 }
 
-// DisplayAsleep reports whether the display with this id is off: display
-// sleep, the lock screen or a powered-down monitor. An id the system no
-// longer knows counts as awake, matching the Mac answer.
+// DisplayAsleep reports whether the user cannot see the display with this id:
+// the console's displays are powered down, or the console is locked or
+// switched away. An id the system no longer knows counts as awake, matching
+// the Mac answer.
+//
+// Windows has no per-display power query (GetDevicePowerState takes a device
+// handle, not an HMONITOR) and reports the console display state for all
+// displays at once, so the state the power notification cached decides.
 func DisplayAsleep(display int64) bool {
-	m, _, ok := findMonitor(display)
-	if !ok {
+	if _, _, ok := findMonitor(display); !ok {
 		return false
 	}
-	return monitorAsleep(m.handle)
+	return displayAsleep()
 }
 
-// MainDisplayAsleep reports whether the primary display is off.
+// MainDisplayAsleep reports whether the primary display is dark.
 func MainDisplayAsleep() bool {
 	h, _, _ := procMonitorFromPoint.Call(0, 1 /* MONITOR_DEFAULTTOPRIMARY */)
 	if h == 0 {
 		return false
 	}
-	return monitorAsleep(h)
+	return displayAsleep()
 }
 
-func monitorAsleep(handle uintptr) bool {
-	var on int32
-	r, _, _ := procGetDevicePowerState.Call(handle, uintptr(unsafe.Pointer(&on)))
-	if r == 0 {
-		// The query is not available for this display: report awake so no
-		// animation is frozen on a guess.
-		return false
+// displayAsleep answers whether the screen is dark right now: the console's
+// displays are off, or the session is locked. The lock screen is a desktop of
+// its own that covers every window, and Windows gives no per-window answer
+// for it, so a locked console counts as dark here — the desktop pet holds its
+// pose instead of animating behind the lock.
+func displayAsleep() bool {
+	if !SessionActive() {
+		return true
 	}
-	return on == 0
+	return displayPowerState() == powerDisplayOff
+}
+
+// powerDisplayOff/On/Dim are the values GUID_CONSOLE_DISPLAY_STATE reports.
+const (
+	powerDisplayOff = 0
+	powerDisplayOn  = 1
+	powerDisplayDim = 2
+)
+
+// displayPowerGUID is GUID_CONSOLE_DISPLAY_STATE: the console display's power
+// state, the only notification Windows offers for a screen turning off.
+var displayPowerGUID = windows.GUID{
+	Data1: 0x6fe69556,
+	Data2: 0x704a,
+	Data3: 0x47a0,
+	Data4: [8]byte{0x8f, 0x24, 0xc2, 0x8d, 0x93, 0x6f, 0xda, 0x47},
+}
+
+const (
+	deviceNotifyCallback  = 0x00000002
+	pbtPowerSettingChange = 0x8017
+)
+
+// powerSettingChange mirrors POWER_SETTING_CHANGE as the power notification
+// hands it over: the setting's GUID, its data's length, and the data itself,
+// a DWORD for the console display state.
+type powerSettingChange struct {
+	setting    windows.GUID
+	dataLength uint32
+	data       *byte
+}
+
+// deviceNotifySubscribeParams mirrors DEVICE_NOTIFY_SUBSCRIBE_PARAMETERS, the
+// recipient a DEVICE_NOTIFY_CALLBACK subscription names.
+type deviceNotifySubscribeParams struct {
+	callback uintptr
+	context  uintptr
+}
+
+var displayPower = struct {
+	once   sync.Once
+	err    error
+	state  atomic.Uint32
+	params deviceNotifySubscribeParams
+	notify uintptr
+}{}
+
+// displayPowerCallbackAddr is the subscription's fixed callback: Windows freezes
+// a callback for the life of the process, so it must not be created per call.
+var displayPowerCallbackAddr = windows.NewCallback(displayPowerCallback)
+
+// displayPowerCallback stores the display state the system reports. It runs on
+// a system thread, so it does nothing else.
+func displayPowerCallback(_, notifyType, setting uintptr) uintptr {
+	if uint32(notifyType) == pbtPowerSettingChange && setting != 0 {
+		change := powerSettingChangeAt(setting)
+		if change.setting == displayPowerGUID && change.dataLength >= 4 && change.data != nil {
+			if v := *(*uint32)(unsafe.Pointer(change.data)); v <= powerDisplayDim {
+				displayPower.state.Store(v)
+			}
+		}
+	}
+	return 0
+}
+
+// powerSettingChangeAt reads the setting the notification handed over. The
+// value comes from the system's own stack frame, so the uintptr-to-pointer
+// conversion is safe for the callback's duration.
+func powerSettingChangeAt(p uintptr) *powerSettingChange {
+	var v unsafe.Pointer
+	*(*uintptr)(unsafe.Pointer(&v)) = p
+	return (*powerSettingChange)(v)
+}
+
+// ensureDisplayPower subscribes the process to the console display state. One
+// subscription serves the whole process; a system that refuses it leaves the
+// display reported awake, so no animation is frozen on a guess.
+func ensureDisplayPower() {
+	displayPower.once.Do(func() {
+		displayPower.state.Store(powerDisplayOn)
+		displayPower.params = deviceNotifySubscribeParams{callback: displayPowerCallbackAddr}
+		r, _, err := procPowerSettingRegisterNotification.Call(
+			uintptr(unsafe.Pointer(&displayPowerGUID)), deviceNotifyCallback,
+			uintptr(unsafe.Pointer(&displayPower.params)), uintptr(unsafe.Pointer(&displayPower.notify)))
+		if int32(r) != 0 {
+			displayPower.err = fmt.Errorf("platform: PowerSettingRegisterNotification: %w", err)
+			return
+		}
+	})
+}
+
+// displayPowerState answers the console display state the notification last
+// reported: on until the system says otherwise, because a display that can
+// run this process is on when the process starts.
+func displayPowerState() uint32 {
+	ensureDisplayPower()
+	return displayPower.state.Load()
 }
 
 // WindowNumber returns the window's identity in the window list: the

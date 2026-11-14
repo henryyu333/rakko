@@ -225,6 +225,68 @@ func TestDisplayTargetPathsQuery(t *testing.T) {
 	}
 }
 
+// TestDisplayPowerGUID checks the console display state's identifier: a wrong
+// GUID subscribes to nothing and the screen never reports dark.
+func TestDisplayPowerGUID(t *testing.T) {
+	want, err := guidFromString("6fe69556-704a-47a0-8f24-c28d936fda47")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if displayPowerGUID != want {
+		t.Fatalf("display power GUID = %v, want GUID_CONSOLE_DISPLAY_STATE %v", displayPowerGUID, want)
+	}
+}
+
+// TestDisplayPowerCallback checks that the subscription's callback stores the
+// states the system reports and ignores everything else.
+func TestDisplayPowerCallback(t *testing.T) {
+	t.Cleanup(func() { displayPower.state.Store(powerDisplayOn) })
+	for _, tt := range []struct {
+		name   string
+		guid   windows.GUID
+		data   []byte
+		before uint32
+		want   uint32
+	}{
+		{"screen off", displayPowerGUID, []byte{0, 0, 0, 0}, powerDisplayOn, powerDisplayOff},
+		{"screen on", displayPowerGUID, []byte{1, 0, 0, 0}, powerDisplayOff, powerDisplayOn},
+		{"dimmed", displayPowerGUID, []byte{2, 0, 0, 0}, powerDisplayOff, powerDisplayDim},
+		{"another setting", windows.GUID{Data1: 1}, []byte{0, 0, 0, 0}, powerDisplayOn, powerDisplayOn},
+		{"unknown value", displayPowerGUID, []byte{9, 0, 0, 0}, powerDisplayOn, powerDisplayOn},
+		{"short data", displayPowerGUID, []byte{0}, powerDisplayOn, powerDisplayOn},
+	} {
+		displayPower.state.Store(tt.before)
+		change := powerSettingChange{setting: tt.guid, dataLength: uint32(len(tt.data))}
+		if len(tt.data) > 0 {
+			change.data = &tt.data[0]
+		}
+		displayPowerCallback(0, pbtPowerSettingChange, uintptr(unsafe.Pointer(&change)))
+		if got := displayPower.state.Load(); got != tt.want {
+			t.Errorf("%s: state = %d, want %d", tt.name, got, tt.want)
+		}
+	}
+}
+
+// TestDisplayPowerSubscribes checks that the system accepts the display power
+// subscription: without it the screen state never changes again.
+func TestDisplayPowerSubscribes(t *testing.T) {
+	ensureDisplayPower()
+	if displayPower.err != nil {
+		t.Fatalf("the display power subscription failed: %v", displayPower.err)
+	}
+	if displayPower.notify == 0 {
+		t.Fatal("the subscription reported success without a handle")
+	}
+}
+
+// TestDisplayAsleepUnknownDisplay checks that an id no display answers for
+// counts as awake, as on the Mac: a stale saved id must not freeze anything.
+func TestDisplayAsleepUnknownDisplay(t *testing.T) {
+	if DisplayAsleep(999999999) {
+		t.Fatal("an unknown display counts as asleep")
+	}
+}
+
 // TestRepeatedEnumerationKeepsCallbackSlots checks that resolving displays
 // and listing windows reuse the package's fixed enumeration callbacks. Each
 // call used to create a fresh Windows callback and the runtime never frees

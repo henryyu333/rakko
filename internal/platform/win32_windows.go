@@ -29,6 +29,7 @@ var (
 	shcore   = windows.NewLazySystemDLL("shcore.dll")
 	wtsapi32 = windows.NewLazySystemDLL("wtsapi32.dll")
 	combase  = windows.NewLazySystemDLL("combase.dll")
+	powrprof = windows.NewLazySystemDLL("powrprof.dll")
 )
 
 // Procedures more than one area calls.
@@ -116,7 +117,6 @@ var (
 	procGetLastInputInfo                 = sysProc(user32, "GetLastInputInfo")
 	procGetTickCount                     = sysProc(kernel32, "GetTickCount64")
 	procGetSystemPowerStat               = sysProc(kernel32, "GetSystemPowerStatus")
-	procGetDevicePowerState              = sysProc(kernel32, "GetDevicePowerState")
 	procGetFileAttributesEx              = sysProc(kernel32, "GetFileAttributesExW")
 	procMoveFileEx                       = sysProc(kernel32, "MoveFileExW")
 	procGetDiskFreeSpaceEx               = sysProc(kernel32, "GetDiskFreeSpaceExW")
@@ -156,12 +156,13 @@ var (
 	procPlaySound        = sysProc(winmm, "PlaySoundW")
 	procGetDpiForMonitor = sysProc(shcore, "GetDpiForMonitor")
 
-	procGetDisplayConfigBufferSizes = sysProc(user32, "GetDisplayConfigBufferSizes")
-	procQueryDisplayConfig          = sysProc(user32, "QueryDisplayConfig")
-	procDisplayConfigGetDeviceInfo  = sysProc(user32, "DisplayConfigGetDeviceInfo")
-	procWTSQuerySession             = sysProc(wtsapi32, "WTSQuerySessionInformationW")
-	procOpenInputDesktop            = sysProc(user32, "OpenInputDesktop")
-	procCloseDesktop                = sysProc(user32, "CloseDesktop")
+	procGetDisplayConfigBufferSizes      = sysProc(user32, "GetDisplayConfigBufferSizes")
+	procQueryDisplayConfig               = sysProc(user32, "QueryDisplayConfig")
+	procDisplayConfigGetDeviceInfo       = sysProc(user32, "DisplayConfigGetDeviceInfo")
+	procWTSQuerySession                  = sysProc(wtsapi32, "WTSQuerySessionInformationW")
+	procPowerSettingRegisterNotification = sysProc(powrprof, "PowerSettingRegisterNotification")
+	procOpenInputDesktop                 = sysProc(user32, "OpenInputDesktop")
+	procCloseDesktop                     = sysProc(user32, "CloseDesktop")
 )
 
 // Window styles and messages this package touches.
