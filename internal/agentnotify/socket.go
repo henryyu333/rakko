@@ -177,10 +177,12 @@ func (s *Server) handle(conn net.Conn) {
 	if err != nil {
 		return
 	}
-	// The request is in; the read deadline was for the framing only. An
-	// approval connection stays open while its card waits, and a leftover
-	// deadline would cancel it two seconds later.
+	// The request is in; the framing budget is spent. An approval connection
+	// stays open while its card waits, and a leftover deadline would cancel
+	// it two seconds later. The handshake left a write deadline behind too;
+	// the decision sets its own when it is written.
 	_ = conn.SetReadDeadline(time.Time{})
+	_ = conn.SetWriteDeadline(time.Time{})
 	var env struct {
 		V    int    `json:"v"`
 		Kind string `json:"kind"`
