@@ -99,9 +99,9 @@ func TestNowPlayingTimelineAnchorsAtItsUpdateTime(t *testing.T) {
 	published := time.Unix(1_700_000_000, 0).UTC()
 	tl := newFakeCOM()
 	for slot, v := range map[int]int64{
-		6:  0,                          // start
-		7:  200 * ticksPerSecond,       // end
-		10: 30 * ticksPerSecond,        // position
+		6:  0,                                                  // start
+		7:  200 * ticksPerSecond,                               // end
+		10: 30 * ticksPerSecond,                                // position
 		11: filetimeUnixBase + published.Unix()*ticksPerSecond, // last update
 	} {
 		tl.slot[slot] = windows.NewCallback(func(_, out uintptr) uintptr {

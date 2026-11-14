@@ -132,7 +132,7 @@ func TestWICEncoderPixelFormatsTakePremultipliedRGBA(t *testing.T) {
 		guid wiGUID
 		want []byte
 	}{
-		{wiGUIDPixelBGRA, []byte{0, 0, 255, 0x80}},  // straight BGRA
+		{wiGUIDPixelBGRA, []byte{0, 0, 255, 0x80}},   // straight BGRA
 		{wiGUIDPixelPBGRA, []byte{0, 0, 0x80, 0x80}}, // premultiplied BGRA
 		{wiGUIDPixel32BGR, []byte{0, 0, 255, 0xFF}},  // opaque, straight
 		{wiGUIDPixel24BGR, []byte{0, 0, 255}},        // opaque, straight
