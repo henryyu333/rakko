@@ -273,6 +273,9 @@ func startupLoc(dirs ...string) locales.Messages {
 
 func (a *shelf) ready(show bool) {
 	a.locale = mygo.App.Locale()
+	// Layouts saved under an earlier display identity are re-keyed before the
+	// first window is placed, so the user's own place restores.
+	a.migrateSavedLayouts()
 	a.newNotchWindow()
 	// Pay the index's per-process setup now, so the first search of the
 	// session is as fast as the ones after it.

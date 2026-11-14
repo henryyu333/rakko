@@ -7,6 +7,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 )
 
@@ -413,6 +414,61 @@ func (a *shelf) panelDragTick(p mygo.Point, down bool) bool {
 	a.syncDragGuard()
 	a.syncMousePassThrough()
 	return true
+}
+
+// displayIDMigrator maps a display id saved by an earlier build to the one
+// the running system uses. platform.StableDisplayID answers both mygo's raw id
+// and the GDI-name hash older Windows builds saved.
+var displayIDMigrator = platform.StableDisplayID
+
+// migrateIslandSpots re-keys saved island places from the ids an earlier build
+// wrote to the ids this system uses, and answers the migrated map plus whether
+// anything moved. A place already stored under the current id wins over a
+// migrated one; a key that is not an integer is left alone.
+func migrateIslandSpots(saved map[string]settings.IslandPos) (map[string]settings.IslandPos, bool) {
+	if len(saved) == 0 {
+		return saved, false
+	}
+	next := make(map[string]settings.IslandPos, len(saved))
+	changed := false
+	for key, pos := range saved {
+		id, err := strconv.ParseInt(key, 10, 64)
+		if err != nil {
+			next[key] = pos
+			continue
+		}
+		mapped := displayIDMigrator(id)
+		if mapped == id {
+			next[key] = pos
+			continue
+		}
+		changed = true
+		if _, taken := saved[islandSpotKey(mapped)]; taken {
+			// The current key is already there and describes this display.
+			continue
+		}
+		next[islandSpotKey(mapped)] = pos
+	}
+	if !changed {
+		return saved, false
+	}
+	return next, true
+}
+
+// migrateSavedLayouts re-keys the places saved under an earlier display
+// identity once at startup, so a layout that was saved before the identity
+// changed still restores instead of being ignored as an unknown screen.
+func (a *shelf) migrateSavedLayouts() {
+	if a.settingsBroken {
+		return
+	}
+	next, changed := migrateIslandSpots(a.settings.IslandPos)
+	if !changed {
+		return
+	}
+	nextSettings := a.settings
+	nextSettings.IslandPos = next
+	a.applySettings(nextSettings)
 }
 
 // saveIslandSpot writes this display's place to settings.json after a move.

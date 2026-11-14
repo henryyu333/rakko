@@ -882,11 +882,20 @@ func overlapArea(a, b winRect) int64 {
 // physical monitor's device interface path, which survives a restart even
 // though the HMONITOR mygo reports as Display.ID does not, and stays with the
 // monitor when it is moved to another output (the GDI device name does not).
-// An unknown id is returned unchanged, so a stale saved key never matches a
-// real display by accident.
+//
+// A layout key an earlier build saved — the GDI device name's hash — resolves
+// to the same display's current identity, so a saved layout can be migrated
+// rather than lost. An unknown id is returned unchanged, so a stale saved key
+// never matches a real display by accident.
 func StableDisplayID(id int64) int64 {
-	for _, m := range enumMonitors() {
+	monitors := enumMonitors()
+	for _, m := range monitors {
 		if int64(m.handle) == id {
+			return stableDisplayID(m)
+		}
+	}
+	for _, m := range monitors {
+		if legacyDisplayID(m) == id {
 			return stableDisplayID(m)
 		}
 	}

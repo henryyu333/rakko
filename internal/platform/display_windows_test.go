@@ -306,6 +306,26 @@ func TestDisplayAsleepUnknownDisplay(t *testing.T) {
 	}
 }
 
+// TestStableDisplayIDResolvesLegacyKeys checks the mapping the saved-layout
+// migration uses: the key an earlier build wrote must resolve to the same
+// display's current id, so a layout keyed by it is re-keyed rather than lost.
+// An unknown id stays unknown, so a stale key never matches by accident.
+func TestStableDisplayIDResolvesLegacyKeys(t *testing.T) {
+	monitors := enumMonitors()
+	if len(monitors) == 0 {
+		t.Fatal("no displays reported")
+	}
+	for _, m := range monitors {
+		if got, want := StableDisplayID(legacyDisplayID(m)), stableDisplayID(m); got != want {
+			t.Errorf("%s: StableDisplayID(legacy %d) = %d, want the current id %d",
+				m.device, legacyDisplayID(m), got, want)
+		}
+	}
+	if got := StableDisplayID(-42424242); got != -42424242 {
+		t.Fatalf("an unknown id changed to %d", got)
+	}
+}
+
 // TestRepeatedEnumerationKeepsCallbackSlots checks that resolving displays
 // and listing windows reuse the package's fixed enumeration callbacks. Each
 // call used to create a fresh Windows callback and the runtime never frees
