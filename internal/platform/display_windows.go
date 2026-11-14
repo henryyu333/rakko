@@ -166,22 +166,6 @@ func WindowsOfPID(pid int) []ScreenWindow {
 	return out
 }
 
-type windowsEnumProc func(h uintptr) bool
-
-func enumTopLevel(fn windowsEnumProc) {
-	cb := windowsEnumCallback(fn)
-	procEnumWindows.Call(cb, 0)
-}
-
-func windowsEnumCallback(fn windowsEnumProc) uintptr {
-	return newCallback(func(h, _ uintptr) uintptr {
-		if fn(h) {
-			return 1
-		}
-		return 0
-	})
-}
-
 // ordinaryWindow reports whether h is an app window the user can see:
 // visible, not a tool window, not this process's hidden owner, with a
 // title (the desktop and the shell's helper windows have none).

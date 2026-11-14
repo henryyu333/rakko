@@ -36,12 +36,6 @@ var (
 
 func sysProc(dll *windows.LazyDLL, name string) *windows.LazyProc { return dll.NewProc(name) }
 
-// newCallback wraps a two-argument Windows callback (enumeration procs take
-// the handle and the application-supplied value).
-func newCallback(fn func(uintptr, uintptr) uintptr) uintptr {
-	return windows.NewCallback(fn)
-}
-
 var (
 	procSetWindowPos        = sysProc(user32, "SetWindowPos")
 	procGetWindowRect       = sysProc(user32, "GetWindowRect")
@@ -315,6 +309,81 @@ func setLayeredAlpha(h uintptr) {
 	user32.NewProc("SetLayeredWindowAttributes").Call(h, 0, 255, lwaAlpha)
 }
 
+// --- enumeration callbacks --------------------------------------------------
+
+// windowsEnumProc visits one enumerated handle and reports whether the
+// enumeration may continue.
+type windowsEnumProc func(h uintptr) bool
+
+// The enumeration procs are fixed: a Windows callback is permanent once
+// created and takes a slot the runtime never frees, so each kind of
+// enumeration has exactly one and the per-call visitor travels through the
+// enumeration's own application value (EnumWindows' lParam,
+// EnumDisplayMonitors' dwData) as a token into enumCalls.
+var (
+	enumWindowsProc  = windows.NewCallback(enumWindowHandle)
+	enumMonitorsProc = windows.NewCallback(enumMonitorHandle)
+)
+
+var enumCalls struct {
+	mu      sync.Mutex
+	next    uintptr
+	byToken map[uintptr]windowsEnumProc
+}
+
+// beginEnum registers a visitor for one enumeration and returns the token
+// its callback receives.
+func beginEnum(fn windowsEnumProc) uintptr {
+	enumCalls.mu.Lock()
+	defer enumCalls.mu.Unlock()
+	if enumCalls.byToken == nil {
+		enumCalls.byToken = map[uintptr]windowsEnumProc{}
+	}
+	enumCalls.next++
+	enumCalls.byToken[enumCalls.next] = fn
+	return enumCalls.next
+}
+
+func endEnum(token uintptr) {
+	enumCalls.mu.Lock()
+	delete(enumCalls.byToken, token)
+	enumCalls.mu.Unlock()
+}
+
+// enumVisitor resolves the token an enumeration callback was handed. The
+// token is only valid for the call that issued it, and the system never
+// calls back after that call returns.
+func enumVisitor(token uintptr) windowsEnumProc {
+	enumCalls.mu.Lock()
+	defer enumCalls.mu.Unlock()
+	return enumCalls.byToken[token]
+}
+
+func enumWindowHandle(h, lParam uintptr) uintptr {
+	if fn := enumVisitor(lParam); fn != nil && fn(h) {
+		return 1
+	}
+	return 0
+}
+
+func enumMonitorHandle(handle, _, _, lParam uintptr) uintptr {
+	if fn := enumVisitor(lParam); fn != nil && fn(handle) {
+		return 1
+	}
+	return 0
+}
+
+// enumTopLevel visits the top-level windows front to back until fn reports
+// done.
+func enumTopLevel(fn windowsEnumProc) {
+	if fn == nil {
+		return
+	}
+	token := beginEnum(fn)
+	defer endEnum(token)
+	procEnumWindows.Call(enumWindowsProc, token)
+}
+
 // --- displays ---------------------------------------------------------------
 
 type screenMonitor struct {
@@ -325,29 +394,35 @@ type screenMonitor struct {
 	device string
 }
 
+// enumMonitors lists the active displays. The fixed monitor callback reads
+// this call's collector through the enumeration's application value, so no
+// per-call Windows callback is created: those are permanent, and a query
+// repeated a few thousand times would exhaust the runtime's callback slots.
 func enumMonitors() []screenMonitor {
 	var out []screenMonitor
-	cb := windows.NewCallback(func(handle, _ uintptr, _ uintptr, _ uintptr) uintptr {
+	token := beginEnum(func(handle uintptr) bool {
 		var mi monitorInfoEx
 		mi.cbSize = uint32(unsafe.Sizeof(mi))
 		if r, _, _ := procGetMonitorInfo.Call(handle, uintptr(unsafe.Pointer(&mi))); r == 0 {
-			return 1
+			return true
 		}
 		dpi := 96
 		var dx, dy uint32
 		if r, _, _ := procGetDpiForMonitor.Call(handle, mdvEffDPI, uintptr(unsafe.Pointer(&dx)), uintptr(unsafe.Pointer(&dy))); r == 0 && dx > 0 {
 			dpi = int(dx)
 		}
+		device := windows.UTF16ToString(mi.szDevice[:])
 		out = append(out, screenMonitor{
 			handle: handle,
 			bounds: mi.rcMonitor,
 			work:   mi.rcWork,
 			dpi:    dpi,
-			device: windows.UTF16ToString(mi.szDevice[:]),
+			device: device,
 		})
-		return 1
+		return true
 	})
-	procEnumDisplayMonitors.Call(0, 0, cb, 0)
+	defer endEnum(token)
+	procEnumDisplayMonitors.Call(0, 0, enumMonitorsProc, token)
 	return out
 }
 

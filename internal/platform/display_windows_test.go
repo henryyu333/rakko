@@ -129,6 +129,27 @@ func TestStableDisplayID(t *testing.T) {
 	}
 }
 
+// TestRepeatedEnumerationKeepsCallbackSlots checks that resolving displays
+// and listing windows reuse the package's fixed enumeration callbacks. Each
+// call used to create a fresh Windows callback and the runtime never frees
+// them (its table holds 2000), so a few thousand display queries — the DIP
+// conversions make one each — crashed the app.
+func TestRepeatedEnumerationKeepsCallbackSlots(t *testing.T) {
+	for range 2500 {
+		if len(enumMonitors()) == 0 {
+			t.Fatal("no displays reported")
+		}
+	}
+	seen := 0
+	enumTopLevel(func(uintptr) bool {
+		seen++
+		return true
+	})
+	if seen == 0 {
+		t.Fatal("EnumWindows reported no windows")
+	}
+}
+
 // TestPressClassification checks the global observer's inside/outside
 // answer: a press inside a window that takes the mouse is the app's, even
 // when WindowFromPoint answers the desktop; a click-through window reports
