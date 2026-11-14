@@ -38,7 +38,7 @@ import (
 	"golang.org/x/net/http/httpproxy"
 )
 
-// System is one read of the macOS proxy settings that decide where outbound
+// System is one read of the system proxy settings that decide where outbound
 // requests go.
 type System struct {
 	// HTTP, HTTPS and SOCKS are the enabled proxies as "host:port"; an
@@ -78,7 +78,7 @@ var (
 )
 
 // ProxyFor is the transport's Proxy hook: the environment's proxying when it
-// configures any, else the macOS system proxy settings.
+// configures any, else the system proxy settings.
 func ProxyFor(req *http.Request) (*url.URL, error) {
 	if cfg := envProxy(); cfg != nil {
 		return cfg.ProxyFunc()(req.URL)
@@ -191,6 +191,10 @@ func bypassMatches(rule, host string) bool {
 		return strings.HasSuffix(host, rule[1:]) // ".example.test"
 	case strings.HasPrefix(rule, "."):
 		return strings.HasSuffix(host, rule)
+	case strings.HasSuffix(rule, "*"):
+		// A trailing wildcard is a prefix match, the ProxyOverride form
+		// Windows writes for a range of addresses ("192.168.*").
+		return strings.HasPrefix(host, rule[:len(rule)-1])
 	}
 	return host == rule || strings.HasSuffix(host, "."+rule)
 }
@@ -220,7 +224,7 @@ func (s System) noteAutoConfig() {
 	pacNoted = true
 	pacNoteMu.Unlock()
 	if !noted {
-		log.Printf("netproxy: macOS proxy auto-configuration (PAC) is on; Rakko does not evaluate PAC scripts and connects directly")
+		log.Printf("netproxy: %s proxy auto-configuration (PAC) is on; Rakko does not evaluate PAC scripts and connects directly", systemName)
 	}
 }
 

@@ -301,8 +301,8 @@ func TestSharedTransport(t *testing.T) {
 }
 
 // One ExceptionsList entry covers the host and its subdomains; a leading
-// "*." only subdomains; addresses, CIDR (Apple's shorthand included), ports
-// and "*" as written.
+// "*." only subdomains; addresses, CIDR (Apple's shorthand included), ports,
+// "*" as written, and a trailing "*" as the ProxyOverride prefix form.
 func TestBypassMatches(t *testing.T) {
 	for _, tc := range []struct {
 		rule, host string
@@ -323,6 +323,8 @@ func TestBypassMatches(t *testing.T) {
 		{"10.0.0.1", "10.0.0.1", true},
 		{"10.0.0.1", "10.0.0.2", false},
 		{"*", "anything.test", true},
+		{"192.168.*", "192.168.1.20", true},
+		{"192.168.*", "192.169.1.20", false},
 		{"", "anything.test", false},
 		{"weird/thing", "weird.test", false},
 	} {

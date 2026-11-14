@@ -1,8 +1,10 @@
-//go:build !darwin
+//go:build !darwin && !windows
 
 package netproxy
 
-// readSystemProxies reports no system proxy settings: only macOS has the
-// per-network proxy configuration this package reads. The environment's
-// rules still apply on every platform.
+// readSystemProxies reports no system proxy settings: this package reads
+// them only on macOS and Windows. The environment's rules still apply.
 func readSystemProxies() (System, error) { return System{}, nil }
+
+// systemName is how the platform's settings are named in the log.
+const systemName = "system"

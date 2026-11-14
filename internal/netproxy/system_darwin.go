@@ -245,3 +245,6 @@ func cfString(s string) uintptr {
 	buf := append([]byte(s), 0)
 	return cfStringCreate(0, &buf[0], cfUTF8)
 }
+
+// systemName is how the platform's settings are named in the log.
+const systemName = "macOS"
