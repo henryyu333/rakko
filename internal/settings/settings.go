@@ -9,11 +9,10 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-
-	"rakko/internal/atomicfile"
 	"strings"
 
 	"rakko/internal/agentnotify"
+	"rakko/internal/atomicfile"
 )
 
 // FileName is the preferences file inside the data directory.

@@ -15,11 +15,11 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-
-	"rakko/internal/atomicfile"
 	"sort"
 	"sync"
 	"time"
+
+	"rakko/internal/atomicfile"
 )
 
 // FileName is the report history file inside the data directory.
