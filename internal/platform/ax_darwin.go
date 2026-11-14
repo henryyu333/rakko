@@ -205,6 +205,11 @@ func axAttributeSettable(el uintptr, name string, out *byte) int32 {
 	return axIsAttributeSettable(el, uintptr(nsString(name)), out)
 }
 
+// ArrangementError reports a posted arrangement's verdict. The Mac
+// arranges synchronously and already reported from MoveResize, so there is
+// nothing left to say.
+func (w AppWindow) ArrangementError(Rect, bool) error { return nil }
+
 // MoveResize sets the window's position, then its size when resize is
 // true. Position first: a window resized at its old origin may push the
 // title bar under the menu bar before the move lands. ErrAppWindowResize means

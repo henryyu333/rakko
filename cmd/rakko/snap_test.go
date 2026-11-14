@@ -3,6 +3,7 @@
 package main
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -23,15 +24,19 @@ type fakeSnapWindow struct {
 	moves    []platform.Rect
 	resizes  []bool
 	err      error
+	// arrangeErr is the verdict ArrangementError reports, standing in for
+	// a platform that posts the move.
+	arrangeErr error
 	// tiled is a frame the window server applies right after the first
 	// move, standing in for its own drag-time tiling.
 	tiled *platform.Rect
 }
 
-func (f *fakeSnapWindow) Valid() bool                  { return !f.released }
-func (f *fakeSnapWindow) Frame() (platform.Rect, bool) { return f.rect, !f.released }
-func (f *fakeSnapWindow) Settable() (bool, bool)       { return f.move, f.resize }
-func (f *fakeSnapWindow) Release()                     { f.released = true }
+func (f *fakeSnapWindow) Valid() bool                                { return !f.released }
+func (f *fakeSnapWindow) Frame() (platform.Rect, bool)               { return f.rect, !f.released }
+func (f *fakeSnapWindow) Settable() (bool, bool)                     { return f.move, f.resize }
+func (f *fakeSnapWindow) Release()                                   { f.released = true }
+func (f *fakeSnapWindow) ArrangementError(platform.Rect, bool) error { return f.arrangeErr }
 func (f *fakeSnapWindow) MoveResize(r platform.Rect, resize bool) error {
 	f.moves = append(f.moves, r)
 	f.resizes = append(f.resizes, resize)
@@ -833,5 +838,57 @@ func TestSnapPanelUsesItsOwnBox(t *testing.T) {
 	a.snap.panel, a.snap.drawn, a.visible = false, false, false
 	if w, h := a.panelBox(); w != homeShellW || h != homeShellH {
 		t.Fatalf("ordinary island box = %g×%g", w, h)
+	}
+}
+
+// TestSnapConfirmReportsAPostedRefusal drives the confirmation deadline
+// with a posted-move verdict: a refusal that only arrives after the move
+// was posted must reach the same notice the synchronous path posts from
+// snapRelease, and a platform that arranges synchronously (a nil verdict)
+// must stay silent.
+func TestSnapConfirmReportsAPostedRefusal(t *testing.T) {
+	cases := []struct {
+		name     string
+		verdict  error
+		wantMove bool
+	}{
+		{"resize refused", platform.ErrAppWindowResize, false},
+		{"move refused", errors.New("windows: the window refused the move"), true},
+		{"no posted verdict", nil, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			a := snapTestShelf()
+			fake := &fakeSnapWindow{
+				rect:       platform.Rect{X: 0, Y: 0, Width: 100, Height: 100},
+				move:       true,
+				resize:     true,
+				arrangeErr: tc.verdict,
+			}
+			target := platform.Rect{X: 400, Y: 300, Width: 700, Height: 500}
+			past := time.Now().Add(-time.Second)
+			a.snap.confirm = &snapConfirm{win: fake, target: target, resize: true, at: past, until: past}
+			a.snapConfirmTick(time.Now())
+			if !fake.released {
+				t.Fatal("the confirmation kept the window")
+			}
+			if a.snap.confirm != nil {
+				t.Fatal("the confirmation is still armed after its deadline")
+			}
+			switch {
+			case tc.verdict == nil:
+				if a.status != "" {
+					t.Fatalf("a nil verdict posted %q", a.status)
+				}
+			case tc.wantMove:
+				if a.status != a.appLoc().SnapCantMove() || a.statusKind != statusErr {
+					t.Fatalf("move refusal posted %q (%v), want %q", a.status, a.statusKind, a.appLoc().SnapCantMove())
+				}
+			default:
+				if a.status != a.appLoc().SnapCantResize() || a.statusKind != statusErr {
+					t.Fatalf("resize refusal posted %q (%v), want %q", a.status, a.statusKind, a.appLoc().SnapCantResize())
+				}
+			}
+		})
 	}
 }

@@ -114,6 +114,10 @@ type snapWindow interface {
 	Frame() (platform.Rect, bool)
 	Settable() (move, resize bool)
 	MoveResize(r platform.Rect, resize bool) error
+	// ArrangementError reports why a posted arrangement did not land, once
+	// the confirmation window has run out. A platform that arranges
+	// synchronously has already reported from MoveResize and answers nil.
+	ArrangementError(target platform.Rect, resize bool) error
 	Release()
 }
 
@@ -484,7 +488,21 @@ func (a *shelf) snapConfirmTick(now time.Time) {
 		a.snap.confirm = nil
 	}
 	f, ok := c.win.Frame()
-	if !ok || now.After(c.until) {
+	if !ok {
+		done()
+		return
+	}
+	if now.After(c.until) {
+		// The confirmation window ran out without the arrangement holding.
+		// A platform that posts the move could not report synchronously;
+		// it reports the refusal here, into the same notices a synchronous
+		// refusal gets.
+		switch err := c.win.ArrangementError(c.target, c.resize); {
+		case errors.Is(err, platform.ErrAppWindowResize):
+			a.toastStatus(a.appLoc().SnapCantResize(), time.Now().Add(4*time.Second), statusErr)
+		case err != nil:
+			a.toastStatus(a.appLoc().SnapCantMove(), time.Now().Add(4*time.Second), statusErr)
+		}
 		done()
 		return
 	}

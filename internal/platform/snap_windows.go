@@ -163,18 +163,43 @@ func (w AppWindow) MoveResize(r Rect, resize bool) error {
 	}
 	if windowThread(h) != currentThreadID() {
 		// Posted: the move has not happened yet, so reading the frame
-		// would only see the old one.
+		// would only see the old one. ArrangementError reports the verdict
+		// once the confirmation window has run out.
 		return nil
 	}
 	got, ok := windowRect(h)
 	if !ok {
 		return nil // the window went away; nothing left to check
 	}
-	if abs32(got.Left-p.Left) > 2 || abs32(got.Top-p.Top) > 2 {
-		return fmt.Errorf("windows: the window refused the move (at %d,%d, want %d,%d)",
-			got.Left, got.Top, p.Left, p.Top)
+	return arrangementError(got, p, resize)
+}
+
+// ArrangementError reports why a posted arrangement did not land. The
+// caller checks it once its confirmation window has run out: a posted move
+// cannot fail synchronously, so this is where a window that refuses the
+// position or the size still gets its say. A window that has gone away, or
+// whose thread has not processed the move at all, reports nothing — it may
+// still be on its way.
+func (w AppWindow) ArrangementError(target Rect, resize bool) error {
+	if !w.Valid() {
+		return nil
 	}
-	if resize && (abs32(got.width()-p.width()) > 2 || abs32(got.height()-p.height()) > 2) {
+	got, ok := windowRect(w.handle)
+	if !ok {
+		return nil
+	}
+	return arrangementError(got, dipToPixels(target), resize)
+}
+
+// arrangementError classifies a frame against the arrangement asked for:
+// ErrAppWindowResize when only the size differs, a move error when the
+// position does, and nil when the arrangement landed.
+func arrangementError(got, want winRect, resize bool) error {
+	if abs32(got.Left-want.Left) > 2 || abs32(got.Top-want.Top) > 2 {
+		return fmt.Errorf("windows: the window refused the move (at %d,%d, want %d,%d)",
+			got.Left, got.Top, want.Left, want.Top)
+	}
+	if resize && (abs32(got.width()-want.width()) > 2 || abs32(got.height()-want.height()) > 2) {
 		return ErrAppWindowResize
 	}
 	return nil

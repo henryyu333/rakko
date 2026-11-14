@@ -7,6 +7,7 @@ package platform
 // the arrangement are exercised without a desktop.
 
 import (
+	"errors"
 	"math"
 	"runtime"
 	"testing"
@@ -192,4 +193,183 @@ func TestAppWindowZeroValueIsInert(t *testing.T) {
 		t.Fatal("the zero AppWindow accepted a move")
 	}
 	w.Release()
+}
+
+// TestArrangementErrorClassifiesRefusals pins the verdict the async snap
+// reports at the end of its confirmation window: a size-only mismatch is a
+// resize refusal, a position mismatch a failed move.
+func TestArrangementErrorClassifiesRefusals(t *testing.T) {
+	want := winRect{Left: 100, Top: 80, Right: 700, Bottom: 580}
+	if err := arrangementError(want, want, true); err != nil {
+		t.Fatalf("a matching frame reported %v", err)
+	}
+	sizeOnly := winRect{Left: 100, Top: 80, Right: 420, Bottom: 320}
+	if err := arrangementError(sizeOnly, want, true); !errors.Is(err, ErrAppWindowResize) {
+		t.Fatalf("a refused size reported %v, want ErrAppWindowResize", err)
+	}
+	moved := winRect{Left: 160, Top: 140, Right: 760, Bottom: 640}
+	if err := arrangementError(moved, want, true); err == nil || errors.Is(err, ErrAppWindowResize) {
+		t.Fatalf("a refused move reported %v, want a move error", err)
+	}
+	// A move-only arrangement never blames the size.
+	rightSize := winRect{Left: 160, Top: 140, Right: 760, Bottom: 640}
+	if err := arrangementError(rightSize, want, false); err == nil || errors.Is(err, ErrAppWindowResize) {
+		t.Fatalf("a move-only mismatch reported %v, want a move error", err)
+	}
+}
+
+// testConstrainedWindow creates a foreign window that enforces a fixed
+// track size through WM_GETMINMAXINFO, on a thread that pumps messages.
+// It returns the handle and the window's size.
+func testConstrainedWindow(t *testing.T) (uintptr, int, int) {
+	t.Helper()
+	const (
+		wmGetMinMaxInfo = 0x0024
+		wmClose         = 0x0010
+		wmDestroy       = 0x0002
+		minW, minH      = 320, 240
+	)
+	user32 := windows.NewLazySystemDLL("user32.dll")
+	procRegisterClassEx := user32.NewProc("RegisterClassExW")
+	procDefWindowProc := user32.NewProc("DefWindowProcW")
+	procGetMessage := user32.NewProc("GetMessageW")
+	procTranslateMessage := user32.NewProc("TranslateMessage")
+	procDispatchMessage := user32.NewProc("DispatchMessageW")
+	procPostQuitMessage := user32.NewProc("PostQuitMessage")
+
+	type minMaxInfo struct {
+		ptReserved     [2]int32
+		ptMaxSize      [2]int32
+		ptMaxPosition  [2]int32
+		ptMinTrackSize [2]int32
+		ptMaxTrackSize [2]int32
+	}
+	ready := make(chan uintptr, 1)
+	done := make(chan struct{})
+	className, _ := windows.UTF16PtrFromString("rakko-snap-constrained")
+	title, _ := windows.UTF16PtrFromString("rakko-snap-constrained")
+	wndProc := windows.NewCallback(func(h, msg, wparam, lparam uintptr) uintptr {
+		switch msg {
+		case wmGetMinMaxInfo:
+			mmi := (*minMaxInfo)(wiPtr(lparam))
+			mmi.ptMinTrackSize = [2]int32{minW, minH}
+			mmi.ptMaxTrackSize = [2]int32{minW, minH}
+			return 0
+		case wmClose:
+			procDestroyWindow.Call(h)
+			return 0
+		case wmDestroy:
+			procPostQuitMessage.Call(0)
+			return 0
+		}
+		r, _, _ := procDefWindowProc.Call(h, msg, wparam, lparam)
+		return r
+	})
+	go func() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+		defer close(done)
+		var wc struct {
+			cbSize        uint32
+			style         uint32
+			lpfnWndProc   uintptr
+			cbClsExtra    int32
+			cbWndExtra    int32
+			hInstance     uintptr
+			hIcon         uintptr
+			hCursor       uintptr
+			hbrBackground uintptr
+			lpszMenuName  *uint16
+			lpszClassName *uint16
+			hIconSm       uintptr
+		}
+		wc.cbSize = uint32(unsafe.Sizeof(wc))
+		wc.lpfnWndProc = wndProc
+		wc.lpszClassName = className
+		if r, _, _ := procRegisterClassEx.Call(uintptr(unsafe.Pointer(&wc))); r == 0 {
+			ready <- 0
+			return
+		}
+		const wsOverlappedWindow = 0x00CF0000
+		h, _, _ := procCreateWindowEx.Call(0, uintptr(unsafe.Pointer(className)), uintptr(unsafe.Pointer(title)),
+			wsOverlappedWindow, 200, 200, 400, 300, 0, 0, 0, 0)
+		if h == 0 {
+			ready <- 0
+			return
+		}
+		t.Cleanup(func() {})
+		procShowWindow.Call(h, 4 /* SW_SHOWNOACTIVATE */)
+		ready <- h
+		var msg struct {
+			hwnd    uintptr
+			message uint32
+			wParam  uintptr
+			lParam  uintptr
+			time    uint32
+			pt      winPoint
+		}
+		for {
+			r, _, _ := procGetMessage.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0)
+			if int32(r) <= 0 {
+				return
+			}
+			procTranslateMessage.Call(uintptr(unsafe.Pointer(&msg)))
+			procDispatchMessage.Call(uintptr(unsafe.Pointer(&msg)))
+		}
+	}()
+	h := <-ready
+	if h == 0 {
+		<-done
+		t.Skip("this session cannot create a constrained window")
+	}
+	t.Cleanup(func() {
+		// Closing posts WM_CLOSE and the owner's loop ends; a stuck loop
+		// must not hang the suite.
+		user32.NewProc("PostMessageW").Call(h, 0x0010, 0, 0)
+		select {
+		case <-done:
+		case <-time.After(3 * time.Second):
+			t.Log("the constrained window's thread did not exit")
+		}
+	})
+	return h, minW, minH
+}
+
+// TestArrangementErrorReportsAForeignResizeRefusal drives the asynchronous
+// snap against a foreign window that fixes its track size: MoveResize
+// returns before the owner answers, and the verdict at the end of the
+// confirmation window is the resize refusal the synchronous path used to
+// report.
+func TestArrangementErrorReportsAForeignResizeRefusal(t *testing.T) {
+	h, minW, minH := testConstrainedWindow(t)
+	w := AppWindow{handle: h}
+	frame, ok := w.Frame()
+	if !ok {
+		t.Fatal("the constrained window has no frame")
+	}
+	target := Rect{X: frame.X + 40, Y: frame.Y + 30, Width: float64(minW) + 180, Height: float64(minH) + 160}
+	if err := w.MoveResize(target, true); err != nil {
+		t.Fatalf("MoveResize on a foreign window: %v", err)
+	}
+	// The posted move is processed by the owner's message loop, so the
+	// position lands first; the refusal is about the size alone.
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		err := w.ArrangementError(target, true)
+		got, ok := w.Frame()
+		if !ok {
+			t.Fatal("the constrained window went away")
+		}
+		if math.Abs(got.X-target.X) <= 2 && math.Abs(got.Y-target.Y) <= 2 {
+			if !errors.Is(err, ErrAppWindowResize) {
+				t.Fatalf("after the move landed the verdict is %v, want ErrAppWindowResize", err)
+			}
+			return
+		}
+		if time.Now().After(deadline) {
+			got, _ := w.Frame()
+			t.Fatalf("the posted move never landed (frame %+v, verdict %v)", got, err)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 }
