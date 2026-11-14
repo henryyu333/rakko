@@ -15,6 +15,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unsafe"
 )
 
 func TestSearchSQLScreensMetacharacters(t *testing.T) {
@@ -50,6 +51,59 @@ func TestSearchSQLScreensMetacharacters(t *testing.T) {
 		if !strings.HasPrefix(sql, "SELECT TOP ") || !strings.Contains(sql, "SYSTEMINDEX") {
 			t.Errorf("%q: query shape is wrong: %q", tt.term, sql)
 		}
+	}
+}
+
+// TestSearchSQLEscapesQuotesForBothLayers pins the outer SQL layer around
+// the CONTAINS phrase: a name like O'Brien sits in a SQL string literal
+// too, and an unescaped quote there breaks the whole query, not just the
+// phrase.
+func TestSearchSQLEscapesQuotesForBothLayers(t *testing.T) {
+	sql, ok := searchSQL("O'Brien")
+	if !ok {
+		t.Fatal("a name with an apostrophe produced no query")
+	}
+	if !strings.Contains(sql, `LIKE '%O''Brien%'`) {
+		t.Errorf("the LIKE pattern lost its quote escaping: %q", sql)
+	}
+	if !strings.Contains(sql, `CONTAINS(*, '"O''Brien*"')`) {
+		t.Errorf("the CONTAINS phrase left a bare quote in the SQL literal: %q", sql)
+	}
+	if n := strings.Count(sql, "'"); n%2 != 0 {
+		t.Errorf("the statement has %d single quotes, so one ends its string literal early: %q", n, sql)
+	}
+	// A term that tries to close the literal must stay inside it.
+	for _, term := range []string{`a') OR 1=1 --`, `x' OR '1'='1`} {
+		sql, ok := searchSQL(term)
+		if !ok {
+			t.Fatalf("%q produced no query", term)
+		}
+		if strings.Contains(sql, term) {
+			t.Fatalf("%q reached the SQL unescaped: %q", term, sql)
+		}
+		if !strings.Contains(sql, strings.ReplaceAll(term, "'", "''")) {
+			t.Fatalf("%q is missing in its escaped form: %q", term, sql)
+		}
+		if n := strings.Count(sql, "'"); n%2 != 0 {
+			t.Fatalf("%q left an unbalanced quote: %q", term, sql)
+		}
+	}
+}
+
+// TestSearchBatchOutcomeFallsBackOnAFailedFetch pins the difference
+// between the provider saying "no more rows" and failing mid-fetch: only
+// the failure makes StartSearch scan the common folders.
+func TestSearchBatchOutcomeFallsBackOnAFailedFetch(t *testing.T) {
+	const eFail = uintptr(0x80004005)
+	if done, err := searchBatchOutcome(eFail, 0, nil); err == nil || done {
+		t.Fatalf("a failed GetNextRows was treated as the end of the rows (done=%v err=%v)", done, err)
+	}
+	if done, err := searchBatchOutcome(0, 0, nil); !done || err != nil {
+		t.Fatalf("an exhausted rowset: done=%v err=%v, want done without error", done, err)
+	}
+	fake := new(int)
+	if done, err := searchBatchOutcome(0, 3, unsafe.Pointer(fake)); done || err != nil {
+		t.Fatalf("a batch of 3 rows: done=%v err=%v, want more rows without error", done, err)
 	}
 }
 

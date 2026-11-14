@@ -268,21 +268,24 @@ const (
 // provider has no ESCAPE clause — and relies on CONTAINS, which reads
 // them literally. A term carrying characters the full-text phrase syntax
 // cannot quote skips the content match; a term carrying both is left to
-// the folder scan.
+// the folder scan. Both clauses sit inside SQL string literals, so a
+// single quote is doubled in the term either way: the CONTAINS phrase's
+// own quote layer is not a SQL layer.
 func searchSQL(term string) (string, bool) {
 	term = strings.TrimSpace(term)
 	if term == "" {
 		return "", false
 	}
+	esc := strings.ReplaceAll(term, "'", "''")
 	var clauses []string
 	if !strings.ContainsAny(term, "%_[") {
 		// A SQL string literal, where a quote is doubled.
-		esc := strings.ReplaceAll(term, "'", "''")
 		clauses = append(clauses, `"System.ItemNameDisplay" LIKE '%`+esc+`%'`)
 	}
 	if !strings.ContainsAny(term, "\"\\") {
-		// A full-text phrase, where a single quote is literal.
-		clauses = append(clauses, `CONTAINS(*, '"`+term+`*"')`)
+		// A full-text phrase, where a single quote is literal to the
+		// phrase syntax but still ends the outer SQL string literal.
+		clauses = append(clauses, `CONTAINS(*, '"`+esc+`*"')`)
 	}
 	if len(clauses) == 0 {
 		return "", false
@@ -340,7 +343,17 @@ func searchIndex(term string, scope SearchScope, w *searchSink) error {
 		var fetched uintptr
 		var handles unsafe.Pointer
 		hr = winCOMCall(rowset, 5, 0, 0, rowsPerFetch, uintptr(unsafe.Pointer(&fetched)), uintptr(unsafe.Pointer(&handles)))
-		if failedHR(hr) || fetched == 0 || handles == nil {
+		done, err := searchBatchOutcome(hr, fetched, handles)
+		if err != nil {
+			// The provider failed while fetching: an empty answer here
+			// would look like "no matches" and the callers would never
+			// scan the common folders.
+			if handles != nil {
+				windows.CoTaskMemFree(handles)
+			}
+			return err
+		}
+		if done {
 			return nil
 		}
 		rows := (*[rowsPerFetch]uintptr)(handles)
@@ -359,6 +372,17 @@ func searchIndex(term string, scope SearchScope, w *searchSink) error {
 		}
 		windows.CoTaskMemFree(handles)
 	}
+}
+
+// searchBatchOutcome classifies one IRowset::GetNextRows result. done is
+// the end of the rows; a non-nil error is a provider failure, which the
+// caller must answer by scanning the common folders instead of presenting
+// a short list as the whole answer.
+func searchBatchOutcome(hr, fetched uintptr, handles unsafe.Pointer) (done bool, err error) {
+	if failedHR(hr) {
+		return false, errNoSearchIndex
+	}
+	return fetched == 0 || handles == nil, nil
 }
 
 // searchBindings lays the four columns out in one row buffer and returns
