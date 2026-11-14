@@ -432,7 +432,9 @@ func fileOperationSinkAt(this uintptr) *fileOperationSink {
 }
 
 var (
-	sinkIIDUnknown  = windows.GUID{}
+	sinkIIDUnknown = windows.GUID{ // IID_IUnknown {00000000-0000-0000-C000-000000000046}
+		Data4: [8]byte{0xC0, 0, 0, 0, 0, 0, 0, 0x46},
+	}
 	sinkIIDProgress = windows.GUID{
 		Data1: 0x04b0f1a7,
 		Data2: 0x9490,

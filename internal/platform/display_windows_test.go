@@ -515,6 +515,20 @@ func TestFileOperationSinkPostDeleteItem(t *testing.T) {
 	if hr := fileOperationSinkQueryInterface(this, uintptr(unsafe.Pointer(&other)), uintptr(unsafe.Pointer(&out))); uint32(hr) != 0x80004002 || out != 0 {
 		t.Fatalf("QueryInterface(unknown) = %#x, out %#x; want E_NOINTERFACE", hr, out)
 	}
+	// IUnknown is answered with the same pointer and a reference; IID_NULL
+	// is not an interface.
+	iidUnknown, err := guidFromString("{00000000-0000-0000-C000-000000000046}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := sink.refs
+	if hr := fileOperationSinkQueryInterface(this, uintptr(unsafe.Pointer(&iidUnknown)), uintptr(unsafe.Pointer(&out))); hr != 0 || out != this || sink.refs != before+1 {
+		t.Fatalf("QueryInterface(IUnknown) = %#x, out %#x, refs %d→%d; want S_OK, this and one more reference", hr, out, before, sink.refs)
+	}
+	var iidNull windows.GUID
+	if hr := fileOperationSinkQueryInterface(this, uintptr(unsafe.Pointer(&iidNull)), uintptr(unsafe.Pointer(&out))); uint32(hr) != 0x80004002 || out != 0 {
+		t.Fatalf("QueryInterface(IID_NULL) = %#x, out %#x; want E_NOINTERFACE", hr, out)
+	}
 }
 
 // TestRecycleApartmentAction checks what the recycle thread does with each
