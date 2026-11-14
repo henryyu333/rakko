@@ -59,8 +59,8 @@ type pipeListener struct {
 	mu      sync.Mutex
 	cond    *sync.Cond
 	pending windows.Handle // instance waiting for a client
-	waiting windows.Handle // instance Accept is blocked on
-	active  int            // Accept calls in progress
+	waiting map[windows.Handle]struct{} // instances Accept is blocked on
+	active  int                         // Accept calls in progress
 	closed  bool
 }
 
@@ -71,7 +71,7 @@ func listenPipe(name string, sd *windows.SECURITY_DESCRIPTOR) (*pipeListener, er
 	if err != nil {
 		return nil, err
 	}
-	l := &pipeListener{name: name, sd: sd, pending: h}
+	l := &pipeListener{name: name, sd: sd, pending: h, waiting: map[windows.Handle]struct{}{}}
 	l.cond = sync.NewCond(&l.mu)
 	return l, nil
 }
@@ -99,12 +99,27 @@ func (l *pipeListener) Accept() (net.Conn, error) {
 			windows.CloseHandle(h)
 			return nil, err
 		}
+		// Register the instance before submitting, so Close cancels every
+		// accept that is under way — net.Listener allows concurrent Accepts,
+		// and one field could only remember the last of them.
+		l.mu.Lock()
+		if l.closed {
+			l.mu.Unlock()
+			windows.CloseHandle(h)
+			windows.CloseHandle(ev)
+			return nil, net.ErrClosed
+		}
+		l.waiting[h] = struct{}{}
+		l.mu.Unlock()
+
 		ov := &windows.Overlapped{HEvent: ev}
 		err = windows.ConnectNamedPipe(h, ov)
 		connected := err == nil || errors.Is(err, windows.ERROR_PIPE_CONNECTED)
 		if !connected && errors.Is(err, windows.ERROR_IO_PENDING) {
+			// Close may have cancelled between the registration and the
+			// submission, which cancels nothing yet; the flag is read again
+			// once the request really is pending.
 			l.mu.Lock()
-			l.waiting = h
 			closed := l.closed
 			l.mu.Unlock()
 			if closed {
@@ -116,16 +131,17 @@ func (l *pipeListener) Accept() (net.Conn, error) {
 				var done uint32
 				connected = windows.GetOverlappedResult(h, ov, &done, false) == nil
 			}
-			l.mu.Lock()
-			l.waiting = 0
-			closed = l.closed
-			l.mu.Unlock()
-			if closed {
-				_ = windows.DisconnectNamedPipe(h)
-				windows.CloseHandle(h)
-				windows.CloseHandle(ev)
-				return nil, net.ErrClosed
-			}
+		}
+		l.mu.Lock()
+		delete(l.waiting, h)
+		closed := l.closed
+		l.mu.Unlock()
+
+		if closed {
+			_ = windows.DisconnectNamedPipe(h)
+			windows.CloseHandle(h)
+			windows.CloseHandle(ev)
+			return nil, net.ErrClosed
 		}
 		if connected {
 			windows.CloseHandle(ev)
@@ -157,16 +173,20 @@ func (l *pipeListener) Close() error {
 	l.closed = true
 	pending := l.pending
 	l.pending = 0
-	waiting := l.waiting
+	waiting := make([]windows.Handle, 0, len(l.waiting))
+	for h := range l.waiting {
+		waiting = append(waiting, h)
+	}
 	l.mu.Unlock()
 
 	if pending != 0 {
 		windows.CloseHandle(pending)
 	}
-	if waiting != 0 {
-		// The blocked ConnectNamedPipe completes with an error; Accept owns
-		// the handle and closes it before it decrements l.active.
-		_ = windows.CancelIoEx(waiting, nil)
+	// Every blocked ConnectNamedPipe completes with an error; the accepting
+	// goroutine owns the handle and closes it before it drops out of
+	// l.active.
+	for _, h := range waiting {
+		_ = windows.CancelIoEx(h, nil)
 	}
 	l.mu.Lock()
 	for l.active > 0 {

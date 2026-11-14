@@ -381,7 +381,8 @@ func TestExtraInstanceCannotForgeADecision(t *testing.T) {
 	if err != nil {
 		t.Skipf("the name cannot host a second instance here: %v", err)
 	}
-	impostor := &pipeListener{name: name, sd: sd, pending: h}
+	impostor := &pipeListener{name: name, sd: sd, pending: h,
+		waiting: map[windows.Handle]struct{}{}}
 	impostor.cond = sync.NewCond(&impostor.mu)
 	defer impostor.Close()
 	var mu sync.Mutex
@@ -1107,4 +1108,45 @@ func TestTokenFailureLeavesNoPlaceholder(t *testing.T) {
 	if _, err := writeToken(dir); err != nil {
 		t.Fatalf("a later start failed: %v", err)
 	}
+}
+
+// net.Listener allows concurrent Accepts. Close must cancel every instance
+// that is waiting, return, and leave the name free.
+func TestConcurrentAcceptsClosePromptly(t *testing.T) {
+	_, name := testPipe(t)
+	sd := permissivePipeSD(t)
+	ln, err := listenPipe(name, sd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	errs := make(chan error, 2)
+	for range 2 {
+		go func() {
+			_, err := ln.Accept()
+			errs <- err
+		}()
+	}
+	time.Sleep(200 * time.Millisecond)
+	done := make(chan struct{})
+	go func() { _ = ln.Close(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("Close hung behind two waiting Accepts")
+	}
+	for range 2 {
+		select {
+		case err := <-errs:
+			if err == nil {
+				t.Fatal("Accept returned a connection after Close")
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("an Accept did not return after Close")
+		}
+	}
+	again, err := listenPipe(name, sd)
+	if err != nil {
+		t.Fatalf("the name was still busy: %v", err)
+	}
+	again.Close()
 }

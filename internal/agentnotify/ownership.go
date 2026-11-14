@@ -133,34 +133,73 @@ func isRakkoProgram(program string) bool {
 }
 
 // invokesShim reports whether a command line runs exactly the named shim:
-// the doubled quotes cmd.exe's /c uses, a PowerShell single-quoted word with
-// its call operator, a plain quoted word, or a bare path. Anything else on
-// the line — another program, a redirect, a second word — makes it someone
-// else's command.
+// one complete path literal in one of the forms Rakko writes — PowerShell's
+// call operator with a single-quoted word ('' inside it is a literal quote),
+// cmd.exe's doubled outer quotes, a plain quoted word, or a bare path. Any
+// legal path character is fine inside the literal, spaces included; only
+// text outside the closing quote (another command, an argument, a
+// redirect) makes the line someone else's.
 func invokesShim(command, shim string) bool {
 	v := strings.TrimSpace(command)
-	v = strings.TrimSpace(strings.TrimPrefix(v, "&"))
-	if v == "" {
+	if strings.HasPrefix(v, "&") {
+		v = strings.TrimSpace(v[1:])
+	}
+	literal, ok := commandPath(v)
+	if !ok {
 		return false
 	}
+	return path.Base(strings.ReplaceAll(literal, `\`, "/")) == shim
+}
+
+// commandPath returns the single path a command line consists of.
+func commandPath(v string) (string, bool) {
 	switch {
-	case strings.HasPrefix(v, `""`) && strings.HasSuffix(v, `""`) && len(v) >= 4:
-		v = v[2 : len(v)-2]
-	case strings.HasPrefix(v, `"`) && strings.HasSuffix(v, `"`) && len(v) >= 2:
-		v = v[1 : len(v)-1]
-		if strings.Contains(v, `"`) {
-			return false
+	case strings.HasPrefix(v, `""`):
+		// cmd.exe's doubled form: ""C:\dir\shim.cmd""
+		if len(v) < 4 || !strings.HasSuffix(v, `""`) {
+			return "", false
 		}
-	case strings.HasPrefix(v, "'") && strings.HasSuffix(v, "'") && len(v) >= 2:
-		v = v[1 : len(v)-1]
-		if strings.Contains(v, "'") {
-			return false
+		inner := v[2 : len(v)-2]
+		if strings.Contains(inner, `"`) {
+			return "", false
 		}
+		return inner, true
+	case strings.HasPrefix(v, `"`):
+		// One quoted word; nothing may follow the closing quote.
+		end := strings.LastIndexByte(v, '"')
+		if end <= 0 {
+			return "", false
+		}
+		inner := v[1:end]
+		if strings.Contains(inner, `"`) || strings.TrimSpace(v[end+1:]) != "" {
+			return "", false
+		}
+		return inner, true
+	case strings.HasPrefix(v, "'"):
+		// PowerShell's single-quoted word: '' is a literal quote.
+		var b strings.Builder
+		for i := 1; i < len(v); i++ {
+			if v[i] != '\'' {
+				b.WriteByte(v[i])
+				continue
+			}
+			if i+1 < len(v) && v[i+1] == '\'' {
+				b.WriteByte('\'')
+				i++
+				continue
+			}
+			if strings.TrimSpace(v[i+1:]) != "" {
+				return "", false
+			}
+			return b.String(), true
+		}
+		return "", false
+	default:
+		if v == "" || strings.ContainsAny(v, " \t\r\n") {
+			return "", false
+		}
+		return v, true
 	}
-	if strings.ContainsAny(v, " \t\r\n&|<>;") {
-		return false
-	}
-	return path.Base(strings.ReplaceAll(v, `\`, "/")) == shim
 }
 
 func stringSlice(v any) []string {

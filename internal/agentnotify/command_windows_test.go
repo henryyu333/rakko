@@ -852,3 +852,139 @@ func TestAppDataPathsFollowTheEnvironment(t *testing.T) {
 		t.Fatalf("fallback devin config = %q, want %q", got, want)
 	}
 }
+
+// A data directory with a space or a single quote in it survives the entry
+// forms that quote a path: Status sees Rakko's entry, a second connect adds
+// nothing, and disconnect removes both the entry and the shim.
+func TestQuotedShimPathsOwnTheEntry(t *testing.T) {
+	exe := helperExe(t)
+	for _, tc := range []struct {
+		name string
+		dir  string
+	}{
+		{"space", "data dir"},
+		{"quote", "data's dir"},
+		{"both", "First Last's data"},
+	} {
+		for _, tool := range []Tool{ToolCursor, ToolGrok} {
+			t.Run(tc.name+"/"+string(tool), func(t *testing.T) {
+				home := t.TempDir()
+				redirectAppData(t, home)
+				dataDir := filepath.Join(t.TempDir(), tc.dir)
+				if err := os.MkdirAll(dataDir, 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if err := Connect(home, dataDir, exe, tool); err != nil {
+					t.Fatalf("connect: %v", err)
+				}
+				entry := hookEntryFor(exe, tool, dataDir, "").fields[0].value
+				if !invokesShim(entry, shimName(hookCompletion, tool)) {
+					t.Fatalf("the generated entry is not recognized as Rakko's: %q", entry)
+				}
+				if got, note := Status(home, tool); got != StateInjected {
+					t.Fatalf("status = %v (%s)", got, note)
+				}
+				path := ConfigPath(home, tool)
+				before, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := Connect(home, dataDir, exe, tool); err != nil {
+					t.Fatal(err)
+				}
+				after, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if string(before) != string(after) {
+					t.Fatalf("a second connect duplicated the entry:\n%s\n---\n%s", before, after)
+				}
+				if err := Disconnect(home, dataDir, tool); err != nil {
+					t.Fatal(err)
+				}
+				if got, _ := Status(home, tool); got == StateInjected {
+					t.Fatal("disconnect left the entry in place")
+				}
+				if _, err := os.Stat(shimPath(dataDir, hookCompletion, tool)); err == nil {
+					t.Fatal("disconnect left the shim behind")
+				}
+			})
+		}
+	}
+}
+
+// Text outside the quoted literal means the line is someone else's command.
+func TestOwnershipRejectsExtraCommandText(t *testing.T) {
+	shim := shimName(hookCompletion, ToolCursor)
+	for _, value := range []string{
+		`echo "C:\Rakko\agent-hook-cursor.cmd"`,
+		`& 'C:\Rakko\agent-hook-cursor.cmd' extra`,
+		`& 'C:\Rakko\agent-hook-cursor.cmd'; echo hi`,
+		`""C:\Rakko\agent-hook-cursor.cmd"" & calc`,
+		`C:\Rakko\agent-hook-cursor.cmd --wait`,
+	} {
+		if invokesShim(value, shim) {
+			t.Errorf("accepted %q as Rakko's own command", value)
+		}
+	}
+	for _, value := range []string{
+		`& 'C:\Users\First Last\AppData\Roaming\Rakko\agent-hook-cursor.cmd'`,
+		`& 'C:\Users\it''s\Rakko\agent-hook-cursor.cmd'`,
+		`""C:\Users\First Last\Rakko\agent-hook-cursor.cmd""`,
+		`"C:\Users\First Last\Rakko\agent-hook-cursor.cmd"`,
+		`C:\Rakko\agent-hook-cursor.cmd`,
+	} {
+		if !invokesShim(value, shim) {
+			t.Errorf("rejected %q", value)
+		}
+	}
+}
+
+// Under a Chinese console code page, PowerShell runs the shim the way
+// Cursor, Gemini CLI, Qwen Code and Codex do: the payload reaches the app
+// byte for byte, and the ASCII decision the tool reads comes back unchanged.
+func TestShimUnderPowerShellWithACodePage(t *testing.T) {
+	exe := helperExe(t)
+	dataDir := filepath.Join(t.TempDir(), "数据 目录")
+	if err := os.MkdirAll(dataDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeShim(dataDir, hookApproval, ToolCursor, exe,
+		rakkoArgs(hookApproval, ToolCursor, dataDir, "")); err != nil {
+		t.Fatal(err)
+	}
+	entry := approveEntryFor(exe, ToolCursor, dataDir).fields[0].value
+	payload := `{"session_id":"s1","tool_name":"Bash","tool_input":{"command":"echo 你好"}}`
+	received := filepath.Join(t.TempDir(), "stdin.bin")
+
+	run := func(env ...string) []byte {
+		t.Helper()
+		cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive",
+			"-ExecutionPolicy", "Bypass", "-Command", "chcp 936 | Out-Null; "+entry)
+		cmd.Env = append(os.Environ(), env...)
+		cmd.Stdin = strings.NewReader(payload)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("powershell: %v (%s)", err, out)
+		}
+		return out
+	}
+
+	out := run("RAKKO_HELPER_STDIN_FILE="+received, "RAKKO_HELPER_ASCII=1")
+	got, err := os.ReadFile(received)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != payload {
+		t.Fatalf("the payload changed in flight:\n got %q\nwant %q", got, payload)
+	}
+	if decision := strings.TrimSpace(string(out)); decision != `{"decision":"allow"}` {
+		t.Fatalf("the decision reached the tool as %q", decision)
+	}
+
+	// Without the ASCII switch the helper prints a JSON document containing
+	// non-ASCII text; this is where PowerShell's own console decoding shows
+	// up, and it is why the real decision is ASCII.
+	raw := run()
+	t.Logf("non-ASCII stdout through PowerShell under cp936: %q", raw)
+}
