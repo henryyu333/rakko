@@ -109,9 +109,10 @@ func (a *shelf) dragGuardRegion() platform.DragGuardRegion {
 // dragSummonsBasket reports whether this drag may wake the shake-to-summon
 // basket: anything carrying files, promised files or image data. Text, link
 // and app-window drags never summon it — they may still be dropped on the
-// notch band.
+// notch band. The platform decides because Windows cannot read a drag's
+// formats before the drop.
 func dragSummonsBasket(types []string) bool {
-	return platform.DragHasFiles(types) || platform.DragHasFilePromise(types) || platform.DragHasImages(types)
+	return platform.DragMayCarryFiles(types)
 }
 
 // notchGuardOn reports whether the drop-protection corridor belongs to the

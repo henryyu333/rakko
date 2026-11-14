@@ -57,6 +57,11 @@ func main() {
 	if !requestSingleInstanceLock() {
 		return
 	}
+	// Windows' Explorer entries launch this binary with the selected
+	// paths. Consume them after the hand-off — a second launch forwards
+	// its raw arguments — and before flag.Parse, which would reject the
+	// verb. Other platforms return the command line untouched.
+	os.Args = append(os.Args[:1], platform.ConsumeServiceArgs(os.Args[1:])...)
 	// A bundle an in-app update left at ShelfU.app or Shelf.app moves to
 	// Rakko.app and reopens from there before anything reads the data
 	// directory.
