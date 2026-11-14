@@ -504,7 +504,7 @@ func (a *shelf) petTick(now time.Time, p mygo.Point, down bool) {
 			pet.applyFrame()
 		}
 		centre := mygo.Point{X: pet.frame.X + pet.frame.Width/2, Y: pet.frame.Y + pet.frame.Height/2}
-		returning = pet.moving && a.pinReturnZone(centre)
+		returning = pet.moving && petReturnTarget(a, centre, p)
 	}
 	// A pet held over the notch grows 松开收进刘海 exactly where a card
 	// held there grows 松开放回: the release reads the same zone.
@@ -639,6 +639,19 @@ func (pet *petWindow) lockMove(dx, dy int) {
 	pet.grabX, pet.grabY = 0, 0
 }
 
+// petReturnTarget reports whether a carried otter counts as put back into
+// the shell: its own box in the return zone, or — where the platform's work
+// area stops the box short of that zone — the pointer the drag carried
+// there (see petPointerReturnSupported). The release and the 松开收进刘海
+// pill read this one answer, so a hint never promises what a release will
+// not do.
+func petReturnTarget(a *shelf, centre, p mygo.Point) bool {
+	if a.pinReturnZone(centre) {
+		return true
+	}
+	return petPointerReturnSupported && a.pinReturnZone(p)
+}
+
 // petRelease settles a moved otter: 收进刘海 when it was carried to the
 // notch, otherwise it lands where it let go — seated on the floor, flush
 // to a side, or exactly there — sliding the last few points into place.
@@ -654,10 +667,8 @@ func (a *shelf) petRelease(p mygo.Point) {
 		Width: pet.frame.Width, Height: pet.frame.Height,
 	}
 	centre := mygo.Point{X: frame.X + frame.Width/2, Y: frame.Y + frame.Height/2}
-	// 收进刘海：归位区是顶部那条带。海獭比卡片高得多，窗口停在工作区上沿时
-	// 它自己的中心还差半个身高才够到胶囊下沿，所以松手的位置也算一次——
-	// 拖着它放到胶囊上，指针确实到了那条带里（Windows 上就是这样）。
-	if a.pinReturnZone(centre) || a.pinReturnZone(p) {
+	// 收进刘海：归位区是顶部那条带；平台自己的见 petReturnTarget。
+	if petReturnTarget(a, centre, p) {
 		a.hidePet()
 		return
 	}

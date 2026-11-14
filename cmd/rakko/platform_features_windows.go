@@ -13,4 +13,9 @@ const (
 	// Settings window opened under it would show the panel's page and
 	// capsule through its own, so the panel closes first.
 	overlayHidesForSettings = true
+	// The capsule's return zone is 41pt tall plus its hover margin, while a
+	// 96pt otter parked at the work area's top edge has its centre half its
+	// height below: the box alone can never reach it, so the pointer the
+	// drag carried there decides too.
+	petPointerReturnSupported = true
 )

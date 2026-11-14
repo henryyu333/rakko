@@ -388,27 +388,40 @@ func TestPetReleaseToTheNotchStows(t *testing.T) {
 	}
 }
 
-// TestPetReleaseToTheIslandStows: 岛样式的归位区是顶部胶囊。海獭比卡片高，
-// 窗口被工作区上沿挡住时它自己的中心还差半个身高，够不到胶囊下沿那条带；
-// 拖动真正带着的是指针，松手的位置就在胶囊上，所以它必须收进去。Windows
-// 真机上拖着海獭放到胶囊上停在 36pt、中心 84pt 正是这个形状。
-func TestPetReleaseToTheIslandStows(t *testing.T) {
+// TestPetReturnNeedsTheBoxOnTheMac: 收进刘海 on the Mac is the otter's own
+// box reaching the return zone. A pointer over the notch while the otter
+// hangs below it does not count: the Mac's work area leaves room for the
+// box in that zone, and counting the pointer as well would make an otter
+// let go well under the notch disappear (its spot saved as stowed).
+func TestPetReturnNeedsTheBoxOnTheMac(t *testing.T) {
 	a := petShelf(t)
-	a.island = true
-	pet := windowlessPet(a, 0, 36, 74, 96)
-	capsule := a.islandRect()
-	release := mygo.Point{X: capsule.X + capsule.Width/2, Y: capsule.Y + 20}
-	centre := mygo.Point{X: release.X + pet.frame.Width/2, Y: release.Y + pet.frame.Height/2}
-	if a.pinReturnZone(centre) {
-		t.Skipf("the otter's centre already reaches the capsule %+v; the release point is not what decides", capsule)
-	}
+	a.hasNotch, a.notchX, a.notchY, a.notchW, a.notchH = true, 600, 0, 180, 32
+	pet := windowlessPet(a, 500, 400, 74, 96)
+	a.savePetSpot()
 	pet.moving, pet.pressed, pet.grabX, pet.grabY = true, true, 0, 0
+	// Released at (690,100): the box's centre (727,148) is below the
+	// notch's return band, where the old rule left the otter alone.
+	release := mygo.Point{X: 690, Y: 100}
 	a.petRelease(release)
-	if a.pet != nil {
-		t.Fatalf("the otter did not stow: released at %v on the capsule %+v", release, capsule)
+	if a.pet == nil {
+		t.Fatal("a pointer over the notch stowed an otter whose box was not in the zone")
 	}
-	if a.settings.Pet.Shown {
-		t.Fatal("a stowed otter is still marked shown")
+	if !a.settings.Pet.Shown {
+		t.Fatal("the otter stayed but was saved as stowed")
+	}
+	centre := mygo.Point{X: release.X + pet.frame.Width/2, Y: release.Y + pet.frame.Height/2}
+	if petReturnTarget(a, centre, release) {
+		t.Fatalf("centre %v / pointer %v counted as a return on the Mac", centre, release)
+	}
+
+	// The island's band is just as short: a pointer on the capsule with the
+	// window parked at the work area's top edge is not a return there.
+	a.island = true
+	pet2 := windowlessPet(a, 0, 36, 74, 96)
+	pet2.moving, pet2.pressed, pet2.grabX, pet2.grabY = true, true, 0, 0
+	a.petRelease(mygo.Point{X: 0, Y: 16})
+	if a.pet == nil {
+		t.Fatal("the island capsule stowed an otter whose box was not in the zone on the Mac")
 	}
 }
 
