@@ -24,4 +24,7 @@
   DeleteRegKey HKCU "Software\Classes\*\shell\Rakko"
   DeleteRegKey HKCU "Software\Classes\Directory\shell\Rakko"
   Delete "$APPDATA\Microsoft\Windows\SendTo\Rakko.lnk"
+  ; 开机自启 leaves a Run entry named after the app; without this, Windows
+  ; would try to start the removed executable at the next sign-in.
+  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "local.y3.rakko"
 !macroend
