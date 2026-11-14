@@ -39,7 +39,7 @@ func TestClassifyClipboardWindows(t *testing.T) {
 		{"viewer marker wins", []string{"CF_UNICODETEXT", "Clipboard Viewer Ignore"}, ClipboardSkip},
 		{"nothing usable", []string{"Rich Text Format"}, ClipboardSkip},
 		{"exclude marker in another case", []string{"CF_UNICODETEXT", "excludeclipboardcontentfrommonitorprocessing"}, ClipboardSkip},
-		{"history marker in another case", []string{"CF_UNICODETEXT", "CANINCLUDECLIPBOARDHISTORY"}, ClipboardSkip},
+		{"history marker in another case", []string{"CF_UNICODETEXT", "CANINCLUDEINCLIPBOARDHISTORY"}, ClipboardSkip},
 		{"viewer marker in another case", []string{"CF_UNICODETEXT", "clipboard viewer ignore"}, ClipboardSkip},
 		{"files in another case", []string{"cf_hdrop", "CF_UNICODETEXT"}, ClipboardSkip},
 	}
