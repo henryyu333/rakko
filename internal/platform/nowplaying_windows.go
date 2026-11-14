@@ -271,7 +271,10 @@ func abs64(v float64) float64 {
 func (h *NowPlayingHost) run(stop chan struct{}) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
-	winCOMInit()
+	// A multithreaded apartment: this thread never pumps messages, and an
+	// apartment that does not pump would leave a broker-delivered async
+	// completion (the artwork stream does) stuck at Started forever.
+	procCoInitializeEx.Call(0, coinitMultithreaded)
 	defer close(h.done)
 
 	mgr := npOpenManager(stop)
@@ -504,7 +507,7 @@ func (p *npPoller) act(a npAction) {
 	if failedHR(hr) || op == nil {
 		return
 	}
-	_, _ = npWait(op, 2*time.Second)
+	_ = npWaitDone(op, 2*time.Second)
 	winCOMRelease(op)
 	p.poll()
 }
@@ -641,9 +644,38 @@ func npOpenManager(stop chan struct{}) unsafe.Pointer {
 	return mgr
 }
 
+// npWaitDone blocks until the async operation completes. It is for the
+// operations whose result is a scalar (a count, a boolean): the ABI hands
+// those back in a value slot, not as an interface to release.
+func npWaitDone(op unsafe.Pointer, timeout time.Duration) bool {
+	info := winCOMQI(op, &iidNPIAsyncInfo)
+	if info == nil {
+		return false
+	}
+	defer winCOMRelease(info)
+	deadline := time.Now().Add(timeout)
+	for {
+		var status int32
+		if hr := winCOMCall(info, 7, uintptr(unsafe.Pointer(&status))); failedHR(hr) {
+			return false
+		}
+		switch status {
+		case 1:
+			return true
+		case 2, 3:
+			return false
+		}
+		if time.Now().After(deadline) {
+			winCOMCall(info, 9)
+			return false
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+}
+
 // npWait blocks until the async operation completes and returns its
-// result. The status is read through IAsyncInfo, which the operation
-// implements as a separate interface.
+// interface result. The status is read through IAsyncInfo, which the
+// operation implements as a separate interface.
 func npWait(op unsafe.Pointer, timeout time.Duration) (unsafe.Pointer, bool) {
 	info := winCOMQI(op, &iidNPIAsyncInfo)
 	if info == nil {
@@ -709,13 +741,10 @@ func npReadThumbnail(ref unsafe.Pointer) ([]byte, bool) {
 	if hr := winCOMCall(reader, 29, uintptr(uint32(size)), uintptr(unsafe.Pointer(&loadOp))); failedHR(hr) || loadOp == nil {
 		return nil, true
 	}
-	loaded, ok := npWait(loadOp, 3*time.Second)
+	ok = npWaitDone(loadOp, 3*time.Second)
 	winCOMRelease(loadOp)
 	if !ok {
 		return nil, true
-	}
-	if loaded != nil {
-		winCOMRelease(loaded)
 	}
 	buf := make([]byte, size)
 	if hr := winCOMCall(reader, 14, uintptr(uint32(size)), uintptr(unsafe.Pointer(&buf[0]))); failedHR(hr) {

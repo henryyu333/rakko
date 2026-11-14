@@ -55,6 +55,7 @@ type BatteryLevel struct {
 
 const (
 	coinitApartmentThreaded = 0x2
+	coinitMultithreaded     = 0x0
 	clsctxAll               = 0x17
 	eRender                 = 0
 	eConsole                = 0
