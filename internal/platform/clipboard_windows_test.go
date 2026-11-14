@@ -3,7 +3,9 @@
 package platform
 
 import (
+	"bytes"
 	"slices"
+	"strings"
 	"testing"
 	"unsafe"
 
@@ -36,6 +38,10 @@ func TestClassifyClipboardWindows(t *testing.T) {
 		{"history marker wins", []string{"CF_UNICODETEXT", "CanIncludeInClipboardHistory"}, ClipboardSkip},
 		{"viewer marker wins", []string{"CF_UNICODETEXT", "Clipboard Viewer Ignore"}, ClipboardSkip},
 		{"nothing usable", []string{"Rich Text Format"}, ClipboardSkip},
+		{"exclude marker in another case", []string{"CF_UNICODETEXT", "excludeclipboardcontentfrommonitorprocessing"}, ClipboardSkip},
+		{"history marker in another case", []string{"CF_UNICODETEXT", "CANINCLUDECLIPBOARDHISTORY"}, ClipboardSkip},
+		{"viewer marker in another case", []string{"CF_UNICODETEXT", "clipboard viewer ignore"}, ClipboardSkip},
+		{"files in another case", []string{"cf_hdrop", "CF_UNICODETEXT"}, ClipboardSkip},
 	}
 	for _, c := range cases {
 		if got := ClassifyClipboard(c.types); got != c.want {
@@ -98,34 +104,130 @@ var (
 	procTestAlloc      = sysProc(kernel32, "GlobalAlloc")
 	procTestLock       = sysProc(kernel32, "GlobalLock")
 	procTestUnlock     = sysProc(kernel32, "GlobalUnlock")
-	procTestGetData    = sysProc(user32, "GetClipboardData")
 	procTestGlobalSize = sysProc(kernel32, "GlobalSize")
+	procTestGlobalFree = sysProc(kernel32, "GlobalFree")
+	procTestCopyImage  = sysProc(user32, "CopyImage")
+	procTestDeleteObj  = sysProc(gdi32, "DeleteObject")
 )
 
-// withClipboard runs fn with the clipboard open, restoring the clipboard's
-// previous text afterwards (the test machine is shared, and the platform
-// rule says a test that writes the clipboard puts it back).
-func withClipboard(t *testing.T, fn func()) {
-	t.Helper()
-	before, hadBefore := clipboardText()
+const gmemMoveable = 0x0042
+
+// savedClip is one format the clipboard held before a test touched it. A
+// custom format keeps its registered name so it can be registered again on
+// restore; CF_BITMAP is a handle rather than an HGLOBAL and is copied with
+// CopyImage.
+type savedClip struct {
+	format uint16
+	name   string
+	data   []byte
+	bitmap uintptr
+}
+
+// saveClipboard copies every format the clipboard declares. It reports false
+// when the clipboard is held open by another process or holds a format this
+// test cannot duplicate (a delayed-render placeholder, a palette, a metafile):
+// the test then skips rather than emptying content it cannot put back.
+func saveClipboard() ([]savedClip, bool) {
 	if r, _, _ := procTestOpen.Call(0); r == 0 {
-		t.Skip("clipboard held by another process")
+		return nil, false
 	}
+	defer procTestClose.Call()
+
+	var saved []savedClip
+	for format := uintptr(0); ; {
+		format, _, _ = procEnumFormats.Call(format)
+		if format == 0 {
+			break
+		}
+		clip := savedClip{format: uint16(format)}
+		if format >= cfRegistered {
+			clip.name = clipboardFormatName(uint16(format))
+		}
+		if clip.format == 2 /* CF_BITMAP */ {
+			h, _, _ := procTestCopyImage.Call(format, 0, 0, 0)
+			if h == 0 {
+				return nil, false
+			}
+			clip.bitmap = h
+		} else {
+			h, _, _ := procClipboardData.Call(format)
+			if h == 0 {
+				return nil, false // rendered on request: no data to copy
+			}
+			size, _, _ := procTestGlobalSize.Call(h)
+			p, _, _ := procTestLock.Call(h)
+			if p == 0 {
+				return nil, false
+			}
+			var ptr unsafe.Pointer
+			*(*uintptr)(unsafe.Pointer(&ptr)) = p
+			clip.data = make([]byte, size)
+			copy(clip.data, unsafe.Slice((*byte)(ptr), size))
+			procTestUnlock.Call(h)
+		}
+		saved = append(saved, clip)
+	}
+	return saved, true
+}
+
+// restoreClipboard puts the saved formats back, in the order the clipboard
+// listed them, so the next reader sees the same preference order.
+func restoreClipboard(t *testing.T, saved []savedClip) {
+	t.Helper()
+	if r, _, _ := procTestOpen.Call(0); r == 0 {
+		t.Logf("clipboard busy: the original content was not restored")
+		return
+	}
+	defer procTestClose.Call()
 	procTestEmpty.Call()
-	fn()
-	procTestClose.Call()
-	if hadBefore {
-		setClipboardText(before)
-	} else {
-		if r, _, _ := procTestOpen.Call(0); r != 0 {
-			procTestEmpty.Call()
-			procTestClose.Call()
+	for i := len(saved) - 1; i >= 0; i-- {
+		clip := saved[i]
+		format := uintptr(clip.format)
+		if clip.name != "" {
+			u, err := windows.UTF16FromString(clip.name)
+			if err != nil {
+				continue
+			}
+			if id, _, _ := procTestRegister.Call(uintptr(unsafe.Pointer(&u[0]))); id != 0 {
+				format = id
+			}
+		}
+		if clip.bitmap != 0 {
+			if r, _, _ := procTestSetText.Call(format, clip.bitmap); r == 0 {
+				procTestDeleteObj.Call(clip.bitmap)
+			}
+			continue
+		}
+		h, _, _ := procTestAlloc.Call(gmemMoveable, uintptr(len(clip.data)))
+		if h == 0 {
+			t.Logf("could not restore clipboard format %d", clip.format)
+			continue
+		}
+		p, _, _ := procTestLock.Call(h)
+		if p == 0 {
+			procTestGlobalFree.Call(h)
+			t.Logf("could not restore clipboard format %d", clip.format)
+			continue
+		}
+		var ptr unsafe.Pointer
+		*(*uintptr)(unsafe.Pointer(&ptr)) = p
+		copy(unsafe.Slice((*byte)(ptr), len(clip.data)), clip.data)
+		procTestUnlock.Call(h)
+		if r, _, _ := procTestSetText.Call(format, h); r == 0 {
+			procTestGlobalFree.Call(h)
+			t.Logf("could not restore clipboard format %d", clip.format)
 		}
 	}
 }
 
+// clipboardText reads the clipboard's Unicode text, false when there is
+// none.
 func clipboardText() (string, bool) {
-	h, _, _ := procTestGetData.Call(uintptr(cfUnicodeText))
+	if r, _, _ := procTestOpen.Call(0); r == 0 {
+		return "", false
+	}
+	defer procTestClose.Call()
+	h, _, _ := procClipboardData.Call(uintptr(cfUnicodeText))
 	if h == 0 {
 		return "", false
 	}
@@ -138,6 +240,25 @@ func clipboardText() (string, bool) {
 	var ptr unsafe.Pointer
 	*(*uintptr)(unsafe.Pointer(&ptr)) = p
 	return windows.UTF16ToString(unsafe.Slice((*uint16)(ptr), n/2)), true
+}
+
+// withClipboard empties the clipboard for fn and puts every format it found
+// back afterwards, including when fn calls t.Fatal. The test skips when the
+// clipboard cannot be saved in full: the machine is shared and destroying a
+// user's copy is worse than a skipped test.
+func withClipboard(t *testing.T, fn func()) {
+	t.Helper()
+	saved, ok := saveClipboard()
+	if !ok {
+		t.Skip("clipboard holds content this test cannot restore, so it is left alone")
+	}
+	t.Cleanup(func() { restoreClipboard(t, saved) })
+	if r, _, _ := procTestOpen.Call(0); r == 0 {
+		t.Skip("clipboard held by another process")
+	}
+	procTestEmpty.Call()
+	procTestClose.Call()
+	fn()
 }
 
 func setClipboardText(s string) {
@@ -220,6 +341,20 @@ func TestClipboardLiveWindows(t *testing.T) {
 			t.Errorf("exclude marker: got %v, want skip", got)
 		}
 	})
+	// The DWORD markers are found by name whatever case they were
+	// registered with.
+	withClipboard(t, func() {
+		setClipboardText("case")
+		setClipboardDWORD(t, "CanIncludeInClipboardHistory", 1)
+		if r, _, _ := procTestOpen.Call(0); r == 0 {
+			t.Fatal("clipboard held")
+		}
+		got := clipboardDWORD("cAnInClUdEiNcLiPbOaRdHiStOrY")
+		procTestClose.Call()
+		if got != 1 {
+			t.Errorf("clipboardDWORD with another case = %d, want 1", got)
+		}
+	})
 	// The opt-in markers only exclude with a zero value.
 	withClipboard(t, func() {
 		setClipboardText("hist")
@@ -232,4 +367,106 @@ func TestClipboardLiveWindows(t *testing.T) {
 			t.Errorf("history=1: got %v, want text", got)
 		}
 	})
+}
+
+// setClipboardBytes puts a registered format with arbitrary bytes on the
+// clipboard, next to whatever is there already.
+func setClipboardBytes(t *testing.T, name string, data []byte) {
+	t.Helper()
+	u, err := windows.UTF16FromString(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _, _ := procTestRegister.Call(uintptr(unsafe.Pointer(&u[0])))
+	if id == 0 {
+		t.Fatalf("register %q failed", name)
+	}
+	h, _, _ := procTestAlloc.Call(gmemMoveable, uintptr(len(data)))
+	if h == 0 {
+		t.Fatal("GlobalAlloc failed")
+	}
+	p, _, _ := procTestLock.Call(h)
+	if p == 0 {
+		t.Fatal("GlobalLock failed")
+	}
+	var ptr unsafe.Pointer
+	*(*uintptr)(unsafe.Pointer(&ptr)) = p
+	copy(unsafe.Slice((*byte)(ptr), len(data)), data)
+	procTestUnlock.Call(h)
+	if r, _, _ := procTestOpen.Call(0); r == 0 {
+		t.Fatal("clipboard held")
+	}
+	if r, _, _ := procTestSetText.Call(id, h); r == 0 {
+		procTestGlobalFree.Call(h)
+		t.Fatal("SetClipboardData failed")
+	}
+	procTestClose.Call()
+}
+
+// clipboardFormatBytes reads a registered format's payload, nil when it is
+// not on the clipboard.
+func clipboardFormatBytes(t *testing.T, name string) []byte {
+	t.Helper()
+	if r, _, _ := procTestOpen.Call(0); r == 0 {
+		t.Fatal("clipboard held")
+	}
+	defer procTestClose.Call()
+	var id uintptr
+	for format := uintptr(0); ; {
+		format, _, _ = procEnumFormats.Call(format)
+		if format == 0 {
+			return nil
+		}
+		if strings.EqualFold(clipboardFormatName(uint16(format)), name) {
+			id = format
+			break
+		}
+	}
+	h, _, _ := procClipboardData.Call(id)
+	if h == 0 {
+		return nil
+	}
+	size, _, _ := procTestGlobalSize.Call(h)
+	p, _, _ := procTestLock.Call(h)
+	if p == 0 {
+		return nil
+	}
+	defer procTestUnlock.Call(h)
+	var ptr unsafe.Pointer
+	*(*uintptr)(unsafe.Pointer(&ptr)) = p
+	out := make([]byte, size)
+	copy(out, unsafe.Slice((*byte)(ptr), size))
+	return out
+}
+
+// TestClipboardRestoreKeepsEveryFormat checks the helper the other live tests
+// rely on: the clipboard goes back with the text and the custom binary format
+// it had, not just the text. A restore that only handled text left custom
+// formats behind for the next reader.
+func TestClipboardRestoreKeepsEveryFormat(t *testing.T) {
+	original, ok := saveClipboard()
+	if !ok {
+		t.Skip("clipboard holds content this test cannot restore, so it is left alone")
+	}
+	t.Cleanup(func() { restoreClipboard(t, original) })
+
+	blob := []byte{0x01, 0x00, 0x02, 0x7f, 0xfe}
+	withClipboard(t, func() {
+		setClipboardText("rakko round trip")
+		setClipboardBytes(t, "RakkoClipboardRoundTrip", blob)
+	})
+
+	saved, ok := saveClipboard()
+	if !ok {
+		t.Skip("clipboard holds content this test cannot restore, so it is left alone")
+	}
+	setClipboardText("clobbered")
+	restoreClipboard(t, saved)
+
+	if got, ok := clipboardText(); !ok || got != "rakko round trip" {
+		t.Fatalf("text after restore = %q (present %v), want %q", got, ok, "rakko round trip")
+	}
+	if got := clipboardFormatBytes(t, "RakkoClipboardRoundTrip"); !bytes.Equal(got, blob) {
+		t.Fatalf("custom format after restore = %v, want %v", got, blob)
+	}
 }

@@ -11,6 +11,7 @@ package platform
 import (
 	"encoding/binary"
 	"slices"
+	"strings"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -77,6 +78,20 @@ var (
 	procSendInput      = sysProc(user32, "SendInput")
 )
 
+// clipFormatIs reports whether name is one of set. Windows registers
+// clipboard format names without regard to case, so a source that registered
+// "excludeclipboardcontentfrommonitorprocessing" owns the same format as the
+// documented spelling, and a case-sensitive comparison would let its content
+// through.
+func clipFormatIs(name string, set []string) bool {
+	for _, s := range set {
+		if strings.EqualFold(name, s) {
+			return true
+		}
+	}
+	return false
+}
+
 // ClassifyClipboard decides what a clipboard change should add, from the
 // declared formats in the source's order of preference.
 func ClassifyClipboard(types []string) ClipboardKind {
@@ -84,20 +99,20 @@ func ClassifyClipboard(types []string) ClipboardKind {
 		return ClipboardNotReady
 	}
 	for _, t := range types {
-		if slices.Contains(privateClipTypes, t) {
+		if clipFormatIs(t, privateClipTypes) {
 			return ClipboardSkip
 		}
 	}
 	for _, t := range types {
-		if slices.Contains(clipFileTypes, t) {
+		if clipFormatIs(t, clipFileTypes) {
 			return ClipboardSkip
 		}
 	}
 	for _, t := range types {
 		switch {
-		case slices.Contains(clipTextTypes, t):
+		case clipFormatIs(t, clipTextTypes):
 			return ClipboardText
-		case slices.Contains(clipImageTypes, t):
+		case clipFormatIs(t, clipImageTypes):
 			return ClipboardImage
 		}
 	}
@@ -161,7 +176,7 @@ func ClipboardTypes() []string {
 	// content may be recorded, keeping it only when it asks to stay out.
 	kept := out[:0]
 	for _, name := range out {
-		if slices.Contains(optInClipFormats, name) && clipboardDWORD(name) != 0 {
+		if clipFormatIs(name, optInClipFormats) && clipboardDWORD(name) != 0 {
 			continue
 		}
 		kept = append(kept, name)
@@ -207,7 +222,7 @@ func clipboardDWORD(name string) uint32 {
 		if format == 0 {
 			return 0
 		}
-		if clipboardFormatName(uint16(format)) == name {
+		if strings.EqualFold(clipboardFormatName(uint16(format)), name) {
 			id = uint16(format)
 			break
 		}
