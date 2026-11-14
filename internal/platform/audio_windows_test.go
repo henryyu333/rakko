@@ -117,6 +117,17 @@ func TestEnterCOMApartmentBalancesTheCount(t *testing.T) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
+	// LockOSThread does not promise a thread nobody used: Go reuses OS
+	// threads, and a test that left an STA on one hands it over, which
+	// makes CoInitializeEx answer RPC_E_CHANGED_MODE before this test has
+	// done anything. Tell that apart from the helper misbehaving: probe
+	// the thread's apartment first and skip only the reused thread.
+	if hr, _, _ := procCoInitializeEx.Call(0, coinitMultithreaded); uint32(hr) == rpcEChangedMode {
+		t.Skip("the pool handed this test an OS thread another test left in an STA")
+	} else {
+		procCoUninitialize.Call() // our own probe reference, freed again
+	}
+
 	leave, ok := enterCOMApartment(coinitMultithreaded)
 	if !ok {
 		t.Fatal("a fresh test thread refused the MTA")
