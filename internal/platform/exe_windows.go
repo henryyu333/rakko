@@ -29,17 +29,34 @@ const uninstallKey = `Software\Microsoft\Windows\CurrentVersion\Uninstall\local.
 // uninstall entry records when it is present, otherwise NSIS's default.
 // It is a variable so tests can pin a temporary install directory.
 var installDir = func() (string, bool) {
-	if key, err := registry.OpenKey(registry.CURRENT_USER, uninstallKey, registry.QUERY_VALUE); err == nil {
-		value, _, verr := key.GetStringValue("InstallLocation")
-		key.Close()
-		if verr == nil && strings.TrimSpace(value) != "" {
-			return filepath.Clean(strings.TrimSpace(value)), true
-		}
+	if dir, ok := registryInstallDir(); ok {
+		return dir, true
 	}
-	if local := os.Getenv("LOCALAPPDATA"); local != "" {
-		return filepath.Join(local, "Programs", "Rakko"), true
+	return defaultInstallDir()
+}
+
+// registryInstallDir is the directory the user chose at install time, which
+// NSIS records in the uninstall entry.
+func registryInstallDir() (string, bool) {
+	key, err := registry.OpenKey(registry.CURRENT_USER, uninstallKey, registry.QUERY_VALUE)
+	if err != nil {
+		return "", false
 	}
-	return "", false
+	defer key.Close()
+	value, _, err := key.GetStringValue("InstallLocation")
+	if err != nil || strings.TrimSpace(value) == "" {
+		return "", false
+	}
+	return filepath.Clean(strings.TrimSpace(value)), true
+}
+
+// defaultInstallDir is NSIS's per-user default.
+func defaultInstallDir() (string, bool) {
+	local := os.Getenv("LOCALAPPDATA")
+	if local == "" {
+		return "", false
+	}
+	return filepath.Join(local, "Programs", "Rakko"), true
 }
 
 // StableExePath reports whether exe is the installed Rakko executable and
@@ -51,8 +68,8 @@ func StableExePath(exe string) (string, bool) {
 	if exe == "" {
 		return "", false
 	}
-	path := filepath.Clean(exe)
-	path = strings.TrimPrefix(path, `\\?\`)
+	path := strings.TrimPrefix(exe, `\\?\`)
+	path = filepath.Clean(path)
 	if !rakkoExeNameMatches(filepath.Base(path)) {
 		return "", false
 	}
@@ -66,10 +83,10 @@ func StableExePath(exe string) (string, bool) {
 // rakkoExeNameMatches reports whether base is Rakko.exe or the updater's
 // in-place name for a running executable, .Rakko.exe.old-<pid>.
 func rakkoExeNameMatches(base string) bool {
-	if base == rakkoExeName {
+	if strings.EqualFold(base, rakkoExeName) {
 		return true
 	}
-	rest, ok := strings.CutPrefix(base, "."+rakkoExeName+".old-")
+	rest, ok := strings.CutPrefix(strings.ToLower(base), "."+strings.ToLower(rakkoExeName)+".old-")
 	if !ok || rest == "" {
 		return false
 	}

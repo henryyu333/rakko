@@ -113,6 +113,14 @@ func hookEntryFor(exe string, tool Tool, dataDir, event string) hookEntry {
 	return hookEntryOS(exe, tool, dataDir, event)
 }
 
+// entryFor renders the entry of one kind.
+func entryFor(kind hookKind, exe string, tool Tool, dataDir, event string) hookEntry {
+	if kind == hookApproval {
+		return approveEntryFor(exe, tool, dataDir)
+	}
+	return hookEntryFor(exe, tool, dataDir, event)
+}
+
 // approveEntryFor renders the approval entry for tool.
 func approveEntryFor(exe string, tool Tool, dataDir string) hookEntry {
 	return approveEntryOS(exe, tool, dataDir)

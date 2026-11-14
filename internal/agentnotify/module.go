@@ -243,10 +243,10 @@ func fillModule(tmpl string, tool Tool, exe, dataDir string, kind hookKind) stri
 	)
 	out := r.Replace(tmpl)
 	out = fillEntryPlaceholder(out, "__RAKKO_CMD:", func(event string) string {
-		return quoteJSON(hookEntryFor(exe, tool, dataDir, event).command())
+		return quoteJSON(entryFor(kind, exe, tool, dataDir, event).command())
 	})
 	return fillEntryPlaceholder(out, "__RAKKO_ENTRY:", func(event string) string {
-		return hookEntryFor(exe, tool, dataDir, event).inline()
+		return entryFor(kind, exe, tool, dataDir, event).inline()
 	})
 }
 

@@ -100,6 +100,13 @@ func clientHandshake(conn net.Conn, token []byte, timeout time.Duration) error {
 	if _, err := io.ReadFull(conn, peer); err != nil {
 		return err
 	}
+	// The answer goes out before the app's arrives: the app verifies it
+	// before it answers, and waiting first would deadlock both ends. An
+	// HMAC proves nothing to a thief, and no payload follows until the
+	// app's own answer has been checked.
+	if _, err := conn.Write(authMAC(token, authClientTag, peer, nonce)); err != nil {
+		return err
+	}
 	answer := make([]byte, authTagSize)
 	if _, err := io.ReadFull(conn, answer); err != nil {
 		return err
@@ -108,6 +115,5 @@ func clientHandshake(conn net.Conn, token []byte, timeout time.Duration) error {
 	if subtle.ConstantTimeCompare(answer, want) != 1 {
 		return errors.New("agentnotify: the process on the other end is not this Rakko")
 	}
-	_, err := conn.Write(authMAC(token, authClientTag, peer, nonce))
-	return err
+	return nil
 }

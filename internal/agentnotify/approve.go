@@ -632,5 +632,7 @@ export default function (ctx) {
 // renderApproveModule fills an approval module's baked-in values.
 func renderApproveModule(tmpl string, tool Tool, exe, dataDir string) string {
 	out := fillModule(tmpl, tool, exe, dataDir, hookApproval)
+	// Copilot CLI's macOS file keeps its bash field; the Windows file uses
+	// the exec form and needs no command string.
 	return strings.ReplaceAll(out, "__RAKKO_APPROVE_CMD__", quoteJSON(approveEntryFor(exe, tool, dataDir).command()))
 }

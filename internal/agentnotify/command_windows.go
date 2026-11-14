@@ -210,7 +210,7 @@ func shimInvocation(tool Tool, kind hookKind, dataDir string) string {
 	if toolShell(tool) == shellPowerShell {
 		return "& " + powerShellQuote(path)
 	}
-	return cmdQuote(path)
+	return cmdInvocation(path)
 }
 
 // posixEntryLine is the entry Qwen Code needs when it runs hooks through Git
@@ -258,8 +258,13 @@ func escapedArgs(tool Tool, args []string) []string {
 	return out
 }
 
-// cmdQuote quotes one token for cmd.exe. The caller has already refused
-// values cmd expands or treats specially.
+// cmdInvocation is a command line that runs path under cmd.exe. /c strips
+// the outermost pair of quotes, so a path with spaces and any arguments the
+// tool appends still parse as one command.
+func cmdInvocation(path string) string { return `""` + path + `""` }
+
+// cmdQuote quotes one token inside a batch file for cmd.exe. The caller has
+// already refused values cmd expands or treats specially.
 func cmdQuote(s string) string { return `"` + s + `"` }
 
 // powerShellQuote quotes one word as a PowerShell single-quoted string.

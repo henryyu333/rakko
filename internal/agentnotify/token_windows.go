@@ -12,6 +12,7 @@ package agentnotify
 import (
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -79,39 +80,51 @@ func writeTokenFile(path string, token []byte, sid string) error {
 	if err != nil {
 		return err
 	}
-	dacl, err := windows.SecurityDescriptorFromString(tokenDACL(sid))
+	userDACL, err := windows.SecurityDescriptorFromString(tokenDACL(sid))
+	if err != nil {
+		return err
+	}
+	// CreateFile applies a descriptor's DACL but silently drops its SACL
+	// unless the caller holds SeSecurityPrivilege, and a per-user install
+	// does not. So the file is born with an empty DACL (nobody, not even
+	// this process, can open it by name), the mandatory label is applied to
+	// the open handle, and only then is the DACL opened to this user. The
+	// label is therefore in place before any other process could read the
+	// file — the token is never readable at low integrity, not even for a
+	// moment.
+	none, err := windows.SecurityDescriptorFromString("D:P")
 	if err != nil {
 		return err
 	}
 	sa := &windows.SecurityAttributes{
 		Length:             uint32(unsafe.Sizeof(windows.SecurityAttributes{})),
-		SecurityDescriptor: full,
+		SecurityDescriptor: none,
 		InheritHandle:      0,
 	}
 	h, err := createTokenFile(path, sa)
-	labeled := err == nil
-	if err != nil && errors.Is(err, windows.ERROR_PRIVILEGE_NOT_HELD) {
-		sa.SecurityDescriptor = dacl
-		h, err = createTokenFile(path, sa)
-		if err == nil {
-			labeled = false
-		}
-	}
 	if err != nil {
 		return err
 	}
 	defer windows.CloseHandle(h)
-	if !labeled {
-		sacl, present, serr := full.SACL()
-		if serr != nil || !present {
-			_ = os.Remove(path)
-			return errors.New("agentnotify: the token file could not be given its label")
-		}
-		if serr := windows.SetSecurityInfo(h, windows.SE_FILE_OBJECT,
-			windows.LABEL_SECURITY_INFORMATION, nil, nil, nil, sacl); serr != nil {
-			_ = os.Remove(path)
-			return serr
-		}
+	sacl, _, err := full.SACL()
+	if err != nil || sacl == nil {
+		_ = os.Remove(path)
+		return errors.New("agentnotify: the token file could not be given its label")
+	}
+	if err := windows.SetSecurityInfo(h, windows.SE_FILE_OBJECT,
+		windows.LABEL_SECURITY_INFORMATION, nil, nil, nil, sacl); err != nil {
+		_ = os.Remove(path)
+		return fmt.Errorf("agentnotify: the token file's integrity label: %w", err)
+	}
+	dacl, _, err := userDACL.DACL()
+	if err != nil || dacl == nil {
+		_ = os.Remove(path)
+		return errors.New("agentnotify: the token file has no access rule")
+	}
+	if err := windows.SetSecurityInfo(h, windows.SE_FILE_OBJECT,
+		windows.DACL_SECURITY_INFORMATION, nil, nil, dacl, nil); err != nil {
+		_ = os.Remove(path)
+		return fmt.Errorf("agentnotify: the token file's access rule: %w", err)
 	}
 	var done uint32
 	if err := windows.WriteFile(h, token, &done, nil); err != nil {
@@ -130,7 +143,10 @@ func createTokenFile(path string, sa *windows.SecurityAttributes) (windows.Handl
 	if err != nil {
 		return 0, err
 	}
-	return windows.CreateFile(namep, windows.GENERIC_READ|windows.GENERIC_WRITE,
+	// WRITE_DAC/WRITE_OWNER are what applying the mandatory label to the
+	// open handle needs; GENERIC_WRITE alone does not carry them.
+	return windows.CreateFile(namep,
+		windows.GENERIC_READ|windows.GENERIC_WRITE|windows.WRITE_DAC|windows.WRITE_OWNER,
 		0, sa, windows.CREATE_ALWAYS, windows.FILE_ATTRIBUTE_NORMAL, 0)
 }
 
