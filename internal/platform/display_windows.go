@@ -129,17 +129,20 @@ var displayPowerGUID = windows.GUID{
 }
 
 const (
-	deviceNotifyCallback  = 0x00000002
-	pbtPowerSettingChange = 0x8017
+	deviceNotifyCallback = 0x00000002
+	// PBT_POWERSETTINGCHANGE, the WM_POWERBROADCAST code a
+	// POWER_SETTING_REGISTER_NOTIFICATION callback is invoked with.
+	pbtPowerSettingChange = 0x8013
 )
 
-// powerSettingChange mirrors POWER_SETTING_CHANGE as the power notification
-// hands it over: the setting's GUID, its data's length, and the data itself,
-// a DWORD for the console display state.
-type powerSettingChange struct {
+// powerBroadcastSetting mirrors POWERBROADCAST_SETTING: the setting's GUID,
+// its data's length, and then the data itself inline — a DWORD for the console
+// display state. The data is part of the structure, not a pointer to it, so it
+// is read at offset 20 rather than dereferenced.
+type powerBroadcastSetting struct {
 	setting    windows.GUID
 	dataLength uint32
-	data       *byte
+	data       uint32
 }
 
 // deviceNotifySubscribeParams mirrors DEVICE_NOTIFY_SUBSCRIBE_PARAMETERS, the
@@ -163,25 +166,23 @@ var displayPowerCallbackAddr = windows.NewCallback(displayPowerCallback)
 
 // displayPowerCallback stores the display state the system reports. It runs on
 // a system thread, so it does nothing else.
-func displayPowerCallback(_, notifyType, setting uintptr) uintptr {
-	if uint32(notifyType) == pbtPowerSettingChange && setting != 0 {
-		change := powerSettingChangeAt(setting)
-		if change.setting == displayPowerGUID && change.dataLength >= 4 && change.data != nil {
-			if v := *(*uint32)(unsafe.Pointer(change.data)); v <= powerDisplayDim {
-				displayPower.state.Store(v)
-			}
+func displayPowerCallback(_, event, setting uintptr) uintptr {
+	if uint32(event) == pbtPowerSettingChange && setting != 0 {
+		change := powerBroadcastSettingAt(setting)
+		if change.setting == displayPowerGUID && change.dataLength >= 4 && change.data <= powerDisplayDim {
+			displayPower.state.Store(change.data)
 		}
 	}
 	return 0
 }
 
-// powerSettingChangeAt reads the setting the notification handed over. The
+// powerBroadcastSettingAt reads the setting the notification handed over. The
 // value comes from the system's own stack frame, so the uintptr-to-pointer
 // conversion is safe for the callback's duration.
-func powerSettingChangeAt(p uintptr) *powerSettingChange {
+func powerBroadcastSettingAt(p uintptr) *powerBroadcastSetting {
 	var v unsafe.Pointer
 	*(*uintptr)(unsafe.Pointer(&v)) = p
-	return (*powerSettingChange)(v)
+	return (*powerBroadcastSetting)(v)
 }
 
 // ensureDisplayPower subscribes the process to the console display state. One

@@ -7,6 +7,7 @@ package platform
 // window-style cases use a real STATIC window, which needs no app loop.
 
 import (
+	"encoding/binary"
 	"errors"
 	"os"
 	"path/filepath"
@@ -256,15 +257,33 @@ func TestDisplayPowerCallback(t *testing.T) {
 		{"short data", displayPowerGUID, []byte{0}, powerDisplayOn, powerDisplayOn},
 	} {
 		displayPower.state.Store(tt.before)
-		change := powerSettingChange{setting: tt.guid, dataLength: uint32(len(tt.data))}
-		if len(tt.data) > 0 {
-			change.data = &tt.data[0]
-		}
-		displayPowerCallback(0, pbtPowerSettingChange, uintptr(unsafe.Pointer(&change)))
+		payload := nativePowerSetting(tt.guid, tt.data)
+		displayPowerCallback(0, pbtPowerSettingChange, uintptr(unsafe.Pointer(&payload[0])))
 		if got := displayPower.state.Load(); got != tt.want {
 			t.Errorf("%s: state = %d, want %d", tt.name, got, tt.want)
 		}
 	}
+	// Any other event number means the display state did not change.
+	displayPower.state.Store(powerDisplayOn)
+	payload := nativePowerSetting(displayPowerGUID, []byte{0, 0, 0, 0})
+	displayPowerCallback(0, pbtPowerSettingChange+1, uintptr(unsafe.Pointer(&payload[0])))
+	if got := displayPower.state.Load(); got != powerDisplayOn {
+		t.Fatalf("a foreign power event stored state %d", got)
+	}
+}
+
+// nativePowerSetting lays a POWERBROADCAST_SETTING out the way the system
+// hands it to the callback: the GUID's fields, the data length as a DWORD at
+// offset 16, and the data's bytes inline at offset 20.
+func nativePowerSetting(guid windows.GUID, data []byte) []byte {
+	buf := make([]byte, 20+len(data))
+	binary.LittleEndian.PutUint32(buf[0:], guid.Data1)
+	binary.LittleEndian.PutUint16(buf[4:], guid.Data2)
+	binary.LittleEndian.PutUint16(buf[6:], guid.Data3)
+	copy(buf[8:16], guid.Data4[:])
+	binary.LittleEndian.PutUint32(buf[16:], uint32(len(data)))
+	copy(buf[20:], data)
+	return buf
 }
 
 // TestDisplayPowerSubscribes checks that the system accepts the display power
