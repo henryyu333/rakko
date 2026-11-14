@@ -1014,17 +1014,30 @@ func (p *toolsPage) toolChrome(c *ui.Context, live bool) {
 		minus.Children(func() {
 			ui.Icon(c, minusSymbol).Size(8, 8).TextColor(ink)
 		})
+		remove := func() {
+			if a.mutateToolsChanged(func(l *layout.Layout) bool {
+				at := slices.IndexFunc(l.Cards, func(c layout.Card) bool { return c.ID == cell.id })
+				if at < 0 {
+					return false // already gone: the click came twice
+				}
+				l.RemoveCard(cell.id)
+				return true
+			}) {
+				p.press, p.menu, p.rs = nil, nil, nil
+			}
+		}
 		minus.HandleInput(func(ev ui.InputEvent) bool {
 			if ev.Kind == ui.InputPointerUp {
-				if a.mutateToolsChanged(func(l *layout.Layout) bool {
-					l.RemoveCard(cell.id)
-					return true
-				}) {
-					p.press, p.menu, p.rs = nil, nil, nil
-				}
+				remove()
 			}
 			return true // swallow the down too, so no card press starts
 		})
+		// A screen reader, or automation driving the accessibility tree,
+		// presses the badge through its Invoke pattern, which reports a
+		// click rather than the pointer release InputPointerUp carries. The
+		// removal is the same, and a pointer click that reports both only
+		// removes the card once (remove finds it gone the second time).
+		minus.OnClick(remove)
 		minus.PointerPosition()
 		if len(cardSizes(cell.id)) < 2 {
 			continue

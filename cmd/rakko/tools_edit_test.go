@@ -121,6 +121,48 @@ func TestToolsDragToLibraryRemoves(t *testing.T) {
 	}
 }
 
+// TestToolsMinusBadgeRemovesTheCard: the ⊖ badge at a card's corner takes
+// it off the page. The badge is found by its own accessibility name — what
+// a screen reader and desktop automation look for — and pressed at that
+// box, and layout.json follows; the desktop pass found the badge dead when
+// the press missed its 18pt square by the width of the pill's label.
+func TestToolsMinusBadgeRemovesTheCard(t *testing.T) {
+	a, p, view := editPage(t, []layout.Card{{ID: "awake"}, {ID: "ocr"}})
+	// The chrome pops in over 220ms; a press before it has a box lands on
+	// nothing, which is what an automation script that clicks the moment
+	// editing is on sees.
+	view.Advance(300 * time.Millisecond)
+	view.Frame()
+	badge, ok := view.Find(a.appLoc().Remove())
+	if !ok {
+		t.Fatalf("no ⊖ badge in the chrome; texts %v", view.Texts())
+	}
+	if badge.W <= 0 || badge.H <= 0 {
+		t.Fatalf("the ⊖ badge has no box: %+v", badge)
+	}
+	view.ClickAt(badge.X+badge.W/2, badge.Y+badge.H/2)
+	view.Frame()
+	if !p.editing {
+		t.Fatal("the badge press left the editing mode")
+	}
+	for _, c := range a.toolsLayout().Cards {
+		if c.ID == "awake" {
+			t.Fatalf("the badge left the card on the page: %v", idsOf(a.toolsLayout().Cards))
+		}
+	}
+	// What is left of the chrome still works: the second card's badge sits
+	// where the first one did after the page re-packed.
+	badge, ok = view.Find(a.appLoc().Remove())
+	if !ok {
+		t.Fatal("the remaining card lost its badge")
+	}
+	view.ClickAt(badge.X+badge.W/2, badge.Y+badge.H/2)
+	view.Frame()
+	if got := a.toolsLayout().Cards; len(got) != 0 {
+		t.Fatalf("the second badge left a card behind: %v", idsOf(got))
+	}
+}
+
 // TestToolsResizeHandleSnapsAndSaves: dragging the arc grows the card to
 // the nearest size, the page follows live, and layout.json is written only
 // on the release.
