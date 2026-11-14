@@ -127,7 +127,7 @@ var (
 	procGetVolumeNameForVolumeMountPoint = sysProc(kernel32, "GetVolumeNameForVolumeMountPointW")
 	procQueryFullProcessImg              = sysProc(kernel32, "QueryFullProcessImageNameW")
 	procCloseHandle                      = sysProc(kernel32, "CloseHandle")
-	procGetAUMID                         = sysProc(kernel32, "GetApplicationUserModelID")
+	procGetProcessTimes                  = sysProc(kernel32, "GetProcessTimes")
 	procGetConsoleWindow                 = sysProc(kernel32, "GetConsoleWindow")
 	procGetModuleFileName                = sysProc(kernel32, "GetModuleFileNameW")
 
@@ -1023,21 +1023,78 @@ func processExe(pid int) string {
 }
 
 // processAUMID is the AppUserModelID of a packaged (Store/UWP) process, or
-// "" for a desktop one (and on a system whose kernel does not export the
-// query).
+// "" for a desktop one. The answer is memoized by process and creation
+// time: one package can publish several apps, so the AUMID is per process,
+// and a packaged process's identity never changes — the once-a-second
+// foreground poll must not reopen a handle and ask the system again.
 func processAUMID(pid int) string {
-	proc := aumidProc()
-	if proc == nil {
+	if pid <= 0 {
 		return ""
 	}
-	h, _, _ := procOpenProcess.Call(0x1000, 0, uintptr(pid))
+	h, _, _ := procOpenProcess.Call(0x1000 /* PROCESS_QUERY_LIMITED_INFORMATION */, 0, uintptr(pid))
 	if h == 0 {
 		return ""
 	}
 	defer procCloseHandle.Call(h)
+	key := aumidKey{pid: uint32(pid), created: processCreationTime(h)}
+	aumidMu.Lock()
+	id, ok := aumidCache[key]
+	aumidMu.Unlock()
+	if ok {
+		return id
+	}
+	id = queryAUMID(h)
+	aumidMu.Lock()
+	if len(aumidCache) >= 4096 { // pids recycle; the cache must not grow forever
+		aumidCache = map[aumidKey]string{}
+	}
+	aumidCache[key] = id
+	aumidMu.Unlock()
+	return id
+}
+
+type aumidKey struct {
+	pid     uint32
+	created uint64
+}
+
+var (
+	aumidMu    sync.Mutex
+	aumidCache = map[aumidKey]string{}
+)
+
+// processCreationTime is the process's start time, which keeps a recycled
+// pid from inheriting the previous process's identity.
+func processCreationTime(h uintptr) uint64 {
+	var created, exited, kernel, user winFileTime
+	if r, _, _ := procGetProcessTimes.Call(h, uintptr(unsafe.Pointer(&created)),
+		uintptr(unsafe.Pointer(&exited)), uintptr(unsafe.Pointer(&kernel)), uintptr(unsafe.Pointer(&user))); r == 0 {
+		return 0
+	}
+	return uint64(created.high)<<32 | uint64(created.low)
+}
+
+// winFileTime is FILETIME: 100ns ticks since 1601, as two 32-bit halves.
+type winFileTime struct {
+	low  uint32
+	high uint32
+}
+
+// queryAUMID asks the system for the handle's AppUserModelID.
+func queryAUMID(h uintptr) string {
+	proc := aumidProc()
+	if proc == nil {
+		return ""
+	}
 	size := uint32(512)
 	buf := make([]uint16, size)
-	if r, _, _ := proc.Call(h, uintptr(unsafe.Pointer(&size)), uintptr(unsafe.Pointer(&buf[0]))); r != 0 {
+	r, _, _ := proc.Call(h, uintptr(unsafe.Pointer(&size)), uintptr(unsafe.Pointer(&buf[0])))
+	const errorInsufficientBuffer = 122
+	if uint32(r) == errorInsufficientBuffer && int(size) > len(buf) {
+		buf = make([]uint16, size)
+		r, _, _ = proc.Call(h, uintptr(unsafe.Pointer(&size)), uintptr(unsafe.Pointer(&buf[0])))
+	}
+	if r != 0 {
 		return ""
 	}
 	return windows.UTF16ToString(buf[:size])
@@ -1048,12 +1105,13 @@ var (
 	aumidP    *windows.LazyProc
 )
 
-// aumidProc resolves GetApplicationUserModelID without panicking on a
-// system that does not export it: an absent query only means the app
-// identity falls back to the executable path.
+// aumidProc resolves the process AppUserModelID query without panicking on
+// a system that does not export it: an absent query only means the app
+// identity falls back to the executable path. The Windows export is
+// GetApplicationUserModelId (lower-case d).
 func aumidProc() *windows.LazyProc {
 	aumidOnce.Do(func() {
-		p := kernel32.NewProc("GetApplicationUserModelID")
+		p := kernel32.NewProc("GetApplicationUserModelId")
 		if err := p.Find(); err == nil {
 			aumidP = p
 		}

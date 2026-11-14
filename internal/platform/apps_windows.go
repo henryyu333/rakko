@@ -120,7 +120,7 @@ func hostedAppPID(frame uintptr) int {
 		if p == owner || p == 0 || p == ownProcessID() {
 			return true
 		}
-		if processFamilyID(p) != "" {
+		if appAUMID(p) != "" {
 			pid = p
 			return false
 		}
@@ -135,62 +135,6 @@ func hostedAppPID(frame uintptr) int {
 func appEnumWindows(visit func(h uintptr) bool) { enumTopLevel(visit) }
 
 func appEnumChildren(parent uintptr, visit func(h uintptr) bool) { enumChildren(parent, visit) }
-
-var procGetPackageFamilyName = sysProc(kernel32, "GetPackageFamilyName")
-
-// processFamilyID is the package family name of pid, or "" for a desktop
-// process. GetApplicationUserModelID is not exported by the system DLLs on
-// current Windows builds, so the family name is the bridge from a process
-// to the package that names it.
-func processFamilyID(pid int) string {
-	if pid <= 0 {
-		return ""
-	}
-	h, _, _ := procOpenProcess.Call(0x1000 /* PROCESS_QUERY_LIMITED_INFORMATION */, 0, uintptr(pid))
-	if h == 0 {
-		return ""
-	}
-	defer procCloseHandle.Call(h)
-	size := uint32(256)
-	buf := make([]uint16, size)
-	r, _, _ := procGetPackageFamilyName.Call(h, uintptr(unsafe.Pointer(&size)), uintptr(unsafe.Pointer(&buf[0])))
-	const errorInsufficientBuffer = 122
-	if uint32(r) == errorInsufficientBuffer && int(size) > len(buf) {
-		buf = make([]uint16, size)
-		r, _, _ = procGetPackageFamilyName.Call(h, uintptr(unsafe.Pointer(&size)), uintptr(unsafe.Pointer(&buf[0])))
-	}
-	if r != 0 {
-		return ""
-	}
-	return windows.UTF16ToString(buf[:size])
-}
-
-// appIDForFamily is the identity of the Apps folder entry whose
-// AppUserModelID belongs to the package family: a packaged app's stable
-// identity, which the pinned defaults and the running-app snapshot share.
-func appIDForFamily(entries []appEntry, family string) string {
-	if family == "" {
-		return ""
-	}
-	prefix := strings.ToLower(`shell:AppsFolder\` + family + "!")
-	for _, e := range entries {
-		if strings.HasPrefix(strings.ToLower(e.Target), prefix) {
-			return e.Target[len(`shell:AppsFolder\`):]
-		}
-	}
-	return ""
-}
-
-// packagedAppID maps a packaged process to the identity the shell opens
-// for its package, or "" when the process is not packaged (or the Apps
-// folder does not list the package).
-func packagedAppID(pid int) string {
-	family := processFamilyID(pid)
-	if family == "" {
-		return ""
-	}
-	return appIDForFamily(appListFresh(), family)
-}
 
 // appWindow reports whether h is a window that names a running app: it is
 // visible, is not a tool window and has a title. A minimized window still
@@ -237,11 +181,14 @@ func FrontmostApp() (appID, name string) {
 	return appIDOf(pid), appNameOf(pid)
 }
 
+// appAUMID is the process's own AppUserModelID. It is a variable so the
+// identity rule — one package can publish several apps, and each process
+// keeps its own — can be tested without two installed apps; production
+// always reads the system query.
+var appAUMID = processAUMID
+
 func appIDOf(pid int) string {
-	if id := processAUMID(pid); id != "" {
-		return id
-	}
-	if id := packagedAppID(pid); id != "" {
+	if id := appAUMID(pid); id != "" {
 		return id
 	}
 	return processExe(pid)
@@ -252,7 +199,7 @@ func appNameOf(pid int) string {
 		base := filepath.Base(exe)
 		return strings.TrimSuffix(base, filepath.Ext(base))
 	}
-	if id := processAUMID(pid); id != "" {
+	if id := appAUMID(pid); id != "" {
 		if i := strings.Index(id, "!"); i > 0 {
 			id = id[:i]
 		}

@@ -5,7 +5,10 @@ package platform
 // The app paths that do not need a foreign app: this process's own
 // windows stand in for the enumeration rules.
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 // TestTopWindowEnumerationReusesOneCallback runs far more enumerations
 // than the Go callback table holds. A callback registered per call leaks
@@ -17,25 +20,53 @@ func TestTopWindowEnumerationReusesOneCallback(t *testing.T) {
 	}
 }
 
-// TestAppIDForFamilyPicksTheAppsFolderEntry pins the process→package→
-// identity bridge: the family name must match only the entry whose
-// AppUserModelID belongs to that exact package, not a longer sibling.
-func TestAppIDForFamilyPicksTheAppsFolderEntry(t *testing.T) {
-	entries := []appEntry{
-		{Name: "计算器", Target: `shell:AppsFolder\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App`},
-		{Name: "计算器预览", Target: `shell:AppsFolder\Microsoft.WindowsCalculatorBeta_8wekyb3d8bbwe!App`},
-		{Name: "notepad", Target: `C:\Windows\System32\notepad.exe`},
+// TestAppIDOfKeepsEachAppsOwnID pins why a package family is not an
+// identity: one family can publish several apps, and each process must
+// keep its own AppUserModelID rather than the family's first entry.
+func TestAppIDOfKeepsEachAppsOwnID(t *testing.T) {
+	const family = "Microsoft.WindowsCalculator_8wekyb3d8bbwe"
+	ids := map[int]string{
+		101: family + "!App",
+		202: family + "!Secondary",
 	}
-	for _, tt := range []struct{ family, want string }{
-		{"Microsoft.WindowsCalculator_8wekyb3d8bbwe", "Microsoft.WindowsCalculator_8wekyb3d8bbwe!App"},
-		{"microsoft.windowscalculator_8wekyb3d8bbwe", "Microsoft.WindowsCalculator_8wekyb3d8bbwe!App"},
-		{"Microsoft.WindowsCalculatorBeta_8wekyb3d8bbwe", "Microsoft.WindowsCalculatorBeta_8wekyb3d8bbwe!App"},
-		{"Microsoft.WindowsCalculator", ""},
-		{"", ""},
-	} {
-		if got := appIDForFamily(entries, tt.family); got != tt.want {
-			t.Errorf("appIDForFamily(%q) = %q, want %q", tt.family, got, tt.want)
+	old := appAUMID
+	defer func() { appAUMID = old }()
+	appAUMID = func(pid int) string { return ids[pid] }
+
+	first, second := appIDOf(101), appIDOf(202)
+	if first != family+"!App" || second != family+"!Secondary" {
+		t.Fatalf("appIDOf = %q and %q, want each process's own AUMID", first, second)
+	}
+	if first == second {
+		t.Fatal("two apps of one package collapsed into one identity")
+	}
+	if id := appIDOf(OwnPID()); id == "" {
+		t.Fatal("a desktop process lost its executable identity")
+	}
+}
+
+// TestIdentityLookupCost measures the identity lookups the weekly brief's
+// once-a-second foreground poll makes: the first call per process asks the
+// system, the rest are one creation-time query and a map hit.
+func TestIdentityLookupCost(t *testing.T) {
+	const calls = 20000
+	start := time.Now()
+	for range calls {
+		if id := processAUMID(OwnPID()); id != "" {
+			t.Fatalf("the test binary reported the AppUserModelID %q", id)
 		}
+	}
+	cached := time.Since(start) / calls
+	t.Logf("processAUMID, memoized: %v per call (%d calls)", cached, calls)
+
+	start = time.Now()
+	for range 5000 {
+		FrontmostApp()
+	}
+	perCall := time.Since(start) / 5000
+	t.Logf("FrontmostApp: %v per call (5000 calls)", perCall)
+	if cached > time.Millisecond || perCall > time.Millisecond {
+		t.Fatalf("identity lookups cost %v cached and %v through FrontmostApp; a once-a-second poll cannot afford that", cached, perCall)
 	}
 }
 
