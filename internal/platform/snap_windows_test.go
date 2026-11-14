@@ -8,7 +8,9 @@ package platform
 
 import (
 	"math"
+	"runtime"
 	"testing"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -38,7 +40,13 @@ func testSnapWindow(t *testing.T) uintptr {
 }
 
 func TestAppWindowFrameAndMove(t *testing.T) {
+	// The window must belong to the thread that moves it: a move posted to
+	// another thread is asynchronous by design, and this test checks the
+	// immediate result.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	h := testSnapWindow(t)
+	defer func() { procDestroyWindow.Call(h) }()
 	// The calls under test take the handle as an AppWindow: the hit test is
 	// separately covered, and must not decide this test's fate.
 	w := AppWindow{handle: h}
@@ -118,6 +126,57 @@ func TestAppWindowRejectsTheDesktop(t *testing.T) {
 		if class := windowClass(uintptr(w.handle)); shellWindows[class] {
 			t.Fatalf("AppWindowAt(1,1) returned the desktop window %q", class)
 		}
+	}
+}
+
+// TestMoveResizeDoesNotWaitOnAHungWindow moves a window owned by a thread
+// that never pumps messages — an unresponsive app. SetWindowPos and
+// ShowWindow would both wait on that thread, which on the UI thread is
+// Rakko freezing with the app; the calls must be posted instead.
+func TestMoveResizeDoesNotWaitOnAHungWindow(t *testing.T) {
+	created := make(chan uintptr, 1)
+	release := make(chan struct{})
+	ownerDone := make(chan struct{})
+	go func() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+		defer close(ownerDone)
+		class, _ := windows.UTF16PtrFromString("STATIC")
+		title, _ := windows.UTF16PtrFromString("rakko-hung-window-test")
+		// WS_OVERLAPPEDWINDOW, never shown: the test needs no desktop.
+		const wsOverlappedWindow = 0x00CF0000
+		h, _, _ := procCreateWindowEx.Call(0, uintptr(unsafe.Pointer(class)), uintptr(unsafe.Pointer(title)),
+			wsOverlappedWindow, 120, 120, 240, 160, 0, 0, 0, 0)
+		created <- h
+		// Hold the thread without a message loop: a synchronous
+		// SetWindowPos from another thread waits here forever.
+		<-release
+		if h != 0 {
+			procDestroyWindow.Call(h)
+		}
+	}()
+	h := <-created
+	if h == 0 {
+		close(release)
+		<-ownerDone
+		t.Skip("this session cannot create a window")
+	}
+	t.Cleanup(func() {
+		close(release)
+		<-ownerDone
+	})
+	w := AppWindow{handle: h}
+	moved := make(chan error, 1)
+	go func() {
+		moved <- w.MoveResize(Rect{X: 40, Y: 40, Width: 200, Height: 120}, true)
+	}()
+	select {
+	case err := <-moved:
+		if err != nil {
+			t.Fatalf("MoveResize on a hung window: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("MoveResize waited on a window whose thread does not pump messages")
 	}
 }
 

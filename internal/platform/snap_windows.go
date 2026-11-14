@@ -109,31 +109,62 @@ func (w AppWindow) Settable() (move, resize bool) {
 	return move, resize
 }
 
+// swpAsyncWindowPos posts SetWindowPos to the window's thread instead of
+// waiting for it. A window whose app is hung would otherwise block this
+// call — and with it the UI thread's snap release — until that app
+// answered.
+const swpAsyncWindowPos = 0x4000
+
+var procShowWindowAsync = sysProc(user32, "ShowWindowAsync")
+
+// windowThread is the id of the thread that owns h.
+func windowThread(h uintptr) uintptr {
+	tid, _, _ := procGetWindowThreadPID.Call(h)
+	return tid
+}
+
+// currentThreadID is the calling thread's id.
+func currentThreadID() uintptr {
+	tid, _, _ := procGetCurrentThreadID.Call()
+	return tid
+}
+
 // MoveResize sets the window's position, then its size when resize is
 // true. A maximized or minimized window is restored first: SetWindowPos on
 // a maximized window would only move its restore rectangle while the
 // window kept filling the screen. Position first, so a window resized at
 // its old origin cannot push its title bar under the taskbar before the
-// move lands. ErrAppWindowResize means the move may already have been
-// applied.
+// move lands.
+//
+// Both the restore and the move are posted rather than waited on: the
+// window belongs to another application, which may be hung. The result is
+// read back only when this thread owns the window; for a foreign window
+// the caller's confirmation tick verifies the frame once the owner has
+// processed the move. ErrAppWindowResize therefore only describes a
+// window this thread owns.
 func (w AppWindow) MoveResize(r Rect, resize bool) error {
 	if !w.Valid() {
 		return errors.New("windows: the window is gone")
 	}
 	h := w.handle
 	if r, _, _ := procIsIconic.Call(h); r != 0 {
-		procShowWindow.Call(h, 9 /* SW_RESTORE */)
+		procShowWindowAsync.Call(h, 9 /* SW_RESTORE */)
 	} else if z, _, _ := procIsZoomed.Call(h); z != 0 {
-		procShowWindow.Call(h, 9 /* SW_RESTORE */)
+		procShowWindowAsync.Call(h, 9 /* SW_RESTORE */)
 	}
 	p := dipToPixels(r)
-	flags := uintptr(swpNoZOrder | swpNoActivate)
+	flags := uintptr(swpNoZOrder | swpNoActivate | swpAsyncWindowPos)
 	if !resize {
 		flags |= swpNoSize
 	}
 	if res, _, err := procSetWindowPos.Call(h, 0,
 		uintptr(p.Left), uintptr(p.Top), uintptr(p.width()), uintptr(p.height()), flags); res == 0 {
 		return fmt.Errorf("windows: moving the window failed: %w", err)
+	}
+	if windowThread(h) != currentThreadID() {
+		// Posted: the move has not happened yet, so reading the frame
+		// would only see the old one.
+		return nil
 	}
 	got, ok := windowRect(h)
 	if !ok {
