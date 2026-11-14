@@ -77,17 +77,18 @@ func runClaudeCommand(ctx context.Context, env Env, args []string, configDir str
 	}
 	defer os.RemoveAll(dir)
 
-	cmd, err := claudeCommand(path, args)
+	childEnv := cleanClaudeEnv(os.Environ())
+	if configDir != "" {
+		childEnv = setEnv(childEnv, "CLAUDE_CONFIG_DIR", configDir)
+	}
+	// The builder owns the child's environment: a batch launcher has to add
+	// the entries its command line reads.
+	cmd, err := claudeCommand(path, args, childEnv)
 	if err != nil {
 		return "", "", err
 	}
 	cmd.Dir = dir
 	cmd.Stdin = strings.NewReader("")
-	childEnv := cleanClaudeEnv(os.Environ())
-	if configDir != "" {
-		childEnv = setEnv(childEnv, "CLAUDE_CONFIG_DIR", configDir)
-	}
-	cmd.Env = childEnv
 	var out, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &stderr
 	group, err := startInGroup(cmd)

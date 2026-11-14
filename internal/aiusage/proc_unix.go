@@ -16,8 +16,10 @@ type procGroup struct {
 }
 
 // claudeCommand builds the run for one Claude Code invocation.
-func claudeCommand(path string, args []string) (*exec.Cmd, error) {
-	return exec.Command(path, args...), nil
+func claudeCommand(path string, args, env []string) (*exec.Cmd, error) {
+	cmd := exec.Command(path, args...)
+	cmd.Env = env
+	return cmd, nil
 }
 
 // startInGroup starts cmd in a new session and returns the handle that can

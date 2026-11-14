@@ -89,9 +89,10 @@ func runClaudeLoginTTY(ctx context.Context, argv []string, dir string, childEnv 
 	}
 	si.ProcThreadAttributeList = attrs.List()
 	// The sign-in may be an npm claude.cmd, whose arguments have to be
-	// written the way cmd.exe reads a batch file. The command line names the
-	// program as its first token, so CreateProcess resolves it — an
-	// unqualified cmd.exe through PATH — as before.
+	// written the way cmd.exe reads a batch file; that launch carries them
+	// in the environment. The command line names the program as its first
+	// token, so CreateProcess resolves it — an unqualified cmd.exe through
+	// PATH — as before.
 	launch, err := claudeLaunch(argv)
 	if err != nil {
 		return err
@@ -108,7 +109,7 @@ func runClaudeLoginTTY(ctx context.Context, argv []string, dir string, childEnv 
 	if err != nil {
 		return err
 	}
-	block := envBlock(childEnv)
+	block := envBlock(launch.withEnv(childEnv))
 	var pi windows.ProcessInformation
 	err = windows.CreateProcess(nil, commandLine, nil, nil, false,
 		windows.EXTENDED_STARTUPINFO_PRESENT|windows.CREATE_UNICODE_ENVIRONMENT|windows.CREATE_SUSPENDED,
