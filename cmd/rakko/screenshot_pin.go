@@ -75,6 +75,16 @@ func (a *shelf) openShotPin(png []byte, frame mygo.Rectangle, scale float64) {
 	win.OnClose(func(*mygo.CloseEvent) { a.removeShotPin(p) })
 	win.ShowInactive()
 	a.shotPins = append(a.shotPins, p)
+	// The first frame can reach the screen before the picture's texture is
+	// uploaded; one repaint a moment after showing keeps the pin from
+	// opening as an empty frame.
+	shotAfter(30*time.Millisecond, func() {
+		mygo.RunOnMain(func() {
+			if p.win != nil {
+				p.win.Invalidate()
+			}
+		})
+	})
 }
 
 // removeShotPin drops p from the launch's list.
