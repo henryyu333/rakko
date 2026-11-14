@@ -51,6 +51,12 @@ func main() {
 	if agentnotify.RunApproveCLI(os.Args[1:], os.Stdin, os.Stdout) {
 		return
 	}
+	// A second launch hands its arguments to the running app and exits. On
+	// macOS the lock is always granted: LaunchServices already made the
+	// second launch an activation of the first.
+	if !requestSingleInstanceLock() {
+		return
+	}
 	// A bundle an in-app update left at ShelfU.app or Shelf.app moves to
 	// Rakko.app and reopens from there before anything reads the data
 	// directory.
@@ -189,21 +195,27 @@ func main() {
 		a.ready(*show)
 	})
 	mygo.App.OnDidBecomeActive(a.followSystemLanguage)
-	mygo.App.OnActivate(func(bool) {
-		// macOS reopen（如 open -a / Finder 再次启动已运行的实例）：设置
-		// 窗口开着就归还给它；否则等价于菜单栏图标点击——切换而非强制
-		// 展开，避免常驻窗口随激活事件自行弹出。
-		if a.settingsWin != nil {
-			platform.ActivateSelf()
-			a.settingsWin.Focus()
-			return
-		}
-		if a.win != nil {
-			a.toggle()
-		}
-	})
+	// macOS reopen（如 open -a / Finder 再次启动已运行的实例）和
+	// Windows 的第二次启动走同一个落点：设置窗口开着就归还给它；否则
+	// 等价于图标点击——切换而非强制展开，避免常驻窗口自行弹出。
+	mygo.App.OnActivate(func(bool) { a.reopened() })
+	registerSecondInstance(a.reopened)
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)
+	}
+}
+
+// reopened is what a second launch asks the running app to do: give the
+// keyboard back to an open Settings window, or toggle the shelf the way a
+// click on the icon does.
+func (a *shelf) reopened() {
+	if a.settingsWin != nil {
+		platform.ActivateSelf()
+		a.settingsWin.Focus()
+		return
+	}
+	if a.win != nil {
+		a.toggle()
 	}
 }
 
@@ -437,7 +449,7 @@ func (a *shelf) newNotchWindow() {
 		Title: appName, Width: sheetW, Height: sheetH,
 		Hidden: true, Frameless: true, Transparent: true, DisableShadow: true,
 		AlwaysOnTop: true, SkipTaskbar: true, Panel: true,
-		DisableMove: true, DisableResize: true, DisableMinimize: true, DisableMaximize: true, DisableFullScreen: true,
+		DisableMove: disableMoveOverlay, DisableResize: true, DisableMinimize: true, DisableMaximize: true, DisableFullScreen: true,
 		Content: ui.View(a.view),
 	})
 	a.win.SetVisibleOnAllWorkspaces(true)
@@ -459,10 +471,14 @@ func (a *shelf) trayMenu() *mygo.Menu {
 	l := a.appLoc()
 	items := []*mygo.MenuItem{
 		{Label: l.TrayShowShelf(), Click: func(*mygo.MenuItem, *mygo.Window) { a.toggle() }},
-		a.permissionMenuItem(),
-		{Label: l.TrayRetention(), Type: mygo.MenuItemSubmenu, Submenu: a.retentionMenu()},
-		{Label: l.TrayClipboard(), Type: mygo.MenuItemSubmenu, Submenu: a.clipboardMenu()},
 	}
+	if it := a.permissionMenuItem(); it != nil {
+		items = append(items, it)
+	}
+	items = append(items,
+		&mygo.MenuItem{Label: l.TrayRetention(), Type: mygo.MenuItemSubmenu, Submenu: a.retentionMenu()},
+		&mygo.MenuItem{Label: l.TrayClipboard(), Type: mygo.MenuItemSubmenu, Submenu: a.clipboardMenu()},
+	)
 	if it := a.petMenuItem(); it != nil {
 		items = append(items, it)
 	}

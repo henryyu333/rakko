@@ -714,7 +714,7 @@ func (a *shelf) openGhostWindow(g *snapGhost) {
 		X: f.X, Y: f.Y,
 		Hidden: true, Frameless: true, Transparent: true, DisableShadow: true,
 		AlwaysOnTop: true, SkipTaskbar: true, Panel: true,
-		DisableMove: true, DisableResize: true, DisableMinimize: true, DisableMaximize: true, DisableFullScreen: true,
+		DisableMove: disableMoveOverlay, DisableResize: true, DisableMinimize: true, DisableMaximize: true, DisableFullScreen: true,
 		Content: ui.View(snapGhostView),
 	})
 	g.win = w

@@ -368,7 +368,9 @@ func (a *shelf) settingsSidebar(c *ui.Context) {
 		a.settingsNavItem(c, settingsPageAIUsage, navUsage, l.SettingsAISection())
 		settingsNavGroup(c, l.SettingsGroupSystem())
 		a.settingsNavItem(c, settingsPageShortcuts, navKey, l.SettingsShortcutsSection())
-		a.settingsNavItem(c, settingsPagePermissions, navHand, l.PermTitle())
+		if permissionsSupported {
+			a.settingsNavItem(c, settingsPagePermissions, navHand, l.PermTitle())
+		}
 		a.settingsNavItem(c, settingsPageAbout, navInfo, l.SettingsAboutPage())
 
 		ui.Box(c.Key("side-grow")).Grow(1)
@@ -411,6 +413,9 @@ func (a *shelf) settingsNavItem(c *ui.Context, page settingsPageID, icon *ui.SVG
 // permission is on, an orange one and a count when not; it opens the 系统权限
 // page.
 func (a *shelf) settingsPermissionStatus(c *ui.Context) {
+	if !permissionsSupported {
+		return
+	}
 	l := loc(c)
 	missing := len(missingSystemPermissions())
 	dot := success

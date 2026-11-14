@@ -104,7 +104,7 @@ type pinItem struct {
 }
 
 // pinDisplays is the display list the geometry sees; tests replace it.
-var pinDisplays = func() []mygo.Display { return mygo.Screen.Displays() }
+var pinDisplays = screenDisplays
 
 // pinArea returns the work area of a display, or of the primary when the
 // ID is gone (unplugged, or a test list that lacks it): the remembered
@@ -427,7 +427,7 @@ func (it *pinItem) openWindow(preview bool) {
 		X: f.X, Y: f.Y,
 		Hidden: true, Frameless: true, Transparent: true, DisableShadow: true,
 		AlwaysOnTop: true, SkipTaskbar: true, Panel: true,
-		DisableMove: true, DisableResize: true, DisableMinimize: true, DisableMaximize: true, DisableFullScreen: true,
+		DisableMove: disableMoveOverlay, DisableResize: true, DisableMinimize: true, DisableMaximize: true, DisableFullScreen: true,
 		Content: ui.View(func(c *ui.Context) { it.view(c) }),
 	})
 	it.win = w

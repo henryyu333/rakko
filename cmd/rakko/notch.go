@@ -10,6 +10,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/platform"
+	"rakko/internal/settings"
 )
 
 // The notch shell: geometry, the three states (idle, peek, expanded), their
@@ -35,13 +36,37 @@ func (a *shelf) place(p mygo.Point) {
 // displayNearest is the display lookup placeAt measures from. The app always
 // asks WindowServer; tests replace it with a synthetic layout so placement,
 // the saved island spot and the clamps can be driven without a screen.
-var displayNearest = func(p mygo.Point) mygo.Display { return mygo.Screen.DisplayNearestPoint(p) }
+// The identity is the platform's stable display id: Windows' raw HMONITOR
+// changes across restarts, while the saved layout keys must not.
+var displayNearest = func(p mygo.Point) mygo.Display {
+	return stableDisplay(mygo.Screen.DisplayNearestPoint(p))
+}
+
+// stableDisplay rewrites mygo's display identity to the one saved layouts
+// are keyed by.
+func stableDisplay(d mygo.Display) mygo.Display {
+	d.ID = platform.StableDisplayID(d.ID)
+	return d
+}
+
+// screenDisplays lists every display with its stable identity.
+func screenDisplays() []mygo.Display {
+	ds := mygo.Screen.Displays()
+	for i := range ds {
+		ds[i] = stableDisplay(ds[i])
+	}
+	return ds
+}
 
 // notchRect measures a display's camera housing; tests replace it with the
 // synthetic layout displayNearest returns.
 var notchRect = platform.NotchRect
 
 func (a *shelf) placeAt(p mygo.Point) {
+	// A platform without a camera housing measures a simulated one only
+	// when the notch style is chosen; the measurement below is what encodes
+	// that, so the flag is applied first.
+	platform.SetSimulatedNotch(a.settings.ShellStyle.Normalized() != settings.ShellStyleIsland)
 	d := displayNearest(p)
 	a.dispBounds, a.dispWork = d.Bounds, d.WorkArea
 	a.dispID = d.ID

@@ -75,7 +75,7 @@ func (a *shelf) openMainIdleCapsule(f mygo.Rectangle) *mainIdleCapsule {
 		X: f.X, Y: f.Y,
 		Hidden: true, Frameless: true, Transparent: true, DisableShadow: true,
 		AlwaysOnTop: true, SkipTaskbar: true, Panel: true,
-		DisableMove: true, DisableResize: true, DisableMinimize: true, DisableMaximize: true, DisableFullScreen: true,
+		DisableMove: disableMoveOverlay, DisableResize: true, DisableMinimize: true, DisableMaximize: true, DisableFullScreen: true,
 		Content: ui.View(a.mainIdleCapsuleView),
 	})
 	if w == nil {
@@ -207,7 +207,7 @@ func (a *shelf) syncIdleIslands() {
 		a.closeIdleIslands()
 		return
 	}
-	displays := mygo.Screen.Displays()
+	displays := screenDisplays()
 	ds := make([]islandDisplay, 0, len(displays))
 	for _, d := range displays {
 		_, _, _, _, hasNotch := platform.NotchRect(d.ID)
@@ -247,7 +247,7 @@ func (a *shelf) openIdleIsland(pl idlePlacement) *idleIslandWindow {
 		X: f.X, Y: f.Y,
 		Hidden: true, Frameless: true, Transparent: true, DisableShadow: true,
 		AlwaysOnTop: true, SkipTaskbar: true, Panel: true,
-		DisableMove: true, DisableResize: true, DisableMinimize: true, DisableMaximize: true, DisableFullScreen: true,
+		DisableMove: disableMoveOverlay, DisableResize: true, DisableMinimize: true, DisableMaximize: true, DisableFullScreen: true,
 		Content: ui.View(idleIslandView),
 	})
 	if w == nil {

@@ -421,7 +421,7 @@ func Default() Settings {
 		AutoCheckUpdates: true,
 		RemoveAfterDrag:  false,
 		SnapWindows:      true,
-		ShellStyle:       ShellStyleNotch,
+		ShellStyle:       defaultShellStyle,
 		SearchMode:       SearchModeAll,
 		LiveActivities: LiveActivitySettings{
 			Charging:   true,

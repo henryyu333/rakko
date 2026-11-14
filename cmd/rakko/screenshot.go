@@ -35,7 +35,7 @@ import (
 // the real ones; headless tests replace them and never touch a window
 // server, a pasteboard or the user's Desktop.
 var (
-	shotDisplays       = func() []mygo.Display { return mygo.Screen.Displays() }
+	shotDisplays       = screenDisplays
 	shotCursorPoint    = func() mygo.Point { return mygo.Screen.CursorScreenPoint() }
 	shotCaptureDisplay = platform.CaptureDisplay
 	shotNormalWindow   = platform.NormalWindows
@@ -382,7 +382,7 @@ func (s *shotSession) openWindow(di int) {
 		X: b.X, Y: b.Y,
 		Hidden: true, Frameless: true, Transparent: true, DisableShadow: true,
 		AlwaysOnTop: true, SkipTaskbar: true, Panel: true,
-		DisableMove: true, DisableResize: true, DisableMinimize: true, DisableMaximize: true, DisableFullScreen: true,
+		DisableMove: disableMoveOverlay, DisableResize: true, DisableMinimize: true, DisableMaximize: true, DisableFullScreen: true,
 		Content: ui.View(func(c *ui.Context) { s.overlayView(c, di) }),
 	})
 	if w == nil {

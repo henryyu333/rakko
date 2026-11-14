@@ -108,12 +108,17 @@ func stepAfter(name string) string {
 }
 
 // steps is the guide's own order: the move step only exists for a bundle
-// that should not stay where it runs, and the permissions are last.
+// that should not stay where it runs, and the permissions are last, on the
+// platforms that have them.
 func (o *onboardingFeature) steps() []string {
-	if o.origin == originInstalled {
-		return []string{onbStepIntro, onbStepPerms}
+	steps := []string{onbStepIntro}
+	if o.origin != originInstalled {
+		steps = append(steps, onbStepMove)
 	}
-	return []string{onbStepIntro, onbStepMove, onbStepPerms}
+	if permissionsSupported {
+		steps = append(steps, onbStepPerms)
+	}
+	return steps
 }
 
 func (o *onboardingFeature) current() string { return o.steps()[o.step] }

@@ -290,7 +290,7 @@ func TestShellStyleLoad(t *testing.T) {
 		raw  string
 		want ShellStyle
 	}{
-		{`{}`, ShellStyleNotch},
+		{`{}`, defaultShellStyle},
 		{`{"shellStyle": "island"}`, ShellStyleIsland},
 		{`{"shellStyle": "notch"}`, ShellStyleNotch},
 		{`{"shellStyle": "ISLAND"}`, ShellStyleNotch},

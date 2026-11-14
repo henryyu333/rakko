@@ -57,7 +57,7 @@ func (a *shelf) openShotPin(png []byte, frame mygo.Rectangle, scale float64) {
 		X: frame.X, Y: frame.Y,
 		Hidden: true, Frameless: true, Transparent: true, DisableShadow: true,
 		AlwaysOnTop: true, SkipTaskbar: true, Panel: true,
-		DisableMove: true, DisableResize: true, DisableMinimize: true, DisableMaximize: true, DisableFullScreen: true,
+		DisableMove: disableMoveOverlay, DisableResize: true, DisableMinimize: true, DisableMaximize: true, DisableFullScreen: true,
 		Content: ui.View(p.view),
 	})
 	if win == nil {
