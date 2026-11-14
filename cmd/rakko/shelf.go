@@ -85,7 +85,7 @@ type shelf struct {
 	homeQuery                                                   string               // the home search bar's text
 	homeScope                                                   platform.SearchScope // what the bar searches: 全部 / 应用 / 文件, never saved
 	homeSel                                                     int                  // the selected result row
-	homeSearch                                                    homeSearchState        // the bar's Spotlight query and hits
+	homeSearch                                                  homeSearchState      // the bar's Spotlight query and hits
 	homeRows                                                    []homeHit            // the current build pass's grouped rows
 	homeRowsOK                                                  bool
 	spotIcons                                                   map[string]*ui.Bitmap // result path → Finder icon, cached for the sheet

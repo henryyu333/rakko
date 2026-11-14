@@ -11,7 +11,7 @@ type ClipboardKind int
 
 const (
 	ClipboardNotReady ClipboardKind = iota // no type declared yet
-	ClipboardSkip                         // private, files, or nothing usable
+	ClipboardSkip                          // private, files, or nothing usable
 	ClipboardText
 	ClipboardImage
 )

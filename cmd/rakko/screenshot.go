@@ -22,9 +22,7 @@ import (
 	"image/draw"
 	stdpng "image/png"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strconv"
 	"sync"
 	"time"
 
@@ -41,7 +39,7 @@ import (
 var (
 	shotDisplays       = func() []mygo.Display { return mygo.Screen.Displays() }
 	shotCursorPoint    = func() mygo.Point { return mygo.Screen.CursorScreenPoint() }
-	shotCaptureDisplay = captureShotDisplayFile
+	shotCaptureDisplay = platform.CaptureDisplay
 	shotNormalWindow   = platform.NormalWindows
 	shotDispatch       = mygo.RunOnMain
 	shotWork           = func(fn func()) { go fn() }
@@ -54,7 +52,7 @@ var (
 	shotOrderOverlay   = platform.OrderOverlayFront
 	shotPreflight      = platform.CanCaptureScreen
 	shotClipboard      = writeShotClipboard
-	shotReadSaveDir    = readScreenCaptureLocation
+	shotReadSaveDir    = platform.ScreenshotFolder
 	shotWriteFile      = os.WriteFile
 	shotAfter          = time.AfterFunc
 	shotOpenWindow     = func(s *shotSession, di int) { s.openWindow(di) }
@@ -175,16 +173,6 @@ type shotSession struct {
 	closed       bool
 }
 
-// captureShotDisplayFile freezes one display with the system tool. -D
-// picks the display (1-based); -x keeps the shutter sound off. The system
-// excludes the pointer itself.
-func captureShotDisplayFile(index int, path string) error {
-	return exec.Command("/usr/sbin/screencapture", "-x", "-D", strconv.Itoa(index), path).Run()
-}
-
-// startScreenshot is the one entry for the ⌃⌥A shortcut, the tray menu
-// and the tools page's card. A second press while a session runs cancels
-// it; while the permission card waits, a press does nothing.
 func (a *shelf) startScreenshot() {
 	shotDispatch(func() { a.startScreenshotOnMain() })
 }

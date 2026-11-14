@@ -20,19 +20,15 @@ package main
 import (
 	"archive/tar"
 	"archive/zip"
-	"bytes"
 	"compress/bzip2"
 	"compress/gzip"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
-	"time"
 	"unicode/utf8"
 
 	"rakko/internal/platform"
@@ -86,7 +82,7 @@ func isArchive(item store.Item) bool {
 // Seams: tests substitute the bsdtar runner and the space probe.
 var (
 	bsdtarRun     = runBsdtar
-	freeDiskSpace = realFreeDiskSpace
+	freeDiskSpace = platform.FreeSpace
 )
 
 // encryptedErr is the failure of an archive that needs a passphrase:
@@ -518,58 +514,18 @@ func uniqueDir(dir, name string, taken map[string]bool) string {
 	}
 }
 
-// runBsdtar runs /usr/bin/bsdtar with its streams captured separately: a
-// listing goes to stdout and is returned, while an error comes from stderr
-// only, so a failed listing never turns its file names into the message.
-// A cancelled job kills the process. Stdin stays closed so a passphrase
-// request can never block (encrypted archives are refused before this
-// runs).
+// runBsdtar runs the platform's archive tool, mapping a cancellation to
+// the extractor's own error.
 func runBsdtar(job *convertJob, args ...string) ([]byte, error) {
-	cmd := exec.Command("/usr/bin/bsdtar", args...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	if err := cmd.Start(); err != nil {
-		return nil, err
-	}
-	done := make(chan struct{})
+	var canceled func() bool
 	if job != nil {
-		go func() {
-			tick := time.NewTicker(50 * time.Millisecond)
-			defer tick.Stop()
-			for {
-				select {
-				case <-done:
-					return
-				case <-tick.C:
-					if job.cancel.Load() {
-						_ = cmd.Process.Kill()
-					}
-				}
-			}
-		}()
+		canceled = job.cancel.Load
 	}
-	err := cmd.Wait()
-	close(done)
+	out, err := platform.ExtractWithSystemTool(args, canceled)
 	if job != nil && job.cancel.Load() {
-		return stdout.Bytes(), errConvertCanceled
+		return out, errConvertCanceled
 	}
-	if err != nil {
-		msg := strings.TrimSpace(stderr.String())
-		if msg == "" {
-			msg = err.Error()
-		}
-		return stdout.Bytes(), errors.New(msg)
-	}
-	return stdout.Bytes(), nil
-}
-
-// realFreeDiskSpace reports the free bytes on the volume holding dir.
-func realFreeDiskSpace(dir string) (int64, error) {
-	var st syscall.Statfs_t
-	if err := syscall.Statfs(dir, &st); err != nil {
-		return 0, err
-	}
-	return int64(st.Bavail) * int64(st.Bsize), nil
+	return out, err
 }
 
 // addExtracted registers freshly extracted folders as tray items.

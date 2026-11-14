@@ -126,16 +126,16 @@ type snapState struct {
 	win       snapWindow
 	start     platform.Rect // window frame at the press
 	frame     platform.Rect // latest frame read while dragging
-	move      bool            // the window's position is settable
-	resize    bool            // the window's size is settable
-	trusted   bool            // Accessibility at the press
-	dragging  bool            // the press turned out to be a window drag
-	hot       int             // hovered tile, -1 for none
-	panel     bool            // the 排列窗口 panel is (or is closing as) the open panel
-	drawn     bool            // the shell currently drawn is the snap box
-	wasOpen   bool            // the shelf panel was already open when the snap panel took over
-	prevLevel int             // that panel's level, restored when the snap panel leaves
-	confirm   *snapConfirm    // the arrangement still being verified after the drag
+	move      bool          // the window's position is settable
+	resize    bool          // the window's size is settable
+	trusted   bool          // Accessibility at the press
+	dragging  bool          // the press turned out to be a window drag
+	hot       int           // hovered tile, -1 for none
+	panel     bool          // the 排列窗口 panel is (or is closing as) the open panel
+	drawn     bool          // the shell currently drawn is the snap box
+	wasOpen   bool          // the shelf panel was already open when the snap panel took over
+	prevLevel int           // that panel's level, restored when the snap panel leaves
+	confirm   *snapConfirm  // the arrangement still being verified after the drag
 	ghost     *snapGhost
 }
 

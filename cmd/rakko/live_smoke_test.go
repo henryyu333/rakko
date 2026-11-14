@@ -168,8 +168,8 @@ func TestLiveSmokeStates(t *testing.T) {
 	writeLiveFile(t, temp, make([]byte, 4096))
 	dm := &downloadsModule{
 		host: a, dir: func() (string, error) { return dir, nil }, scan: scanDownloadDir,
-		allowed: func() bool { return true }, plist: readXMLPlist,
-		now: time.Now, prev: map[string]downloadFile{},
+		allowed: func() bool { return true },
+		now:     time.Now, prev: map[string]downloadFile{},
 	}
 	onMain(func() { dm.tick(time.Now()) })
 	onMain(func() {

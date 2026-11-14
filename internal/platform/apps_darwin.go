@@ -267,8 +267,8 @@ func RunningApps() []RunningApp {
 			}
 			out = append(out, RunningApp{
 				AppID: bundleID,
-				Name:     goString(send(app, "localizedName")),
-				PID:      pid,
+				Name:  goString(send(app, "localizedName")),
+				PID:   pid,
 			})
 		}
 	})

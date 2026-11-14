@@ -14,9 +14,7 @@ import (
 	stdpng "image/png"
 	"math"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -287,17 +285,6 @@ func cleanShotTempDir() {
 		}
 	}
 	os.MkdirAll(dir, 0o700)
-}
-
-// readScreenCaptureLocation reads where macOS saves screenshots, from
-// `defaults read com.apple.screencapture location`. A missing preference
-// is an error, and shotSaveDir falls back to ~/Desktop.
-func readScreenCaptureLocation() string {
-	out, err := exec.Command("/usr/bin/defaults", "read", "com.apple.screencapture", "location").Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
 }
 
 // shotClipboardData is what a screenshot copy offers: the picture and the

@@ -15,7 +15,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -39,7 +38,7 @@ var (
 	// permission card must never clear a screen-recording record.
 	ocrPreflight  = platform.CanCaptureScreen
 	ocrGrant      = platform.RequestScreenCapture
-	ocrCapture    = captureRegion
+	ocrCapture    = platform.PickScreenRegion
 	ocrWork       = func(fn func()) { go fn() }
 	ocrDispatch   = mygo.RunOnMain
 	ocrRecognize  = recognizeImageText
@@ -50,15 +49,6 @@ var (
 		}
 	}
 )
-
-// captureRegion runs the system's own region picker (screencapture -i):
-// crosshair, Esc to cancel, Space for the window mode. -x keeps the shutter
-// sound off. A cancelled pick (Esc) or a denied capture writes nothing, so
-// the caller treats a missing file as cancellation and stays silent — a
-// denied build's system dialog is shown by macOS itself.
-func captureRegion(path string) error {
-	return exec.Command("/usr/sbin/screencapture", "-i", "-x", path).Run()
-}
 
 // startScreenOCR is 「框选文字」's one entry for every trigger: the ⌃⌥O
 // shortcut, the tray menu and the tools page's card (runToolCard). The

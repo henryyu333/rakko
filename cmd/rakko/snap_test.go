@@ -28,10 +28,10 @@ type fakeSnapWindow struct {
 	tiled *platform.Rect
 }
 
-func (f *fakeSnapWindow) Valid() bool                    { return !f.released }
+func (f *fakeSnapWindow) Valid() bool                  { return !f.released }
 func (f *fakeSnapWindow) Frame() (platform.Rect, bool) { return f.rect, !f.released }
-func (f *fakeSnapWindow) Settable() (bool, bool)         { return f.move, f.resize }
-func (f *fakeSnapWindow) Release()                       { f.released = true }
+func (f *fakeSnapWindow) Settable() (bool, bool)       { return f.move, f.resize }
+func (f *fakeSnapWindow) Release()                     { f.released = true }
 func (f *fakeSnapWindow) MoveResize(r platform.Rect, resize bool) error {
 	f.moves = append(f.moves, r)
 	f.resizes = append(f.resizes, resize)

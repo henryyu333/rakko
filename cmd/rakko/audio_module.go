@@ -11,12 +11,7 @@ package main
 // thread and fills the notice in when it answers.
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
-	"os/exec"
-	"strconv"
-	"strings"
 	"time"
 
 	"rakko/internal/platform"
@@ -48,7 +43,7 @@ type audioModule struct {
 
 func newAudioModule(a *shelf) *audioModule {
 	return &audioModule{
-		host: a, list: platform.OutputDevices, battery: readBluetoothLevels,
+		host: a, list: platform.OutputDevices, battery: func(name string) []batteryLevel { return headphoneLevels(platform.HeadphoneBatteries(name)) },
 		dispatch: mygoRunOnMain, now: time.Now, known: map[string]string{},
 		connGen: map[string]int{},
 	}
@@ -144,96 +139,26 @@ func (m *audioModule) lookupBattery(uid, name, token string, gen int) {
 	}()
 }
 
-// readBluetoothLevels asks system_profiler for the connected devices'
-// battery percentages and returns the ones it names, in 左 / 右 / 盒 order.
-// An over-ear headset often reports one main level; that is shown as 电量.
-func readBluetoothLevels(name string) []batteryLevel {
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-	out, err := exec.CommandContext(ctx, "/usr/sbin/system_profiler", "SPBluetoothDataType", "-json").Output()
-	if err != nil {
-		return nil
+// headphoneLevels turns the platform's report into the module's parts.
+func headphoneLevels(levels []platform.BatteryLevel) []batteryLevel {
+	out := make([]batteryLevel, 0, len(levels))
+	for _, l := range levels {
+		out = append(out, batteryLevel{part: headphonePartOf(l.Part), pct: l.Pct})
 	}
-	return parseBluetoothLevels(out, name)
+	return out
 }
 
-// parseBluetoothLevels reads the connected devices out of the report.
-func parseBluetoothLevels(out []byte, name string) []batteryLevel {
-	var doc struct {
-		Data []map[string]json.RawMessage `json:"SPBluetoothDataType"`
+// headphonePartOf maps the platform's part onto the module's.
+func headphonePartOf(part platform.HeadphonePart) batteryPart {
+	switch part {
+	case platform.HeadphoneLeft:
+		return batteryLeft
+	case platform.HeadphoneRight:
+		return batteryRight
+	case platform.HeadphoneCase:
+		return batteryCase
 	}
-	if json.Unmarshal(out, &doc) != nil {
-		return nil
-	}
-	for _, section := range doc.Data {
-		raw, ok := section["device_connected"]
-		if !ok {
-			continue
-		}
-		var devices []map[string]map[string]any
-		if json.Unmarshal(raw, &devices) != nil {
-			continue
-		}
-		for _, entry := range devices {
-			for devName, props := range entry {
-				if !sameDevice(devName, name) {
-					continue
-				}
-				return batteryLevels(props)
-			}
-		}
-	}
-	return nil
-}
-
-// sameDevice compares the CoreAudio name with the report's name, which can
-// differ in spacing and case.
-func sameDevice(a, b string) bool {
-	norm := func(s string) string {
-		return strings.ToLower(strings.Join(strings.Fields(s), ""))
-	}
-	return norm(a) == norm(b)
-}
-
-func batteryLevels(props map[string]any) []batteryLevel {
-	var levels []batteryLevel
-	for _, f := range []struct {
-		key  string
-		part batteryPart
-	}{
-		{"device_batteryLevelLeft", batteryLeft},
-		{"device_batteryLevelRight", batteryRight},
-		{"device_batteryLevelCase", batteryCase},
-		{"device_batteryLevelMain", batteryWhole},
-		{"device_batteryLevel", batteryWhole},
-	} {
-		if v, ok := props[f.key]; ok {
-			if pct, ok := percentOf(v); ok {
-				levels = append(levels, batteryLevel{part: f.part, pct: pct})
-			}
-		}
-	}
-	return levels
-}
-
-// percentOf reads "80%", " 80 %" or 80 from a report value.
-func percentOf(v any) (int, bool) {
-	switch t := v.(type) {
-	case float64:
-		return int(t), true
-	case string:
-		s := strings.TrimSpace(t)
-		i := 0
-		for i < len(s) && (s[i] >= '0' && s[i] <= '9') {
-			i++
-		}
-		if i == 0 {
-			return 0, false
-		}
-		n, err := strconv.Atoi(s[:i])
-		return n, err == nil
-	}
-	return 0, false
+	return batteryWhole
 }
 
 // nextTick is the next audio-device scan.

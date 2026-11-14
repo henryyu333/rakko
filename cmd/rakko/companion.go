@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"rakko/internal/companion"
+	"rakko/internal/platform"
 )
 
 // supportURL is the site's sponsorship page. The app links to the page, not
@@ -70,7 +71,7 @@ func companionStart(freshInstall bool, now time.Time, born func() (time.Time, bo
 }
 
 // companionBorn answers with the data folder's creation date on this Mac.
-var companionBorn = dataDirBorn
+var companionBorn = platform.CreationTime
 
 // loadCompanion opens the companion file and gives a new install its first
 // day. A file that cannot be read stays untouched and this run simply shows

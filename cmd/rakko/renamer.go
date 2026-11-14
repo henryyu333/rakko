@@ -16,10 +16,10 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"unsafe"
 
 	"golang.org/x/text/unicode/norm"
 
+	"rakko/internal/platform"
 	"rakko/internal/store"
 	"rakko/locales"
 )
@@ -344,28 +344,8 @@ type stagedMove struct {
 }
 
 // renameNoClobber moves src to dst without ever overwriting an existing
-// entry: renameatx_np with RENAME_EXCL fails with EEXIST instead of
-// replacing. It is a seam so tests can fail specific moves
-// deterministically.
-var renameNoClobber = func(src, dst string) error {
-	const renameatxNp = 488 // RENAME_EXCL move, never overwrites
-	const renameExcl = 0x4
-	atFdcwd := ^uintptr(1) // AT_FDCWD = -2 as uintptr
-	srcB, err := syscall.BytePtrFromString(src)
-	if err != nil {
-		return err
-	}
-	dstB, err := syscall.BytePtrFromString(dst)
-	if err != nil {
-		return err
-	}
-	_, _, errno := syscall.Syscall6(renameatxNp, atFdcwd,
-		uintptr(unsafe.Pointer(srcB)), atFdcwd, uintptr(unsafe.Pointer(dstB)), renameExcl, 0)
-	if errno != 0 {
-		return errno
-	}
-	return nil
-}
+// entry. It is a seam so tests can fail specific moves deterministically.
+var renameNoClobber = platform.RenameNoReplace
 
 // execRename performs the ops in two phases — every file first to a
 // unique temp name in its own directory, then to its target — so swaps

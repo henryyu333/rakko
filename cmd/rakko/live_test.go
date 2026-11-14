@@ -354,21 +354,6 @@ func TestAudioConnectAndDisconnect(t *testing.T) {
 	}
 }
 
-func TestBluetoothLevelParsing(t *testing.T) {
-	report := []byte(`{"SPBluetoothDataType":[{"device_connected":[{"AirPods Pro":{"device_batteryLevelLeft":"80%","device_batteryLevelRight":"78 %","device_batteryLevelCase":"50%"}},{"Sony WH-1000XM5":{"device_batteryLevelMain":"65%"}}]}]}`)
-	levels := parseBluetoothLevels(report, "AirPods Pro")
-	want := []batteryLevel{{part: batteryLeft, pct: 80}, {part: batteryRight, pct: 78}, {part: batteryCase, pct: 50}}
-	if fmt.Sprint(levels) != fmt.Sprint(want) {
-		t.Fatalf("levels = %v, want %v", levels, want)
-	}
-	if got := parseBluetoothLevels(report, "Sony WH-1000XM5"); fmt.Sprint(got) != fmt.Sprint([]batteryLevel{{part: batteryWhole, pct: 65}}) {
-		t.Fatalf("single level = %v", got)
-	}
-	if got := parseBluetoothLevels(report, "Unknown"); got != nil {
-		t.Fatalf("unknown device = %v", got)
-	}
-}
-
 func TestDownloadScanIdentifiesBrowsers(t *testing.T) {
 	dir := t.TempDir()
 	writeLiveFile(t, filepath.Join(dir, "movie.mp4.crdownload"), make([]byte, 700))
@@ -426,8 +411,8 @@ func TestDownloadCompletionPostsCapsule(t *testing.T) {
 	a := liveShelf()
 	m := &downloadsModule{
 		host: a, dir: func() (string, error) { return dir, nil }, scan: scanDownloadDir,
-		allowed: func() bool { return true }, plist: readXMLPlist,
-		now: time.Now, prev: map[string]downloadFile{},
+		allowed: func() bool { return true },
+		now:     time.Now, prev: map[string]downloadFile{},
 	}
 	now := time.Now()
 	m.tick(now)
@@ -457,8 +442,8 @@ func TestDownloadSwitchAndUnreadableFolder(t *testing.T) {
 	a.settings.LiveActivities.Downloads = false
 	m := &downloadsModule{
 		host: a, dir: func() (string, error) { return dir, nil }, scan: scanDownloadDir,
-		allowed: func() bool { return true }, plist: readXMLPlist,
-		now: time.Now, prev: map[string]downloadFile{},
+		allowed: func() bool { return true },
+		now:     time.Now, prev: map[string]downloadFile{},
 	}
 	m.tick(time.Now())
 	if m.active() || len(a.live.queued) != 0 {
@@ -473,8 +458,8 @@ func TestDownloadSwitchAndUnreadableFolder(t *testing.T) {
 	// Full Disk Access denied: nothing may be read.
 	m = &downloadsModule{
 		host: a, dir: func() (string, error) { return dir, nil }, scan: scanDownloadDir,
-		allowed: func() bool { return false }, plist: readXMLPlist,
-		now: time.Now, prev: map[string]downloadFile{},
+		allowed: func() bool { return false },
+		now:     time.Now, prev: map[string]downloadFile{},
 	}
 	m.tick(time.Now())
 	if m.active() {
@@ -682,8 +667,8 @@ func TestDownloadPersistentScanFailureClearsWings(t *testing.T) {
 			}
 			return items, nil
 		},
-		allowed: func() bool { return true }, plist: readXMLPlist,
-		now: time.Now, prev: map[string]downloadFile{},
+		allowed: func() bool { return true },
+		now:     time.Now, prev: map[string]downloadFile{},
 	}
 	m.tick(now)
 	if !m.active() {
@@ -730,8 +715,8 @@ func TestDownloadMissingFolderPausesAtOnce(t *testing.T) {
 			}
 			return items, nil
 		},
-		allowed: func() bool { return true }, plist: readXMLPlist,
-		now: time.Now, prev: map[string]downloadFile{},
+		allowed: func() bool { return true },
+		now:     time.Now, prev: map[string]downloadFile{},
 	}
 	m.items = []downloadFile{{temp: "/tmp/x", name: "x"}}
 	m.prev = map[string]downloadFile{inFlight.temp: inFlight}
@@ -768,8 +753,8 @@ func TestDownloadCompletionsOneNotice(t *testing.T) {
 	now := time.Now()
 	m := &downloadsModule{
 		host: a, dir: func() (string, error) { return dir, nil }, scan: scanDownloadDir,
-		allowed: func() bool { return true }, plist: readXMLPlist,
-		now: time.Now, prev: map[string]downloadFile{},
+		allowed: func() bool { return true },
+		now:     time.Now, prev: map[string]downloadFile{},
 	}
 	m.tick(now)
 	for _, name := range []string{"one.zip", "two.zip"} {
@@ -839,8 +824,8 @@ func TestDownloadBatchNoticeAddsEveryFile(t *testing.T) {
 	now := time.Now()
 	m := &downloadsModule{
 		host: a, dir: func() (string, error) { return dir, nil }, scan: scanDownloadDir,
-		allowed: func() bool { return true }, plist: readXMLPlist,
-		now: time.Now, prev: map[string]downloadFile{},
+		allowed: func() bool { return true },
+		now:     time.Now, prev: map[string]downloadFile{},
 	}
 	m.tick(now)
 	for _, target := range targets {
@@ -903,8 +888,8 @@ func TestDownloadPauseKeepsCompletionDuringFailure(t *testing.T) {
 			}
 			return items, nil
 		},
-		allowed: func() bool { return true }, plist: readXMLPlist,
-		now: time.Now, prev: map[string]downloadFile{},
+		allowed: func() bool { return true },
+		now:     time.Now, prev: map[string]downloadFile{},
 	}
 	m.tick(now)
 	scanErr = errors.New("temporary I/O error")
@@ -954,8 +939,8 @@ func TestDownloadLongPauseRebaselinesSilently(t *testing.T) {
 			}
 			return items, nil
 		},
-		allowed: func() bool { return true }, plist: readXMLPlist,
-		now: time.Now, prev: map[string]downloadFile{},
+		allowed: func() bool { return true },
+		now:     time.Now, prev: map[string]downloadFile{},
 	}
 	m.tick(now)
 	scanErr = errors.New("temporary I/O error")

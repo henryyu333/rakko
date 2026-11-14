@@ -21,15 +21,6 @@ import (
 	"rakko/internal/settings"
 )
 
-// defaultPinnedApps 是首次使用前从未编辑过固定列表时的候选：按顺序尝试，
-// 只加入系统能解析出应用的那几个；某个默认应用缺失不会让整组失败。
-var defaultPinnedApps = []string{
-	"com.apple.finder",
-	"com.apple.Safari",
-	"com.apple.Terminal",
-	"com.apple.Notes",
-}
-
 // appEntry 是两翼里的一个应用：固定位或运行中位。PID 只对本次快照有
 // 效；missing 为真时它是已卸载或解析不到的固定应用，只给移除入口。
 type appEntry struct {

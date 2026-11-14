@@ -345,7 +345,7 @@ func TestScreenshotRealCaptureTiming(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		path := filepath.Join(dir, fmt.Sprintf("cap-%d.png", i))
 		start := time.Now()
-		if err := captureShotDisplayFile(1, path); err != nil {
+		if err := platform.CaptureDisplay(1, path); err != nil {
 			t.Fatalf("screencapture: %v", err)
 		}
 		times = append(times, time.Since(start))
