@@ -352,24 +352,26 @@ func TestArrangementErrorReportsAForeignResizeRefusal(t *testing.T) {
 		t.Fatalf("MoveResize on a foreign window: %v", err)
 	}
 	// The posted move is processed by the owner's message loop, so the
-	// position lands first; the refusal is about the size alone.
+	// position lands first; the refusal is about the size alone. Read the
+	// frame once and judge that same frame: a second read can catch the
+	// owner between two messages and see the old position, which is not a
+	// verdict about the frame the loop just accepted.
+	want := dipToPixels(target)
 	deadline := time.Now().Add(3 * time.Second)
 	for {
-		err := w.ArrangementError(target, true)
-		got, ok := w.Frame()
+		got, ok := windowRect(h)
 		if !ok {
 			t.Fatal("the constrained window went away")
 		}
-		if math.Abs(got.X-target.X) <= 2 && math.Abs(got.Y-target.Y) <= 2 {
-			if !errors.Is(err, ErrAppWindowResize) {
+		if abs32(got.Left-want.Left) <= 2 && abs32(got.Top-want.Top) <= 2 {
+			if err := arrangementError(got, want, true); !errors.Is(err, ErrAppWindowResize) {
 				t.Fatalf("after the move landed the verdict is %v, want ErrAppWindowResize", err)
 			}
 			return
 		}
 		if time.Now().After(deadline) {
-			got, _ := w.Frame()
-			t.Fatalf("the posted move never landed (frame %+v, verdict %v)", got, err)
+			t.Fatalf("the posted move never landed (frame %+v, want %+v)", got, want)
 		}
-		time.Sleep(20 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 }
