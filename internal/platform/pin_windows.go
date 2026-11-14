@@ -11,6 +11,8 @@ package platform
 // pin code knowing about Windows.
 
 import (
+	"fmt"
+	"log"
 	"sync"
 	"syscall"
 	"time"
@@ -20,8 +22,8 @@ import (
 )
 
 const (
-	clsidVirtualDesktopManager = "aa509086-5ca9-4c25-8f95-589d3c07b48a"
-	iidIVirtualDesktopManager  = "a5cd92ff-29be-454c-8d04-d82879fb3f1b"
+	clsidVirtualDesktopManager = "{aa509086-5ca9-4c25-8f95-589d3c07b48a}"
+	iidIVirtualDesktopManager  = "{a5cd92ff-29be-454c-8d04-d82879fb3f1b}"
 
 	virtualDesktopManagerIsWindowOnCurrent   = 3
 	virtualDesktopManagerGetWindowDesktopID  = 4
@@ -31,32 +33,47 @@ const (
 var (
 	virtualDesktopOnce sync.Once
 	virtualDesktop     uintptr // IVirtualDesktopManager, 0 when unavailable
+	virtualDesktopFail error   // why the manager is unavailable
+	virtualDesktopLog  sync.Once
 )
 
-// virtualDesktopManager returns the process's IVirtualDesktopManager, or 0
-// on a system without one. Not thread-safe; callers hold the caller's
-// lock or use it on the main thread.
-func virtualDesktopManager() uintptr {
+// virtualDesktopManager returns the process's IVirtualDesktopManager, or 0 and
+// the reason it could not be created. A malformed identifier, a shell without
+// the manager and a refused activation all report here instead of becoming a
+// zero GUID that creates nothing. The manager is an apartment-threaded shell
+// object, so ask from the main thread.
+func virtualDesktopManager() (uintptr, error) {
 	virtualDesktopOnce.Do(func() {
-		clsid := clsidFromString(clsidVirtualDesktopManager)
-		iid := clsidFromString(iidIVirtualDesktopManager)
+		if err := ensureCOM(); err != nil {
+			virtualDesktopFail = err
+			return
+		}
+		clsid, err := guidFromString(clsidVirtualDesktopManager)
+		if err != nil {
+			virtualDesktopFail = err
+			return
+		}
+		iid, err := guidFromString(iidIVirtualDesktopManager)
+		if err != nil {
+			virtualDesktopFail = err
+			return
+		}
 		var out uintptr
 		// CLSCTX_INPROC_SERVER|CLSCTX_LOCAL_SERVER = 1|4.
 		if r, _, _ := procCoCreateInstance.Call(uintptr(unsafe.Pointer(&clsid)), 0, 5, uintptr(unsafe.Pointer(&iid)), uintptr(unsafe.Pointer(&out))); int32(r) < 0 {
+			virtualDesktopFail = fmt.Errorf("platform: IVirtualDesktopManager: CoCreateInstance failed (0x%08x)", uint32(int32(r)))
 			return
 		}
 		virtualDesktop = out
 	})
-	return virtualDesktop
-}
-
-// clsidFromString parses a GUID in registry spelling into its ABI layout.
-func clsidFromString(s string) windows.GUID {
-	g, err := windows.GUIDFromString(s)
-	if err != nil {
-		return windows.GUID{}
+	if virtualDesktopFail != nil {
+		// Pinned cards cannot follow the user across desktops; say so once
+		// rather than leaving the pin silently behind.
+		virtualDesktopLog.Do(func() {
+			log.Printf("platform: pinned cards stay on their desktop: %v", virtualDesktopFail)
+		})
 	}
-	return g
+	return virtualDesktop, virtualDesktopFail
 }
 
 // currentDesktopID answers the desktop id of the window the user is on:
@@ -125,7 +142,7 @@ func followCurrentDesktop(window uintptr) {
 	if window == 0 {
 		return
 	}
-	if vdm := virtualDesktopManager(); vdm == 0 {
+	if vdm, _ := virtualDesktopManager(); vdm == 0 {
 		return
 	}
 	go func() {
@@ -148,7 +165,7 @@ func moveToCurrentDesktop(window uintptr) {
 	if r, _, _ := procIsWindow.Call(window); r == 0 {
 		return
 	}
-	vdm := virtualDesktopManager()
+	vdm, _ := virtualDesktopManager()
 	if vdm == 0 {
 		return
 	}

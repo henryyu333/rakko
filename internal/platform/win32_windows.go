@@ -8,7 +8,9 @@ package platform
 // the windows (the main thread) unless a caller says otherwise.
 
 import (
+	"fmt"
 	"hash/fnv"
+	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -36,6 +38,38 @@ var (
 )
 
 func sysProc(dll *windows.LazyDLL, name string) *windows.LazyProc { return dll.NewProc(name) }
+
+// guidFromString parses a GUID in either spelling — the registry's
+// "{...}" form or the bare one — into its ABI layout.
+// windows.GUIDFromString calls CLSIDFromString, which insists on the braces,
+// so a bare identifier would parse to nothing; and a malformed identifier is
+// an error the caller must see, not a zero GUID that creates nothing.
+func guidFromString(s string) (windows.GUID, error) {
+	if !strings.HasPrefix(s, "{") {
+		s = "{" + s + "}"
+	}
+	g, err := windows.GUIDFromString(s)
+	if err != nil {
+		return windows.GUID{}, fmt.Errorf("platform: %q is not a GUID: %w", s, err)
+	}
+	return g, nil
+}
+
+// ensureCOM makes sure the calling thread has a COM apartment to create the
+// shell objects in. mygo initialises the main thread as an STA; this covers a
+// call made before that and a test binary, and leaves an apartment that is
+// already there alone. The apartment is not released: Rakko owns it for the
+// life of the process.
+func ensureCOM() error {
+	r, _, _ := procCoInitializeEx.Call(0, coinitApartmentThreaded)
+	switch uint32(int32(r)) {
+	case 0, 1: // S_OK, S_FALSE (already an STA)
+		return nil
+	case 0x80010106: // RPC_E_CHANGED_MODE: the thread is an MTA already
+		return nil
+	}
+	return fmt.Errorf("platform: CoInitializeEx: 0x%08x", uint32(int32(r)))
+}
 
 var (
 	procSetWindowPos        = sysProc(user32, "SetWindowPos")
