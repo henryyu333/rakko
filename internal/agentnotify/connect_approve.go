@@ -84,7 +84,7 @@ func DisconnectApprove(home, dataDir string, tool Tool) error {
 }
 
 // StatusApprove reports whether Rakko's approval entry is installed.
-func StatusApprove(home string, tool Tool) (State, string) {
+func StatusApprove(home, dataDir string, tool Tool) (State, string) {
 	s, ok := specFor(tool)
 	if !ok || s.approve == nil {
 		return StateUnsupported, ""
@@ -102,7 +102,7 @@ func StatusApprove(home string, tool Tool) (State, string) {
 		if !existed {
 			return StateNotInjected, ""
 		}
-		if ownsApprove(raw, tool) {
+		if ownsApprove(raw, tool, dataDir) {
 			return StateInjected, ""
 		}
 		return StateError, path + " was not written by Rakko"
@@ -137,7 +137,7 @@ func StatusApprove(home string, tool Tool) (State, string) {
 		if _, derr := newJSONDoc(raw); derr != nil {
 			return StateError, derr.Error()
 		}
-		if carriesKind(raw, tool, hookApproval) {
+		if carriesKind(raw, tool, hookApproval, dataDir) {
 			return StateInjected, ""
 		}
 		return StateNotInjected, ""
@@ -155,7 +155,7 @@ func connectApproveHooks(s spec, home, dataDir, exe string) error {
 			return filePlan{}, fmt.Errorf("agentnotify: %s: %w", path, derr)
 		}
 		added, aerr := addHookCommand(doc, s, s.approve.event, s.approve.timeout,
-			approveEntryFor(exe, s.tool, dataDir), hookApproval)
+			approveEntryFor(exe, s.tool, dataDir), hookApproval, dataDir)
 		if aerr != nil {
 			return filePlan{}, aerr
 		}
@@ -188,7 +188,7 @@ func connectApproveHooks(s spec, home, dataDir, exe string) error {
 func writeApproveModule(s spec, home, dataDir, exe string) error {
 	path := ApproveConfigPath(home, s.tool)
 	return updateFile(path, func(raw []byte, existed bool, _ os.FileMode) (filePlan, error) {
-		if existed && !ownsApprove(raw, s.tool) {
+		if existed && !ownsApprove(raw, s.tool, dataDir) {
 			return filePlan{}, fmt.Errorf("agentnotify: %s exists and was not written by Rakko; left alone", path)
 		}
 		body := renderApproveModule(moduleSource(s, hookApproval), s.tool, exe, dataDir)
@@ -209,7 +209,7 @@ func removeApproveModule(s spec, home, dataDir string) error {
 		if !existed {
 			return filePlan{after: func() { forgetOrigin(dataDir, path) }}, nil
 		}
-		if !ownsApprove(raw, s.tool) {
+		if !ownsApprove(raw, s.tool, dataDir) {
 			return filePlan{}, nil
 		}
 		return filePlan{remove: true, changed: true, after: func() { forgetOrigin(dataDir, path) }}, nil
@@ -217,6 +217,6 @@ func removeApproveModule(s spec, home, dataDir string) error {
 }
 
 // ownsApprove reports whether a module file is Rakko's approval file.
-func ownsApprove(raw []byte, tool Tool) bool {
-	return bytes.Contains(raw, []byte(approveModuleMarker)) || carriesKind(raw, tool, hookApproval)
+func ownsApprove(raw []byte, tool Tool, dataDir string) bool {
+	return bytes.Contains(raw, []byte(approveModuleMarker)) || carriesKind(raw, tool, hookApproval, dataDir)
 }

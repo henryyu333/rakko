@@ -64,7 +64,7 @@ func TestDshConnectRoundTrip(t *testing.T) {
 	if !strings.Contains(module, "session/event") || !strings.Contains(module, "--agent-hook") {
 		t.Fatalf("completion module looks wrong:\n%s", module)
 	}
-	if got, _ := Status(home, ToolDsh); got != StateInjected {
+	if got, _ := Status(home, dataDir, ToolDsh); got != StateInjected {
 		t.Fatalf("status = %v, want injected", got)
 	}
 
@@ -76,7 +76,7 @@ func TestDshConnectRoundTrip(t *testing.T) {
 		!strings.Contains(body, "      name: '"+approval+"'") {
 		t.Fatalf("the approval entry is missing:\n%s", body)
 	}
-	if got, _ := StatusApprove(home, ToolDsh); got != StateInjected {
+	if got, _ := StatusApprove(home, dataDir, ToolDsh); got != StateInjected {
 		t.Fatalf("approval status = %v, want injected", got)
 	}
 	if readFile(t, approval) == "" {
@@ -98,7 +98,7 @@ func TestDshConnectRoundTrip(t *testing.T) {
 	if _, err := os.Stat(approval); !os.IsNotExist(err) {
 		t.Fatalf("approval module survived: %v", err)
 	}
-	if got, _ := StatusApprove(home, ToolDsh); got != StateNotInjected {
+	if got, _ := StatusApprove(home, dataDir, ToolDsh); got != StateNotInjected {
 		t.Fatalf("approval status = %v, want not injected", got)
 	}
 	if err := Disconnect(home, dataDir, ToolDsh); err != nil {
@@ -190,7 +190,7 @@ func TestDshTwoSurfacesOnEmptyFlow(t *testing.T) {
 			if !strings.Contains(body, want) {
 				t.Fatalf("%q/%s first: the other block is gone:\n%s", original, first, body)
 			}
-			if got, _ := Status(home, ToolDsh); first == "approval" && got != StateInjected {
+			if got, _ := Status(home, dataDir, ToolDsh); first == "approval" && got != StateInjected {
 				t.Fatalf("%q/%s first: status = %v, want injected", original, first, got)
 			}
 			// The second switch takes the last block away; the layer is the
@@ -257,7 +257,7 @@ func TestDshConnectMergesAWriteFromAnotherProgram(t *testing.T) {
 			t.Fatalf("%q is missing after the merge:\n%s", want, body)
 		}
 	}
-	if got, _ := Status(home, ToolDsh); got != StateInjected {
+	if got, _ := Status(home, dataDir, ToolDsh); got != StateInjected {
 		t.Fatalf("status = %v, want injected", got)
 	}
 }

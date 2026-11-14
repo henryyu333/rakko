@@ -113,6 +113,35 @@ func hookEntryFor(exe string, tool Tool, dataDir, event string) hookEntry {
 	return hookEntryOS(exe, tool, dataDir, event)
 }
 
+// expectedArgvs is every argument array Rakko writes in an exec-form entry
+// for this tool, kind and data directory: one per event the tool registers,
+// with the event fixed on the command line where the tool reads it. Ownership
+// compares a written entry's arguments against these exactly.
+func expectedArgvs(s spec, dataDir string, kind hookKind) [][]string {
+	if execFormField(s.tool) == "" {
+		return nil
+	}
+	if kind == hookApproval {
+		return [][]string{approveEntryFor("Rakko.exe", s.tool, dataDir).argv}
+	}
+	events := s.events
+	if len(events) == 0 {
+		events = []string{""}
+	}
+	out := make([][]string, 0, len(events)+len(s.entryEvents))
+	for _, ev := range events {
+		event := ""
+		if s.eventArg {
+			event = ev
+		}
+		out = append(out, hookEntryFor("Rakko.exe", s.tool, dataDir, event).argv)
+	}
+	for _, ev := range s.entryEvents {
+		out = append(out, hookEntryFor("Rakko.exe", s.tool, dataDir, ev).argv)
+	}
+	return out
+}
+
 // entryFor renders the entry of one kind.
 func entryFor(kind hookKind, exe string, tool Tool, dataDir, event string) hookEntry {
 	if kind == hookApproval {

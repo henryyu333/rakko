@@ -108,7 +108,7 @@ func TestApproveConnectIndependent(t *testing.T) {
 		!strings.Contains(string(raw), "my-own-hook") {
 		t.Fatalf("both entries and the user's should be there:\n%s", raw)
 	}
-	if st, note := StatusApprove(home, ToolClaude); st != StateInjected {
+	if st, note := StatusApprove(home, data, ToolClaude); st != StateInjected {
 		t.Fatalf("approve status %v %s", st, note)
 	}
 	if err := Disconnect(home, data, ToolClaude); err != nil {
@@ -121,7 +121,7 @@ func TestApproveConnectIndependent(t *testing.T) {
 	if !strings.Contains(string(raw), "--agent-approve --tool claude") || !strings.Contains(string(raw), "my-own-hook") {
 		t.Fatalf("Disconnect removed the approval entry or the user's:\n%s", raw)
 	}
-	if st, _ := StatusApprove(home, ToolClaude); st != StateInjected {
+	if st, _ := StatusApprove(home, data, ToolClaude); st != StateInjected {
 		t.Fatalf("approve status after Disconnect %v", st)
 	}
 	if err := Connect(home, data, exe, ToolClaude); err != nil {

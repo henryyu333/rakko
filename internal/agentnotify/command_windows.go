@@ -67,9 +67,9 @@ func toolShell(tool Tool) windowsShell {
 	return shellCmd
 }
 
-// windowsArgvField is the JSON member an exec-form entry uses for the
+// execFormField is the JSON member an exec-form entry uses for the
 // program; empty when the tool runs a command line instead.
-func windowsArgvField(tool Tool) string {
+func execFormField(tool Tool) string {
 	switch tool {
 	case ToolClaude, ToolAugment:
 		// Claude Code's hooks reference: "command" with "args" runs the
@@ -89,7 +89,7 @@ func windowsArgvField(tool Tool) string {
 // Windows, which is what needs a shim. Module tools whose module spawns the
 // app itself (opencode, omp, pi, dsh, hermes) are argv and need none.
 func windowsShellTool(tool Tool) bool {
-	if windowsArgvField(tool) != "" {
+	if execFormField(tool) != "" {
 		return false
 	}
 	switch tool {
@@ -101,7 +101,7 @@ func windowsShellTool(tool Tool) bool {
 
 // hookEntryOS renders one completion entry for Windows.
 func hookEntryOS(exe string, tool Tool, dataDir, event string) hookEntry {
-	if field := windowsArgvField(tool); field != "" {
+	if field := execFormField(tool); field != "" {
 		return hookEntry{
 			fields: []hookField{{field, escapedForTool(tool, exe)}},
 			argv:   escapedArgs(tool, rakkoArgs(hookCompletion, tool, dataDir, event)),
@@ -118,13 +118,30 @@ func hookEntryOS(exe string, tool Tool, dataDir, event string) hookEntry {
 
 // approveEntryOS renders one approval entry for Windows.
 func approveEntryOS(exe string, tool Tool, dataDir string) hookEntry {
-	if field := windowsArgvField(tool); field != "" {
+	if field := execFormField(tool); field != "" {
 		return hookEntry{
 			fields: []hookField{{field, escapedForTool(tool, exe)}},
 			argv:   escapedArgs(tool, rakkoArgs(hookApproval, tool, dataDir, "")),
 		}
 	}
 	return shellEntry(tool, hookApproval, dataDir)
+}
+
+// expectedShellCommands is every command string Rakko has written for this
+// tool's shim on Windows: the doubled-quote form cmd.exe's /c needs (current),
+// the single quoted word the first Windows build wrote, and PowerShell's call
+// operator with a single-quoted path. Ownership compares against these
+// exactly.
+func expectedShellCommands(dataDir string, tool Tool, kind hookKind) []string {
+	if dataDir == "" || !windowsShellTool(tool) {
+		return nil
+	}
+	shim := shimPath(dataDir, kind, tool)
+	return []string{
+		cmdInvocation(shim),
+		`"` + shim + `"`,
+		"& " + powerShellQuote(shim),
+	}
 }
 
 // prepareHookShim writes the batch file a shell tool runs, and refuses a

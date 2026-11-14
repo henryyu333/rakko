@@ -124,7 +124,7 @@ func TestConnectClaudePreservesUserFile(t *testing.T) {
 	if !strings.Contains(body, "say done") || !strings.Contains(body, `"theme": "dark"`) {
 		t.Fatalf("the user's file changed beyond our entry:\n%s", body)
 	}
-	if got, _ := Status(home, ToolClaude); got != StateInjected {
+	if got, _ := Status(home, dataDir, ToolClaude); got != StateInjected {
 		t.Fatalf("status = %v, want injected", got)
 	}
 	// A second connect is a no-op.
@@ -141,7 +141,7 @@ func TestConnectClaudePreservesUserFile(t *testing.T) {
 	if after := readFile(t, path); after != user {
 		t.Fatalf("disconnect did not restore the original:\n%s", after)
 	}
-	if got, _ := Status(home, ToolClaude); got != StateNotInjected {
+	if got, _ := Status(home, dataDir, ToolClaude); got != StateNotInjected {
 		t.Fatalf("status after disconnect = %v", got)
 	}
 }
@@ -196,7 +196,7 @@ func TestConnectCreatesFileAndRemovesIt(t *testing.T) {
 	if _, err := os.Stat(path); err != nil {
 		t.Fatalf("hooks.json was not created: %v", err)
 	}
-	if got, _ := Status(home, ToolCodex); got != StateInjected {
+	if got, _ := Status(home, dataDir, ToolCodex); got != StateInjected {
 		t.Fatalf("status = %v", got)
 	}
 	if err := Disconnect(home, dataDir, ToolCodex); err != nil {
@@ -236,7 +236,7 @@ func TestConnectRefusesBrokenJSON(t *testing.T) {
 	if body := readFile(t, path); body != broken {
 		t.Fatalf("broken file changed: %q", body)
 	}
-	if got, note := Status(home, ToolClaude); got != StateError || note == "" {
+	if got, note := Status(home, dataDir, ToolClaude); got != StateError || note == "" {
 		t.Fatalf("status = %v %q, want an error with a reason", got, note)
 	}
 }
@@ -254,7 +254,7 @@ func TestConnectModuleTools(t *testing.T) {
 			if !strings.Contains(body, moduleMarker) || !strings.Contains(body, exePath) {
 				t.Fatalf("%s module lacks the marker or the binary:\n%s", tool, body)
 			}
-			if got, _ := Status(home, tool); got != StateInjected {
+			if got, _ := Status(home, dataDir, tool); got != StateInjected {
 				t.Fatalf("status = %v", got)
 			}
 			if err := Disconnect(home, dataDir, tool); err != nil {
@@ -292,7 +292,7 @@ func TestGrokFileIsDedicated(t *testing.T) {
 	if err := Connect(home, dataDir, exePath, ToolGrok); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := Status(home, ToolGrok); got != StateInjected {
+	if got, _ := Status(home, dataDir, ToolGrok); got != StateInjected {
 		t.Fatalf("status = %v", got)
 	}
 	if err := Disconnect(home, dataDir, ToolGrok); err != nil {
@@ -304,7 +304,7 @@ func TestGrokFileIsDedicated(t *testing.T) {
 }
 
 func TestStatusOnlyTouchesKnownTools(t *testing.T) {
-	if got, _ := Status(t.TempDir(), Tool("nope")); got != StateUnsupported {
+	if got, _ := Status(t.TempDir(), t.TempDir(), Tool("nope")); got != StateUnsupported {
 		t.Fatalf("unknown tool = %v, want unsupported", got)
 	}
 }

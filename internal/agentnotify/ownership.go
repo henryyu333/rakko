@@ -17,6 +17,7 @@ package agentnotify
 import (
 	"encoding/json"
 	"path"
+	"slices"
 	"strings"
 )
 
@@ -25,30 +26,31 @@ import (
 var entryCommandFields = []string{"command", "exec", "bash", "powershell", "commandWindows"}
 
 // carriesKind reports whether one configuration document (or one hook entry)
-// holds Rakko's entry of this kind for tool.
-func carriesKind(raw []byte, tool Tool, kind hookKind) bool {
+// holds Rakko's entry of this kind for tool. dataDir is the directory whose
+// shim path the entry names; the comparison there is exact.
+func carriesKind(raw []byte, tool Tool, kind hookKind, dataDir string) bool {
 	var v any
 	if json.Unmarshal(raw, &v) != nil {
 		return false
 	}
-	return valueOwned(v, tool, kind)
+	return valueOwned(v, tool, kind, dataDir)
 }
 
 // valueOwned walks a parsed document, judging command entries only.
-func valueOwned(v any, tool Tool, kind hookKind) bool {
+func valueOwned(v any, tool Tool, kind hookKind, dataDir string) bool {
 	switch x := v.(type) {
 	case map[string]any:
-		if entryOwned(x, tool, kind) {
+		if entryOwned(x, tool, kind, dataDir) {
 			return true
 		}
 		for _, item := range x {
-			if valueOwned(item, tool, kind) {
+			if valueOwned(item, tool, kind, dataDir) {
 				return true
 			}
 		}
 	case []any:
 		for _, item := range x {
-			if valueOwned(item, tool, kind) {
+			if valueOwned(item, tool, kind, dataDir) {
 				return true
 			}
 		}
@@ -56,37 +58,53 @@ func valueOwned(v any, tool Tool, kind hookKind) bool {
 	return false
 }
 
-// entryOwned judges one hook entry object.
-func entryOwned(m map[string]any, tool Tool, kind hookKind) bool {
+// entryOwned judges one hook entry object. An entry is Rakko's when its
+// command is byte for byte one of the exact forms Rakko generates for this
+// tool, kind and data directory, or — for the entries macOS and the first
+// Windows build wrote — when a command field carries the legacy marker.
+// Nothing is parsed or prefix-matched here: a user's own hook that happens to
+// mention a shim's name is not ours.
+func entryOwned(m map[string]any, tool Tool, kind hookKind, dataDir string) bool {
 	str := func(key string) string {
 		s, _ := m[key].(string)
 		return s
 	}
-	flag := flagFor(kind)
-	// An exec-form entry runs a program directly: that program must be
-	// Rakko's, and the arguments must start with its mode flag and this
-	// tool's name.
-	program := str("exec")
-	if program == "" {
-		program = str("command")
-	}
-	if program != "" && isRakkoProgram(program) {
-		if args := stringSlice(m["args"]); len(args) >= 3 &&
-			args[0] == flag && args[1] == "--tool" && args[2] == string(tool) {
-			return true
-		}
-	}
-	shim := shimName(kind, tool)
 	for _, field := range entryCommandFields {
 		cmd := str(field)
 		if cmd == "" {
 			continue
 		}
-		// The marker form is what macOS and the first Windows build wrote.
+		// Legacy: the guarded shell line carries the marker.
 		if strings.Contains(cmd, markFor(kind, tool)) {
 			return true
 		}
-		if invokesShim(cmd, shim) {
+		for _, want := range expectedShellCommands(dataDir, tool, kind) {
+			if cmd == want {
+				return true
+			}
+		}
+	}
+	// An exec-form entry runs a program directly. The program's exact path is
+	// not known where cleanup happens (a development build may be cleaning up
+	// after an installed one), so it must be named like Rakko's executable and
+	// the arguments must equal the ones Rakko writes, in order.
+	program := str("exec")
+	if program == "" {
+		program = str("command")
+	}
+	if program == "" || !isRakkoProgram(program) {
+		return false
+	}
+	args := stringSlice(m["args"])
+	if args == nil {
+		return false
+	}
+	s, ok := specFor(tool)
+	if !ok {
+		return false
+	}
+	for _, want := range expectedArgvs(s, dataDir, kind) {
+		if slices.Equal(args, want) {
 			return true
 		}
 	}
@@ -96,7 +114,7 @@ func entryOwned(m map[string]any, tool Tool, kind hookKind) bool {
 // itemCarries is entryOwned for one node of a parsed document: a bare
 // command entry, or a list item that wraps its commands in "hooks" (Claude
 // Code's matcher form).
-func itemCarries(doc *jsonDoc, item *jnode, tool Tool, kind hookKind) bool {
+func itemCarries(doc *jsonDoc, item *jnode, tool Tool, kind hookKind, dataDir string) bool {
 	if item == nil || item.start < 0 || item.end > len(doc.src) {
 		return false
 	}
@@ -110,13 +128,13 @@ func itemCarries(doc *jsonDoc, item *jnode, tool Tool, kind hookKind) bool {
 	}
 	if inner, wrapped := m["hooks"].([]any); wrapped {
 		for _, entry := range inner {
-			if e, ok := entry.(map[string]any); ok && entryOwned(e, tool, kind) {
+			if e, ok := entry.(map[string]any); ok && entryOwned(e, tool, kind, dataDir) {
 				return true
 			}
 		}
 		return false
 	}
-	return entryOwned(m, tool, kind)
+	return entryOwned(m, tool, kind, dataDir)
 }
 
 // isRakkoProgram reports whether a program path names Rakko: the installed
@@ -130,76 +148,6 @@ func isRakkoProgram(program string) bool {
 		return true
 	}
 	return strings.HasSuffix(program, ".app/Contents/MacOS/Rakko")
-}
-
-// invokesShim reports whether a command line runs exactly the named shim:
-// one complete path literal in one of the forms Rakko writes — PowerShell's
-// call operator with a single-quoted word ('' inside it is a literal quote),
-// cmd.exe's doubled outer quotes, a plain quoted word, or a bare path. Any
-// legal path character is fine inside the literal, spaces included; only
-// text outside the closing quote (another command, an argument, a
-// redirect) makes the line someone else's.
-func invokesShim(command, shim string) bool {
-	v := strings.TrimSpace(command)
-	if strings.HasPrefix(v, "&") {
-		v = strings.TrimSpace(v[1:])
-	}
-	literal, ok := commandPath(v)
-	if !ok {
-		return false
-	}
-	return path.Base(strings.ReplaceAll(literal, `\`, "/")) == shim
-}
-
-// commandPath returns the single path a command line consists of.
-func commandPath(v string) (string, bool) {
-	switch {
-	case strings.HasPrefix(v, `""`):
-		// cmd.exe's doubled form: ""C:\dir\shim.cmd""
-		if len(v) < 4 || !strings.HasSuffix(v, `""`) {
-			return "", false
-		}
-		inner := v[2 : len(v)-2]
-		if strings.Contains(inner, `"`) {
-			return "", false
-		}
-		return inner, true
-	case strings.HasPrefix(v, `"`):
-		// One quoted word; nothing may follow the closing quote.
-		end := strings.LastIndexByte(v, '"')
-		if end <= 0 {
-			return "", false
-		}
-		inner := v[1:end]
-		if strings.Contains(inner, `"`) || strings.TrimSpace(v[end+1:]) != "" {
-			return "", false
-		}
-		return inner, true
-	case strings.HasPrefix(v, "'"):
-		// PowerShell's single-quoted word: '' is a literal quote.
-		var b strings.Builder
-		for i := 1; i < len(v); i++ {
-			if v[i] != '\'' {
-				b.WriteByte(v[i])
-				continue
-			}
-			if i+1 < len(v) && v[i+1] == '\'' {
-				b.WriteByte('\'')
-				i++
-				continue
-			}
-			if strings.TrimSpace(v[i+1:]) != "" {
-				return "", false
-			}
-			return b.String(), true
-		}
-		return "", false
-	default:
-		if v == "" || strings.ContainsAny(v, " \t\r\n") {
-			return "", false
-		}
-		return v, true
-	}
 }
 
 func stringSlice(v any) []string {

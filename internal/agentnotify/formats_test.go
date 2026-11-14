@@ -98,7 +98,7 @@ func TestCopilotHookFileNamesItsEvents(t *testing.T) {
 			t.Fatalf("%s entry missing in %s", ev, body)
 		}
 	}
-	if st, _ := Status(home, ToolCopilot); st != StateInjected {
+	if st, _ := Status(home, dataDir, ToolCopilot); st != StateInjected {
 		t.Fatalf("status = %v", st)
 	}
 	if err := Disconnect(home, dataDir, ToolCopilot); err != nil {
@@ -133,7 +133,7 @@ func TestAntigravityOwnsOneNamedHook(t *testing.T) {
 	if len(doc) != 2 || len(ours) != 1 || !strings.Contains(ours[0].Command, "--tool antigravity --event Stop") {
 		t.Fatalf("hooks.json = %s", body)
 	}
-	if st, _ := Status(home, ToolAntigravity); st != StateInjected {
+	if st, _ := Status(home, dataDir, ToolAntigravity); st != StateInjected {
 		t.Fatalf("status = %v", st)
 	}
 	if err := Disconnect(home, dataDir, ToolAntigravity); err != nil {
@@ -259,7 +259,7 @@ func TestDroidWritesWhereDroidReads(t *testing.T) {
 	if len(doc["Stop"]) != 2 || len(doc["UserPromptSubmit"]) != 1 {
 		t.Fatalf("hooks.json:\n%s", body)
 	}
-	if st, _ := Status(home, ToolFactory); st != StateInjected {
+	if st, _ := Status(home, dataDir, ToolFactory); st != StateInjected {
 		t.Fatalf("status = %v", st)
 	}
 	if err := Disconnect(home, dataDir, ToolFactory); err != nil {

@@ -18,6 +18,12 @@ func main() {
 	if path := os.Getenv("RAKKO_HELPER_STDIN_FILE"); path != "" {
 		_ = os.WriteFile(path, stdin, 0o600)
 	}
+	if say := os.Getenv("RAKKO_HELPER_SAY"); say != "" {
+		// Print exactly these bytes, so a test can compare what a console
+		// code page does to them.
+		fmt.Print(say)
+		return
+	}
 	if os.Getenv("RAKKO_HELPER_ASCII") != "" {
 		// The decision a tool actually reads is ASCII JSON.
 		fmt.Println(`{"decision":"allow"}`)

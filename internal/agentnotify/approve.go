@@ -321,82 +321,89 @@ func ApproveOutput(tool Tool, decision, message string) string {
 	}
 	msg := approveReason(message)
 	allow := decision == DecisionAllow
+	var out string
 	switch tool {
 	case ToolClaude, ToolCodex, ToolQwen:
 		type behavior struct {
 			Behavior string `json:"behavior"`
 			Message  string `json:"message,omitempty"`
 		}
-		var out struct {
+		var doc struct {
 			HookSpecificOutput struct {
 				HookEventName string   `json:"hookEventName"`
 				Decision      behavior `json:"decision"`
 			} `json:"hookSpecificOutput"`
 		}
-		out.HookSpecificOutput.HookEventName = "PermissionRequest"
-		out.HookSpecificOutput.Decision.Behavior = decision
+		doc.HookSpecificOutput.HookEventName = "PermissionRequest"
+		doc.HookSpecificOutput.Decision.Behavior = decision
 		if !allow {
-			out.HookSpecificOutput.Decision.Message = msg
+			doc.HookSpecificOutput.Decision.Message = msg
 		}
-		return marshal(out)
+		out = marshal(doc)
 	case ToolDevin:
 		if allow {
-			return marshal(struct {
+			out = marshal(struct {
 				Decision string `json:"decision"`
 			}{"approve"})
+		} else {
+			out = marshal(struct {
+				Decision string `json:"decision"`
+				Reason   string `json:"reason"`
+			}{"block", msg})
 		}
-		return marshal(struct {
-			Decision string `json:"decision"`
-			Reason   string `json:"reason"`
-		}{"block", msg})
 	case ToolCopilot:
 		if allow {
-			return marshal(struct {
+			out = marshal(struct {
 				Behavior string `json:"behavior"`
 			}{"allow"})
+		} else {
+			out = marshal(struct {
+				Behavior string `json:"behavior"`
+				Message  string `json:"message"`
+			}{"deny", msg})
 		}
-		return marshal(struct {
-			Behavior string `json:"behavior"`
-			Message  string `json:"message"`
-		}{"deny", msg})
 	case ToolFactory:
 		reason := "Approved in Rakko"
 		if !allow {
 			reason = msg
 		}
-		var out struct {
+		var doc struct {
 			HookSpecificOutput struct {
 				HookEventName            string `json:"hookEventName"`
 				PermissionDecision       string `json:"permissionDecision"`
 				PermissionDecisionReason string `json:"permissionDecisionReason"`
 			} `json:"hookSpecificOutput"`
 		}
-		out.HookSpecificOutput.HookEventName = "PreToolUse"
-		out.HookSpecificOutput.PermissionDecision = decision
-		out.HookSpecificOutput.PermissionDecisionReason = reason
-		return marshal(out)
+		doc.HookSpecificOutput.HookEventName = "PreToolUse"
+		doc.HookSpecificOutput.PermissionDecision = decision
+		doc.HookSpecificOutput.PermissionDecisionReason = reason
+		out = marshal(doc)
 	case ToolAntigravity:
 		if allow {
-			return marshal(struct {
+			out = marshal(struct {
 				Decision string `json:"decision"`
 			}{"auto_approve"})
+		} else {
+			out = marshal(struct {
+				Decision string `json:"decision"`
+				Reason   string `json:"reason"`
+			}{"deny", msg})
 		}
-		return marshal(struct {
-			Decision string `json:"decision"`
-			Reason   string `json:"reason"`
-		}{"deny", msg})
 	case ToolOpencode, ToolPi, ToolHermes, ToolDsh:
 		if allow {
-			return marshal(struct {
+			out = marshal(struct {
 				Decision string `json:"decision"`
 			}{"allow"})
+		} else {
+			out = marshal(struct {
+				Decision string `json:"decision"`
+				Message  string `json:"message"`
+			}{"deny", msg})
 		}
-		return marshal(struct {
-			Decision string `json:"decision"`
-			Message  string `json:"message"`
-		}{"deny", msg})
+	default:
+		return ApproveFallback(tool)
 	}
-	return ApproveFallback(tool)
+	return platformDecision(out)
 }
 
 func marshal(v any) string {

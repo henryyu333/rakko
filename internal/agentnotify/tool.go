@@ -89,6 +89,11 @@ type spec struct {
 	// eventArg passes the event name on the command line, for tools whose
 	// payload does not name it.
 	eventArg bool
+	// entryEvents are the events an entry of a module tool names on the
+	// command line itself (Copilot CLI's JSON hook file, whose payloads carry
+	// no event). Ownership compares the entry's arguments against the
+	// arguments generated for each of them.
+	entryEvents []string
 	// module is the KindModule source.
 	module string
 	// bareName is the file name of a hooks document that is keyed by event
@@ -233,8 +238,9 @@ var specs = []spec{
 		detect: func(home string) []string {
 			return paths(home, ".copilot/config.json", ".copilot/session-state", ".copilot/logs")
 		},
-		config: func(home string) string { return join(home, ".copilot", "hooks", "rakko-agent-completion.json") },
-		module: copilotHooks,
+		config:      func(home string) string { return join(home, ".copilot", "hooks", "rakko-agent-completion.json") },
+		module:      copilotHooks,
+		entryEvents: []string{"userPromptSubmitted", "agentStop"},
 		approve: &approveSpec{
 			event: "permissionRequest", timeout: approveTimeout,
 			config: func(home string) string {

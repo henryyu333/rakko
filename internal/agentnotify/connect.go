@@ -81,8 +81,8 @@ func posixHookCommand(exe string, tool Tool, dataDir, event string) string {
 // ownsModule reports whether a module file is Rakko's: a script carries
 // moduleMarker in its header, a JSON hook file (Copilot CLI's, Kiro's) holds
 // Rakko's entry.
-func ownsModule(raw []byte, tool Tool) bool {
-	return bytes.Contains(raw, []byte(moduleMarker)) || carriesKind(raw, tool, hookCompletion)
+func ownsModule(raw []byte, tool Tool, dataDir string) bool {
+	return bytes.Contains(raw, []byte(moduleMarker)) || carriesKind(raw, tool, hookCompletion, dataDir)
 }
 
 // shellQuote quotes one word for /bin/sh so the shell hands it over
@@ -109,7 +109,7 @@ func shellQuote(s string) string {
 
 // Status reports whether Rakko's entry is installed for tool. The detail is
 // a short reason when the state is StateError.
-func Status(home string, tool Tool) (State, string) {
+func Status(home, dataDir string, tool Tool) (State, string) {
 	s, ok := specFor(tool)
 	if !ok {
 		return StateUnsupported, ""
@@ -126,7 +126,7 @@ func Status(home string, tool Tool) (State, string) {
 		if !existed {
 			return StateNotInjected, ""
 		}
-		if ownsModule(raw, tool) {
+		if ownsModule(raw, tool, dataDir) {
 			return StateInjected, ""
 		}
 		return StateError, path + " was not written by Rakko"
@@ -151,7 +151,7 @@ func Status(home string, tool Tool) (State, string) {
 		if _, derr := newJSONDoc(raw); derr != nil {
 			return StateError, derr.Error()
 		}
-		if carriesKind(raw, tool, hookCompletion) {
+		if carriesKind(raw, tool, hookCompletion, dataDir) {
 			return StateInjected, ""
 		}
 		return StateNotInjected, ""
@@ -229,7 +229,7 @@ func connectHooks(s spec, home, dataDir, exe string) error {
 		if derr != nil {
 			return filePlan{}, fmt.Errorf("agentnotify: %s: %w", path, derr)
 		}
-		if existed && !carriesKind(raw, s.tool, hookCompletion) && isDedicated(s.tool) {
+		if existed && !carriesKind(raw, s.tool, hookCompletion, dataDir) && isDedicated(s.tool) {
 			// The file is Rakko's own name; anything else in it is not ours
 			// to replace.
 			return filePlan{}, fmt.Errorf("agentnotify: %s exists and was not written by Rakko; left alone", path)
@@ -301,7 +301,7 @@ func disconnectHooksAt(s spec, path, dataDir string, kind hookKind) error {
 		if derr != nil {
 			return filePlan{}, fmt.Errorf("agentnotify: %s: %w", path, derr)
 		}
-		if !removeHooks(doc, s, kind) {
+		if !removeHooks(doc, s, kind, dataDir) {
 			return filePlan{}, nil
 		}
 		rec := readOrigin(dataDir, path)
@@ -328,7 +328,7 @@ func isDedicated(tool Tool) bool { return tool == ToolGrok }
 func writeModule(s spec, home, dataDir, exe string) error {
 	path := s.config(home)
 	return updateFile(path, func(raw []byte, existed bool, _ os.FileMode) (filePlan, error) {
-		if existed && !ownsModule(raw, s.tool) {
+		if existed && !ownsModule(raw, s.tool, dataDir) {
 			return filePlan{}, fmt.Errorf("agentnotify: %s exists and was not written by Rakko; left alone", path)
 		}
 		body := renderModule(moduleSource(s, hookCompletion), s.tool, exe, dataDir)
@@ -349,7 +349,7 @@ func removeModule(s spec, home, dataDir string) error {
 		if !existed {
 			return filePlan{after: func() { forgetOrigin(dataDir, path) }}, nil
 		}
-		if !ownsModule(raw, s.tool) {
+		if !ownsModule(raw, s.tool, dataDir) {
 			return filePlan{}, nil
 		}
 		return filePlan{remove: true, changed: true, after: func() { forgetOrigin(dataDir, path) }}, nil
@@ -481,13 +481,13 @@ func addHook(doc *jsonDoc, s spec, exe, dataDir, ev string, timeout int) (bool, 
 	if s.eventArg {
 		event = ev
 	}
-	return addHookCommand(doc, s, ev, timeout, hookEntryFor(exe, s.tool, dataDir, event), hookCompletion)
+	return addHookCommand(doc, s, ev, timeout, hookEntryFor(exe, s.tool, dataDir, event), hookCompletion, dataDir)
 }
 
 // addHookCommand is addHook for any Rakko command line and marker: the
 // completion entry and the approval entry share the splice-and-reparse
 // rules but never see each other's marker.
-func addHookCommand(doc *jsonDoc, s spec, ev string, timeout int, entry hookEntry, kind hookKind) (bool, error) {
+func addHookCommand(doc *jsonDoc, s spec, ev string, timeout int, entry hookEntry, kind hookKind, dataDir string) (bool, error) {
 	hooks := hooksIn(doc, s.bare)
 	if hooks == nil && !s.bare {
 		if err := doc.appendMember(doc.root, "hooks", func(string) string { return "{}" }); err != nil {
@@ -510,7 +510,7 @@ func addHookCommand(doc *jsonDoc, s spec, ev string, timeout int, entry hookEntr
 		return false, fmt.Errorf("agentnotify: hooks.%s is not an array", ev)
 	}
 	for _, item := range arr.items {
-		if itemCarries(doc, item, s.tool, kind) {
+		if itemCarries(doc, item, s.tool, kind, dataDir) {
 			return false, nil
 		}
 	}
@@ -551,12 +551,12 @@ func hookObject(members []string, indent, fieldIndent, timeout string) string {
 
 // removeHooks deletes every command carrying Rakko's marker for a tool, and
 // the containers it leaves empty.
-func removeHooks(doc *jsonDoc, s spec, kind hookKind) bool {
+func removeHooks(doc *jsonDoc, s spec, kind hookKind, dataDir string) bool {
 	changed := false
 	// One command per step: every splice re-parses the document, so the
 	// nodes of the previous step no longer describe the file.
 	for range 4096 {
-		if !removeOneHookCommand(doc, s.bare, s.tool, kind) {
+		if !removeOneHookCommand(doc, s.bare, s.tool, kind, dataDir) {
 			break
 		}
 		changed = true
@@ -569,7 +569,7 @@ func removeHooks(doc *jsonDoc, s spec, kind hookKind) bool {
 // item that holds other commands keeps them: only the inner command with our
 // marker goes, and the item itself only when nothing else is left in it —
 // no other command and no other key such as a user's matcher.
-func removeOneHookCommand(doc *jsonDoc, bare bool, tool Tool, kind hookKind) bool {
+func removeOneHookCommand(doc *jsonDoc, bare bool, tool Tool, kind hookKind, dataDir string) bool {
 	hooks := hooksIn(doc, bare)
 	if hooks == nil || hooks.kind != jObject {
 		return false
@@ -597,7 +597,7 @@ func removeOneHookCommand(doc *jsonDoc, bare bool, tool Tool, kind hookKind) boo
 			inner, _ := item.lookup("hooks")
 			if inner == nil || inner.kind != jArray {
 				// A command written directly as the item: remove it whole.
-				if itemCarries(doc, item, tool, kind) {
+				if itemCarries(doc, item, tool, kind, dataDir) {
 					return doc.removeItem(arr, i) == nil
 				}
 				continue
@@ -611,7 +611,7 @@ func removeOneHookCommand(doc *jsonDoc, bare bool, tool Tool, kind hookKind) boo
 				if inner == nil || inner.kind != jArray || j >= len(inner.items) {
 					break
 				}
-				if !itemCarries(doc, inner.items[j], tool, kind) {
+				if !itemCarries(doc, inner.items[j], tool, kind, dataDir) {
 					continue
 				}
 				if err := doc.removeItem(inner, j); err != nil {

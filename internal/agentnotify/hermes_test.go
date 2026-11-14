@@ -223,7 +223,7 @@ func TestHermesConnectRoundTrip(t *testing.T) {
 	if err := Connect(home, dataDir, exePath, ToolHermes); err != nil {
 		t.Fatal(err)
 	}
-	if st, note := Status(home, ToolHermes); st != StateInjected {
+	if st, note := Status(home, dataDir, ToolHermes); st != StateInjected {
 		t.Fatalf("completion status = %v %s", st, note)
 	}
 	cfg := readFile(t, path)
@@ -243,7 +243,7 @@ func TestHermesConnectRoundTrip(t *testing.T) {
 	if err := ConnectApprove(home, dataDir, exePath, ToolHermes); err != nil {
 		t.Fatal(err)
 	}
-	if st, note := StatusApprove(home, ToolHermes); st != StateInjected {
+	if st, note := StatusApprove(home, dataDir, ToolHermes); st != StateInjected {
 		t.Fatalf("approval status = %v %s", st, note)
 	}
 	cfg = readFile(t, path)
@@ -263,10 +263,10 @@ func TestHermesConnectRoundTrip(t *testing.T) {
 	if err := DisconnectApprove(home, dataDir, ToolHermes); err != nil {
 		t.Fatal(err)
 	}
-	if st, _ := StatusApprove(home, ToolHermes); st != StateNotInjected {
+	if st, _ := StatusApprove(home, dataDir, ToolHermes); st != StateNotInjected {
 		t.Fatalf("approval survived its switch: %v", st)
 	}
-	if st, _ := Status(home, ToolHermes); st != StateInjected {
+	if st, _ := Status(home, dataDir, ToolHermes); st != StateInjected {
 		t.Fatalf("completion went with the approval switch: %v", st)
 	}
 	cfg = readFile(t, path)
@@ -277,7 +277,7 @@ func TestHermesConnectRoundTrip(t *testing.T) {
 	if err := Disconnect(home, dataDir, ToolHermes); err != nil {
 		t.Fatal(err)
 	}
-	if st, _ := Status(home, ToolHermes); st != StateNotInjected {
+	if st, _ := Status(home, dataDir, ToolHermes); st != StateNotInjected {
 		t.Fatalf("completion survived its switch: %v", st)
 	}
 	if after := readFile(t, path); after != hermesUserConfig {
@@ -296,10 +296,10 @@ func TestHermesApproveAloneKeepsThePlugin(t *testing.T) {
 	if err := ConnectApprove(home, dataDir, exePath, ToolHermes); err != nil {
 		t.Fatal(err)
 	}
-	if st, _ := StatusApprove(home, ToolHermes); st != StateInjected {
+	if st, _ := StatusApprove(home, dataDir, ToolHermes); st != StateInjected {
 		t.Fatalf("approval status = %v", st)
 	}
-	if st, _ := Status(home, ToolHermes); st != StateNotInjected {
+	if st, _ := Status(home, dataDir, ToolHermes); st != StateNotInjected {
 		t.Fatalf("completion is on without its switch: %v", st)
 	}
 	if err := DisconnectApprove(home, dataDir, ToolHermes); err != nil {
@@ -367,7 +367,7 @@ func TestHermesNotInstalledIsInvisible(t *testing.T) {
 	if Installed(home, ToolHermes) {
 		t.Fatal("an empty home counts as Hermes")
 	}
-	if st, _ := Status(home, ToolHermes); st != StateNotInjected {
+	if st, _ := Status(home, dataDir, ToolHermes); st != StateNotInjected {
 		t.Fatalf("status = %v", st)
 	}
 	if err := Connect(home, dataDir, exePath, ToolHermes); err == nil {
@@ -487,7 +487,7 @@ func TestHermesRefusesToRemoveAChangedTransport(t *testing.T) {
 	if after := readFile(t, path); after != cfg {
 		t.Fatalf("the changed config was overwritten:\n%s", after)
 	}
-	if st, _ := StatusApprove(home, ToolHermes); st == StateInjected {
+	if st, _ := StatusApprove(home, dataDir, ToolHermes); st == StateInjected {
 		t.Fatal("the row still says injected after the transport changed")
 	}
 }

@@ -241,9 +241,9 @@ func dshOnlyComments(text []byte) bool {
 // --- install / remove ---
 
 func writePatchModule(path, tmpl string, tool Tool, exe, dataDir string, approve bool) error {
-	owns := ownsModule
+	owns := func(raw []byte, tool Tool) bool { return ownsModule(raw, tool, dataDir) }
 	if approve {
-		owns = ownsApprove
+		owns = func(raw []byte, tool Tool) bool { return ownsApprove(raw, tool, dataDir) }
 	}
 	return updateFile(path, func(raw []byte, existed bool, _ os.FileMode) (filePlan, error) {
 		if existed && !owns(raw, tool) {
@@ -357,9 +357,9 @@ func disconnectDSHPatch(s spec, home, dataDir, entry, path string, approve bool)
 	if err != nil {
 		return err
 	}
-	owns := ownsModule
+	owns := func(raw []byte, tool Tool) bool { return ownsModule(raw, tool, dataDir) }
 	if approve {
-		owns = ownsApprove
+		owns = func(raw []byte, tool Tool) bool { return ownsApprove(raw, tool, dataDir) }
 	}
 	err = updateFile(path, func(raw []byte, existed bool, _ os.FileMode) (filePlan, error) {
 		if !existed {

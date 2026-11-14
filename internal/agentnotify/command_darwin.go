@@ -16,6 +16,13 @@ func approveEntryOS(exe string, tool Tool, dataDir string) hookEntry {
 	return hookEntry{fields: []hookField{{"command", posixApproveCommand(exe, tool, dataDir)}}}
 }
 
+// execFormField is empty on macOS: every entry is a shell line.
+func execFormField(Tool) string { return "" }
+
+// expectedShellCommands is empty on macOS: its entries are recognized by the
+// legacy marker rule.
+func expectedShellCommands(string, Tool, hookKind) []string { return nil }
+
 // prepareHookShim writes nothing on macOS.
 func prepareHookShim(hookKind, spec, string, string) error { return nil }
 

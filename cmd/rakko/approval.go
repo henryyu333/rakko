@@ -557,7 +557,7 @@ func (f *approvalFeature) refresh() {
 	for _, tool := range f.detected() {
 		st, note := agentnotify.StateNotInjected, ""
 		if on {
-			st, note = agentnotify.StatusApprove(f.home, tool)
+			st, note = agentnotify.StatusApprove(f.home, f.host.dataDir, tool)
 			if st != agentnotify.StateInjected && !stable {
 				st, note = agentnotify.StateError, agentNeedsAppNote
 			}

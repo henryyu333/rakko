@@ -452,7 +452,7 @@ func (f *agentNotifyFeature) refresh() {
 		}
 		st, note := agentnotify.StateNotInjected, ""
 		if on {
-			st, note = agentnotify.Status(f.home, tool)
+			st, note = agentnotify.Status(f.home, f.dir, tool)
 			if st != agentnotify.StateInjected && !stable {
 				// The switch is on but this build cannot own a hook entry.
 				st, note = agentnotify.StateError, agentNeedsAppNote

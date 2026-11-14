@@ -56,7 +56,7 @@ func TestConnectMergesAWriteFromAnotherProgram(t *testing.T) {
 	if !strings.Contains(body, marker(ToolGemini)) {
 		t.Fatalf("Rakko's entry is missing:\n%s", body)
 	}
-	if got, _ := Status(home, ToolGemini); got != StateInjected {
+	if got, _ := Status(home, dataDir, ToolGemini); got != StateInjected {
 		t.Fatalf("status = %v, want injected", got)
 	}
 }

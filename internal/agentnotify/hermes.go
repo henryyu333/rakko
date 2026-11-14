@@ -249,7 +249,7 @@ func writeHermesPlugin(home, dataDir, exe string) error {
 	} {
 		path := f.path
 		if err := updateFile(path, func(raw []byte, existed bool, _ os.FileMode) (filePlan, error) {
-			if existed && !ownsModule(raw, ToolHermes) {
+			if existed && !ownsModule(raw, ToolHermes, "") {
 				return filePlan{}, fmt.Errorf("agentnotify: %s exists and was not written by Rakko; left alone", path)
 			}
 			if existed && string(raw) == f.body {
@@ -267,7 +267,7 @@ func writeHermesPlugin(home, dataDir, exe string) error {
 // holds nothing else. A plugin source Rakko did not write is left alone.
 func removeHermesPlugin(home string) {
 	dir := hermesPluginDir(home)
-	if raw, err := os.ReadFile(hermesInitPath(home)); err == nil && !ownsModule(raw, ToolHermes) {
+	if raw, err := os.ReadFile(hermesInitPath(home)); err == nil && !ownsModule(raw, ToolHermes, "") {
 		return
 	}
 	for _, name := range []string{"__pycache__"} {
@@ -417,7 +417,7 @@ func statusHermes(home string) (State, string) {
 	if !existed {
 		return StateNotInjected, ""
 	}
-	if !ownsModule(raw, ToolHermes) {
+	if !ownsModule(raw, ToolHermes, "") {
 		return StateError, hermesInitPath(home) + " was not written by Rakko"
 	}
 	if !readHermesState(home).Completion {
@@ -453,7 +453,7 @@ func statusHermesApprove(home string) (State, string) {
 	if !existed {
 		return StateNotInjected, ""
 	}
-	if !ownsModule(raw, ToolHermes) {
+	if !ownsModule(raw, ToolHermes, "") {
 		return StateError, hermesInitPath(home) + " was not written by Rakko"
 	}
 	if !readHermesState(home).Approval {

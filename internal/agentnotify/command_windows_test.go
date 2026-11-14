@@ -10,9 +10,11 @@ package agentnotify
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -347,7 +349,7 @@ func TestConnectStatusDisconnectEveryTool(t *testing.T) {
 			if err := Connect(home, dataDir, exe, tool); err != nil {
 				t.Fatalf("connect: %v", err)
 			}
-			if got, note := Status(home, tool); got != StateInjected {
+			if got, note := Status(home, dataDir, tool); got != StateInjected {
 				t.Fatalf("status = %v (%s)", got, note)
 			}
 			if s, ok := specFor(tool); ok && windowsShellTool(tool) && s.kind != KindHermes && s.kind != KindPatch {
@@ -363,13 +365,13 @@ func TestConnectStatusDisconnectEveryTool(t *testing.T) {
 			if after := snapshotTree(t, home); after != before {
 				t.Fatalf("a second connect changed the files:\n%s\n---\n%s", before, after)
 			}
-			if got, note := Status(home, tool); got != StateInjected {
+			if got, note := Status(home, dataDir, tool); got != StateInjected {
 				t.Fatalf("status after second connect = %v (%s)", got, note)
 			}
 			if err := Disconnect(home, dataDir, tool); err != nil {
 				t.Fatalf("disconnect: %v", err)
 			}
-			if got, _ := Status(home, tool); got == StateInjected {
+			if got, _ := Status(home, dataDir, tool); got == StateInjected {
 				t.Fatal("disconnect left the entry in place")
 			}
 			if _, err := os.Stat(shimPath(dataDir, hookCompletion, tool)); err == nil {
@@ -466,10 +468,10 @@ func TestApprovalIsSeparateFromCompletion(t *testing.T) {
 			if err := ConnectApprove(home, dataDir, exe, tool); err != nil {
 				t.Fatalf("connect approve: %v", err)
 			}
-			if got, note := StatusApprove(home, tool); got != StateInjected {
+			if got, note := StatusApprove(home, dataDir, tool); got != StateInjected {
 				t.Fatalf("approval status = %v (%s)", got, note)
 			}
-			if got, note := Status(home, tool); got != StateInjected {
+			if got, note := Status(home, dataDir, tool); got != StateInjected {
 				t.Fatalf("completion status = %v (%s)", got, note)
 			}
 			shim := shimPath(dataDir, hookApproval, tool)
@@ -481,10 +483,10 @@ func TestApprovalIsSeparateFromCompletion(t *testing.T) {
 			if err := DisconnectApprove(home, dataDir, tool); err != nil {
 				t.Fatalf("disconnect approve: %v", err)
 			}
-			if got, _ := StatusApprove(home, tool); got == StateInjected {
+			if got, _ := StatusApprove(home, dataDir, tool); got == StateInjected {
 				t.Fatal("disconnect left the approval entry in place")
 			}
-			if got, _ := Status(home, tool); got != StateInjected {
+			if got, _ := Status(home, dataDir, tool); got != StateInjected {
 				t.Fatal("disconnecting the approval entry removed the completion entry")
 			}
 			if _, err := os.Stat(shim); err == nil {
@@ -520,7 +522,7 @@ func TestDisconnectingOneToolLeavesTheOthers(t *testing.T) {
 	if string(before) != string(after) {
 		t.Fatal("disconnecting claude changed cursor's file")
 	}
-	if got, _ := Status(home, ToolGrok); got != StateInjected {
+	if got, _ := Status(home, dataDir, ToolGrok); got != StateInjected {
 		t.Fatal("grok was cleaned up with claude")
 	}
 }
@@ -547,13 +549,13 @@ func TestLegacyEntriesAreRecognizedAndCleaned(t *testing.T) {
 	if err := os.WriteFile(path, []byte(legacy), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if got, note := Status(home, ToolClaude); got != StateInjected {
+	if got, note := Status(home, dataDir, ToolClaude); got != StateInjected {
 		t.Fatalf("legacy entry status = %v (%s)", got, note)
 	}
 	if err := Disconnect(home, dataDir, ToolClaude); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := Status(home, ToolClaude); got == StateInjected {
+	if got, _ := Status(home, dataDir, ToolClaude); got == StateInjected {
 		t.Fatal("the legacy entry survived a disconnect")
 	}
 	body, err := os.ReadFile(path)
@@ -645,7 +647,7 @@ func TestUserEntriesMentioningRakkoAreNotOurs(t *testing.T) {
 	if err := os.WriteFile(path, []byte(user), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if got, note := Status(home, ToolCursor); got == StateInjected {
+	if got, note := Status(home, dataDir, ToolCursor); got == StateInjected {
 		t.Fatalf("a user entry was mistaken for Rakko's (%s)", note)
 	}
 	if err := Connect(home, dataDir, exe, ToolCursor); err != nil {
@@ -659,7 +661,7 @@ func TestUserEntriesMentioningRakkoAreNotOurs(t *testing.T) {
 		!strings.Contains(string(body), `C:\\Tools\\other.exe`) {
 		t.Fatalf("connect removed a user's entry:\n%s", body)
 	}
-	if got, note := Status(home, ToolCursor); got != StateInjected {
+	if got, note := Status(home, dataDir, ToolCursor); got != StateInjected {
 		t.Fatalf("Rakko's entry was not installed (%s)", note)
 	}
 	if err := Disconnect(home, dataDir, ToolCursor); err != nil {
@@ -878,10 +880,10 @@ func TestQuotedShimPathsOwnTheEntry(t *testing.T) {
 					t.Fatalf("connect: %v", err)
 				}
 				entry := hookEntryFor(exe, tool, dataDir, "").fields[0].value
-				if !invokesShim(entry, shimName(hookCompletion, tool)) {
-					t.Fatalf("the generated entry is not recognized as Rakko's: %q", entry)
+				if !slices.Contains(expectedShellCommands(dataDir, tool, hookCompletion), entry) {
+					t.Fatalf("the generated entry is not one Rakko expects: %q", entry)
 				}
-				if got, note := Status(home, tool); got != StateInjected {
+				if got, note := Status(home, dataDir, tool); got != StateInjected {
 					t.Fatalf("status = %v (%s)", got, note)
 				}
 				path := ConfigPath(home, tool)
@@ -902,7 +904,7 @@ func TestQuotedShimPathsOwnTheEntry(t *testing.T) {
 				if err := Disconnect(home, dataDir, tool); err != nil {
 					t.Fatal(err)
 				}
-				if got, _ := Status(home, tool); got == StateInjected {
+				if got, _ := Status(home, dataDir, tool); got == StateInjected {
 					t.Fatal("disconnect left the entry in place")
 				}
 				if _, err := os.Stat(shimPath(dataDir, hookCompletion, tool)); err == nil {
@@ -913,30 +915,61 @@ func TestQuotedShimPathsOwnTheEntry(t *testing.T) {
 	}
 }
 
-// Text outside the quoted literal means the line is someone else's command.
-func TestOwnershipRejectsExtraCommandText(t *testing.T) {
-	shim := shimName(hookCompletion, ToolCursor)
-	for _, value := range []string{
-		`echo "C:\Rakko\agent-hook-cursor.cmd"`,
-		`& 'C:\Rakko\agent-hook-cursor.cmd' extra`,
-		`& 'C:\Rakko\agent-hook-cursor.cmd'; echo hi`,
-		`""C:\Rakko\agent-hook-cursor.cmd"" & calc`,
-		`C:\Rakko\agent-hook-cursor.cmd --wait`,
-	} {
-		if invokesShim(value, shim) {
+// Ownership is exact: only the forms Rakko generates match, and text that
+// merely contains a shim's name — even without a space, so cmd's redirect
+// and chaining syntax could hide it — is somebody else's command.
+func TestOwnershipIsExact(t *testing.T) {
+	dataDir := filepath.Join(`C:\Users\First Last`, `data's dir`)
+	shim := shimPath(dataDir, hookCompletion, ToolCursor)
+	accepted := expectedShellCommands(dataDir, ToolCursor, hookCompletion)
+	want := []string{
+		`""` + shim + `""`,
+		`"` + shim + `"`,
+		`& '` + strings.ReplaceAll(shim, `'`, `''`) + `'`,
+	}
+	if !slices.Equal(accepted, want) {
+		t.Fatalf("expected forms = %q, want %q", accepted, want)
+	}
+	// Near misses: every one of these mentions the shim but is not one of
+	// Rakko's command lines.
+	rejected := []string{
+		`echo>` + shim, // cmd redirect, no space
+		`x&` + shim,    // cmd chaining, no space
+		`echo ` + shim,
+		`& '` + shim + `' extra`,
+		`& '` + shim + `'; echo hi`,
+		`""` + shim + `"" & calc`,
+		shim, // the bare path is never written
+		`& "` + shim + `"`,
+		`"` + shim + `" extra`,
+		`"` + shim + `"` + `"` + shim + `"`,
+		`""` + shim + `""""`,
+		`'` + shim + `''`,
+		`& ''` + shim + `''`,
+		`&& '` + shim + `'`,
+		`& '` + shim + `"`,
+		`  ` + `""` + shim + `""  `, // surrounding space is not ours
+		`""` + "C:\\other\\agent-hook-cursor.cmd" + `""`,
+	}
+	for _, value := range rejected {
+		if slices.Contains(accepted, value) {
+			t.Errorf("a near miss equals an accepted form: %q", value)
+		}
+		m := map[string]any{"command": value}
+		if entryOwned(m, ToolCursor, hookCompletion, dataDir) {
 			t.Errorf("accepted %q as Rakko's own command", value)
 		}
 	}
-	for _, value := range []string{
-		`& 'C:\Users\First Last\AppData\Roaming\Rakko\agent-hook-cursor.cmd'`,
-		`& 'C:\Users\it''s\Rakko\agent-hook-cursor.cmd'`,
-		`""C:\Users\First Last\Rakko\agent-hook-cursor.cmd""`,
-		`"C:\Users\First Last\Rakko\agent-hook-cursor.cmd"`,
-		`C:\Rakko\agent-hook-cursor.cmd`,
-	} {
-		if !invokesShim(value, shim) {
-			t.Errorf("rejected %q", value)
+	for _, value := range accepted {
+		m := map[string]any{"command": value}
+		if !entryOwned(m, ToolCursor, hookCompletion, dataDir) {
+			t.Errorf("rejected the generated form %q", value)
 		}
+	}
+	// The same shim name in another data directory is not ours either.
+	other := map[string]any{"command": `""` + shimPath(`C:\elsewhere`, hookCompletion, ToolCursor) + `""`}
+	if entryOwned(other, ToolCursor, hookCompletion, dataDir) {
+		t.Error("accepted a shim path from another data directory")
 	}
 }
 
@@ -987,4 +1020,98 @@ func TestShimUnderPowerShellWithACodePage(t *testing.T) {
 	// up, and it is why the real decision is ASCII.
 	raw := run()
 	t.Logf("non-ASCII stdout through PowerShell under cp936: %q", raw)
+}
+
+// unescapeJSON turns \uXXXX escapes into the characters they stand for, so a
+// test can see the decision as it would have been without the Windows rule.
+func unescapeJSON(t *testing.T, s string) string {
+	t.Helper()
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] != '\\' || i+1 >= len(s) || s[i+1] != 'u' || i+5 >= len(s) {
+			b.WriteByte(s[i])
+			continue
+		}
+		var r rune
+		if _, err := fmt.Sscanf(s[i+2:i+6], "%04x", &r); err != nil {
+			b.WriteByte(s[i])
+			continue
+		}
+		i += 5
+		if r >= 0xD800 && r <= 0xDBFF && i+6 < len(s) && s[i+1] == '\\' && s[i+2] == 'u' {
+			var lo rune
+			if _, err := fmt.Sscanf(s[i+3:i+7], "%04x", &lo); err == nil {
+				b.WriteRune(0x10000 + (r-0xD800)<<10 + (lo - 0xDC00))
+				i += 6
+				continue
+			}
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
+// A deny reason typed in Chinese must reach the tool intact through the
+// console that runs the hook. Comparing the bytes PowerShell delivers for
+// the raw UTF-8 JSON and for the \uXXXX-escaped one shows which survives; the
+// escaped form is what Rakko emits on Windows.
+func TestDecisionReasonSurvivesPowerShellUnderACodePage(t *testing.T) {
+	exe := helperExe(t)
+	dataDir := filepath.Join(t.TempDir(), "数据 目录")
+	if err := os.MkdirAll(dataDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeShim(dataDir, hookApproval, ToolCursor, exe,
+		rakkoArgs(hookApproval, ToolCursor, dataDir, "")); err != nil {
+		t.Fatal(err)
+	}
+	entry := approveEntryFor(exe, ToolCursor, dataDir).fields[0].value
+
+	reason := `拒绝：这条命令会删除文件 "构建目录"`
+	escaped := ApproveOutput(ToolClaude, DecisionDeny, reason)
+	raw := unescapeJSON(t, escaped)
+	if escaped == raw {
+		t.Fatal("the Windows decision is not escaped")
+	}
+	if !isASCII(escaped) {
+		t.Fatalf("the escaped decision still holds non-ASCII: %q", escaped)
+	}
+	var decoded struct {
+		HookSpecificOutput struct {
+			Decision struct {
+				Message string `json:"message"`
+			} `json:"decision"`
+		} `json:"hookSpecificOutput"`
+	}
+	if err := json.Unmarshal([]byte(escaped), &decoded); err != nil {
+		t.Fatalf("the escaped decision is not JSON: %v", err)
+	}
+	if decoded.HookSpecificOutput.Decision.Message != reason {
+		t.Fatalf("a JSON parser reads back %q, want %q",
+			decoded.HookSpecificOutput.Decision.Message, reason)
+	}
+
+	say := func(payload string) string {
+		t.Helper()
+		cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive",
+			"-ExecutionPolicy", "Bypass", "-Command", "chcp 936 | Out-Null; "+entry)
+		cmd.Env = append(os.Environ(), "RAKKO_HELPER_SAY="+payload)
+		cmd.Stdin = strings.NewReader(`{}`)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("powershell: %v (%s)", err, out)
+		}
+		return string(out)
+	}
+	gotRaw := say(raw)
+	gotEscaped := say(escaped)
+	t.Logf("raw UTF-8 decision delivered as %q", gotRaw)
+	if gotEscaped != escaped {
+		t.Fatalf("the escaped decision was re-encoded:\n got %q\nwant %q", gotEscaped, escaped)
+	}
+	if gotRaw == raw {
+		t.Logf("this console passed the raw UTF-8 through unchanged")
+	} else {
+		t.Logf("the raw UTF-8 decision was re-encoded (mojibake for the tool)")
+	}
 }
