@@ -2,7 +2,7 @@
 // state.json plus managed images/ and converted/ directories under a
 // single root. It is purely synchronous and owns no goroutines; the
 // caller (UI/main thread) drives every operation. One live process at a
-// time owns the directory through an exclusive flock on <root>/.lock.
+// time owns the directory through an exclusive lock on <root>/.lock.
 // Managed image items are persisted relative to <root>/images and
 // converted items relative to <root>/converted; file items keep
 // absolute paths.
@@ -23,8 +23,9 @@ import (
 	"slices"
 	"strings"
 	"sync/atomic"
-	"syscall"
 	"time"
+
+	"rakko/internal/atomicfile"
 )
 
 // Item kinds stored in the shelf.
@@ -94,7 +95,7 @@ type Item struct {
 
 // Store holds the shelf contents. Items is newest-first; the zero Item
 // order is load order from disk. Root is the storage directory. The
-// exclusive <root>/.lock flock is held from Open until Close/exit.
+// exclusive <root>/.lock lock is held from Open until Close/exit.
 type Store struct {
 	Items []Item `json:"items"`
 	Root  string `json:"-"`
@@ -473,50 +474,6 @@ func writeFileNew(path string, data []byte) error {
 	return nil
 }
 
-// lockRoot takes the exclusive advisory lock that gives one process
-// ownership of a data directory. flock is tied to the open file, so the
-// kernel releases it when the descriptor closes — including abnormal
-// process death — and a leftover .lock file never blocks later runs.
-// Two Stores in the same process conflict too, which is the intended
-// contract: one live handle per directory.
-func lockRoot(root string) (*os.File, error) {
-	lockPath := filepath.Join(root, lockFileName)
-	// O_NOFOLLOW: a .lock that is a symlink is refused outright, so the
-	// open can never reach — and the truncate below never rewrite — the
-	// file it points at.
-	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR|syscall.O_NOFOLLOW, 0o600)
-	if err != nil {
-		if errors.Is(err, syscall.ELOOP) {
-			return nil, fmt.Errorf("store: lock file %s is a symlink; refusing to follow it", lockPath)
-		}
-		return nil, fmt.Errorf("store: opening lock file: %w", err)
-	}
-	// Anything but a regular file (a device, a FIFO) has no meaningful
-	// truncate and is not ours to lock.
-	if fi, serr := f.Stat(); serr != nil || !fi.Mode().IsRegular() {
-		f.Close()
-		return nil, fmt.Errorf("store: lock file %s is not a regular file", lockPath)
-	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		f.Close()
-		if errors.Is(err, syscall.EWOULDBLOCK) {
-			holder := ""
-			if data, rerr := os.ReadFile(lockPath); rerr == nil {
-				if pid := strings.TrimSpace(string(data)); pid != "" {
-					holder = " (pid " + pid + ")"
-				}
-			}
-			return nil, fmt.Errorf("%w%s: %s", ErrLocked, holder, root)
-		}
-		return nil, fmt.Errorf("store: locking %s: %w", root, err)
-	}
-	// Best-effort diagnostics: record the holder pid for the conflict
-	// message above. The lock, not this text, is what enforces exclusion.
-	_ = f.Truncate(0)
-	_, _ = f.WriteAt([]byte(fmt.Sprintf("%d\n", os.Getpid())), 0)
-	return f, nil
-}
-
 // Close releases the directory lock. It is safe to call more than once
 // and on a nil Store.
 func (s *Store) Close() error {
@@ -823,12 +780,12 @@ func (s *Store) ensureImageFile(name string, png []byte, sum [32]byte) (created 
 				return false, nil
 			}
 		}
-		if err := writeFileAtomic(s.imagesDir(), name, png, 0o600); err != nil {
+		if err := atomicfile.WriteFile(s.imagesDir(), name, png, 0o600); err != nil {
 			return false, err
 		}
 		return false, nil
 	case os.IsNotExist(statErr):
-		if err := writeFileAtomic(s.imagesDir(), name, png, 0o600); err != nil {
+		if err := atomicfile.WriteFile(s.imagesDir(), name, png, 0o600); err != nil {
 			return false, err
 		}
 		return true, nil
@@ -1177,7 +1134,7 @@ func (s *Store) Save() error {
 	if err != nil {
 		return fmt.Errorf("store: encoding state: %w", err)
 	}
-	if err := writeFileAtomic(s.Root, stateFileName, data, 0o600); err != nil {
+	if err := atomicfile.WriteFile(s.Root, stateFileName, data, 0o600); err != nil {
 		return fmt.Errorf("store: writing %s: %w", stateFileName, err)
 	}
 	// 原件已被新格式替换且备份仍保留在同目录；迁移保护结束。
@@ -1359,32 +1316,6 @@ func (s *Store) trimText() {
 		next = append(next, it)
 	}
 	s.Items = next
-}
-
-// writeFileAtomic writes data to dir/name via a temp file + rename.
-func writeFileAtomic(dir, name string, data []byte, perm os.FileMode) error {
-	tmp, err := os.CreateTemp(dir, "."+name+".tmp-*")
-	if err != nil {
-		return err
-	}
-	tmpName := tmp.Name()
-	defer os.Remove(tmpName) // no-op once renamed
-	if err := tmp.Chmod(perm); err != nil {
-		tmp.Close()
-		return err
-	}
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmpName, filepath.Join(dir, name))
 }
 
 func newID() string {

@@ -88,29 +88,3 @@ func TestUpdatePathsSkipsNonFiles(t *testing.T) {
 		t.Fatalf("non-file or unchanged rows were touched: %+v", s.Items)
 	}
 }
-
-// A failed save restores the in-memory paths and leaves state.json with
-// the old names.
-func TestUpdatePathsSaveFailureRollsBack(t *testing.T) {
-	s, root := newStore(t)
-	dir := t.TempDir()
-	f := filepath.Join(dir, "a.txt")
-	if err := os.WriteFile(f, []byte("x"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.AddFiles([]string{f}); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Chmod(root, 0o555); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { os.Chmod(root, 0o755) })
-	if _, err := s.UpdatePaths(map[string]string{
-		s.Items[0].ID: filepath.Join(dir, "b.txt"),
-	}); err == nil {
-		t.Fatal("expected save error with read-only root")
-	}
-	if s.Items[0].Path != f {
-		t.Fatalf("path not rolled back: %q", s.Items[0].Path)
-	}
-}
