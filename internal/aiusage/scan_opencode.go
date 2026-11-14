@@ -9,30 +9,21 @@ package aiusage
 //    "tokens":{"total":8595,"input":6601,"output":30,"reasoning":44,
 //              "cache":{"write":0,"read":1920}}}
 //
-// The database is read through macOS's /usr/bin/sqlite3 in read-only mode;
-// this avoids a SQLite dependency and never writes to the file. A full
-// re-read on every change is cheap (the compact projection of ~4k messages
-// is under 1 MB) and avoids missing a message whose tokens were finalized
-// after its row was created.
+// The database is read from a private copy, never the user's file: macOS
+// uses its /usr/bin/sqlite3, Windows the pure-Go SQLite driver that ships
+// with the app. A full re-read on every change is cheap (the compact
+// projection of ~4k messages is under 1 MB) and avoids missing a message
+// whose tokens were finalized after its row was created.
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
-)
-
-const (
-	opencodeDB  = ".local/share/opencode/opencode.db"
-	sqlite3Path = "/usr/bin/sqlite3"
 )
 
 const opencodeQuery = `
@@ -114,24 +105,9 @@ func readOpencodeOnce(ctx context.Context, dbPath, cacheDir string, pool map[str
 		return nil, err
 	}
 	defer cleanup()
-	// No -readonly: the connection must be able to create the copy's -shm.
-	cmd := exec.CommandContext(ctx, sqlite3Path, "-json", copyPath, opencodeQuery)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	if err := cmd.Run(); err != nil {
-		msg := strings.TrimSpace(stderr.String())
-		if msg == "" {
-			msg = err.Error()
-		}
-		return nil, fmt.Errorf("opencode: sqlite3: %s", msg)
-	}
-	body := bytes.TrimSpace(stdout.Bytes())
-	if len(body) == 0 || bytes.Equal(body, []byte("[]")) {
-		return nil, nil
-	}
-	var rows []opencodeRow
-	if err := json.Unmarshal(body, &rows); err != nil {
-		return nil, fmt.Errorf("opencode: decoding sqlite3 output: %w", err)
+	rows, err := queryOpencode(ctx, copyPath)
+	if err != nil {
+		return nil, err
 	}
 	out := make([]rec, 0, len(rows))
 	for _, row := range rows {

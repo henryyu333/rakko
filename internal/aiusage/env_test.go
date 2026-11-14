@@ -83,9 +83,7 @@ func TestDefaultEnv(t *testing.T) {
 	if env.HTTP == nil || env.HTTP.Timeout != 15*time.Second {
 		t.Fatalf("HTTP client timeout = %v", env.HTTP)
 	}
-	if env.Keychain == nil {
-		t.Fatal("Keychain should be set")
-	}
+	requireDefaultKeychain(t, env)
 	if env.CodexBaseURL != "https://chatgpt.com/backend-api" {
 		t.Fatalf("CodexBaseURL = %q", env.CodexBaseURL)
 	}

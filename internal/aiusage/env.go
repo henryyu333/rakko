@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -68,40 +67,24 @@ const (
 )
 
 // DefaultEnv returns the production environment: real home directory, a 15s
-// HTTP timeout over the app's proxy rules (environment, else the macOS system
-// proxy: quota requests are the outbound path a Finder-launched process has no
-// proxy variables for), the macOS `security` tool for Keychain reads, the
-// vendor's real endpoint and the user's own Claude Code.
+// HTTP timeout over the app's proxy rules (environment, else the system
+// proxy: quota requests are the outbound path a launcher-started process has
+// no proxy variables for), the platform's credential reader, the vendor's
+// real endpoint and the user's own Claude Code.
 func DefaultEnv() Env {
 	home, _ := os.UserHomeDir()
 	return Env{
 		Home:            home,
 		HTTP:            netproxy.NewClient(quotaHTTPTimeout),
-		Keychain:        keychainPassword,
+		Keychain:        defaultKeychain(),
 		CodexBaseURL:    codexDefaultBase,
 		Now:             time.Now,
 		ClaudeConfigDir: os.Getenv("CLAUDE_CONFIG_DIR"),
-		ClaudeUser:      os.Getenv("USER"),
+		ClaudeUser:      defaultClaudeUser(),
 		ClaudeAccount:   &ClaudeAccount{},
 
 		RakkoClaudeAccount: &ClaudeAccount{},
 	}
-}
-
-// keychainPassword reads a generic password via /usr/bin/security, which does
-// not pop an authorization dialog for the items Claude Code stores. The
-// account name is part of the lookup, as Claude Code writes its item under
-// $USER.
-func keychainPassword(ctx context.Context, service, account string) ([]byte, error) {
-	args := []string{"find-generic-password", "-s", service, "-w"}
-	if account != "" {
-		args = append(args, "-a", account)
-	}
-	out, err := exec.CommandContext(ctx, "/usr/bin/security", args...).Output()
-	if err != nil {
-		return nil, err
-	}
-	return trimLineEnd(out), nil
 }
 
 func trimLineEnd(b []byte) []byte {

@@ -286,7 +286,10 @@ func TestDeletedFileDropped(t *testing.T) {
 	s := NewScanner(home, t.TempDir())
 	mustScan(t, s)
 	// Same message id in two files dedupes to one anyway; use a file
-	// with a distinct id to see the drop.
+	// with a distinct id to see the drop. The rewrite has the same size as
+	// the first line, so it must also land in a later timestamp tick:
+	// Windows file times advance in ~15 ms steps.
+	time.Sleep(30 * time.Millisecond)
 	writeLines(t, f2,
 		`{"type":"assistant","uuid":"b1","timestamp":"2026-10-19T10:00:00.000Z","message":{"id":"mx","model":"claude-sonnet-4-5","usage":{"input_tokens":10,"output_tokens":1}}}`)
 	mustScan(t, s)

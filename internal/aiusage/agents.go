@@ -48,7 +48,7 @@ func agentSpecs(home string) []agentSpec {
 		},
 		{
 			tool: ToolOpencode,
-			db:   join(".local/share/opencode/opencode.db"),
+			db:   opencodeDBPath(home),
 		},
 		{
 			tool: ToolGrok,

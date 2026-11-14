@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -46,17 +45,6 @@ func keychainFixture(t *testing.T, name string, calls *int, service, account *st
 
 func keychainMissing(context.Context, string, string) ([]byte, error) {
 	return nil, errors.New("The specified item could not be found in the keychain.")
-}
-
-// exitError is a real *exec.ExitError with the given exit code, which is
-// how `security` reports a missing item (44) or anything else.
-func exitError(t *testing.T, code int) error {
-	t.Helper()
-	err := exec.Command("/bin/sh", "-c", fmt.Sprintf("exit %d", code)).Run()
-	if err == nil {
-		t.Fatalf("exit %d did not fail", code)
-	}
-	return err
 }
 
 // fakeClaudeCLI stands in for Claude Code: it answers `auth status` and

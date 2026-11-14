@@ -5,15 +5,13 @@ import (
 	"context"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
-	"syscall"
-	"time"
 )
 
 // claudeBinary finds Claude Code: an explicit path, then PATH, then the
-// usual install locations. A Finder-launched app has a minimal PATH, so
-// the locations a user's shell installs into are checked by name.
+// locations a user's shell installs into. A Finder-launched app has a
+// minimal PATH, so the install locations are checked by name; each platform
+// lists the names and directories its installer writes.
 func claudeBinary(env Env) (string, error) {
 	if env.ClaudePath != "" {
 		return env.ClaudePath, nil
@@ -21,16 +19,8 @@ func claudeBinary(env Env) (string, error) {
 	if p, err := exec.LookPath("claude"); err == nil {
 		return p, nil
 	}
-	for _, dir := range []string{
-		joinHome(env.Home, ".local", "bin"),
-		joinHome(env.Home, ".claude", "local"),
-		joinHome(env.Home, ".npm-global", "bin"),
-		joinHome(env.Home, ".bun", "bin"),
-		"/opt/homebrew/bin",
-		"/usr/local/bin",
-	} {
-		p := filepath.Join(dir, "claude")
-		if fi, err := os.Stat(p); err == nil && !fi.IsDir() && fi.Mode()&0o111 != 0 {
+	for _, p := range claudeCandidates(env) {
+		if fi, err := os.Stat(p); err == nil && !fi.IsDir() && executableFile(fi) {
 			return p, nil
 		}
 	}
@@ -95,33 +85,22 @@ func runClaudeCommand(ctx context.Context, env Env, args []string, configDir str
 		childEnv = setEnv(childEnv, "CLAUDE_CONFIG_DIR", configDir)
 	}
 	cmd.Env = childEnv
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	var out, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &stderr
-	if err := cmd.Start(); err != nil {
+	group, err := startInGroup(cmd)
+	if err != nil {
 		return "", "", err
 	}
+	defer group.release()
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
 	select {
 	case err := <-done:
 		return out.String(), stderr.String(), err
 	case <-ctx.Done():
-		killClaudeGroup(cmd.Process.Pid)
+		group.kill()
 		<-done
 		return out.String(), stderr.String(), ctx.Err()
-	}
-}
-
-// killClaudeGroup kills every process of the run's session. The group keeps
-// its id while any member lives, so it is signalled until none is left: a
-// signal can miss a process being forked as it is sent.
-func killClaudeGroup(pgid int) {
-	for range 200 {
-		if syscall.Kill(-pgid, syscall.SIGKILL) != nil {
-			return
-		}
-		time.Sleep(5 * time.Millisecond)
 	}
 }
 
