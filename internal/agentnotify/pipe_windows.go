@@ -96,11 +96,11 @@ func (l *pipeListener) Accept() (net.Conn, error) {
 			}
 		}
 		if connected {
-			c, cerr := newPipeConn(h, l.name)
 			windows.CloseHandle(ev)
+			// newPipeConn owns the pipe handle from here and closes it if it
+			// cannot set up the connection's events.
+			c, cerr := newPipeConn(h, l.name)
 			if cerr != nil {
-				_ = windows.DisconnectNamedPipe(h)
-				windows.CloseHandle(h)
 				return nil, cerr
 			}
 			return c, nil

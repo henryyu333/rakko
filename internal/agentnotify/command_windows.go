@@ -258,9 +258,10 @@ func escapedArgs(tool Tool, args []string) []string {
 	return out
 }
 
-// cmdInvocation is a command line that runs path under cmd.exe. /c strips
-// the outermost pair of quotes, so a path with spaces and any arguments the
-// tool appends still parse as one command.
+// cmdInvocation is the command line that runs path under cmd.exe. The
+// doubled outer quotes are what /c needs to keep a path with spaces (or
+// Chinese, or a dollar sign) whole, and they leave any arguments the tool
+// appends in place. Measured on Windows 10 with cmd.exe /d /s /c.
 func cmdInvocation(path string) string { return `""` + path + `""` }
 
 // cmdQuote quotes one token inside a batch file for cmd.exe. The caller has

@@ -54,6 +54,15 @@ func helperExe(t *testing.T) string {
 	return helper.path
 }
 
+func specForTool(t *testing.T, tool Tool) spec {
+	t.Helper()
+	s, ok := specFor(tool)
+	if !ok {
+		t.Fatalf("%s has no spec", tool)
+	}
+	return s
+}
+
 func argvEntry(t *testing.T, e hookEntry) (value string, args []string) {
 	t.Helper()
 	if len(e.fields) != 1 {
@@ -122,6 +131,23 @@ func TestHookEntriesUseEachToolsOwnForm(t *testing.T) {
 		if e.fields[0].value != want {
 			t.Fatalf("%s = %q, want %q", tool, e.fields[0].value, want)
 		}
+	}
+
+	// Antigravity's payload names no event, so its shim carries it.
+	antiSpec := specForTool(t, ToolAntigravity)
+	if got := eventArgFor(antiSpec); got != "Stop" {
+		t.Fatalf("antigravity event = %q, want Stop", got)
+	}
+	antiDir := t.TempDir()
+	if err := prepareHookShim(hookCompletion, antiSpec, antiDir, testExe); err != nil {
+		t.Fatal(err)
+	}
+	antiShim, err := os.ReadFile(shimPath(antiDir, hookCompletion, ToolAntigravity))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(antiShim), `"--event" "Stop"`) {
+		t.Fatalf("antigravity shim lacks its event:\n%s", antiShim)
 	}
 
 	// Approvals keep their own shim and their own flag.
@@ -246,6 +272,17 @@ func TestShimsCarryOddPathsAndPayloads(t *testing.T) {
 		t.Fatalf("cmd args = %q", got.Args)
 	}
 
+	// A cmd.exe tool's entry, which is just the quoted shim path.
+	if err := writeShim(dataDir, hookCompletion, ToolGrok, exe,
+		rakkoArgs(hookCompletion, ToolGrok, dataDir, "")); err != nil {
+		t.Fatal(err)
+	}
+	grok := hookEntryFor(exe, ToolGrok, dataDir, "")
+	grokOut := runRaw(t, "cmd.exe /d /s /c "+grok.fields[0].value, helperExe(t))
+	if !equalStrings(grokOut.Args, rakkoArgs(hookCompletion, ToolGrok, dataDir, "")) {
+		t.Fatalf("grok args = %q", grokOut.Args)
+	}
+
 	// PowerShell, the way Cursor's entry runs it.
 	ps := runArgs(t, []string{"powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
 		"-Command", hookEntryFor(exe, ToolCursor, dataDir, "").fields[0].value})
@@ -330,8 +367,12 @@ func TestConnectStatusDisconnectEveryTool(t *testing.T) {
 					t.Fatalf("connect did not write %s: %v", shim, err)
 				}
 			}
+			before := snapshotTree(t, home)
 			if err := Connect(home, dataDir, exe, tool); err != nil {
 				t.Fatalf("second connect: %v", err)
+			}
+			if after := snapshotTree(t, home); after != before {
+				t.Fatalf("a second connect changed the files:\n%s\n---\n%s", before, after)
 			}
 			if got, note := Status(home, tool); got != StateInjected {
 				t.Fatalf("status after second connect = %v (%s)", got, note)
@@ -347,6 +388,36 @@ func TestConnectStatusDisconnectEveryTool(t *testing.T) {
 			}
 		})
 	}
+}
+
+// snapshotTree renders every file under dir, so a second connect can be
+// compared byte for byte.
+func snapshotTree(t *testing.T, dir string) string {
+	t.Helper()
+	var b strings.Builder
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, rerr := filepath.Rel(dir, path)
+		if rerr != nil {
+			return rerr
+		}
+		if info.IsDir() {
+			b.WriteString("dir " + rel + "\n")
+			return nil
+		}
+		raw, rerr := os.ReadFile(path)
+		if rerr != nil {
+			return rerr
+		}
+		b.WriteString("file " + rel + "\n" + string(raw) + "\n")
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b.String()
 }
 
 // hermesTestConfig is what Hermes writes for itself; Rakko only extends an
