@@ -654,7 +654,10 @@ func (a *shelf) petRelease(p mygo.Point) {
 		Width: pet.frame.Width, Height: pet.frame.Height,
 	}
 	centre := mygo.Point{X: frame.X + frame.Width/2, Y: frame.Y + frame.Height/2}
-	if a.pinReturnZone(centre) {
+	// 收进刘海：归位区是顶部那条带。海獭比卡片高得多，窗口停在工作区上沿时
+	// 它自己的中心还差半个身高才够到胶囊下沿，所以松手的位置也算一次——
+	// 拖着它放到胶囊上，指针确实到了那条带里（Windows 上就是这样）。
+	if a.pinReturnZone(centre) || a.pinReturnZone(p) {
 		a.hidePet()
 		return
 	}

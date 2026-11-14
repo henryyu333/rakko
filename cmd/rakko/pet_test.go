@@ -388,6 +388,30 @@ func TestPetReleaseToTheNotchStows(t *testing.T) {
 	}
 }
 
+// TestPetReleaseToTheIslandStows: 岛样式的归位区是顶部胶囊。海獭比卡片高，
+// 窗口被工作区上沿挡住时它自己的中心还差半个身高，够不到胶囊下沿那条带；
+// 拖动真正带着的是指针，松手的位置就在胶囊上，所以它必须收进去。Windows
+// 真机上拖着海獭放到胶囊上停在 36pt、中心 84pt 正是这个形状。
+func TestPetReleaseToTheIslandStows(t *testing.T) {
+	a := petShelf(t)
+	a.island = true
+	pet := windowlessPet(a, 0, 36, 74, 96)
+	capsule := a.islandRect()
+	release := mygo.Point{X: capsule.X + capsule.Width/2, Y: capsule.Y + 20}
+	centre := mygo.Point{X: release.X + pet.frame.Width/2, Y: release.Y + pet.frame.Height/2}
+	if a.pinReturnZone(centre) {
+		t.Skipf("the otter's centre already reaches the capsule %+v; the release point is not what decides", capsule)
+	}
+	pet.moving, pet.pressed, pet.grabX, pet.grabY = true, true, 0, 0
+	a.petRelease(release)
+	if a.pet != nil {
+		t.Fatalf("the otter did not stow: released at %v on the capsule %+v", release, capsule)
+	}
+	if a.settings.Pet.Shown {
+		t.Fatal("a stowed otter is still marked shown")
+	}
+}
+
 // TestPetHomeRestoresTheLastDisplay: the otter goes back to the screen it
 // was last left on, not to the first display in the list that still holds an
 // older spot; the other screens keep their spots for when they return.
