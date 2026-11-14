@@ -109,12 +109,16 @@ func TestPreviewHandlerThroughProgID(t *testing.T) {
 		ext    = ".rakkoprevtest"
 	)
 	handlerKey := `Software\Classes\` + progID + `\ShellEx\` + previewHandlerClass
+	shellExKey := `Software\Classes\` + progID + `\ShellEx`
 	progIDKey := `Software\Classes\` + progID
 	extKey := `Software\Classes\` + ext
 	want := windows.GUID{Data1: 0x1531d583, Data2: 0x8375, Data3: 0x4d3f, Data4: [8]byte{0xb5, 0xfb, 0xd2, 0x3b, 0xbd, 0x16, 0x9f, 0x22}}
 
+	// DeleteKey only removes an empty key, so the deepest key goes first and
+	// the intermediate ShellEx key is named explicitly.
 	remove := func() {
 		registry.DeleteKey(registry.CURRENT_USER, handlerKey)
+		registry.DeleteKey(registry.CURRENT_USER, shellExKey)
 		registry.DeleteKey(registry.CURRENT_USER, progIDKey)
 		registry.DeleteKey(registry.CURRENT_USER, extKey)
 	}
