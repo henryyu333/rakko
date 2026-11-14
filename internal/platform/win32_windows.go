@@ -534,6 +534,18 @@ func enumTopLevel(fn windowsEnumProc) {
 	procEnumWindows.Call(enumWindowsProc, token)
 }
 
+// enumChildren visits parent's child windows until fn reports done.
+func enumChildren(parent uintptr, fn windowsEnumProc) {
+	if fn == nil {
+		return
+	}
+	token := beginEnum(fn)
+	defer endEnum(token)
+	procEnumChildWindows.Call(parent, enumWindowsProc, token)
+}
+
+var procEnumChildWindows = sysProc(user32, "EnumChildWindows")
+
 // --- displays ---------------------------------------------------------------
 
 type screenMonitor struct {

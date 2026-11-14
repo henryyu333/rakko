@@ -13,7 +13,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync"
 	"unsafe"
 
 	"github.com/egoist/mygo"
@@ -132,51 +131,10 @@ func hostedAppPID(frame uintptr) int {
 
 // appEnumWindows runs visit over every top-level window, and
 // appEnumChildren over every child window of parent. Both go through the
-// one callback this process registers.
-func appEnumWindows(visit func(h uintptr) bool) {
-	enumWindowProc(visit, func(cb, id uintptr) { procEnumWindows.Call(cb, id) })
-}
+// process's fixed enumeration callback (win32_windows.go).
+func appEnumWindows(visit func(h uintptr) bool) { enumTopLevel(visit) }
 
-func appEnumChildren(parent uintptr, visit func(h uintptr) bool) {
-	enumWindowProc(visit, func(cb, id uintptr) { procEnumChildWindows.Call(parent, cb, id) })
-}
-
-// enumWindowProc hands visit to the process-wide callback: Go's Windows
-// callback thunks are never released, so a closure per enumeration would
-// run the table dry after enough app switcher openings. The visit travels
-// beside the callback as the enumeration's application value instead.
-func enumWindowProc(visit func(h uintptr) bool, run func(cb, id uintptr)) {
-	appEnumCallbackOnce.Do(func() {
-		appEnumCallback = newCallback(func(h, id uintptr) uintptr {
-			appEnumMu.Lock()
-			fn := appEnumVisits[id]
-			appEnumMu.Unlock()
-			if fn != nil && !fn(h) {
-				return 0
-			}
-			return 1
-		})
-	})
-	appEnumMu.Lock()
-	appEnumNextID++
-	id := appEnumNextID
-	appEnumVisits[id] = visit
-	cb := appEnumCallback
-	appEnumMu.Unlock()
-	run(cb, id)
-	appEnumMu.Lock()
-	delete(appEnumVisits, id)
-	appEnumMu.Unlock()
-}
-
-var (
-	appEnumMu            sync.Mutex
-	appEnumVisits        = map[uintptr]func(uintptr) bool{}
-	appEnumNextID        uintptr
-	appEnumCallback      uintptr
-	appEnumCallbackOnce  sync.Once
-	procEnumChildWindows = sysProc(user32, "EnumChildWindows")
-)
+func appEnumChildren(parent uintptr, visit func(h uintptr) bool) { enumChildren(parent, visit) }
 
 var procGetPackageFamilyName = sysProc(kernel32, "GetPackageFamilyName")
 
