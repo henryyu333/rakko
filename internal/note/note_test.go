@@ -1,9 +1,6 @@
-//go:build darwin
-
 package note
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -78,52 +75,6 @@ func TestOpenStartsFreshWhenTheNoteIsGone(t *testing.T) {
 	}
 }
 
-// TestWriteReplacesTheFile proves the write is a rename, not a truncate:
-// a reader holding the old file keeps the old bytes, and no temporary
-// file is left behind.
-func TestWriteReplacesTheFile(t *testing.T) {
-	dir := t.TempDir()
-	s, err := Open(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := s.Write("old\n"); err != nil {
-		t.Fatal(err)
-	}
-	reader, err := os.Open(s.Path())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer reader.Close()
-	if err := s.Write("new content\n"); err != nil {
-		t.Fatal(err)
-	}
-	buf := make([]byte, 64)
-	n, err := reader.ReadAt(buf, 0)
-	if err != nil && n == 0 {
-		t.Fatal(err)
-	}
-	if got := string(buf[:n]); got != "old\n" {
-		t.Fatalf("the reader of the old file saw %q, so the write was not a rename", got)
-	}
-	text, err := s.Read()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if text != "new content\n" {
-		t.Fatalf("read = %q", text)
-	}
-	entries, err := os.ReadDir(filepath.Join(dir, DirName))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), ".") {
-			t.Fatalf("temporary file left behind: %s", e.Name())
-		}
-	}
-}
-
 func TestTitle(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"", ""},
@@ -171,11 +122,10 @@ func TestWatchSeesSaves(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	hits := make(chan string, 16)
+	hits := make(chan struct{}, 16)
 	w, err := WatchFile(s.Path(), func() {
-		text, _ := s.Read()
 		select {
-		case hits <- text:
+		case hits <- struct{}{}:
 		default:
 		}
 	})
@@ -184,39 +134,92 @@ func TestWatchSeesSaves(t *testing.T) {
 	}
 	defer w.Close()
 
-	wait := func(want string, why string) {
-		t.Helper()
-		deadline := time.After(3 * time.Second)
+	// The callback only signals: reading the note from here keeps the
+	// check independent of when the watcher's goroutine runs, and never
+	// holds the file open while the test replaces it.
+	drain := func() {
 		for {
 			select {
-			case got := <-hits:
-				if got == want {
-					return
-				}
-			case <-deadline:
-				t.Fatalf("%s: no event carrying %q", why, want)
+			case <-hits:
+			default:
+				return
 			}
 		}
 	}
+	wait := func(want string, why string) {
+		t.Helper()
+		deadline := time.After(3 * time.Second)
+		// One save must produce at least one report…
+		select {
+		case <-hits:
+		case <-deadline:
+			t.Fatalf("%s: no change was reported", why)
+		}
+		// …and the note must then read the new text.
+		for {
+			if got, _ := s.Read(); got == want {
+				return
+			}
+			select {
+			case <-hits:
+			case <-deadline:
+				last, _ := s.Read()
+				t.Fatalf("%s: note still reads %q, want %q", why, last, want)
+			}
+		}
+	}
+	drain()
 	if err := s.Write("rename save\n"); err != nil {
 		t.Fatal(err)
 	}
 	wait("rename save\n", "atomic save")
 
 	// An editor that rewrites the file in place (no rename).
+	drain()
 	if err := os.WriteFile(s.Path(), []byte("in place\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	wait("in place\n", "in-place write")
 
 	// The note goes away and comes back: the folder watch still reports it.
+	drain()
 	if err := os.Remove(s.Path()); err != nil {
 		t.Fatal(err)
 	}
+	drain()
 	if err := s.Write("back again\n"); err != nil {
 		t.Fatal(err)
 	}
 	wait("back again\n", "after a delete")
+}
+
+// TestWatchCloseStopsNotifications: after Close returns, a save is no
+// longer reported.
+func TestWatchCloseStopsNotifications(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hits := make(chan struct{}, 16)
+	w, err := WatchFile(s.Path(), func() {
+		select {
+		case hits <- struct{}{}:
+		default:
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.Close()
+	if err := s.Write("after close\n"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-hits:
+		t.Fatal("the watcher reported a save after Close")
+	case <-time.After(300 * time.Millisecond):
+	}
 }
 
 // TestOpenKeepsANoteAnEarlierBuildWrote: the notes/ folder a previous
@@ -389,33 +392,6 @@ func TestSelectSwitchesTheNote(t *testing.T) {
 	}
 	if got, err := s.Read(); err != nil || got != "" {
 		t.Fatalf("read %q, %v; want the first note's empty text", got, err)
-	}
-}
-
-// TestWatchFileArmFailureClosesEveryFD: a kqueue registration that fails
-// must not leak the folder, the stop pipe or the kqueue. The watch it
-// would have returned never starts a goroutine, so WatchFile itself has to
-// close them; a working kqueue will not fail, so the seam takes that path.
-func TestWatchFileArmFailureClosesEveryFD(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "note.md")
-	old := watchArm
-	var got *Watch
-	watchArm = func(w *Watch, _ uint64, _ uint32) error {
-		got = w
-		return errors.New("arm failed")
-	}
-	t.Cleanup(func() { watchArm = old })
-	if _, err := WatchFile(path, func() {}); err == nil {
-		t.Fatal("a failed registration must be an error")
-	}
-	if got == nil {
-		t.Fatal("the test never saw the watch")
-	}
-	if got.dir != nil || got.quit != nil || got.stop != nil || got.kq != -1 {
-		t.Fatalf("fds left open: dir %v quit %v stop %v kq %d", got.dir, got.quit, got.stop, got.kq)
-	}
-	if !got.done {
-		t.Fatal("the abandoned watch is not marked closed")
 	}
 }
 

@@ -16,6 +16,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"rakko/internal/atomicfile"
 )
 
 const (
@@ -229,28 +231,7 @@ func validID(id string) bool {
 // it, synced, then renamed over it. The temporary file is 0600 like the
 // rest of the data directory's files.
 func WriteFile(path, text string) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
-	if err != nil {
-		return err
-	}
-	name := tmp.Name()
-	defer os.Remove(name) // no-op after a successful rename
-	if err := tmp.Chmod(0o600); err != nil {
-		tmp.Close()
-		return err
-	}
-	if _, err := tmp.WriteString(text); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(name, path)
+	return atomicfile.WriteFile(filepath.Dir(path), filepath.Base(path), []byte(text), 0o600)
 }
 
 // Title is the note's heading for the window bar and the card: its first
