@@ -8,4 +8,7 @@ package main
 const (
 	permissionsSupported = true
 	disableMoveOverlay   = true
+	// AppKit keeps the Settings window above the panel's level, so the
+	// panel stays open behind it, as it always has.
+	overlayHidesForSettings = false
 )

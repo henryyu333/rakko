@@ -628,11 +628,12 @@ func (a *shelf) navView(c *ui.Context, r ui.Rect, opacity float32) {
 		if b := button("settings", l.PanelSettings(), false, func() {
 			ui.Icon(c, gearSymbol).Size(16, 16).TextColor(ink2)
 		}); b.Clicked() {
-			// The overlay stays topmost: left open, it would sit over the
-			// Settings window. The search bar's own settings action hides
-			// first for the same reason.
-			a.hide(hideExplicit)
-			a.openSettings()
+			if overlayHidesForSettings {
+				// Windows composites the overlay above the window stack:
+				// left open, it would sit over the Settings window.
+				a.hide(hideExplicit)
+			}
+			openSettingsWindow(a)
 		}
 		if b := button("collapse", l.PanelCollapse(), false, func() {
 			ui.Icon(c, chevronUpSymbol).Size(16, 16).TextColor(ink2)

@@ -9,4 +9,8 @@ package main
 const (
 	permissionsSupported = false
 	disableMoveOverlay   = false
+	// The overlay's content is composited above the window stack: a
+	// Settings window opened under it would show the panel's page and
+	// capsule through its own, so the panel closes first.
+	overlayHidesForSettings = true
 )
