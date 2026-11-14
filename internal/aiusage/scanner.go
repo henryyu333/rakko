@@ -22,6 +22,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"rakko/internal/atomicfile"
 )
 
 // rec is one usage record in the scanner's compact form. at is Unix
@@ -772,21 +774,5 @@ func (s *Scanner) saveCache(ctx context.Context, files map[string]*fileState) {
 	if ctx.Err() != nil {
 		return // caller already stopped: leave the old cache in place
 	}
-	tmp, err := os.CreateTemp(s.cacheDir, ".usage-scan-*.tmp")
-	if err != nil {
-		return
-	}
-	tmpName := tmp.Name()
-	if _, err := tmp.Write(buf.Bytes()); err != nil {
-		tmp.Close()
-		os.Remove(tmpName)
-		return
-	}
-	if err := tmp.Close(); err != nil {
-		os.Remove(tmpName)
-		return
-	}
-	if err := os.Rename(tmpName, s.cachePath()); err != nil {
-		os.Remove(tmpName)
-	}
+	_ = atomicfile.WriteFile(s.cacheDir, cacheName, buf.Bytes(), 0o600)
 }
