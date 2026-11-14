@@ -438,6 +438,9 @@ func (a *shelf) ready(show bool) {
 		a.syncMousePassThrough()
 		a.win.ShowInactive()
 	}
+	// Platform work that finishes after its call returned reports failures to
+	// the same notice the call's own error would use.
+	platform.InstallErrorNotice(a.report)
 	a.installServices()
 	a.pinRestore()
 	// The desktop otter comes out after the pins: it stands among them on

@@ -348,7 +348,9 @@ func ShareNearby(paths []string, texts []string) error {
 	}
 
 	if len(paths) == 0 {
-		showErr := shareOpenPanel(pkg) // the panel takes its own reference
+		// Texts are ready now: clear any preparation still in flight so its
+		// completion cannot reopen the panel over this share.
+		showErr := shareShowNow(pkg)
 		pkg.release()
 		return showErr
 	}
@@ -356,6 +358,13 @@ func ShareNearby(paths []string, texts []string) error {
 	shareSheet.pending = pkg
 	shareStartPrepare(pkg, append([]string(nil), paths...))
 	return nil
+}
+
+// shareShowNow opens the panel for a package that is ready and supersedes any
+// share whose files are still being prepared.
+func shareShowNow(pkg *sharePackage) error {
+	shareSheet.pending = nil
+	return shareShowPanel(pkg)
 }
 
 // shareOpenPanel hands pkg to the system panel. The payload keeps its own
@@ -729,9 +738,9 @@ func shareDelegateInvoke(this, sender, args uintptr) uintptr {
 	return shareOK
 }
 
-// shareShowPanel is the last step of a prepared share. A test replaces it to
-// observe the completion without a real panel.
-var shareShowPanel = func(pkg *sharePackage) { _ = shareOpenPanel(pkg) }
+// shareShowPanel is the last step of a share. A test replaces it to observe
+// the completion without a real panel.
+var shareShowPanel = shareOpenPanel
 
 // shareStartPrepare opens paths on a worker thread and, once they are ready,
 // opens the panel for pkg on the main thread. The goroutine owns the
@@ -789,7 +798,12 @@ func sharePrepared(pkg *sharePackage, items []uintptr, resolveErr error) {
 			pkg.failure = "Rakko could not open these items for sharing: " + resolveErr.Error()
 		}
 	}
-	shareShowPanel(pkg)
+	if err := shareShowPanel(pkg); err != nil {
+		// The anchor window may have gone away while the files were opening;
+		// the caller is long back in its own loop, so the failure goes to the
+		// app's error notice instead.
+		reportError(err)
+	}
 }
 
 // shareReleaseItems drops the references shareResolveItems handed over.

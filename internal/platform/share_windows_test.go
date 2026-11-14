@@ -428,7 +428,10 @@ func shareTestPrepare(t *testing.T, pkg *sharePackage, resolver func([]string) (
 	oldPending := shareSheet.pending
 	shareResolveItemsFn = resolver
 	shareWakeMain = func(fn func()) { queue <- fn }
-	shareShowPanel = func(p *sharePackage) { shown <- p }
+	shareShowPanel = func(p *sharePackage) error {
+		shown <- p
+		return nil
+	}
 	shareSheet.pending = pkg
 	t.Cleanup(func() {
 		shareResolveItemsFn = oldResolve
@@ -616,5 +619,83 @@ func TestShareRequestReportsPreparedFailure(t *testing.T) {
 	}
 	if setData != 0 {
 		t.Fatal("SetData was called with a package that has no shareable data")
+	}
+}
+
+// TestTextShareSupersedesPreparingFileShare checks that a text share started
+// while files are still being opened wins: the older preparation completes,
+// releases what it held, and does not reopen the panel over the newer share.
+func TestTextShareSupersedesPreparingFileShare(t *testing.T) {
+	fileFake := newShareFake(shareFakePackage)
+	filePkg := &sharePackage{pkg: fileFake}
+	started := make(chan struct{})
+	release := make(chan struct{})
+	queue, shown := shareTestPrepare(t, filePkg, func([]string) ([]uintptr, error) {
+		close(started)
+		<-release
+		return []uintptr{newShareFake(shareFakeItem)}, nil
+	})
+
+	shareStartPrepare(filePkg, []string{`\\server\share\slow.txt`})
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the worker never started")
+	}
+
+	textPkg := &sharePackage{pkg: newShareFake(shareFakePackage), hasText: true}
+	if err := shareShowNow(textPkg); err != nil {
+		t.Fatalf("the text share: %v", err)
+	}
+	select {
+	case p := <-shown:
+		if p != textPkg {
+			t.Fatalf("the panel opened for %p, want the text package", p)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("the text share never opened the panel")
+	}
+
+	close(release)
+	shareTestRun(t, queue)
+	select {
+	case p := <-shown:
+		t.Fatalf("the superseded preparation reopened the panel for %p", p)
+	case <-time.After(300 * time.Millisecond):
+	}
+	if shareSheet.pending != nil {
+		t.Fatal("the superseded preparation is still pending")
+	}
+	if n := atomic.LoadInt32(&shareFakeAt(fileFake).refs); n != 0 {
+		t.Fatalf("the superseded package has %d references left, want 0", n)
+	}
+}
+
+// TestShareShowFailureReachesTheErrorNotice checks that a panel that cannot
+// open after the files were opened reports through the app's error notice,
+// which is where the caller's own error would have gone.
+func TestShareShowFailureReachesTheErrorNotice(t *testing.T) {
+	notice := make(chan error, 1)
+	InstallErrorNotice(func(err error) { notice <- err })
+	t.Cleanup(func() { InstallErrorNotice(nil) })
+
+	pkg := &sharePackage{pkg: newShareFake(shareFakePackage), hasText: true}
+	queue, _ := shareTestPrepare(t, pkg, func([]string) ([]uintptr, error) {
+		return nil, nil
+	})
+	shareShowPanel = func(*sharePackage) error {
+		return errors.New("the share panel's window is gone")
+	}
+
+	shareStartPrepare(pkg, []string{"one"})
+	shareTestRun(t, queue)
+
+	select {
+	case err := <-notice:
+		if err == nil {
+			t.Fatal("the notice got a nil error")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("the failed panel never reached the error notice")
 	}
 }
