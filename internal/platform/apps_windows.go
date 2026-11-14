@@ -83,14 +83,15 @@ func ActivateApp(pid int) bool {
 }
 
 // topWindowOf returns the app window of pid a user would recognize: the
-// first visible titled window that is not a tool window.
+// first visible titled window that is not a tool window, minimized ones
+// included (ActivateApp restores what it finds here).
 func topWindowOf(pid int) uintptr {
 	var found uintptr
 	appEnumWindows(func(h uintptr) bool {
 		if windowPID(h) != pid {
 			return true
 		}
-		if !ordinaryWindow(h) {
+		if !appWindow(h) {
 			return true
 		}
 		found = h
@@ -135,6 +136,21 @@ var (
 	appEnumCallback     uintptr
 	appEnumCallbackOnce sync.Once
 )
+
+// appWindow reports whether h is a window that names a running app: it is
+// visible, is not a tool window and has a title. A minimized window still
+// counts — its app is running, the switcher lists it, and ActivateApp has
+// to find it to restore it. The screen-visible window list keeps using
+// ordinaryWindow, which drops minimized windows.
+func appWindow(h uintptr) bool {
+	if r, _, _ := procIsWindowVisible.Call(h); r == 0 {
+		return false
+	}
+	if isToolWindow(h) {
+		return false
+	}
+	return windowText(h) != ""
+}
 
 // FrontmostPID returns the process identifier of the foreground app, 0
 // when there is none.
@@ -190,7 +206,7 @@ func RunningApps() []RunningApp {
 		if pid == self || pid == 0 || seen[pid] {
 			return true
 		}
-		if !ordinaryWindow(h) {
+		if !appWindow(h) {
 			return true
 		}
 		id := appIDOf(pid)
