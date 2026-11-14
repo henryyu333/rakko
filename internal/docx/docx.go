@@ -2,7 +2,7 @@
 // documents — a sequence of text paragraphs plus one optional inline
 // picture — which ShelfU produces when exporting an image together with
 // the text recognized in it. It is a small writer, not a docx toolkit,
-// and uses only the standard library.
+// and uses only the standard library (plus the app's atomic replace).
 package docx
 
 import (
@@ -12,11 +12,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"rakko/internal/atomicfile"
 )
 
 // Picture is an embedded image. Data holds PNG or JPEG bytes and Ext
@@ -68,7 +69,7 @@ func Write(dst string, paragraphs []string, pic *Picture) error {
 	if err != nil {
 		return err
 	}
-	if err := writeFileAtomic(dst, data, 0o600); err != nil {
+	if err := atomicfile.WriteFile(filepath.Dir(dst), filepath.Base(dst), data, 0o600); err != nil {
 		return fmt.Errorf("docx: %w", err)
 	}
 	return nil
@@ -90,7 +91,7 @@ func WritePages(dst string, pages [][]string) error {
 	if err != nil {
 		return err
 	}
-	if err := writeFileAtomic(dst, data, 0o600); err != nil {
+	if err := atomicfile.WriteFile(filepath.Dir(dst), filepath.Base(dst), data, 0o600); err != nil {
 		return fmt.Errorf("docx: %w", err)
 	}
 	return nil
@@ -407,32 +408,4 @@ func isXMLChar(r rune) bool {
 	return r == '\t' ||
 		r >= 0x20 && r <= 0xD7FF ||
 		r >= 0xE000 && r != 0xFFFE && r != 0xFFFF
-}
-
-// writeFileAtomic writes data to dst through a temp file in the same
-// directory plus rename, so a crash never leaves a half-written .docx.
-func writeFileAtomic(dst string, data []byte, perm os.FileMode) error {
-	dir := filepath.Dir(dst)
-	tmp, err := os.CreateTemp(dir, "."+filepath.Base(dst)+".tmp-*")
-	if err != nil {
-		return err
-	}
-	tmpName := tmp.Name()
-	defer os.Remove(tmpName) // no-op once renamed
-	if err := tmp.Chmod(perm); err != nil {
-		tmp.Close()
-		return err
-	}
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmpName, dst)
 }

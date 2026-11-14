@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"rakko/internal/atomicfile"
 )
 
 // CacheTTL is how long one answer (including "no synced lyrics") is reused.
@@ -114,18 +116,5 @@ func (c *Cache) writeLocked() {
 		return
 	}
 	data = append(data, '\n')
-	tmp, err := os.CreateTemp(c.dir, "."+cacheFileName+".tmp-*")
-	if err != nil {
-		return
-	}
-	name := tmp.Name()
-	defer os.Remove(name)
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		return
-	}
-	if err := tmp.Close(); err != nil {
-		return
-	}
-	_ = os.Rename(name, filepath.Join(c.dir, cacheFileName))
+	_ = atomicfile.WriteFile(c.dir, cacheFileName, data, 0o600)
 }

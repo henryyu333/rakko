@@ -17,6 +17,8 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+
+	"rakko/internal/atomicfile"
 )
 
 // FileName is the file's name inside the data directory.
@@ -227,28 +229,7 @@ func Write(dir string, l Layout) error {
 		return err
 	}
 	data = append(data, '\n')
-	tmp, err := os.CreateTemp(dir, "."+FileName+".tmp-*")
-	if err != nil {
-		return err
-	}
-	tmpName := tmp.Name()
-	defer os.Remove(tmpName) // no-op after a successful rename
-	if err := tmp.Chmod(0o600); err != nil {
-		tmp.Close()
-		return err
-	}
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmpName, filepath.Join(dir, FileName))
+	return atomicfile.WriteFile(dir, FileName, data, 0o600)
 }
 
 // normalize repairs the recoverable parts of a loaded file (version 2):

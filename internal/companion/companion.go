@@ -14,6 +14,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+
+	"rakko/internal/atomicfile"
 	"sync"
 	"time"
 )
@@ -195,28 +197,7 @@ func (s *Store) save() error {
 // writeAtomic replaces companion.json in one rename, so a crash leaves
 // either the old file or the new one, never half of either.
 func writeAtomic(dir string, data []byte) error {
-	tmp, err := os.CreateTemp(dir, "."+FileName+".tmp-*")
-	if err != nil {
-		return err
-	}
-	name := tmp.Name()
-	defer os.Remove(name) // no-op after a successful rename
-	if err := tmp.Chmod(0o600); err != nil {
-		tmp.Close()
-		return err
-	}
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(name, filepath.Join(dir, FileName)); err != nil {
+	if err := atomicfile.WriteFile(dir, FileName, data, 0o600); err != nil {
 		return err
 	}
 	// The rename itself must reach the disk too, or a crash can leave the
