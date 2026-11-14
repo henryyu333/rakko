@@ -144,10 +144,19 @@ func RunningApps() []RunningApp {
 			return true
 		}
 		seen[pid] = true
-		out = append(out, RunningApp{AppID: id, Name: appNameOf(pid), PID: pid})
+		out = append(out, RunningApp{AppID: id, PID: pid})
 		return true
 	})
 	enumTopLevel(cb)
+	// Names are resolved after the enumeration: the shell query behind a
+	// localized name must not run inside the window callback.
+	for i := range out {
+		if localized, ok := appListName(out[i].AppID); ok && localized != "" {
+			out[i].Name = localized
+			continue
+		}
+		out[i].Name = appNameOf(out[i].PID)
+	}
 	return out
 }
 
@@ -156,6 +165,9 @@ func RunningApps() []RunningApp {
 func AppName(bundleID string) string {
 	if bundleID == "" {
 		return ""
+	}
+	if name, ok := appListName(bundleID); ok {
+		return name
 	}
 	if p := AppPath(bundleID); p != "" {
 		base := filepath.Base(p)
@@ -174,8 +186,10 @@ func AppName(bundleID string) string {
 	return id
 }
 
-// AppPath resolves an app identity to an executable path, or "" when
-// nothing installed answers for it.
+// AppPath resolves an app identity to the path the shell opens for it,
+// or "" when nothing installed answers for it. A desktop app resolves to
+// its executable; a packaged app resolves to its Apps folder entry, which
+// is the only address the shell accepts for one.
 func AppPath(bundleID string) string {
 	if bundleID == "" {
 		return ""
@@ -183,6 +197,12 @@ func AppPath(bundleID string) string {
 	if filepath.IsAbs(bundleID) {
 		if st, err := os.Stat(bundleID); err == nil && !st.IsDir() {
 			return bundleID
+		}
+		return ""
+	}
+	if strings.HasPrefix(bundleID, `shell:`) {
+		if target, ok := appListResolve(bundleID); ok {
+			return target
 		}
 		return ""
 	}
@@ -199,7 +219,24 @@ func AppPath(bundleID string) string {
 			return p
 		}
 	}
+	if target, ok := appListResolve(bundleID); ok {
+		return target
+	}
 	return ""
+}
+
+// appListResolve finds the Apps folder entry an identity names, whether
+// the caller holds the AppUserModelID or the entry's shell path.
+func appListResolve(id string) (string, bool) {
+	for _, e := range appListFresh() {
+		if e.Target == id {
+			return e.Target, true
+		}
+		if e.Target == `shell:AppsFolder\`+id {
+			return e.Target, true
+		}
+	}
+	return "", false
 }
 
 func execLookup(name string) (string, error) {
@@ -266,6 +303,9 @@ func FileIcon(path string, size int) []byte {
 func iconFilePNG(path string, size int) []byte {
 	if size <= 0 {
 		size = 32
+	}
+	if strings.HasPrefix(path, "shell:") {
+		return shellItemIconPNG(path, size)
 	}
 	var shfi shFileInfo
 	p, err := windows.UTF16PtrFromString(path)
