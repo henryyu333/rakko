@@ -57,9 +57,6 @@ func main() {
 	if !requestSingleInstanceLock() {
 		return
 	}
-	// The panel is topmost, and a system popup menu opened from it is not:
-	// keep the menus this process shows above the panel (no-op on macOS).
-	platform.WatchOwnMenus()
 	// Windows' Explorer entries launch this binary with the selected
 	// paths. Consume them after the hand-off — a second launch forwards
 	// its raw arguments — and before flag.Parse, which would reject the
@@ -470,6 +467,10 @@ func (a *shelf) newNotchWindow() {
 	a.win.SetVisibleOnAllWorkspaces(true)
 	a.winH = a.win.NativeHandle()
 	platform.ConfigureNotchWindow(a.winH)
+	// The panel is topmost, and a system popup menu opened from it is not:
+	// keep the menus this process shows above the panel, which needs the
+	// window's own handle (no-op on macOS).
+	platform.WatchOwnMenus(a.winH)
 	// The gate belongs to the window, not to a placement: an app that
 	// starts with the panel open never places, and a test shelf must watch
 	// the pointer as production does.

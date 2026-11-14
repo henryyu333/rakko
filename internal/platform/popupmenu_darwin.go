@@ -3,5 +3,6 @@
 package platform
 
 // WatchOwnMenus does nothing: AppKit draws popup menus above the panel's
-// window level already.
-func WatchOwnMenus() {}
+// window level already. window is the overlay's handle, which the macOS
+// side never needs.
+func WatchOwnMenus(window uintptr) {}
