@@ -19,8 +19,8 @@
 </p>
 
 <p align="center">
-  Apple Silicon · macOS 13+ · Free and open source · <a href="https://rakko-yu.pages.dev">Website</a> · <a href="#install">Install guide</a> · <a href="https://github.com/henryyu333/rakko/releases/latest">All downloads</a> · <a href="https://rakko-yu.pages.dev/support/">Buy me a coffee</a><br>
-  Apple Silicon 芯片 · macOS 13 或以上 · 免费开源 · <a href="https://rakko-yu.pages.dev">官网</a> · <a href="#安装">安装说明</a> · <a href="https://github.com/henryyu333/rakko/releases/latest">全部下载</a> · <a href="https://rakko-yu.pages.dev/support/">请我喝杯咖啡</a>
+  Apple Silicon · macOS 13+ · Windows 10/11 x64 (beta) · Free and open source · <a href="https://rakko-yu.pages.dev">Website</a> · <a href="#install">Install guide</a> · <a href="https://github.com/henryyu333/rakko/releases/latest">All downloads</a> · <a href="https://rakko-yu.pages.dev/support/">Buy me a coffee</a><br>
+  Apple Silicon 芯片 · macOS 13 或以上 · Windows 10/11 64 位（测试版）· 免费开源 · <a href="https://rakko-yu.pages.dev">官网</a> · <a href="#安装">安装说明</a> · <a href="https://github.com/henryyu333/rakko/releases/latest">全部下载</a> · <a href="https://rakko-yu.pages.dev/support/">请我喝杯咖啡</a>
 </p>
 
 <p align="center">
@@ -251,6 +251,16 @@ macOS treats Rakko as a new app, so turn its system permissions and Open at Logi
 
 Coming from the older Shelf app? Rakko copies from `Application Support/Shelf/` the same way when no ShelfU folder exists, and renames a `Shelf.app` bundle the same way too.
 
+### Windows (beta)
+
+The same Rakko runs on Windows 10 22H2 and Windows 11 (64-bit). With no notch on the screen it lives in a capsule at the top centre (or a simulated notch, in Settings → Appearance); the tray icon sits in the notification area.
+
+1. Download `rakko-setup-<version>-amd64.exe` from the [Releases page](https://github.com/henryyu333/rakko/releases/latest) and run it. It installs for your account only, no administrator rights needed. A portable `rakko-<version>-windows-amd64.zip` is there too.
+2. The beta is not code-signed, so Windows may show "Windows protected your PC" the first time: click **More info** → **Run anyway**. Only do this for a file downloaded from this repository.
+3. Press `Ctrl+Alt+Space` to open the search bar.
+
+Shortcuts use Ctrl / Alt where the Mac uses ⌘ / ⌥ / ⌃. What differs from the Mac — no permission page, Nearby Share instead of AirDrop, Windows Search instead of Spotlight, Explorer's right-click "Add to Rakko", HEIC needing Microsoft's codec extensions — is listed in the manual's [Windows chapter](docs/MANUAL.zh-CN.md#windows-版) (Chinese).
+
 ## Everyday use
 
 | To | Do this |
@@ -304,14 +314,14 @@ Requires Go 1.27 or later and Xcode Command Line Tools. Run the following comman
 go run github.com/egoist/mygo/cmd/mygo build
 ```
 
-The packaged `Rakko.app` and a `.dmg` land in a `darwin-arm64` subfolder under the output directory configured in `mygo.json`. Rakko is written in Go with [MyGo](https://github.com/egoist/mygo). The app icon and the menu-bar icon are not in this repository: a build from source uses the default icon and shows the name in the menu bar.
+The packaged `Rakko.app` and a `.dmg` land in a `darwin-arm64` subfolder under the output directory configured in `mygo.json`. For Windows, run `go tool mygo build -platform windows/amd64` on a Windows machine: the installer, a zip and `Rakko.exe` land in `windows-amd64` (MyGo downloads NSIS the first time). Rakko is written in Go with [MyGo](https://github.com/egoist/mygo). The app icon and the menu-bar icon are not in this repository: a build from source uses the default icon and shows the name in the menu bar.
 
 ### Source layout
 
 | Path | Contents |
 | --- | --- |
 | `cmd/rakko/` | Application entry point, native interface and application tests |
-| `internal/` | macOS integration, storage, settings, layout, notes, agent hooks, document export and AI usage modules |
+| `internal/` | platform integration (`internal/platform`: `_darwin.go` for macOS, `_windows.go` for Windows), storage, settings, layout, notes, agent hooks, document export and AI usage modules |
 | `resources/` | Third-party notices and generated native helper |
 | `docs/` | User manual |
 
@@ -552,6 +562,16 @@ macOS 会把 Rakko 当成一个新应用，所以升级后系统权限和「开�
 
 从更早的 Shelf 升上来？没有 ShelfU 文件夹时，Rakko 同样从 `Application Support/Shelf/` 复制，也会把 `Shelf.app` 改名。
 
+### Windows（测试版）
+
+同一个 Rakko 也能在 Windows 10 22H2 和 Windows 11（64 位）上用。Windows 屏幕没有刘海，它住在屏幕顶端居中的胶囊里（设置 →「外形与提示」可以改成模拟小刘海），托盘图标在任务栏右下角的通知区域。
+
+1. 在 [Releases 页面](https://github.com/henryyu333/rakko/releases/latest)下载 `rakko-setup-<版本>-amd64.exe` 并运行。它只装在你自己的账户里，不需要管理员权限。也有免安装的 `rakko-<版本>-windows-amd64.zip`。
+2. 测试版没有代码签名，第一次运行时 Windows 可能提示「Windows 已保护你的电脑」：点「更多信息」→「仍要运行」。只对从本项目下载的文件这样做。
+3. 按 `Ctrl+Alt+Space` 打开搜索条。
+
+Mac 上的 ⌘ / ⌥ / ⌃ 在 Windows 上换成 Ctrl / Alt。和 Mac 不一样的地方（没有权限页、附近共享代替隔空投送、Windows 搜索代替 Spotlight、资源管理器右键「添加到 Rakko」、HEIC 需要微软的编解码扩展等）见使用说明的 [「Windows 版」](docs/MANUAL.zh-CN.md#windows-版)一章。
+
 ## 日常使用
 
 | 想做什么 | 怎么做 |
@@ -604,14 +624,14 @@ Agent 完成提醒这个开关不增加任何流量：那些 hook 只在本机�
 go run github.com/egoist/mygo/cmd/mygo build
 ```
 
-打包好的 `Rakko.app` 和 `.dmg` 在 `mygo.json` 配置的输出目录下的 `darwin-arm64` 子文件夹中。Rakko 用 Go 和 [MyGo](https://github.com/egoist/mygo) 编写。应用图标和菜单栏图标不在本仓库里：自己从源码构建时用的是默认图标，菜单栏里显示文字名称。
+打包好的 `Rakko.app` 和 `.dmg` 在 `mygo.json` 配置的输出目录下的 `darwin-arm64` 子文件夹中。Windows 版在 Windows 电脑上运行 `go tool mygo build -platform windows/amd64`：安装包、zip 和 `Rakko.exe` 在 `windows-amd64` 里（第一次会自动下载 NSIS）。Rakko 用 Go 和 [MyGo](https://github.com/egoist/mygo) 编写。应用图标和菜单栏图标不在本仓库里：自己从源码构建时用的是默认图标，菜单栏里显示文字名称。
 
 ### 源码结构
 
 | 路径 | 内容 |
 | --- | --- |
 | `cmd/rakko/` | 应用入口、原生界面和应用测试 |
-| `internal/` | macOS 集成、存储、设置、布局、便利贴、agent hook、文档导出和 AI 用量模块 |
+| `internal/` | 系统接入（`internal/platform`：`_darwin.go` 是 macOS，`_windows.go` 是 Windows）、存储、设置、布局、便利贴、agent hook、文档导出和 AI 用量模块 |
 | `resources/` | 第三方声明和构建生成的原生辅助模块 |
 | `docs/` | 使用手册 |
 
