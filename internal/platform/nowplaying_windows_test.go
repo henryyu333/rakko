@@ -9,6 +9,9 @@ import (
 	"os"
 	"testing"
 	"time"
+	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
 func TestNowPlayingPositionExtrapolation(t *testing.T) {
@@ -33,6 +36,58 @@ func TestNowPlayingPositionExtrapolation(t *testing.T) {
 	noRate := NowPlayingState{Playing: true, Elapsed: 10, InfoAt: base}
 	if got := noRate.Position(base.Add(2 * time.Second)); got != 12 {
 		t.Fatalf("position without a rate = %v, want 12", got)
+	}
+}
+
+// TestNowPlayingReadsThePublishedPlaybackRate pins the slots and the
+// nullable value: the card must extrapolate at the player's own speed,
+// and fall back to 1× only when the player publishes no usable rate.
+func TestNowPlayingReadsThePublishedPlaybackRate(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		status   int32
+		rate     float64
+		haveRate bool
+		want     npPlayback
+	}{
+		{"playing at 2x", 4, 2, true, npPlayback{playing: true, rate: 2}},
+		{"playing with no rate", 4, 0, false, npPlayback{playing: true, rate: 1}},
+		{"playing at a zero rate", 4, 0, true, npPlayback{playing: true, rate: 1}},
+		{"paused", 5, 1.5, true, npPlayback{playing: false, rate: 0}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			info := newFakeCOM()
+			ref := newFakeCOM()
+			info.slot[7] = windows.NewCallback(func(_, out uintptr) uintptr {
+				*(*int32)(wiPtr(out)) = tt.status
+				return 0
+			})
+			if tt.haveRate {
+				info.slot[10] = windows.NewCallback(func(_, out uintptr) uintptr {
+					*(*unsafe.Pointer)(wiPtr(out)) = unsafe.Pointer(ref)
+					return 0
+				})
+				ref.slot[6] = windows.NewCallback(func(_, out uintptr) uintptr {
+					*(*float64)(wiPtr(out)) = tt.rate
+					return 0
+				})
+			} else {
+				info.slot[10] = windows.NewCallback(func(_, out uintptr) uintptr {
+					*(*unsafe.Pointer)(wiPtr(out)) = nil
+					return 0
+				})
+			}
+			got, ok := npReadPlayback(unsafe.Pointer(info))
+			if !ok {
+				t.Fatal("the playback info could not be read")
+			}
+			if got != tt.want {
+				t.Fatalf("playback = %+v, want %+v", got, tt.want)
+			}
+			if tt.want.playing && tt.haveRate && ref.releases.Load() != 1 {
+				t.Fatalf("the rate reference was released %d times, want once", ref.releases.Load())
+			}
+		})
 	}
 }
 

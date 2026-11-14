@@ -15,6 +15,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"io"
+	"math"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -390,24 +391,65 @@ type npPlayback struct {
 	rate    float64
 }
 
+// npMaxRate bounds the rate the card extrapolates with: a player that
+// reports something wilder is not reporting a play speed.
+const npMaxRate = 100
+
+// npPlaybackRate is the rate the card advances with: the player's own rate
+// when it reports a usable one, and 1× otherwise.
+func npPlaybackRate(reported float64, ok bool) float64 {
+	if !ok || !(reported > 0 && reported <= npMaxRate) || math.IsNaN(reported) {
+		return 1
+	}
+	return reported
+}
+
 func (p *npPoller) readPlaybackInfo(session unsafe.Pointer) *npPlayback {
 	var info unsafe.Pointer
 	if hr := winCOMCall(session, 9, uintptr(unsafe.Pointer(&info))); failedHR(hr) || info == nil {
 		return nil
 	}
 	defer winCOMRelease(info)
+	out, ok := npReadPlayback(info)
+	if !ok {
+		return nil
+	}
+	return &out
+}
+
+// npReadPlayback reads IGlobalSystemMediaTransportControlsSessionPlaybackInfo:
+// slot 7 is the playback status, slot 10 the nullable playback rate.
+func npReadPlayback(info unsafe.Pointer) (npPlayback, bool) {
 	var status int32
 	if hr := winCOMCall(info, 7, uintptr(unsafe.Pointer(&status))); failedHR(hr) {
-		return nil
+		return npPlayback{}, false
 	}
 	// GlobalSystemMediaTransportControlsSessionPlaybackStatus:
 	// 4 is playing, 5 is paused; every other value is not playback.
 	playing := status == 4
-	rate := 0.0
-	if playing {
-		rate = 1
+	out := npPlayback{playing: playing}
+	if !playing {
+		return out, true
 	}
-	return &npPlayback{playing: playing, rate: rate}
+	rate, ok := npReadRate(info)
+	out.rate = npPlaybackRate(rate, ok)
+	return out, true
+}
+
+// npReadRate reads the PlaybackRate property: slot 10 returns a nullable
+// IReference<double>, whose Value is slot 6. A player that publishes no
+// rate (a livestream, a browser tab) answers a null reference.
+func npReadRate(info unsafe.Pointer) (float64, bool) {
+	var ref unsafe.Pointer
+	if hr := winCOMCall(info, 10, uintptr(unsafe.Pointer(&ref))); failedHR(hr) || ref == nil {
+		return 0, false
+	}
+	defer winCOMRelease(ref)
+	var v float64
+	if hr := winCOMCall(ref, 6, uintptr(unsafe.Pointer(&v))); failedHR(hr) {
+		return 0, false
+	}
+	return v, true
 }
 
 type npTimeline struct {
