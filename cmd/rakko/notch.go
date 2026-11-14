@@ -880,14 +880,14 @@ func (a *shelf) mouseDown(inside bool, button int, p mygo.Point) {
 // candidate panel — drawn at 20 and anchored inside the opaque panel —
 // stays completely hidden behind it (marked text still composes inline,
 // which is why the bug reads as "IME types but no candidates").
-func (a *shelf) windowLevel() int {
+func (a *shelf) windowLevel() platform.Layer {
 	switch {
 	case a.dragging || a.pointerDrag:
-		return platform.PopUpMenuWindowLevel
+		return platform.LayerPopUpMenu
 	case a.focusMode:
-		return platform.SearchKeyboardLevel
+		return platform.LayerSearchKeyboard
 	default:
-		return platform.StatusWindowLevel
+		return platform.LayerStatus
 	}
 }
 
@@ -913,7 +913,7 @@ func (a *shelf) syncMousePassThrough() {
 	}
 	h := a.winH
 	platform.SetOverlayAcceptsMouse(h, accept)
-	platform.SetWindowLevel(h, a.windowLevel())
+	platform.SetWindowLayer(h, a.windowLevel())
 }
 
 // overlayWanted reports whether the current state needs the overlay to take
@@ -1399,7 +1399,7 @@ func (a *shelf) show(edge bool) {
 		}
 		a.focusMode = true
 		a.resetHomeSearch()
-		a.warmSpotlight()
+		a.warmSearch()
 	}
 	// Raise the surface to the envelope the whole panel fits in now, so no
 	// spring resizes it. The idle canvas is not blank in island style — it
@@ -1480,7 +1480,7 @@ func (a *shelf) holdKeys() {
 
 // ShowInactive does not give the overlay keyboard focus. Hold ⌘C like
 // Space only while a selected tray picture can actually be copied.
-const copyKey = "Cmd+C"
+const copyKey = "CmdOrCtrl+C"
 
 // wantsCopyKey reports whether the tray would act on ⌘C right now: the
 // panel is open with its keys, on the tray page, and exactly one selected
@@ -1566,8 +1566,8 @@ func (a *shelf) escape() {
 		}
 		return
 	}
-	if platform.QuickLookVisible() {
-		platform.CloseQuickLook()
+	if platform.PreviewVisible() {
+		platform.ClosePreview()
 		return
 	}
 	if a.ocrSheet {

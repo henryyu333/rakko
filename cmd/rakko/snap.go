@@ -100,22 +100,22 @@ type snapGhost struct {
 // ShelfU's target stick.
 type snapConfirm struct {
 	win      snapWindow
-	target   platform.AXRect
+	target   platform.Rect
 	resize   bool
 	at       time.Time
 	until    time.Time
-	last     platform.AXRect
+	last     platform.Rect
 	haveLast bool
 	nearAt   time.Time
 }
 
 // snapWindow is the Accessible window a session follows. The production
-// value is platform.AXWindowRef; tests supply a fake without touching AX.
+// value is platform.AppWindow; tests supply a fake without touching AX.
 type snapWindow interface {
 	Valid() bool
-	Frame() (platform.AXRect, bool)
+	Frame() (platform.Rect, bool)
 	Settable() (move, resize bool)
-	MoveResize(r platform.AXRect, resize bool) error
+	MoveResize(r platform.Rect, resize bool) error
 	Release()
 }
 
@@ -124,8 +124,8 @@ type snapState struct {
 	armed     bool
 	press     mygo.Point
 	win       snapWindow
-	start     platform.AXRect // window frame at the press
-	frame     platform.AXRect // latest frame read while dragging
+	start     platform.Rect // window frame at the press
+	frame     platform.Rect // latest frame read while dragging
 	move      bool            // the window's position is settable
 	resize    bool            // the window's size is settable
 	trusted   bool            // Accessibility at the press
@@ -142,14 +142,14 @@ type snapState struct {
 // Seams for the headless tests and the smoke run.
 var (
 	snapAXWindowAt = func(x, y float64) (snapWindow, int, bool) {
-		w, pid, ok := platform.AXWindowAt(x, y)
+		w, pid, ok := platform.AppWindowAt(x, y)
 		if !ok {
 			return nil, 0, false
 		}
 		return w, pid, true
 	}
 	snapOwnPID    = platform.OwnPID
-	snapOwnWindow = func(a *shelf, f platform.AXRect) bool { return a.snapOwnWindowFrame(f) }
+	snapOwnWindow = func(a *shelf, f platform.Rect) bool { return a.snapOwnWindowFrame(f) }
 	// snapInvalidate repaints the shelf when a tile becomes (or stops
 	// being) the hovered one. A seam so the headless test can count it.
 	snapInvalidate = func(a *shelf) {
@@ -302,7 +302,7 @@ func (a *shelf) snapPress(inside bool, button int, p mygo.Point) {
 // so the frame is what identifies them. A normal window of the same
 // process (the smoke test's, for one) is not ShelfU's interface and may be
 // arranged.
-func (a *shelf) snapOwnWindowFrame(f platform.AXRect) bool {
+func (a *shelf) snapOwnWindowFrame(f platform.Rect) bool {
 	if f.Width <= 0 || f.Height <= 0 {
 		return false
 	}
@@ -336,8 +336,8 @@ func (a *shelf) snapOwnWindowFrame(f platform.AXRect) bool {
 		if !ok {
 			continue
 		}
-		if math.Abs(r.Origin.X-f.X) <= 1 && math.Abs(r.Origin.Y-f.Y) <= 1 &&
-			math.Abs(r.Size.Width-f.Width) <= 1 && math.Abs(r.Size.Height-f.Height) <= 1 {
+		if math.Abs(r.X-f.X) <= 1 && math.Abs(r.Y-f.Y) <= 1 &&
+			math.Abs(r.Width-f.Width) <= 1 && math.Abs(r.Height-f.Height) <= 1 {
 			return true
 		}
 	}
@@ -438,13 +438,13 @@ func (a *shelf) snapRelease(p mygo.Point) {
 	resize := s.resize
 	if target >= 0 {
 		r := snapSlotRect(snapWorkAreaAt(screenPointOf(s.frame)), target)
-		want := platform.AXRect{
+		want := platform.Rect{
 			X: float64(r.X), Y: float64(r.Y),
 			Width: float64(r.Width), Height: float64(r.Height),
 		}
 		err := s.win.MoveResize(want, resize)
 		switch {
-		case errors.Is(err, platform.ErrAXResize):
+		case errors.Is(err, platform.ErrAppWindowResize):
 			resizeErr = true
 		case err != nil:
 			moveErr = true
@@ -525,7 +525,7 @@ func (a *shelf) cancelSnapConfirm() {
 
 // snapFrameNear reports whether two frames are the same arrangement
 // within the one-point rounding the window server applies.
-func snapFrameNear(a, b platform.AXRect) bool {
+func snapFrameNear(a, b platform.Rect) bool {
 	return math.Abs(a.X-b.X) <= snapConfirmTol && math.Abs(a.Y-b.Y) <= snapConfirmTol &&
 		math.Abs(a.Width-b.Width) <= snapConfirmTol && math.Abs(a.Height-b.Height) <= snapConfirmTol
 }
@@ -625,7 +625,7 @@ func (a *shelf) snapAnchor() mygo.Rectangle {
 }
 
 // screenPointOf is the AX frame's centre as the point that picks a display.
-func screenPointOf(r platform.AXRect) mygo.Point {
+func screenPointOf(r platform.Rect) mygo.Point {
 	return mygo.Point{X: int(math.Round(r.X + r.Width/2)), Y: int(math.Round(r.Y + r.Height/2))}
 }
 

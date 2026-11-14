@@ -50,9 +50,9 @@ var (
 	shotActivateSelf   = platform.ActivateSelf
 	shotActivateApp    = platform.ActivateApp
 	shotKeyWindow      = platform.IsKeyWindow
-	shotSetWindowLevel = platform.SetWindowLevel
+	shotSetWindowLayer = platform.SetWindowLayer
 	shotOrderOverlay   = platform.OrderOverlayFront
-	shotPreflight      = platform.ScreenCapturePreflight
+	shotPreflight      = platform.CanCaptureScreen
 	shotClipboard      = writeShotClipboard
 	shotReadSaveDir    = readScreenCaptureLocation
 	shotWriteFile      = os.WriteFile
@@ -409,7 +409,7 @@ func (s *shotSession) openWindow(di int) {
 	w.ShowInactive()
 	// mygo applies the AlwaysOnTop floating level when it orders a window
 	// front; the capture band must be the last word.
-	platform.SetWindowLevel(h, platform.CaptureWindowLevel)
+	platform.SetWindowLayer(h, platform.LayerCapture)
 	d.handle = h
 	d.win = w
 }
@@ -422,7 +422,7 @@ func (s *shotSession) assertCaptureLevel() {
 			continue // an editing box keeps its display below the IM band
 		}
 		if d.win != nil {
-			platform.SetWindowLevel(d.win.NativeHandle(), platform.CaptureWindowLevel)
+			platform.SetWindowLayer(d.win.NativeHandle(), platform.LayerCapture)
 			platform.OrderOverlayFront(d.win.NativeHandle())
 		}
 	}
@@ -441,7 +441,7 @@ func (s *shotSession) lowerForText() {
 	if d == nil || d.handle == 0 {
 		return
 	}
-	shotSetWindowLevel(d.handle, platform.SearchKeyboardLevel)
+	shotSetWindowLayer(d.handle, platform.LayerSearchKeyboard)
 	s.textLevelLow = true
 }
 
@@ -454,7 +454,7 @@ func (s *shotSession) restoreTextLevel() {
 	}
 	s.textLevelLow = false
 	if d := s.ownerDisplay(); d != nil && d.handle != 0 {
-		shotSetWindowLevel(d.handle, platform.CaptureWindowLevel)
+		shotSetWindowLayer(d.handle, platform.LayerCapture)
 		shotOrderOverlay(d.handle)
 	}
 }

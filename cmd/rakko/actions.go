@@ -72,7 +72,7 @@ func (a *shelf) itemMenu(m *ui.Menu, item store.Item) {
 		a.quickLook(paths)
 	}
 	if m.Item(l.ItemAirDrop()).Disabled(!files && len(texts) == 0).Chosen() {
-		if err := platform.AirDrop(paths, texts); err != nil {
+		if err := platform.ShareNearby(paths, texts); err != nil {
 			a.report(err)
 		}
 	}
@@ -334,7 +334,7 @@ func (a *shelf) appName(bundleID string) string {
 	if name, ok := a.appNames[bundleID]; ok {
 		return name
 	}
-	name := platform.AppNameForBundleID(bundleID)
+	name := platform.AppName(bundleID)
 	if name == "" {
 		name = bundleID
 	}
@@ -456,7 +456,7 @@ func (a *shelf) quickLook(paths []string) {
 	if len(paths) == 0 {
 		return
 	}
-	if err := platform.QuickLook(paths); err != nil {
+	if err := platform.Preview(paths); err != nil {
 		a.report(err)
 	}
 }
@@ -464,8 +464,8 @@ func (a *shelf) quickLook(paths []string) {
 // toggleQuickLook is Space while the shelf is in use: it closes an open
 // preview, or previews the selected files and images.
 func (a *shelf) toggleQuickLook() {
-	if platform.QuickLookVisible() {
-		platform.CloseQuickLook()
+	if platform.PreviewVisible() {
+		platform.ClosePreview()
 		return
 	}
 	if a.store == nil || !a.visible {

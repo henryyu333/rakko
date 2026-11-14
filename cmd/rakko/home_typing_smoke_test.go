@@ -232,11 +232,11 @@ func typeHomeChunk(t *testing.T, a *shelf, text string, gap time.Duration, want 
 	return false
 }
 
-// homeSpotNow reads the field and the query state for a failure message.
-func homeSpotNow(a *shelf) (string, homeSpotState) {
+// homeSearchNow reads the field and the query state for a failure message.
+func homeSearchNow(a *shelf) (string, homeSearchState) {
 	var q string
-	var st homeSpotState
-	onMain(func() { q, st = a.homeQuery, a.homeSpot })
+	var st homeSearchState
+	onMain(func() { q, st = a.homeQuery, a.homeSearch })
 	return q, st
 }
 
@@ -247,7 +247,7 @@ func TestSmokeHomeTypingMotion(t *testing.T) {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 	a := redesignShelf(t)
 	// Production warms the index at launch; the harness does the same.
-	platform.WarmSpotlight()
+	platform.WarmSearch()
 	time.Sleep(1200 * time.Millisecond)
 	stop := startMotionTicker(a)
 	defer stop()
@@ -316,7 +316,7 @@ func TestSmokeHomeTypingMotion(t *testing.T) {
 			typed++
 		}
 		if !waitHomeQuery(t, a, "rakko") {
-			q, st := homeSpotNow(a)
+			q, st := homeSearchNow(a)
 			t.Fatalf("rep %d: the long query never answered: field=%q spot=%+v", rep, q, st)
 		}
 		// A pause at rest. The old code dropped its envelope here and the
@@ -334,7 +334,7 @@ func TestSmokeHomeTypingMotion(t *testing.T) {
 				typed++
 			}
 			if !waitHomeQuery(t, a, q) {
-				got, st := homeSpotNow(a)
+				got, st := homeSearchNow(a)
 				t.Fatalf("rep %d: the query %q never answered: field=%q spot=%+v", rep, q, got, st)
 			}
 			time.Sleep(700 * time.Millisecond)
@@ -345,7 +345,7 @@ func TestSmokeHomeTypingMotion(t *testing.T) {
 			typed++
 		}
 		if !waitMain(3*time.Second, func() bool { return a.homeQuery == "" }) {
-			got, st := homeSpotNow(a)
+			got, st := homeSearchNow(a)
 			t.Fatalf("rep %d: the field never cleared: field=%q spot=%+v", rep, got, st)
 		}
 		time.Sleep(500 * time.Millisecond)
@@ -364,7 +364,7 @@ func TestSmokeHomeTypingMotion(t *testing.T) {
 			typed++
 		}
 		if !waitHomeQuery(t, a, "tr") {
-			got, st := homeSpotNow(a)
+			got, st := homeSearchNow(a)
 			t.Fatalf("rep %d: the short query never answered: field=%q spot=%+v", rep, got, st)
 		}
 		// The sheet is settled again, exactly the moment the video's

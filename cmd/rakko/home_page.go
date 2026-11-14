@@ -276,7 +276,7 @@ func (p *homePage) player(c *ui.Context, w float32, st platform.NowPlayingState)
 		if dur > 0 {
 			rem = max(0, dur-pos)
 		}
-		nowLabel, remLabel := platform.FormatClock(pos), "-"+platform.FormatClock(rem)
+		nowLabel, remLabel := formatClock(pos), "-"+formatClock(rem)
 		nw, rw := clockLabelW(c, nowLabel, 11.5), clockLabelW(c, remLabel, 11.5)
 		panelLabel(c, nil, nowLabel, 11.5, 500).TextColor(ink3).Width(nw)
 		p.host.seekRail(c, "home-progress", frac, dur, 14, 5).Grow(1).MinWidth(0)
@@ -647,7 +647,7 @@ func homeAwakeRemain(l locales.Messages, m *awakeModule, now time.Time) string {
 	if rem < 0 {
 		rem = 0
 	}
-	return l.AwakeRemaining(platform.FormatClock(rem.Seconds()))
+	return l.AwakeRemaining(formatClock(rem.Seconds()))
 }
 
 // homeTrayCount is how many files and folders the tray holds now.

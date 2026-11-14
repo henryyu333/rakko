@@ -24,7 +24,7 @@ type fakeSpot struct {
 	terms   []string
 	scopes  []platform.SearchScope
 	cancels int
-	emit    func([]platform.SpotlightHit)
+	emit    func([]platform.SearchHit)
 	done    func()
 }
 
@@ -32,7 +32,7 @@ func withFakeSpot(t *testing.T) *fakeSpot {
 	t.Helper()
 	f := &fakeSpot{}
 	old := spotlightStart
-	spotlightStart = func(term string, scope platform.SearchScope, _ int, emit func([]platform.SpotlightHit), done func()) func() {
+	spotlightStart = func(term string, scope platform.SearchScope, _ int, emit func([]platform.SearchHit), done func()) func() {
 		f.mu.Lock()
 		f.terms = append(f.terms, term)
 		f.scopes = append(f.scopes, scope)
@@ -110,10 +110,10 @@ func TestHomeSpotDropsStaleBatches(t *testing.T) {
 
 	a.homeQuery = "rakko"
 	a.homeQueryChanged()
-	emit([]platform.SpotlightHit{{Path: "/tmp/old.txt", Name: "old.txt"}})
+	emit([]platform.SearchHit{{Path: "/tmp/old.txt", Name: "old.txt"}})
 	done()
-	if len(a.homeSpot.items) != 0 || a.homeSpot.done {
-		t.Fatalf("a stale batch landed: %+v", a.homeSpot)
+	if len(a.homeSearch.items) != 0 || a.homeSearch.done {
+		t.Fatalf("a stale batch landed: %+v", a.homeSearch)
 	}
 }
 
@@ -126,9 +126,9 @@ func TestHomeSpotShowsFirstBatchBeforeTheEnd(t *testing.T) {
 	a.homeQuery = "rakko"
 	a.homeQueryChanged()
 	(*pending)()
-	f.emit([]platform.SpotlightHit{{Path: "/Applications/Rakko.app", Name: "Rakko", App: true}})
-	if len(a.homeSpot.items) != 1 || a.homeSpot.done {
-		t.Fatalf("first batch not shown: %+v", a.homeSpot)
+	f.emit([]platform.SearchHit{{Path: "/Applications/Rakko.app", Name: "Rakko", App: true}})
+	if len(a.homeSearch.items) != 1 || a.homeSearch.done {
+		t.Fatalf("first batch not shown: %+v", a.homeSearch)
 	}
 	if !a.homeSearching() {
 		t.Fatal("the query is still gathering")
@@ -143,7 +143,7 @@ func TestHomeSpotShowsFirstBatchBeforeTheEnd(t *testing.T) {
 // text-only hit; recent use breaks ties inside one rank.
 func TestSpotGroupHitsRanksAndSplits(t *testing.T) {
 	now := time.Now()
-	items := []platform.SpotlightHit{
+	items := []platform.SearchHit{
 		{Path: "/Users/x/budget.xlsx", Name: "budget.xlsx", LastUsed: now},
 		{Path: "/Users/x/my-rakko-notes.txt", Name: "my-rakko-notes.txt", LastUsed: now.Add(-time.Hour)},
 		{Path: "/Users/x/rakko-old.txt", Name: "rakko-old.txt", LastUsed: now.Add(-2 * time.Hour)},
@@ -178,9 +178,9 @@ func TestSpotGroupHitsRanksAndSplits(t *testing.T) {
 func TestHomeHitsGroupsFitTheSheet(t *testing.T) {
 	a := spotShelf()
 	a.homeQuery = "rakko"
-	a.homeSpot.query = "rakko"
-	a.homeSpot.done = true
-	a.homeSpot.items = []platform.SpotlightHit{
+	a.homeSearch.query = "rakko"
+	a.homeSearch.done = true
+	a.homeSearch.items = []platform.SearchHit{
 		{Path: "/Applications/Rakko.app", Name: "Rakko", App: true},
 		{Path: "/Users/x/Rakko Files", Name: "Rakko Files", Folder: true},
 		{Path: "/Users/x/rakko.txt", Name: "rakko.txt"},
@@ -243,14 +243,14 @@ func TestHomeHitsGroupsFitTheSheet(t *testing.T) {
 func TestNoMatchWaitsForTheQuery(t *testing.T) {
 	a := spotShelf()
 	a.homeQuery = "nothingmatches"
-	a.homeSpot.query = "nothingmatches"
+	a.homeSearch.query = "nothingmatches"
 	if !a.homeSearching() {
 		t.Fatal("a query that has not started is still searching")
 	}
 	if h := a.resultsTargetH(); h != 0 {
 		t.Fatalf("sheet opened at %v pt while searching", h)
 	}
-	a.homeSpot.done = true
+	a.homeSearch.done = true
 	if a.homeSearching() {
 		t.Fatal("a finished query is not searching")
 	}

@@ -53,14 +53,14 @@ func defaultFullDiskAccessPaths() []string {
 	return append(paths, "/Library/Application Support/com.apple.TCC/TCC.db")
 }
 
-// FullDiskAccessGranted reports whether this process may read the folders
+// CanReadDownloads reports whether this process may read the folders
 // Full Disk Access protects (Desktop, Documents, Downloads, iCloud Drive,
 // network and removable volumes). It opens a TCC database read-only and
 // closes it at once: a success means the grant is in effect, any failure
 // means it is not. It never prompts and never changes anything, so the
 // Settings window may call it every frame; it is a plain open/close, so any
 // goroutine may call it too.
-func FullDiskAccessGranted() bool {
+func CanReadDownloads() bool {
 	for _, path := range fullDiskAccessPaths() {
 		f, err := fullDiskAccessOpenFile(path)
 		if err != nil {
@@ -79,7 +79,7 @@ func FullDiskAccessGranted() bool {
 // granted call leaves both System Settings and Finder alone. Main thread
 // only (the reveal goes through NSWorkspace).
 func RequestFullDiskAccess() bool {
-	if FullDiskAccessGranted() {
+	if CanReadDownloads() {
 		return true
 	}
 	openURL(fullDiskAccessPane)
@@ -100,9 +100,9 @@ func OpenPrivacySecurityPane() {
 	openURL(privacySecurityPane)
 }
 
-// RevealInFinder selects path in a new Finder window, as Finder's 显示 in
+// RevealInFileManager selects path in a new Finder window, as Finder's 显示 in
 // enclosing folder. Main thread only.
-func RevealInFinder(path string) { revealInFinder(path) }
+func RevealInFileManager(path string) { revealInFinder(path) }
 
 // revealInFinder selects path in a new Finder window, as Finder's 显示 in
 // enclosing folder: NSWorkspace.activateFileViewerSelectingURLs:. Main

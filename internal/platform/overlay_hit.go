@@ -398,38 +398,55 @@ func WindowAtPoint(x, y, screenH float64) int {
 	return n
 }
 
-const (
-	// StatusWindowLevel is the notch overlay's resting level
-	// (NSStatusWindowLevel): above the menu bar so the shelf can occupy
-	// the screen's top edge.
-	StatusWindowLevel = 25
+// level maps the band to this platform's window-level number. LayerStatus
+// is NSStatusWindowLevel (above the menu bar); LayerCapture is
+// NSScreenSaverWindowLevel; LayerPopUpMenu is NSPopUpMenuWindowLevel;
+// LayerFloating is NSFloatingWindowLevel. LayerSearchKeyboard is 19:
+// kCGDockWindowLevel (20 — measured on 簡體中文輸入法's cached candidate
+// window) is where input methods draw candidate panels, so any level above
+// it hides them behind the opaque panel; 19 stays below that band yet above
+// torn-off menus (18) and floating palettes (3). LayerBelowStatus is one
+// under the status level. The menu bar (24) covers the notch-height strip
+// at the panel's top under LayerSearchKeyboard: content there is a spacer
+// plus the title row, while the search field and the list sit below it, so
+// the keyboard flow is unaffected.
+func (l Layer) level() int {
+	switch l {
+	case LayerStatus:
+		return 25
+	case LayerBelowStatus:
+		return 24
+	case LayerSearchKeyboard:
+		return 19
+	case LayerPopUpMenu:
+		return 101
+	case LayerCapture:
+		return 1000
+	case LayerFloating:
+		return 3
+	}
+	return 0
+}
 
-	// CaptureWindowLevel is NSScreenSaverWindowLevel: the screenshot
-	// overlay covers the menu bar and the Dock, not just ordinary windows.
-	CaptureWindowLevel = 1000
+// layerFor is level's inverse; ok is false for a level no Layer names.
+func layerFor(level int) (Layer, bool) {
+	for l := LayerStatus; l <= LayerFloating; l++ {
+		if l.level() == level {
+			return l, true
+		}
+	}
+	return 0, false
+}
 
-	// PopUpMenuWindowLevel is NSPopUpMenuWindowLevel, used while a file
-	// drag needs the overlay above the menu bar's exclusive strip.
-	PopUpMenuWindowLevel = 101
+// WindowLayerNumber is the stacking number layer maps to on this platform.
+// Tests that read system window lists compare against it; application code
+// uses layers, never numbers.
+func WindowLayerNumber(layer Layer) int { return layer.level() }
 
-	// SearchKeyboardLevel is where the overlay sits while the clipboard
-	// search has the keyboard (shelf.focusMode). Input-method candidate
-	// panels are drawn by the input method's own process at
-	// kCGDockWindowLevel (20 — measured on 簡體中文輸入法's cached
-	// candidate window); any level above it leaves the candidate
-	// completely behind the 440×400 opaque panel it is anchored inside.
-	// Level 19 stays below that band yet above torn-off menus (18) and
-	// floating palettes (3). The cost of dipping under the band is that
-	// the menu bar (24) covers the notch-height strip at the panel's top:
-	// content there is a spacer plus the title row, while the search
-	// field and the list sit below it, so the keyboard flow is unaffected.
-	SearchKeyboardLevel = 19
-)
-
-// SetWindowLevel puts the window at level and re-orders it frontmost of
-// that band. Level changes alone do not promise topmost placement within
+// SetWindowLayer puts the window at layer and re-orders it frontmost of
+// that band. Layer changes alone do not promise topmost placement within
 // the band the window joins. Main thread only.
-func SetWindowLevel(window uintptr, level int) {
+func SetWindowLayer(window uintptr, layer Layer) {
 	if window == 0 {
 		return
 	}
@@ -438,10 +455,11 @@ func SetWindowLevel(window uintptr, level int) {
 	}
 	withPool(func() {
 		w := id(window)
-		if sendInt(w, "level") == level {
+		n := layer.level()
+		if sendInt(w, "level") == n {
 			return
 		}
-		send(w, "setLevel:", uintptr(level))
+		send(w, "setLevel:", uintptr(n))
 		send(w, "orderFrontRegardless")
 		if hasAssoc(send(w, "contentView"), &assocCursorOwner) {
 			setArrowCursor()
@@ -462,25 +480,29 @@ func OrderOverlayFront(window uintptr) {
 	withPool(func() { send(id(window), "orderFrontRegardless") })
 }
 
-// WindowLevel reads the window's current NSWindow level. Main thread only.
-func WindowLevel(window uintptr) int {
+// WindowLayer reads the band the window currently sits in, or -1 when its
+// level is one no Layer names. Main thread only.
+func WindowLayer(window uintptr) Layer {
 	if window == 0 {
-		return 0
+		return -1
 	}
 	var level int
 	withPool(func() {
 		level = sendInt(id(window), "level")
 	})
-	return level
+	if l, ok := layerFor(level); ok {
+		return l
+	}
+	return -1
 }
 
 // SetDragElevated raises the overlay above the menu bar for the duration of
 // a file drag so the menu bar's exclusive strip cannot steal the drop.
 // Restores the status level afterwards. Main thread only.
 func SetDragElevated(window uintptr, elevate bool) {
-	level := StatusWindowLevel
+	layer := LayerStatus
 	if elevate {
-		level = PopUpMenuWindowLevel
+		layer = LayerPopUpMenu
 	}
-	SetWindowLevel(window, level)
+	SetWindowLayer(window, layer)
 }

@@ -116,7 +116,7 @@ func TestSmokeHomeSpotlight(t *testing.T) {
 	// Production warms the index at launch; the harness has no launch path
 	// of its own, so it does the same and lets the query finish before the
 	// bar opens.
-	platform.WarmSpotlight()
+	platform.WarmSearch()
 	time.Sleep(1200 * time.Millisecond)
 	onMain(func() {
 		a.show(false)
@@ -146,15 +146,15 @@ func TestSmokeHomeSpotlight(t *testing.T) {
 			a.homeQueryChanged()
 		})
 	}
-	if !waitMain(8*time.Second, func() bool { return a.homeSpot.done }) {
-		t.Fatalf("the query never finished: %+v", a.homeSpot)
+	if !waitMain(8*time.Second, func() bool { return a.homeSearch.done }) {
+		t.Fatalf("the query never finished: %+v", a.homeSearch)
 	}
 	var field string
 	onMain(func() { field = a.homeQuery })
 	if field != "rakko" {
 		t.Fatalf("the field says %q, want rakko", field)
 	}
-	t.Logf("query %q: %d hits in %v", a.homeSpot.query, len(a.homeSpot.items), time.Since(start).Round(time.Millisecond))
+	t.Logf("query %q: %d hits in %v", a.homeSearch.query, len(a.homeSearch.items), time.Since(start).Round(time.Millisecond))
 
 	var rows []string
 	onMain(func() {
@@ -166,7 +166,7 @@ func TestSmokeHomeSpotlight(t *testing.T) {
 		t.Logf("row %s", r)
 	}
 	if len(rows) == 0 {
-		t.Fatalf("no rows for rakko; the index found %d hits", len(a.homeSpot.items))
+		t.Fatalf("no rows for rakko; the index found %d hits", len(a.homeSearch.items))
 	}
 	// The sheet must be open on a real frame before the shot.
 	if !waitMain(2*time.Second, func() bool { return a.fx.resultsH > 1 }) {
@@ -197,11 +197,11 @@ func TestSmokeHomeSpotlight(t *testing.T) {
 	if during != 0 {
 		t.Fatalf("the sheet opened at %v pt while the query was still gathering", during)
 	}
-	if !waitMain(8*time.Second, func() bool { return a.homeSpot.done }) {
+	if !waitMain(8*time.Second, func() bool { return a.homeSearch.done }) {
 		t.Fatal("the empty query never finished")
 	}
 	onMain(func() {
-		if n := len(a.homeSpot.items); n != 0 {
+		if n := len(a.homeSearch.items); n != 0 {
 			t.Fatalf("%q matched %d hits", noMatch, n)
 		}
 	})
@@ -228,7 +228,7 @@ func TestSmokeHomeSpotlight(t *testing.T) {
 		a.homeQuery = "rakko"
 		a.homeQueryChanged()
 	})
-	if !waitMain(8*time.Second, func() bool { return a.homeSpot.done }) {
+	if !waitMain(8*time.Second, func() bool { return a.homeSearch.done }) {
 		t.Fatal("the English query never finished")
 	}
 	if !waitMain(2*time.Second, func() bool { return a.fx.resultsH > 1 }) {

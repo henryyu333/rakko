@@ -48,12 +48,12 @@ var (
 	windowTitlesProveGrant = ScreenCaptureGrantedByWindowTitles
 )
 
-// ScreenCapturePreflight reports whether this process may capture the
+// CanCaptureScreen reports whether this process may capture the
 // screen right now. It never prompts and never clears anything, so UI that
 // only displays the state can call it freely. Note macOS caches the answer
 // for the lifetime of the process: a grant made while the app is running
 // can keep answering false until the next launch.
-func ScreenCapturePreflight() bool {
+func CanCaptureScreen() bool {
 	if err := Init(); err != nil {
 		return false
 	}
@@ -91,7 +91,7 @@ func resetStaleScreenCaptureRecord() {
 // grant. The pane still opens so the user sees the switch is already on;
 // the remedy that works is a relaunch, which the caller's UI names.
 func RequestScreenCapture() bool {
-	if ScreenCapturePreflight() {
+	if CanCaptureScreen() {
 		return true
 	}
 	if windowTitlesProveGrant() {

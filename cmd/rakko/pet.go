@@ -563,7 +563,7 @@ func (a *shelf) petMoves(now time.Time) bool {
 	if pet == nil || pet.reduceMotion {
 		return false
 	}
-	return !platform.DisplayAsleep(uint32(pet.display)) && !a.petCovered(now)
+	return !platform.DisplayAsleep(pet.display) && !a.petCovered(now)
 }
 
 // petCovered reports the window hidden behind something else — another

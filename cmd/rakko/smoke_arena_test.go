@@ -64,9 +64,9 @@ func screenWindows(t *testing.T) []smokeWindow {
 
 // foreignIn is foreignAt over a snapshot: it runs no main-thread work, so
 // a caller already inside onMain can use it.
-func foreignIn(windows []smokeWindow, p mygo.Point, minLayer int) (smokeWindow, bool) {
+func foreignIn(windows []smokeWindow, p mygo.Point, minLayer platform.Layer) (smokeWindow, bool) {
 	for _, w := range windows {
-		if w.Owner == ownPID() || w.Layer < minLayer {
+		if w.Owner == ownPID() || w.Layer < platform.WindowLayerNumber(minLayer) {
 			continue
 		}
 		if p.X >= w.Frame.X && p.X < w.Frame.X+w.Frame.Width &&
@@ -78,16 +78,16 @@ func foreignIn(windows []smokeWindow, p mygo.Point, minLayer int) (smokeWindow, 
 }
 
 // foreignAt is foreignIn over a fresh snapshot.
-func foreignAt(t *testing.T, p mygo.Point, minLayer int) (smokeWindow, bool) {
+func foreignAt(t *testing.T, p mygo.Point, minLayer platform.Layer) (smokeWindow, bool) {
 	t.Helper()
 	return foreignIn(screenWindows(t), p, minLayer)
 }
 
 // foreignOverArena is foreignAt for any window overlapping r.
-func foreignOverArena(t *testing.T, r mygo.Rectangle, minLayer int) (smokeWindow, bool) {
+func foreignOverArena(t *testing.T, r mygo.Rectangle, minLayer platform.Layer) (smokeWindow, bool) {
 	t.Helper()
 	for _, w := range screenWindows(t) {
-		if w.Owner == ownPID() || w.Layer < minLayer {
+		if w.Owner == ownPID() || w.Layer < platform.WindowLayerNumber(minLayer) {
 			continue
 		}
 		if w.Frame.X < r.X+r.Width && r.X < w.Frame.X+w.Frame.Width &&
@@ -103,7 +103,7 @@ func foreignOverArena(t *testing.T, r mygo.Rectangle, minLayer int) (smokeWindow
 // or live activity does at the notch.
 func skipIfForeignOverlay(t *testing.T, p mygo.Point) {
 	t.Helper()
-	if w, ok := foreignAt(t, p, platform.StatusWindowLevel); ok {
+	if w, ok := foreignAt(t, p, platform.LayerStatus); ok {
 		t.Skipf("window %d (pid %d, layer %d) covers %+v: another copy of ShelfU or an overlay app is at the notch",
 			w.ID, w.Owner, w.Layer, p)
 	}
@@ -112,7 +112,7 @@ func skipIfForeignOverlay(t *testing.T, p mygo.Point) {
 // skipIfForeignOverlayOver skips when one covers the whole area.
 func skipIfForeignOverlayOver(t *testing.T, r mygo.Rectangle) {
 	t.Helper()
-	if w, ok := foreignOverArena(t, r, platform.StatusWindowLevel); ok {
+	if w, ok := foreignOverArena(t, r, platform.LayerStatus); ok {
 		t.Skipf("window %d (pid %d, layer %d) overlaps %+v: another copy of ShelfU or an overlay app is at the notch",
 			w.ID, w.Owner, w.Layer, r)
 	}

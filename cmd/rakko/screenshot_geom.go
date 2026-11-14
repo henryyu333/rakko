@@ -262,8 +262,8 @@ func shotWindowAt(windows []platform.ScreenWindow, p mygo.Point, t shotTarget) (
 	area := t.Bounds
 	for _, w := range windows {
 		r := mygo.Rectangle{
-			X: int(math.Round(w.Bounds.Origin.X)), Y: int(math.Round(w.Bounds.Origin.Y)),
-			Width: int(math.Round(w.Bounds.Size.Width)), Height: int(math.Round(w.Bounds.Size.Height)),
+			X: int(math.Round(w.Bounds.X)), Y: int(math.Round(w.Bounds.Y)),
+			Width: int(math.Round(w.Bounds.Width)), Height: int(math.Round(w.Bounds.Height)),
 		}
 		if r.Width <= 0 || r.Height <= 0 {
 			continue

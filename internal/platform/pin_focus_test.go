@@ -82,13 +82,13 @@ func TestPinPanelRefusesKeyWindow(t *testing.T) {
 		defer withPool(func() { send(pin, "orderOut:", 0); send(pin, "close"); send(stock, "close") })
 
 		var pinCan, stockCan, pinKey, appKeyIsPin, onlyIfNeeded bool
-		var level int
+		var level Layer
 		var behavior, styleMask uint
 		withPool(func() {
 			// The real capability query — the value that used to be YES.
 			pinCan = sendInt(pin, "canBecomeKeyWindow") != 0
 			stockCan = sendInt(stock, "canBecomeKeyWindow") != 0
-			level = WindowLevel(uintptr(pin))
+			level = WindowLayer(uintptr(pin))
 			behavior = CollectionBehavior(uintptr(pin))
 			styleMask = uint(sendInt(pin, "styleMask"))
 			onlyIfNeeded = sendInt(pin, "becomesKeyOnlyIfNeeded") != 0
@@ -109,8 +109,8 @@ func TestPinPanelRefusesKeyWindow(t *testing.T) {
 		if !stockCan {
 			return fmt.Errorf("unconfigured sibling of the shared class reports canBecomeKeyWindow = NO; the graft leaked to unrelated windows")
 		}
-		if level != 3 {
-			return fmt.Errorf("pin window level = %d, want NSFloatingWindowLevel (3)", level)
+		if level != LayerFloating {
+			return fmt.Errorf("pin window layer = %d, want LayerFloating", level)
 		}
 		if styleMask&nsWindowStyleMaskNonactivatingPanel == 0 {
 			return fmt.Errorf("pin styleMask 0x%x lost NonactivatingPanel", styleMask)

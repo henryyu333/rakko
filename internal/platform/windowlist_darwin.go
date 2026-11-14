@@ -82,6 +82,11 @@ func loadWindowList() error {
 	return windowListErr
 }
 
+// rectOf converts an AppKit rectangle into the app's neutral Rect.
+func rectOf(r NSRect) Rect {
+	return Rect{X: r.Origin.X, Y: r.Origin.Y, Width: r.Size.Width, Height: r.Size.Height}
+}
+
 // WindowNumber returns the NSWindow's CGWindowID — the number
 // CGWindowListCopyWindowInfo and `screencapture -l` both use.
 // Main thread only.
@@ -96,7 +101,7 @@ func WindowNumber(window uintptr) int {
 // WindowScreenRect returns the on-screen rect WindowServer reports for the
 // window with CGWindowID num, in MyGo top-left screen coordinates. ok is
 // false while the window is not ordered in. Main thread only.
-func WindowScreenRect(num int) (r NSRect, ok bool) {
+func WindowScreenRect(num int) (r Rect, ok bool) {
 	if err := Init(); err != nil || num == 0 {
 		return r, false
 	}
@@ -119,7 +124,7 @@ func WindowScreenRect(num int) (r NSRect, ok bool) {
 		}
 		var out NSRect
 		if rectFromDict(bounds, &out) {
-			r, ok = out, true
+			r, ok = rectOf(out), true
 		}
 	})
 	return r, ok
@@ -132,7 +137,7 @@ func WindowScreenRect(num int) (r NSRect, ok bool) {
 type ScreenWindow struct {
 	Number int
 	PID    int
-	Bounds NSRect
+	Bounds Rect
 }
 
 // NormalWindows lists the ordinary on-screen windows (layer 0) of other
@@ -179,7 +184,7 @@ func NormalWindows() []ScreenWindow {
 			if num := cfDictGetValue(dict, windowNumberKey); num != 0 {
 				number = sendInt(num, "intValue")
 			}
-			out = append(out, ScreenWindow{Number: number, PID: pid, Bounds: r})
+			out = append(out, ScreenWindow{Number: number, PID: pid, Bounds: rectOf(r)})
 		}
 	})
 	return out
@@ -222,7 +227,7 @@ func WindowsOfPID(pid int) []ScreenWindow {
 			if num := cfDictGetValue(dict, windowNumberKey); num != 0 {
 				number = sendInt(num, "intValue")
 			}
-			out = append(out, ScreenWindow{Number: number, PID: pid, Bounds: r})
+			out = append(out, ScreenWindow{Number: number, PID: pid, Bounds: rectOf(r)})
 		}
 	})
 	return out

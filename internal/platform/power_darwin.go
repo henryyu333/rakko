@@ -28,8 +28,9 @@ const (
 	PowerAssertDisplaySleep
 )
 
-// PowerAssertionID is the handle an assertion creation writes.
-type PowerAssertionID = uint32
+// PowerAssertionID is the opaque handle an assertion creation writes; zero
+// means no handle. Release it with ReleasePowerAssertion.
+type PowerAssertionID uintptr
 
 // The assertion-type constants are CFSTR literals, not exported symbols:
 // dlsym cannot find them, so the strings are passed by name.
@@ -96,17 +97,17 @@ func NewPowerAssertion(kind PowerAssertionKind, name string) (PowerAssertionID, 
 	if err := loadPower(); err != nil {
 		return 0, err
 	}
-	var out PowerAssertionID
+	var raw uint32
 	var ret uintptr
 	withPool(func() {
 		ret, _, _ = purego.SyscallN(powerCreateAddr,
 			uintptr(nsString(typ)), powerAssertionLevelOn, uintptr(nsString(name)),
-			uintptr(unsafe.Pointer(&out)))
+			uintptr(unsafe.Pointer(&raw)))
 	})
 	if ret != kIOReturnSuccess {
 		return 0, fmt.Errorf("IOPMAssertionCreateWithName: IOReturn %#x", uint32(ret))
 	}
-	return out, nil
+	return PowerAssertionID(raw), nil
 }
 
 // PowerAssertionName returns the AssertName powerd recorded for

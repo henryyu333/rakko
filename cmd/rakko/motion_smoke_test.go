@@ -197,12 +197,12 @@ func TestSmokeCapsuleSuccess(t *testing.T) {
 	t.Cleanup(func() { onMain(stop) })
 	var pill mygo.Rectangle
 	onMain(func() { pill = a.peekPillRect() })
-	if platform.AccessibilityTrusted() {
+	if platform.CanSendInput() {
 		// The capsule intentionally passes through native hit-testing.
 		// Catch the click in our own small receiver, not another app.
 		x, y := pill.X+pill.Width/2, pill.Y+pill.Height-8
 		receiver := newSmokePointerBackdrop(t, mygo.Rectangle{X: x - 2, Y: y - 2, Width: 4, Height: 4})
-		onMain(func() { platform.SetWindowLevel(receiver.NativeHandle(), platform.StatusWindowLevel+1) })
+		onMain(func() { platform.SetWindowLayer(receiver.NativeHandle(), platform.LayerPopUpMenu) })
 		var stopReceiver func()
 		onMain(func() {
 			stopReceiver = platform.ObserveMouseDown(receiver.NativeHandle(), func(inside bool, button int) {

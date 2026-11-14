@@ -50,12 +50,12 @@ const (
 var (
 	// Full Disk Access has no read-only query API: the probe opens the
 	// TCC database, which only a granted process may read.
-	fullDiskAccessProbe   = platform.FullDiskAccessGranted
+	fullDiskAccessProbe   = platform.CanReadDownloads
 	fullDiskAccessRequest = platform.RequestFullDiskAccess
-	accessibilityProbe    = platform.AccessibilityTrusted
-	// ScreenCapturePreflight, not ScreenCaptureAllowed: showing state must
+	accessibilityProbe    = platform.CanSendInput
+	// CanCaptureScreen, not the request path: showing state must
 	// never run the stale-record reset that belongs to the request path.
-	screenCaptureProbe   = platform.ScreenCapturePreflight
+	screenCaptureProbe   = platform.CanCaptureScreen
 	screenCaptureRequest = platform.RequestScreenCapture
 	// openPrivacyPane is all a switched-off permission can do: macOS gives
 	// no app the power to revoke a grant, only the user in System Settings.

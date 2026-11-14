@@ -469,11 +469,11 @@ func galleryGroupA() []galleryItem {
 			a.settings.PinnedApps = &saved
 			stubApps(t, &appsStub{
 				running: []platform.RunningApp{
-					{BundleID: "com.apple.finder", Name: "访达", PID: 101},
-					{BundleID: "com.apple.Terminal", Name: "终端", PID: 103},
-					{BundleID: "com.apple.dt.Xcode", Name: "Xcode", PID: 105},
-					{BundleID: "com.tinyspeck.slackmacgap", Name: "Slack", PID: 106},
-					{BundleID: "us.zoom.xos", Name: "zoom.us", PID: 107},
+					{AppID: "com.apple.finder", Name: "访达", PID: 101},
+					{AppID: "com.apple.Terminal", Name: "终端", PID: 103},
+					{AppID: "com.apple.dt.Xcode", Name: "Xcode", PID: 105},
+					{AppID: "com.tinyspeck.slackmacgap", Name: "Slack", PID: 106},
+					{AppID: "us.zoom.xos", Name: "zoom.us", PID: 107},
 				},
 				paths: map[string]string{"com.apple.Safari": "/Safari.app", "com.apple.Notes": "/Notes.app"},
 				names: map[string]string{"com.apple.Safari": "Safari", "com.apple.Notes": "备忘录"},
@@ -501,10 +501,10 @@ func galleryGroupA() []galleryItem {
 			}
 			stubApps(t, &appsStub{
 				running: []platform.RunningApp{
-					{BundleID: "com.apple.finder", Name: "访达", PID: 101},
-					{BundleID: "com.apple.Terminal", Name: "终端", PID: 103},
-					{BundleID: "com.apple.dt.Xcode", Name: "Xcode", PID: 105},
-					{BundleID: "com.tinyspeck.slackmacgap", Name: "Slack", PID: 106},
+					{AppID: "com.apple.finder", Name: "访达", PID: 101},
+					{AppID: "com.apple.Terminal", Name: "终端", PID: 103},
+					{AppID: "com.apple.dt.Xcode", Name: "Xcode", PID: 105},
+					{AppID: "com.tinyspeck.slackmacgap", Name: "Slack", PID: 106},
 				},
 				paths:     map[string]string{"com.apple.Safari": "/Safari.app"},
 				names:     map[string]string{"com.apple.Safari": "Safari"},
@@ -883,7 +883,7 @@ func galleryGroupB() []galleryItem {
 			a := galleryShelf(galleryEmptyStore(t), t.TempDir())
 			a.level, a.visible, a.progress = 1, true, 1
 			a.homeQuery = galleryText(lang, "没有这个", "nothing-here")
-			a.homeSpot.query, a.homeSpot.done = a.homeQuery, true
+			a.homeSearch.query, a.homeSearch.done = a.homeQuery, true
 			a.locale = lang
 			h := float32(homeShellH) + resultsGap + resultsHeight(nil) + navGap + navH + 4
 			return galleryRender{view: galleryPanel(t, lang, a, homeTypingW+2*earR, int(h))}
@@ -892,7 +892,7 @@ func galleryGroupB() []galleryItem {
 			a := galleryShelf(galleryEmptyStore(t), t.TempDir())
 			q := galleryText(lang, "发版", "release")
 			a.homeQuery = q
-			a.homeSpot.query, a.homeSpot.done = q, true
+			a.homeSearch.query, a.homeSearch.done = q, true
 			writeGalleryNote(t, a, galleryText(lang,
 				"# 发版清单\n– 改 README\n– 跑一遍回归测试\n",
 				"# Release checklist\n– Update the README\n– Run the regression suite\n"))
@@ -1246,8 +1246,8 @@ func gallerySearchShelf(t *testing.T, lang string) *shelf {
 	if lang == "en" {
 		app, folder, file = "Setapp", "Settings Backup", "setup-notes.md"
 	}
-	a.homeSpot.query, a.homeSpot.done = query, true
-	a.homeSpot.items = []platform.SpotlightHit{
+	a.homeSearch.query, a.homeSearch.done = query, true
+	a.homeSearch.items = []platform.SearchHit{
 		{Path: "/Applications/" + app + ".app", Name: app, App: true},
 		{Path: "/Users/x/Documents/" + folder, Name: folder, Folder: true},
 		{Path: "/Users/x/Documents/" + file, Name: file},

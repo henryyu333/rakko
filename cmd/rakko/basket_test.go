@@ -117,14 +117,14 @@ func TestBasketWindowShownAndPlaced(t *testing.T) {
 	}
 	// WindowServer can report a transient frame while the window orders in;
 	// poll until it matches the requested rect.
-	var got platform.NSRect
+	var got platform.Rect
 	match := false
 	for i := range 60 {
 		onMain(func() {
 			var ok bool
 			got, ok = platform.WindowScreenRect(num)
-			match = ok && int(got.Size.Width) == want.Width && int(got.Size.Height) == want.Height &&
-				int(got.Origin.X) == want.X && int(got.Origin.Y) == want.Y
+			match = ok && int(got.Width) == want.Width && int(got.Height) == want.Height &&
+				int(got.X) == want.X && int(got.Y) == want.Y
 		})
 		if match {
 			break

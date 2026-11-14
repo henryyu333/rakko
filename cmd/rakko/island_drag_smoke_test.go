@@ -111,7 +111,7 @@ func newIslandBackdrop(t *testing.T, b mygo.Rectangle) *mygo.Window {
 			})})
 		h := w.NativeHandle()
 		platform.ConfigureOverlayWindow(h)
-		platform.SetWindowLevel(h, platform.StatusWindowLevel-1)
+		platform.SetWindowLayer(h, platform.LayerBelowStatus)
 		platform.SetWindowFrame(h, b.X, b.Y, b.Width, b.Height)
 		w.ShowInactive()
 	})

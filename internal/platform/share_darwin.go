@@ -20,7 +20,7 @@ var airDropService id
 // Paths are wrapped as file URLs; texts are shared as plain strings. The
 // sheet is system-owned: delivery happens (or not) after this returns.
 // Main thread only.
-func AirDrop(paths []string, texts []string) error {
+func ShareNearby(paths []string, texts []string) error {
 	if err := Init(); err != nil {
 		return err
 	}

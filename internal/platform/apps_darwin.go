@@ -15,21 +15,21 @@ const (
 	nsApplicationActivateIgnoringOtherApps = 1 << 1
 )
 
-// FrontmostApp returns the frontmost application's bundle identifier and
+// FrontmostApp returns the frontmost application's app id and
 // localized name through NSWorkspace.frontmostApplication — the app the
 // user is copying from. Both are "" when the system reports none (early
 // launch, no GUI session). Read-only, no permission needed. Main thread
 // only.
-func FrontmostApp() (bundleID, name string) {
+func FrontmostApp() (appID, name string) {
 	withPool(func() {
 		app := send(send(class("NSWorkspace"), "sharedWorkspace"), "frontmostApplication")
 		if app == 0 {
 			return
 		}
-		bundleID = goString(send(app, "bundleIdentifier"))
+		appID = goString(send(app, "bundleIdentifier"))
 		name = goString(send(app, "localizedName"))
 	})
-	return bundleID, name
+	return appID, name
 }
 
 // FrontmostPID returns the process identifier of the frontmost
@@ -131,11 +131,11 @@ func SetWindowAppearance(window uintptr, dark bool) {
 	})
 }
 
-// AppNameForBundleID resolves a display name for a bundle identifier: the
+// AppName resolves a display name for a bundle identifier: the
 // name of the running application with that identifier, else the bundle's
 // localized name from disk, else "". Read-only, no permission needed.
 // Main thread only.
-func AppNameForBundleID(bundleID string) string {
+func AppName(bundleID string) string {
 	if strings.TrimSpace(bundleID) == "" {
 		return ""
 	}
@@ -218,9 +218,9 @@ func ReopenApp(bundleID string) bool {
 // RunningApp is one entry of the app switcher's snapshot: a regular GUI
 // application NSWorkspace reports as running.
 type RunningApp struct {
-	// BundleID is the stable identity: activation is by pid, but pinning
-	// and re-launching resolve the bundle id again.
-	BundleID string
+	// AppID is the stable identity: activation is by pid, but pinning and
+	// re-launching resolve the app id again.
+	AppID string
 	// Name is the app's localized name, "" when the system reports none.
 	Name string
 	// PID is valid for this snapshot only; the process may exit any time.
@@ -266,7 +266,7 @@ func RunningApps() []RunningApp {
 				continue
 			}
 			out = append(out, RunningApp{
-				BundleID: bundleID,
+				AppID: bundleID,
 				Name:     goString(send(app, "localizedName")),
 				PID:      pid,
 			})
@@ -275,12 +275,12 @@ func RunningApps() []RunningApp {
 	return out
 }
 
-// AppPathForBundleID resolves a bundle identifier to its application
+// AppPath resolves a bundle identifier to its application
 // bundle path through NSWorkspace.URLForApplicationWithBundleIdentifier,
 // or "" when nothing installed answers for it — the app was uninstalled,
 // or the id was never an application. Read-only, no permission needed.
 // Main thread only.
-func AppPathForBundleID(bundleID string) string {
+func AppPath(bundleID string) string {
 	if bundleID == "" {
 		return ""
 	}

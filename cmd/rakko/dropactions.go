@@ -83,7 +83,7 @@ var (
 		return platform.DragFilesChange()
 	}
 	dropFilesData = func(d transfer.Data) ([]string, error) { return d.Files() }
-	airDrop       = platform.AirDrop
+	airDrop       = platform.ShareNearby
 	cursorPoint   = func() mygo.Point { return mygo.Screen.CursorScreenPoint() }
 	dragState     = func() (bool, int64) { return platform.DragState() }
 	dragTypes     = platform.DragTypes

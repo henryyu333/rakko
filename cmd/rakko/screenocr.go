@@ -37,7 +37,7 @@ const ocrProgressDelay = 250 * time.Millisecond
 var (
 	// ScreenCapturePreflight, not the request path's check: showing the
 	// permission card must never clear a screen-recording record.
-	ocrPreflight  = platform.ScreenCapturePreflight
+	ocrPreflight  = platform.CanCaptureScreen
 	ocrGrant      = platform.RequestScreenCapture
 	ocrCapture    = captureRegion
 	ocrWork       = func(fn func()) { go fn() }

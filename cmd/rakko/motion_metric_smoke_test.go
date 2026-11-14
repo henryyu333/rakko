@@ -198,7 +198,7 @@ func setMotionStyle(a *shelf, island bool) {
 func resetHomeQuery(a *shelf) {
 	onMain(func() {
 		a.homeQuery = ""
-		a.homeSpot.items, a.homeSpot.done, a.homeSpot.query = nil, false, ""
+		a.homeSearch.items, a.homeSearch.done, a.homeSearch.query = nil, false, ""
 		a.homeSel = 0
 		a.invalidateHome()
 	})
@@ -206,22 +206,22 @@ func resetHomeQuery(a *shelf) {
 
 // startHomeQuery shows the bar's typed state without asking the real index:
 // searching=true keeps the results sheet shut while the bar widens.
-func startHomeQuery(a *shelf, q string, done bool, hits []platform.SpotlightHit) {
+func startHomeQuery(a *shelf, q string, done bool, hits []platform.SearchHit) {
 	onMain(func() {
 		a.homeQuery = q
-		a.homeSpot.items = hits
-		a.homeSpot.done = done
-		a.homeSpot.query = q
-		a.homeSpot.scope = a.homeScope
+		a.homeSearch.items = hits
+		a.homeSearch.done = done
+		a.homeSearch.query = q
+		a.homeSearch.scope = a.homeScope
 		a.homeSel = 0
 		a.invalidateHome()
 	})
 }
 
-func fakeHits(n int) []platform.SpotlightHit {
-	hits := make([]platform.SpotlightHit, 0, n)
+func fakeHits(n int) []platform.SearchHit {
+	hits := make([]platform.SearchHit, 0, n)
 	for i := range n {
-		hits = append(hits, platform.SpotlightHit{
+		hits = append(hits, platform.SearchHit{
 			Path: fmt.Sprintf("/tmp/Rakko-anim-fix/hits/file-%02d.txt", i),
 			Name: fmt.Sprintf("file-%02d", i),
 		})

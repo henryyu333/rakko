@@ -213,9 +213,9 @@ func TestNoteFileDoesNotRepeatInSpotlightRows(t *testing.T) {
 	path := filepath.Join(a.dataDir, note.DirName, id+note.FileExt)
 	other := filepath.Join(a.dataDir, "README-发版.txt")
 	a.homeQuery = "发版"
-	a.homeSpot.query = a.homeQuery
+	a.homeSearch.query = a.homeQuery
 	// An index that did return the note file, beside an ordinary one.
-	a.homeSpot.items = []platform.SpotlightHit{
+	a.homeSearch.items = []platform.SearchHit{
 		{Path: path, Name: filepath.Base(path)},
 		{Path: other, Name: filepath.Base(other)},
 	}

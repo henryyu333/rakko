@@ -287,13 +287,13 @@ func TestSmokeTrayCmdCCopiesThroughTheRealKey(t *testing.T) {
 	// smoke stubs so the test never steals them from the user.
 	origReg, origUnreg := registerKey, unregisterKey
 	registerKey = func(acc string, fn func()) error {
-		if acc == "Cmd+C" {
+		if acc == "CmdOrCtrl+C" {
 			return mygo.GlobalShortcut.Register(acc, fn)
 		}
 		return nil
 	}
 	unregisterKey = func(acc string) {
-		if acc == "Cmd+C" {
+		if acc == "CmdOrCtrl+C" {
 			mygo.GlobalShortcut.Unregister(acc)
 		}
 	}
@@ -303,7 +303,7 @@ func TestSmokeTrayCmdCCopiesThroughTheRealKey(t *testing.T) {
 			a.hide(hidePassive)
 			a.write = nil
 		})
-		mygo.GlobalShortcut.Unregister("Cmd+C")
+		mygo.GlobalShortcut.Unregister("CmdOrCtrl+C")
 		registerKey, unregisterKey = origReg, origUnreg
 	})
 

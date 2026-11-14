@@ -326,12 +326,12 @@ func closeAppsWings(t *testing.T, a *shelf) {
 }
 
 var smokeApps = []platform.RunningApp{
-	{BundleID: "com.smoke.pin1", Name: "Pin One", PID: 101},
-	{BundleID: "com.smoke.pin2", Name: "Pin Two", PID: 102},
-	{BundleID: "com.smoke.run1", Name: "Run One", PID: 103},
-	{BundleID: "com.smoke.run2", Name: "Run Two", PID: 104},
-	{BundleID: "com.smoke.run3", Name: "Run Three", PID: 105},
-	{BundleID: "com.smoke.run4", Name: "Run Four", PID: 106},
+	{AppID: "com.smoke.pin1", Name: "Pin One", PID: 101},
+	{AppID: "com.smoke.pin2", Name: "Pin Two", PID: 102},
+	{AppID: "com.smoke.run1", Name: "Run One", PID: 103},
+	{AppID: "com.smoke.run2", Name: "Run Two", PID: 104},
+	{AppID: "com.smoke.run3", Name: "Run Three", PID: 105},
+	{AppID: "com.smoke.run4", Name: "Run Four", PID: 106},
 }
 
 // appSeat returns the screen point at the centre of wing seat index i:

@@ -78,8 +78,8 @@ func (a *shelf) appsModeOn() bool { return a.apps.on }
 // 切到用户的应用。
 var (
 	appRunning    = platform.RunningApps
-	appPathFor    = platform.AppPathForBundleID
-	appNameFor    = platform.AppNameForBundleID
+	appPathFor    = platform.AppPath
+	appNameFor    = platform.AppName
 	appReopen     = platform.ReopenApp
 	appsInstalled = func() ([]mygo.InstalledApp, error) { return mygo.Shell.InstalledApps() }
 )
@@ -123,8 +123,8 @@ func (a *shelf) appSnapshot() []appEntry {
 	running := appRunning()
 	byID := make(map[string]platform.RunningApp, len(running))
 	for _, r := range running {
-		if _, dup := byID[r.BundleID]; !dup {
-			byID[r.BundleID] = r
+		if _, dup := byID[r.AppID]; !dup {
+			byID[r.AppID] = r
 		}
 	}
 	pinned := a.effectivePinnedIDs()
@@ -147,19 +147,19 @@ func (a *shelf) appSnapshot() []appEntry {
 		pinSet[id] = true
 	}
 	for _, r := range running {
-		if !pinSet[r.BundleID] {
+		if !pinSet[r.AppID] {
 			rest = append(rest, r)
 		}
 	}
 	sort.SliceStable(rest, func(i, j int) bool {
 		li, lj := rest[i].Name, rest[j].Name
 		if li == lj {
-			return rest[i].BundleID < rest[j].BundleID
+			return rest[i].AppID < rest[j].AppID
 		}
 		return li < lj
 	})
 	for _, r := range rest {
-		list = append(list, appEntry{bundleID: r.BundleID, name: r.Name, pid: r.PID})
+		list = append(list, appEntry{bundleID: r.AppID, name: r.Name, pid: r.PID})
 	}
 	return list
 }

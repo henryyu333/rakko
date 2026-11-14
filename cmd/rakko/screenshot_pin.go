@@ -72,7 +72,7 @@ func (a *shelf) openShotPin(png []byte, frame mygo.Rectangle, scale float64) {
 	// floating level keeps it over ordinary windows, under the menu bar.
 	platform.ConfigureOverlayWindow(hnd)
 	platform.DisableWindowAnimation(hnd)
-	platform.SetWindowLevel(hnd, 3) // NSFloatingWindowLevel
+	platform.SetWindowLayer(hnd, platform.LayerFloating)
 	platform.SetWindowFrame(hnd, frame.X, frame.Y, frame.Width, frame.Height)
 	win.OnClose(func(*mygo.CloseEvent) { a.removeShotPin(p) })
 	win.ShowInactive()

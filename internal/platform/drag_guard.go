@@ -137,9 +137,9 @@ func loadDragGuard() error {
 	return dragGuardErr
 }
 
-// AccessibilityTrusted reports whether this process may install an active
+// CanSendInput reports whether this process may install an active
 // event tap. It never asks the user.
-func AccessibilityTrusted() bool {
+func CanSendInput() bool {
 	return loadDragGuard() == nil && axIsProcessTrusted()
 }
 

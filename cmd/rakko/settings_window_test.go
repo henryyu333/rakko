@@ -629,14 +629,14 @@ func TestSettingsWindowSmoke(t *testing.T) {
 	// WindowServer must show it at the centered frame computed from the
 	// cursor display's work area.
 	want := settingsFrame(mygo.Screen.DisplayNearestPoint(mygo.Screen.CursorScreenPoint()).WorkArea)
-	var got platform.NSRect
+	var got platform.Rect
 	settled := false
 	for range 60 {
 		onMain(func() {
 			var ok bool
 			got, ok = platform.WindowScreenRect(num)
-			settled = ok && int(got.Size.Width) == want.Width && int(got.Size.Height) == want.Height &&
-				int(got.Origin.X) == want.X && int(got.Origin.Y) == want.Y
+			settled = ok && int(got.Width) == want.Width && int(got.Height) == want.Height &&
+				int(got.X) == want.X && int(got.Y) == want.Y
 		})
 		if settled {
 			break

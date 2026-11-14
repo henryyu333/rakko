@@ -98,7 +98,7 @@ func TestSnapSmokeDragToNotch(t *testing.T) {
 	if os.Getenv("RAKKO_BASKET_SMOKE") != "1" {
 		t.Skip("set RAKKO_BASKET_SMOKE=1 to run the real window drag")
 	}
-	if !platform.AccessibilityTrusted() {
+	if !platform.CanSendInput() {
 		t.Skip("the test process needs Accessibility for the real window drag")
 	}
 	a := redesignShelf(t)
@@ -144,7 +144,7 @@ func TestSnapSmokeDragToNotch(t *testing.T) {
 
 	var axW, axPid int
 	onMain(func() {
-		win, pid, ok := platform.AXWindowAt(titleX, titleY)
+		win, pid, ok := platform.AppWindowAt(titleX, titleY)
 		if !ok {
 			t.Fatalf("AX found no window at the title bar (%.0f,%.0f)", titleX, titleY)
 		}
@@ -215,7 +215,7 @@ func TestSnapSmokeIslandPanel(t *testing.T) {
 	if os.Getenv("RAKKO_BASKET_SMOKE") != "1" {
 		t.Skip("set RAKKO_BASKET_SMOKE=1 to run the real window drag")
 	}
-	if !platform.AccessibilityTrusted() {
+	if !platform.CanSendInput() {
 		t.Skip("the test process needs Accessibility for the real window drag")
 	}
 	a := redesignShelf(t)

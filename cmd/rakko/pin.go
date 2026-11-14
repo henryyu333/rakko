@@ -435,7 +435,7 @@ func (it *pinItem) openWindow(preview bool) {
 	it.win = w
 	w.SetVisibleOnAllWorkspaces(true)
 	if preview {
-		platform.ConfigureDragPreview(w.NativeHandle(), it.owner.windowLevel()+1)
+		platform.ConfigureDragPreviewAbove(w.NativeHandle(), it.owner.windowLevel())
 	} else {
 		platform.ConfigurePinWindow(w.NativeHandle())
 		w.OnClose(it.onClose)

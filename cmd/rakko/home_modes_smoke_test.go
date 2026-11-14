@@ -93,7 +93,7 @@ func TestSmokeHomeModes(t *testing.T) {
 		t.Skip("set RAKKO_BASKET_SMOKE=1 to run the native window smoke test")
 	}
 	a := redesignShelf(t)
-	platform.WarmSpotlight()
+	platform.WarmSearch()
 	time.Sleep(1200 * time.Millisecond)
 	var def platform.SearchScope
 	onMain(func() { def = a.defaultHomeScope() })
@@ -133,9 +133,9 @@ func TestSmokeHomeModes(t *testing.T) {
 		})
 	}
 	if !waitMain(15*time.Second, func() bool {
-		return a.homeSpot.done && a.homeSpot.scope == platform.ScopeApps
+		return a.homeSearch.done && a.homeSearch.scope == platform.ScopeApps
 	}) {
-		t.Fatalf("the 应用 query never finished: %+v", a.homeSpot)
+		t.Fatalf("the 应用 query never finished: %+v", a.homeSearch)
 	}
 	groups := modeGroups(a)
 	t.Logf("应用 groups: %v", groups)
@@ -163,9 +163,9 @@ func TestSmokeHomeModes(t *testing.T) {
 	onMain(func() { a.setHomeScope(platform.ScopeFiles) })
 	waitScope(t, a, platform.ScopeFiles, "the 文件 mode")
 	if !waitMain(15*time.Second, func() bool {
-		return a.homeSpot.done && a.homeSpot.scope == platform.ScopeFiles
+		return a.homeSearch.done && a.homeSearch.scope == platform.ScopeFiles
 	}) {
-		t.Fatalf("the 文件 query never finished: %+v", a.homeSpot)
+		t.Fatalf("the 文件 query never finished: %+v", a.homeSearch)
 	}
 	groups = modeGroups(a)
 	t.Logf("文件 groups: %v", groups)

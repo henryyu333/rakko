@@ -40,7 +40,7 @@ func TestIdleOverlayLetsClicksThrough(t *testing.T) {
 		onMain(func() {
 			// Another copy of ShelfU's panel at the notch takes these
 			// points; the hit test could only report it, not ours.
-			if w, ok := foreignIn(windows, mygo.Point{X: a.stripCenter(), Y: a.dispBounds.Y + a.notchH/2}, platform.StatusWindowLevel); ok {
+			if w, ok := foreignIn(windows, mygo.Point{X: a.stripCenter(), Y: a.dispBounds.Y + a.notchH/2}, platform.LayerStatus); ok {
 				foreign, hasForeign = w, true
 				return
 			}

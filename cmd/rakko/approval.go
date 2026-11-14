@@ -407,13 +407,13 @@ func (f *approvalFeature) syncKey() {
 	}
 	active := f.queueHead() != nil
 	if active && !f.keyHeld {
-		if registerKey("Cmd+Return", f.keyAllow) == nil {
+		if registerKey("CmdOrCtrl+Return", f.keyAllow) == nil {
 			f.keyHeld = true
 		}
 		return
 	}
 	if !active && f.keyHeld {
-		unregisterKey("Cmd+Return")
+		unregisterKey("CmdOrCtrl+Return")
 		f.keyHeld = false
 	}
 }

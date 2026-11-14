@@ -4,7 +4,6 @@ package main
 
 import (
 	"log"
-	"slices"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -109,33 +108,12 @@ func (a *shelf) dragGuardRegion() platform.DragGuardRegion {
 	}
 }
 
-// dragSummonTypes are the drag pasteboard types whose shake may summon the
-// basket: anything carrying files or image data. Text, link and app-window
-// drags never summon it — they may still be dropped on the notch band.
-var dragSummonTypes = []string{
-	"public.file-url",
-	"NSFilenamesPboardType",
-	"com.apple.finder.node",
-	"com.apple.NSFilePromiseItemMetaData",
-	"com.apple.pasteboard.promised-file-url",
-	"public.file-promise",
-	"public.png",
-	"public.tiff",
-	"public.jpeg",
-	"public.heic",
-	"public.webp",
-	"public.image",
-}
-
-// dragSummonsBasket reports whether this drag's declared types may wake
-// the shake-to-summon basket. Pure; unit-tested.
+// dragSummonsBasket reports whether this drag may wake the shake-to-summon
+// basket: anything carrying files, promised files or image data. Text, link
+// and app-window drags never summon it — they may still be dropped on the
+// notch band.
 func dragSummonsBasket(types []string) bool {
-	for _, t := range types {
-		if slices.Contains(dragSummonTypes, t) {
-			return true
-		}
-	}
-	return false
+	return platform.DragHasFiles(types) || platform.DragHasFilePromise(types) || platform.DragHasImages(types)
 }
 
 // notchGuardOn reports whether the drop-protection corridor belongs to the
@@ -187,11 +165,11 @@ func (a *shelf) syncDragGuard() {
 		}
 		return
 	}
-	if a.guard.attempted && (a.guard.trusted || !platform.AccessibilityTrusted()) {
+	if a.guard.attempted && (a.guard.trusted || !platform.CanSendInput()) {
 		return
 	}
 	stop, err := platform.StartDragGuard(region)
-	a.guard = dragGuard{stop: stop, region: region, attempted: true, trusted: platform.AccessibilityTrusted()}
+	a.guard = dragGuard{stop: stop, region: region, attempted: true, trusted: platform.CanSendInput()}
 	if err != nil {
 		log.Printf("刘海拖拽保护未启用：%v", err)
 	}

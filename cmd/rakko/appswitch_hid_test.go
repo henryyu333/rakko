@@ -62,7 +62,7 @@ func hidFrontPID() int {
 func hidRunningPID(bundleID string) int {
 	if v := mainValue(func() any {
 		for _, r := range platform.RunningApps() {
-			if r.BundleID == bundleID {
+			if r.AppID == bundleID {
 				return r.PID
 			}
 		}
@@ -143,7 +143,7 @@ func hidWriteSentinel(t *testing.T) {
 // launch — and fails loudly when fixtures were not built/registered.
 func hidFixture(t *testing.T, bundleID string) string {
 	t.Helper()
-	p := mainValue(func() any { return platform.AppPathForBundleID(bundleID) }).(string)
+	p := mainValue(func() any { return platform.AppPath(bundleID) }).(string)
 	if p == "" {
 		t.Fatalf("%s not resolvable through LaunchServices — build the switch fixtures first (dist.noindex/switch-fixtures)", bundleID)
 	}

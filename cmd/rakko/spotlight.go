@@ -36,14 +36,14 @@ var homeAfterFunc = time.AfterFunc
 // total (see homeHits).
 const homeGroupMax = 3
 
-// homeSpotState is the bar's Spotlight query and what it found so far.
+// homeSearchState is the bar's Spotlight query and what it found so far.
 // query names the text the items answer and scope the mode they answer it
 // in: a batch that arrives after the field or the mode moved on is dropped
 // by the sequence number, and hits of another mode are never shown.
-type homeSpotState struct {
+type homeSearchState struct {
 	query   string
 	scope   platform.SearchScope
-	items   []platform.SpotlightHit
+	items   []platform.SearchHit
 	done    bool
 	seq     int
 	typedAt time.Time // when the field last changed, for the latency log
@@ -52,25 +52,25 @@ type homeSpotState struct {
 	cancel  func()
 }
 
-// spotlightWarm primes the index connection; a headless shelf has no
+// searchWarm primes the index connection; a headless shelf has no
 // window to type into and skips it.
-var spotlightWarm = platform.WarmSpotlight
+var searchWarm = platform.WarmSearch
 
-// warmSpotlight pays the index's per-process setup before the user's first
+// warmSearch pays the index's per-process setup before the user's first
 // keystroke, once per launch.
 var spotWarmed sync.Once
 
-func (a *shelf) warmSpotlight() {
+func (a *shelf) warmSearch() {
 	if a.win == nil {
 		return
 	}
-	spotWarmed.Do(spotlightWarm)
+	spotWarmed.Do(searchWarm)
 }
 
 // spotlightStart runs one query in a mode; tests replace it with a fake
 // that records the term and scope and delivers batches by hand.
-var spotlightStart = func(term string, scope platform.SearchScope, limit int, emit func([]platform.SpotlightHit), done func()) func() {
-	return platform.StartSpotlight(term, scope, limit, emit, done).Cancel
+var spotlightStart = func(term string, scope platform.SearchScope, limit int, emit func([]platform.SearchHit), done func()) func() {
+	return platform.StartSearch(term, scope, limit, emit, done).Cancel
 }
 
 // spotDebug logs the first batch's latency when RAKKO_SPOTLIGHT_DEBUG is
@@ -84,19 +84,19 @@ func (a *shelf) homeQueryChanged() {
 	q := strings.TrimSpace(a.homeQuery)
 	a.homeSel = 0
 	a.stopHomeSpot()
-	a.homeSpot.query, a.homeSpot.typedAt = q, time.Now()
-	a.homeSpot.painted = time.Time{}
+	a.homeSearch.query, a.homeSearch.typedAt = q, time.Now()
+	a.homeSearch.painted = time.Time{}
 	if q == "" {
 		a.invalidateHome()
 		return
 	}
-	seq := a.homeSpot.seq
-	a.homeSpot.timer = homeAfterFunc(homeDebounce, func() {
+	seq := a.homeSearch.seq
+	a.homeSearch.timer = homeAfterFunc(homeDebounce, func() {
 		a.onUI(func() {
-			if a.homeSpot.seq != seq || strings.TrimSpace(a.homeQuery) != q {
+			if a.homeSearch.seq != seq || strings.TrimSpace(a.homeQuery) != q {
 				return
 			}
-			a.homeSpot.timer = nil
+			a.homeSearch.timer = nil
 			a.startHomeSpot(q, seq)
 		})
 	})
@@ -111,34 +111,34 @@ func (a *shelf) startHomeSpot(q string, seq int) {
 	started := time.Now()
 	if spotDebug {
 		log.Printf("spotlight %q: query started %v after the last keystroke",
-			q, time.Since(a.homeSpot.typedAt).Round(time.Millisecond))
+			q, time.Since(a.homeSearch.typedAt).Round(time.Millisecond))
 	}
-	a.homeSpot.scope = scope
-	a.homeSpot.cancel = spotlightStart(q, scope, 0, func(batch []platform.SpotlightHit) {
+	a.homeSearch.scope = scope
+	a.homeSearch.cancel = spotlightStart(q, scope, 0, func(batch []platform.SearchHit) {
 		if spotDebug {
 			log.Printf("spotlight %q: %d hits arrived %v after the query started",
 				q, len(batch), time.Since(started).Round(time.Millisecond))
 		}
 		a.onUI(func() {
-			if a.homeSpot.seq != seq {
+			if a.homeSearch.seq != seq {
 				return
 			}
-			if spotDebug && len(a.homeSpot.items) == 0 && len(batch) > 0 {
+			if spotDebug && len(a.homeSearch.items) == 0 && len(batch) > 0 {
 				log.Printf("spotlight %q: first batch of %d after %v",
-					q, len(batch), time.Since(a.homeSpot.typedAt).Round(time.Millisecond))
+					q, len(batch), time.Since(a.homeSearch.typedAt).Round(time.Millisecond))
 			}
-			a.homeSpot.items = append(a.homeSpot.items, batch...)
+			a.homeSearch.items = append(a.homeSearch.items, batch...)
 			a.invalidateHome()
 		})
 	}, func() {
 		a.onUI(func() {
-			if a.homeSpot.seq != seq {
+			if a.homeSearch.seq != seq {
 				return
 			}
-			a.homeSpot.done = true
+			a.homeSearch.done = true
 			if spotDebug {
 				log.Printf("spotlight %q: done after %v, %d hits",
-					q, time.Since(a.homeSpot.typedAt).Round(time.Millisecond), len(a.homeSpot.items))
+					q, time.Since(a.homeSearch.typedAt).Round(time.Millisecond), len(a.homeSearch.items))
 			}
 			a.invalidateHome()
 		})
@@ -157,10 +157,10 @@ func (a *shelf) setHomeScope(scope platform.SearchScope) {
 	a.homeSel = 0
 	q := strings.TrimSpace(a.homeQuery)
 	a.stopHomeSpot()
-	a.homeSpot.query, a.homeSpot.typedAt = q, time.Now()
-	a.homeSpot.painted = time.Time{}
+	a.homeSearch.query, a.homeSearch.typedAt = q, time.Now()
+	a.homeSearch.painted = time.Time{}
 	if q != "" {
-		a.startHomeSpot(q, a.homeSpot.seq)
+		a.startHomeSpot(q, a.homeSearch.seq)
 	}
 	a.invalidateHome()
 }
@@ -182,28 +182,28 @@ func (a *shelf) cycleHomeScope() {
 // cancelHomeSpot stops the timer and the query in flight; a later batch
 // belongs to a dead sequence and is dropped.
 func (a *shelf) cancelHomeSpot() {
-	a.homeSpot.seq++
-	if a.homeSpot.timer != nil {
-		a.homeSpot.timer.Stop()
-		a.homeSpot.timer = nil
+	a.homeSearch.seq++
+	if a.homeSearch.timer != nil {
+		a.homeSearch.timer.Stop()
+		a.homeSearch.timer = nil
 	}
-	if a.homeSpot.cancel != nil {
-		a.homeSpot.cancel()
-		a.homeSpot.cancel = nil
+	if a.homeSearch.cancel != nil {
+		a.homeSearch.cancel()
+		a.homeSearch.cancel = nil
 	}
 }
 
 // stopHomeSpot retires the query in flight and the hits it left.
 func (a *shelf) stopHomeSpot() {
 	a.cancelHomeSpot()
-	a.homeSpot.query, a.homeSpot.items, a.homeSpot.done = "", nil, false
+	a.homeSearch.query, a.homeSearch.items, a.homeSearch.done = "", nil, false
 }
 
 // noteHomePainted logs, under RAKKO_SPOTLIGHT_DEBUG, how long the current
 // query's first row took to reach the screen after the last keystroke: the
 // latency the gate's evidence reads.
 func (a *shelf) noteHomePainted(hits []homeHit) {
-	if !spotDebug || !a.homeSpot.painted.IsZero() || len(hits) == 0 {
+	if !spotDebug || !a.homeSearch.painted.IsZero() || len(hits) == 0 {
 		return
 	}
 	for _, hit := range hits {
@@ -211,8 +211,8 @@ func (a *shelf) noteHomePainted(hits []homeHit) {
 			continue
 		}
 		log.Printf("spotlight %q: first row painted %v after the last keystroke",
-			a.homeSpot.query, time.Since(a.homeSpot.typedAt).Round(time.Millisecond))
-		a.homeSpot.painted = time.Now()
+			a.homeSearch.query, time.Since(a.homeSearch.typedAt).Round(time.Millisecond))
+		a.homeSearch.painted = time.Now()
 		return
 	}
 }
@@ -224,18 +224,18 @@ func (a *shelf) homeSearching() bool {
 	if q == "" {
 		return false
 	}
-	return a.homeSpot.scope != a.homeScope || !a.homeSpot.done || !strings.EqualFold(strings.TrimSpace(a.homeSpot.query), q)
+	return a.homeSearch.scope != a.homeScope || !a.homeSearch.done || !strings.EqualFold(strings.TrimSpace(a.homeSearch.query), q)
 }
 
-// homeSpotItems are the hits that answer the bar's current text and mode.
-func (a *shelf) homeSpotItems() []platform.SpotlightHit {
-	if len(a.homeSpot.items) == 0 || a.homeSpot.scope != a.homeScope {
+// homeSearchItems are the hits that answer the bar's current text and mode.
+func (a *shelf) homeSearchItems() []platform.SearchHit {
+	if len(a.homeSearch.items) == 0 || a.homeSearch.scope != a.homeScope {
 		return nil
 	}
-	if !strings.EqualFold(strings.TrimSpace(a.homeSpot.query), strings.TrimSpace(a.homeQuery)) {
+	if !strings.EqualFold(strings.TrimSpace(a.homeSearch.query), strings.TrimSpace(a.homeQuery)) {
 		return nil
 	}
-	return a.homeSpot.items
+	return a.homeSearch.items
 }
 
 // onUI runs fn where the shelf's view state lives: the window's update
@@ -295,7 +295,7 @@ func (a *shelf) resetHomeSearch() {
 	a.homeQuery, a.homeSel = "", 0
 	a.homeScope = a.defaultHomeScope()
 	a.stopHomeSpot()
-	a.homeSpot.scope = a.homeScope
+	a.homeSearch.scope = a.homeScope
 	a.invalidateHome()
 }
 
@@ -317,7 +317,7 @@ func spotRank(name, q string) int {
 // spotGroupHits splits the index's hits into the sheet's three Spotlight
 // groups and orders each: rank, then the most recently used, then name.
 // Paths already shown (the tray's rows) are skipped.
-func spotGroupHits(q string, items []platform.SpotlightHit, shown map[string]bool) (apps, folders, files []platform.SpotlightHit) {
+func spotGroupHits(q string, items []platform.SearchHit, shown map[string]bool) (apps, folders, files []platform.SearchHit) {
 	seen := make(map[string]bool, len(items))
 	for _, hit := range items {
 		if hit.Path == "" || seen[hit.Path] || shown[hit.Path] {
@@ -333,7 +333,7 @@ func spotGroupHits(q string, items []platform.SpotlightHit, shown map[string]boo
 			files = append(files, hit)
 		}
 	}
-	for _, g := range [][]platform.SpotlightHit{apps, folders, files} {
+	for _, g := range [][]platform.SearchHit{apps, folders, files} {
 		sortSpotGroup(g, q)
 	}
 	return apps, folders, files
@@ -343,12 +343,12 @@ func spotGroupHits(q string, items []platform.SpotlightHit, shown map[string]boo
 // then name. The rank and the lower-cased name are computed once per hit,
 // not once per comparison: a large index result sorts in milliseconds
 // instead of lower-casing every name on every comparison.
-func sortSpotGroup(g []platform.SpotlightHit, q string) {
+func sortSpotGroup(g []platform.SearchHit, q string) {
 	if len(g) < 2 {
 		return
 	}
 	type ranked struct {
-		hit  platform.SpotlightHit
+		hit  platform.SearchHit
 		rank int
 	}
 	rs := make([]ranked, len(g))
@@ -375,7 +375,7 @@ func sortSpotGroup(g []platform.SpotlightHit, q string) {
 // spotHitRow is one index hit as a sheet row: ⏎ opens it, ⌘⏎ reveals it in
 // Finder, and the secondary text is its folder with the home directory
 // written as ~.
-func (a *shelf) spotHitRow(group string, hit platform.SpotlightHit) homeHit {
+func (a *shelf) spotHitRow(group string, hit platform.SearchHit) homeHit {
 	path := hit.Path
 	return homeHit{
 		group: group,
@@ -390,7 +390,7 @@ func (a *shelf) spotHitRow(group string, hit platform.SpotlightHit) homeHit {
 			a.hide(hideExplicit)
 		},
 		reveal: func() {
-			platform.RevealInFinder(path)
+			platform.RevealInFileManager(path)
 			a.hide(hideExplicit)
 		},
 	}

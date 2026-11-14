@@ -147,12 +147,12 @@ const (
 	// 1<<7. Combined with mask 0 this is an NSPanel that has no title bar
 	// for AppKit to keep below the menu bar.
 	nsWindowStyleMaskNonactivatingPanel = 1 << 7
-	// nsStatusWindowLevel is the overlay's resting level; the exported
-	// names live in overlay_hit.go next to the other band levels.
-	nsStatusWindowLevel = StatusWindowLevel
+	// nsStatusWindowLevel is the overlay's resting level; the Layer bands
+	// live in overlay_hit.go next to their mapping.
+	nsStatusWindowLevel = LayerStatus
 	// nsScreenSaverWindowLevel is NSScreenSaverWindowLevel, above the menu
 	// bar (24) and the Dock: the screenshot overlay must cover everything.
-	nsScreenSaverWindowLevel = CaptureWindowLevel
+	nsScreenSaverWindowLevel = LayerCapture
 	// nsWindowAnimationBehaviorNone is NSWindowAnimationBehaviorNone: the
 	// window appears and disappears without the default scale/fade.
 	nsWindowAnimationBehaviorNone = 2
@@ -713,7 +713,7 @@ func ConfigureOverlayWindow(window uintptr) {
 			"{CGRect={CGPoint=dd}{CGSize=dd}}@:{CGRect={CGPoint=dd}{CGSize=dd}}@")
 		markAssoc(w, &assocUnconstrain)
 		send(w, "setStyleMask:", nsWindowStyleMaskNonactivatingPanel)
-		send(w, "setLevel:", nsStatusWindowLevel)
+		send(w, "setLevel:", uintptr(nsStatusWindowLevel.level()))
 		send(w, "setHasShadow:", 0)
 		send(w, "setHidesOnDeactivate:", 0)
 		send(w, "setMovable:", 0)
@@ -744,7 +744,7 @@ func ConfigureCaptureWindow(window uintptr) {
 	withPool(func() {
 		w := id(window)
 		send(w, "setStyleMask:", nsWindowStyleMaskNonactivatingPanel)
-		send(w, "setLevel:", nsScreenSaverWindowLevel)
+		send(w, "setLevel:", uintptr(nsScreenSaverWindowLevel.level()))
 		send(w, "setAnimationBehavior:", nsWindowAnimationBehaviorNone)
 		send(w, "setHasShadow:", 0)
 		send(w, "setHidesOnDeactivate:", 0)
@@ -819,7 +819,7 @@ func configureFloatingPanel(window uintptr, behavior uintptr, shadow int) {
 	withPool(func() {
 		w := id(window)
 		send(w, "setStyleMask:", nsWindowStyleMaskNonactivatingPanel)
-		send(w, "setLevel:", uintptr(3))    // NSFloatingWindowLevel
+		send(w, "setLevel:", uintptr(LayerFloating.level()))
 		send(w, "setAnimationBehavior:", 0) // NSWindowAnimationBehaviorDefault
 		send(w, "setHasShadow:", uintptr(shadow))
 		send(w, "setHidesOnDeactivate:", 0)
@@ -856,7 +856,17 @@ func configureFloatingPanel(window uintptr, behavior uintptr, shadow int) {
 // ConfigureDragPreview uses the pin's non-activating appearance, but never
 // intercepts the source gesture or animates out over the returning grid copy.
 // The animation setting is per-window; it does not change system preferences.
-func ConfigureDragPreview(window uintptr, level int) {
+func ConfigureDragPreview(window uintptr, layer Layer) {
+	configureDragPreview(window, layer.level())
+}
+
+// ConfigureDragPreviewAbove is ConfigureDragPreview one step in front of the
+// given band, for a preview that must stay visible above the shelf itself.
+func ConfigureDragPreviewAbove(window uintptr, layer Layer) {
+	configureDragPreview(window, layer.level()+1)
+}
+
+func configureDragPreview(window uintptr, level int) {
 	ConfigurePinWindow(window)
 	if window == 0 {
 		return
@@ -1085,8 +1095,8 @@ func AppIcon(bundle string, size int) []byte {
 	})
 }
 
-// SystemSymbol returns an SF Symbol raster as PNG. Call on the main thread.
-func SystemSymbol(name string, size int) []byte {
+// systemSymbol returns an SF Symbol raster as PNG. Call on the main thread.
+func systemSymbol(name string, size int) []byte {
 	if name == "" || size <= 0 || Init() != nil {
 		return nil
 	}
@@ -1124,17 +1134,17 @@ func iconPNG(size int, iconOf func(ws id) id) []byte {
 	return out
 }
 
-// DisplayAsleep reports whether the display with this CGDirectDisplayID is
+// DisplayAsleep reports whether the display with this display ID is
 // asleep — screensaver, display sleep, or a closed lid with no mirror. The
 // desktop otter skips its own motion while it is: nothing is on screen to
 // see, and waking a window to animate it would spend power for nothing.
 // An unknown display counts as awake. Main thread only.
-func DisplayAsleep(display uint32) bool {
+func DisplayAsleep(display int64) bool {
 	if err := Init(); err != nil {
 		return false
 	}
 	var asleep bool
-	withPool(func() { asleep = cgDisplayIsAsleep(display) != 0 })
+	withPool(func() { asleep = cgDisplayIsAsleep(uint32(display)) != 0 })
 	return asleep
 }
 

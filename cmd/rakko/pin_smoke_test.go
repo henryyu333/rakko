@@ -177,8 +177,8 @@ func TestPinSmokeWindowsAndShots(t *testing.T) {
 	time.Sleep(700 * time.Millisecond)
 
 	// Floating card, expanded.
-	if level := platform.WindowLevel(free.win.NativeHandle()); level != 3 {
-		t.Fatalf("pin window level = %d, want 3 (floating)", level)
+	if layer := platform.WindowLayer(free.win.NativeHandle()); layer != platform.LayerFloating {
+		t.Fatalf("pin window layer = %d, want LayerFloating", layer)
 	}
 	pinShot(t, free.win, "pin-floating")
 	// The design's drop shadow is the window's own: captured without -o.

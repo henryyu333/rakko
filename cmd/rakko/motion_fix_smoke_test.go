@@ -452,7 +452,7 @@ func TestSmokeSettledPanelBottomMarginPassesThrough(t *testing.T) {
 				})
 				platform.SetWindowFrame(below.NativeHandle(), belowPoint.X-20, belowPoint.Y-20, 40, 40)
 				below.ShowInactive()
-				platform.SetWindowLevel(below.NativeHandle(), platform.StatusWindowLevel-1)
+				platform.SetWindowLayer(below.NativeHandle(), platform.LayerBelowStatus)
 				belowNum = platform.WindowNumber(below.NativeHandle())
 				side = mygo.NewWindow(mygo.WindowOptions{
 					Title: "ShelfU side-margin click receiver", Width: frame.Width - 16, Height: 30,
@@ -461,7 +461,7 @@ func TestSmokeSettledPanelBottomMarginPassesThrough(t *testing.T) {
 				})
 				platform.SetWindowFrame(side.NativeHandle(), frame.X+8, midY-15, frame.Width-16, 30)
 				side.ShowInactive()
-				platform.SetWindowLevel(side.NativeHandle(), platform.StatusWindowLevel-1)
+				platform.SetWindowLayer(side.NativeHandle(), platform.LayerBelowStatus)
 				sideNum = platform.WindowNumber(side.NativeHandle())
 				shelfNum = platform.WindowNumber(a.winH)
 			})

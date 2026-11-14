@@ -94,7 +94,7 @@ type downloadsModule struct {
 func newDownloadsModule(a *shelf) *downloadsModule {
 	return &downloadsModule{
 		host: a, dir: downloadsDir, scan: scanDownloadDir,
-		allowed: platform.FullDiskAccessGranted, plist: readPlist,
+		allowed: platform.CanReadDownloads, plist: readPlist,
 		now: time.Now, prev: map[string]downloadFile{},
 	}
 }

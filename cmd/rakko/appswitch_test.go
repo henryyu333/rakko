@@ -237,11 +237,11 @@ func TestAppSnapshotDedupAndOrder(t *testing.T) {
 	a.settings.PinnedApps = &saved
 	stubApps(t, &appsStub{
 		running: []platform.RunningApp{
-			{BundleID: "com.test.A", Name: "Alpha", PID: 10},
-			{BundleID: "com.test.B", Name: "Beta", PID: 11},
-			{BundleID: "com.test.B", Name: "Beta Again", PID: 12}, // duplicate id collapses
-			{BundleID: "com.test.zed", Name: "Zulu", PID: 13},
-			{BundleID: "com.test.ace", Name: "Ace", PID: 14},
+			{AppID: "com.test.A", Name: "Alpha", PID: 10},
+			{AppID: "com.test.B", Name: "Beta", PID: 11},
+			{AppID: "com.test.B", Name: "Beta Again", PID: 12}, // duplicate id collapses
+			{AppID: "com.test.zed", Name: "Zulu", PID: 13},
+			{AppID: "com.test.ace", Name: "Ace", PID: 14},
 		},
 		paths: map[string]string{"com.test.A": "/A.app", "com.test.B": "/B.app", "com.test.stopped": "/S.app"},
 		names: map[string]string{"com.test.missing": "Long Gone", "com.test.stopped": "Stopped"},
@@ -455,8 +455,8 @@ func TestAppSelectionWalkAndEnter(t *testing.T) {
 	a.settings.PinnedApps = &saved
 	st := &appsStub{
 		running: []platform.RunningApp{
-			{BundleID: "com.test.pin", Name: "Pin", PID: 7},
-			{BundleID: "com.test.run", Name: "Run", PID: 8},
+			{AppID: "com.test.pin", Name: "Pin", PID: 7},
+			{AppID: "com.test.run", Name: "Run", PID: 8},
 		},
 		paths: map[string]string{"com.test.pin": "/Pin.app"},
 		actOK: map[int]bool{7: true, 8: true},
@@ -562,13 +562,13 @@ func TestAppsShownAndOverflow(t *testing.T) {
 	a.settings.PinnedApps = &saved
 	st := &appsStub{
 		running: []platform.RunningApp{
-			{BundleID: "com.t.a", Name: "A", PID: 1},
-			{BundleID: "com.t.b", Name: "B", PID: 2},
-			{BundleID: "com.t.c", Name: "C", PID: 3},
-			{BundleID: "com.t.d", Name: "D", PID: 4},
-			{BundleID: "com.t.e", Name: "E", PID: 5},
-			{BundleID: "com.t.f", Name: "F", PID: 6},
-			{BundleID: "com.t.g", Name: "G", PID: 7},
+			{AppID: "com.t.a", Name: "A", PID: 1},
+			{AppID: "com.t.b", Name: "B", PID: 2},
+			{AppID: "com.t.c", Name: "C", PID: 3},
+			{AppID: "com.t.d", Name: "D", PID: 4},
+			{AppID: "com.t.e", Name: "E", PID: 5},
+			{AppID: "com.t.f", Name: "F", PID: 6},
+			{AppID: "com.t.g", Name: "G", PID: 7},
 		},
 		paths: map[string]string{"com.t.a": "/a", "com.t.b": "/b", "com.t.c": "/c", "com.t.d": "/d"},
 	}
@@ -738,8 +738,8 @@ func TestManageRowsModel(t *testing.T) {
 	a.settings.PinnedApps = &saved
 	st := &appsStub{
 		running: []platform.RunningApp{
-			{BundleID: "com.t.pin", Name: "Pinned", PID: 3},
-			{BundleID: "com.t.orphan", Name: "Orphan", PID: 4},
+			{AppID: "com.t.pin", Name: "Pinned", PID: 3},
+			{AppID: "com.t.orphan", Name: "Orphan", PID: 4},
 		},
 		paths: map[string]string{"com.t.pin": "/P.app"},
 		names: map[string]string{"com.t.gone": "Gone"},
@@ -787,7 +787,7 @@ func TestEnsureInstalledDegrades(t *testing.T) {
 	a := appSwitchShelf(t)
 	st := &appsStub{
 		headless:   true, // pump-driven scan delivery
-		running:    []platform.RunningApp{{BundleID: "com.t.x", Name: "X", PID: 1}},
+		running:    []platform.RunningApp{{AppID: "com.t.x", Name: "X", PID: 1}},
 		paths:      map[string]string{},
 		installErr: errors.New("ls boom"),
 	}
@@ -859,8 +859,8 @@ func TestManageRowButtonsClick(t *testing.T) {
 	a.settings.PinnedApps = &saved
 	st := &appsStub{
 		running: []platform.RunningApp{
-			{BundleID: "com.t.one", Name: "One", PID: 1},
-			{BundleID: "com.t.two", Name: "Two", PID: 2},
+			{AppID: "com.t.one", Name: "One", PID: 1},
+			{AppID: "com.t.two", Name: "Two", PID: 2},
 		},
 		paths:     map[string]string{"com.t.one": "/1", "com.t.two": "/2"},
 		names:     map[string]string{"com.t.one": "One", "com.t.two": "Two"},
@@ -923,11 +923,11 @@ func TestAppsPopoverClicks(t *testing.T) {
 	a.settings.PinnedApps = &saved
 	st := &appsStub{
 		running: []platform.RunningApp{
-			{BundleID: "com.t.pin", Name: "Pin", PID: 1},
-			{BundleID: "com.t.x", Name: "Xray", PID: 2},
-			{BundleID: "com.t.y", Name: "Yankee", PID: 3},
-			{BundleID: "com.t.z", Name: "Zulu", PID: 4},
-			{BundleID: "com.t.w", Name: "Whisky", PID: 5},
+			{AppID: "com.t.pin", Name: "Pin", PID: 1},
+			{AppID: "com.t.x", Name: "Xray", PID: 2},
+			{AppID: "com.t.y", Name: "Yankee", PID: 3},
+			{AppID: "com.t.z", Name: "Zulu", PID: 4},
+			{AppID: "com.t.w", Name: "Whisky", PID: 5},
 		},
 		paths: map[string]string{"com.t.pin": "/P"},
 		actOK: map[int]bool{5: true},
@@ -1120,10 +1120,10 @@ func TestWingTipHangsBelowTheShell(t *testing.T) {
 	pins := []string{"com.t.one", "com.t.two", "com.t.three", "com.t.four"}
 	stubApps(t, &appsStub{
 		running: []platform.RunningApp{
-			{BundleID: "com.t.one", Name: "One", PID: 1},
-			{BundleID: "com.t.two", Name: "Two", PID: 2},
-			{BundleID: "com.t.three", Name: "Three", PID: 3},
-			{BundleID: "com.t.four", Name: "Four", PID: 4},
+			{AppID: "com.t.one", Name: "One", PID: 1},
+			{AppID: "com.t.two", Name: "Two", PID: 2},
+			{AppID: "com.t.three", Name: "Three", PID: 3},
+			{AppID: "com.t.four", Name: "Four", PID: 4},
 		},
 		paths: map[string]string{},
 	})
@@ -1211,7 +1211,7 @@ func TestInstalledScanStates(t *testing.T) {
 	a := appSwitchShelf(t)
 	st := &appsStub{
 		headless:  true, // the scan delivery must ride the test's pump queue
-		running:   []platform.RunningApp{{BundleID: "com.t.x", Name: "X", PID: 1}},
+		running:   []platform.RunningApp{{AppID: "com.t.x", Name: "X", PID: 1}},
 		paths:     map[string]string{},
 		installed: []mygo.InstalledApp{{ID: "com.t.cand", Name: "Cand"}},
 	}
@@ -1416,8 +1416,8 @@ func TestAppsMoreSeatWithoutRightWing(t *testing.T) {
 	a.settings.PinnedApps = &saved
 	stubApps(t, &appsStub{
 		running: []platform.RunningApp{
-			{BundleID: "com.t.pin", Name: "Pin", PID: 1},
-			{BundleID: "com.t.a", Name: "Alpha", PID: 2},
+			{AppID: "com.t.pin", Name: "Pin", PID: 1},
+			{AppID: "com.t.a", Name: "Alpha", PID: 2},
 		},
 		paths: map[string]string{"com.t.pin": "/P"},
 	})

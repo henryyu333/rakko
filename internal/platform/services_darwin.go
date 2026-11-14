@@ -113,7 +113,7 @@ func addToShelf(_ id, _ objc.SEL, pboard id, _ id, errOut *id) {
 	}
 }
 
-// InstallServiceProvider registers the process as the handler for the
+// InstallAddToRakko registers the process as the handler for the
 // "添加到 Rakko" service and routes each invocation to fn. fn receives the
 // payload as Go values and must not keep Objective-C objects.
 // setServicesProvider: installs the provider on this NSApplication; the
@@ -121,7 +121,7 @@ func addToShelf(_ id, _ objc.SEL, pboard id, _ id, errOut *id) {
 // NSPortName-based endpoint the plist declares. When the app is not running
 // the system launches it and delivers once the provider registers.
 // Main thread only; call after the application has started.
-func InstallServiceProvider(fn func(paths []string, text string)) error {
+func InstallAddToRakko(fn func(paths []string, text string)) error {
 	if err := Init(); err != nil {
 		return err
 	}

@@ -172,7 +172,7 @@ func newSmokePointerBackdrop(t *testing.T, r mygo.Rectangle) *mygo.Window {
 				ui.Box(c).Fill().Background(ui.Hex("#253445"))
 			})})
 		platform.ConfigurePinWindow(w.NativeHandle())
-		platform.SetWindowLevel(w.NativeHandle(), 2)
+		platform.SetWindowLayer(w.NativeHandle(), platform.LayerFloating)
 		platform.SetWindowFrame(w.NativeHandle(), r.X, r.Y, r.Width, r.Height)
 		w.ShowInactive()
 	})

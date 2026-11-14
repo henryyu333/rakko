@@ -97,7 +97,7 @@ func TestNotchPanelDeclaresTheArrowCursor(t *testing.T) {
 			send(text, "set")
 			SetOverlayAcceptsMouse(uintptr(stock), false)
 			SetOverlayAcceptsMouse(uintptr(stock), true)
-			SetWindowLevel(uintptr(stock), nsStatusWindowLevel+1)
+			SetWindowLayer(uintptr(stock), LayerPopUpMenu)
 			if send(class("NSCursor"), "currentCursor") != text {
 				t.Error("a sibling overlay replaced its own cursor with the panel's")
 			}

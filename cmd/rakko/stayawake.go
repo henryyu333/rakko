@@ -242,7 +242,7 @@ func (m *awakeModule) remainText(now time.Time) string {
 	if rem < 0 {
 		rem = 0
 	}
-	return l.AwakeRemaining(platform.FormatClock(rem.Seconds()))
+	return l.AwakeRemaining(formatClock(rem.Seconds()))
 }
 
 func (m *awakeModule) clock() time.Time {

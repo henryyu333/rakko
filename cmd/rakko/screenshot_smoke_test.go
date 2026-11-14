@@ -95,12 +95,12 @@ func TestScreenshotSmokeOverlay(t *testing.T) {
 	if num == 0 {
 		t.Fatal("overlay window has no CGWindowID")
 	}
-	var level int
-	var srect platform.NSRect
+	var level platform.Layer
+	var srect platform.Rect
 	var onScreen bool
 	var menuHit int
 	onMain(func() {
-		level = platform.WindowLevel(od.win.NativeHandle())
+		level = platform.WindowLayer(od.win.NativeHandle())
 		srect, onScreen = platform.WindowScreenRect(num)
 		primary := mygo.Screen.PrimaryDisplay()
 		menuHit = platform.WindowAtPoint(float64(d.Bounds.X+w/2), float64(d.Bounds.Y+10), float64(primary.Bounds.Y+primary.Bounds.Height))
@@ -196,14 +196,14 @@ func TestScreenshotSmokeOverlay(t *testing.T) {
 	postShotMouse(t, float64(textAt.X), float64(textAt.Y), num, 5, 1, 2)
 	time.Sleep(300 * time.Millisecond)
 	var keyIsKey bool
-	var textLevel int
+	var textLevel platform.Layer
 	onMain(func() {
 		keyIsKey = platform.IsKeyWindow(od.win.NativeHandle())
-		textLevel = platform.WindowLevel(od.win.NativeHandle())
+		textLevel = platform.WindowLayer(od.win.NativeHandle())
 	})
 	t.Logf("text editing key window=%v level=%d", keyIsKey, textLevel)
-	if textLevel != platform.SearchKeyboardLevel {
-		t.Fatalf("the overlay under an editing box is at level %d, want %d below the input method's candidates", textLevel, platform.SearchKeyboardLevel)
+	if textLevel != platform.LayerSearchKeyboard {
+		t.Fatalf("the overlay under an editing box is at level %d, want %d below the input method's candidates", textLevel, platform.LayerSearchKeyboard)
 	}
 
 	// The candidate panel anchors to the text input client's caret rect:
@@ -262,10 +262,10 @@ func TestScreenshotSmokeOverlay(t *testing.T) {
 	if gotText != "hello\nworld" {
 		t.Fatalf("typed text = %q, want two lines", gotText)
 	}
-	var restoredLevel int
-	onMain(func() { restoredLevel = platform.WindowLevel(od.win.NativeHandle()) })
-	if restoredLevel != platform.CaptureWindowLevel {
-		t.Fatalf("after ⌘Return the overlay level = %d, want %d", restoredLevel, platform.CaptureWindowLevel)
+	var restoredLevel platform.Layer
+	onMain(func() { restoredLevel = platform.WindowLayer(od.win.NativeHandle()) })
+	if restoredLevel != platform.LayerCapture {
+		t.Fatalf("after ⌘Return the overlay level = %d, want %d", restoredLevel, platform.LayerCapture)
 	}
 	t.Logf("overlay level after editing=%d", restoredLevel)
 
@@ -337,7 +337,7 @@ func TestScreenshotRealCaptureTiming(t *testing.T) {
 	if os.Getenv("RAKKO_BASKET_SMOKE") != "1" {
 		t.Skip("set RAKKO_BASKET_SMOKE=1 to run the native capture timing")
 	}
-	if !platform.ScreenCapturePreflight() {
+	if !platform.CanCaptureScreen() {
 		t.Skip("no screen-recording grant: real capture timing unproven")
 	}
 	dir := t.TempDir()

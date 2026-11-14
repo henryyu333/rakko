@@ -89,7 +89,7 @@ func (a *shelf) openMainIdleCapsule(f mygo.Rectangle) *mainIdleCapsule {
 	// One level below the panel's resting level, so the opening shell and
 	// the folding shell draw over it; it shows through only while their
 	// canvas is blank or exactly capsule-sized.
-	platform.SetWindowLevel(h, platform.StatusWindowLevel-1)
+	platform.SetWindowLayer(h, platform.LayerBelowStatus)
 	platform.SetOverlayAcceptsMouse(h, false)
 	platform.SetWindowFrame(h, f.X, f.Y, f.Width, f.Height)
 	return &mainIdleCapsule{win: w, frame: f}

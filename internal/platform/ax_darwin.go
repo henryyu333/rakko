@@ -14,25 +14,19 @@ import (
 // Accessibility (AX) window access for 拖窗口到刘海分屏: find the window
 // under a press, follow it while it is dragged, and set its frame on
 // release. Every function here needs the process to be trusted for
-// Accessibility; callers check AccessibilityTrusted first, because a
+// Accessibility; callers check CanSendInput first, because a
 // denied AX call returns an error but cannot prompt. Main thread only.
 
-// AXRect is a window frame in the global top-left screen coordinates the
-// rest of the app uses.
-type AXRect struct {
-	X, Y, Width, Height float64
-}
-
-// AXWindowRef owns one AXUIElementRef. Release it with ReleaseAXWindow;
+// AppWindow owns one AXUIElementRef. Release it with Release;
 // a zero ref is inert.
-type AXWindowRef struct{ el uintptr }
+type AppWindow struct{ el uintptr }
 
 // Valid reports whether the ref holds an element.
-func (w AXWindowRef) Valid() bool { return w.el != 0 }
+func (w AppWindow) Valid() bool { return w.el != 0 }
 
-// ErrAXResize is returned when the window accepted the move but refused
+// ErrAppWindowResize is returned when the window accepted the move but refused
 // the size change (or its size is not settable at all).
-var ErrAXResize = errors.New("mac: the window cannot be resized")
+var ErrAppWindowResize = errors.New("mac: the window cannot be resized")
 
 const (
 	kAXValueCGPointType = 1
@@ -112,13 +106,13 @@ func axString(el uintptr, name string) string {
 	return s
 }
 
-// AXWindowAt returns the window containing the screen point, with its
+// AppWindowAt returns the window containing the screen point, with its
 // owner pid. The caller must release the ref. ok is false when the point
 // is over no window (the desktop background still answers Finder's
 // desktop window; that one is not movable and callers reject it).
-func AXWindowAt(x, y float64) (w AXWindowRef, pid int, ok bool) {
+func AppWindowAt(x, y float64) (w AppWindow, pid int, ok bool) {
 	if loadAX() != nil {
-		return AXWindowRef{}, 0, false
+		return AppWindow{}, 0, false
 	}
 	var found uintptr
 	var foundPID int32
@@ -151,13 +145,13 @@ func AXWindowAt(x, y float64) (w AXWindowRef, pid int, ok bool) {
 		}
 	})
 	if found == 0 {
-		return AXWindowRef{}, 0, false
+		return AppWindow{}, 0, false
 	}
-	return AXWindowRef{el: found}, int(foundPID), true
+	return AppWindow{el: found}, int(foundPID), true
 }
 
 // Release releases the element reference.
-func (w AXWindowRef) Release() {
+func (w AppWindow) Release() {
 	if w.el == 0 || loadAX() != nil {
 		return
 	}
@@ -165,11 +159,11 @@ func (w AXWindowRef) Release() {
 }
 
 // Frame reads the window's position and size.
-func (w AXWindowRef) Frame() (AXRect, bool) {
+func (w AppWindow) Frame() (Rect, bool) {
 	if w.el == 0 || loadAX() != nil {
-		return AXRect{}, false
+		return Rect{}, false
 	}
-	var r AXRect
+	var r Rect
 	var okP, okS bool
 	withPool(func() {
 		var pv, sv uintptr
@@ -191,7 +185,7 @@ func (w AXWindowRef) Frame() (AXRect, bool) {
 
 // Settable reports whether the window's position (move) and size (resize)
 // can be set. A movable window answers true for position.
-func (w AXWindowRef) Settable() (move, resize bool) {
+func (w AppWindow) Settable() (move, resize bool) {
 	if w.el == 0 || loadAX() != nil {
 		return false, false
 	}
@@ -213,9 +207,9 @@ func axAttributeSettable(el uintptr, name string, out *byte) int32 {
 
 // MoveResize sets the window's position, then its size when resize is
 // true. Position first: a window resized at its old origin may push the
-// title bar under the menu bar before the move lands. ErrAXResize means
+// title bar under the menu bar before the move lands. ErrAppWindowResize means
 // the move may already have been applied.
-func (w AXWindowRef) MoveResize(r AXRect, resize bool) error {
+func (w AppWindow) MoveResize(r Rect, resize bool) error {
 	if w.el == 0 || loadAX() != nil {
 		return errors.New("mac: accessibility window unavailable")
 	}
@@ -243,7 +237,7 @@ func (w AXWindowRef) MoveResize(r AXRect, resize bool) error {
 		return fmt.Errorf("mac: setting the window position failed (%d)", moveErr)
 	}
 	if sizeErr != 0 {
-		return ErrAXResize
+		return ErrAppWindowResize
 	}
 	return nil
 }

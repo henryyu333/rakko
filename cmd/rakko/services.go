@@ -34,7 +34,7 @@ func (a *shelf) takeServiceOwnership() {
 // startup notice, not fatal: the shelf still works through drag, paste and
 // the clipboard module.
 func (a *shelf) installServices() {
-	err := platform.InstallServiceProvider(func(paths []string, text string) {
+	err := platform.InstallAddToRakko(func(paths []string, text string) {
 		mygo.RunOnMain(func() { a.serviceReceive(paths, text) })
 	})
 	if err != nil {

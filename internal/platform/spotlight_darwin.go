@@ -24,8 +24,8 @@ import (
 	"github.com/ebitengine/purego/objc"
 )
 
-// SpotlightHit is one result of a Spotlight query.
-type SpotlightHit struct {
+// SearchHit is one result of a Spotlight query.
+type SearchHit struct {
 	Path     string
 	Name     string
 	App      bool
@@ -45,7 +45,7 @@ const (
 // wants reports whether a hit belongs to the scope's results. The sheet
 // shows the groups its scope names, so a hit of another kind would only
 // take a row from one that belongs.
-func (s SearchScope) wants(h SpotlightHit) bool {
+func (s SearchScope) wants(h SearchHit) bool {
 	switch s {
 	case ScopeApps:
 		return h.App
@@ -55,7 +55,7 @@ func (s SearchScope) wants(h SpotlightHit) bool {
 	return true
 }
 
-// SpotlightQueries builds the MDQuery expressions for term: one asks the
+// SearchQueries builds the MDQuery expressions for term: one asks the
 // name index (case- and diacritic-insensitive), the other the text
 // content index. They run side by side because the text index answers
 // much later — a name hit paints the sheet while the content hits are
@@ -69,7 +69,7 @@ func (s SearchScope) wants(h SpotlightHit) bool {
 // text index, and ScopeFiles keeps bundles out of its name query the same
 // way. The restriction is part of the expression because the index can
 // then stop at its match limit with rows the sheet keeps.
-func SpotlightQueries(term string, scope SearchScope) []string {
+func SearchQueries(term string, scope SearchScope) []string {
 	term = strings.TrimSpace(term)
 	if term == "" {
 		return nil
@@ -103,11 +103,11 @@ func spotlightEscape(term string) string {
 	return b.String()
 }
 
-// SpotlightPathWanted reports whether a hit belongs in the results: not a
+// SearchPathWanted reports whether a hit belongs in the results: not a
 // hidden file, not inside ~/Library, a cache, a package (.app, .bundle,
 // .framework) or the per-user temporary tree. Paths outside the home are
 // kept, including /Applications and /System/Applications.
-func SpotlightPathWanted(path string) bool {
+func SearchPathWanted(path string) bool {
 	if path == "" || !strings.HasPrefix(path, "/") {
 		return false
 	}
@@ -137,16 +137,16 @@ var spotHomeDir = sync.OnceValue(func() string {
 
 func spotHome() string { return spotHomeDir() }
 
-// WarmSpotlight primes MDQuery's connection to the index, so the first
+// WarmSearch primes MDQuery's connection to the index, so the first
 // search of a session answers as fast as the ones after it. The query
 // matches nothing and its results are discarded; it is safe to call more
 // than once. A warmup that outlives its budget is cancelled: the index can
 // be slow to start, and the user's first real query must not queue behind
 // it.
-func WarmSpotlight() {
+func WarmSearch() {
 	go func() {
 		done := make(chan struct{})
-		run := spotWarmStart("zzz-rakko-warmup-zzz", ScopeAll, 1, func([]SpotlightHit) {}, func() { close(done) })
+		run := spotWarmStart("zzz-rakko-warmup-zzz", ScopeAll, 1, func([]SearchHit) {}, func() { close(done) })
 		select {
 		case <-done:
 		case <-time.After(spotWarmTimeout):
@@ -157,13 +157,13 @@ func WarmSpotlight() {
 
 // spotWarmStart and spotWarmTimeout are seams for the warmup's test.
 var (
-	spotWarmStart   = StartSpotlight
+	spotWarmStart   = StartSearch
 	spotWarmTimeout = 2 * time.Second
 )
 
-// SpotlightRun is the queries one term runs. Cancel stops them; the
+// SearchRun is the queries one term runs. Cancel stops them; the
 // batches they would still deliver are dropped.
-type SpotlightRun struct {
+type SearchRun struct {
 	mu      sync.Mutex
 	qs      []uintptr
 	emitMu  sync.Mutex
@@ -172,7 +172,7 @@ type SpotlightRun struct {
 
 // Cancel stops every query of the run. Safe from any goroutine and more
 // than once.
-func (r *SpotlightRun) Cancel() {
+func (r *SearchRun) Cancel() {
 	if r == nil {
 		return
 	}
@@ -184,16 +184,16 @@ func (r *SpotlightRun) Cancel() {
 	r.mu.Unlock()
 }
 
-// StartSpotlight runs term against the Spotlight index, in scope. The name
+// StartSearch runs term against the Spotlight index, in scope. The name
 // and the text queries run side by side; emit receives each batch of new
 // hits on the query goroutines (never two at once), and done runs once both
 // have finished gathering (or immediately for an empty term). limit caps how
 // many hits each query collects. Only the scope's own kind of hit is
 // emitted, so a caller never filters what the index already narrowed. The
 // returned run is never nil, so a caller can always cancel it.
-func StartSpotlight(term string, scope SearchScope, limit int, emit func([]SpotlightHit), done func()) *SpotlightRun {
-	run := &SpotlightRun{}
-	exprs := SpotlightQueries(term, scope)
+func StartSearch(term string, scope SearchScope, limit int, emit func([]SearchHit), done func()) *SearchRun {
+	run := &SearchRun{}
+	exprs := SearchQueries(term, scope)
 	if len(exprs) == 0 {
 		if done != nil {
 			done()
@@ -223,7 +223,7 @@ func StartSpotlight(term string, scope SearchScope, limit int, emit func([]Spotl
 
 // query runs one expression to completion, emitting its batches as they
 // arrive. The run's emit lock keeps the two queries' batches apart.
-func (r *SpotlightRun) query(expr string, scope SearchScope, limit int, emit func([]SpotlightHit)) {
+func (r *SearchRun) query(expr string, scope SearchScope, limit int, emit func([]SearchHit)) {
 	// MDQuery is a CoreFoundation object with a run-loop ancestry: keep the
 	// goroutine on one thread for the query's whole life, even though the
 	// dispatch queue, not a run loop, delivers its results.
@@ -264,7 +264,7 @@ func (r *SpotlightRun) query(expr string, scope SearchScope, limit int, emit fun
 		return
 	}
 	seen := int64(0)
-	var pending []SpotlightHit
+	var pending []SearchHit
 	last := time.Now()
 	first := true
 	flush := func() bool {
@@ -348,12 +348,12 @@ const (
 // no usable path, lives where the results never show, or is another kind
 // than the scope's: the query already narrowed the index, and the sheet
 // keeps the same rule on what arrives.
-func spotHit(item uintptr, scope SearchScope) (SpotlightHit, bool) {
+func spotHit(item uintptr, scope SearchScope) (SearchHit, bool) {
 	path := spotAttrString(item, spotAttrPath())
-	if !SpotlightPathWanted(path) {
-		return SpotlightHit{}, false
+	if !SearchPathWanted(path) {
+		return SearchHit{}, false
 	}
-	hit := SpotlightHit{Path: path, Name: spotAttrString(item, spotAttrName())}
+	hit := SearchHit{Path: path, Name: spotAttrString(item, spotAttrName())}
 	if hit.Name == "" {
 		hit.Name = filepath.Base(path)
 	}
@@ -370,7 +370,7 @@ func spotHit(item uintptr, scope SearchScope) (SpotlightHit, bool) {
 	}
 	hit.LastUsed = spotAttrDate(item, spotAttrUsed())
 	if !scope.wants(hit) {
-		return SpotlightHit{}, false
+		return SearchHit{}, false
 	}
 	return hit, true
 }

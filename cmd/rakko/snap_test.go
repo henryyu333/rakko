@@ -16,23 +16,23 @@ import (
 
 // fakeSnapWindow is a stand-in for the AX window a session follows.
 type fakeSnapWindow struct {
-	rect     platform.AXRect
+	rect     platform.Rect
 	move     bool
 	resize   bool
 	released bool
-	moves    []platform.AXRect
+	moves    []platform.Rect
 	resizes  []bool
 	err      error
 	// tiled is a frame the window server applies right after the first
 	// move, standing in for its own drag-time tiling.
-	tiled *platform.AXRect
+	tiled *platform.Rect
 }
 
 func (f *fakeSnapWindow) Valid() bool                    { return !f.released }
-func (f *fakeSnapWindow) Frame() (platform.AXRect, bool) { return f.rect, !f.released }
+func (f *fakeSnapWindow) Frame() (platform.Rect, bool) { return f.rect, !f.released }
 func (f *fakeSnapWindow) Settable() (bool, bool)         { return f.move, f.resize }
 func (f *fakeSnapWindow) Release()                       { f.released = true }
-func (f *fakeSnapWindow) MoveResize(r platform.AXRect, resize bool) error {
+func (f *fakeSnapWindow) MoveResize(r platform.Rect, resize bool) error {
 	f.moves = append(f.moves, r)
 	f.resizes = append(f.resizes, resize)
 	if f.err == nil && !f.released {
@@ -80,7 +80,7 @@ func installSnapSeams(t *testing.T, s *snapSeams) {
 	})
 	accessibilityProbe = func() bool { return s.trusted }
 	snapOwnPID = func() int { return 999 }
-	snapOwnWindow = func(*shelf, platform.AXRect) bool { return s.own }
+	snapOwnWindow = func(*shelf, platform.Rect) bool { return s.own }
 	snapInvalidate = func(a *shelf) {
 		if s.repaints != nil {
 			*s.repaints = *s.repaints + 1
@@ -249,7 +249,7 @@ func TestSnapIsWindowDrag(t *testing.T) {
 
 func TestSnapSessionArrangesAndCloses(t *testing.T) {
 	a := snapTestShelf()
-	f := &fakeSnapWindow{rect: platform.AXRect{X: 700, Y: 300, Width: 500, Height: 400}, move: true, resize: true}
+	f := &fakeSnapWindow{rect: platform.Rect{X: 700, Y: 300, Width: 500, Height: 400}, move: true, resize: true}
 	s := &snapSeams{fake: f, pid: 4242, trusted: true, down: true,
 		work: mygo.Rectangle{X: 0, Y: 25, Width: 1470, Height: 750}}
 	installSnapSeams(t, s)
@@ -290,7 +290,7 @@ func TestSnapSessionArrangesAndCloses(t *testing.T) {
 	// Release: the window is arranged and the panel folds away.
 	s.down = false
 	a.snapTick(time.Now(), mygo.Point{X: 576, Y: 63}, false)
-	if len(f.moves) != 1 || f.moves[0] != (platform.AXRect{X: 0, Y: 25, Width: 735, Height: 750}) {
+	if len(f.moves) != 1 || f.moves[0] != (platform.Rect{X: 0, Y: 25, Width: 735, Height: 750}) {
 		t.Fatalf("window moves = %+v", f.moves)
 	}
 	if !f.resizes[0] {
@@ -310,7 +310,7 @@ func TestSnapSessionArrangesAndCloses(t *testing.T) {
 
 func TestSnapOnlyMovesUnresizableWindow(t *testing.T) {
 	a := snapTestShelf()
-	f := &fakeSnapWindow{rect: platform.AXRect{X: 700, Y: 300, Width: 500, Height: 400}, move: true, resize: false}
+	f := &fakeSnapWindow{rect: platform.Rect{X: 700, Y: 300, Width: 500, Height: 400}, move: true, resize: false}
 	s := &snapSeams{fake: f, pid: 4242, trusted: true, down: true,
 		work: mygo.Rectangle{X: 0, Y: 25, Width: 1470, Height: 750}}
 	installSnapSeams(t, s)
@@ -327,7 +327,7 @@ func TestSnapOnlyMovesUnresizableWindow(t *testing.T) {
 	if len(f.resizes) != 1 || f.resizes[0] {
 		t.Fatalf("resize flags = %v, want one move-only call", f.resizes)
 	}
-	want := platform.AXRect{X: 0, Y: 25, Width: 735, Height: 750}
+	want := platform.Rect{X: 0, Y: 25, Width: 735, Height: 750}
 	if len(f.moves) != 1 || f.moves[0] != want {
 		t.Fatalf("window moves = %+v, want %+v", f.moves, want)
 	}
@@ -342,7 +342,7 @@ func TestSnapOnlyMovesUnresizableWindow(t *testing.T) {
 // to sit over where the panel would have been.
 func TestSnapReleaseNeedsAnOpenPanel(t *testing.T) {
 	a := snapTestShelf()
-	f := &fakeSnapWindow{rect: platform.AXRect{X: 700, Y: 300, Width: 500, Height: 400}, move: true, resize: true}
+	f := &fakeSnapWindow{rect: platform.Rect{X: 700, Y: 300, Width: 500, Height: 400}, move: true, resize: true}
 	s := &snapSeams{fake: f, pid: 4242, trusted: true, down: true,
 		work: mygo.Rectangle{X: 0, Y: 25, Width: 1470, Height: 750}}
 	installSnapSeams(t, s)
@@ -372,7 +372,7 @@ func TestSnapReleaseNeedsAnOpenPanel(t *testing.T) {
 
 func TestSnapHoverInvalidatesOnChange(t *testing.T) {
 	a := snapTestShelf()
-	f := &fakeSnapWindow{rect: platform.AXRect{X: 700, Y: 300, Width: 500, Height: 400}, move: true, resize: true}
+	f := &fakeSnapWindow{rect: platform.Rect{X: 700, Y: 300, Width: 500, Height: 400}, move: true, resize: true}
 	repaints := 0
 	s := &snapSeams{fake: f, pid: 4242, trusted: true, down: true, repaints: &repaints,
 		work: mygo.Rectangle{X: 0, Y: 25, Width: 1470, Height: 750}}
@@ -446,7 +446,7 @@ func TestSnapFailureNoticeShowsOnIsland(t *testing.T) {
 	a.notchX, a.notchY, a.notchW, a.notchH = 600, 0, 180, 32
 	a.x, a.y = 410, 0
 	a.visible, a.level = true, 1
-	f := &fakeSnapWindow{rect: platform.AXRect{X: 700, Y: 300, Width: 500, Height: 400}, move: true, resize: false}
+	f := &fakeSnapWindow{rect: platform.Rect{X: 700, Y: 300, Width: 500, Height: 400}, move: true, resize: false}
 	s := &snapSeams{fake: f, pid: 4242, trusted: true, down: true,
 		work: mygo.Rectangle{X: 0, Y: 25, Width: 1470, Height: 750}}
 	installSnapSeams(t, s)
@@ -478,8 +478,8 @@ func TestSnapFailureNoticeShowsOnIsland(t *testing.T) {
 // settled and sets its target a second time.
 func TestSnapReappliesAFrameTheWindowServerChanged(t *testing.T) {
 	a := snapTestShelf()
-	tiled := platform.AXRect{X: 0, Y: 25, Width: 490, Height: 750}
-	f := &fakeSnapWindow{rect: platform.AXRect{X: 700, Y: 300, Width: 500, Height: 400},
+	tiled := platform.Rect{X: 0, Y: 25, Width: 490, Height: 750}
+	f := &fakeSnapWindow{rect: platform.Rect{X: 700, Y: 300, Width: 500, Height: 400},
 		move: true, resize: true, tiled: &tiled}
 	s := &snapSeams{fake: f, pid: 4242, trusted: true, down: true,
 		work: mygo.Rectangle{X: 0, Y: 25, Width: 1470, Height: 750}}
@@ -504,7 +504,7 @@ func TestSnapReappliesAFrameTheWindowServerChanged(t *testing.T) {
 	// frame first, then puts the target back once the server is still.
 	a.snapTick(time.Now().Add(200*time.Millisecond), mygo.Point{X: 576, Y: 63}, false)
 	a.snapTick(time.Now().Add(400*time.Millisecond), mygo.Point{X: 576, Y: 63}, false)
-	if len(f.moves) != 2 || f.moves[1] != (platform.AXRect{X: 0, Y: 25, Width: 735, Height: 750}) {
+	if len(f.moves) != 2 || f.moves[1] != (platform.Rect{X: 0, Y: 25, Width: 735, Height: 750}) {
 		t.Fatalf("verification moves = %+v, want a second move to the left half", f.moves)
 	}
 	if f.rect.Width != 735 {
@@ -541,8 +541,8 @@ func snapAwaitVerificationAt(t *testing.T, a *shelf, f *fakeSnapWindow, from tim
 func snapPendingConfirm(t *testing.T) (*shelf, *fakeSnapWindow, *snapSeams) {
 	t.Helper()
 	a := snapTestShelf()
-	tiled := platform.AXRect{X: 0, Y: 25, Width: 490, Height: 750}
-	f := &fakeSnapWindow{rect: platform.AXRect{X: 700, Y: 300, Width: 500, Height: 400},
+	tiled := platform.Rect{X: 0, Y: 25, Width: 490, Height: 750}
+	f := &fakeSnapWindow{rect: platform.Rect{X: 700, Y: 300, Width: 500, Height: 400},
 		move: true, resize: true, tiled: &tiled}
 	s := &snapSeams{fake: f, pid: 4242, trusted: true, down: true,
 		work: mygo.Rectangle{X: 0, Y: 25, Width: 1470, Height: 750}}
@@ -602,7 +602,7 @@ func TestSnapSettingOffCancelsPendingVerification(t *testing.T) {
 
 func TestSnapLeavingTriggerCancels(t *testing.T) {
 	a := snapTestShelf()
-	f := &fakeSnapWindow{rect: platform.AXRect{X: 700, Y: 300, Width: 500, Height: 400}, move: true, resize: true}
+	f := &fakeSnapWindow{rect: platform.Rect{X: 700, Y: 300, Width: 500, Height: 400}, move: true, resize: true}
 	s := &snapSeams{fake: f, pid: 4242, trusted: true, down: true,
 		work: mygo.Rectangle{X: 0, Y: 25, Width: 1470, Height: 750}}
 	installSnapSeams(t, s)
@@ -628,7 +628,7 @@ func TestSnapLeavingTriggerCancels(t *testing.T) {
 
 func TestSnapFileDragNeverOpensPanel(t *testing.T) {
 	a := snapTestShelf()
-	f := &fakeSnapWindow{rect: platform.AXRect{X: 700, Y: 300, Width: 500, Height: 400}, move: true, resize: true}
+	f := &fakeSnapWindow{rect: platform.Rect{X: 700, Y: 300, Width: 500, Height: 400}, move: true, resize: true}
 	s := &snapSeams{fake: f, pid: 4242, trusted: true, down: true,
 		work: mygo.Rectangle{X: 0, Y: 25, Width: 1470, Height: 750}}
 	installSnapSeams(t, s)
@@ -648,7 +648,7 @@ func TestSnapFileDragNeverOpensPanel(t *testing.T) {
 // The old code cancelled the session on the pasteboard bit alone.
 func TestSnapMovingWindowOutranksAFileDragPasteboard(t *testing.T) {
 	a := snapTestShelf()
-	f := &fakeSnapWindow{rect: platform.AXRect{X: 700, Y: 300, Width: 500, Height: 400}, move: true, resize: true}
+	f := &fakeSnapWindow{rect: platform.Rect{X: 700, Y: 300, Width: 500, Height: 400}, move: true, resize: true}
 	s := &snapSeams{fake: f, pid: 4242, trusted: true, down: true,
 		work: mygo.Rectangle{X: 0, Y: 25, Width: 1470, Height: 750}}
 	installSnapSeams(t, s)
@@ -664,7 +664,7 @@ func TestSnapMovingWindowOutranksAFileDragPasteboard(t *testing.T) {
 
 func TestSnapOwnWindowAndNoPermission(t *testing.T) {
 	a := snapTestShelf()
-	f := &fakeSnapWindow{rect: platform.AXRect{X: 700, Y: 300, Width: 500, Height: 400}, move: true, resize: true}
+	f := &fakeSnapWindow{rect: platform.Rect{X: 700, Y: 300, Width: 500, Height: 400}, move: true, resize: true}
 	s := &snapSeams{fake: f, pid: 999, trusted: true, down: true, own: true,
 		work: mygo.Rectangle{X: 0, Y: 25, Width: 1470, Height: 750}}
 	installSnapSeams(t, s)
@@ -679,7 +679,7 @@ func TestSnapOwnWindowAndNoPermission(t *testing.T) {
 	// A normal window of the same process that is not one of ShelfU's own
 	// interface windows is allowed (the smoke drag's case).
 	s.own = false
-	f = &fakeSnapWindow{rect: platform.AXRect{X: 700, Y: 300, Width: 500, Height: 400}, move: true, resize: true}
+	f = &fakeSnapWindow{rect: platform.Rect{X: 700, Y: 300, Width: 500, Height: 400}, move: true, resize: true}
 	s.fake = f
 	a.snapPress(false, 0, mygo.Point{X: 700, Y: 300})
 	if !a.snap.armed || a.snap.win == nil {

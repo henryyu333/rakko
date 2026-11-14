@@ -300,16 +300,16 @@ func waitWindow(t *testing.T, pid int, d time.Duration) (windowInfo, bool) {
 		found := false
 		onMain(func() {
 			for _, w := range platform.WindowsOfPID(pid) {
-				if w.Bounds.Size.Width < 430 || w.Bounds.Size.Height < 240 {
+				if w.Bounds.Width < 430 || w.Bounds.Height < 240 {
 					continue
 				}
-				area := w.Bounds.Size.Width * w.Bounds.Size.Height
+				area := w.Bounds.Width * w.Bounds.Height
 				if found && area <= float64(best.frame.Width*best.frame.Height) {
 					continue
 				}
 				best = windowInfo{number: w.Number, frame: mygo.Rectangle{
-					X: int(w.Bounds.Origin.X), Y: int(w.Bounds.Origin.Y),
-					Width: int(w.Bounds.Size.Width), Height: int(w.Bounds.Size.Height),
+					X: int(w.Bounds.X), Y: int(w.Bounds.Y),
+					Width: int(w.Bounds.Width), Height: int(w.Bounds.Height),
 				}}
 				found = true
 			}

@@ -27,7 +27,7 @@ func TestSmokePasteIntoReceiver(t *testing.T) {
 	if os.Getenv("RAKKO_BASKET_SMOKE") != "1" {
 		t.Skip("set RAKKO_BASKET_SMOKE=1 to run the native paste acceptance")
 	}
-	if !platform.AccessibilityTrusted() {
+	if !platform.CanSendInput() {
 		t.Skip("this process is not trusted for Accessibility: the real ⌘V chain cannot be exercised here")
 	}
 	a := redesignShelf(t)

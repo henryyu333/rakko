@@ -122,7 +122,7 @@ func TestScreenCapturePreflightHasNoSideEffects(t *testing.T) {
 		windowTitlesProveGrant = oldTitles
 	})
 
-	if ScreenCapturePreflight() {
+	if CanCaptureScreen() {
 		t.Fatal("untrusted stub reported trusted")
 	}
 	if resets != 0 || opens != 0 || requests != 0 || probes != 0 {

@@ -158,7 +158,7 @@ func (a *shelf) computeHomeHits() []homeHit {
 		}
 	}
 	var apps, folders, files []homeHit
-	if items := a.homeSpotItems(); len(items) > 0 {
+	if items := a.homeSearchItems(); len(items) > 0 {
 		ag, fg, fh := spotGroupHits(q, items, shown)
 		if scope != platform.ScopeFiles {
 			label := l.HomeGroupApps()

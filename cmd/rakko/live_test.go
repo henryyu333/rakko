@@ -615,21 +615,6 @@ func TestLiveSettingsDefaultOnForOldFiles(t *testing.T) {
 	}
 }
 
-func TestLiveHeadsetGlyph(t *testing.T) {
-	for name, want := range map[string]string{
-		"AirPods Pro":     "airpodspro",
-		"AirPods Pro 3":   "airpodspro3",
-		"AirPods Max":     "airpodsmax",
-		"AirPods":         "airpods",
-		"Beats Studio":    "beats.headphones",
-		"Sony WH-1000XM5": "headphones",
-	} {
-		if got := headsetSymbol(name); got != want {
-			t.Errorf("%s: symbol %q, want %q", name, got, want)
-		}
-	}
-}
-
 // Two Bluetooth outputs appearing in one poll each keep their own battery
 // answer: the lookup is judged against that device's connection, not a
 // single module-wide generation.

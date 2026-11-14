@@ -293,14 +293,12 @@ func (m *clipboardModule) tick(now time.Time) {
 func (m *clipboardModule) record(now time.Time, source string) {
 	a := m.host
 	types := m.board.types()
-	if len(types) == 0 {
+	// 每次变化只收一条：按来源声明的首选表示取文字或图片，避免双条目。
+	switch clipCapture(types, source, a.settings.ExcludedApps) {
+	case clipNotReady:
 		// No declared type yet: the content is still on its way, and reading
 		// it — above all the image bytes — would only be wasted work.
 		m.await(now, source)
-		return
-	}
-	// 每次变化只收一条：按来源声明的首选表示取文字或图片，避免双条目。
-	switch clipCapture(types, source, a.settings.ExcludedApps) {
 	case clipText:
 		text := m.board.text()
 		if text == "" {

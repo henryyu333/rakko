@@ -41,19 +41,19 @@ func TestFullDiskAccessProbeReadsTheTCCDatabase(t *testing.T) {
 
 	// An openable database is the grant.
 	_, _ = stubFullDisk(t, readable)
-	if !FullDiskAccessGranted() {
+	if !CanReadDownloads() {
 		t.Fatal("an openable TCC database must read as granted")
 	}
 
 	// A missing one is not, and the probe reports it instead of failing.
 	_, _ = stubFullDisk(t, missing)
-	if FullDiskAccessGranted() {
+	if CanReadDownloads() {
 		t.Fatal("a missing TCC database must read as not granted")
 	}
 
 	// The list is tried in order: the first miss does not stop the probe.
 	_, _ = stubFullDisk(t, missing, readable)
-	if !FullDiskAccessGranted() {
+	if !CanReadDownloads() {
 		t.Fatal("a later TCC database was not tried")
 	}
 
@@ -64,7 +64,7 @@ func TestFullDiskAccessProbeReadsTheTCCDatabase(t *testing.T) {
 		return nil, &os.PathError{Op: "open", Path: "denied", Err: os.ErrPermission}
 	}
 	t.Cleanup(func() { fullDiskAccessOpenFile = oldOpen })
-	if FullDiskAccessGranted() {
+	if CanReadDownloads() {
 		t.Fatal("a denied TCC database must read as not granted")
 	}
 }

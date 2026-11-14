@@ -260,7 +260,7 @@ func (a *shelf) ready(show bool) {
 	a.newNotchWindow()
 	// Pay the index's per-process setup now, so the first search of the
 	// session is as fast as the ones after it.
-	a.warmSpotlight()
+	a.warmSearch()
 	a.stopMouseObservation = platform.ObserveMouseDown(a.win.NativeHandle(), func(inside bool, button int) {
 		a.mouseDown(inside, button, mygo.Screen.CursorScreenPoint())
 	})
@@ -451,7 +451,7 @@ func (a *shelf) newNotchWindow() {
 	a.watchPointer()
 	a.win.OnMove(a.windowGeometryChanged)
 	a.win.OnResize(a.windowGeometryChanged)
-	log.Printf("window collectionBehavior=0x%x", platform.CollectionBehavior(a.win.NativeHandle()))
+	logWindowDiagnostics(a.winH)
 }
 
 // trayMenu is rebuilt on every right-click so it reflects the current

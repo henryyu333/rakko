@@ -25,10 +25,10 @@ import (
 // 粘贴路径的接缝：辅助功能信任、前台应用、按键，以及等待焦点的时间。测试
 // 全部替换掉；生产走平台实现。
 var (
-	pasteTrusted   = platform.AccessibilityTrusted
+	pasteTrusted   = platform.CanSendInput
 	pasteFrontmost = platform.FrontmostPID
 	pasteActivate  = platform.ActivateApp
-	pasteSend      = platform.PostCommandV
+	pasteSend      = platform.SendPasteShortcut
 	// pasteFocusWait 是收起面板后等待目标应用拿回键盘的上限，
 	// pastePollInterval 是检查间隔。
 	pasteFocusWait    = 250 * time.Millisecond

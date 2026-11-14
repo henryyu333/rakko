@@ -72,10 +72,10 @@ func TestSearchOpenFocusesWindow(t *testing.T) {
 	// search field has the keyboard, and the rect the candidate panel
 	// anchors to must be a real caret inside the window — if either is
 	// wrong, candidates are drawn behind the opaque panel or off-screen.
-	level := 0
-	onMain(func() { level = platform.WindowLevel(a.win.NativeHandle()) })
-	if level != platform.SearchKeyboardLevel {
-		t.Fatalf("focus-mode window level = %d, want %d (below the IM band at 20)", level, platform.SearchKeyboardLevel)
+	var level platform.Layer
+	onMain(func() { level = platform.WindowLayer(a.win.NativeHandle()) })
+	if level != platform.LayerSearchKeyboard {
+		t.Fatalf("focus-mode window level = %d, want %d (below the IM band at 20)", level, platform.LayerSearchKeyboard)
 	}
 	t.Logf("firstResponder=%s windowLevel=%d (IM candidate band=20, menubar=24, status=25)",
 		platform.FirstResponderClass(a.win.NativeHandle()), level)
@@ -137,10 +137,10 @@ func TestSearchOpenFocusesWindow(t *testing.T) {
 	if !restored {
 		t.Fatalf("the previous app %d was not re-activated on hide", prev)
 	}
-	restoredLevel := 0
-	onMain(func() { restoredLevel = platform.WindowLevel(a.win.NativeHandle()) })
-	if restoredLevel != platform.StatusWindowLevel {
-		t.Fatalf("window level after hide = %d, want %d — mouse flows keep the status level", restoredLevel, platform.StatusWindowLevel)
+	var restoredLevel platform.Layer
+	onMain(func() { restoredLevel = platform.WindowLayer(a.win.NativeHandle()) })
+	if restoredLevel != platform.LayerStatus {
+		t.Fatalf("window level after hide = %d, want %d — mouse flows keep the status level", restoredLevel, platform.LayerStatus)
 	}
 	t.Logf("focus restored to pid=%d", prev)
 }

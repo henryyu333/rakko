@@ -682,7 +682,7 @@ func (a *shelf) awakeHero(m *awakeModule, now time.Time, l locales.Messages) str
 	if rem < 0 {
 		rem = 0
 	}
-	return platform.FormatClock(rem.Seconds())
+	return formatClock(rem.Seconds())
 }
 
 // awakeFrac is the keep-awake ring's remaining share.
@@ -1203,7 +1203,7 @@ func (a *shelf) toolPlayingTallBars(c *ui.Context, st platform.NowPlayingState, 
 		}
 		// The labels are as wide as their own text at this font: a fixed
 		// width would cut -10:00 and 1:02:03.
-		nowLabel, remLabel := platform.FormatClock(pos), "-"+platform.FormatClock(rem)
+		nowLabel, remLabel := formatClock(pos), "-"+formatClock(rem)
 		nw, rw := clockLabelW(c, nowLabel, 9.5), clockLabelW(c, remLabel, 9.5)
 		panelLabel(c, nil, nowLabel, 9.5, 500).TextColor(ink3).Width(nw)
 		a.seekRail(c, "tc-np-progress", frac, dur, 12, 4).Grow(1).MinWidth(0)

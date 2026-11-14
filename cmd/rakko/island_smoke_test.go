@@ -56,7 +56,7 @@ func newIslandArena(t *testing.T, r mygo.Rectangle) {
 			}),
 		})
 		platform.ConfigurePinWindow(w.NativeHandle())
-		platform.SetWindowLevel(w.NativeHandle(), 2)
+		platform.SetWindowLayer(w.NativeHandle(), platform.LayerFloating)
 		platform.SetWindowFrame(w.NativeHandle(), r.X, r.Y, r.Width, r.Height)
 		w.ShowInactive()
 		t.Cleanup(func() { onMain(w.Destroy) })

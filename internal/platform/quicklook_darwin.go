@@ -14,7 +14,7 @@ import (
 
 // qlState backs ShelfQLPreviewSource, the QLPreviewPanel data source
 // registered at first use. The panel and this state live on the main
-// thread; the panel keeps no copy of the paths, so a second QuickLook call
+// thread; the panel keeps no copy of the paths, so a second Preview call
 // replaces the items a visible panel shows (the contract's "replaces any
 // items already shown").
 var qlState struct {
@@ -154,11 +154,11 @@ func qlSetup() error {
 	return qlSetupErr
 }
 
-// QuickLook shows the system Quick Look panel for the given absolute file
+// Preview shows the system Quick Look panel for the given absolute file
 // paths, starting at index 0; replaces any items already shown. Missing
 // files are skipped; a call left with no previews is an error.
 // Main thread only.
-func QuickLook(paths []string) error {
+func Preview(paths []string) error {
 	if err := Init(); err != nil {
 		return err
 	}
@@ -201,11 +201,11 @@ func QuickLook(paths []string) error {
 	return lookErr
 }
 
-// QuickLookVisible reports whether ShelfU's Quick Look panel is open.
+// PreviewVisible reports whether ShelfU's Quick Look panel is open.
 // Main thread only. Off the main thread (headless tests) it reports false
 // without instantiating the panel, which AppKit allows only on the main
 // thread.
-func QuickLookVisible() bool {
+func PreviewVisible() bool {
 	if !OnMainThread() {
 		return false
 	}
@@ -217,9 +217,9 @@ func QuickLookVisible() bool {
 	return visible
 }
 
-// CloseQuickLook closes the Quick Look panel; no-op when closed.
+// ClosePreview closes the Quick Look panel; no-op when closed.
 // Main thread only.
-func CloseQuickLook() {
+func ClosePreview() {
 	withPool(func() {
 		if panel := qlSharedPanel(); panel != 0 {
 			send(panel, "orderOut:", 0)

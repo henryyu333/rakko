@@ -47,13 +47,13 @@ func loadPaste() error {
 	return pasteLoadErr
 }
 
-// PostCommandV sends ⌘V to the process pid — to that process, not to the
+// SendPasteShortcut sends ⌘V to the process pid — to that process, not to the
 // session, so the keystroke cannot land in whichever app happens to be
 // frontmost. macOS delivers a synthetic keystroke only from a process trusted
-// for Accessibility, so a caller must check AccessibilityTrusted first and
+// for Accessibility, so a caller must check CanSendInput first and
 // report a copy, never a paste, when it is false. It reports whether the
 // keystroke was posted. Safe on any goroutine; it reads no AppKit state.
-func PostCommandV(pid int) bool {
+func SendPasteShortcut(pid int) bool {
 	if pid <= 0 || loadPaste() != nil {
 		return false
 	}

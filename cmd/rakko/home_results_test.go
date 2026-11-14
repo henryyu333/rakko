@@ -27,9 +27,9 @@ func resultsShelf() *shelf {
 	}}
 	a := &shelf{store: s, level: 1, visible: true, homeQuery: "find",
 		appNames: map[string]string{"com.example.Editor": "Editor"}}
-	a.homeSpot.query = "find"
-	a.homeSpot.done = true
-	a.homeSpot.items = []platform.SpotlightHit{
+	a.homeSearch.query = "find"
+	a.homeSearch.done = true
+	a.homeSearch.items = []platform.SearchHit{
 		{Path: "/Applications/Find.app", Name: "Find", App: true},
 		{Path: "/Users/x/Documents/find", Name: "find", Folder: true},
 	}

@@ -82,7 +82,7 @@ func TestCollapsedMarginsReachUnderlyingWindow(t *testing.T) {
 			h := receiver.NativeHandle()
 			platform.SetWindowFrame(h, point.X-10, point.Y-10, 40, 40)
 			receiver.ShowInactive()
-			platform.SetWindowLevel(h, platform.StatusWindowLevel-1)
+			platform.SetWindowLayer(h, platform.LayerBelowStatus)
 			receiverNum = platform.WindowNumber(h)
 			stop = platform.ObserveMouseDown(h, func(inside bool, button int) {
 				if inside {
@@ -101,7 +101,7 @@ func TestCollapsedMarginsReachUnderlyingWindow(t *testing.T) {
 		if !ignoring || hit != receiverNum {
 			t.Fatalf("%s: margin ignores=%v native target=%d want receiver=%d", state, ignoring, hit, receiverNum)
 		}
-		if platform.AccessibilityTrusted() {
+		if platform.CanSendInput() {
 			// Another copy of ShelfU (the installed one) opens its own
 			// notch panel on hover and can sit above the receiver between
 			// the check above and the click: this pass-through test can

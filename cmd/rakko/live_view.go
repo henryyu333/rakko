@@ -17,7 +17,6 @@ import (
 	"image/png"
 	"math"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -182,33 +181,21 @@ func (a *shelf) downloadWings(c *ui.Context, shellW, shellH, k float32, dl downl
 	})
 }
 
-// headsetSymbol selects the closest SF Symbol available for the device.
-func headsetSymbol(label string) string {
-	name := strings.ToLower(label)
-	switch {
-	case strings.Contains(name, "airpods") && strings.Contains(name, "max"):
-		return "airpodsmax"
-	case strings.Contains(name, "airpods") && strings.Contains(name, "pro") && strings.Contains(name, "3"):
-		return "airpodspro3"
-	case strings.Contains(name, "airpods") && strings.Contains(name, "pro"):
-		return "airpodspro"
-	case strings.Contains(name, "airpods"):
-		return "airpods"
-	case strings.Contains(name, "beats"):
-		return "beats.headphones"
-	default:
-		return "headphones"
-	}
+// headphoneKey identifies one cached icon: the device and the part drawn.
+type headphoneKey struct {
+	model string
+	part  platform.HeadphonePart
 }
 
-var headsetSymbols = map[string]*ui.Bitmap{}
+var headphoneIcons = map[headphoneKey]*ui.Bitmap{}
 
-// headsetBitmap caches a white template raster of one SF Symbol by name.
-func headsetBitmap(name string) *ui.Bitmap {
-	if b, ok := headsetSymbols[name]; ok {
+// headphoneBitmap caches a white template raster of the device's icon.
+func headphoneBitmap(model string, part platform.HeadphonePart) *ui.Bitmap {
+	key := headphoneKey{model, part}
+	if b, ok := headphoneIcons[key]; ok {
 		return b
 	}
-	data := platform.SystemSymbol(name, 24)
+	data := platform.HeadphoneIcon(model, part, 24)
 	var b *ui.Bitmap
 	if src, err := png.Decode(bytes.NewReader(data)); err == nil {
 		dst := image.NewNRGBA(src.Bounds())
@@ -220,19 +207,16 @@ func headsetBitmap(name string) *ui.Bitmap {
 		}
 		b = ui.NewBitmap(dst)
 	}
-	headsetSymbols[name] = b
+	headphoneIcons[key] = b
 	return b
 }
 
-// headsetGlyph draws the device's own symbol; the generic headphones is
-// the last resort when the model's symbol or AppKit is unavailable.
+// headsetGlyph draws the device's own icon; the generic headphones is the
+// last resort when the model's icon or the window is unavailable.
 func (a *shelf) headsetGlyph(c *ui.Context, label string) {
 	var glyph *ui.Bitmap
 	if a.win != nil {
-		glyph = headsetBitmap(headsetSymbol(label))
-		if glyph == nil {
-			glyph = headsetBitmap("headphones")
-		}
+		glyph = headphoneBitmap(label, platform.HeadphoneWhole)
 	}
 	if glyph != nil {
 		ui.Image(c.Key("headset-symbol"), glyph).Size(18, 18).Fit(ui.Contain)
@@ -241,20 +225,17 @@ func (a *shelf) headsetGlyph(c *ui.Context, label string) {
 	}
 }
 
-// batterySymbol names the part glyph for the device model.
-func batterySymbol(model string, part batteryPart) string {
+// headphonePart maps the battery part onto the platform's part vocabulary.
+func headphonePart(part batteryPart) platform.HeadphonePart {
 	switch part {
 	case batteryLeft:
-		return "airpod.left"
+		return platform.HeadphoneLeft
 	case batteryRight:
-		return "airpod.right"
+		return platform.HeadphoneRight
 	case batteryCase:
-		if strings.Contains(strings.ToLower(model), "pro") {
-			return "airpodspro.chargingcase.wireless"
-		}
-		return "airpods.chargingcase"
+		return platform.HeadphoneCase
 	}
-	return headsetSymbol(model)
+	return platform.HeadphoneWhole
 }
 
 // batteryBadge is one part: its glyph inside a charge ring, the percentage
@@ -279,10 +260,7 @@ func (a *shelf) batteryBadge(c *ui.Context, model string, lv batteryLevel) {
 		ring.Children(func() {
 			var glyph *ui.Bitmap
 			if a.win != nil {
-				glyph = headsetBitmap(batterySymbol(model, lv.part))
-				if glyph == nil && lv.part == batteryCase {
-					glyph = headsetBitmap("airpods.chargingcase")
-				}
+				glyph = headphoneBitmap(model, headphonePart(lv.part))
 			}
 			if glyph != nil {
 				ui.Image(c.Key("part"), glyph).Size(11, 11).Fit(ui.Contain)
