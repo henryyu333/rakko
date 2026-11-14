@@ -468,7 +468,7 @@ func (a *shelf) setApprovalTool(tool agentnotify.Tool, on bool) {
 	var err error
 	if on {
 		a.agentFeature().start()
-		if exe, xerr := agentNotifyExe(); xerr == nil && agentnotify.StableExe(exe) {
+		if exe := agentStableExe(); exe != "" {
 			err = agentnotify.ConnectApprove(f.home, f.host.dataDir, exe, tool)
 		}
 	} else {
@@ -509,13 +509,7 @@ func (a *shelf) approvalApply(on bool) {
 		return
 	}
 	a.agentFeature().start()
-	exe, err := agentNotifyExe()
-	if err != nil {
-		exe = ""
-	}
-	if exe != "" && !agentnotify.StableExe(exe) {
-		exe = "" // a development build: nothing may be written
-	}
+	exe := agentStableExe()
 	failed := map[agentnotify.Tool]string{}
 	if exe != "" {
 		for _, tool := range f.detected() {
@@ -550,8 +544,7 @@ func (a *shelf) approvalStartEnabled() {
 
 // refresh recomputes the settings rows' states.
 func (f *approvalFeature) refresh() {
-	exe, _ := agentNotifyExe()
-	stable := exe != "" && agentnotify.StableExe(exe)
+	stable := agentStableExe() != ""
 	on := f.host.settings.Approval.Enabled
 	states := map[agentnotify.Tool]agentnotify.State{}
 	notes := map[agentnotify.Tool]string{}

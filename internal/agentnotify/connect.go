@@ -21,6 +21,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"rakko/internal/platform"
 )
 
 // State is what the settings row says about one tool.
@@ -42,13 +44,12 @@ const (
 // never waits on Rakko: it writes to a socket and exits.
 const hookTimeout = 5
 
-// StableExe reports whether exe is the binary of an installed app bundle.
-// A development build runs from a temporary directory; injecting its path
-// would leave the tools with a command that stops working at once, so only
-// a bundle is written into their configuration.
-func StableExe(exe string) bool {
-	return strings.Contains(exe, ".app/Contents/MacOS/")
-}
+// StableExePath reports whether exe is the binary of an installed app and
+// returns the canonical path to write into a tool's configuration. A
+// development build runs from a temporary directory or a checkout; injecting
+// its path would leave the tools with a command that stops working at once,
+// so only an installed app is written into their configuration.
+func StableExePath(exe string) (string, bool) { return platform.StableExePath(exe) }
 
 // marker identifies Rakko's own entries inside a hooks document.
 func marker(tool Tool) string { return "--agent-hook --tool " + string(tool) }

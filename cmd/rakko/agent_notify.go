@@ -41,6 +41,21 @@ var (
 // on but this build is not an installed app, so nothing was written.
 const agentNeedsAppNote = "needs-app"
 
+// agentStableExe is the path written into every tool's configuration: the
+// canonical path of this installed app, or empty when this build runs from a
+// development location (nothing may be written then).
+func agentStableExe() string {
+	exe, err := agentNotifyExe()
+	if err != nil {
+		return ""
+	}
+	path, ok := agentnotify.StableExePath(exe)
+	if !ok {
+		return ""
+	}
+	return path
+}
+
 // agentTask is one session's latest prompt and when it arrived.
 type agentTask struct {
 	tool agentnotify.Tool
@@ -344,13 +359,7 @@ func (a *shelf) agentApply(on bool) {
 	f.failed = map[agentnotify.Tool]string{}
 	f.mu.Unlock()
 	f.start()
-	exe, err := agentNotifyExe()
-	if err != nil {
-		exe = ""
-	}
-	if exe != "" && !agentnotify.StableExe(exe) {
-		exe = "" // a development build: nothing may be written
-	}
+	exe := agentStableExe()
 	failed := map[agentnotify.Tool]string{}
 	if exe != "" {
 		for _, tool := range agentnotify.Tools() {
@@ -395,14 +404,7 @@ func (a *shelf) agentApplyTool(tool agentnotify.Tool, on bool) {
 	var err error
 	if on {
 		f.start()
-		exe, xerr := agentNotifyExe()
-		if xerr != nil {
-			exe = ""
-		}
-		if exe != "" && !agentnotify.StableExe(exe) {
-			exe = "" // a development build: nothing may be written
-		}
-		if exe != "" {
+		if exe := agentStableExe(); exe != "" {
 			err = agentnotify.Connect(f.home, f.dir, exe, tool)
 		}
 	} else {
@@ -434,8 +436,7 @@ func (a *shelf) agentStartEnabled() {
 // switch off every row is simply 未注入 and none of the tools' files are
 // opened.
 func (f *agentNotifyFeature) refresh() {
-	exe, _ := agentNotifyExe()
-	stable := exe != "" && agentnotify.StableExe(exe)
+	stable := agentStableExe() != ""
 	states := map[agentnotify.Tool]agentnotify.State{}
 	notes := map[agentnotify.Tool]string{}
 	on := f.host.settings.AgentNotify.Enabled

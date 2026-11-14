@@ -19,7 +19,6 @@ import (
 	"io"
 	"net"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 )
@@ -81,8 +80,7 @@ type Decision struct {
 
 // Server accepts hook events and approval requests.
 type Server struct {
-	path    string
-	ln      net.Listener
+	t       *transport
 	handler func(Event)
 	ask     func(context.Context, Ask) Decision
 	done    chan struct{}
@@ -92,31 +90,29 @@ type Server struct {
 	answered map[string]time.Time
 }
 
+// transport is the platform's listening end: a unix socket on macOS, a
+// named pipe on Windows. authorize decides whether an accepted connection
+// may send a frame at all (it may read a handshake first); cleanup runs once
+// the listener is closed.
+type transport struct {
+	ln        net.Listener
+	authorize func(net.Conn) bool
+	cleanup   func()
+}
+
 // Listen starts the server in dataDir. handler runs on its own goroutine
 // for each accepted completion event and must not block. ask may block; it
 // runs on the request's own goroutine, and ctx is cancelled when the hook
 // hangs up.
 func Listen(dataDir string, handler func(Event), ask func(context.Context, Ask) Decision) (*Server, error) {
-	path := filepath.Join(dataDir, SocketName)
 	if err := os.MkdirAll(dataDir, 0o700); err != nil {
 		return nil, err
 	}
-	// A leftover socket from a crashed run would block Listen.
-	if fi, err := os.Lstat(path); err == nil {
-		if fi.Mode()&os.ModeSocket == 0 {
-			return nil, errors.New("agentnotify: " + path + " exists and is not a socket")
-		}
-		_ = os.Remove(path)
-	}
-	ln, err := net.Listen("unix", path)
+	t, err := openTransport(dataDir)
 	if err != nil {
 		return nil, err
 	}
-	if err := os.Chmod(path, 0o600); err != nil {
-		ln.Close()
-		return nil, err
-	}
-	s := &Server{path: path, ln: ln, handler: handler, ask: ask,
+	s := &Server{t: t, handler: handler, ask: ask,
 		done: make(chan struct{}), answered: map[string]time.Time{}}
 	go s.accept()
 	return s, nil
@@ -129,14 +125,16 @@ func (s *Server) Close() {
 	}
 	s.once.Do(func() {
 		close(s.done)
-		s.ln.Close()
-		_ = os.Remove(s.path)
+		s.t.ln.Close()
+		if s.t.cleanup != nil {
+			s.t.cleanup()
+		}
 	})
 }
 
 func (s *Server) accept() {
 	for {
-		conn, err := s.ln.Accept()
+		conn, err := s.t.ln.Accept()
 		if err != nil {
 			select {
 			case <-s.done:
@@ -151,9 +149,9 @@ func (s *Server) accept() {
 			time.Sleep(50 * time.Millisecond)
 			continue
 		}
-		// One user only: a connection from another account is closed
-		// without reading a byte.
-		if uid, err := peerUID(conn); err != nil || uid != uint32(os.Getuid()) {
+		// One user only: a connection that cannot prove it belongs to this
+		// account is closed without reading a byte of payload.
+		if s.t.authorize != nil && !s.t.authorize(conn) {
 			conn.Close()
 			continue
 		}

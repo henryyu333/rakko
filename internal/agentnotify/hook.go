@@ -12,7 +12,6 @@ package agentnotify
 import (
 	"encoding/json"
 	"io"
-	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -120,7 +119,7 @@ func forward(tool Tool, dataDir, event string, stdin io.Reader) {
 		}
 		dataDir = filepath.Join(dir, "Rakko")
 	}
-	send(filepath.Join(dataDir, SocketName), req)
+	send(dataDir, req)
 }
 
 // buildRequest turns a tool's hook payload into the wire event.
@@ -179,8 +178,8 @@ func first(values []string) string {
 
 // send writes one line to the socket and closes. It never blocks on a
 // missing app: the dial's own timeout ends the attempt.
-func send(path string, req Event) {
-	conn, err := net.DialTimeout("unix", path, forwardDial)
+func send(dataDir string, req Event) {
+	conn, err := dialTransport(dataDir, forwardDial)
 	if err != nil {
 		return
 	}

@@ -1,13 +1,9 @@
-//go:build !darwin
+//go:build !darwin && !windows
 
 package agentnotify
 
-import (
-	"errors"
-	"net"
-)
+import "net"
 
-// peerUID is unavailable away from Darwin, where Rakko does not run.
-func peerUID(net.Conn) (uint32, error) { return 0, errors.New("agentnotify: no peer credentials") }
-
+// peerIsSelf is unavailable away from the platforms Rakko runs on; an
+// approval client there always falls back to its tool's own flow.
 func peerIsSelf(net.Conn) bool { return false }
