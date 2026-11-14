@@ -1,3 +1,9 @@
+//go:build !windows
+
+// The Windows transport (named pipes, process identity) and its CLI
+// arrive with the agent-approval batch; these tests drive the Unix
+// socket and shell forms.
+
 package agentnotify
 
 // Behavioral checks for the three module tools: each rendered module is run

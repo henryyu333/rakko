@@ -1,3 +1,5 @@
+//go:build !windows
+
 package agentnotify
 
 // Another program writing the same agent configuration while Rakko edits it:

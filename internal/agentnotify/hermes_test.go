@@ -1,3 +1,9 @@
+//go:build !windows
+
+// The Windows transport (named pipes, process identity) and its CLI
+// arrive with the agent-approval batch; these tests drive the Unix
+// socket and shell forms.
+
 package agentnotify
 
 // Hermes is the one tool whose installation is a plugin directory plus a few

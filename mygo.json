@@ -28,5 +28,9 @@
         }
       ]
     }
+  },
+  "windows": {
+    "displayName": "Rakko",
+    "installDirName": "Rakko"
   }
 }
