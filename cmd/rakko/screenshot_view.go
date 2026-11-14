@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // How the screenshot overlay paints itself: the frozen picture, the veil,

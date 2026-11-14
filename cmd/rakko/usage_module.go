@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // AI 用量页的数据侧：刷新节奏、后台取数、回主线程发布。页面绘制在

@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // Batch rename: the 重新命名 window — Finder's "Rename N Items" for the

@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // DeepSeek Harness's mark: the dsh web app's favicon, its 50-unit box

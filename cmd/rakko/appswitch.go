@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // 应用切换：刘海两翼从刘海两侧展开，左翼最多 4 个固定常用应用，右翼 3

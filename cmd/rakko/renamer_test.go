@@ -13,9 +13,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"testing"
 
+	"rakko/internal/platform"
 	"rakko/internal/store"
 )
 
@@ -338,7 +338,7 @@ func TestExecRenameSeamFailure(t *testing.T) {
 	fail := false
 	renameNoClobber = func(src, dst string) error {
 		if fail && filepath.Base(dst) == "b2.txt" {
-			return syscall.EACCES
+			return platform.ErrPermission
 		}
 		return orig(src, dst)
 	}
@@ -386,15 +386,14 @@ func TestUndoOccupiedOriginal(t *testing.T) {
 
 // renameErr words the errno cases in Chinese.
 func TestRenameErrWording(t *testing.T) {
-	for errno, want := range map[syscall.Errno]string{
-		syscall.EEXIST:       "已存在同名文件",
-		syscall.ENOENT:       "文件不存在",
-		syscall.EACCES:       "没有权限",
-		syscall.EPERM:        "没有权限",
-		syscall.ENAMETOOLONG: "名字过长",
+	for err, want := range map[error]string{
+		platform.ErrExists:      "已存在同名文件",
+		platform.ErrNotExist:    "文件不存在",
+		platform.ErrPermission:  "没有权限",
+		platform.ErrNameTooLong: "名字过长",
 	} {
-		if got := renameErr(errno); got != want {
-			t.Fatalf("renameErr(%v) = %q, want %q", errno, got, want)
+		if got := renameErr(err); got != want {
+			t.Fatalf("renameErr(%v) = %q, want %q", err, got, want)
 		}
 	}
 	if got := renameErr(errors.New("weird")); got != "weird" {

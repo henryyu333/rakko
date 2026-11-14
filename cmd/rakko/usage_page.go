@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // AI 用量页（原型 variant=B 的 AI 页）：左栏 203 宽、两张 84 高的套餐额度

@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // The eight pages of the Settings window, each the design's hero card over

@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // 「框选文字」：用户在屏幕上框一块区域，区域里的文字识别后直接进剪贴板，

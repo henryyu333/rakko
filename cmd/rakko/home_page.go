@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // 首页（design/explore/home-v3.html、home-v4.html）：点刘海仍是搜索条，页面

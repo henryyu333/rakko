@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // The otter in the drop zone. When a file drag opens the 放入托盘 row, the

@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // The desktop otter: the brand character as a small transparent window of

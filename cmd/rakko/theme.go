@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // The panel's design tokens, in one place: colours, corner radii, spacing,

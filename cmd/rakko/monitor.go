@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // The monitoring loop. It runs on the main thread only, at 30 ms while the

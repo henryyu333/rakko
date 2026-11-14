@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // 应用切换的绘制：两翼是收起态内容（peek 家族的一员），壳按 appsSize

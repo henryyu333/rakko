@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // The home bar's Spotlight search: every keystroke cancels the query in

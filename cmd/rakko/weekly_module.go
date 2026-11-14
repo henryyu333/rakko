@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // 每周简报的数据侧：应用使用采样（须用户明确同意）、Rakko 完成事件、以及

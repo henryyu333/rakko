@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // The 工具 page: one grid holding the action cards and the widgets. Cards

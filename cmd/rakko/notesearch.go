@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // The home search's 便利贴 group: the notes' text lives in memory, so the

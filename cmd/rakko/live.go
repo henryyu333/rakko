@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // Realtime activities on the notch: charging, headphones and downloads.

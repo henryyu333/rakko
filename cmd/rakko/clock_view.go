@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // Drawing for the clock: the two tool cards, the band chips, the closed

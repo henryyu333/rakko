@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // 每周简报页（design/explore/notch-apps-brief-prototype.html）：从首页的

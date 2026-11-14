@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // 「解压」 for archives on the shelf. Zips are extracted with archive/zip
@@ -8,7 +6,7 @@ package main
 // exact uncompressed sizes for the free-space check, and refuses
 // encrypted, absolute-path and ../ archives without running a tool that
 // could prompt for a passphrase. Tar-family archives (tar, tgz, tar.gz,
-// tar.bz2/tbz, tar.xz) and 7z / rar go through /usr/bin/bsdtar -xf; it
+// tar.bz2/tbz, tar.xz) and 7z / rar go through the system's bsdtar -xf;
 // refuses ../ entries and does not write through a symlink. bsdtar reads
 // RAR4/RAR5, but not RAR4 solid archives, encrypted archives, or archive
 // parts, so those are reported in plain language instead of surfacing the

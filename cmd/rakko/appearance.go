@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // The expanded panel follows the system appearance: the glass frosts what

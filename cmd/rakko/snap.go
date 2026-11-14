@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // 拖窗口到刘海分屏: a window dragged by its title bar toward the notch grows

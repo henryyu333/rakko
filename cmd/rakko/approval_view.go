@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // The approval card: three layers — the agent's own sentence, the risks

@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // The tools page's editing gestures (v3 §1, §3, §4): the card library,

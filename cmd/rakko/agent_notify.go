@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // Agent completion notices: the app side of internal/agentnotify. The

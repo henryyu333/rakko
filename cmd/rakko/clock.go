@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // The clock: one countdown timer and one stopwatch, both widgets on the

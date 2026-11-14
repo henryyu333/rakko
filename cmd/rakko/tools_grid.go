@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // Pure grid math for the tools page: pack the card list into a variable

@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // The player's seek and volume rails, shared by every surface that draws

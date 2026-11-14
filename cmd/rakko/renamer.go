@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // Batch rename: the pure logic — computing new names, checking conflicts,
@@ -15,7 +13,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"golang.org/x/text/unicode/norm"
 
@@ -438,13 +435,13 @@ func renameErr(err error) string { return renameErrIn(locales.In(""), err) }
 // language of l.
 func renameErrIn(l locales.Messages, err error) string {
 	switch {
-	case errors.Is(err, syscall.EEXIST):
+	case errors.Is(err, platform.ErrExists):
 		return l.RenameConflictExists()
-	case errors.Is(err, syscall.ENOENT):
+	case errors.Is(err, platform.ErrNotExist):
 		return l.RenameErrMissing()
-	case errors.Is(err, syscall.EACCES), errors.Is(err, syscall.EPERM):
+	case errors.Is(err, platform.ErrPermission):
 		return l.RenameErrPermission()
-	case errors.Is(err, syscall.ENAMETOOLONG):
+	case errors.Is(err, platform.ErrNameTooLong):
 		return l.RenameWarnNameTooLong()
 	default:
 		return err.Error()

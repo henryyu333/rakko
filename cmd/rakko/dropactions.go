@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // The drop zone: while a system drag carrying files hovers over the

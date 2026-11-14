@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // Signed auto-updates through mygo.Updater. `mygo build` bakes the update

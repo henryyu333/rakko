@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // Charging, full and low-battery notices. The state comes from IOKit's

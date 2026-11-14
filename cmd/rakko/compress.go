@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // 「压缩到」: shrink pictures under a byte budget instead of a pixel one.

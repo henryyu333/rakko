@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // The tool cards' catalog, drawing and file-drop entry, shared by the

@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // The shared card skeleton (design/explore/tools-v2.html §2): a status

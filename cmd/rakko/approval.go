@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // Approvals on the notch: an agent's permission request becomes a card,

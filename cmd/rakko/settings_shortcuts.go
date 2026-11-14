@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // The global shortcuts, as preferences: the Settings window's 快捷键 page

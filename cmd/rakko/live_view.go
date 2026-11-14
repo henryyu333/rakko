@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // Drawing for the realtime activities: the charging wings (icon + words on

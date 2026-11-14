@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // The support line's one home: the first day of companionship, the click

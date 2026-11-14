@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // The screenshot's text tool: a box drawn on the overlay whose text is

@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // The screenshot session's arithmetic: display-local and global point
@@ -460,10 +458,10 @@ func shotUniqueName(name string, taken func(string) bool) string {
 	return name
 }
 
-// shotSaveDir turns the screencapture preference (the output of
-// `defaults read com.apple.screencapture location`) into the directory a
-// screenshot is saved in: the preference when it names an existing
-// absolute directory, ~/Desktop otherwise.
+// shotSaveDir turns the platform's screenshot-folder preference (from
+// platform.ScreenshotFolder) into the directory a screenshot is saved in:
+// the preference when it names an existing absolute directory, ~/Desktop
+// otherwise.
 func shotSaveDir(configured, home string) string {
 	dir := strings.TrimSpace(configured)
 	if strings.HasPrefix(dir, "~/") {

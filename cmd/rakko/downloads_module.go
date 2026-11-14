@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // Browser downloads in ~/Downloads: Safari's `.download` bundles (their
@@ -21,7 +19,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -127,7 +124,7 @@ func (m *downloadsModule) tick(now time.Time) {
 			m.pausedAt = now
 		}
 		m.failures++
-		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ENOTDIR) ||
+		if errors.Is(err, fs.ErrNotExist) || platform.IsNotDirectory(err) ||
 			m.failures >= downloadScanFailureLimit {
 			m.pause(now)
 		}

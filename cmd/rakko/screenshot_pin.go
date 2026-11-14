@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // A pinned screenshot: the annotated crop in a small borderless window on

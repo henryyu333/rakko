@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // The brand otter, as static art. The pictures live outside the repository

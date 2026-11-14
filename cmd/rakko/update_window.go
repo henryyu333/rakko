@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // The Sparkle-style update window: one titled window that shows every face

@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // Every string the interface says lives in the catalogs of locales/, in the

@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // Completion feedback: the panel's bottom toast only exists while the panel

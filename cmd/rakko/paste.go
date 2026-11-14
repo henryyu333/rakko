@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // 剪贴板页的粘贴：⏎ 与 ⌘1..⌘9 都是「写剪贴板 → 收起面板 → 把键盘交还给

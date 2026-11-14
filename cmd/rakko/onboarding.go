@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // The first-launch guide: a page the panel shows instead of the search bar

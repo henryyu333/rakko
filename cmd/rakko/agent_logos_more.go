@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // More agent marks for the Agent 完成提醒 rows: Cursor, Copilot, Antigravity,

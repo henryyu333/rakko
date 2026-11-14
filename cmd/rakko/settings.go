@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // The Settings window: Coucou Hub's two-column layout — a pure black

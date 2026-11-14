@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // Headphone notices: a Bluetooth audio device appearing in CoreAudio's

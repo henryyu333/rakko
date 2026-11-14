@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // The marks before each tool in 设置 → AI → Agent 完成提醒. Claude Code

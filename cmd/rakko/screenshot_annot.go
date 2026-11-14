@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // The screenshot annotations: what the user can draw on the frozen

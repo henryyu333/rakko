@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // The screenshot overlay (⌃⌥A): every display is frozen into a static

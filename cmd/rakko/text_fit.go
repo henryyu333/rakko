@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // fitText is the one-line text the home and tools pages draw. When a test

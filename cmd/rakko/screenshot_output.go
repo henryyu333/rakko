@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 // What the screenshot session produces: the cropped PNG, the clipboard
