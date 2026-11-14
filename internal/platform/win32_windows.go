@@ -878,6 +878,20 @@ func findMonitorIn(ms []screenMonitor, displayID int64) (screenMonitor, int, boo
 
 // --- window enumeration -----------------------------------------------------
 
+// windowFromPointAt asks the window manager which window is at a physical
+// screen point. WindowFromPoint takes the point by value — the two
+// coordinates packed into one argument on 64-bit Windows, two arguments on
+// 32-bit — so handing it a pointer would hit whatever the pointer's bits
+// decode to.
+func windowFromPointAt(pt winPoint) uintptr {
+	if unsafe.Sizeof(uintptr(0)) == 4 {
+		r, _, _ := procWindowFromPoint.Call(uintptr(uint32(pt.X)), uintptr(uint32(pt.Y)))
+		return r
+	}
+	r, _, _ := procWindowFromPoint.Call(uintptr(uint32(pt.X)) | uintptr(uint32(pt.Y))<<32)
+	return r
+}
+
 func windowPID(h uintptr) int {
 	var pid uint32
 	procGetWindowThreadPID.Call(h, uintptr(unsafe.Pointer(&pid)))

@@ -134,7 +134,7 @@ func pressInside(lParam, watched uintptr) (inside, report bool) {
 // WindowFromPoint answers the desktop (a DirectComposition surface carries
 // no hit-test alpha there).
 func pressAt(pt winPoint, watched uintptr) (inside, report bool) {
-	h, _, _ := procWindowFromPoint.Call(uintptr(unsafe.Pointer(&pt)))
+	h := windowFromPointAt(pt)
 	root := h
 	if h != 0 {
 		if r, _, _ := procGetAncestor.Call(h, gaRoot); r != 0 {

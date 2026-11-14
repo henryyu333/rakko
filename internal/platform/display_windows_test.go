@@ -278,6 +278,46 @@ func TestPressClassification(t *testing.T) {
 	}
 }
 
+// TestWindowFromPointAtPacksTheCoordinates checks the physical-point hit test
+// the global observer classifies presses with. WindowFromPoint takes the point
+// by value: the old call passed its address, so x64 used the pointer's bits as
+// coordinates and answered no window, and only the rectangle fallback kept the
+// observer working.
+func TestWindowFromPointAtPacksTheCoordinates(t *testing.T) {
+	// A BUTTON class window hit-tests its client area; a STATIC one answers
+	// HTTRANSPARENT there, which WindowFromPoint skips.
+	class, _ := windows.UTF16PtrFromString("BUTTON")
+	title, _ := windows.UTF16PtrFromString("rakko-point-test")
+	h, _, err := procCreateWindowEx.Call(0, uintptr(unsafe.Pointer(class)), uintptr(unsafe.Pointer(title)),
+		0x80000000 /* WS_POPUP */, 300, 260, 200, 120, 0, 0, 0, 0)
+	if h == 0 {
+		t.Fatalf("CreateWindowEx: %v", err)
+	}
+	defer procDestroyWindow.Call(h)
+	procShowWindow.Call(h, 4 /* SW_SHOWNOACTIVATE */)
+	if r, _, _ := procIsWindowVisible.Call(h); r == 0 {
+		// A logon session with no attached desktop (an SSH-only test run)
+		// cannot show or hit-test a window: the same test runs through
+		// rw desk, where the desktop is real.
+		t.Skip("no interactive desktop: the test window cannot be shown")
+	}
+	// The shared desktop may keep other windows over that spot; a topmost
+	// test window is the one the hit test must find.
+	reorderFront(h, true)
+	r, ok := windowRect(h)
+	if !ok {
+		t.Fatal("GetWindowRect failed")
+	}
+	center := winPoint{X: (r.Left + r.Right) / 2, Y: (r.Top + r.Bottom) / 2}
+	if got := windowFromPointAt(center); got != h {
+		t.Fatalf("WindowFromPoint at the window's centre = %#x, want %#x", got, h)
+	}
+	far := winPoint{X: r.Right + 400, Y: r.Bottom + 400}
+	if got := windowFromPointAt(far); got == h {
+		t.Fatal("WindowFromPoint outside the window answered the window itself")
+	}
+}
+
 // TestFileOperations checks the shell calls the rename, trash, free-space
 // and icon paths depend on, against a temporary directory.
 func TestFileOperations(t *testing.T) {
