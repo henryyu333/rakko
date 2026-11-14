@@ -16,6 +16,10 @@ const notifyFilter = windows.FILE_NOTIFY_CHANGE_FILE_NAME |
 	windows.FILE_NOTIFY_CHANGE_SIZE |
 	windows.FILE_NOTIFY_CHANGE_LAST_WRITE
 
+// watchArm is Watch.arm as run calls it; a test replaces it to take the
+// registration failure path, which a working file system will not produce.
+var watchArm = (*Watch).arm
+
 // Watch follows the note's folder without polling. ReadDirectoryChangesW
 // reports our atomic save (a temporary file renamed into the folder), most
 // editors' saves and an editor that rewrites the file in place, all as one
@@ -30,12 +34,23 @@ type Watch struct {
 	io       windows.Handle
 	finished chan struct{}
 
-	mu     sync.Mutex
-	closed bool
+	// buf and ol belong to the one read in flight: the kernel writes into
+	// both until that read completes, so neither is reused or released
+	// before then.
+	buf []byte
+	ol  windows.Overlapped
+
+	mu       sync.Mutex
+	closed   bool
+	released bool
 }
 
 // WatchFile starts watching path. notify runs on a goroutine other than
 // the caller's, once per batch of file system events.
+//
+// It returns only once the first read is pending: a caller that saves the
+// note right after the call must still be seen. A folder that cannot be
+// watched is an error, not a watch that silently reports nothing.
 func WatchFile(path string, notify func()) (*Watch, error) {
 	dirName, err := windows.UTF16PtrFromString(filepath.Dir(path))
 	if err != nil {
@@ -59,70 +74,139 @@ func WatchFile(path string, notify func()) (*Watch, error) {
 		windows.CloseHandle(dir)
 		return nil, err
 	}
-	w := &Watch{dir: dir, stop: stop, io: ioEvent, finished: make(chan struct{})}
-	go w.run(notify)
+	w := &Watch{
+		dir:      dir,
+		stop:     stop,
+		io:       ioEvent,
+		finished: make(chan struct{}),
+		buf:      make([]byte, 64<<10),
+	}
+	ready := make(chan error, 1)
+	go w.run(notify, ready)
+	if err := <-ready; err != nil {
+		<-w.finished
+		return nil, err
+	}
 	return w, nil
 }
 
-// Close stops the watcher. notify is not called again after it returns.
+// Close stops the watcher. notify is not called again after it returns,
+// and the pending read has completed by then, so nothing the kernel owns
+// outlives the watch.
 func (w *Watch) Close() {
 	w.mu.Lock()
-	if w.closed {
-		w.mu.Unlock()
-		return
+	if !w.closed {
+		w.closed = true
+		if !w.released {
+			windows.SetEvent(w.stop)
+		}
 	}
-	w.closed = true
 	w.mu.Unlock()
-	windows.SetEvent(w.stop)
-	// Abandon a read still pending on the folder, then let the goroutine
-	// leave before its handles go.
-	_ = windows.CancelIoEx(w.dir, nil)
 	<-w.finished
-	windows.CloseHandle(w.io)
-	windows.CloseHandle(w.stop)
-	windows.CloseHandle(w.dir)
 }
 
-// run reads one batch of changes at a time until Close.
-func (w *Watch) run(notify func()) {
-	defer close(w.finished)
-	buf := make([]byte, 64<<10)
+// run arms one read, waits for it, and reports the changes; the read loop
+// is the only thing that submits or cancels a request, so Close can neither
+// race a submission nor close a buffer the kernel still owns.
+func (w *Watch) run(notify func(), ready chan<- error) {
+	defer w.release()
+	if err := watchArm(w); err != nil {
+		ready <- err
+		return
+	}
+	ready <- nil
 	for {
-		var ol windows.Overlapped
-		ol.HEvent = w.io
-		_ = windows.ResetEvent(w.io)
-		if err := windows.ReadDirectoryChanges(w.dir, &buf[0], uint32(len(buf)), false,
-			notifyFilter, nil, &ol, 0); err != nil {
-			return
-		}
 		event, err := windows.WaitForMultipleObjects([]windows.Handle{w.stop, w.io}, false, windows.INFINITE)
 		if err != nil {
+			w.abandon()
 			return
 		}
 		if event == windows.WAIT_OBJECT_0 {
-			return // Close
+			w.abandon() // Close
+			return
 		}
 		if event != windows.WAIT_OBJECT_0+1 {
+			w.abandon()
 			return
 		}
 		var n uint32
-		if err := windows.GetOverlappedResult(w.dir, &ol, &n, false); err != nil {
-			if err == windows.ERROR_NOTIFY_ENUM_DIR {
-				// The buffer overflowed and changes were dropped; telling
-				// the caller is the only correct answer left.
-				n = 1
-			} else {
-				return
-			}
-		}
+		err = windows.GetOverlappedResult(w.dir, &w.ol, &n, false)
 		w.mu.Lock()
-		if w.closed {
-			w.mu.Unlock()
+		closed := w.closed
+		w.mu.Unlock()
+		if closed {
+			// Close is waiting for this goroutine: the request has
+			// completed, so the buffer is already safe to drop.
 			return
 		}
-		if n > 0 {
-			notify()
+		if !reportsChange(n, err) {
+			// The read failed for a reason other than a dropped batch —
+			// the folder went away, most likely. The request is complete,
+			// so there is nothing to cancel.
+			return
 		}
-		w.mu.Unlock()
+		notify()
+		if err := watchArm(w); err != nil {
+			return
+		}
+	}
+}
+
+// arm submits one read into the watcher's buffer. A request left pending is
+// the normal answer, so only a request that could not be started is an
+// error.
+func (w *Watch) arm() error {
+	w.ol = windows.Overlapped{HEvent: w.io}
+	if err := windows.ResetEvent(w.io); err != nil {
+		return err
+	}
+	err := windows.ReadDirectoryChanges(w.dir, &w.buf[0], uint32(len(w.buf)), false,
+		notifyFilter, nil, &w.ol, 0)
+	if err != nil && err != windows.ERROR_IO_PENDING {
+		return err
+	}
+	return nil
+}
+
+// abandon ends the read in flight and waits for the kernel to finish with
+// the overlapped structure and the buffer. CancelIoEx only asks; the
+// completion is what makes the buffer safe to release.
+func (w *Watch) abandon() {
+	if err := windows.CancelIoEx(w.dir, &w.ol); err != nil && err != windows.ERROR_NOT_FOUND {
+		// ERROR_NOT_FOUND is the only benign answer: no request is
+		// pending, so the read has already completed and nothing can
+		// still write into the buffer.
+	}
+	var n uint32
+	_ = windows.GetOverlappedResult(w.dir, &w.ol, &n, true)
+}
+
+// release lets go of everything the read loop owned. It runs only after
+// the read in flight has completed, so the kernel no longer holds the
+// buffer, and Close returns when it is done.
+func (w *Watch) release() {
+	w.mu.Lock()
+	w.released = true
+	windows.CloseHandle(w.io)
+	windows.CloseHandle(w.stop)
+	windows.CloseHandle(w.dir)
+	w.io, w.stop, w.dir = 0, 0, 0
+	w.buf = nil
+	w.mu.Unlock()
+	close(w.finished)
+}
+
+// reportsChange says whether a finished read reports a change worth telling
+// the caller about. A buffer overflow can complete in two ways: as
+// ERROR_NOTIFY_ENUM_DIR, or as a successful read of no bytes. Both mean the
+// record of what changed was dropped, so both are answered with a notify.
+func reportsChange(n uint32, err error) bool {
+	switch {
+	case err == windows.ERROR_NOTIFY_ENUM_DIR:
+		return true
+	case err != nil:
+		return false
+	default:
+		return true
 	}
 }
