@@ -375,11 +375,18 @@ func sortSpotGroup(g []platform.SearchHit, q string) {
 // written as ~.
 func (a *shelf) spotHitRow(group string, hit platform.SearchHit) homeHit {
 	path := hit.Path
+	sub := shortDir(path)
+	if hit.App && strings.HasPrefix(path, "shell:") {
+		// A packaged app has no file of its own: its identity is the Apps
+		// folder's shell path, which would read as "shell:AppsFolder"
+		// under the name. The group already says what it is.
+		sub = ""
+	}
 	return homeHit{
 		group: group,
 		path:  path,
 		title: hit.Name,
-		sub:   shortDir(path),
+		sub:   sub,
 		run: func() {
 			if err := mygo.Shell.OpenPath(path); err != nil {
 				a.report(err)
