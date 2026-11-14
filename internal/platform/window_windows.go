@@ -73,6 +73,8 @@ func DisableWindowAnimation(window uintptr) {}
 
 // ConfigurePinWindow makes a pinned card a non-activating topmost panel:
 // a click on the card never takes the keyboard from the app being typed in.
+// It also makes the card follow the user across virtual desktops, since
+// Windows has no show-on-all-desktops window bit.
 func ConfigurePinWindow(window uintptr) {
 	if window == 0 {
 		return
@@ -80,6 +82,7 @@ func ConfigurePinWindow(window uintptr) {
 	ensureToolWindow(window)
 	setExBits(window, wsExNoActivate, true)
 	reorderFront(window, true)
+	followCurrentDesktop(window)
 }
 
 // ConfigurePetWindow makes the desktop otter the same non-activating

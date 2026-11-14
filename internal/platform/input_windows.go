@@ -257,6 +257,6 @@ func ObserveLeftMouseDragged(moved func()) (stop func()) {
 func LeftMouseDown() bool { return leftHeld() }
 
 // NoteLeftPress tells the drag tracker a real left press arrived. The
-// Windows drag session is not tracked yet (WINDOWS-NEXT(drag)), so there is
-// no tracker to note it to; the call stays for the shared gesture path.
+// Windows tracker reads the capture window OLE holds for the whole drag,
+// so it needs no press edge; the call stays for the shared gesture path.
 func NoteLeftPress() {}

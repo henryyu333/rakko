@@ -97,3 +97,11 @@ func DragHasImages(types []string) bool {
 	}
 	return false
 }
+
+// DragMayCarryFiles reports whether a drag with these declared types may
+// wake the shake-to-summon basket and the pin strips: anything carrying
+// files, promised files or image data. macOS always knows the types, so
+// the answer is exactly that test.
+func DragMayCarryFiles(types []string) bool {
+	return DragHasFiles(types) || DragHasFilePromise(types) || DragHasImages(types)
+}
