@@ -7,6 +7,9 @@ package platform
 // window-style cases use a real STATIC window, which needs no app loop.
 
 import (
+	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"unsafe"
 
@@ -155,6 +158,49 @@ func TestPressClassification(t *testing.T) {
 	SetOverlayAcceptsMouse(h, false)
 	if inside, report := pressAt(center, h); inside || !report {
 		t.Fatalf("press through a click-through window: inside=%v report=%v, want false true", inside, report)
+	}
+}
+
+// TestFileOperations checks the shell calls the rename, trash, free-space
+// and icon paths depend on, against a temporary directory.
+func TestFileOperations(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "source.txt")
+	dst := filepath.Join(dir, "target.txt")
+	if err := os.WriteFile(src, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dst, []byte("y"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := RenameNoReplace(src, dst); !errors.Is(err, ErrExists) {
+		t.Fatalf("RenameNoReplace onto an existing name = %v, want ErrExists", err)
+	}
+	if _, err := os.Stat(src); err != nil {
+		t.Fatalf("the failed rename lost the source: %v", err)
+	}
+	other := filepath.Join(dir, "renamed.txt")
+	if err := RenameNoReplace(src, other); err != nil {
+		t.Fatalf("RenameNoReplace: %v", err)
+	}
+	if _, ok := CreationTime(other); !ok {
+		t.Fatal("CreationTime failed for a fresh file")
+	}
+	if free, err := FreeSpace(dir); err != nil || free <= 0 {
+		t.Fatalf("FreeSpace = %d, %v; want a positive number", free, err)
+	}
+	if icon := FileIcon(filepath.Join(os.Getenv("SystemRoot"), "System32", "notepad.exe"), 32); len(icon) == 0 {
+		t.Fatal("FileIcon(notepad.exe) returned no PNG")
+	}
+	text := filepath.Join(dir, "trash-me.txt")
+	if err := os.WriteFile(text, []byte("z"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := TrashFile(text); err != nil {
+		t.Fatalf("TrashFile: %v", err)
+	}
+	if _, err := os.Stat(text); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the trashed file is still there: %v", err)
 	}
 }
 

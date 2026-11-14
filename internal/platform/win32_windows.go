@@ -72,7 +72,7 @@ var (
 	procCreateWindowEx      = sysProc(user32, "CreateWindowExW")
 	procDestroyWindow       = sysProc(user32, "DestroyWindow")
 
-	procGetLastInputInfo    = sysProc(kernel32, "GetLastInputInfo")
+	procGetLastInputInfo    = sysProc(user32, "GetLastInputInfo")
 	procGetTickCount        = sysProc(kernel32, "GetTickCount64")
 	procGetSystemPowerStat  = sysProc(kernel32, "GetSystemPowerStatus")
 	procGetDevicePowerState = sysProc(kernel32, "GetDevicePowerState")
