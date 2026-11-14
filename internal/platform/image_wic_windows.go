@@ -224,7 +224,10 @@ func wicDecodeScaled(path string, maxPx int) (*image.RGBA, error) {
 	if w == 0 || h == 0 {
 		return nil, errors.New("windows: image has no pixels: " + path)
 	}
-	if int64(w)*int64(h) > thumbMaxPixels {
+	// The pixel cap belongs to thumbnails: a conversion, resize, compress
+	// or OCR of a large picture must still work. A thumbnail is bounded by
+	// the 40-megapixel rule and refuses to decode a source past it.
+	if maxPx > 0 && int64(w)*int64(h) > thumbMaxPixels {
 		return nil, fmt.Errorf("windows: %s is %d×%d, above the %d-pixel thumbnail limit",
 			filepath.Base(path), w, h, int64(thumbMaxPixels))
 	}

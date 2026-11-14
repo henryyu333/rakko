@@ -180,3 +180,81 @@ func TestThumbnailScalesTheLargeSource(t *testing.T) {
 		t.Fatalf("thumbnail %dx%d, want 80x40", thumb.Rect.Dx(), thumb.Rect.Dy())
 	}
 }
+
+// TestLargePicturesStillConvert builds a 48-megapixel picture — above the
+// thumbnail rule's 40-megapixel cap. Converting, resizing and compressing
+// it must still work: the cap exists to bound thumbnails, not to refuse
+// pictures the system can decode (a 48 MP HEIC has no Go decoder to fall
+// back on).
+func TestLargePicturesStillConvert(t *testing.T) {
+	const w, h = 8000, 6000 // 48 MP
+	dir := t.TempDir()
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	for y := range h {
+		row := img.Pix[y*img.Stride : y*img.Stride+w*4]
+		for x := range w {
+			row[x*4] = uint8(x)
+			row[x*4+1] = uint8(y)
+			row[x*4+2] = 0x40
+			row[x*4+3] = 0xFF
+		}
+	}
+	src := filepath.Join(dir, "large.png")
+	f, err := os.Create(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := png.Encode(f, img); err != nil {
+		f.Close()
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	converted := filepath.Join(dir, "converted.jpg")
+	if err := ConvertImage(src, converted, FormatJPEG); err != nil {
+		t.Fatalf("ConvertImage of a %d×%d picture: %v", w, h, err)
+	}
+	if gotW, gotH, err := ImageSize(converted); err != nil || gotW != w || gotH != h {
+		t.Fatalf("converted size %dx%d (err %v), want %dx%d", gotW, gotH, err, w, h)
+	}
+	resized := filepath.Join(dir, "resized.png")
+	if err := ResizeImage(src, resized, FormatPNG, 800); err != nil {
+		t.Fatalf("ResizeImage of a %d×%d picture: %v", w, h, err)
+	}
+	if gotW, gotH, err := ImageSize(resized); err != nil || gotW != 800 || gotH != 600 {
+		t.Fatalf("resized size %dx%d (err %v), want 800x600", gotW, gotH, err)
+	}
+	// The thumbnail path still applies the cap where it belongs.
+	if _, err := Thumbnail(src, 80); err == nil {
+		t.Fatal("a 48-megapixel source produced a thumbnail despite the cap")
+	}
+
+	// The same through HEIC when the system has the encoder: HEIC has no
+	// Go decoder, so a refusal here would leave the picture unreadable.
+	// The probe runs in its own directory: a failed encode leaves the
+	// container's file locked inside WIC, and t.TempDir would report that
+	// as a test failure instead of the capability it is.
+	probeDir, err := os.MkdirTemp("", "rakko-heic-probe-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { os.RemoveAll(probeDir) }()
+	probe := filepath.Join(probeDir, "probe.heic")
+	if err := wiApartment(func() error { return wicEncodeHEIC(image.NewRGBA(image.Rect(0, 0, 1, 1)), probe, 0.5) }); err != nil {
+		t.Logf("HEIC encoder unavailable, HEIC arm skipped: %v", err)
+		return
+	}
+	heic := filepath.Join(dir, "large.heic")
+	if err := wiApartment(func() error { return wicEncodeHEIC(img, heic, 0.5) }); err != nil {
+		t.Fatalf("encoding a %d×%d HEIC: %v", w, h, err)
+	}
+	fromHEIC := filepath.Join(dir, "from-heic.png")
+	if err := ConvertImage(heic, fromHEIC, FormatPNG); err != nil {
+		t.Fatalf("ConvertImage of a %d×%d HEIC: %v", w, h, err)
+	}
+	if gotW, gotH, err := ImageSize(fromHEIC); err != nil || gotW != w || gotH != h {
+		t.Fatalf("HEIC conversion size %dx%d (err %v), want %dx%d", gotW, gotH, err, w, h)
+	}
+}
