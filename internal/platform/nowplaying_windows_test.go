@@ -91,6 +91,51 @@ func TestNowPlayingReadsThePublishedPlaybackRate(t *testing.T) {
 	}
 }
 
+// TestNowPlayingTimelineAnchorsAtItsUpdateTime drives the timeline slots
+// and the conversion of the published stamp: the position is extrapolated
+// from when the player last updated it, not from when Rakko polled.
+func TestNowPlayingTimelineAnchorsAtItsUpdateTime(t *testing.T) {
+	const ticksPerSecond = 10_000_000
+	published := time.Unix(1_700_000_000, 0).UTC()
+	tl := newFakeCOM()
+	for slot, v := range map[int]int64{
+		6:  0,                          // start
+		7:  200 * ticksPerSecond,       // end
+		10: 30 * ticksPerSecond,        // position
+		11: filetimeUnixBase + published.Unix()*ticksPerSecond, // last update
+	} {
+		tl.slot[slot] = windows.NewCallback(func(_, out uintptr) uintptr {
+			*(*int64)(wiPtr(out)) = v
+			return 0
+		})
+	}
+	got, ok := npReadTimeline(unsafe.Pointer(tl))
+	if !ok {
+		t.Fatal("the timeline could not be read")
+	}
+	if got.position != 30 || got.duration != 200 {
+		t.Fatalf("timeline position %v duration %v, want 30 and 200", got.position, got.duration)
+	}
+	if !got.updated.Equal(published) {
+		t.Fatalf("timeline update %v, want %v", got.updated, published)
+	}
+	// Ten seconds of wall time after the update is ten seconds of track at
+	// 1x, computed from the stamp rather than from the poll.
+	st := NowPlayingState{Playing: true, Rate: 1, Elapsed: got.position, InfoAt: got.updated, Duration: got.duration}
+	if pos := st.Position(published.Add(10 * time.Second)); pos != 40 {
+		t.Fatalf("position ten seconds after the update = %v, want 40", pos)
+	}
+	// A stamp that is not a real time degrades to the zero time.
+	for _, ticks := range []int64{0, -1, filetimeUnixBase} {
+		if !npDateTime(ticks).IsZero() {
+			t.Errorf("npDateTime(%d) = %v, want the zero time", ticks, npDateTime(ticks))
+		}
+	}
+	if one := npDateTime(filetimeUnixBase + ticksPerSecond); !one.Equal(time.Unix(1, 0).UTC()) {
+		t.Errorf("one second after the epoch = %v", one)
+	}
+}
+
 func TestNowPlayingArtIDTracksTheTrack(t *testing.T) {
 	a := npArtID("app", "Song", "Artist", "Album")
 	if a == "" || a != npArtID("app", "Song", "Artist", "Album") {

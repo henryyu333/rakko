@@ -331,7 +331,8 @@ func (p *npPoller) poll() {
 		p.host.publish(NowPlayingState{})
 		return
 	}
-	st := NowPlayingState{App: p.app}
+	now := time.Now()
+	st := NowPlayingState{App: p.app, Received: now}
 	if info := p.readPlaybackInfo(session); info != nil {
 		st.Playing = info.playing
 		st.Rate = info.rate
@@ -339,9 +340,18 @@ func (p *npPoller) poll() {
 	if timeline := p.readTimeline(session); timeline != nil {
 		st.Elapsed = timeline.position
 		st.Duration = timeline.duration
+		if !timeline.updated.IsZero() && !timeline.updated.After(now) {
+			// Anchor the position where the player published it. A player
+			// that only updates the timeline on state changes would
+			// otherwise have the same stale position re-anchored to every
+			// poll, freezing the card's clock or jumping it back.
+			st.InfoAt = timeline.updated
+		}
 	}
-	st.InfoAt = time.Now()
-	st.Received = st.InfoAt
+	if st.InfoAt.IsZero() {
+		st.InfoAt = now
+	}
+	st.Received = now
 	if props := p.readMediaProperties(session); props != nil {
 		st.Title, st.Artist, st.Album = props.title, props.artist, props.album
 		st.ArtID = npArtID(p.app, props.title, props.artist, props.album)
@@ -455,6 +465,10 @@ func npReadRate(info unsafe.Pointer) (float64, bool) {
 type npTimeline struct {
 	position float64
 	duration float64
+	// updated is when the player last published position, from the
+	// timeline's own LastUpdatedTime. The zero time means the player did
+	// not publish one.
+	updated time.Time
 }
 
 func (p *npPoller) readTimeline(session unsafe.Pointer) *npTimeline {
@@ -463,25 +477,53 @@ func (p *npPoller) readTimeline(session unsafe.Pointer) *npTimeline {
 		return nil
 	}
 	defer winCOMRelease(tl)
+	out, ok := npReadTimeline(tl)
+	if !ok {
+		return nil
+	}
+	return &out
+}
+
+// npReadTimeline reads IGlobalSystemMediaTransportControlsSessionTimelineProperties:
+// slots 6 and 7 are the start and end times, 10 the position, and 11 when
+// the player last published that position.
+func npReadTimeline(tl unsafe.Pointer) (npTimeline, bool) {
 	var start, end, pos int64
 	if hr := winCOMCall(tl, 6, uintptr(unsafe.Pointer(&start))); failedHR(hr) {
-		return nil
+		return npTimeline{}, false
 	}
 	if hr := winCOMCall(tl, 7, uintptr(unsafe.Pointer(&end))); failedHR(hr) {
-		return nil
+		return npTimeline{}, false
 	}
 	if hr := winCOMCall(tl, 10, uintptr(unsafe.Pointer(&pos))); failedHR(hr) {
-		return nil
+		return npTimeline{}, false
 	}
 	const ticksPerSecond = 10_000_000
-	out := &npTimeline{}
+	out := npTimeline{}
 	if end > start {
 		out.duration = float64(end-start) / ticksPerSecond
 	}
 	if pos > start {
 		out.position = float64(pos-start) / ticksPerSecond
 	}
-	return out
+	var updated int64
+	if hr := winCOMCall(tl, 11, uintptr(unsafe.Pointer(&updated))); !failedHR(hr) {
+		out.updated = npDateTime(updated)
+	}
+	return out, true
+}
+
+// npDateTime converts a Windows.Foundation.DateTime — 100ns ticks since
+// 1601 UTC — into a Go time. A value that cannot be a real timestamp
+// comes back as the zero time, so the caller anchors the position itself.
+func npDateTime(ticks int64) time.Time {
+	delta := ticks - filetimeUnixBase
+	// 100ns ticks to nanoseconds: refuse values whose conversion would
+	// overflow rather than wrapping into a plausible-looking date.
+	if delta <= 0 || delta > math.MaxInt64/100 {
+		return time.Time{}
+	}
+	return time.Unix(0, delta*100).UTC()
 }
 
 type npProps struct {
