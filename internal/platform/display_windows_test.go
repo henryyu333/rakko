@@ -456,6 +456,36 @@ func TestFileOperations(t *testing.T) {
 	}
 }
 
+// TestRecycleApartmentAction checks what the recycle thread does with each
+// CoInitializeEx answer: every success is released again — S_FALSE included,
+// since it adds a reference too — and a thread already in another apartment is
+// refused rather than used, because IFileOperation needs an STA.
+func TestRecycleApartmentAction(t *testing.T) {
+	hresult := func(v uint32) int32 { return int32(v) }
+	for _, tt := range []struct {
+		name    string
+		hr      int32
+		usable  bool
+		release bool
+	}{
+		{"S_OK", 0, true, true},
+		{"S_FALSE", 1, true, true},
+		{"RPC_E_CHANGED_MODE", hresult(0x80010106), false, false},
+		{"E_OUTOFMEMORY", hresult(0x8007000e), false, false},
+	} {
+		usable, release, err := comApartmentAction(tt.hr)
+		if usable != tt.usable || release != tt.release {
+			t.Errorf("%s: usable=%v release=%v, want %v/%v", tt.name, usable, release, tt.usable, tt.release)
+		}
+		if tt.usable && err != nil {
+			t.Errorf("%s: unexpected error %v", tt.name, err)
+		}
+		if !tt.usable && err == nil {
+			t.Errorf("%s: no error for an unusable apartment", tt.name)
+		}
+	}
+}
+
 // TestRecycleRefusal checks when the recycle path refuses to delete: an item
 // the shell would permanently remove must be refused instead.
 func TestRecycleRefusal(t *testing.T) {

@@ -385,11 +385,34 @@ func recycleItem(abs string) error {
 	return <-done
 }
 
+// comApartmentAction says what to do with a thread's CoInitializeEx result:
+// whether the thread may host the operation, and whether the success has to be
+// released with CoUninitialize — S_FALSE ("already initialised") counts too,
+// because every successful call adds a reference.
+func comApartmentAction(hr int32) (usable, release bool, err error) {
+	switch uint32(hr) {
+	case 0, 1: // S_OK, S_FALSE: the thread is (now) a single-threaded apartment
+		return true, true, nil
+	case 0x80010106: // RPC_E_CHANGED_MODE: another apartment is already there
+		return false, false, errors.New("platform: the recycle thread is not a single-threaded apartment")
+	default:
+		return false, false, fmt.Errorf("platform: CoInitializeEx: 0x%08x", uint32(hr))
+	}
+}
+
 // fileOperationDelete recycles one item. The shell reports a refused or
 // aborted operation through the HRESULTs here, which the caller propagates.
 func fileOperationDelete(abs string) error {
-	if r, _, _ := procCoInitializeEx.Call(0, coinitApartmentThreaded); int32(r) < 0 && uint32(int32(r)) != 0x80010106 {
-		return fmt.Errorf("platform: CoInitializeEx: 0x%08x", uint32(int32(r)))
+	// IFileOperation requires a single-threaded apartment. The worker thread
+	// is this operation's own, so it starts one and releases it before the
+	// thread goes back to the pool.
+	hr, _, _ := procCoInitializeEx.Call(0, coinitApartmentThreaded)
+	usable, release, err := comApartmentAction(int32(hr))
+	if !usable {
+		return err
+	}
+	if release {
+		defer procCoUninitialize.Call()
 	}
 	clsid, err := guidFromString(clsidFileOperation)
 	if err != nil {
