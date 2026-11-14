@@ -20,23 +20,32 @@ func ConnectApprove(home, dataDir, exe string, tool Tool) error {
 		return fmt.Errorf("agentnotify: %s has no approval channel", tool)
 	}
 	ap := s.approve
+	if err := prepareHookShim(hookApproval, s, dataDir, exe); err != nil {
+		return err
+	}
+	var err error
 	switch s.kind {
 	case KindHermes:
-		return connectHermesApprove(s, home, dataDir, exe)
+		err = connectHermesApprove(s, home, dataDir, exe)
 	case KindNamed:
 		if ap.member == "" {
-			return fmt.Errorf("agentnotify: %s has no approval member", tool)
+			err = fmt.Errorf("agentnotify: %s has no approval member", tool)
+			break
 		}
-		return connectNamedMember(s, home, dataDir, ap.member, []string{ap.event}, ap.timeout,
-			func(string) string { return ApproveCommand(exe, tool, dataDir) })
+		err = connectNamedMember(s, home, dataDir, ap.member, []string{ap.event}, ap.timeout,
+			func(string) string { return approveEntryFor(exe, tool, dataDir).command() })
 	case KindModule:
-		return writeApproveModule(s, home, dataDir, exe)
+		err = writeApproveModule(s, home, dataDir, exe)
 	case KindPatch:
-		return connectDSHPatch(s, home, dataDir, exe, dshEntryApproval,
+		err = connectDSHPatch(s, home, dataDir, exe, dshEntryApproval,
 			ApproveConfigPath(home, tool), ap.module, true)
 	default:
-		return connectApproveHooks(s, home, dataDir, exe)
+		err = connectApproveHooks(s, home, dataDir, exe)
 	}
+	if err != nil {
+		_ = removeShim(dataDir, hookApproval, tool)
+	}
+	return err
 }
 
 // DisconnectApprove removes every approval entry Rakko wrote for tool and
@@ -47,27 +56,30 @@ func DisconnectApprove(home, dataDir string, tool Tool) error {
 		return fmt.Errorf("agentnotify: %s has no approval channel", tool)
 	}
 	ap := s.approve
+	var err error
 	switch s.kind {
 	case KindHermes:
-		return disconnectHermesApprove(s, home, dataDir)
+		err = disconnectHermesApprove(s, home, dataDir)
 	case KindNamed:
-		return disconnectNamedMember(s, home, dataDir, ap.member)
+		err = disconnectNamedMember(s, home, dataDir, ap.member)
 	case KindModule:
-		return removeApproveModule(s, home, dataDir)
+		err = removeApproveModule(s, home, dataDir)
 	case KindPatch:
-		return disconnectDSHPatch(s, home, dataDir, dshEntryApproval,
+		err = disconnectDSHPatch(s, home, dataDir, dshEntryApproval,
 			ApproveConfigPath(home, tool), true)
 	default:
-		var first error
 		for _, path := range s.candidates(home) {
 			r := s
 			r.bare = s.bareName != "" && filepath.Base(path) == s.bareName
-			if err := disconnectHooksAt(r, path, dataDir, approveMarker(tool)); err != nil && first == nil {
-				first = err
+			if derr := disconnectHooksAt(r, path, dataDir, hookApproval); derr != nil && err == nil {
+				err = derr
 			}
 		}
-		return first
 	}
+	if err != nil {
+		return err
+	}
+	return removeShim(dataDir, hookApproval, tool)
 }
 
 // StatusApprove reports whether Rakko's approval entry is installed.
@@ -113,7 +125,7 @@ func StatusApprove(home string, tool Tool) (State, string) {
 		}
 		return StateNotInjected, ""
 	default:
-		s, path := s.at(home)
+		_, path := s.at(home)
 		raw, existed, _, err := readConfig(path)
 		if err != nil {
 			return StateError, err.Error()
@@ -121,11 +133,10 @@ func StatusApprove(home string, tool Tool) (State, string) {
 		if !existed {
 			return StateNotInjected, ""
 		}
-		doc, derr := newJSONDoc(raw)
-		if derr != nil {
+		if _, derr := newJSONDoc(raw); derr != nil {
 			return StateError, derr.Error()
 		}
-		if hooksHasMarker(doc, s, approveMarker(tool)) {
+		if carriesDocument(raw, tool, hookApproval) {
 			return StateInjected, ""
 		}
 		return StateNotInjected, ""
@@ -143,7 +154,7 @@ func connectApproveHooks(s spec, home, dataDir, exe string) error {
 			return filePlan{}, fmt.Errorf("agentnotify: %s: %w", path, derr)
 		}
 		added, aerr := addHookCommand(doc, s, s.approve.event, s.approve.timeout,
-			ApproveCommand(exe, s.tool, dataDir), approveMarker(s.tool))
+			approveEntryFor(exe, s.tool, dataDir), hookApproval)
 		if aerr != nil {
 			return filePlan{}, aerr
 		}
@@ -179,7 +190,7 @@ func writeApproveModule(s spec, home, dataDir, exe string) error {
 		if existed && !ownsApprove(raw, s.tool) {
 			return filePlan{}, fmt.Errorf("agentnotify: %s exists and was not written by Rakko; left alone", path)
 		}
-		body := renderApproveModule(s.approve.module, s.tool, exe, dataDir)
+		body := renderApproveModule(moduleSource(s, hookApproval), s.tool, exe, dataDir)
 		return filePlan{data: []byte(body), mode: 0o644, changed: true, before: func() error {
 			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 				return err
@@ -206,5 +217,5 @@ func removeApproveModule(s spec, home, dataDir string) error {
 
 // ownsApprove reports whether a module file is Rakko's approval file.
 func ownsApprove(raw []byte, tool Tool) bool {
-	return bytes.Contains(raw, []byte(approveModuleMarker)) || bytes.Contains(raw, []byte(approveMarker(tool)))
+	return bytes.Contains(raw, []byte(approveModuleMarker)) || carriesDocument(raw, tool, hookApproval)
 }

@@ -13,7 +13,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
-	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -44,10 +43,15 @@ const (
 // a substring of the completion marker (`--agent-hook --tool …`).
 func approveMarker(tool Tool) string { return "--agent-approve --tool " + string(tool) }
 
-// ApproveCommand is the shell line written into a tool's approval entry.
+// ApproveCommand is the command line written into a tool's approval entry.
 // The else branch, when the tool has a fallback, is what keeps an
 // uninstalled Rakko from changing the tool's behaviour.
 func ApproveCommand(exe string, tool Tool, dataDir string) string {
+	return approveEntryFor(exe, tool, dataDir).command()
+}
+
+// posixApproveCommand is the macOS shell line for one approval entry.
+func posixApproveCommand(exe string, tool Tool, dataDir string) string {
 	call := shellQuote(exe) + " " + approveMarker(tool)
 	if dataDir != "" {
 		call += " --data-dir " + shellQuote(dataDir)
@@ -97,7 +101,7 @@ func RunApproveCLI(args []string, stdin io.Reader, stdout io.Writer) (handled bo
 		}
 		dataDir = filepath.Join(dir, "Rakko")
 	}
-	d, ok := askRakko(context.Background(), filepath.Join(dataDir, SocketName), a)
+	d, ok := askRakko(context.Background(), dataDir, a)
 	if !ok {
 		io.WriteString(stdout, fallback)
 		return true
@@ -259,8 +263,8 @@ func newAskID() string {
 
 // askRakko dials the app, checks who is on the other end, and waits for one
 // decision. ok is false on every abnormal path; the caller then falls back.
-func askRakko(ctx context.Context, path string, a Ask) (Decision, bool) {
-	conn, err := net.DialTimeout("unix", path, approveDial)
+func askRakko(ctx context.Context, dataDir string, a Ask) (Decision, bool) {
+	conn, err := dialTransport(dataDir, approveDial)
 	if err != nil {
 		return Decision{}, false
 	}
@@ -627,11 +631,6 @@ export default function (ctx) {
 
 // renderApproveModule fills an approval module's baked-in values.
 func renderApproveModule(tmpl string, tool Tool, exe, dataDir string) string {
-	r := strings.NewReplacer(
-		"__RAKKO_EXE__", quoteJSON(exe),
-		"__RAKKO_DATA__", quoteJSON(dataDir),
-		"__RAKKO_TOOL__", quoteJSON(string(tool)),
-		"__RAKKO_APPROVE_CMD__", quoteJSON(ApproveCommand(exe, tool, dataDir)),
-	)
-	return r.Replace(tmpl)
+	out := fillModule(tmpl, tool, exe, dataDir, hookApproval)
+	return strings.ReplaceAll(out, "__RAKKO_APPROVE_CMD__", quoteJSON(approveEntryFor(exe, tool, dataDir).command()))
 }

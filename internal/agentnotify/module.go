@@ -226,15 +226,33 @@ const kiroHooks = `{
 // renderModule fills a module template's baked-in values. The values are
 // JSON strings, so a path with quotes or backslashes stays a literal.
 // __RAKKO_CMD:<event>__ becomes the hook command line for that event (an
-// empty event leaves it to the payload).
+// empty event leaves it to the payload), and __RAKKO_ENTRY:<event>__ becomes
+// the entry's members, for a tool that takes a program and an argument array
+// inside an object of its own.
 func renderModule(tmpl string, tool Tool, exe, dataDir string) string {
+	return fillModule(tmpl, tool, exe, dataDir, hookCompletion)
+}
+
+// fillModule substitutes a module template's values and its entry
+// placeholders.
+func fillModule(tmpl string, tool Tool, exe, dataDir string, kind hookKind) string {
 	r := strings.NewReplacer(
 		"__RAKKO_EXE__", quoteJSON(exe),
 		"__RAKKO_DATA__", quoteJSON(dataDir),
 		"__RAKKO_TOOL__", quoteJSON(string(tool)),
 	)
 	out := r.Replace(tmpl)
-	const open, end = "__RAKKO_CMD:", "__"
+	out = fillEntryPlaceholder(out, "__RAKKO_CMD:", func(event string) string {
+		return quoteJSON(hookEntryFor(exe, tool, dataDir, event).command())
+	})
+	return fillEntryPlaceholder(out, "__RAKKO_ENTRY:", func(event string) string {
+		return hookEntryFor(exe, tool, dataDir, event).inline()
+	})
+}
+
+// fillEntryPlaceholder replaces every <open><event>__ with fn(event).
+func fillEntryPlaceholder(out, open string, fn func(string) string) string {
+	const end = "__"
 	for {
 		i := strings.Index(out, open)
 		if i < 0 {
@@ -245,6 +263,6 @@ func renderModule(tmpl string, tool Tool, exe, dataDir string) string {
 			return out
 		}
 		event := out[i+len(open) : i+len(open)+j]
-		out = out[:i] + quoteJSON(hookCommandFor(exe, tool, dataDir, event)) + out[i+len(open)+j+len(end):]
+		out = out[:i] + fn(event) + out[i+len(open)+j+len(end):]
 	}
 }

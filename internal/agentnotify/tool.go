@@ -216,8 +216,8 @@ var specs = []spec{
 		name: "Cursor",
 		kind: KindHooks,
 		detect: func(home string) []string {
-			return paths(home, ".cursor/cli-config.json", ".cursor/ide_state.json", ".cursor/chats",
-				".local/share/cursor-agent", "Library/Application Support/Cursor")
+			return append(paths(home, ".cursor/cli-config.json", ".cursor/ide_state.json",
+				".cursor/chats", ".local/share/cursor-agent"), hostToolPaths(ToolCursor, home)...)
 		},
 		config:  func(home string) string { return join(home, ".cursor", "hooks.json") },
 		events:  []string{"beforeSubmitPrompt", "stop"},
@@ -246,13 +246,11 @@ var specs = []spec{
 	{
 		// Devin CLI: Claude Code's hook format under the "hooks" key of its
 		// user config (docs.devin.ai/cli/extensibility/hooks).
-		tool: ToolDevin,
-		name: "Devin",
-		kind: KindHooks,
-		detect: func(home string) []string {
-			return paths(home, ".config/devin/config.json", ".config/devin/cli")
-		},
-		config:  func(home string) string { return join(home, ".config", "devin", "config.json") },
+		tool:    ToolDevin,
+		name:    "Devin",
+		kind:    KindHooks,
+		detect:  devinDetect,
+		config:  devinConfigPath,
 		events:  []string{"UserPromptSubmit", "Stop"},
 		approve: &approveSpec{event: "PermissionRequest", timeout: approveTimeout},
 	},
@@ -391,7 +389,7 @@ var specs = []spec{
 		name: "Kiro",
 		kind: KindModule,
 		detect: func(home string) []string {
-			return paths(home, ".kiro/settings", ".kiro/agents", "Library/Application Support/Kiro")
+			return append(paths(home, ".kiro/settings", ".kiro/agents"), hostToolPaths(ToolKiro, home)...)
 		},
 		config: func(home string) string { return join(home, ".kiro", "hooks", "rakko-agent-completion.json") },
 		module: kiroHooks,

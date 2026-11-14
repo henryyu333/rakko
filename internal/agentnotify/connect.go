@@ -59,15 +59,15 @@ const namedHook = moduleMarker
 
 // HookCommand is the command line written into a tool's configuration. It
 // runs the forwarder only while the app binary still exists: after the app
-// is moved to the Trash the command succeeds and does nothing, so the agent
-// keeps working.
+// is gone the command succeeds and does nothing, so the agent keeps working.
 func HookCommand(exe string, tool Tool, dataDir string) string {
-	return hookCommandFor(exe, tool, dataDir, "")
+	return hookEntryFor(exe, tool, dataDir, "").command()
 }
 
-// hookCommandFor is HookCommand naming the event on the command line, for
-// tools whose payload does not.
-func hookCommandFor(exe string, tool Tool, dataDir, event string) string {
+// posixHookCommand is the macOS shell line for one completion entry. On
+// Windows the entry is a program with arguments, or the shim that tool's
+// interpreter runs (see command_windows.go).
+func posixHookCommand(exe string, tool Tool, dataDir, event string) string {
 	call := shellQuote(exe) + " " + marker(tool)
 	if event != "" {
 		call += " --event " + shellQuote(event)
@@ -79,9 +79,10 @@ func hookCommandFor(exe string, tool Tool, dataDir, event string) string {
 }
 
 // ownsModule reports whether a module file is Rakko's: a script carries
-// moduleMarker in its header, a JSON hook file Rakko's command.
+// moduleMarker in its header, a JSON hook file (Copilot CLI's, Kiro's) holds
+// Rakko's entry.
 func ownsModule(raw []byte, tool Tool) bool {
-	return bytes.Contains(raw, []byte(moduleMarker)) || bytes.Contains(raw, []byte(marker(tool)))
+	return bytes.Contains(raw, []byte(moduleMarker)) || carriesDocument(raw, tool, hookCompletion)
 }
 
 // shellQuote quotes one word for /bin/sh so the shell hands it over
@@ -147,11 +148,10 @@ func Status(home string, tool Tool) (State, string) {
 		if !existed {
 			return StateNotInjected, ""
 		}
-		doc, derr := newJSONDoc(raw)
-		if derr != nil {
+		if _, derr := newJSONDoc(raw); derr != nil {
 			return StateError, derr.Error()
 		}
-		if hooksHasMarker(doc, s, marker(s.tool)) {
+		if carriesDocument(raw, tool, hookCompletion) {
 			return StateInjected, ""
 		}
 		return StateNotInjected, ""
@@ -165,18 +165,29 @@ func Connect(home, dataDir, exe string, tool Tool) error {
 	if !ok {
 		return fmt.Errorf("agentnotify: %s has no hook channel", tool)
 	}
+	// The shim comes first: an entry that names it must never exist without
+	// it, and a path the tool's interpreter cannot quote leaves the tool's
+	// configuration untouched.
+	if err := prepareHookShim(hookCompletion, s, dataDir, exe); err != nil {
+		return err
+	}
+	var err error
 	switch s.kind {
 	case KindHermes:
-		return connectHermes(s, home, dataDir, exe)
+		err = connectHermes(s, home, dataDir, exe)
 	case KindModule:
-		return writeModule(s, home, dataDir, exe)
+		err = writeModule(s, home, dataDir, exe)
 	case KindNamed:
-		return connectNamed(s, home, dataDir, exe)
+		err = connectNamed(s, home, dataDir, exe)
 	case KindPatch:
-		return connectDSHPatch(s, home, dataDir, exe, dshEntryCompletion, s.config(home), s.module, false)
+		err = connectDSHPatch(s, home, dataDir, exe, dshEntryCompletion, s.config(home), s.module, false)
 	default:
-		return connectHooks(s, home, dataDir, exe)
+		err = connectHooks(s, home, dataDir, exe)
 	}
+	if err != nil {
+		_ = removeShim(dataDir, hookCompletion, tool)
+	}
+	return err
 }
 
 // Disconnect removes every entry Rakko added for tool and puts back what
@@ -186,18 +197,25 @@ func Disconnect(home, dataDir string, tool Tool) error {
 	if !ok {
 		return fmt.Errorf("agentnotify: %s has no hook channel", tool)
 	}
+	var err error
 	switch s.kind {
 	case KindHermes:
-		return disconnectHermes(s, home, dataDir)
+		err = disconnectHermes(s, home, dataDir)
 	case KindModule:
-		return removeModule(s, home, dataDir)
+		err = removeModule(s, home, dataDir)
 	case KindNamed:
-		return disconnectNamed(s, home, dataDir)
+		err = disconnectNamed(s, home, dataDir)
 	case KindPatch:
-		return disconnectDSHPatch(s, home, dataDir, dshEntryCompletion, s.config(home), false)
+		err = disconnectDSHPatch(s, home, dataDir, dshEntryCompletion, s.config(home), false)
 	default:
-		return disconnectHooks(s, home, dataDir)
+		err = disconnectHooks(s, home, dataDir)
 	}
+	if err != nil {
+		// The tool's configuration still names the shim; leave it in place
+		// so the entry keeps working until the next attempt.
+		return err
+	}
+	return removeShim(dataDir, hookCompletion, tool)
 }
 
 // connectHooks adds one entry per event unless the file already carries it.
@@ -208,7 +226,7 @@ func connectHooks(s spec, home, dataDir, exe string) error {
 		if derr != nil {
 			return filePlan{}, fmt.Errorf("agentnotify: %s: %w", path, derr)
 		}
-		if existed && !bytes.Contains(raw, []byte(marker(s.tool))) && isDedicated(s.tool) {
+		if existed && !carriesDocument(raw, s.tool, hookCompletion) && isDedicated(s.tool) {
 			// The file is Rakko's own name; anything else in it is not ours
 			// to replace.
 			return filePlan{}, fmt.Errorf("agentnotify: %s exists and was not written by Rakko; left alone", path)
@@ -264,14 +282,14 @@ func disconnectHooks(s spec, home, dataDir string) error {
 	for _, path := range s.candidates(home) {
 		r := s
 		r.bare = s.bareName != "" && filepath.Base(path) == s.bareName
-		if err := disconnectHooksAt(r, path, dataDir, marker(s.tool)); err != nil && first == nil {
+		if err := disconnectHooksAt(r, path, dataDir, hookCompletion); err != nil && first == nil {
 			first = err
 		}
 	}
 	return first
 }
 
-func disconnectHooksAt(s spec, path, dataDir, mark string) error {
+func disconnectHooksAt(s spec, path, dataDir string, kind hookKind) error {
 	return updateFile(path, func(raw []byte, existed bool, mode os.FileMode) (filePlan, error) {
 		if !existed {
 			return filePlan{after: func() { forgetOrigin(dataDir, path) }}, nil
@@ -280,7 +298,7 @@ func disconnectHooksAt(s spec, path, dataDir, mark string) error {
 		if derr != nil {
 			return filePlan{}, fmt.Errorf("agentnotify: %s: %w", path, derr)
 		}
-		if !removeHooks(doc, s, mark) {
+		if !removeHooks(doc, s, kind) {
 			return filePlan{}, nil
 		}
 		rec := readOrigin(dataDir, path)
@@ -310,7 +328,7 @@ func writeModule(s spec, home, dataDir, exe string) error {
 		if existed && !ownsModule(raw, s.tool) {
 			return filePlan{}, fmt.Errorf("agentnotify: %s exists and was not written by Rakko; left alone", path)
 		}
-		body := renderModule(s.module, s.tool, exe, dataDir)
+		body := renderModule(moduleSource(s, hookCompletion), s.tool, exe, dataDir)
 		return filePlan{data: []byte(body), mode: 0o644, changed: true, before: func() error {
 			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 				return err
@@ -359,7 +377,7 @@ func connectNamed(s spec, home, dataDir, exe string) error {
 		if s.eventArg {
 			event = ev
 		}
-		return hookCommandFor(exe, s.tool, dataDir, event)
+		return hookEntryFor(exe, s.tool, dataDir, event).command()
 	})
 }
 
@@ -460,13 +478,13 @@ func addHook(doc *jsonDoc, s spec, exe, dataDir, ev string, timeout int) (bool, 
 	if s.eventArg {
 		event = ev
 	}
-	return addHookCommand(doc, s, ev, timeout, hookCommandFor(exe, s.tool, dataDir, event), marker(s.tool))
+	return addHookCommand(doc, s, ev, timeout, hookEntryFor(exe, s.tool, dataDir, event), hookCompletion)
 }
 
 // addHookCommand is addHook for any Rakko command line and marker: the
 // completion entry and the approval entry share the splice-and-reparse
 // rules but never see each other's marker.
-func addHookCommand(doc *jsonDoc, s spec, ev string, timeout int, command, mark string) (bool, error) {
+func addHookCommand(doc *jsonDoc, s spec, ev string, timeout int, entry hookEntry, kind hookKind) (bool, error) {
 	hooks := hooksIn(doc, s.bare)
 	if hooks == nil && !s.bare {
 		if err := doc.appendMember(doc.root, "hooks", func(string) string { return "{}" }); err != nil {
@@ -489,24 +507,19 @@ func addHookCommand(doc *jsonDoc, s spec, ev string, timeout int, command, mark 
 		return false, fmt.Errorf("agentnotify: hooks.%s is not an array", ev)
 	}
 	for _, item := range arr.items {
-		if itemHasMarker(doc, item, mark) {
+		if itemCarries(doc, item, s.tool, kind) {
 			return false, nil
 		}
 	}
 	render := func(indent string) string {
 		inner := indent + doc.indent
 		if s.flat {
-			return "{\n" +
-				inner + `"command": ` + quoteJSON(command) + ",\n" +
-				inner + fmt.Sprintf(`"timeout": %d`, timeout) + "\n" + indent + "}"
+			return hookObject(entry.members(), indent, inner, fmt.Sprintf(`"timeout": %d`, timeout))
 		}
 		deep := inner + doc.indent
-		return "{\n" + inner + `"hooks": [` + "\n" +
-			deep + "{\n" +
-			deep + doc.indent + `"type": ` + quoteJSON("command") + ",\n" +
-			deep + doc.indent + `"command": ` + quoteJSON(command) + ",\n" +
-			deep + doc.indent + fmt.Sprintf(`"timeout": %d`, timeout) + "\n" +
-			deep + "}\n" + inner + "]\n" + indent + "}"
+		members := append([]string{`"type": ` + quoteJSON("command")}, entry.members()...)
+		object := hookObject(members, deep, deep+doc.indent, fmt.Sprintf(`"timeout": %d`, timeout))
+		return "{\n" + inner + `"hooks": [` + "\n" + object + "\n" + inner + "]\n" + indent + "}"
 	}
 	return true, doc.appendItem(arr, render)
 }
@@ -521,33 +534,26 @@ func hooksIn(doc *jsonDoc, bare bool) *jnode {
 	return hooks
 }
 
-// hooksHasMarker reports whether any hooks array holds Rakko's command.
-func hooksHasMarker(doc *jsonDoc, s spec, mark string) bool {
-	hooks := hooksIn(doc, s.bare)
-	if hooks == nil || hooks.kind != jObject {
-		return false
+// hookObject renders one hook entry object: its members, then the timeout,
+// one per line inside the object's indentation.
+func hookObject(members []string, indent, fieldIndent, timeout string) string {
+	var b strings.Builder
+	b.WriteString("{\n")
+	for _, m := range members {
+		b.WriteString(fieldIndent + m + ",\n")
 	}
-	for _, m := range hooks.members {
-		if m.value == nil || m.value.kind != jArray {
-			continue
-		}
-		for _, item := range m.value.items {
-			if itemHasMarker(doc, item, mark) {
-				return true
-			}
-		}
-	}
-	return false
+	b.WriteString(fieldIndent + timeout + "\n" + indent + "}")
+	return b.String()
 }
 
 // removeHooks deletes every command carrying Rakko's marker for a tool, and
 // the containers it leaves empty.
-func removeHooks(doc *jsonDoc, s spec, mark string) bool {
+func removeHooks(doc *jsonDoc, s spec, kind hookKind) bool {
 	changed := false
 	// One command per step: every splice re-parses the document, so the
 	// nodes of the previous step no longer describe the file.
 	for range 4096 {
-		if !removeOneHookCommand(doc, s.bare, mark) {
+		if !removeOneHookCommand(doc, s.bare, s.tool, kind) {
 			break
 		}
 		changed = true
@@ -560,7 +566,7 @@ func removeHooks(doc *jsonDoc, s spec, mark string) bool {
 // item that holds other commands keeps them: only the inner command with our
 // marker goes, and the item itself only when nothing else is left in it —
 // no other command and no other key such as a user's matcher.
-func removeOneHookCommand(doc *jsonDoc, bare bool, mark string) bool {
+func removeOneHookCommand(doc *jsonDoc, bare bool, tool Tool, kind hookKind) bool {
 	hooks := hooksIn(doc, bare)
 	if hooks == nil || hooks.kind != jObject {
 		return false
@@ -588,7 +594,7 @@ func removeOneHookCommand(doc *jsonDoc, bare bool, mark string) bool {
 			inner, _ := item.lookup("hooks")
 			if inner == nil || inner.kind != jArray {
 				// A command written directly as the item: remove it whole.
-				if itemHasMarker(doc, item, mark) {
+				if itemCarries(doc, item, tool, kind) {
 					return doc.removeItem(arr, i) == nil
 				}
 				continue
@@ -602,7 +608,7 @@ func removeOneHookCommand(doc *jsonDoc, bare bool, mark string) bool {
 				if inner == nil || inner.kind != jArray || j >= len(inner.items) {
 					break
 				}
-				if !itemHasMarker(doc, inner.items[j], mark) {
+				if !itemCarries(doc, inner.items[j], tool, kind) {
 					continue
 				}
 				if err := doc.removeItem(inner, j); err != nil {
@@ -694,14 +700,6 @@ func memberKeys(obj *jnode) []string {
 func memberIndex(obj *jnode, key string) int {
 	_, idx := obj.lookup(key)
 	return idx
-}
-
-// itemHasMarker reports whether an array item is one of Rakko's entries.
-func itemHasMarker(doc *jsonDoc, item *jnode, mark string) bool {
-	if item == nil || item.start < 0 || item.end > len(doc.src) {
-		return false
-	}
-	return bytes.Contains(doc.src[item.start:item.end], []byte(mark))
 }
 
 // readConfig reads a settings file, reporting whether it exists.
