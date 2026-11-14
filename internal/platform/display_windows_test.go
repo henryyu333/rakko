@@ -157,6 +157,74 @@ func TestStableDisplayID(t *testing.T) {
 	}
 }
 
+// TestStableDisplayIDUsesMonitorPath checks that a display's saved identity
+// comes from the physical monitor rather than the adapter output: the same
+// monitor replugged onto another output keeps its id, and a key saved by an
+// earlier build (the GDI name's hash) still resolves.
+func TestStableDisplayIDUsesMonitorPath(t *testing.T) {
+	m := testMonitor(1, 0, 0, 1920, 1080, 96, `\\.\DISPLAY1`)
+	m.target = `\\?\DISPLAY#DEL4098#5&2f8a1b1c&0&UID4352#{e6f07b5f-ee97-4a90-b076-33f57bf4eaa7}`
+	if stableDisplayID(m) == legacyDisplayID(m) {
+		t.Fatal("the stable id must hash the monitor's path, not the adapter output's name")
+	}
+	replugged := m
+	replugged.device = `\\.\DISPLAY2`
+	if stableDisplayID(replugged) != stableDisplayID(m) {
+		t.Fatal("the same monitor on another output changed its id")
+	}
+	if legacyDisplayID(replugged) == legacyDisplayID(m) {
+		t.Fatal("the legacy id must follow the GDI name")
+	}
+	ms := []screenMonitor{replugged}
+	if _, i, ok := findMonitorIn(ms, stableDisplayID(m)); !ok || i != 0 {
+		t.Fatalf("current id lookup = index %d, ok %v; want 0, true", i, ok)
+	}
+	// A layout saved by an earlier build still resolves while the output
+	// keeps the GDI name that build hashed.
+	if _, i, ok := findMonitorIn(ms, legacyDisplayID(replugged)); !ok || i != 0 {
+		t.Fatalf("a layout saved under the old id no longer resolves: index %d, ok %v", i, ok)
+	}
+	// A display without a monitor path (no display configuration answer)
+	// still gets a stable id, the GDI name's.
+	plain := testMonitor(2, 1920, 0, 1920, 1080, 96, `\\.\DISPLAY2`)
+	if stableDisplayID(plain) != legacyDisplayID(plain) {
+		t.Fatal("without a monitor path the id must fall back to the GDI name")
+	}
+}
+
+// TestDisplayTargetPathsQuery checks the display configuration query on the
+// machine: every active output must resolve to a GDI name and a monitor
+// device path, and the enumerated displays must pick the path up. A session
+// without a display configuration (a headless remote session) has no paths
+// to check.
+func TestDisplayTargetPathsQuery(t *testing.T) {
+	targets := queryDisplayTargetPaths()
+	if len(targets) == 0 {
+		t.Skip("this session has no active display configuration")
+	}
+	for name, path := range targets {
+		if len(name) < len(`\\.\DISPLAY`) || name[:len(`\\.\DISPLAY`)] != `\\.\DISPLAY` {
+			t.Errorf("output name %q, want a GDI device name", name)
+		}
+		if path == "" {
+			t.Errorf("%s has an empty monitor path", name)
+		}
+	}
+	matched := 0
+	for _, m := range enumMonitors() {
+		if m.target == "" {
+			continue
+		}
+		matched++
+		if stableDisplayID(m) == legacyDisplayID(m) {
+			t.Errorf("%s kept the adapter-output id despite monitor path %q", m.device, m.target)
+		}
+	}
+	if matched == 0 {
+		t.Errorf("no enumerated display resolved to a monitor path; targets = %v", targets)
+	}
+}
+
 // TestRepeatedEnumerationKeepsCallbackSlots checks that resolving displays
 // and listing windows reuse the package's fixed enumeration callbacks. Each
 // call used to create a fresh Windows callback and the runtime never frees

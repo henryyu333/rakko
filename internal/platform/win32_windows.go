@@ -10,6 +10,7 @@ package platform
 import (
 	"hash/fnv"
 	"sync"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -114,6 +115,10 @@ var (
 
 	procPlaySound        = sysProc(winmm, "PlaySoundW")
 	procGetDpiForMonitor = sysProc(shcore, "GetDpiForMonitor")
+
+	procGetDisplayConfigBufferSizes = sysProc(user32, "GetDisplayConfigBufferSizes")
+	procQueryDisplayConfig          = sysProc(user32, "QueryDisplayConfig")
+	procDisplayConfigGetDeviceInfo  = sysProc(user32, "DisplayConfigGetDeviceInfo")
 	procWTSQuerySession  = sysProc(wtsapi32, "WTSQuerySessionInformationW")
 	procOpenInputDesktop = sysProc(user32, "OpenInputDesktop")
 	procCloseDesktop     = sysProc(user32, "CloseDesktop")
@@ -190,6 +195,85 @@ var (
 	hwndTopmost   = ^uintptr(0)
 	hwndNoTopmost = ^uintptr(1)
 	hwndTop       = uintptr(0)
+)
+
+// displayConfigSourceInfo, displayConfigTargetInfo and displayConfigPathInfo
+// mirror DISPLAYCONFIG_PATH_SOURCE_INFO, DISPLAYCONFIG_PATH_TARGET_INFO and
+// DISPLAYCONFIG_PATH_INFO: one active output of the display configuration,
+// named by the adapter's LUID and the output id on it. The source's trailing
+// statusFlags is part of the Windows 10 structure and shifts the target
+// information, so the sizes here must match the system's exactly.
+type displayConfigSourceInfo struct {
+	adapterID   windows.LUID
+	id          uint32
+	modeInfoIdx uint32
+	statusFlags uint32
+}
+
+type displayConfigRational struct {
+	numerator   uint32
+	denominator uint32
+}
+
+type displayConfigTargetInfo struct {
+	adapterID        windows.LUID
+	id               uint32
+	modeInfoIdx      uint32
+	outputTechnology uint32
+	rotation         uint32
+	scaling          uint32
+	refreshRate      displayConfigRational
+	scanLineOrdering uint32
+	targetAvailable  int32
+	statusFlags      uint32
+}
+
+type displayConfigPathInfo struct {
+	source displayConfigSourceInfo
+	target displayConfigTargetInfo
+	flags  uint32
+}
+
+// displayConfigDeviceInfoHeader mirrors DISPLAYCONFIG_DEVICE_INFO_HEADER,
+// which gets the type and buffer size on the way in.
+type displayConfigDeviceInfoHeader struct {
+	deviceType uint32
+	size       uint32
+	adapterID  windows.LUID
+	id         uint32
+}
+
+// displayConfigSourceDeviceName mirrors DISPLAYCONFIG_SOURCE_DEVICE_NAME: the
+// GDI device name of an output's source.
+type displayConfigSourceDeviceName struct {
+	header  displayConfigDeviceInfoHeader
+	gdiName [32]uint16
+}
+
+// displayConfigTargetDeviceName mirrors DISPLAYCONFIG_TARGET_DEVICE_NAME: the
+// physical monitor behind an output.
+type displayConfigTargetDeviceName struct {
+	header            displayConfigDeviceInfoHeader
+	flags             uint32
+	outputTechnology  uint32
+	edidManufactureID uint16
+	edidProductCodeID uint16
+	connectorInstance uint32
+	friendlyName      [64]uint16
+	devicePath        [128]uint16
+}
+
+const (
+	// qdcOnlyActivePaths asks the display configuration for the outputs in
+	// use, the ones GDI enumerates as displays.
+	qdcOnlyActivePaths = 0x00000002
+
+	displayConfigGetSourceName = 1
+	displayConfigGetTargetName = 2
+
+	// displayConfigModeInfoSize is sizeof(DISPLAYCONFIG_MODE_INFO); the mode
+	// array is only a buffer for the query, so it is kept as 8-byte words.
+	displayConfigModeInfoSize = 64
 )
 
 type winRect struct{ Left, Top, Right, Bottom int32 }
@@ -392,6 +476,98 @@ type screenMonitor struct {
 	work   winRect
 	dpi    int
 	device string
+	// target is the physical monitor's device interface path, "" when the
+	// display configuration query has no answer for this output.
+	target string
+}
+
+// displayTargetsTTL bounds how long an output's monitor path may be cached.
+// The path identifies the monitor and does not change, but an output can be
+// replugged onto another monitor at any time; a couple of seconds costs a
+// stale layout key at most, while an uncached query would run on every DIP
+// conversion.
+const displayTargetsTTL = 2 * time.Second
+
+var displayTargetsCache struct {
+	mu      sync.Mutex
+	expires time.Time
+	paths   map[string]string
+}
+
+// displayTargetPaths maps each active output's GDI device name
+// ("\\.\DISPLAY1") to the physical monitor's device interface path
+// ("\\?\DISPLAY#DEL4098#5&...#{e6f07b5f-...}"). The GDI name numbers an
+// adapter output, so it follows output enumeration rather than the monitor
+// the user saved a layout for; the device path names the monitor.
+func displayTargetPaths() map[string]string {
+	displayTargetsCache.mu.Lock()
+	defer displayTargetsCache.mu.Unlock()
+	if displayTargetsCache.paths != nil && time.Now().Before(displayTargetsCache.expires) {
+		return displayTargetsCache.paths
+	}
+	paths := queryDisplayTargetPaths()
+	displayTargetsCache.paths = paths
+	displayTargetsCache.expires = time.Now().Add(displayTargetsTTL)
+	return paths
+}
+
+// queryDisplayTargetPaths reads the active outputs and their monitors from the
+// display configuration. A session without a display configuration (a service,
+// a headless remote session) yields an empty map, and displays then fall back
+// to their GDI name.
+func queryDisplayTargetPaths() map[string]string {
+	// The display configuration can change between sizing the buffers and
+	// querying them; the system then asks for a second attempt.
+	for range 2 {
+		var numPaths, numModes uint32
+		if r, _, _ := procGetDisplayConfigBufferSizes.Call(qdcOnlyActivePaths,
+			uintptr(unsafe.Pointer(&numPaths)), uintptr(unsafe.Pointer(&numModes))); int32(r) != 0 || numPaths == 0 {
+			return nil
+		}
+		paths := make([]displayConfigPathInfo, numPaths)
+		modes := make([]uint64, (displayConfigModeInfoSize*int(numModes)+7)/8)
+		var modesPtr uintptr
+		if len(modes) > 0 {
+			modesPtr = uintptr(unsafe.Pointer(&modes[0]))
+		}
+		r, _, _ := procQueryDisplayConfig.Call(qdcOnlyActivePaths,
+			uintptr(unsafe.Pointer(&numPaths)), uintptr(unsafe.Pointer(&paths[0])),
+			uintptr(unsafe.Pointer(&numModes)), modesPtr, 0)
+		switch int32(r) {
+		case 0: // ERROR_SUCCESS
+		case 122: // ERROR_INSUFFICIENT_BUFFER: re-enumerate and try again
+			continue
+		default:
+			return nil
+		}
+		out := make(map[string]string, numPaths)
+		for _, p := range paths[:numPaths] {
+			src := displayConfigSourceDeviceName{header: displayConfigDeviceInfoHeader{
+				deviceType: displayConfigGetSourceName,
+				size:       uint32(unsafe.Sizeof(displayConfigSourceDeviceName{})),
+				adapterID:  p.source.adapterID,
+				id:         p.source.id,
+			}}
+			if r, _, _ := procDisplayConfigGetDeviceInfo.Call(uintptr(unsafe.Pointer(&src))); int32(r) != 0 {
+				continue
+			}
+			tgt := displayConfigTargetDeviceName{header: displayConfigDeviceInfoHeader{
+				deviceType: displayConfigGetTargetName,
+				size:       uint32(unsafe.Sizeof(displayConfigTargetDeviceName{})),
+				adapterID:  p.target.adapterID,
+				id:         p.target.id,
+			}}
+			if r, _, _ := procDisplayConfigGetDeviceInfo.Call(uintptr(unsafe.Pointer(&tgt))); int32(r) != 0 {
+				continue
+			}
+			name := windows.UTF16ToString(src.gdiName[:])
+			if path := windows.UTF16ToString(tgt.devicePath[:]); name != "" && path != "" {
+				out[name] = path
+			}
+		}
+		return out
+	}
+	return nil
 }
 
 // enumMonitors lists the active displays. The fixed monitor callback reads
@@ -400,6 +576,7 @@ type screenMonitor struct {
 // repeated a few thousand times would exhaust the runtime's callback slots.
 func enumMonitors() []screenMonitor {
 	var out []screenMonitor
+	targets := displayTargetPaths()
 	token := beginEnum(func(handle uintptr) bool {
 		var mi monitorInfoEx
 		mi.cbSize = uint32(unsafe.Sizeof(mi))
@@ -418,6 +595,7 @@ func enumMonitors() []screenMonitor {
 			work:   mi.rcWork,
 			dpi:    dpi,
 			device: device,
+			target: targets[device],
 		})
 		return true
 	})
@@ -629,10 +807,12 @@ func overlapArea(a, b winRect) int64 {
 	return w * h
 }
 
-// StableDisplayID returns a display's persistent identity: a hash of its
-// device name ("\\.\DISPLAY1"), which survives a restart even though the
-// HMONITOR mygo reports as Display.ID does not. An unknown id is returned
-// unchanged, so a stale saved key never matches a real display by accident.
+// StableDisplayID returns a display's persistent identity: a hash of the
+// physical monitor's device interface path, which survives a restart even
+// though the HMONITOR mygo reports as Display.ID does not, and stays with the
+// monitor when it is moved to another output (the GDI device name does not).
+// An unknown id is returned unchanged, so a stale saved key never matches a
+// real display by accident.
 func StableDisplayID(id int64) int64 {
 	for _, m := range enumMonitors() {
 		if int64(m.handle) == id {
@@ -642,12 +822,28 @@ func StableDisplayID(id int64) int64 {
 	return id
 }
 
-// stableDisplayID hashes one display's device name into the positive
-// int64 range. The high bit is cleared so a stored key never looks like a
-// negative number in the settings JSON.
+// stableDisplayID hashes a display's persistent identity: its monitor device
+// path, or its GDI device name on a session whose display configuration has
+// no answer for the output.
 func stableDisplayID(m screenMonitor) int64 {
+	identity := m.target
+	if identity == "" {
+		identity = m.device
+	}
+	return displayIDHash(identity)
+}
+
+// legacyDisplayID is the GDI-device-name hash earlier builds saved as a
+// display's layout key. Layouts saved then are still on disk, so a lookup
+// accepts the legacy key as well as the current one.
+func legacyDisplayID(m screenMonitor) int64 { return displayIDHash(m.device) }
+
+// displayIDHash hashes a display identity into the positive int64 range. The
+// high bit is cleared so a stored key never looks like a negative number in
+// the settings JSON.
+func displayIDHash(identity string) int64 {
 	h := fnv.New64a()
-	h.Write([]byte(m.device))
+	h.Write([]byte(identity))
 	return int64(h.Sum64() &^ (1 << 63))
 }
 
@@ -659,7 +855,8 @@ func findMonitor(displayID int64) (screenMonitor, int, bool) {
 }
 
 // findMonitorIn resolves an id against an explicit display list: an
-// HMONITOR first, then a stable display id.
+// HMONITOR first, then the current stable id, then the legacy one a layout
+// saved before the monitor-path identity still carries.
 func findMonitorIn(ms []screenMonitor, displayID int64) (screenMonitor, int, bool) {
 	for i, m := range ms {
 		if int64(m.handle) == displayID {
@@ -668,6 +865,11 @@ func findMonitorIn(ms []screenMonitor, displayID int64) (screenMonitor, int, boo
 	}
 	for i, m := range ms {
 		if stableDisplayID(m) == displayID {
+			return m, i, true
+		}
+	}
+	for i, m := range ms {
+		if legacyDisplayID(m) == displayID {
 			return m, i, true
 		}
 	}
