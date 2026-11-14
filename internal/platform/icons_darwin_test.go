@@ -33,7 +33,24 @@ func TestHeadphoneSymbol(t *testing.T) {
 	if got := headphoneSymbol("AirPods Pro", HeadphoneCase); got != "airpodspro.chargingcase.wireless" {
 		t.Errorf("pro case symbol %q", got)
 	}
-	if got := plainHeadphoneSymbol(HeadphoneCase); got != "airpods.chargingcase" {
-		t.Errorf("case fallback %q", got)
+}
+
+// TestHeadphoneIconFallback: a symbol the system lacks falls back only the
+// way the drawn UI always did: the whole headset to the plain headphones,
+// the case to the plain case, and a pod to no icon at all, so the caller
+// draws its own pod exactly as before.
+func TestHeadphoneIconFallback(t *testing.T) {
+	for _, c := range []struct {
+		part HeadphonePart
+		want string
+	}{
+		{HeadphoneWhole, "headphones"},
+		{HeadphoneCase, "airpods.chargingcase"},
+		{HeadphoneLeft, ""},
+		{HeadphoneRight, ""},
+	} {
+		if got := fallbackHeadphoneSymbol(c.part); got != c.want {
+			t.Errorf("part %d: fallback %q, want %q", c.part, got, c.want)
+		}
 	}
 }

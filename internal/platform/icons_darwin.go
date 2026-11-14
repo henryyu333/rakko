@@ -17,16 +17,19 @@ const (
 // HeadphoneIcon returns a PNG template icon for the named device part:
 // the whole headset, one pod, or the charging case. An unknown model gets
 // the generic headphones symbol; a missing image for the specific symbol
-// falls back to the plain one.
+// falls back the way the drawn UI always has: the headset to the plain
+// headphones, the case to the plain case, and a pod to nothing at all so
+// the caller draws its own pod.
 func HeadphoneIcon(model string, part HeadphonePart, size int) []byte {
 	name := headphoneSymbol(model, part)
 	if out := systemSymbol(name, size); out != nil {
 		return out
 	}
-	if fallback := plainHeadphoneSymbol(part); fallback != name {
-		return systemSymbol(fallback, size)
+	fallback := fallbackHeadphoneSymbol(part)
+	if fallback == "" || fallback == name {
+		return nil
 	}
-	return nil
+	return systemSymbol(fallback, size)
 }
 
 // headphoneSymbol picks the closest SF Symbol available for the device and
@@ -60,11 +63,15 @@ func headphoneSymbol(model string, part HeadphonePart) string {
 	}
 }
 
-// plainHeadphoneSymbol is the fallback the UI draws when the specific one
-// is unavailable.
-func plainHeadphoneSymbol(part HeadphonePart) string {
-	if part == HeadphoneCase {
+// fallbackHeadphoneSymbol is the symbol tried when a part's own symbol is
+// missing. The pods have none: their badge keeps the self-drawn pod it had
+// before, so an absent SF Symbol must reach the caller as no image.
+func fallbackHeadphoneSymbol(part HeadphonePart) string {
+	switch part {
+	case HeadphoneWhole:
+		return "headphones"
+	case HeadphoneCase:
 		return "airpods.chargingcase"
 	}
-	return "headphones"
+	return ""
 }
