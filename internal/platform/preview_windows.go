@@ -49,6 +49,9 @@ const (
 	// CLSCTX_INPROC_SERVER | CLSCTX_LOCAL_SERVER: handlers may live in an
 	// out-of-process server (the Photos and PDF ones do).
 	pvClsctx = 0x1 | 0x4
+	// CLSCTX_LOCAL_SERVER alone: the handler's class names an AppID with
+	// DllSurrogate, so it has to run in that surrogate host.
+	pvClsctxSurrogate = 0x4
 
 	// STGM_READ. Preview handlers only want to read the item.
 	pvStgmRead = 0
@@ -678,12 +681,41 @@ func previewParseCLSID(value string) (windows.GUID, error) {
 	return windows.GUIDFromString(value)
 }
 
+// previewActivationContext answers the context the handler's registration asks
+// for. A preview handler whose class names an AppID with DllSurrogate is meant
+// to run in that surrogate (prevhost.exe), as Explorer runs it; loading its
+// DLL into Rakko instead makes handlers such as Adobe's PDF preview fail at
+// DoPreview.
+func previewActivationContext(clsid windows.GUID) uintptr {
+	appID := previewFirstString(`CLSID\`+clsid.String(), "AppID")
+	if appID != "" && previewFirstString(`AppID\`+appID, "DllSurrogate") != "" {
+		return pvClsctxSurrogate
+	}
+	return pvClsctx
+}
+
+// previewFirstString reads a class registration from the per-user store first,
+// then from the machine view. HKCR does not show a key created under
+// HKCU\Software\Classes in the same session, so the per-user path is read
+// directly.
+func previewFirstString(key, name string) string {
+	for _, probe := range [...]previewRegistryProbe{
+		{registry.CURRENT_USER, `Software\Classes\` + key},
+		{registry.CLASSES_ROOT, key},
+	} {
+		if v := previewStringValue(probe.root, probe.key, name); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
 // previewOpenHandler creates the handler, initializes it with the item and
 // returns its IPreviewHandler.
 func previewOpenHandler(clsid windows.GUID, path string) (*previewComObject, error) {
 	var obj *previewComObject
 	hr, _, _ := procPVCoCreateInstance.Call(
-		uintptr(unsafe.Pointer(&clsid)), 0, pvClsctx,
+		uintptr(unsafe.Pointer(&clsid)), 0, previewActivationContext(clsid),
 		uintptr(unsafe.Pointer(&iidPVIUnknown)), uintptr(unsafe.Pointer(&obj)))
 	runtime.KeepAlive(&clsid)
 	if previewFailed(hr) || obj == nil {

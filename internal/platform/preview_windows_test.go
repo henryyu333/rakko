@@ -156,3 +156,53 @@ func TestPreviewHandlerThroughProgID(t *testing.T) {
 		t.Fatalf("previewHandlerCLSID = %s, want %s", got, want)
 	}
 }
+
+// TestPreviewActivationContext checks that a handler registered to run in the
+// shell's DLL surrogate is activated there, while a plain in-process handler
+// keeps the combined context. Explorer honours this registration; ignoring it
+// loads the handler's DLL into Rakko, where the PDF preview handler fails.
+func TestPreviewActivationContext(t *testing.T) {
+	const (
+		clsidKey = `Software\Classes\CLSID\{0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d}`
+		appID    = "RakkoPreviewTest.Surrogate"
+		appIDKey = `Software\Classes\AppID\` + appID
+		plainKey = `Software\Classes\CLSID\{0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4e}`
+	)
+	clsid := windows.GUID{Data1: 0x0a1b2c3d, Data2: 0x4e5f, Data3: 0x4a6b, Data4: [8]byte{0x8c, 0x7d, 0x9e, 0x0f, 0x1a, 0x2b, 0x3c, 0x4d}}
+	plain := clsid
+	plain.Data4[7] = 0x4e
+
+	remove := func() {
+		registry.DeleteKey(registry.CURRENT_USER, clsidKey)
+		registry.DeleteKey(registry.CURRENT_USER, appIDKey)
+		registry.DeleteKey(registry.CURRENT_USER, plainKey)
+	}
+	remove()
+	t.Cleanup(remove)
+
+	k, _, err := registry.CreateKey(registry.CURRENT_USER, clsidKey, registry.WRITE)
+	if err != nil {
+		t.Skipf("cannot write a test class: %v", err)
+	}
+	if err := k.SetStringValue("AppID", appID); err != nil {
+		k.Close()
+		t.Fatalf("writing the AppID value: %v", err)
+	}
+	k.Close()
+	a, _, err := registry.CreateKey(registry.CURRENT_USER, appIDKey, registry.WRITE)
+	if err != nil {
+		t.Fatalf("creating the AppID: %v", err)
+	}
+	if err := a.SetStringValue("DllSurrogate", `%SystemRoot%\system32\prevhost.exe`); err != nil {
+		a.Close()
+		t.Fatalf("writing the surrogate: %v", err)
+	}
+	a.Close()
+
+	if got := previewActivationContext(clsid); got != pvClsctxSurrogate {
+		t.Fatalf("a surrogate handler activated with %#x, want CLSCTX_LOCAL_SERVER", got)
+	}
+	if got := previewActivationContext(plain); got != pvClsctx {
+		t.Fatalf("a plain handler activated with %#x, want the combined context", got)
+	}
+}
