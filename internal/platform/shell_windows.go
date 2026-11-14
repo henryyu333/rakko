@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -195,34 +196,247 @@ func mapFileError(op string, err error) error {
 	return fmt.Errorf("%s: %w", op, err)
 }
 
+// ErrCannotRecycle reports an item the shell would permanently delete
+// instead of recycling: a volume without a recycle bin, the bin turned off by
+// policy, or an item larger than the bin's quota. TrashFile leaves such an
+// item where it is rather than deleting it.
+var ErrCannotRecycle = errors.New("windows: the item cannot be moved to the recycle bin")
+
 // TrashFile moves path to the recycle bin the way Explorer's 移到回收站
-// does. It fails rather than deleting when the shell cannot recycle the
-// item, so the caller can leave the item where it is.
+// does, and answers the path it took. It never falls back to a permanent
+// delete: an item the shell cannot recycle is refused with ErrCannotRecycle,
+// and a shell that reports a failure or an abort is propagated, so the caller
+// can leave the item where it is.
 func TrashFile(path string) (trashed string, err error) {
 	abs, aerr := filepath.Abs(path)
 	if aerr != nil {
 		return "", aerr
 	}
-	if _, serr := os.Lstat(abs); serr != nil {
+	fi, serr := os.Lstat(abs)
+	if serr != nil {
 		return "", mapFileError("trash", serr)
 	}
-	// SHFileOperation takes a double-NUL-terminated list; one path is a
-	// list of one.
-	from := windows.StringToUTF16(abs)
-	from = append(from, 0)
-	op := shFileOpStruct{
-		wFunc:  foDelete,
-		pFrom:  &from[0],
-		fFlags: fofAllowUndo | fofNoConfirm | fofSilent | fofNoErrorUI,
+	if err := recyclableItem(abs, fi); err != nil {
+		return "", err
 	}
-	r, _, _ := procSHFileOperation.Call(uintptr(unsafe.Pointer(&op)))
-	if r != 0 || op.fAnyOperationsAborted != 0 {
-		if op.fAnyOperationsAborted != 0 {
-			return "", errors.New("platform: the move to the recycle bin was cancelled")
+	// The bin's item count is the only confirmation the shell gives that the
+	// item was recycled rather than deleted.
+	before, counted := recycleBinItems(abs)
+	if err := recycleItem(abs); err != nil {
+		return "", err
+	}
+	if _, serr := os.Lstat(abs); serr == nil {
+		return "", fmt.Errorf("platform: %s is still there after the delete", abs)
+	}
+	if counted {
+		if after, ok := recycleBinItems(abs); ok && after <= before {
+			return "", fmt.Errorf("platform: %s was not added to the recycle bin", abs)
 		}
-		return "", fmt.Errorf("platform: the recycle bin refused %s (0x%x)", abs, r)
 	}
 	return abs, nil
+}
+
+// recyclableItem refuses an item the shell would permanently delete. The
+// recycle rules come from the volume and the user's bin settings; an item on
+// a network share or removable media has no bin at all, and the bin's quota
+// is what Explorer shows in its properties.
+func recyclableItem(abs string, fi os.FileInfo) error {
+	root := filepath.VolumeName(abs)
+	if root == "" {
+		return fmt.Errorf("%w: %s has no volume", ErrCannotRecycle, abs)
+	}
+	mount := root + string(filepath.Separator)
+	p, err := windows.UTF16PtrFromString(mount)
+	if err != nil {
+		return err
+	}
+	driveType, _, _ := procGetDriveType.Call(uintptr(unsafe.Pointer(p)))
+	rules := recycleRules{driveType: uint32(driveType)}
+	if nuke, ok := bitBucketDWORD(mount, "NukeOnDelete"); ok {
+		rules.nukeOnDelete = nuke != 0
+	}
+	if rules.driveType == driveFixed && !rules.nukeOnDelete {
+		rules.capacity = recycleCapacity(mount)
+	}
+	return recycleRefusal(rules, abs, fi)
+}
+
+// recycleRules is what decides whether the shell may recycle an item.
+type recycleRules struct {
+	driveType    uint32
+	nukeOnDelete bool
+	capacity     int64 // 0 when unknown
+}
+
+// recycleRefusal explains why an item cannot go to the recycle bin under
+// rules, or nil when it can.
+func recycleRefusal(rules recycleRules, path string, fi os.FileInfo) error {
+	if rules.driveType != driveFixed {
+		return fmt.Errorf("%w: %s is not on a fixed drive", ErrCannotRecycle, path)
+	}
+	if rules.nukeOnDelete {
+		return fmt.Errorf("%w: the recycle bin is turned off for this user", ErrCannotRecycle)
+	}
+	if !fi.IsDir() && rules.capacity > 0 && fi.Size() > rules.capacity {
+		return fmt.Errorf("%w: %s is larger than the recycle bin (%d bytes)", ErrCannotRecycle, path, rules.capacity)
+	}
+	return nil
+}
+
+// recycleCapacity is the bin's quota for the volume in bytes: the user's
+// setting when there is one, otherwise Explorer's default of 5% of a small
+// volume and 10% of a large one.
+func recycleCapacity(mount string) int64 {
+	if mb, ok := bitBucketDWORD(mount, "MaxCapacity"); ok && mb > 0 {
+		return int64(mb) << 20
+	}
+	p, err := windows.UTF16PtrFromString(mount)
+	if err != nil {
+		return 0
+	}
+	var free, total, totalFree uint64
+	if r, _, _ := procGetDiskFreeSpaceEx.Call(uintptr(unsafe.Pointer(p)),
+		uintptr(unsafe.Pointer(&free)), uintptr(unsafe.Pointer(&total)), uintptr(unsafe.Pointer(&totalFree))); r == 0 {
+		return 0
+	}
+	return defaultRecycleCapacity(total)
+}
+
+// defaultRecycleCapacity is Explorer's default bin quota for a volume of
+// total bytes: 5% up to 40 GB and 10% above that.
+func defaultRecycleCapacity(total uint64) int64 {
+	const fortyGB = 40 << 30
+	if total <= fortyGB {
+		return int64(total / 20)
+	}
+	return int64(total / 10)
+}
+
+// bitBucketDWORD reads one of the shell's per-volume recycle-bin settings.
+// mount is the volume's mount point ("C:\").
+func bitBucketDWORD(mount, name string) (uint32, bool) {
+	guid, ok := volumeGUID(mount)
+	if !ok {
+		return 0, false
+	}
+	k, err := registry.OpenKey(registry.CURRENT_USER,
+		`Software\Microsoft\Windows\CurrentVersion\Explorer\BitBucket\Volume\`+guid, registry.QUERY_VALUE)
+	if err != nil {
+		return 0, false
+	}
+	defer k.Close()
+	v, _, err := k.GetIntegerValue(name)
+	if err != nil {
+		return 0, false
+	}
+	return uint32(v), true
+}
+
+// volumeGUID answers the volume's GUID name ("{...}") from its mount point;
+// the shell keys the per-volume bin settings by it.
+func volumeGUID(mount string) (string, bool) {
+	p, err := windows.UTF16PtrFromString(mount)
+	if err != nil {
+		return "", false
+	}
+	var buf [64]uint16
+	if r, _, _ := procGetVolumeNameForVolumeMountPoint.Call(uintptr(unsafe.Pointer(p)),
+		uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf))); r == 0 {
+		return "", false
+	}
+	name := windows.UTF16ToString(buf[:])
+	name = strings.TrimSuffix(strings.TrimPrefix(name, `\\?\Volume`), `\`)
+	if name == "" {
+		return "", false
+	}
+	return name, true
+}
+
+// recycleBinItems reports how many items the recycle bin holds for the volume
+// holding path.
+func recycleBinItems(path string) (int64, bool) {
+	root := filepath.VolumeName(path)
+	if root == "" {
+		return 0, false
+	}
+	p, err := windows.UTF16PtrFromString(root + string(filepath.Separator))
+	if err != nil {
+		return 0, false
+	}
+	info := shQueryRBInfo{cbSize: uint32(unsafe.Sizeof(shQueryRBInfo{}))}
+	if r, _, _ := procSHQueryRecycleBin.Call(uintptr(unsafe.Pointer(p)), uintptr(unsafe.Pointer(&info))); int32(r) < 0 {
+		return 0, false
+	}
+	return info.i64NumItems, true
+}
+
+// recycleItem hands the item to the shell's IFileOperation with the
+// flag that recycles on delete.
+func recycleItem(abs string) error {
+	// IFileOperation must be used from a single-threaded apartment, so the
+	// operation gets a thread of its own rather than borrowing whichever
+	// apartment the caller happens to be in.
+	done := make(chan error, 1)
+	go func() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+		done <- fileOperationDelete(abs)
+	}()
+	return <-done
+}
+
+// fileOperationDelete recycles one item. The shell reports a refused or
+// aborted operation through the HRESULTs here, which the caller propagates.
+func fileOperationDelete(abs string) error {
+	if r, _, _ := procCoInitializeEx.Call(0, coinitApartmentThreaded); int32(r) < 0 && uint32(int32(r)) != 0x80010106 {
+		return fmt.Errorf("platform: CoInitializeEx: 0x%08x", uint32(int32(r)))
+	}
+	clsid, err := guidFromString(clsidFileOperation)
+	if err != nil {
+		return err
+	}
+	iid, err := guidFromString(iidIFileOperation)
+	if err != nil {
+		return err
+	}
+	itemIID, err := guidFromString(iidShellItem)
+	if err != nil {
+		return err
+	}
+	var op uintptr
+	// CLSCTX_INPROC_SERVER|CLSCTX_LOCAL_SERVER = 1|4.
+	if r, _, _ := procCoCreateInstance.Call(uintptr(unsafe.Pointer(&clsid)), 0, 5,
+		uintptr(unsafe.Pointer(&iid)), uintptr(unsafe.Pointer(&op))); int32(r) < 0 {
+		return fmt.Errorf("platform: IFileOperation: CoCreateInstance failed (0x%08x)", uint32(int32(r)))
+	}
+	defer comMethod(op, comRelease)
+
+	flags := uintptr(fofSilent | fofNoConfirm | fofNoErrorUI | fofxEarlyFailure | fofxRecycleOnDelete)
+	if r := comMethod(op, fileOperationSetOperationFlags, flags); int32(r) < 0 {
+		return fmt.Errorf("platform: IFileOperation.SetOperationFlags failed (0x%08x)", uint32(int32(r)))
+	}
+	p, err := windows.UTF16PtrFromString(abs)
+	if err != nil {
+		return err
+	}
+	var item uintptr
+	if r, _, _ := procSHCreateItemFromParsingName.Call(uintptr(unsafe.Pointer(p)), 0,
+		uintptr(unsafe.Pointer(&itemIID)), uintptr(unsafe.Pointer(&item))); int32(r) < 0 {
+		return fmt.Errorf("platform: SHCreateItemFromParsingName(%s) failed (0x%08x)", abs, uint32(int32(r)))
+	}
+	defer comMethod(item, comRelease)
+
+	if r := comMethod(op, fileOperationDeleteItem, item, 0); int32(r) < 0 {
+		return fmt.Errorf("platform: IFileOperation.DeleteItem(%s) failed (0x%08x)", abs, uint32(int32(r)))
+	}
+	if r := comMethod(op, fileOperationPerformOperations); int32(r) < 0 {
+		return fmt.Errorf("platform: the move of %s to the recycle bin failed (0x%08x)", abs, uint32(int32(r)))
+	}
+	var aborted int32
+	if r := comMethod(op, fileOperationAnyAborted, uintptr(unsafe.Pointer(&aborted))); int32(r) >= 0 && aborted != 0 {
+		return errors.New("platform: the move to the recycle bin was cancelled")
+	}
+	return nil
 }
 
 // RevealInFileManager selects path in a new Explorer window.

@@ -361,13 +361,66 @@ func TestFileOperations(t *testing.T) {
 	if err := os.WriteFile(text, []byte("z"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	before, counted := recycleBinItems(text)
 	if _, err := TrashFile(text); err != nil {
 		t.Fatalf("TrashFile: %v", err)
 	}
 	if _, err := os.Stat(text); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("the trashed file is still there: %v", err)
 	}
+	// The bin's item count must have grown: a delete that leaves the count
+	// alone took the permanent path the function promises never to take.
+	if after, ok := recycleBinItems(text); counted && ok && after <= before {
+		t.Fatalf("the recycle bin count stayed at %d: the file was deleted, not recycled", before)
+	}
 }
+
+// TestRecycleRefusal checks when the recycle path refuses to delete: an item
+// the shell would permanently remove must be refused instead.
+func TestRecycleRefusal(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "item.txt")
+	if err := os.WriteFile(file, []byte("0123456789"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fi, err := os.Stat(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixed := recycleRules{driveType: driveFixed, capacity: 1 << 20}
+	for _, tt := range []struct {
+		name  string
+		rules recycleRules
+		dir   bool
+		want  bool // refused
+	}{
+		{"fixed volume", fixed, false, false},
+		{"network share", recycleRules{driveType: 4}, false, true},
+		{"removable media", recycleRules{driveType: 2}, false, true},
+		{"bin turned off", recycleRules{driveType: driveFixed, nukeOnDelete: true}, false, true},
+		{"over the quota", recycleRules{driveType: driveFixed, capacity: 5}, false, true},
+		{"quota unknown", recycleRules{driveType: driveFixed}, false, false},
+		{"folder of unknown size", recycleRules{driveType: driveFixed, capacity: 5}, true, false},
+	} {
+		err := recycleRefusal(tt.rules, file, dirInfo{fi, tt.dir})
+		if refused := errors.Is(err, ErrCannotRecycle); refused != tt.want {
+			t.Errorf("%s: refused = %v (%v), want %v", tt.name, refused, err, tt.want)
+		}
+	}
+	// Without a recycle bin on the volume the caller must be able to name
+	// the refusal.
+	if err := recycleRefusal(recycleRules{driveType: 4}, file, dirInfo{fi, false}); !errors.Is(err, ErrCannotRecycle) {
+		t.Fatalf("network share refusal = %v, want ErrCannotRecycle", err)
+	}
+}
+
+// dirInfo overrides the directory answer of an os.FileInfo.
+type dirInfo struct {
+	os.FileInfo
+	dir bool
+}
+
+func (d dirInfo) IsDir() bool { return d.dir }
 
 // TestOverlayClickThroughStyle checks the WS_EX_TRANSPARENT toggling on a
 // real window: the bit the overlay uses to let clicks reach whatever is

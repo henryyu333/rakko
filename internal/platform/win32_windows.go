@@ -113,27 +113,30 @@ var (
 	procCreateWindowEx      = sysProc(user32, "CreateWindowExW")
 	procDestroyWindow       = sysProc(user32, "DestroyWindow")
 
-	procGetLastInputInfo    = sysProc(user32, "GetLastInputInfo")
-	procGetTickCount        = sysProc(kernel32, "GetTickCount64")
-	procGetSystemPowerStat  = sysProc(kernel32, "GetSystemPowerStatus")
-	procGetDevicePowerState = sysProc(kernel32, "GetDevicePowerState")
-	procGetFileAttributesEx = sysProc(kernel32, "GetFileAttributesExW")
-	procMoveFileEx          = sysProc(kernel32, "MoveFileExW")
-	procGetDiskFreeSpaceEx  = sysProc(kernel32, "GetDiskFreeSpaceExW")
-	procGetCurrentThreadID  = sysProc(kernel32, "GetCurrentThreadId")
-	procSetThreadExecState  = sysProc(kernel32, "SetThreadExecutionState")
-	procOpenProcess         = sysProc(kernel32, "OpenProcess")
-	procQueryFullProcessImg = sysProc(kernel32, "QueryFullProcessImageNameW")
-	procCloseHandle         = sysProc(kernel32, "CloseHandle")
-	procGetAUMID            = sysProc(kernel32, "GetApplicationUserModelID")
-	procGetConsoleWindow    = sysProc(kernel32, "GetConsoleWindow")
-	procGetModuleFileName   = sysProc(kernel32, "GetModuleFileNameW")
+	procGetLastInputInfo                 = sysProc(user32, "GetLastInputInfo")
+	procGetTickCount                     = sysProc(kernel32, "GetTickCount64")
+	procGetSystemPowerStat               = sysProc(kernel32, "GetSystemPowerStatus")
+	procGetDevicePowerState              = sysProc(kernel32, "GetDevicePowerState")
+	procGetFileAttributesEx              = sysProc(kernel32, "GetFileAttributesExW")
+	procMoveFileEx                       = sysProc(kernel32, "MoveFileExW")
+	procGetDiskFreeSpaceEx               = sysProc(kernel32, "GetDiskFreeSpaceExW")
+	procGetCurrentThreadID               = sysProc(kernel32, "GetCurrentThreadId")
+	procSetThreadExecState               = sysProc(kernel32, "SetThreadExecutionState")
+	procOpenProcess                      = sysProc(kernel32, "OpenProcess")
+	procGetDriveType                     = sysProc(kernel32, "GetDriveTypeW")
+	procGetVolumeNameForVolumeMountPoint = sysProc(kernel32, "GetVolumeNameForVolumeMountPointW")
+	procQueryFullProcessImg              = sysProc(kernel32, "QueryFullProcessImageNameW")
+	procCloseHandle                      = sysProc(kernel32, "CloseHandle")
+	procGetAUMID                         = sysProc(kernel32, "GetApplicationUserModelID")
+	procGetConsoleWindow                 = sysProc(kernel32, "GetConsoleWindow")
+	procGetModuleFileName                = sysProc(kernel32, "GetModuleFileNameW")
 
-	procShellExecute         = sysProc(shell32, "ShellExecuteW")
-	procSHGetFileInfo        = sysProc(shell32, "SHGetFileInfoW")
-	procSHFileOperation      = sysProc(shell32, "SHFileOperationW")
-	procSHGetKnownFolderPath = sysProc(shell32, "SHGetKnownFolderPath")
-	procExtractIconEx        = sysProc(shell32, "ExtractIconExW")
+	procShellExecute                = sysProc(shell32, "ShellExecuteW")
+	procSHGetFileInfo               = sysProc(shell32, "SHGetFileInfoW")
+	procSHCreateItemFromParsingName = sysProc(shell32, "SHCreateItemFromParsingName")
+	procSHQueryRecycleBin           = sysProc(shell32, "SHQueryRecycleBinW")
+	procSHGetKnownFolderPath        = sysProc(shell32, "SHGetKnownFolderPath")
+	procExtractIconEx               = sysProc(shell32, "ExtractIconExW")
 
 	procDwmSetWindowAttr = sysProc(dwmapi, "DwmSetWindowAttribute")
 	procDwmGetWindowAttr = sysProc(dwmapi, "DwmGetWindowAttribute")
@@ -209,11 +212,28 @@ const (
 
 	fileAttributeNormal = 0x00000080
 
-	foDelete     = 0x0003
 	fofSilent    = 0x0004
 	fofNoConfirm = 0x0010
-	fofAllowUndo = 0x0040
 	fofNoErrorUI = 0x0400
+
+	// The Windows 8 shell flags: recycle instead of deleting, and stop the
+	// whole operation on the first error.
+	fofxRecycleOnDelete = 0x00080000
+	fofxEarlyFailure    = 0x00100000
+
+	driveFixed = 3
+
+	// IFileOperation's class and the interfaces the recycle path creates.
+	clsidFileOperation = "{3ad05575-8857-4850-9277-11b85bdb8e09}"
+	iidIFileOperation  = "{947aab5f-0a5c-4c13-b4d6-4bf7836fc9f8}"
+	iidShellItem       = "{43826d1e-e718-42ee-bc55-a1e261c37bfe}"
+
+	// The vtable slots of IUnknown and IFileOperation this package calls.
+	comRelease                     = 2
+	fileOperationSetOperationFlags = 5
+	fileOperationDeleteItem        = 18
+	fileOperationPerformOperations = 21
+	fileOperationAnyAborted        = 22
 
 	esSystemRequired  = 0x00000001
 	esDisplayRequired = 0x00000002
@@ -379,15 +399,12 @@ type shFileInfo struct {
 	szTypeName    [80]uint16
 }
 
-type shFileOpStruct struct {
-	hwnd                  uintptr
-	wFunc                 uint32
-	pFrom                 *uint16
-	pTo                   *uint16
-	fFlags                uint16
-	fAnyOperationsAborted int32
-	hNameMappings         uintptr
-	lpszProgressTitle     *uint16
+// shQueryRBInfo mirrors SHQUERYRBINFO: what the recycle bin holds for one
+// volume.
+type shQueryRBInfo struct {
+	cbSize      uint32
+	i64Size     int64
+	i64NumItems int64
 }
 
 func getWindowLong(h uintptr, index int32) uintptr {
