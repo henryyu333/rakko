@@ -39,10 +39,81 @@ type mouseHookEvent struct {
 	drag   bool
 }
 
-// mouseHookQueue carries events from the hook thread to the dispatcher. The
-// hook proc never waits for it: when the queue is full the event is dropped,
-// and the next move arrives within a frame anyway.
-var mouseHookQueue = make(chan mouseHookEvent, 256)
+// mouseHookQueue carries events from the hook thread to the dispatcher
+// without ever making the hook wait. Presses are never dropped in favour of
+// moves: a lost press is a lost click (the panel stays open), while a lost
+// move is replaced by the next one a frame later. When the queue is full a
+// queued move makes room for a press.
+var mouseHookQueue = newMouseEventQueue(256)
+
+// mouseEventQueue is the bounded hand-off between the hook thread and the
+// dispatcher. push never blocks and never blocks on a full queue's contents.
+type mouseEventQueue struct {
+	mu     sync.Mutex
+	events []mouseHookEvent
+	wake   chan struct{}
+}
+
+func newMouseEventQueue(size int) *mouseEventQueue {
+	return &mouseEventQueue{
+		events: make([]mouseHookEvent, 0, size),
+		wake:   make(chan struct{}, 1),
+	}
+}
+
+// push queues one event. A press is kept even when the queue is full, at the
+// price of the oldest queued move; the hook thread only ever does a short
+// locked append, well inside its timeout.
+func (q *mouseEventQueue) push(ev mouseHookEvent) {
+	q.mu.Lock()
+	if len(q.events) < cap(q.events) {
+		q.events = append(q.events, ev)
+	} else if ev.press {
+		if i := q.firstMove(); i >= 0 {
+			q.events = append(q.events[:i], q.events[i+1:]...)
+			q.events = append(q.events, ev)
+		} else {
+			// Nothing but presses are queued: keep the newest press, which
+			// is the click the user just made.
+			copy(q.events, q.events[1:])
+			q.events[len(q.events)-1] = ev
+		}
+	} else {
+		// A full queue of moves already holds newer ones than this.
+	}
+	q.mu.Unlock()
+	select {
+	case q.wake <- struct{}{}:
+	default:
+	}
+}
+
+// firstMove answers the index of the oldest queued move, -1 when only presses
+// are queued.
+func (q *mouseEventQueue) firstMove() int {
+	for i := range q.events {
+		if !q.events[i].press {
+			return i
+		}
+	}
+	return -1
+}
+
+// drain takes everything queued, oldest first.
+func (q *mouseEventQueue) drain() []mouseHookEvent {
+	q.mu.Lock()
+	out := q.events
+	q.events = make([]mouseHookEvent, 0, cap(out))
+	q.mu.Unlock()
+	return out
+}
+
+// len reports how many events are queued.
+func (q *mouseEventQueue) len() int {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return len(q.events)
+}
 
 // mouseHookProcAddr is the hook's one permanent callback.
 var mouseHookProcAddr = windows.NewCallback(mouseHookProc)
@@ -115,10 +186,7 @@ func hookMoveDue() bool {
 }
 
 func queueMouseEvent(ev mouseHookEvent) {
-	select {
-	case mouseHookQueue <- ev:
-	default:
-	}
+	mouseHookQueue.push(ev)
 }
 
 func callNextHook(nCode, wParam, lParam uintptr) uintptr {
@@ -188,9 +256,11 @@ func runMouseHook() {
 
 // dispatchMouseEvents hands each queued event to the main thread.
 func dispatchMouseEvents() {
-	for ev := range mouseHookQueue {
-		ev := ev
-		WakeMain(func() { dispatchMouseEvent(ev) })
+	for range mouseHookQueue.wake {
+		for _, ev := range mouseHookQueue.drain() {
+			ev := ev
+			WakeMain(func() { dispatchMouseEvent(ev) })
+		}
 	}
 }
 

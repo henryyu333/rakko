@@ -15,14 +15,16 @@ import (
 	"unsafe"
 )
 
-func drainMouseQueue() {
-	for {
-		select {
-		case <-mouseHookQueue:
-		default:
-			return
-		}
+func drainMouseQueue() { mouseHookQueue.drain() }
+
+// takeMouseEvent answers the one event the last hook call queued.
+func takeMouseEvent(t *testing.T) mouseHookEvent {
+	t.Helper()
+	queued := mouseHookQueue.drain()
+	if len(queued) == 0 {
+		t.Fatal("the hook proc queued no event")
 	}
+	return queued[0]
 }
 
 // TestMouseHookProcCopiesAndReturns checks that the hook proc copies the
@@ -51,13 +53,9 @@ func TestMouseHookProcCopiesAndReturns(t *testing.T) {
 	if took := time.Since(start); took > 200*time.Millisecond {
 		t.Fatalf("the hook proc took %v: it ran a business callback", took)
 	}
-	select {
-	case got := <-mouseHookQueue:
-		if !got.press || got.button != 0 || got.pt != (winPoint{X: 640, Y: 480}) {
-			t.Fatalf("queued %+v, want a left press at 640,480", got)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("the hook proc queued no event")
+	got := takeMouseEvent(t)
+	if !got.press || got.button != 0 || got.pt != (winPoint{X: 640, Y: 480}) {
+		t.Fatalf("queued %+v, want a left press at 640,480", got)
 	}
 	select {
 	case <-ran:
@@ -82,22 +80,18 @@ func TestMouseHookProcButtons(t *testing.T) {
 		{wmXButtonDown, 3},
 	} {
 		mouseHookProc(hcAction, tt.msg, uintptr(unsafe.Pointer(&ev)))
-		select {
-		case got := <-mouseHookQueue:
-			if !got.press || got.button != tt.want || got.pt != ev.pt {
-				t.Fatalf("wParam %#x queued %+v, want button %d at %+v", tt.msg, got, tt.want, ev.pt)
-			}
-		case <-time.After(time.Second):
-			t.Fatalf("wParam %#x queued nothing", tt.msg)
+		got := takeMouseEvent(t)
+		if !got.press || got.button != tt.want || got.pt != ev.pt {
+			t.Fatalf("wParam %#x queued %+v, want button %d at %+v", tt.msg, got, tt.want, ev.pt)
 		}
 	}
-	if n := len(mouseHookQueue); n != 0 {
+	if n := mouseHookQueue.len(); n != 0 {
 		t.Fatalf("%d events queued for messages the app does not watch", n)
 	}
 	// 0xFFFFFFFF is -1 as the hook sees it: below HC_ACTION, so the event
 	// must be passed down the chain untouched.
 	mouseHookProc(uintptr(0xFFFFFFFF), wmLButtonDown, uintptr(unsafe.Pointer(&ev)))
-	if n := len(mouseHookQueue); n != 0 {
+	if n := mouseHookQueue.len(); n != 0 {
 		t.Fatal("a code outside HC_ACTION queued an event")
 	}
 }
@@ -109,24 +103,62 @@ func TestMouseMoveThrottle(t *testing.T) {
 	hookLastMove.Store(0)
 	ev := msllHookStruct{pt: winPoint{X: 10, Y: 20}}
 	mouseHookProc(hcAction, wmMouseMove, uintptr(unsafe.Pointer(&ev)))
-	select {
-	case got := <-mouseHookQueue:
-		if got.press || got.pt != ev.pt {
-			t.Fatalf("queued %+v, want a move to %+v", got, ev.pt)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("the first move was not queued")
+	if got := takeMouseEvent(t); got.press || got.pt != ev.pt {
+		t.Fatalf("queued %+v, want a move to %+v", got, ev.pt)
 	}
 	mouseHookProc(hcAction, wmMouseMove, uintptr(unsafe.Pointer(&ev)))
-	if n := len(mouseHookQueue); n != 0 {
+	if n := mouseHookQueue.len(); n != 0 {
 		t.Fatalf("%d moves queued inside the throttle window, want none", n)
 	}
 	time.Sleep(hookMoveInterval + 2*time.Millisecond)
 	mouseHookProc(hcAction, wmMouseMove, uintptr(unsafe.Pointer(&ev)))
-	if n := len(mouseHookQueue); n != 1 {
+	if n := mouseHookQueue.len(); n != 1 {
 		t.Fatalf("%d moves queued after the throttle window, want 1", n)
 	}
 	drainMouseQueue()
+}
+
+// TestMouseHookQueueKeepsPresses checks the hand-off under overflow: a full
+// queue sheds moves, never the press, because a dropped press is a dropped
+// click (the panel would stay open after a click outside).
+func TestMouseHookQueueKeepsPresses(t *testing.T) {
+	q := newMouseEventQueue(4)
+	for i := range 10 {
+		q.push(mouseHookEvent{pt: winPoint{X: int32(i)}})
+	}
+	if n := q.len(); n != 4 {
+		t.Fatalf("%d moves queued, want the 4 the queue holds", n)
+	}
+	press := mouseHookEvent{press: true, button: 0, pt: winPoint{X: -1, Y: -1}}
+	q.push(press)
+	queued := q.drain()
+	if len(queued) != 4 {
+		t.Fatalf("%d events queued after a press, want 4", len(queued))
+	}
+	found := false
+	for _, ev := range queued {
+		if ev.press && ev.pt == press.pt {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("the press was dropped: queued %+v", queued)
+	}
+	// The oldest move made room for it.
+	if queued[0].pt.X != 1 {
+		t.Fatalf("oldest queued move is %+v, want the second one after eviction", queued[0])
+	}
+
+	// A queue that holds nothing but presses keeps the newest one: it is the
+	// click the user just made.
+	presses := newMouseEventQueue(2)
+	for i := range 3 {
+		presses.push(mouseHookEvent{press: true, pt: winPoint{X: int32(i)}})
+	}
+	queued = presses.drain()
+	if len(queued) != 2 || queued[0].pt.X != 1 || queued[1].pt.X != 2 {
+		t.Fatalf("presses queued = %+v, want the two newest", queued)
+	}
 }
 
 // TestMouseEventDispatch checks that a queued event reaches the registered
