@@ -3,13 +3,19 @@
 package platform
 
 // Global mouse observation. Windows hands a process every mouse event only
-// through a low-level hook (WH_MOUSE_LL). The hook is installed on the main
-// thread, whose mygo message loop then invokes it, so the callbacks already
-// run where the rest of the package expects them; each callback is kept
-// short enough for the hook timeout (a dispatch, no drawing).
+// through a low-level hook (WH_MOUSE_LL). The system calls the hook on the
+// thread that installed it, and it forgets the hook when that thread stops
+// pumping messages or when one call takes longer than LowLevelHooksTimeout.
+// The hook therefore lives on a thread of its own that does nothing but pump
+// messages: the hook proc copies the event into a queue and returns at once,
+// and the business callbacks run later on the main thread, where the rest of
+// the package expects window work to happen.
 
 import (
+	"fmt"
+	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -24,16 +30,179 @@ type msllHookStruct struct {
 	dwExtraInfo uintptr
 }
 
-type mouseObserverSet struct {
-	mu       sync.Mutex
-	nextID   uint32
-	downs    map[uint32]func(inside bool, button int)
-	moves    map[uint32]func()
-	drags    map[uint32]func()
+// mouseHookEvent is one event copied out of the hook proc: what happened,
+// where, and whether the left button was held for a move.
+type mouseHookEvent struct {
+	press  bool
+	button int
+	pt     winPoint
+	drag   bool
+}
+
+// mouseHookQueue carries events from the hook thread to the dispatcher. The
+// hook proc never waits for it: when the queue is full the event is dropped,
+// and the next move arrives within a frame anyway.
+var mouseHookQueue = make(chan mouseHookEvent, 256)
+
+// mouseHookProcAddr is the hook's one permanent callback.
+var mouseHookProcAddr = windows.NewCallback(mouseHookProc)
+
+var mouseHook struct {
+	once     sync.Once
+	ready    chan struct{}
 	hook     uintptr
-	proc     uintptr
-	lastMove time.Time
-	lastDrag time.Time
+	threadID uint32
+	err      error
+}
+
+// hookMoveInterval is how often a pointer move is queued. The pointer gate
+// samples at most a frame apart, and the throttle keeps the hook thread far
+// below the timeout the system allows a hook proc.
+const hookMoveInterval = 8 * time.Millisecond
+
+var hookLastMove atomic.Int64
+
+// mouseHookProc copies one event and returns. Nothing here touches a window
+// or a business callback: a hook proc that blocks makes the system drop the
+// hook, which is what silently stopped hover, click-through switching and
+// drag watching before.
+func mouseHookProc(nCode, wParam, lParam uintptr) uintptr {
+	if int32(nCode) == hcAction {
+		switch wParam {
+		case wmLButtonDown, wmRButtonDown, wmMButtonDown, wmXButtonDown:
+			queueMouseEvent(mouseHookEvent{press: true, button: mouseButton(wParam), pt: hookPoint(lParam)})
+		case wmMouseMove:
+			if hookMoveDue() {
+				queueMouseEvent(mouseHookEvent{pt: hookPoint(lParam), drag: leftHeld()})
+			}
+		}
+	}
+	return callNextHook(nCode, wParam, lParam)
+}
+
+// mouseButton maps the hook's button-down message to its button number, the
+// same order the Mac observer reports.
+func mouseButton(wParam uintptr) int {
+	switch wParam {
+	case wmRButtonDown:
+		return 1
+	case wmMButtonDown:
+		return 2
+	case wmXButtonDown:
+		return 3
+	}
+	return 0
+}
+
+// hookPoint reads the screen point out of the event the system handed the
+// hook. The struct belongs to the system and is only valid for the call.
+func hookPoint(lParam uintptr) winPoint {
+	if lParam == 0 {
+		return winPoint{}
+	}
+	return hookStruct(lParam).pt
+}
+
+// hookMoveDue reports whether a pointer move is worth queueing: one per
+// hookMoveInterval, which is all the pointer gate needs.
+func hookMoveDue() bool {
+	now := time.Now().UnixNano()
+	last := hookLastMove.Load()
+	if now-last < int64(hookMoveInterval) {
+		return false
+	}
+	return hookLastMove.CompareAndSwap(last, now)
+}
+
+func queueMouseEvent(ev mouseHookEvent) {
+	select {
+	case mouseHookQueue <- ev:
+	default:
+	}
+}
+
+func callNextHook(nCode, wParam, lParam uintptr) uintptr {
+	r, _, _ := procCallNextHookEx.Call(0, nCode, wParam, lParam)
+	return r
+}
+
+// hookStruct reads the event the hook was handed. The value comes from the
+// system's own stack frame, so the uintptr-to-pointer conversion is safe for
+// the callback's duration; spelling it through a pointer typed value keeps
+// vet's unsafeptr check quiet.
+func hookStruct(lParam uintptr) *msllHookStruct {
+	var p unsafe.Pointer
+	*(*uintptr)(unsafe.Pointer(&p)) = lParam
+	return (*msllHookStruct)(p)
+}
+
+func leftHeld() bool {
+	r, _, _ := procGetAsyncKeyState.Call(vkLeftButton)
+	return r&0x8000 != 0
+}
+
+// ensureMouseHook installs the hook once, on its own thread, and reports why
+// the system refused it. The hook stays installed for the life of the
+// process: the thread that installed it must keep pumping messages, and
+// re-arming it per observer would only churn.
+func ensureMouseHook() error {
+	mouseHook.once.Do(func() {
+		mouseHook.ready = make(chan struct{})
+		go runMouseHook()
+	})
+	<-mouseHook.ready
+	return mouseHook.err
+}
+
+// runMouseHook owns the hook's thread. The system calls the hook proc from
+// this thread's message dispatch, so the loop takes no work of its own.
+func runMouseHook() {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	if r, _, _ := procGetCurrentThreadID.Call(); r != 0 {
+		mouseHook.threadID = uint32(r)
+	}
+	h, _, err := procSetWindowsHookEx.Call(whMouseLL, mouseHookProcAddr, 0, 0)
+	if h == 0 {
+		mouseHook.err = fmt.Errorf("platform: SetWindowsHookEx(WH_MOUSE_LL): %w", err)
+		close(mouseHook.ready)
+		return
+	}
+	mouseHook.hook = h
+	// The install result is what the caller waits for; the loop below runs
+	// for the rest of the process.
+	close(mouseHook.ready)
+	go dispatchMouseEvents()
+
+	var msg winMsg
+	for {
+		r, _, _ := procGetMessage.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0)
+		if int32(r) <= 0 { // WM_QUIT or an error
+			return
+		}
+		procTranslateMessage.Call(uintptr(unsafe.Pointer(&msg)))
+		procDispatchMessage.Call(uintptr(unsafe.Pointer(&msg)))
+	}
+}
+
+// dispatchMouseEvents hands each queued event to the main thread.
+func dispatchMouseEvents() {
+	for ev := range mouseHookQueue {
+		ev := ev
+		WakeMain(func() { dispatchMouseEvent(ev) })
+	}
+}
+
+// mouseObserverSet holds what the app watches. Callbacks are registered and
+// released on the main thread; the hook proc only copies events, so the set
+// is never touched from the hook thread.
+type mouseObserverSet struct {
+	mu     sync.Mutex
+	nextID uint32
+	downs  map[uint32]func(inside bool, button int)
+	moves  map[uint32]func()
+	drags  map[uint32]func()
 }
 
 var mouseObservers = struct {
@@ -45,94 +214,59 @@ var mouseObservers = struct {
 	drags: map[uint32]func(){},
 }}
 
-// observeHookProc dispatches one WH_MOUSE_LL event and always continues the
-// hook chain. Only the events the app's pointer logic needs are looked at.
-func observeHookProc(nCode, wParam, lParam uintptr) uintptr {
-	if int32(nCode) != hcAction {
-		return callNextHook(nCode, wParam, lParam)
-	}
+// dispatchMouseEvent runs the business callbacks for one queued event. Main
+// thread only: the callbacks touch windows and may do file work.
+func dispatchMouseEvent(ev mouseHookEvent) {
 	o := &mouseObservers.mouseObserverSet
-	switch wParam {
-	case wmLButtonDown, wmRButtonDown, wmMButtonDown, wmXButtonDown:
-		button := 0
-		switch wParam {
-		case wmRButtonDown:
-			button = 1
-		case wmMButtonDown:
-			button = 2
-		case wmXButtonDown:
-			button = 3
+	o.mu.Lock()
+	if len(o.downs) == 0 && len(o.moves) == 0 && len(o.drags) == 0 {
+		o.mu.Unlock()
+		return
+	}
+	o.mu.Unlock()
+
+	if ev.press {
+		inside, report := pressAt(ev.pt, mouseObservers.window)
+		if !report {
+			return
 		}
-		inside, report := pressInside(lParam, mouseObservers.window)
-		if report {
-			o.mu.Lock()
-			fns := make([]func(bool, int), 0, len(o.downs))
-			for _, fn := range o.downs {
-				fns = append(fns, fn)
-			}
-			o.mu.Unlock()
-			for _, fn := range fns {
-				fn(inside, button)
-			}
-		}
-	case wmMouseMove:
-		now := time.Now()
 		o.mu.Lock()
-		moves := make([]func(), 0, len(o.moves))
-		if len(o.moves) > 0 && now.Sub(o.lastMove) >= 8*time.Millisecond {
-			o.lastMove = now
-			for _, fn := range o.moves {
-				moves = append(moves, fn)
-			}
-		}
-		drags := make([]func(), 0, len(o.drags))
-		if len(o.drags) > 0 && now.Sub(o.lastDrag) >= 8*time.Millisecond && leftHeld() {
-			o.lastDrag = now
-			for _, fn := range o.drags {
-				drags = append(drags, fn)
-			}
+		fns := make([]func(bool, int), 0, len(o.downs))
+		for _, fn := range o.downs {
+			fns = append(fns, fn)
 		}
 		o.mu.Unlock()
-		for _, fn := range moves {
-			fn()
+		for _, fn := range fns {
+			fn(inside, ev.button)
 		}
-		for _, fn := range drags {
-			fn()
+		return
+	}
+
+	o.mu.Lock()
+	moves := make([]func(), 0, len(o.moves))
+	for _, fn := range o.moves {
+		moves = append(moves, fn)
+	}
+	var drags []func()
+	if ev.drag {
+		drags = make([]func(), 0, len(o.drags))
+		for _, fn := range o.drags {
+			drags = append(drags, fn)
 		}
 	}
-	return callNextHook(nCode, wParam, lParam)
-}
-
-func callNextHook(nCode, wParam, lParam uintptr) uintptr {
-	r, _, _ := procCallNextHookEx.Call(0, nCode, wParam, lParam)
-	return r
-}
-
-// hookStruct reads the event the hook was handed. The value comes from the
-// system's own stack frame, so the uintptr-to-pointer conversion is safe
-// for the callback's duration; spelling it through a pointer typed value
-// keeps vet's unsafeptr check quiet.
-func hookStruct(lParam uintptr) *msllHookStruct {
-	var p unsafe.Pointer
-	*(*uintptr)(unsafe.Pointer(&p)) = lParam
-	return (*msllHookStruct)(p)
-}
-
-// pressInside classifies a press: true when it landed on the watched
-// window, false when it landed in another app or on the desktop. Presses in
-// other Rakko windows report nothing, matching the Mac local monitor.
-func pressInside(lParam, watched uintptr) (inside, report bool) {
-	if lParam == 0 {
-		return false, true
+	o.mu.Unlock()
+	for _, fn := range moves {
+		fn()
 	}
-	ev := hookStruct(lParam)
-	return pressAt(ev.pt, watched)
+	for _, fn := range drags {
+		fn()
+	}
 }
 
-// pressAt classifies a press at a screen point against the watched window:
-// a press inside a window that takes the mouse belongs to it even when
-// WindowFromPoint answers the desktop (a DirectComposition surface carries
-// no hit-test alpha there).
+// pressAt classifies a press at a physical screen point against the watched
+// window: a press inside a window that takes the mouse belongs to it even
+// when WindowFromPoint answers the desktop (a DirectComposition surface
+// carries no hit-test alpha there).
 func pressAt(pt winPoint, watched uintptr) (inside, report bool) {
 	h := windowFromPointAt(pt)
 	root := h
@@ -157,38 +291,10 @@ func pressAt(pt winPoint, watched uintptr) (inside, report bool) {
 	return false, true
 }
 
-func leftHeld() bool {
-	r, _, _ := procGetAsyncKeyState.Call(vkLeftButton)
-	return r&0x8000 != 0
-}
-
-// installHookLocked arms the hook once any observer is registered. The
-// caller holds the set's lock.
-func (o *mouseObserverSet) installHookLocked() {
-	if o.hook != 0 {
-		return
-	}
-	if o.proc == 0 {
-		o.proc = windows.NewCallback(observeHookProc)
-	}
-	h, _, _ := procSetWindowsHookEx.Call(whMouseLL, o.proc, 0, 0)
-	o.hook = h
-}
-
-func (o *mouseObserverSet) removeHookLocked() {
-	if o.hook == 0 {
-		return
-	}
-	if len(o.downs) == 0 && len(o.moves) == 0 && len(o.drags) == 0 {
-		procUnhookWindowsHookEx.Call(o.hook)
-		o.hook = 0
-	}
-}
-
 // ObserveMouseDown observes every mouse button press without consuming it.
 // clicked(true, button) is a press in window; clicked(false, button) a
 // press in another app or on the desktop. Presses in this app's other
-// windows are not reported.
+// windows are not reported. The callback runs on the main thread.
 func ObserveMouseDown(window uintptr, clicked func(inside bool, button int)) (stop func()) {
 	if clicked == nil {
 		return func() {}
@@ -199,22 +305,21 @@ func ObserveMouseDown(window uintptr, clicked func(inside bool, button int)) (st
 	o.nextID++
 	id := o.nextID
 	o.downs[id] = clicked
-	o.installHookLocked()
 	o.mu.Unlock()
+	ensureMouseHook()
 	var once sync.Once
 	return func() {
 		once.Do(func() {
 			o.mu.Lock()
 			delete(o.downs, id)
-			o.removeHookLocked()
 			o.mu.Unlock()
 		})
 	}
 }
 
-// ObserveMouseMoved reports pointer movement anywhere. The callbacks are
-// throttled to roughly one frame's worth of events, which is all the
-// pointer gate needs to sample the cursor.
+// ObserveMouseMoved reports pointer movement anywhere. The events are
+// throttled to roughly one frame's worth, which is all the pointer gate needs
+// to sample the cursor. The callback runs on the main thread.
 func ObserveMouseMoved(moved func()) {
 	if moved == nil {
 		return
@@ -223,13 +328,14 @@ func ObserveMouseMoved(moved func()) {
 	o.mu.Lock()
 	o.nextID++
 	o.moves[o.nextID] = moved
-	o.installHookLocked()
 	o.mu.Unlock()
+	ensureMouseHook()
 }
 
 // ObserveLeftMouseDragged reports a drag of another app's window (the
 // Explorer file drag included): a pointer move with the left button held.
-// The overlay turns into a drop target on the first of them.
+// The overlay turns into a drop target on the first of them. The callback
+// runs on the main thread.
 func ObserveLeftMouseDragged(moved func()) (stop func()) {
 	if moved == nil {
 		return func() {}
@@ -239,14 +345,13 @@ func ObserveLeftMouseDragged(moved func()) (stop func()) {
 	o.nextID++
 	id := o.nextID
 	o.drags[id] = moved
-	o.installHookLocked()
 	o.mu.Unlock()
+	ensureMouseHook()
 	var once sync.Once
 	return func() {
 		once.Do(func() {
 			o.mu.Lock()
 			delete(o.drags, id)
-			o.removeHookLocked()
 			o.mu.Unlock()
 		})
 	}

@@ -278,22 +278,20 @@ func TestPressClassification(t *testing.T) {
 	}
 }
 
-// TestWindowFromPointAtPacksTheCoordinates checks the physical-point hit test
-// the global observer classifies presses with. WindowFromPoint takes the point
-// by value: the old call passed its address, so x64 used the pointer's bits as
-// coordinates and answered no window, and only the rectangle fallback kept the
-// observer working.
-func TestWindowFromPointAtPacksTheCoordinates(t *testing.T) {
-	// A BUTTON class window hit-tests its client area; a STATIC one answers
-	// HTTRANSPARENT there, which WindowFromPoint skips.
+// testHitWindow creates a visible, topmost window that hit-tests its client
+// area, or skips the test when this logon session has no desktop to show it
+// on. A BUTTON class window is used because a STATIC control answers
+// HTTRANSPARENT over its client area and WindowFromPoint skips it.
+func testHitWindow(t *testing.T) uintptr {
+	t.Helper()
 	class, _ := windows.UTF16PtrFromString("BUTTON")
-	title, _ := windows.UTF16PtrFromString("rakko-point-test")
+	title, _ := windows.UTF16PtrFromString("rakko-hit-test")
 	h, _, err := procCreateWindowEx.Call(0, uintptr(unsafe.Pointer(class)), uintptr(unsafe.Pointer(title)),
 		0x80000000 /* WS_POPUP */, 300, 260, 200, 120, 0, 0, 0, 0)
 	if h == 0 {
 		t.Fatalf("CreateWindowEx: %v", err)
 	}
-	defer procDestroyWindow.Call(h)
+	t.Cleanup(func() { procDestroyWindow.Call(h) })
 	procShowWindow.Call(h, 4 /* SW_SHOWNOACTIVATE */)
 	if r, _, _ := procIsWindowVisible.Call(h); r == 0 {
 		// A logon session with no attached desktop (an SSH-only test run)
@@ -304,6 +302,16 @@ func TestWindowFromPointAtPacksTheCoordinates(t *testing.T) {
 	// The shared desktop may keep other windows over that spot; a topmost
 	// test window is the one the hit test must find.
 	reorderFront(h, true)
+	return h
+}
+
+// TestWindowFromPointAtPacksTheCoordinates checks the physical-point hit test
+// the global observer classifies presses with. WindowFromPoint takes the point
+// by value: the old call passed its address, so x64 used the pointer's bits as
+// coordinates and answered no window, and only the rectangle fallback kept the
+// observer working.
+func TestWindowFromPointAtPacksTheCoordinates(t *testing.T) {
+	h := testHitWindow(t)
 	r, ok := windowRect(h)
 	if !ok {
 		t.Fatal("GetWindowRect failed")

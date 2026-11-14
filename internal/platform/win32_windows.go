@@ -72,6 +72,9 @@ var (
 	procSetWinEventHook     = sysProc(user32, "SetWinEventHook")
 	procUnhookWinEvent      = sysProc(user32, "UnhookWinEvent")
 	procMsgWaitForMultiple  = sysProc(user32, "MsgWaitForMultipleObjects")
+	procGetMessage          = sysProc(user32, "GetMessageW")
+	procTranslateMessage    = sysProc(user32, "TranslateMessage")
+	procDispatchMessage     = sysProc(user32, "DispatchMessageW")
 	procShowWindow          = sysProc(user32, "ShowWindow")
 	procCreateWindowEx      = sysProc(user32, "CreateWindowExW")
 	procDestroyWindow       = sysProc(user32, "DestroyWindow")
@@ -119,9 +122,9 @@ var (
 	procGetDisplayConfigBufferSizes = sysProc(user32, "GetDisplayConfigBufferSizes")
 	procQueryDisplayConfig          = sysProc(user32, "QueryDisplayConfig")
 	procDisplayConfigGetDeviceInfo  = sysProc(user32, "DisplayConfigGetDeviceInfo")
-	procWTSQuerySession  = sysProc(wtsapi32, "WTSQuerySessionInformationW")
-	procOpenInputDesktop = sysProc(user32, "OpenInputDesktop")
-	procCloseDesktop     = sysProc(user32, "CloseDesktop")
+	procWTSQuerySession             = sysProc(wtsapi32, "WTSQuerySessionInformationW")
+	procOpenInputDesktop            = sysProc(user32, "OpenInputDesktop")
+	procCloseDesktop                = sysProc(user32, "CloseDesktop")
 )
 
 // Window styles and messages this package touches.
@@ -282,6 +285,17 @@ func (r winRect) width() int32  { return r.Right - r.Left }
 func (r winRect) height() int32 { return r.Bottom - r.Top }
 
 type winPoint struct{ X, Y int32 }
+
+// winMsg mirrors MSG: one message for GetMessage/TranslateMessage/
+// DispatchMessage.
+type winMsg struct {
+	hwnd    uintptr
+	message uint32
+	wParam  uintptr
+	lParam  uintptr
+	time    uint32
+	pt      winPoint
+}
 
 type monitorInfoEx struct {
 	cbSize    uint32
