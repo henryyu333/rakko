@@ -29,8 +29,6 @@ const (
 )
 
 var (
-	procCoCreateInstance = sysProc(ole32, "CoCreateInstance")
-
 	virtualDesktopOnce sync.Once
 	virtualDesktop     uintptr // IVirtualDesktopManager, 0 when unavailable
 )

@@ -99,8 +99,6 @@ var (
 )
 
 var (
-	combase = windows.NewLazySystemDLL("combase.dll")
-
 	procRoGetActivationFactory = sysProc(combase, "RoGetActivationFactory")
 	procRoActivateInstance     = sysProc(combase, "RoActivateInstance")
 	procWindowsCreateString    = sysProc(combase, "WindowsCreateString")

@@ -40,7 +40,6 @@ func RequestAccessibility() bool { return true }
 
 var (
 	procGetGUIThreadInfo = sysProc(user32, "GetGUIThreadInfo")
-	procGetClassName     = sysProc(user32, "GetClassNameW")
 )
 
 type guiThreadInfo struct {

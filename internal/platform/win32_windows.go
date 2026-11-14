@@ -25,6 +25,13 @@ var (
 	winmm    = windows.NewLazySystemDLL("winmm.dll")
 	shcore   = windows.NewLazySystemDLL("shcore.dll")
 	wtsapi32 = windows.NewLazySystemDLL("wtsapi32.dll")
+	combase  = windows.NewLazySystemDLL("combase.dll")
+)
+
+// Procedures more than one area calls.
+var (
+	procCoCreateInstance = sysProc(ole32, "CoCreateInstance")
+	procGetClassName     = sysProc(user32, "GetClassNameW")
 )
 
 func sysProc(dll *windows.LazyDLL, name string) *windows.LazyProc { return dll.NewProc(name) }

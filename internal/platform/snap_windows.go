@@ -11,9 +11,6 @@ package platform
 import (
 	"errors"
 	"fmt"
-	"unsafe"
-
-	"golang.org/x/sys/windows"
 )
 
 // ErrAppWindowResize is returned when a window accepted the move but
@@ -25,10 +22,7 @@ type AppWindow struct {
 	handle uintptr
 }
 
-var (
-	procIsZoomed     = sysProc(user32, "IsZoomed")
-	procGetClassName = sysProc(user32, "GetClassNameW")
-)
+var procIsZoomed = sysProc(user32, "IsZoomed")
 
 // shellWindows are the desktop surfaces behind every application: a press
 // on the wallpaper or the taskbar is not a window drag.
@@ -37,16 +31,6 @@ var shellWindows = map[string]bool{
 	"WorkerW":                true,
 	"Shell_TrayWnd":          true,
 	"Shell_SecondaryTrayWnd": true,
-}
-
-// windowClass is the window's registered class name.
-func windowClass(h uintptr) string {
-	buf := make([]uint16, 256)
-	n, _, _ := procGetClassName.Call(h, uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)))
-	if n == 0 {
-		return ""
-	}
-	return windows.UTF16ToString(buf[:n])
 }
 
 // AppWindowAt returns the window containing the screen point, with its

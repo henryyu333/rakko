@@ -515,8 +515,6 @@ func (p *npPoller) act(a npAction) {
 // --- WinRT plumbing ---------------------------------------------------------
 
 var (
-	combase = windows.NewLazySystemDLL("combase.dll")
-
 	npRoGetFactory  = sysProc(combase, "RoGetActivationFactory")
 	npWindowsCreate = sysProc(combase, "WindowsCreateString")
 	npWindowsDelete = sysProc(combase, "WindowsDeleteString")
