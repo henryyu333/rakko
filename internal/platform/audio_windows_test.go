@@ -49,6 +49,13 @@ func TestOutputVolumeRoundTrip(t *testing.T) {
 	if math.Abs(float64(got-want)) > 0.02 {
 		t.Fatalf("volume read back %v, want %v", got, want)
 	}
+	if err := SetOutputVolume(v); err != nil {
+		t.Fatalf("restoring the volume: %v", err)
+	}
+	back, ok := OutputVolume()
+	if !ok || math.Abs(float64(back-v)) > 0.02 {
+		t.Fatalf("volume read back %v after restoring %v", back, v)
+	}
 }
 
 func TestHeadsetNameMatching(t *testing.T) {

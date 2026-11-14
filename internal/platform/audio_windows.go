@@ -17,7 +17,6 @@ import (
 	"math"
 	"runtime"
 	"strings"
-	"sync"
 	"syscall"
 	"unsafe"
 
@@ -140,49 +139,18 @@ func winCOMRelease(obj unsafe.Pointer) {
 	}
 }
 
-// floatThunk is the machine-code bridge between SyscallN and a method
-// that takes a float: the Windows x64 convention passes a float in XMM1,
-// which SyscallN cannot fill. The thunk moves the second argument's bits
-// into XMM1 and jumps to the third argument, so the target sees exactly
-// the (this, float) call it declared.
-var (
-	floatThunkOnce sync.Once
-	floatThunkAddr uintptr
-)
-
-var procVirtualAlloc = sysProc(kernel32, "VirtualAlloc")
-
-func floatThunk() uintptr {
-	floatThunkOnce.Do(func() {
-		const (
-			memCommitReserve     = 0x3000
-			pageExecuteReadWrite = 0x40
-		)
-		code := []byte{
-			0x4C, 0x89, 0xC0, // mov rax, r8
-			0x66, 0x0F, 0x6E, 0xCA, // movd xmm1, edx
-			0xFF, 0xE0, // jmp rax
-		}
-		p, _, _ := procVirtualAlloc.Call(0, uintptr(len(code)), memCommitReserve, pageExecuteReadWrite)
-		if p == 0 {
-			return
-		}
-		// RtlMoveMemory takes the destination as an integer, so the
-		// allocated code address never has to become a Go pointer.
-		procRtlMoveMemory.Call(p, uintptr(unsafe.Pointer(&code[0])), uintptr(len(code)))
-		floatThunkAddr = p
-	})
-	return floatThunkAddr
-}
-
 // winCOMCallFloat calls method index of obj with one float argument.
+// The Windows x64 convention passes a float in a vector register, which a
+// raw integer call cannot name — but Go's Windows syscall stub copies the
+// first four integer arguments into XMM0–XMM3 as well, for exactly this
+// reason (src/internal/runtime/syscall/windows/asm_windows_amd64.s, the
+// _1args–_4args block: "Floating point arguments are passed in the XMM
+// registers. Set them here..."). The float's bits therefore go in the
+// second integer argument, which the stub also places in XMM1 — the slot
+// of the second argument.
 func winCOMCallFloat(obj unsafe.Pointer, index int, f float32) uintptr {
-	thunk := floatThunk()
-	if thunk == 0 {
-		return 0x80004005 // E_FAIL: no call possible without the thunk
-	}
 	fn := winCOMMethod(obj, index)
-	r, _, _ := syscall.SyscallN(thunk, uintptr(obj), uintptr(math.Float32bits(f)), fn)
+	r, _, _ := syscall.SyscallN(fn, uintptr(obj), uintptr(math.Float32bits(f)), 0)
 	runtime.KeepAlive(obj)
 	return r
 }
@@ -570,8 +538,8 @@ func drawCase(img *image.NRGBA, cx, cy, s float64, c color.NRGBA) {
 	fillRoundRect(img, cx-s*0.42, cy-s*0.5, cx+s*0.42, cy+s*0.5, s*0.16, c)
 }
 
-// procRtlMoveMemory copies bytes; the thunk's code goes into executable
-// memory with it.
+// procRtlMoveMemory copies memory; the string reader uses it to move an
+// HSTRING's buffer into a Go slice without a uintptr-to-pointer cast.
 var procRtlMoveMemory = sysProc(kernel32, "RtlMoveMemory")
 
 // failedHR reports a failed HRESULT.
