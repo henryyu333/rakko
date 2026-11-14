@@ -274,14 +274,14 @@ func TestRunDropActionAirDropShelveNothing(t *testing.T) {
 	a, _, dir := dropShelf(t)
 	png := writeFile(t, dir, "a.png", testPNGBytes(t))
 	var got [][]string
-	old := airDrop
-	airDrop = func(paths, texts []string) error {
+	old := shareNearby
+	shareNearby = func(paths, texts []string) error {
 		got = append(got, append(append([]string{}, paths...), texts...))
 		return nil
 	}
-	t.Cleanup(func() { airDrop = old })
+	t.Cleanup(func() { shareNearby = old })
 	for _, act := range dropActions([]string{png}) {
-		if act.isAirDrop {
+		if act.isShare {
 			a.runDropAction(act, fileDrop(t, png))
 		}
 	}

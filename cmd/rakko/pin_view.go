@@ -192,7 +192,7 @@ func (it *pinItem) pinMenu(e ui.Element) {
 			}
 			m.Separator()
 		}
-		if m.Item(l.PinPutBack()).Chosen() {
+		if m.Item(osText(l.PinPutBack(), l.PinPutBackWin())).Chosen() {
 			it.wantKill, it.putBack = true, true
 		}
 		if m.Item(l.PinRemoveDesktop()).Chosen() {

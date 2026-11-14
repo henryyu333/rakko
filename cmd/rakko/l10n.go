@@ -128,7 +128,7 @@ func (a *shelf) localeChanged(tag string) {
 	a.locale = tag
 	m := a.appLoc()
 	if a.tray != nil {
-		a.tray.SetToolTip(m.AppTrayTooltip())
+		a.tray.SetToolTip(osText(m.AppTrayTooltip(), m.AppTrayTooltipWin()))
 	}
 	a.retitleWindows()
 }

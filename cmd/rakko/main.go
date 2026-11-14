@@ -85,7 +85,8 @@ func main() {
 					log.Printf("%s: %v", appName, merr)
 					lm := startupLoc(root, oldRoot)
 					exitWithDialog(lm.StartupLegacyRunningTitle(),
-						lm.StartupLegacyRunningDetail(appName, oldRoot, root))
+						osText(lm.StartupLegacyRunningDetail(appName, oldRoot, root),
+							lm.StartupLegacyRunningDetailWin(appName, oldRoot, root)))
 					return
 				case merr != nil:
 					log.Printf("%s: 数据迁移失败：%v", appName, merr)
@@ -291,7 +292,7 @@ func (a *shelf) ready(show bool) {
 		}
 	})
 	var err error
-	trayOpts := mygo.TrayOptions{IconIsTemplate: true, ToolTip: a.appLoc().AppTrayTooltip()}
+	trayOpts := mygo.TrayOptions{IconIsTemplate: true, ToolTip: osText(a.appLoc().AppTrayTooltip(), a.appLoc().AppTrayTooltipWin())}
 	if dir, derr := mygo.App.Path(mygo.PathResources); derr == nil {
 		trayOpts.Icon = trayIcon(dir)
 	}

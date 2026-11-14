@@ -191,7 +191,7 @@ func (a *shelf) clipRow(c *ui.Context, item store.Item, number int) {
 	row.Children(func() {
 		if number > 0 {
 			ui.Text(c, strconv.Itoa(number)).SingleLine().FontSize(10).TextColor(ink3).
-				Width(9).TextAlign(ui.Center).Label(a.appLoc().ClipShortcut(strconv.Itoa(number)))
+				Width(9).TextAlign(ui.Center).Label(osText(a.appLoc().ClipShortcut(strconv.Itoa(number)), a.appLoc().ClipShortcutWin(strconv.Itoa(number))))
 		}
 		a.clipRowIcon(c, item)
 		text := title

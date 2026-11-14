@@ -32,13 +32,13 @@ import (
 
 // Symbols for the action cells, after the design draft's glyphs.
 var (
-	shrinkSymbol  = symbol(`<path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/>`)
-	pdfSymbol     = symbol(`<path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5"/>`)
-	imgSymbol     = symbol(`<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5-5-8 8"/>`)
-	docSymbol     = symbol(`<path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>`)
-	airDropSymbol = symbol(`<path d="M5.6 15.5a8 8 0 1 1 12.8 0"/><path d="M8.5 13a4.5 4.5 0 1 1 7 0"/><path d="M12 14l-4 6h8z"/>`)
-	unzipSymbol   = symbol(`<path d="M4 7h16v13H4z"/><path d="M4 7l2-3h12l2 3M12 10v6M9.5 13.5L12 16l2.5-2.5"/>`)
-	zipSymbol     = symbol(`<path d="M4 7h16v13H4z"/><path d="M4 7l2-3h12l2 3M11 10h2M11 13h2M11 16h2"/>`)
+	shrinkSymbol = symbol(`<path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/>`)
+	pdfSymbol    = symbol(`<path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5"/>`)
+	imgSymbol    = symbol(`<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5-5-8 8"/>`)
+	docSymbol    = symbol(`<path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>`)
+	shareSymbol  = symbol(`<path d="M5.6 15.5a8 8 0 1 1 12.8 0"/><path d="M8.5 13a4.5 4.5 0 1 1 7 0"/><path d="M12 14l-4 6h8z"/>`)
+	unzipSymbol  = symbol(`<path d="M4 7h16v13H4z"/><path d="M4 7l2-3h12l2 3M12 10v6M9.5 13.5L12 16l2.5-2.5"/>`)
+	zipSymbol    = symbol(`<path d="M4 7h16v13H4z"/><path d="M4 7l2-3h12l2 3M11 10h2M11 13h2M11 16h2"/>`)
 )
 
 // The drop zone's measurements, straight from the design file
@@ -81,7 +81,7 @@ var (
 		return platform.DragFilesChange()
 	}
 	dropFilesData = func(d transfer.Data) ([]string, error) { return d.Files() }
-	airDrop       = platform.ShareNearby
+	shareNearby   = platform.ShareNearby
 	cursorPoint   = func() mygo.Point { return mygo.Screen.CursorScreenPoint() }
 	dragState     = func() (bool, int64) { return platform.DragState() }
 	dragTypes     = platform.DragTypes
@@ -140,7 +140,7 @@ func dropDebugFiles() []string {
 
 // dropAction is one action cell: glyph, label, subtitle, and what a drop
 // on it runs. target is the convertTarget fed to the conversion pipeline;
-// airDrop is the odd one out — it opens the system sheet and stores
+// sharing is the odd one out — it opens the system sheet and stores
 // nothing; isOCRCopy (the 框选文字 card) recognizes the images' text and
 // puts it on the clipboard instead of shelving anything.
 type dropAction struct {
@@ -149,7 +149,7 @@ type dropAction struct {
 	label     string
 	sub       string
 	target    convertTarget
-	isAirDrop bool
+	isShare   bool
 	isOCRCopy bool
 }
 
@@ -224,7 +224,7 @@ func dropActionsForIn(l locales.Messages, paths []string, class dropClass) []dro
 	if len(paths) == 0 {
 		return nil
 	}
-	air := dropAction{id: "airdrop", icon: airDropSymbol, label: l.CardAirDrop(), isAirDrop: true}
+	air := dropAction{id: "airdrop", icon: shareSymbol, label: osText(l.CardAirDrop(), l.CardAirDropWin()), isShare: true}
 	switch class {
 	case classImages:
 		allJPEG := true
@@ -646,8 +646,8 @@ func (a *shelf) runDropActionFiles(act dropAction, files []string, data transfer
 	if a.tab != pageTray {
 		a.setTab(pageTray)
 	}
-	if act.isAirDrop {
-		if err := airDrop(files, nil); err != nil {
+	if act.isShare {
+		if err := shareNearby(files, nil); err != nil {
 			a.report(err)
 		}
 		return

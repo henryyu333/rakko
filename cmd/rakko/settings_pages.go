@@ -64,7 +64,7 @@ func (a *shelf) settingsGeneralPage(c *ui.Context) {
 		if a.loginErr != "" {
 			loginCap, capColor = a.loginErr, danger
 		}
-		settingsToggleRowCap(c, "login", l.SettingsLoginRow(), loginCap, capColor, a.loginOn, a.applyOpenAtLogin)
+		settingsToggleRowCap(c, "login", osText(l.SettingsLoginRow(), l.SettingsLoginRowWin()), loginCap, capColor, a.loginOn, a.applyOpenAtLogin)
 		settingsSep(c, "login")
 		ui.Column(c.Key("language")).FillWidth().Disabled(a.settingsBroken).Children(func() {
 			settingsRow(c, "language", l.LanguageRow(), "", func() {
@@ -99,13 +99,13 @@ func (a *shelf) settingsNotchPage(c *ui.Context) {
 
 	settingsGroup(c, "shape", l.SettingsShapeGroup(), "", func() {
 		ui.Column(c.Key("shape-rows")).FillWidth().Disabled(a.settingsBroken).Children(func() {
-			settingsRow(c, "shellstyle", l.ShellStyleRow(), l.ShellStyleCaption(), func() {
+			settingsRow(c, "shellstyle", osText(l.ShellStyleRow(), l.ShellStyleRowWin()), osText(l.ShellStyleCaption(), l.ShellStyleCaptionWin()), func() {
 				style := 0
 				if a.settings.ShellStyle.Normalized() == settings.ShellStyleIsland {
 					style = 1
 				}
-				if sg := settingsSegmented(c, "shellstyle", l.ShellStyleRow(), &style,
-					l.ShellStyleNotch(), l.ShellStyleIsland()); sg.Changed() {
+				if sg := settingsSegmented(c, "shellstyle", osText(l.ShellStyleRow(), l.ShellStyleRowWin()), &style,
+					osText(l.ShellStyleNotch(), l.ShellStyleNotchWin()), l.ShellStyleIsland()); sg.Changed() {
 					next := settings.ShellStyleNotch
 					if style == 1 {
 						next = settings.ShellStyleIsland
@@ -157,7 +157,7 @@ func (a *shelf) settingsNotchPage(c *ui.Context) {
 
 	settingsGroup(c, "window", l.SettingsWindowGroup(), "", func() {
 		ui.Column(c.Key("window-rows")).FillWidth().Disabled(a.settingsBroken).Children(func() {
-			settingsToggleRow(c, "snap", l.SettingsSnapRow(), l.SettingsSnapCaption(),
+			settingsToggleRow(c, "snap", osText(l.SettingsSnapRow(), l.SettingsSnapRowWin()), osText(l.SettingsSnapCaption(), l.SettingsSnapCaptionWin()),
 				a.settings.SnapWindows, a.setSnapWindows)
 		})
 	})
@@ -253,7 +253,7 @@ func (a *shelf) settingsAIUsagePage(c *ui.Context) {
 		heroUsageFrom, heroUsageTo, heroUsageGlow)
 
 	settingsGroupRows(c, "ai", l.SettingsAIEnableGroup(), "", a.settingsBroken, func() {
-		settingsToggleRow(c, "aiusage", l.SettingsAIEnableRow(), "", a.settings.AIUsage.Enabled,
+		settingsToggleRow(c, "aiusage", osText(l.SettingsAIEnableRow(), l.SettingsAIEnableRowWin()), "", a.settings.AIUsage.Enabled,
 			func(on bool) { a.setAIUsage(func(s *settings.Settings) { s.AIUsage.Enabled = on }) })
 		settingsSep(c, "aiusage")
 		settingsRow(c, "quota-show", l.SettingsAIQuotaDisplayRow(), "", func() {
@@ -303,7 +303,7 @@ func (a *shelf) settingsAIUsagePage(c *ui.Context) {
 	a.settingsAgentGroup(c)
 	a.settingsApprovalGroup(c)
 
-	settingsFootnote(c, "ai-foot", l.SettingsAILocalFoot())
+	settingsFootnote(c, "ai-foot", osText(l.SettingsAILocalFoot(), l.SettingsAILocalFootWin()))
 }
 
 // settingsAgentGroup is the Agent 完成提醒 card: one switch for every
@@ -315,7 +315,7 @@ func (a *shelf) settingsAgentGroup(c *ui.Context) {
 	f := a.agentFeature()
 	f.refreshIfStale()
 	settingsGroupRows(c, "agentnotify", l.SettingsAgentGroup(), "", a.settingsBroken, func() {
-		settingsToggleRow(c, "agentnotify", l.SettingsAgentRow(), l.SettingsAgentCaption(),
+		settingsToggleRow(c, "agentnotify", osText(l.SettingsAgentRow(), l.SettingsAgentRowWin()), l.SettingsAgentCaption(),
 			a.settings.AgentNotify.Enabled, a.setAgentNotify)
 		tools := f.detected()
 		if len(tools) == 0 {
@@ -370,7 +370,7 @@ func (a *shelf) settingsApprovalGroup(c *ui.Context) {
 	f := a.approvalFeature()
 	f.refreshIfStale()
 	settingsGroupRows(c, "approval", l.SettingsApprovalGroup(), "", a.settingsBroken, func() {
-		settingsToggleRow(c, "approval", l.SettingsApprovalRow(), l.SettingsApprovalCaption(),
+		settingsToggleRow(c, "approval", osText(l.SettingsApprovalRow(), l.SettingsApprovalRowWin()), l.SettingsApprovalCaption(),
 			a.settings.Approval.Enabled, a.setApproval)
 		tools := f.detected()
 		if len(tools) == 0 {
@@ -509,12 +509,12 @@ func (a *shelf) settingsShortcutsPage(c *ui.Context) {
 		a.settingsShortcutRow(c, shortcutAppSwitch, l.SettingsShortcutAppSwitch(), "")
 	})
 
-	settingsGroup(c, "keys-notch", l.SettingsKeysNotchGroup(), "", func() {
+	settingsGroup(c, "keys-notch", osText(l.SettingsKeysNotchGroup(), l.SettingsKeysNotchGroupWin()), "", func() {
 		settingsReadonlyShortcutRow(c, "sc-esc", l.SettingsShortcutEscRow(), l.SettingsShortcutEscCaption(),
 			[]string{"Esc"})
 		settingsSep(c, "sc-esc")
 		settingsReadonlyShortcutRow(c, "sc-select", l.SettingsShortcutSelectRow(), "",
-			[]string{"↑", "↓", "↩"})
+			[]string{"↑", "↓", osText("↩", "Enter")})
 	})
 }
 

@@ -360,7 +360,7 @@ func (a *shelf) settingsSidebar(c *ui.Context) {
 		ui.Box(c.Key("brand-gap")).Height(6)
 
 		a.settingsNavItem(c, settingsPageGeneral, navGear, l.General())
-		settingsNavGroup(c, l.SettingsGroupNotch())
+		settingsNavGroup(c, osText(l.SettingsGroupNotch(), l.SettingsGroupNotchWin()))
 		a.settingsNavItem(c, settingsPageNotch, navNotch, l.SettingsNotchNav())
 		settingsNavGroup(c, l.SettingsGroupContent())
 		a.settingsNavItem(c, settingsPageTray, navTray, l.SettingsTraySection())

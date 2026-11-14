@@ -46,13 +46,21 @@ const (
 // menu-bar menu; the setting takes any number, the menu the usual ones.
 var clipboardLimitChoices = []int{30, 100, 300}
 
-// shortcutLabel renders an Electron-style accelerator ("Ctrl+Alt+Space")
-// as macOS glyphs ("⌃⌥Space"). Unknown spellings are returned unchanged
+// shortcutLabel renders an Electron-style accelerator in the spelling the
+// platform's keyboards use: macOS glyphs ("⌃⌥Space"), or Windows words joined
+// with plus signs ("Ctrl+Alt+Space"). Unknown spellings are returned unchanged
 // so a hint never claims a shortcut the app did not register.
 func shortcutLabel(acc string) string {
-	tokens, ok := shortcutTokens(acc)
+	return shortcutLabelFor(forWindows, acc)
+}
+
+func shortcutLabelFor(windows bool, acc string) string {
+	tokens, ok := shortcutTokensFor(windows, acc)
 	if !ok {
 		return acc
+	}
+	if windows {
+		return strings.Join(tokens, "+")
 	}
 	return strings.Join(tokens, "")
 }

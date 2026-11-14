@@ -212,7 +212,7 @@ func (a *shelf) onboardingFinish() {
 // neutral hint on it.
 func (a *shelf) onboardingSkip() {
 	l := a.appLoc()
-	a.toastStatus(l.OnboardingSkippedHint(), time.Now().Add(3*time.Second), statusInfo)
+	a.toastStatus(osText(l.OnboardingSkippedHint(), l.OnboardingSkippedHintWin()), time.Now().Add(3*time.Second), statusInfo)
 	a.onboardingDone()
 	a.hide(hideExplicit)
 	a.petStart()
@@ -309,8 +309,8 @@ func (o *onboardingFeature) stepIntro(c *ui.Context, l locales.Messages) {
 			})
 		}
 		ui.Column(c.Key("onb-tx")).Gap(6).Children(func() {
-			panelLabel(c, "onb-intro-title", l.OnboardingIntroTitle(), 15, 650).TextColor(ink)
-			panelLabel(c, nil, l.OnboardingIntroLead(), 13, 0).TextColor(ink2)
+			panelLabel(c, "onb-intro-title", osText(l.OnboardingIntroTitle(), l.OnboardingIntroTitleWin()), 15, 650).TextColor(ink)
+			panelLabel(c, nil, osText(l.OnboardingIntroLead(), l.OnboardingIntroLeadWin()), 13, 0).TextColor(ink2)
 			ui.Row(c.Key("onb-keys")).Gap(4).Children(func() {
 				for i, k := range o.shortcutCaps() {
 					ui.Box(c.Key(i)).Height(24).MinWidth(24).Padding(0, 6, 0, 6).Radius(6).
@@ -319,7 +319,7 @@ func (o *onboardingFeature) stepIntro(c *ui.Context, l locales.Messages) {
 					})
 				}
 			})
-			panelLabel(c, nil, l.OnboardingIntroNote(), 11, 0).TextColor(ink3)
+			panelLabel(c, nil, osText(l.OnboardingIntroNote(), l.OnboardingIntroNoteWin()), 11, 0).TextColor(ink3)
 		})
 	})
 }
@@ -332,6 +332,9 @@ func (o *onboardingFeature) shortcutCaps() []string {
 	}
 	if t, ok := shortcutTokens(settings.DefaultShortcutToggle); ok {
 		return t
+	}
+	if forWindows {
+		return []string{"Ctrl", "Alt", "Space"}
 	}
 	return []string{"⌃", "⌥", "Space"}
 }

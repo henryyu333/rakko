@@ -259,19 +259,19 @@ func shotBarTip(c *ui.Context, it shotBarItem) (name, keys string) {
 			return l.ShotToolNumber(), ""
 		}
 	case shotBarUndo:
-		return l.ShotActionUndo(), "⌘Z"
+		return l.ShotActionUndo(), osText("⌘Z", shortcutLabel("Cmd+Z"))
 	case shotBarRedo:
-		return l.ShotActionRedo(), "⇧⌘Z"
+		return l.ShotActionRedo(), osText("⇧⌘Z", shortcutLabel("Cmd+Shift+Z"))
 	case shotBarOCR:
 		return l.ShotActionOCR(), ""
 	case shotBarPin:
 		return l.ShotActionPin(), ""
 	case shotBarSave:
-		return l.ShotActionSave(), "⌘S"
+		return l.ShotActionSave(), osText("⌘S", shortcutLabel("Cmd+S"))
 	case shotBarCancel:
 		return l.ShotActionCancel(), ""
 	case shotBarCopy:
-		return l.ShotCopyButton(), "⌘C"
+		return l.ShotCopyButton(), osText("⌘C", shortcutLabel("Cmd+C"))
 	}
 	return "", ""
 }

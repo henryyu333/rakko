@@ -209,9 +209,9 @@ func (a *shelf) ocrSheetStage(c *ui.Context) {
 			ui.Text(c, title).FontSize(13).FontWeight(600).TextColor(ink)
 			ui.Row(c.Key("acts")).Gap(8).Margin(10, 0, 0, 0).Children(func() {
 				primary := ui.ButtonBase(c.Key("grant")).Height(24).Radius(12).Padding(0, 10, 0, 10).
-					Background(accent).Center().Label(loc(c).OcrOpenSettings())
+					Background(accent).Center().Label(osText(loc(c).OcrOpenSettings(), loc(c).OcrOpenSettingsWin()))
 				primary.Children(func() {
-					ui.Text(c, loc(c).OcrOpenSettings()).SingleLine().FontSize(11).FontWeight(600).TextColor(ink)
+					ui.Text(c, osText(loc(c).OcrOpenSettings(), loc(c).OcrOpenSettingsWin())).SingleLine().FontSize(11).FontWeight(600).TextColor(ink)
 				})
 				if primary.Clicked() {
 					ocrGrant()

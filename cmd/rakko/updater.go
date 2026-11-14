@@ -474,7 +474,7 @@ func (a *shelf) updateStatus() string {
 	case a.updateInstalled && a.update != nil:
 		return l.UpdateInstalled(a.update.Version)
 	case a.update != nil && a.update.Version != a.settings.UpdateSkippedVersion:
-		return l.UpdateAvailable(a.update.Version)
+		return osText(l.UpdateAvailable(a.update.Version), l.UpdateAvailableWin(a.update.Version))
 	}
 	return ""
 }

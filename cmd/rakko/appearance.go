@@ -24,7 +24,7 @@ func (a *shelf) refreshAppearance(now time.Time) {
 		return
 	}
 	a.appearanceAt = now
-	reduce := macReduceTransparency()
+	reduce := reduceTransparency()
 	if reduce != a.reduceTrans {
 		a.reduceTrans = reduce
 		if a.win != nil {
@@ -81,5 +81,5 @@ func (a *shelf) panelFill(p *ui.Painter, path *ui.Path, body ui.Rect, botR float
 	}, 0)
 }
 
-// macReduceTransparency is a seam so headless tests never touch AppKit.
-var macReduceTransparency = func() bool { return platform.ReduceTransparency() }
+// reduceTransparency is a seam so headless tests never touch AppKit.
+var reduceTransparency = func() bool { return platform.ReduceTransparency() }

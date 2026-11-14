@@ -445,7 +445,7 @@ func (a *shelf) approvalAllow(c *ui.Context, ap *approval, now time.Time) {
 		fg = approvalHoldInk
 	}
 	if ap.state == approvalArmed {
-		label = l.LiveApprovalAgain()
+		label = osText(l.LiveApprovalAgain(), l.LiveApprovalAgainWin())
 	}
 	progress := ap.holdProgress(now)
 	if ap.state == approvalHolding {

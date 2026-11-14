@@ -280,7 +280,7 @@ func (p *trayPage) actions(c *ui.Context) []ui.Element {
 	list := p.items()
 	var out []ui.Element
 	if len(list) > 0 {
-		hint := l.PageMultiHint()
+		hint := osText(l.PageMultiHint(), l.PageMultiHintWin())
 		if n := a.selection.count(); n > 1 {
 			hint = l.PageSelectedCount(n)
 		}

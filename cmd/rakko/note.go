@@ -30,10 +30,10 @@ const (
 )
 
 var (
-	// noteSymbol is the design's sticky note glyph; finderSymbol the
-	// folder on the bar's 在访达中显示 button.
+	// noteSymbol is the design's sticky note glyph; revealSymbol the
+	// folder on the bar's show-in-file-manager button.
 	noteSymbol   = symbol(`<path d="M5 3.5h14V15l-4.5 5H5z"/><path d="M14.5 20v-5H19M8.5 8.5h7M8.5 12h4.5"/>`)
-	finderSymbol = symbol(`<path d="M3.5 6.5A1.5 1.5 0 0 1 5 5h3.8L11 7h8a1.5 1.5 0 0 1 1.5 1.5v9.5A1.5 1.5 0 0 1 19 19.5H5a1.5 1.5 0 0 1-1.5-1.5z"/>`)
+	revealSymbol = symbol(`<path d="M3.5 6.5A1.5 1.5 0 0 1 5 5h3.8L11 7h8a1.5 1.5 0 0 1 1.5 1.5v9.5A1.5 1.5 0 0 1 19 19.5H5a1.5 1.5 0 0 1-1.5-1.5z"/>`)
 
 	// Seams around the app-level calls, as rename.go keeps them, so a
 	// headless test can drive the session without a window server.
@@ -514,7 +514,7 @@ func (a *shelf) noteBar(c *ui.Context, l locales.Messages) {
 		AlignItems(ui.Center).Padding(0, 8, 0, 12).Gap(2).DragWindow().Children(func() {
 		ui.Text(c.Key("note-title"), title).SingleLine().FontSize(11.5).FontWeight(600).
 			TextColor(ink2).Grow(1).MinWidth(0)
-		a.noteButton(c, "note-reveal", finderSymbol, l.NoteReveal(), false, func() {
+		a.noteButton(c, "note-reveal", revealSymbol, osText(l.NoteReveal(), l.NoteRevealWin()), false, func() {
 			if n.win != nil {
 				n.frame = n.win.Bounds()
 			}

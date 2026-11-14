@@ -184,7 +184,7 @@ func (f *weeklyFeature) macSection(c *ui.Context, w float32, wk weekly.Week, now
 	l := tloc(c)
 	ui.Column(c.Key("weekly-mac")).Width(w).Margin(0, 0, 0, 0).Children(func() {
 		ui.Row(c.Key("weekly-mac-head")).Width(w).Height(20).AlignItems(ui.Center).Children(func() {
-			panelLabel(c, "weekly-mac-name", l.WeeklyMacSection(), 12, 600).TextColor(ink2)
+			panelLabel(c, "weekly-mac-name", osText(l.WeeklyMacSection(), l.WeeklyMacSectionWin()), 12, 600).TextColor(ink2)
 			ui.Box(c.Key("weekly-mac-gap")).Grow(1)
 			if f.consent() {
 				f.modeSeg(c)
@@ -255,7 +255,7 @@ func (f *weeklyFeature) consentBlock(c *ui.Context, w float32) {
 			ui.Icon(c, weeklySymbol).Size(14, 14).TextColor(ink3)
 			panelLabel(c, nil, l.WeeklyConsentTitle(), 12, 600).TextColor(ink)
 		})
-		panelLines(c, l.WeeklyConsentBody(), 11, 0).TextColor(ink2).MaxWidth(w)
+		panelLines(c, osText(l.WeeklyConsentBody(), l.WeeklyConsentBodyWin()), 11, 0).TextColor(ink2).MaxWidth(w)
 		ui.Row(c.Key("weekly-consent-actions")).Children(func() {
 			b := ui.ButtonBase(c.Key("weekly-enable")).Height(24).Radius(12).Padding(0, 12, 0, 12).
 				Background(accent).Center().Label(l.WeeklyConsentEnable())
@@ -643,7 +643,7 @@ func (f *weeklyFeature) footer(c *ui.Context, w float32) {
 	ui.Row(c.Key("weekly-foot")).Width(w).Height(weeklyFootH).
 		Padding(0, weeklyInnerX, 0, weeklyInnerX).AlignItems(ui.Center).Gap(6).Children(func() {
 		ui.Icon(c, weeklyShield).Size(11, 11).TextColor(ink3)
-		panelLabel(c, nil, l.WeeklyLocalOnly(), 10, 0).TextColor(ink3)
+		panelLabel(c, nil, osText(l.WeeklyLocalOnly(), l.WeeklyLocalOnlyWin()), 10, 0).TextColor(ink3)
 		if !f.consent() {
 			// The Mac section's ask owns turning tracking on; two switches
 			// for one choice would only compete.

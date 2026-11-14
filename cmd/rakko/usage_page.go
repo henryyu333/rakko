@@ -817,7 +817,7 @@ func (f *usageFeature) localPanel(c *ui.Context) {
 		Padding(8, 10, 7, 10).Gap(4)
 	card.Children(func() {
 		ui.Row(c.Key("uh")).Height(15).AlignItems(ui.Center).Children(func() {
-			panelLabel(c, nil, tloc(c).UsageLocalTitle(), 10.5, 600).TextColor(ink2)
+			panelLabel(c, nil, osText(tloc(c).UsageLocalTitle(), tloc(c).UsageLocalTitleWin()), 10.5, 600).TextColor(ink2)
 			ui.Box(c).Grow(1)
 			f.usageSeg(c)
 		})

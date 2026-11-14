@@ -1495,8 +1495,8 @@ func (a *shelf) holdKeys() {
 		}
 	}
 	if !a.spaceHeld {
-		// Without Space, Quick Look stays available from the context menu.
-		a.spaceHeld = registerKey("Space", a.toggleQuickLook) == nil
+		// Without Space, Preview stays available from the context menu.
+		a.spaceHeld = registerKey("Space", a.togglePreview) == nil
 	}
 	a.syncCopyKey()
 }

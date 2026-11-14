@@ -541,16 +541,16 @@ func (a *shelf) resultsView(c *ui.Context, r ui.Rect, opacity float32) {
 			open := ui.Row(c.Key("results-open")).Gap(5).AlignItems(ui.Center)
 			open.Children(func() {
 				panelLabel(c, nil, l.ItemOpen(), 11.5, 600).TextColor(ink2)
-				keycap("open", "↩")
+				keycap("open", osText("↩", "Enter"))
 			})
 			// Files, folders and apps can also be shown where they live;
 			// the clipboard, notes, tray rows and actions cannot.
 			if hits[max(0, min(a.homeSel, len(hits)-1))].reveal != nil {
 				reveal := ui.Row(c.Key("results-reveal")).Gap(5).AlignItems(ui.Center)
 				reveal.Children(func() {
-					panelLabel(c, nil, l.ItemShowInFinder(), 11.5, 600).TextColor(ink2)
-					keycap("reveal-cmd", "⌘")
-					keycap("reveal-enter", "↩")
+					panelLabel(c, nil, osText(l.ItemShowInFinder(), l.ItemShowInFinderWin()), 11.5, 600).TextColor(ink2)
+					keycap("reveal-cmd", shortcutLabel("CmdOrCtrl"))
+					keycap("reveal-enter", osText("↩", "Enter"))
 				})
 			}
 		})

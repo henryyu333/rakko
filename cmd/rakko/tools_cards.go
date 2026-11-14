@@ -79,6 +79,7 @@ var (
 // widgets (design §3's rows in order). 框选文字 leads the actions and
 // the default layout's first cell (design §1's first grid).
 func toolCatalog() []toolCardDef {
+	shareTitle := osText("隔空投送", "附近共享")
 	return []toolCardDef{
 		{id: "ocr", kind: cardAction, title: "框选文字", icon: ocrSymbol, span: 1, accepts: imagesOnly, available: always},
 		{id: "shot", kind: cardAction, title: "截图", icon: shotSymbol, span: 1, accepts: never, available: always},
@@ -89,7 +90,7 @@ func toolCatalog() []toolCardDef {
 		{id: "extract", kind: cardAction, title: "解压", icon: unzipSymbol, span: 1, accepts: archivesOnly, available: always},
 		{id: "resize", kind: cardAction, title: "缩小图片", icon: shrinkSymbol, span: 1, accepts: imagesOnly, available: always},
 		{id: "zip", kind: cardAction, title: "打成 zip", icon: zipSymbol, span: 1, accepts: anyClass, available: always},
-		{id: "airdrop", kind: cardAction, title: "隔空投送", icon: airDropSymbol, span: 1, accepts: anyClass, available: always},
+		{id: "airdrop", kind: cardAction, title: shareTitle, icon: shareSymbol, span: 1, accepts: anyClass, available: always},
 		{id: "playing", kind: cardWidget, title: "音乐", icon: musicSymbol, span: 2, rows: 2, accepts: never, available: always},
 		{id: "awake", kind: cardWidget, title: "保持唤醒", icon: cupSymbol, span: 1, variableSpan: true, accepts: never, available: always},
 		{id: "recent", kind: cardWidget, title: "最近文件", icon: docSymbol, span: 2, accepts: never, available: always},
@@ -155,7 +156,7 @@ func (d *toolCardDef) name(l locales.Messages) string {
 	case "zip":
 		return l.CardZip()
 	case "airdrop":
-		return l.CardAirDrop()
+		return osText(l.CardAirDrop(), l.CardAirDropWin())
 	case "playing":
 		return l.Music()
 	case "awake":
@@ -467,7 +468,7 @@ func (a *shelf) toolCardDropAction(id string, paths []string) dropAction {
 		}
 		return dropAction{id: id, icon: def.icon, label: def.name(l), sub: sub, target: toExtract}
 	case "airdrop":
-		return dropAction{id: id, icon: def.icon, label: def.name(l), isAirDrop: true}
+		return dropAction{id: id, icon: def.icon, label: def.name(l), isShare: true}
 	default: // zip and any future any-class action
 		return zipAction(l, len(paths))
 	}
@@ -565,7 +566,7 @@ func (a *shelf) runToolCard(id string) bool {
 		if len(paths) == 0 {
 			return false
 		}
-		if err := airDrop(paths, nil); err != nil {
+		if err := shareNearby(paths, nil); err != nil {
 			a.report(err)
 		}
 		return true

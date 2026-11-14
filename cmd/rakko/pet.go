@@ -779,7 +779,7 @@ func (pet *petWindow) menu(e ui.Element) {
 		if m.Item(l.PetOpen()).Chosen() {
 			a.show(false)
 		}
-		if m.Item(l.PetStow()).Chosen() {
+		if m.Item(osText(l.PetStow(), l.PetStowWin())).Chosen() {
 			a.hidePet()
 		}
 		m.Separator()

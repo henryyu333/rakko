@@ -1954,7 +1954,7 @@ func (a *shelf) peekView(c *ui.Context, shellW, shellH, openK, peekK, shake floa
 					panelLabel(c, nil, l.DropReturn(), 12, 600).TextColor(ink)
 				} else if kind == peekPetStow {
 					ui.Icon(c, shelfSymbol).Size(14, 14).TextColor(ink)
-					panelLabel(c, nil, l.DropStowPet(), 12, 600).TextColor(ink)
+					panelLabel(c, nil, osText(l.DropStowPet(), l.DropStowPetWin()), 12, 600).TextColor(ink)
 				} else {
 					ui.Icon(c, chevronDownSym).Size(12, 12).TextColor(ink2)
 				}

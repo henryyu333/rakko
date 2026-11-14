@@ -210,13 +210,13 @@ func (a *shelf) registerShortcuts() {
 			a.shortcutBusy[k] = true
 			switch k {
 			case shortcutToggle:
-				a.notice(l.StartupShortcutBusy(err.Error()))
+				a.notice(osText(l.StartupShortcutBusy(err.Error()), l.StartupShortcutBusyWin(err.Error())))
 			case shortcutClipboard:
-				a.notice(l.StartupClipboardShortcutBusy(err.Error()))
+				a.notice(osText(l.StartupClipboardShortcutBusy(err.Error()), l.StartupClipboardShortcutBusyWin(err.Error())))
 			case shortcutCapture:
-				a.notice(l.StartupCaptureShortcutBusy(err.Error()))
+				a.notice(osText(l.StartupCaptureShortcutBusy(err.Error()), l.StartupCaptureShortcutBusyWin(err.Error())))
 			default:
-				a.notice(l.StartupShortcutBusy(err.Error()))
+				a.notice(osText(l.StartupShortcutBusy(err.Error()), l.StartupShortcutBusyWin(err.Error())))
 			}
 			continue
 		}
@@ -533,12 +533,23 @@ func acceleratorKey(key ui.Key) (string, bool) {
 }
 
 // shortcutTokens splits an accelerator into the keycaps the page draws:
-// modifiers as glyphs ("⌃", "⌥", "⌘", "⇧") and the key as it is spelled.
-// ok is false for an empty or malformed accelerator, so the row can show
-// 「未设置」 instead of claiming a shortcut.
+// modifiers as glyphs ("⌃", "⌥", "⌘", "⇧") on macOS and as the words on a
+// Windows keyboard ("Ctrl", "Alt", "Shift") there, and the key as it is
+// spelled. ok is false for an empty or malformed accelerator, so the row can
+// show 「未设置」 instead of claiming a shortcut.
 func shortcutTokens(acc string) (tokens []string, ok bool) {
+	return shortcutTokensFor(forWindows, acc)
+}
+
+func shortcutTokensFor(windows bool, acc string) (tokens []string, ok bool) {
 	if strings.TrimSpace(acc) == "" {
 		return nil, false
+	}
+	mod := func(mac, win string) string {
+		if windows {
+			return win
+		}
+		return mac
 	}
 	parts := strings.Split(acc, "+")
 	tokens = make([]string, 0, len(parts))
@@ -558,14 +569,16 @@ func shortcutTokens(acc string) (tokens []string, ok bool) {
 			continue
 		}
 		switch strings.ToLower(token) {
-		case "cmd", "command", "super", "meta", "win", "cmdorctrl":
-			tokens = append(tokens, "⌘")
+		case "cmd", "command", "cmdorctrl":
+			tokens = append(tokens, mod("⌘", "Ctrl"))
 		case "ctrl", "control":
-			tokens = append(tokens, "⌃")
+			tokens = append(tokens, mod("⌃", "Ctrl"))
 		case "alt", "option":
-			tokens = append(tokens, "⌥")
+			tokens = append(tokens, mod("⌥", "Alt"))
 		case "shift":
-			tokens = append(tokens, "⇧")
+			tokens = append(tokens, mod("⇧", "Shift"))
+		case "super", "meta", "win":
+			tokens = append(tokens, mod("⌘", "Win"))
 		default:
 			return nil, false
 		}

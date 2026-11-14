@@ -96,7 +96,7 @@ func (a *shelf) pasteItems(items []store.Item) {
 	// 回退提示在收起前写进 status，收起时随胶囊一起出现。
 	switch {
 	case target <= 0:
-		a.toastStatus(a.appLoc().ClipPasteManual(), time.Now().Add(4*time.Second), statusOK)
+		a.toastStatus(osText(a.appLoc().ClipPasteManual(), a.appLoc().ClipPasteManualWin()), time.Now().Add(4*time.Second), statusOK)
 		a.hide(hideExplicit)
 		return
 	case !pasteTrusted():
@@ -184,7 +184,7 @@ func (a *shelf) pasteMissed(gen int64) {
 	if a.pasteSeq.Load() != gen {
 		return
 	}
-	a.toastStatus(a.appLoc().ClipPasteManual(), time.Now().Add(4*time.Second), statusOK)
+	a.toastStatus(osText(a.appLoc().ClipPasteManual(), a.appLoc().ClipPasteManualWin()), time.Now().Add(4*time.Second), statusOK)
 }
 
 // cancelPaste 让在途的粘贴尝试作废：面板收起或重新打开时调用。

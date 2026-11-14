@@ -61,15 +61,15 @@ func (a *shelf) itemMenu(m *ui.Menu, item store.Item) {
 			}
 		}
 	}
-	if m.Item(l.ItemShowInFinder()).Disabled(!files).Chosen() {
+	if m.Item(osText(l.ItemShowInFinder(), l.ItemShowInFinderWin())).Disabled(!files).Chosen() {
 		for _, p := range paths {
 			mygo.Shell.ShowItemInFolder(p)
 		}
 	}
-	if m.Item(l.ItemQuickLook()).Disabled(!files).Chosen() {
-		a.quickLook(paths)
+	if m.Item(osText(l.ItemQuickLook(), l.ItemQuickLookWin())).Disabled(!files).Chosen() {
+		a.previewPaths(paths)
 	}
-	if m.Item(l.ItemAirDrop()).Disabled(!files && len(texts) == 0).Chosen() {
+	if m.Item(osText(l.ItemAirDrop(), l.ItemAirDropWin())).Disabled(!files && len(texts) == 0).Chosen() {
 		if err := platform.ShareNearby(paths, texts); err != nil {
 			a.report(err)
 		}
@@ -260,7 +260,7 @@ func (a *shelf) copyItem(item store.Item) bool {
 			return false
 		}
 		a.clip.skipCurrent()
-		a.toastStatus(a.appLoc().ItemCopiedImage(), time.Now().Add(3*time.Second), statusOK)
+		a.toastStatus(osText(a.appLoc().ItemCopiedImage(), a.appLoc().ItemCopiedImageWin()), time.Now().Add(3*time.Second), statusOK)
 		return true
 	}
 	a.report(errors.New(a.appLoc().ItemNotCopyable()))
@@ -449,8 +449,8 @@ func (a *shelf) removeFrom(items []store.Item, id pageID) {
 	a.syncCopyKey()
 }
 
-// quickLook previews paths in the system Quick Look panel.
-func (a *shelf) quickLook(paths []string) {
+// previewPaths previews paths in the platform's preview panel.
+func (a *shelf) previewPaths(paths []string) {
 	if len(paths) == 0 {
 		return
 	}
@@ -459,9 +459,9 @@ func (a *shelf) quickLook(paths []string) {
 	}
 }
 
-// toggleQuickLook is Space while the shelf is in use: it closes an open
+// togglePreview is Space while the shelf is in use: it closes an open
 // preview, or previews the selected files and images.
-func (a *shelf) toggleQuickLook() {
+func (a *shelf) togglePreview() {
 	if platform.PreviewVisible() {
 		platform.ClosePreview()
 		return
@@ -470,7 +470,7 @@ func (a *shelf) toggleQuickLook() {
 		return
 	}
 	paths, _ := usable(a.selection.chosen(a.visibleItems()))
-	a.quickLook(paths)
+	a.previewPaths(paths)
 }
 
 // dragItems is what dragging item carries: every selected item still on

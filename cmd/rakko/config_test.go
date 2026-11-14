@@ -7,22 +7,27 @@ import (
 )
 
 // The shortcut hints are rendered from the accelerators settings.json holds,
-// so a hint can never disagree with the shortcut the app registers.
+// so a hint can never disagree with the shortcut the app registers. macOS
+// draws glyphs; Windows spells the modifiers.
 func TestShortcutLabelGlyphs(t *testing.T) {
-	cases := map[string]string{
-		"Ctrl+Alt+Space":        "⌃⌥Space",
-		"Ctrl+Alt+S":            "⌃⌥S",
-		"Cmd+Shift+Z":           "⌘⇧Z",
-		"CmdOrCtrl+Shift+Space": "⌘⇧Space",
-		"Super+Alt+2":           "⌘⌥2",
-		"Shift+F5":              "⇧F5",
+	cases := []struct{ in, mac, windows string }{
+		{"Ctrl+Alt+Space", "⌃⌥Space", "Ctrl+Alt+Space"},
+		{"Ctrl+Alt+S", "⌃⌥S", "Ctrl+Alt+S"},
+		{"Cmd+Shift+Z", "⌘⇧Z", "Ctrl+Shift+Z"},
+		{"CmdOrCtrl+Shift+Space", "⌘⇧Space", "Ctrl+Shift+Space"},
+		{"Super+Alt+2", "⌘⌥2", "Win+Alt+2"},
+		{"Shift+F5", "⇧F5", "Shift+F5"},
 		// 未知写法原样显示，不虚构按键。
-		"Bogus+Key": "Bogus+Key",
-		"":          "",
+		{"Bogus+Key", "Bogus+Key", "Bogus+Key"},
+		{"", "", ""},
 	}
-	for in, want := range cases {
-		if got := shortcutLabel(in); got != want {
-			t.Fatalf("shortcutLabel(%q) = %q, want %q", in, got, want)
+	for _, tc := range cases {
+		want := tc.mac
+		if forWindows {
+			want = tc.windows
+		}
+		if got := shortcutLabel(tc.in); got != want {
+			t.Fatalf("shortcutLabel(%q) = %q, want %q", tc.in, got, want)
 		}
 	}
 }
@@ -30,10 +35,14 @@ func TestShortcutLabelGlyphs(t *testing.T) {
 // A fresh install's three shortcuts still render, and the fourth is unset.
 func TestDefaultShortcutsRender(t *testing.T) {
 	def := settings.Default().Shortcuts
+	toggle, clipboard, capture := "⌃⌥Space", "⌃⌥V", "⌃⌥O"
+	if forWindows {
+		toggle, clipboard, capture = "Ctrl+Alt+Space", "Ctrl+Alt+V", "Ctrl+Alt+O"
+	}
 	for acc, want := range map[string]string{
-		def.Toggle:    "⌃⌥Space",
-		def.Clipboard: "⌃⌥V",
-		def.Capture:   "⌃⌥O",
+		def.Toggle:    toggle,
+		def.Clipboard: clipboard,
+		def.Capture:   capture,
 	} {
 		if got := shortcutLabel(acc); got != want {
 			t.Fatalf("shortcutLabel(%q) = %q, want %q", acc, got, want)

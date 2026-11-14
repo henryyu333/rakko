@@ -106,7 +106,7 @@ func TestToolCardDropAction(t *testing.T) {
 	}
 	for _, tc := range cases {
 		act := a.toolCardDropAction(tc.id, tc.paths)
-		if act.isAirDrop != tc.air {
+		if act.isShare != tc.air {
 			t.Fatalf("%s: airdrop flag wrong", tc.id)
 		}
 		if act.isOCRCopy != tc.ocr {
