@@ -4805,46 +4805,6 @@ func (msgs Messages) AwakeTapStart() string {
 	return Catalog.Format(msgs.locale, "awakeTapStart", nil)
 }
 
-// AwakeChip30m says "30 分"
-// in the language the app shows.
-func AwakeChip30m() string { return In(i18n.Locale()).AwakeChip30m() }
-
-// AwakeChip30m says "30 分"
-// in the language of msgs.
-func (msgs Messages) AwakeChip30m() string {
-	return Catalog.Format(msgs.locale, "awakeChip30m", nil)
-}
-
-// AwakeChip1h says "1 时"
-// in the language the app shows.
-func AwakeChip1h() string { return In(i18n.Locale()).AwakeChip1h() }
-
-// AwakeChip1h says "1 时"
-// in the language of msgs.
-func (msgs Messages) AwakeChip1h() string {
-	return Catalog.Format(msgs.locale, "awakeChip1h", nil)
-}
-
-// AwakeChip2h says "2 时"
-// in the language the app shows.
-func AwakeChip2h() string { return In(i18n.Locale()).AwakeChip2h() }
-
-// AwakeChip2h says "2 时"
-// in the language of msgs.
-func (msgs Messages) AwakeChip2h() string {
-	return Catalog.Format(msgs.locale, "awakeChip2h", nil)
-}
-
-// AwakeChip4h says "4 时"
-// in the language the app shows.
-func AwakeChip4h() string { return In(i18n.Locale()).AwakeChip4h() }
-
-// AwakeChip4h says "4 时"
-// in the language of msgs.
-func (msgs Messages) AwakeChip4h() string {
-	return Catalog.Format(msgs.locale, "awakeChip4h", nil)
-}
-
 // AwakeAlways says "一直"
 // in the language the app shows.
 func AwakeAlways() string { return In(i18n.Locale()).AwakeAlways() }
@@ -4995,6 +4955,46 @@ func (msgs Messages) Awake4h() string {
 	return Catalog.Format(msgs.locale, "awake4h", nil)
 }
 
+// AwakeChip30m says "30 分"
+// in the language the app shows.
+func AwakeChip30m() string { return In(i18n.Locale()).AwakeChip30m() }
+
+// AwakeChip30m says "30 分"
+// in the language of msgs.
+func (msgs Messages) AwakeChip30m() string {
+	return Catalog.Format(msgs.locale, "awakeChip30m", nil)
+}
+
+// AwakeChip1h says "1 时"
+// in the language the app shows.
+func AwakeChip1h() string { return In(i18n.Locale()).AwakeChip1h() }
+
+// AwakeChip1h says "1 时"
+// in the language of msgs.
+func (msgs Messages) AwakeChip1h() string {
+	return Catalog.Format(msgs.locale, "awakeChip1h", nil)
+}
+
+// AwakeChip2h says "2 时"
+// in the language the app shows.
+func AwakeChip2h() string { return In(i18n.Locale()).AwakeChip2h() }
+
+// AwakeChip2h says "2 时"
+// in the language of msgs.
+func (msgs Messages) AwakeChip2h() string {
+	return Catalog.Format(msgs.locale, "awakeChip2h", nil)
+}
+
+// AwakeChip4h says "4 时"
+// in the language the app shows.
+func AwakeChip4h() string { return In(i18n.Locale()).AwakeChip4h() }
+
+// AwakeChip4h says "4 时"
+// in the language of msgs.
+func (msgs Messages) AwakeChip4h() string {
+	return Catalog.Format(msgs.locale, "awakeChip4h", nil)
+}
+
 // ToolsTitle says "工具"
 // in the language the app shows.
 func ToolsTitle() string { return In(i18n.Locale()).ToolsTitle() }
@@ -5025,42 +5025,52 @@ func (msgs Messages) ToolsEdit() string {
 	return Catalog.Format(msgs.locale, "toolsEdit", nil)
 }
 
-// ToolsMenuEdit is the tools page's toolsMenuEdit string.
+// ToolsMenuEdit says "编辑工具页"
+// in the language the app shows.
 func ToolsMenuEdit() string { return In(i18n.Locale()).ToolsMenuEdit() }
 
-// ToolsMenuEdit is the tools page's toolsMenuEdit string.
+// ToolsMenuEdit says "编辑工具页"
+// in the language of msgs.
 func (msgs Messages) ToolsMenuEdit() string {
 	return Catalog.Format(msgs.locale, "toolsMenuEdit", nil)
 }
 
-// ToolsMenuDone is the tools page's toolsMenuDone string.
+// ToolsMenuDone says "完成编辑"
+// in the language the app shows.
 func ToolsMenuDone() string { return In(i18n.Locale()).ToolsMenuDone() }
 
-// ToolsMenuDone is the tools page's toolsMenuDone string.
+// ToolsMenuDone says "完成编辑"
+// in the language of msgs.
 func (msgs Messages) ToolsMenuDone() string {
 	return Catalog.Format(msgs.locale, "toolsMenuDone", nil)
 }
 
-// ToolsMenuPin is the tools page's toolsMenuPin string.
+// ToolsMenuPin says "固定到桌面"
+// in the language the app shows.
 func ToolsMenuPin() string { return In(i18n.Locale()).ToolsMenuPin() }
 
-// ToolsMenuPin is the tools page's toolsMenuPin string.
+// ToolsMenuPin says "固定到桌面"
+// in the language of msgs.
 func (msgs Messages) ToolsMenuPin() string {
 	return Catalog.Format(msgs.locale, "toolsMenuPin", nil)
 }
 
-// ToolsMenuRemove is the tools page's toolsMenuRemove string.
+// ToolsMenuRemove says "从工具页移除"
+// in the language the app shows.
 func ToolsMenuRemove() string { return In(i18n.Locale()).ToolsMenuRemove() }
 
-// ToolsMenuRemove is the tools page's toolsMenuRemove string.
+// ToolsMenuRemove says "从工具页移除"
+// in the language of msgs.
 func (msgs Messages) ToolsMenuRemove() string {
 	return Catalog.Format(msgs.locale, "toolsMenuRemove", nil)
 }
 
-// ToolsResize is the tools page's toolsResize string.
+// ToolsResize says "改尺寸"
+// in the language the app shows.
 func ToolsResize() string { return In(i18n.Locale()).ToolsResize() }
 
-// ToolsResize is the tools page's toolsResize string.
+// ToolsResize says "改尺寸"
+// in the language of msgs.
 func (msgs Messages) ToolsResize() string {
 	return Catalog.Format(msgs.locale, "toolsResize", nil)
 }
@@ -8851,4 +8861,410 @@ func HomeDateLine(t time.Time) string { return In(i18n.Locale()).HomeDateLine(t)
 // in the language of msgs.
 func (msgs Messages) HomeDateLine(t time.Time) string {
 	return Catalog.Format(msgs.locale, "homeDateLine", map[string]any{"t": t})
+}
+
+// AppTrayTooltipWin says "Rakko · 桌面工具"
+// in the language the app shows.
+func AppTrayTooltipWin() string { return In(i18n.Locale()).AppTrayTooltipWin() }
+
+// AppTrayTooltipWin says "Rakko · 桌面工具"
+// in the language of msgs.
+func (msgs Messages) AppTrayTooltipWin() string {
+	return Catalog.Format(msgs.locale, "appTrayTooltipWin", nil)
+}
+
+// PetStowWin says "收进顶部胶囊"
+// in the language the app shows.
+func PetStowWin() string { return In(i18n.Locale()).PetStowWin() }
+
+// PetStowWin says "收进顶部胶囊"
+// in the language of msgs.
+func (msgs Messages) PetStowWin() string {
+	return Catalog.Format(msgs.locale, "petStowWin", nil)
+}
+
+// ShellStyleRowWin says "顶部样式"
+// in the language the app shows.
+func ShellStyleRowWin() string { return In(i18n.Locale()).ShellStyleRowWin() }
+
+// ShellStyleRowWin says "顶部样式"
+// in the language of msgs.
+func (msgs Messages) ShellStyleRowWin() string {
+	return Catalog.Format(msgs.locale, "shellStyleRowWin", nil)
+}
+
+// ShellStyleCaptionWin says "没有刘海的屏幕可以显示为灵动岛，或模拟小刘海"
+// in the language the app shows.
+func ShellStyleCaptionWin() string { return In(i18n.Locale()).ShellStyleCaptionWin() }
+
+// ShellStyleCaptionWin says "没有刘海的屏幕可以显示为灵动岛，或模拟小刘海"
+// in the language of msgs.
+func (msgs Messages) ShellStyleCaptionWin() string {
+	return Catalog.Format(msgs.locale, "shellStyleCaptionWin", nil)
+}
+
+// ShellStyleNotchWin says "模拟小刘海"
+// in the language the app shows.
+func ShellStyleNotchWin() string { return In(i18n.Locale()).ShellStyleNotchWin() }
+
+// ShellStyleNotchWin says "模拟小刘海"
+// in the language of msgs.
+func (msgs Messages) ShellStyleNotchWin() string {
+	return Catalog.Format(msgs.locale, "shellStyleNotchWin", nil)
+}
+
+// SettingsSnapRowWin says "拖窗口到顶部胶囊分屏"
+// in the language the app shows.
+func SettingsSnapRowWin() string { return In(i18n.Locale()).SettingsSnapRowWin() }
+
+// SettingsSnapRowWin says "拖窗口到顶部胶囊分屏"
+// in the language of msgs.
+func (msgs Messages) SettingsSnapRowWin() string {
+	return Catalog.Format(msgs.locale, "settingsSnapRowWin", nil)
+}
+
+// SettingsSnapCaptionWin says "把窗口拖到顶部胶囊，松手就排好"
+// in the language the app shows.
+func SettingsSnapCaptionWin() string { return In(i18n.Locale()).SettingsSnapCaptionWin() }
+
+// SettingsSnapCaptionWin says "把窗口拖到顶部胶囊，松手就排好"
+// in the language of msgs.
+func (msgs Messages) SettingsSnapCaptionWin() string {
+	return Catalog.Format(msgs.locale, "settingsSnapCaptionWin", nil)
+}
+
+// SettingsAIEnableRowWin says "在顶部胶囊里显示 AI 用量"
+// in the language the app shows.
+func SettingsAIEnableRowWin() string { return In(i18n.Locale()).SettingsAIEnableRowWin() }
+
+// SettingsAIEnableRowWin says "在顶部胶囊里显示 AI 用量"
+// in the language of msgs.
+func (msgs Messages) SettingsAIEnableRowWin() string {
+	return Catalog.Format(msgs.locale, "settingsAIEnableRowWin", nil)
+}
+
+// SettingsAILocalFootWin says "本机用量自动统计本机所有 AI 工具的 token，只读本机日志，不联网、不上传。"
+// in the language the app shows.
+func SettingsAILocalFootWin() string { return In(i18n.Locale()).SettingsAILocalFootWin() }
+
+// SettingsAILocalFootWin says "本机用量自动统计本机所有 AI 工具的 token，只读本机日志，不联网、不上传。"
+// in the language of msgs.
+func (msgs Messages) SettingsAILocalFootWin() string {
+	return Catalog.Format(msgs.locale, "settingsAILocalFootWin", nil)
+}
+
+// SettingsAgentRowWin says "完成时在顶部胶囊提醒"
+// in the language the app shows.
+func SettingsAgentRowWin() string { return In(i18n.Locale()).SettingsAgentRowWin() }
+
+// SettingsAgentRowWin says "完成时在顶部胶囊提醒"
+// in the language of msgs.
+func (msgs Messages) SettingsAgentRowWin() string {
+	return Catalog.Format(msgs.locale, "settingsAgentRowWin", nil)
+}
+
+// SettingsLoginRowWin says "开机时自动启动"
+// in the language the app shows.
+func SettingsLoginRowWin() string { return In(i18n.Locale()).SettingsLoginRowWin() }
+
+// SettingsLoginRowWin says "开机时自动启动"
+// in the language of msgs.
+func (msgs Messages) SettingsLoginRowWin() string {
+	return Catalog.Format(msgs.locale, "settingsLoginRowWin", nil)
+}
+
+// OnboardingIntroTitleWin says "Rakko 住在顶部胶囊里"
+// in the language the app shows.
+func OnboardingIntroTitleWin() string { return In(i18n.Locale()).OnboardingIntroTitleWin() }
+
+// OnboardingIntroTitleWin says "Rakko 住在顶部胶囊里"
+// in the language of msgs.
+func (msgs Messages) OnboardingIntroTitleWin() string {
+	return Catalog.Format(msgs.locale, "onboardingIntroTitleWin", nil)
+}
+
+// OnboardingIntroLeadWin says "点顶部胶囊，或按"
+// in the language the app shows.
+func OnboardingIntroLeadWin() string { return In(i18n.Locale()).OnboardingIntroLeadWin() }
+
+// OnboardingIntroLeadWin says "点顶部胶囊，或按"
+// in the language of msgs.
+func (msgs Messages) OnboardingIntroLeadWin() string {
+	return Catalog.Format(msgs.locale, "onboardingIntroLeadWin", nil)
+}
+
+// OnboardingIntroNoteWin says "不占任务栏；从托盘图标退出。"
+// in the language the app shows.
+func OnboardingIntroNoteWin() string { return In(i18n.Locale()).OnboardingIntroNoteWin() }
+
+// OnboardingIntroNoteWin says "不占任务栏；从托盘图标退出。"
+// in the language of msgs.
+func (msgs Messages) OnboardingIntroNoteWin() string {
+	return Catalog.Format(msgs.locale, "onboardingIntroNoteWin", nil)
+}
+
+// OnboardingSkippedHintWin says "随时点顶部胶囊呼出"
+// in the language the app shows.
+func OnboardingSkippedHintWin() string { return In(i18n.Locale()).OnboardingSkippedHintWin() }
+
+// OnboardingSkippedHintWin says "随时点顶部胶囊呼出"
+// in the language of msgs.
+func (msgs Messages) OnboardingSkippedHintWin() string {
+	return Catalog.Format(msgs.locale, "onboardingSkippedHintWin", nil)
+}
+
+// StartupLegacyRunningDetailWin says "旧版本正在使用它的数据目录，本次没有迁移任何内容，也没有创建新的数据目录。\n\n…"
+// in the language the app shows.
+func StartupLegacyRunningDetailWin(app string, oldRoot string, newRoot string) string {
+	return In(i18n.Locale()).StartupLegacyRunningDetailWin(app, oldRoot, newRoot)
+}
+
+// StartupLegacyRunningDetailWin says "旧版本正在使用它的数据目录，本次没有迁移任何内容，也没有创建新的数据目录。\n\n…"
+// in the language of msgs.
+func (msgs Messages) StartupLegacyRunningDetailWin(app string, oldRoot string, newRoot string) string {
+	return Catalog.Format(msgs.locale, "startupLegacyRunningDetailWin", map[string]any{"app": app, "oldRoot": oldRoot, "newRoot": newRoot})
+}
+
+// StartupShortcutBusyWin says "快捷键被占用；可点击托盘图标。{err}"
+// in the language the app shows.
+func StartupShortcutBusyWin(err string) string { return In(i18n.Locale()).StartupShortcutBusyWin(err) }
+
+// StartupShortcutBusyWin says "快捷键被占用；可点击托盘图标。{err}"
+// in the language of msgs.
+func (msgs Messages) StartupShortcutBusyWin(err string) string {
+	return Catalog.Format(msgs.locale, "startupShortcutBusyWin", map[string]any{"err": err})
+}
+
+// StartupClipboardShortcutBusyWin says "剪贴板搜索快捷键被占用；可点击托盘图标。{err}"
+// in the language the app shows.
+func StartupClipboardShortcutBusyWin(err string) string {
+	return In(i18n.Locale()).StartupClipboardShortcutBusyWin(err)
+}
+
+// StartupClipboardShortcutBusyWin says "剪贴板搜索快捷键被占用；可点击托盘图标。{err}"
+// in the language of msgs.
+func (msgs Messages) StartupClipboardShortcutBusyWin(err string) string {
+	return Catalog.Format(msgs.locale, "startupClipboardShortcutBusyWin", map[string]any{"err": err})
+}
+
+// StartupCaptureShortcutBusyWin says "框选文字快捷键被占用；可用托盘图标的「框选文字」。{err}"
+// in the language the app shows.
+func StartupCaptureShortcutBusyWin(err string) string {
+	return In(i18n.Locale()).StartupCaptureShortcutBusyWin(err)
+}
+
+// StartupCaptureShortcutBusyWin says "框选文字快捷键被占用；可用托盘图标的「框选文字」。{err}"
+// in the language of msgs.
+func (msgs Messages) StartupCaptureShortcutBusyWin(err string) string {
+	return Catalog.Format(msgs.locale, "startupCaptureShortcutBusyWin", map[string]any{"err": err})
+}
+
+// ItemShowInFinderWin says "在文件资源管理器中显示"
+// in the language the app shows.
+func ItemShowInFinderWin() string { return In(i18n.Locale()).ItemShowInFinderWin() }
+
+// ItemShowInFinderWin says "在文件资源管理器中显示"
+// in the language of msgs.
+func (msgs Messages) ItemShowInFinderWin() string {
+	return Catalog.Format(msgs.locale, "itemShowInFinderWin", nil)
+}
+
+// ItemQuickLookWin says "预览"
+// in the language the app shows.
+func ItemQuickLookWin() string { return In(i18n.Locale()).ItemQuickLookWin() }
+
+// ItemQuickLookWin says "预览"
+// in the language of msgs.
+func (msgs Messages) ItemQuickLookWin() string {
+	return Catalog.Format(msgs.locale, "itemQuickLookWin", nil)
+}
+
+// ItemAirDropWin says "附近共享…"
+// in the language the app shows.
+func ItemAirDropWin() string { return In(i18n.Locale()).ItemAirDropWin() }
+
+// ItemAirDropWin says "附近共享…"
+// in the language of msgs.
+func (msgs Messages) ItemAirDropWin() string {
+	return Catalog.Format(msgs.locale, "itemAirDropWin", nil)
+}
+
+// ItemCopiedImageWin says "已复制图片 · 在其他应用按 Ctrl+V 粘贴"
+// in the language the app shows.
+func ItemCopiedImageWin() string { return In(i18n.Locale()).ItemCopiedImageWin() }
+
+// ItemCopiedImageWin says "已复制图片 · 在其他应用按 Ctrl+V 粘贴"
+// in the language of msgs.
+func (msgs Messages) ItemCopiedImageWin() string {
+	return Catalog.Format(msgs.locale, "itemCopiedImageWin", nil)
+}
+
+// PinPutBackWin says "放回顶部胶囊"
+// in the language the app shows.
+func PinPutBackWin() string { return In(i18n.Locale()).PinPutBackWin() }
+
+// PinPutBackWin says "放回顶部胶囊"
+// in the language of msgs.
+func (msgs Messages) PinPutBackWin() string {
+	return Catalog.Format(msgs.locale, "pinPutBackWin", nil)
+}
+
+// UpdateAvailableWin says "发现新版本 v{version} · 从托盘图标的菜单安装"
+// in the language the app shows.
+func UpdateAvailableWin(version string) string { return In(i18n.Locale()).UpdateAvailableWin(version) }
+
+// UpdateAvailableWin says "发现新版本 v{version} · 从托盘图标的菜单安装"
+// in the language of msgs.
+func (msgs Messages) UpdateAvailableWin(version string) string {
+	return Catalog.Format(msgs.locale, "updateAvailableWin", map[string]any{"version": version})
+}
+
+// UsageLocalTitleWin says "本机用量"
+// in the language the app shows.
+func UsageLocalTitleWin() string { return In(i18n.Locale()).UsageLocalTitleWin() }
+
+// UsageLocalTitleWin says "本机用量"
+// in the language of msgs.
+func (msgs Messages) UsageLocalTitleWin() string {
+	return Catalog.Format(msgs.locale, "usageLocalTitleWin", nil)
+}
+
+// CardAirDropWin says "附近共享"
+// in the language the app shows.
+func CardAirDropWin() string { return In(i18n.Locale()).CardAirDropWin() }
+
+// CardAirDropWin says "附近共享"
+// in the language of msgs.
+func (msgs Messages) CardAirDropWin() string {
+	return Catalog.Format(msgs.locale, "cardAirDropWin", nil)
+}
+
+// NoteRevealWin says "在文件资源管理器中显示"
+// in the language the app shows.
+func NoteRevealWin() string { return In(i18n.Locale()).NoteRevealWin() }
+
+// NoteRevealWin says "在文件资源管理器中显示"
+// in the language of msgs.
+func (msgs Messages) NoteRevealWin() string {
+	return Catalog.Format(msgs.locale, "noteRevealWin", nil)
+}
+
+// OcrOpenSettingsWin says "打开 Windows 设置"
+// in the language the app shows.
+func OcrOpenSettingsWin() string { return In(i18n.Locale()).OcrOpenSettingsWin() }
+
+// OcrOpenSettingsWin says "打开 Windows 设置"
+// in the language of msgs.
+func (msgs Messages) OcrOpenSettingsWin() string {
+	return Catalog.Format(msgs.locale, "ocrOpenSettingsWin", nil)
+}
+
+// WeeklyMacSectionWin says "电脑使用"
+// in the language the app shows.
+func WeeklyMacSectionWin() string { return In(i18n.Locale()).WeeklyMacSectionWin() }
+
+// WeeklyMacSectionWin says "电脑使用"
+// in the language of msgs.
+func (msgs Messages) WeeklyMacSectionWin() string {
+	return Catalog.Format(msgs.locale, "weeklyMacSectionWin", nil)
+}
+
+// WeeklyConsentBodyWin says "开启后，只在本机记录前台应用与累计时长，不记录窗口标题、网址或输入内容。\n…"
+// in the language the app shows.
+func WeeklyConsentBodyWin() string { return In(i18n.Locale()).WeeklyConsentBodyWin() }
+
+// WeeklyConsentBodyWin says "开启后，只在本机记录前台应用与累计时长，不记录窗口标题、网址或输入内容。\n…"
+// in the language of msgs.
+func (msgs Messages) WeeklyConsentBodyWin() string {
+	return Catalog.Format(msgs.locale, "weeklyConsentBodyWin", nil)
+}
+
+// WeeklyLocalOnlyWin says "仅保存在这台电脑"
+// in the language the app shows.
+func WeeklyLocalOnlyWin() string { return In(i18n.Locale()).WeeklyLocalOnlyWin() }
+
+// WeeklyLocalOnlyWin says "仅保存在这台电脑"
+// in the language of msgs.
+func (msgs Messages) WeeklyLocalOnlyWin() string {
+	return Catalog.Format(msgs.locale, "weeklyLocalOnlyWin", nil)
+}
+
+// PageMultiHintWin says "Ctrl / Shift 多选"
+// in the language the app shows.
+func PageMultiHintWin() string { return In(i18n.Locale()).PageMultiHintWin() }
+
+// PageMultiHintWin says "Ctrl / Shift 多选"
+// in the language of msgs.
+func (msgs Messages) PageMultiHintWin() string {
+	return Catalog.Format(msgs.locale, "pageMultiHintWin", nil)
+}
+
+// ClipShortcutWin says "Ctrl+{n} 粘贴"
+// in the language the app shows.
+func ClipShortcutWin(n string) string { return In(i18n.Locale()).ClipShortcutWin(n) }
+
+// ClipShortcutWin says "Ctrl+{n} 粘贴"
+// in the language of msgs.
+func (msgs Messages) ClipShortcutWin(n string) string {
+	return Catalog.Format(msgs.locale, "clipShortcutWin", map[string]any{"n": n})
+}
+
+// ClipPasteManualWin says "已复制 · 按 Ctrl+V 粘贴"
+// in the language the app shows.
+func ClipPasteManualWin() string { return In(i18n.Locale()).ClipPasteManualWin() }
+
+// ClipPasteManualWin says "已复制 · 按 Ctrl+V 粘贴"
+// in the language of msgs.
+func (msgs Messages) ClipPasteManualWin() string {
+	return Catalog.Format(msgs.locale, "clipPasteManualWin", nil)
+}
+
+// DropStowPetWin says "松开收进顶部胶囊"
+// in the language the app shows.
+func DropStowPetWin() string { return In(i18n.Locale()).DropStowPetWin() }
+
+// DropStowPetWin says "松开收进顶部胶囊"
+// in the language of msgs.
+func (msgs Messages) DropStowPetWin() string {
+	return Catalog.Format(msgs.locale, "dropStowPetWin", nil)
+}
+
+// SettingsKeysNotchGroupWin says "在顶部胶囊里"
+// in the language the app shows.
+func SettingsKeysNotchGroupWin() string { return In(i18n.Locale()).SettingsKeysNotchGroupWin() }
+
+// SettingsKeysNotchGroupWin says "在顶部胶囊里"
+// in the language of msgs.
+func (msgs Messages) SettingsKeysNotchGroupWin() string {
+	return Catalog.Format(msgs.locale, "settingsKeysNotchGroupWin", nil)
+}
+
+// SettingsGroupNotchWin says "顶部胶囊"
+// in the language the app shows.
+func SettingsGroupNotchWin() string { return In(i18n.Locale()).SettingsGroupNotchWin() }
+
+// SettingsGroupNotchWin says "顶部胶囊"
+// in the language of msgs.
+func (msgs Messages) SettingsGroupNotchWin() string {
+	return Catalog.Format(msgs.locale, "settingsGroupNotchWin", nil)
+}
+
+// SettingsApprovalRowWin says "在顶部胶囊审批 Agent 请求"
+// in the language the app shows.
+func SettingsApprovalRowWin() string { return In(i18n.Locale()).SettingsApprovalRowWin() }
+
+// SettingsApprovalRowWin says "在顶部胶囊审批 Agent 请求"
+// in the language of msgs.
+func (msgs Messages) SettingsApprovalRowWin() string {
+	return Catalog.Format(msgs.locale, "settingsApprovalRowWin", nil)
+}
+
+// LiveApprovalAgainWin says "再按一次 Ctrl+Enter"
+// in the language the app shows.
+func LiveApprovalAgainWin() string { return In(i18n.Locale()).LiveApprovalAgainWin() }
+
+// LiveApprovalAgainWin says "再按一次 Ctrl+Enter"
+// in the language of msgs.
+func (msgs Messages) LiveApprovalAgainWin() string {
+	return Catalog.Format(msgs.locale, "liveApprovalAgainWin", nil)
 }
