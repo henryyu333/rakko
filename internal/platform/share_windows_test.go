@@ -268,13 +268,12 @@ func TestShareIterableIIDsMatchTheSystem(t *testing.T) {
 	}
 }
 
-// --- the data request runs off the main thread -----------------------------
+// --- preparation and the data request --------------------------------------
 
-// The roles a shareFake plays in the request tests.
+// The roles a shareFake plays in the preparation tests.
 const (
 	shareFakeArgs = iota
 	shareFakeRequest
-	shareFakeDeferral
 	shareFakePackage
 	shareFakeItem
 )
@@ -283,16 +282,16 @@ const (
 // answers the slots those calls land on, and every object stays rooted so the
 // collector never frees memory COM still holds by raw pointer.
 type shareFake struct {
-	vtable   *[24]uintptr
-	role     int
-	refs     int32
-	request  uintptr
-	deferral uintptr
-	setData  uintptr
-	setItem  uintptr
-	failed   bool
-	done     bool
-	mu       sync.Mutex
+	vtable       *[24]uintptr
+	role         int
+	refs         int32
+	request      uintptr
+	setData      uintptr
+	setItem      uintptr
+	failSetItems bool
+	failed       bool
+	underflowed  bool
+	mu           sync.Mutex
 }
 
 var (
@@ -314,8 +313,6 @@ func init() {
 			shareFakeVtable[i] = windows.NewCallback(shareFakeSlot7)
 		case 9:
 			shareFakeVtable[i] = windows.NewCallback(shareFakeSlot9)
-		case 10:
-			shareFakeVtable[i] = windows.NewCallback(shareFakeSlot10)
 		case 23:
 			shareFakeVtable[i] = windows.NewCallback(shareFakeSlot23)
 		default:
@@ -332,7 +329,7 @@ func newShareFake(role int) uintptr {
 
 func shareFakeAt(this uintptr) *shareFake { return (*shareFake)(shareUnsafePointer(this)) }
 
-func shareFakeQueryInterface(this, iid, out uintptr) uintptr {
+func shareFakeQueryInterface(this, _, out uintptr) uintptr {
 	if out == 0 {
 		return sharePointer
 	}
@@ -346,7 +343,14 @@ func shareFakeAddRef(this uintptr) uintptr {
 }
 
 func shareFakeRelease(this uintptr) uintptr {
-	if n := atomic.AddInt32(&shareFakeAt(this).refs, -1); n > 0 {
+	f := shareFakeAt(this)
+	n := atomic.AddInt32(&f.refs, -1)
+	if n < 0 {
+		f.mu.Lock()
+		f.underflowed = true
+		f.mu.Unlock()
+	}
+	if n > 0 {
 		return uintptr(n)
 	}
 	return 0
@@ -354,234 +358,263 @@ func shareFakeRelease(this uintptr) uintptr {
 
 func shareFakeSlot6(this, a, _ uintptr) uintptr {
 	f := shareFakeAt(this)
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	switch f.role {
-	case shareFakeArgs:
-		if a == 0 {
-			return sharePointer
-		}
-		*(*uintptr)(shareUnsafePointer(a)) = f.request
-		shareFakeAddRef(f.request)
-		return shareOK
-	case shareFakeDeferral:
-		f.done = true
-		return shareOK
+	if f.role != shareFakeArgs || a == 0 {
+		return shareNoInterface
 	}
-	return shareNoInterface
+	*(*uintptr)(shareUnsafePointer(a)) = f.request
+	shareFakeAddRef(f.request)
+	return shareOK
 }
 
 func shareFakeSlot7(this, a, _ uintptr) uintptr {
 	f := shareFakeAt(this)
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if f.role == shareFakeRequest {
-		f.setData = a
-		return shareOK
+	if f.role != shareFakeRequest {
+		return shareNoInterface
 	}
-	return shareNoInterface
-}
-
-func shareFakeSlot10(this, a, _ uintptr) uintptr {
-	f := shareFakeAt(this)
 	f.mu.Lock()
-	defer f.mu.Unlock()
-	if f.role == shareFakeRequest {
-		if a == 0 {
-			return sharePointer
-		}
-		*(*uintptr)(shareUnsafePointer(a)) = f.deferral
-		shareFakeAddRef(f.deferral)
-		return shareOK
-	}
-	return shareNoInterface
+	f.setData = a
+	f.mu.Unlock()
+	return shareOK
 }
 
 func shareFakeSlot9(this, _, _ uintptr) uintptr {
 	f := shareFakeAt(this)
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if f.role == shareFakeRequest {
-		f.failed = true
-		return shareOK
+	if f.role != shareFakeRequest {
+		return shareNoInterface
 	}
-	return shareNoInterface
+	f.mu.Lock()
+	f.failed = true
+	f.mu.Unlock()
+	return shareOK
 }
 
 func shareFakeSlot23(this, a, _ uintptr) uintptr {
 	f := shareFakeAt(this)
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if f.role == shareFakePackage {
-		f.setItem = a
-		return shareOK
+	if f.role != shareFakePackage {
+		return shareNoInterface
 	}
-	return shareNoInterface
+	if f.failSetItems {
+		return shareFail
+	}
+	f.mu.Lock()
+	f.setItem = a
+	f.mu.Unlock()
+	return shareOK
 }
 
 func shareFakeUnsupported(this, _, _ uintptr) uintptr { return shareNoInterface }
 
-// shareRequestSetup prepares a payload, an args object, a request and a
-// deferral, and puts the payload in the sheet for one test.
-type shareRequestSetup struct {
-	pkg      *sharePackage
-	pkgFake  uintptr
-	args     uintptr
-	request  uintptr
-	deferral uintptr
+// shareTestRun executes the completion the worker queued.
+func shareTestRun(t *testing.T, queue chan func()) {
+	t.Helper()
+	select {
+	case fn := <-queue:
+		fn()
+	case <-time.After(5 * time.Second):
+		t.Fatal("the preparation never completed")
+	}
 }
 
-func shareNewRequestSetup(t *testing.T, hasText bool) shareRequestSetup {
+// shareTestPrepare runs shareStartPrepare with a fake main-thread queue and a
+// fake panel, and leaves the sheet's pending package set up as ShareNearby
+// would.
+func shareTestPrepare(t *testing.T, pkg *sharePackage, resolver func([]string) ([]uintptr, error)) (queue chan func(), shown chan *sharePackage) {
 	t.Helper()
-	pkgFake := newShareFake(shareFakePackage)
-	args := newShareFake(shareFakeArgs)
-	request := newShareFake(shareFakeRequest)
-	deferral := newShareFake(shareFakeDeferral)
-	shareFakeAt(args).request = request
-	shareFakeAt(request).deferral = deferral
-
-	pkg := &sharePackage{pkg: pkgFake, paths: []string{`\\server\share\slow.txt`}, hasText: hasText}
-	previous := shareSheet.payload.Swap(pkg)
+	queue = make(chan func(), 4)
+	shown = make(chan *sharePackage, 4)
+	oldResolve := shareResolveItemsFn
+	oldWake := shareWakeMain
+	oldShow := shareShowPanel
+	oldPending := shareSheet.pending
+	shareResolveItemsFn = resolver
+	shareWakeMain = func(fn func()) { queue <- fn }
+	shareShowPanel = func(p *sharePackage) { shown <- p }
+	shareSheet.pending = pkg
 	t.Cleanup(func() {
-		shareSheet.payload.Store(previous)
+		shareResolveItemsFn = oldResolve
+		shareWakeMain = oldWake
+		shareShowPanel = oldShow
+		shareSheet.pending = oldPending
 		shareTestFakes = nil
 	})
-	return shareRequestSetup{pkg: pkg, pkgFake: pkgFake, args: args, request: request, deferral: deferral}
+	return queue, shown
 }
 
-// TestShareRequestDoesNotWaitForFiles checks that answering the panel returns
-// before the storage items are opened, and that the data and the deferral are
-// settled once they arrive. The old code opened the files on the main thread
-// inside the call, so a slow path froze every window until it timed out.
-func TestShareRequestDoesNotWaitForFiles(t *testing.T) {
+// TestSharePreparationWaitsForFilesOffTheThread checks that ShareNearby's file
+// work happens on the worker: the call returns while the resolver is still
+// blocked, and the panel opens only once the items are on the package.
+func TestSharePreparationWaitsForFilesOffTheThread(t *testing.T) {
+	pkgFake := newShareFake(shareFakePackage)
+	pkg := &sharePackage{pkg: pkgFake, hasText: true}
+	started := make(chan struct{})
 	release := make(chan struct{})
-	resolverStarted := make(chan struct{})
-	finished := make(chan struct{})
-	oldResolve := shareResolveItemsFn
-	shareResolveItemsFn = func(paths []string) ([]uintptr, error) {
-		close(resolverStarted)
+	queue, shown := shareTestPrepare(t, pkg, func([]string) ([]uintptr, error) {
+		close(started)
 		<-release
-		item := newShareFake(shareFakeItem)
-		return []uintptr{item}, nil
-	}
-	oldWake := shareWakeMain
-	shareWakeMain = func(fn func()) { fn(); close(finished) }
-	t.Cleanup(func() { shareResolveItemsFn = oldResolve; shareWakeMain = oldWake })
+		return []uintptr{newShareFake(shareFakeItem)}, nil
+	})
 
-	setup := shareNewRequestSetup(t, false)
-	returned := make(chan uintptr, 1)
-	go func() { returned <- shareDelegateInvoke(0, 0, setup.args) }()
+	shareStartPrepare(pkg, []string{`\\server\share\slow.txt`})
 	select {
-	case hr := <-returned:
-		if hr != shareOK {
-			t.Fatalf("DataRequested = %#x, want S_OK", uint32(hr))
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("DataRequested did not return before the files were opened")
-	}
-	select {
-	case <-resolverStarted:
+	case <-started:
 	case <-time.After(2 * time.Second):
 		t.Fatal("the worker never started")
 	}
-
-	close(release)
 	select {
-	case <-finished:
-	case <-time.After(5 * time.Second):
-		t.Fatal("the request never completed")
+	case <-shown:
+		t.Fatal("the panel opened before the files were ready")
+	default:
 	}
 
-	request := shareFakeAt(setup.request)
-	request.mu.Lock()
-	setData, failed := request.setData, request.failed
-	request.mu.Unlock()
+	close(release)
+	shareTestRun(t, queue)
+	select {
+	case p := <-shown:
+		if p != pkg {
+			t.Fatalf("the panel got %p, want the prepared package", p)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("the panel never opened")
+	}
+	if shareFakeAt(pkgFake).setItem == 0 {
+		t.Fatal("SetStorageItems was not called before the panel opened")
+	}
+}
+
+// TestSharePreparationReleasesItemsOnce checks the ownership split: the
+// collection takes its own reference to each item, and exactly one reference
+// (the one the resolver returned) is released afterwards. The collection used
+// to take ownership while the completion released the items again, so a
+// success path double-released them.
+func TestSharePreparationReleasesItemsOnce(t *testing.T) {
+	pkgFake := newShareFake(shareFakePackage)
+	pkg := &sharePackage{pkg: pkgFake, hasText: true}
+	item := newShareFake(shareFakeItem)
+	queue, shown := shareTestPrepare(t, pkg, func([]string) ([]uintptr, error) {
+		return []uintptr{item}, nil
+	})
+
+	shareStartPrepare(pkg, []string{"one"})
+	shareTestRun(t, queue)
+	<-shown
+	if f := shareFakeAt(item); f.underflowed {
+		t.Fatal("the item was released more often than it was referenced")
+	}
+	if n := atomic.LoadInt32(&shareFakeAt(item).refs); n != 0 {
+		t.Fatalf("item refs = %d after the share, want 0", n)
+	}
+	if n := atomic.LoadInt32(&shareFakeAt(pkgFake).refs); n != 0 {
+		t.Fatalf("package refs = %d after the share, want 0", n)
+	}
+}
+
+// TestSharePreparationReleasesItemsOnceWhenAddingFails covers the failure path
+// of SetStorageItems: the collection still owns its references and the caller
+// still releases its own.
+func TestSharePreparationReleasesItemsOnceWhenAddingFails(t *testing.T) {
+	pkgFake := newShareFake(shareFakePackage)
+	shareFakeAt(pkgFake).failSetItems = true
+	pkg := &sharePackage{pkg: pkgFake, hasText: true}
+	item := newShareFake(shareFakeItem)
+	queue, shown := shareTestPrepare(t, pkg, func([]string) ([]uintptr, error) {
+		return []uintptr{item}, nil
+	})
+
+	shareStartPrepare(pkg, []string{"one"})
+	shareTestRun(t, queue)
+	<-shown
+	if f := shareFakeAt(item); f.underflowed {
+		t.Fatal("the item was released more often than it was referenced on the failure path")
+	}
+	if n := atomic.LoadInt32(&shareFakeAt(item).refs); n != 0 {
+		t.Fatalf("item refs = %d after the failed share, want 0", n)
+	}
+	if pkg.failure == "" {
+		t.Fatal("the panel was not told that the files could not be added")
+	}
+}
+
+// TestSharePreparationReportsFilesItCannotOpen checks the failure the panel
+// shows when nothing could be opened and there is no text to fall back on.
+func TestSharePreparationReportsFilesItCannotOpen(t *testing.T) {
+	pkg := &sharePackage{pkg: newShareFake(shareFakePackage)}
+	queue, shown := shareTestPrepare(t, pkg, func([]string) ([]uintptr, error) {
+		return nil, errors.New("the share is offline")
+	})
+
+	shareStartPrepare(pkg, []string{"one"})
+	shareTestRun(t, queue)
+	<-shown
+
+	if pkg.failure == "" {
+		t.Fatal("no failure message was prepared for the panel")
+	}
+}
+
+// TestSharePreparationKeepsTextWhenFilesFail keeps the text-only fallback: the
+// text still goes over when none of the files could be opened.
+func TestSharePreparationKeepsTextWhenFilesFail(t *testing.T) {
+	pkg := &sharePackage{pkg: newShareFake(shareFakePackage), hasText: true}
+	queue, shown := shareTestPrepare(t, pkg, func([]string) ([]uintptr, error) {
+		return nil, errors.New("the share is offline")
+	})
+
+	shareStartPrepare(pkg, []string{"one"})
+	shareTestRun(t, queue)
+	<-shown
+
+	if pkg.failure != "" {
+		t.Fatalf("text-only share prepared failure %q", pkg.failure)
+	}
+}
+
+// TestShareRequestSetsThePreparedPackage checks the DataRequested handler with
+// a package whose files were already added: SetData happens at once, with no
+// deferral.
+func TestShareRequestSetsThePreparedPackage(t *testing.T) {
+	args := newShareFake(shareFakeArgs)
+	request := newShareFake(shareFakeRequest)
+	shareFakeAt(args).request = request
+	pkgFake := newShareFake(shareFakePackage)
+	previous := shareSheet.payload.Swap(&sharePackage{pkg: pkgFake})
+	t.Cleanup(func() { shareSheet.payload.Store(previous) })
+
+	if hr := shareDelegateInvoke(0, 0, args); hr != shareOK {
+		t.Fatalf("DataRequested = %#x, want S_OK", uint32(hr))
+	}
+	f := shareFakeAt(request)
+	f.mu.Lock()
+	setData, failed := f.setData, f.failed
+	f.mu.Unlock()
 	if failed {
 		t.Fatal("the request reported a failure")
 	}
-	if setData != setup.pkgFake {
-		t.Fatalf("SetData got %#x, want the package", setData)
-	}
-	if shareFakeAt(setup.pkgFake).setItem == 0 {
-		t.Fatal("SetStorageItems was not called with the resolved item")
-	}
-	if !shareFakeAt(setup.deferral).done {
-		t.Fatal("the deferral was never completed")
-	}
-	if n := atomic.LoadInt32(&request.refs); n != 1 {
-		t.Fatalf("request refs = %d, want 1 (the test's own)", n)
-	}
-	if n := atomic.LoadInt32(&shareFakeAt(setup.pkgFake).refs); n != 1 {
-		t.Fatalf("package refs = %d, want 1 (the test's own)", n)
+	if setData != pkgFake {
+		t.Fatalf("SetData got %#x, want the prepared package", setData)
 	}
 }
 
-// TestShareRequestReportsFilesItCannotOpen checks that a request whose files
-// all fail still completes the deferral, and says so in the panel instead of
-// leaving it spinning.
-func TestShareRequestReportsFilesItCannotOpen(t *testing.T) {
-	finished := make(chan struct{})
-	oldResolve := shareResolveItemsFn
-	shareResolveItemsFn = func([]string) ([]uintptr, error) {
-		return nil, errors.New("the share is offline")
-	}
-	oldWake := shareWakeMain
-	shareWakeMain = func(fn func()) { fn(); close(finished) }
-	t.Cleanup(func() { shareResolveItemsFn = oldResolve; shareWakeMain = oldWake })
+// TestShareRequestReportsPreparedFailure checks that a package whose files
+// could not be opened reports the message instead of sharing nothing.
+func TestShareRequestReportsPreparedFailure(t *testing.T) {
+	args := newShareFake(shareFakeArgs)
+	request := newShareFake(shareFakeRequest)
+	shareFakeAt(args).request = request
+	pkgFake := newShareFake(shareFakePackage)
+	previous := shareSheet.payload.Swap(&sharePackage{pkg: pkgFake, failure: "nothing usable"})
+	t.Cleanup(func() { shareSheet.payload.Store(previous) })
 
-	setup := shareNewRequestSetup(t, false)
-	if hr := shareDelegateInvoke(0, 0, setup.args); hr != shareOK {
+	if hr := shareDelegateInvoke(0, 0, args); hr != shareOK {
 		t.Fatalf("DataRequested = %#x, want S_OK", uint32(hr))
 	}
-	select {
-	case <-finished:
-	case <-time.After(5 * time.Second):
-		t.Fatal("the request never completed")
-	}
-	request := shareFakeAt(setup.request)
-	request.mu.Lock()
-	failed := request.failed
-	request.mu.Unlock()
+	f := shareFakeAt(request)
+	f.mu.Lock()
+	setData, failed := f.setData, f.failed
+	f.mu.Unlock()
 	if !failed {
-		t.Fatal("the panel was not told the files could not be opened")
+		t.Fatal("the panel was not told that nothing could be shared")
 	}
-	if !shareFakeAt(setup.deferral).done {
-		t.Fatal("the deferral was never completed")
-	}
-}
-
-// TestShareRequestKeepsTextWhenFilesFail checks the text-only fallback: the
-// text still goes over when none of the files could be opened.
-func TestShareRequestKeepsTextWhenFilesFail(t *testing.T) {
-	finished := make(chan struct{})
-	oldResolve := shareResolveItemsFn
-	shareResolveItemsFn = func([]string) ([]uintptr, error) {
-		return nil, errors.New("the share is offline")
-	}
-	oldWake := shareWakeMain
-	shareWakeMain = func(fn func()) { fn(); close(finished) }
-	t.Cleanup(func() { shareResolveItemsFn = oldResolve; shareWakeMain = oldWake })
-
-	setup := shareNewRequestSetup(t, true)
-	if hr := shareDelegateInvoke(0, 0, setup.args); hr != shareOK {
-		t.Fatalf("DataRequested = %#x, want S_OK", uint32(hr))
-	}
-	select {
-	case <-finished:
-	case <-time.After(5 * time.Second):
-		t.Fatal("the request never completed")
-	}
-	request := shareFakeAt(setup.request)
-	request.mu.Lock()
-	setData, failed := request.setData, request.failed
-	request.mu.Unlock()
-	if failed {
-		t.Fatal("the text-only request reported a failure")
-	}
-	if setData != setup.pkgFake {
-		t.Fatalf("SetData got %#x, want the package with the text", setData)
-	}
-	if !shareFakeAt(setup.deferral).done {
-		t.Fatal("the deferral was never completed")
+	if setData != 0 {
+		t.Fatal("SetData was called with a package that has no shareable data")
 	}
 }

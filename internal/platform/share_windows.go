@@ -9,12 +9,13 @@ package platform
 // through IDataTransferManagerInterop, a DataRequested handler hands it a
 // prepared DataPackage, and ShowShareUIForWindow opens the panel.
 //
-// The package is built before the panel opens. The texts share the one text
+// The package is complete before the panel opens. The texts share the one text
 // field the panel offers, joined with newlines; every path is resolved to an
 // IStorageItem (a StorageFile, or a StorageFolder for a directory) through
-// GetFileFromPathAsync / GetFolderFromPathAsync and handed over as an
-// IIterable<IStorageItem> implemented here. The handler therefore completes
-// without a deferral, and everything runs on the main thread.
+// GetFileFromPathAsync / GetFolderFromPathAsync on a worker thread, added to
+// the package as an IIterable<IStorageItem> implemented here, and only then
+// does the panel open. The handler therefore answers immediately, inside the
+// request's short deadline, and the main thread never waits for a file.
 
 import (
 	"errors"
@@ -56,9 +57,6 @@ const (
 	shareRequestData         = 6
 	shareRequestSetData      = 7
 	shareRequestFailWithText = 9
-	shareRequestGetDeferral  = 10
-
-	shareDeferralComplete = 6
 
 	sharePackageProperties      = 7
 	sharePackageSetText         = 16
@@ -74,6 +72,10 @@ const (
 	shareAsyncInfoErrorCode = 8
 	shareAsyncInfoCancel    = 9
 )
+
+// RPC_E_CHANGED_MODE: the thread already holds an apartment of the other
+// model. The worker can use it, but must not uninitialize it.
+const shareRPCChangedMode = 0x80010106
 
 // AsyncStatus values, the result of IAsyncInfo::get_Status.
 const (
@@ -253,14 +255,14 @@ func shareActivationFactory(class string, iid windows.GUID) (uintptr, error) {
 
 // sharePackage is the DataPackage one ShareNearby call built, kept alive
 // while the system may still read it. The handler in shareDelegate hands it
-// to the panel, and the panel owns a reference of its own after that. The
-// paths travel with it unresolved: opening storage items can talk to a slow
-// disk or a network share, so the table only resolves them once the panel
-// asks for its data.
+// to the panel, and the panel owns a reference of its own after that. Files
+// are opened before the panel opens, so the handler always has its data ready
+// inside the request's short deadline; failure carries the message the panel
+// shows when that preparation produced nothing shareable.
 type sharePackage struct {
-	pkg     uintptr  // IDataPackage
-	paths   []string // files and folders to add when the panel asks
-	hasText bool     // the package already carries text
+	pkg     uintptr // IDataPackage
+	hasText bool    // the package already carries text
+	failure string  // shown by the panel when no data could be prepared
 }
 
 func (p *sharePackage) addRef() { shareComCall(p.pkg, shareMethodAddRef) }
@@ -285,8 +287,10 @@ type shareManager struct {
 // holds its own activation factories.
 type shareSheetState struct {
 	interop       uintptr // IDataTransferManagerInterop
+	hwnd          uintptr // the window the panel anchors to
 	managerList   []shareManager
 	payload       atomic.Pointer[sharePackage] // set before the panel opens
+	pending       *sharePackage                // files still being prepared
 	hiddenWindow  uintptr
 	hiddenWindowE error
 	hiddenTried   bool
@@ -309,10 +313,12 @@ var (
 
 // ShareNearby opens the system Share panel for files, folders and texts.
 // Empty input is an error, as are a missing share service and unusable
-// items. Texts share the panel's text field, joined with newlines; paths are
-// resolved to storage items once the panel asks for its data, on a worker
-// thread, so a slow disk or a network share never freezes the main thread.
-// The panel is system-owned: delivery happens (or not) after this returns.
+// items. Texts share the panel's text field, joined with newlines. Paths are
+// opened on a worker thread first and the panel opens as soon as the items
+// are ready, so the DataRequested handler can answer inside the request's
+// deadline even when a path sits on a slow disk or a network share; the call
+// itself returns at once in that case and reports nothing further.
+// The panel is system-owned: delivery happens (or not) after it opens.
 // Main thread only.
 func ShareNearby(paths []string, texts []string) error {
 	if len(paths) == 0 && len(texts) == 0 {
@@ -333,16 +339,32 @@ func ShareNearby(paths []string, texts []string) error {
 	if err != nil {
 		return err
 	}
+	shareSheet.hwnd, shareSheet.interop = hwnd, interop
 	// The manager's handler is registered by the time the package exists, so
 	// the DataRequested event the panel raises can always answer it.
-	pkg, err := shareNewPackage(paths, texts)
+	pkg, err := shareNewPackage(texts)
 	if err != nil {
 		return err
 	}
 
-	previous := shareSheet.payload.Load()
-	shareSheet.payload.Store(pkg)
-	if hr := shareComCall(interop, shareInteropShowUI, hwnd); shareFailed(hr) {
+	if len(paths) == 0 {
+		showErr := shareOpenPanel(pkg) // the panel takes its own reference
+		pkg.release()
+		return showErr
+	}
+	// The preparation owns this reference and releases it when it is done.
+	shareSheet.pending = pkg
+	shareStartPrepare(pkg, append([]string(nil), paths...))
+	return nil
+}
+
+// shareOpenPanel hands pkg to the system panel. The payload keeps its own
+// reference; the previous package is released once the panel has taken this
+// one.
+func shareOpenPanel(pkg *sharePackage) error {
+	pkg.addRef()
+	previous := shareSheet.payload.Swap(pkg)
+	if hr := shareComCall(shareSheet.interop, shareInteropShowUI, shareSheet.hwnd); shareFailed(hr) {
 		shareSheet.payload.Store(previous)
 		pkg.release()
 		return shareError("showing the share panel", hr)
@@ -437,10 +459,10 @@ func shareManagerFor(hwnd uintptr) (uintptr, error) {
 }
 
 // shareNewPackage creates the DataPackage with the title and the joined
-// texts. Files are only recorded here; they are resolved and added when the
-// panel asks for its data, so the call never touches the file system. The
-// returned package is owned by the caller.
-func shareNewPackage(paths, texts []string) (*sharePackage, error) {
+// texts. Files are added once they are prepared, before the panel opens, so
+// the call never touches the file system. The returned package is owned by
+// the caller.
+func shareNewPackage(texts []string) (*sharePackage, error) {
 	instance, err := shareActivateInstance("Windows.ApplicationModel.DataTransfer.DataPackage")
 	if err != nil {
 		return nil, err
@@ -487,13 +509,12 @@ func shareNewPackage(paths, texts []string) (*sharePackage, error) {
 	}
 
 	done = true
-	copied := append([]string(nil), paths...)
-	return &sharePackage{pkg: pkg, paths: copied, hasText: len(texts) > 0}, nil
+	return &sharePackage{pkg: pkg, hasText: len(texts) > 0}, nil
 }
 
 // shareAddFiles hands resolved items to the package. The package keeps its own
-// reference to each item it accepts; the caller still owns the ones in the
-// slice and releases them.
+// reference to each item it accepts, and the collection takes its own as well;
+// the caller still owns the references in the slice and releases them.
 func shareAddFiles(pkg uintptr, items []uintptr) error {
 	collection := shareNewItems(items)
 	hr := shareComCall(pkg, sharePackageSetStorageItems,
@@ -564,8 +585,8 @@ var shareResolveItemsFn = shareResolveItems
 // to the main thread afterwards; the caller owns every returned reference.
 func shareResolveItems(paths []string) ([]uintptr, error) {
 	var fileFactory, folderFactory uintptr
-	defer shareComRelease(fileFactory)
-	defer shareComRelease(folderFactory)
+	defer func() { shareComRelease(fileFactory) }()
+	defer func() { shareComRelease(folderFactory) }()
 	items := make([]uintptr, 0, len(paths))
 	var firstErr error
 	for _, path := range paths {
@@ -678,13 +699,11 @@ func shareDelegateRelease(this uintptr) uintptr {
 	return 0
 }
 
-// shareDelegateInvoke answers the panel's data request. The package already
-// carries the texts, so it goes over at once; files are opened on a worker
-// thread with a deferral held until they arrive, leaving the main thread free
-// to keep pumping messages while a slow disk or a network share answers.
+// shareDelegateInvoke answers the panel's data request. The package is fully
+// prepared (texts and storage items) before the panel opens, so setting the
+// data here is immediate and stays inside the request's deadline.
 // FailWithDisplayText is the only channel left once ShareNearby has returned,
-// so a failed request is reported there rather than in a call the caller no
-// longer sees.
+// so a package that could not be prepared reports there.
 func shareDelegateInvoke(this, sender, args uintptr) uintptr {
 	if args == 0 {
 		return sharePointer
@@ -693,80 +712,84 @@ func shareDelegateInvoke(this, sender, args uintptr) uintptr {
 	if request == 0 {
 		return hr
 	}
+	defer shareComRelease(request)
 
 	payload := shareSheet.payload.Load()
 	if payload == nil || payload.pkg == 0 {
 		shareFailRequest(request, "Rakko has nothing to share")
-		shareComRelease(request)
 		return shareOK
 	}
-	payload.addRef()
-
-	if len(payload.paths) == 0 {
-		if hr := shareComCall(request, shareRequestSetData, payload.pkg); shareFailed(hr) {
-			shareFailRequest(request, "Rakko could not prepare these items for sharing")
-		}
-		shareComRelease(request)
-		payload.release()
+	if payload.failure != "" {
+		shareFailRequest(request, payload.failure)
 		return shareOK
 	}
-
-	deferral, hr := shareGetter(request, shareRequestGetDeferral)
-	if deferral == 0 {
+	if hr := shareComCall(request, shareRequestSetData, payload.pkg); shareFailed(hr) {
 		shareFailRequest(request, "Rakko could not prepare these items for sharing")
-		shareComRelease(request)
-		payload.release()
-		return shareOK
 	}
-	shareStartFiles(payload, request, deferral)
 	return shareOK
 }
 
-// shareStartFiles opens the package's paths on a worker thread and finishes
-// the request on the main thread, where the package and the request live.
-func shareStartFiles(pkg *sharePackage, request, deferral uintptr) {
-	paths := append([]string(nil), pkg.paths...)
+// shareShowPanel is the last step of a prepared share. A test replaces it to
+// observe the completion without a real panel.
+var shareShowPanel = func(pkg *sharePackage) { _ = shareOpenPanel(pkg) }
+
+// shareStartPrepare opens paths on a worker thread and, once they are ready,
+// opens the panel for pkg on the main thread. The goroutine owns the
+// caller's package reference until the completion runs.
+func shareStartPrepare(pkg *sharePackage, paths []string) {
 	go func() {
 		// WinRT objects are apartment-bound: the worker needs its own
-		// apartment, and it must stay on the thread that made one.
+		// apartment, and it must stay on the thread that made one and give
+		// the apartment back before the thread returns to the pool.
 		runtime.LockOSThread()
 		defer runtime.UnlockOSThread()
-		procCoInitializeEx.Call(0, coinitMultithreaded)
+		hr, _, _ := procCoInitializeEx.Call(0, coinitMultithreaded)
+		switch {
+		case int32(uint32(hr)) == 0, int32(uint32(hr)) == 1:
+			// S_OK, S_FALSE: this thread now holds the apartment.
+			defer procCoUninitialize.Call()
+		case uint32(hr) == shareRPCChangedMode:
+			// The thread already held another apartment (a host that made it
+			// an STA, for example). Use it and leave it alone.
+		default:
+			shareWakeMain(func() {
+				sharePrepared(pkg, nil,
+					fmt.Errorf("windows: the share background thread could not initialize COM (0x%08x)", uint32(hr)))
+			})
+			return
+		}
 		items, err := shareResolveItemsFn(paths)
-		shareWakeMain(func() { shareFinishFiles(pkg, request, deferral, items, err) })
+		shareWakeMain(func() { sharePrepared(pkg, items, err) })
 	}()
 }
 
-// shareFinishFiles hands the resolved items to the request and completes the
-// deferral. Main thread only; it owns the request, the deferral and the
-// package reference taken in shareDelegateInvoke.
-func shareFinishFiles(pkg *sharePackage, request, deferral uintptr, items []uintptr, resolveErr error) {
-	defer shareComRelease(request)
-	defer shareComRelease(deferral)
-	defer pkg.release()
+// sharePrepared finishes a share on the main thread: the resolved items join
+// the package, then the panel opens. It owns the item references from the
+// worker and the package reference taken in ShareNearby.
+func sharePrepared(pkg *sharePackage, items []uintptr, resolveErr error) {
 	defer shareReleaseItems(items)
-
-	if len(items) == 0 {
-		if !pkg.hasText {
-			message := "Rakko could not open these items for sharing"
-			if resolveErr != nil {
-				message = "Rakko could not open these items for sharing: " + resolveErr.Error()
-			}
-			shareFailRequest(request, message)
-			shareComCall(deferral, shareDeferralComplete)
-			return
-		}
-		// The texts still go over; the files that would not open are left out,
-		// as they were when the shell refused one item of a selection.
-	} else if err := shareAddFiles(pkg.pkg, items); err != nil {
-		shareFailRequest(request, "Rakko could not add these items to the share panel")
-		shareComCall(deferral, shareDeferralComplete)
+	defer pkg.release()
+	if shareSheet.pending != pkg {
+		// A newer share replaced this one while the files were opening.
 		return
 	}
-	if hr := shareComCall(request, shareRequestSetData, pkg.pkg); shareFailed(hr) {
-		shareFailRequest(request, "Rakko could not prepare these items for sharing")
+	shareSheet.pending = nil
+
+	switch {
+	case len(items) > 0:
+		if err := shareAddFiles(pkg.pkg, items); err != nil {
+			pkg.failure = "Rakko could not add these items to the share panel"
+		}
+	case pkg.hasText:
+		// The texts still go over; the files that would not open are left
+		// out, as they were when the shell refused one item of a selection.
+	default:
+		pkg.failure = "Rakko could not open these items for sharing"
+		if resolveErr != nil {
+			pkg.failure = "Rakko could not open these items for sharing: " + resolveErr.Error()
+		}
 	}
-	shareComCall(deferral, shareDeferralComplete)
+	shareShowPanel(pkg)
 }
 
 // shareReleaseItems drops the references shareResolveItems handed over.
@@ -790,8 +813,8 @@ func shareFailRequest(request uintptr, message string) {
 // shareItems is the IIterable<IStorageItem> handed to DataPackage.
 // SetStorageItems. Its first word is the vtable pointer, so the address of
 // the struct is the COM interface pointer. The items are StorageFile and
-// StorageFolder objects resolved by shareStorageItem; the collection owns one
-// reference to each.
+// StorageFolder objects resolved by shareStorageItem; the collection takes one
+// reference of its own to each, so the caller keeps the references it holds.
 type shareItems struct {
 	vtable *[7]uintptr
 	items  []uintptr // IStorageItem, one reference each
@@ -829,7 +852,12 @@ func shareUnroot(obj uintptr) {
 }
 
 func shareNewItems(items []uintptr) *shareItems {
-	collection := &shareItems{vtable: &shareItemsVtable, items: items, refs: 1}
+	held := make([]uintptr, len(items))
+	for i, item := range items {
+		shareComCall(item, shareMethodAddRef)
+		held[i] = item
+	}
+	collection := &shareItems{vtable: &shareItemsVtable, items: held, refs: 1}
 	shareRoot(uintptr(unsafe.Pointer(collection)), collection)
 	return collection
 }
