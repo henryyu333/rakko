@@ -126,3 +126,101 @@ func TestRunClaudeLoginConPTYCancel(t *testing.T) {
 		t.Fatalf("cancelling took %v", elapsed)
 	}
 }
+
+// TestHelperWritesMarker is the child of the binding tests: writing the
+// marker is proof it was allowed to run.
+func TestHelperWritesMarker(t *testing.T) {
+	marker := os.Getenv("RAKKO_MARKER")
+	if marker == "" {
+		t.Skip("only runs as a child process")
+	}
+	if err := os.WriteFile(marker, []byte("ran"), 0o600); err != nil {
+		os.Exit(3)
+	}
+}
+
+// TestStartInGroupBindsBeforeTheProcessRuns: a process that cannot be put
+// in its job is ended and reported, and it never ran — the old order let it
+// run first and ignored the failure.
+func TestStartInGroupBindsBeforeTheProcessRuns(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "ran")
+	t.Setenv("RAKKO_MARKER", marker)
+	old := assignToJob
+	assignToJob = func(windows.Handle, uint32) error { return errors.New("the job refused the process") }
+	t.Cleanup(func() { assignToJob = old })
+
+	cmd := exec.Command(os.Args[0], "-test.run=^TestHelperWritesMarker$")
+	group, err := startInGroup(cmd)
+	if err == nil {
+		group.release()
+		t.Fatal("a run that could not be bound reported success")
+	}
+	if _, statErr := os.Stat(marker); statErr == nil {
+		t.Fatal("the process ran before its job held it")
+	}
+	pid := uint32(cmd.Process.Pid)
+	deadline := time.Now().Add(5 * time.Second)
+	for processAlive(pid) {
+		if time.Now().After(deadline) {
+			t.Fatalf("pid %d left running after a failed bind", pid)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// TestRunClaudeLoginBindsBeforeTheProcessRuns: the sign-in's entry point
+// behaves the same — a failed bind is an error and the process never runs.
+func TestRunClaudeLoginBindsBeforeTheProcessRuns(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "ran")
+	t.Setenv("RAKKO_MARKER", marker)
+	old := assignToJob
+	assignToJob = func(windows.Handle, uint32) error { return errors.New("the job refused the process") }
+	t.Cleanup(func() { assignToJob = old })
+
+	err := runClaudeLoginTTY(context.Background(),
+		[]string{os.Args[0], "-test.run=^TestHelperWritesMarker$"}, t.TempDir(), os.Environ())
+	if err == nil {
+		t.Fatal("a sign-in that could not be bound reported success")
+	}
+	if _, statErr := os.Stat(marker); statErr == nil {
+		t.Fatal("the sign-in ran before its job held it")
+	}
+}
+
+// TestCancelRightAfterStartLeavesNoProcess: a run cancelled the moment it
+// started leaves neither the child nor the grandchild it starts as its
+// first act. The child is resumed only after the job holds it, so the
+// grandchild is in the job whatever the timing.
+func TestCancelRightAfterStartLeavesNoProcess(t *testing.T) {
+	result := filepath.Join(t.TempDir(), "pids")
+	cmd := exec.Command(os.Args[0], "-test.run=^TestStartInGroupKillsTheWholeTree$")
+	cmd.Env = append(os.Environ(), "RAKKO_TREE_HELPER=child", "RAKKO_TREE_RESULT="+result)
+	group, err := startInGroup(cmd)
+	if err != nil {
+		t.Fatalf("starting the helper tree: %v", err)
+	}
+	group.kill()
+	defer group.release()
+
+	done := make(chan struct{})
+	go func() { _, _ = cmd.Process.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the killed run did not end")
+	}
+	data, _ := os.ReadFile(result)
+	for _, f := range strings.Fields(string(data)) {
+		pid, err := strconv.Atoi(f)
+		if err != nil {
+			t.Fatalf("helper pid %q: %v", f, err)
+		}
+		deadline := time.Now().Add(5 * time.Second)
+		for processAlive(uint32(pid)) {
+			if time.Now().After(deadline) {
+				t.Fatalf("pid %d survived a cancel right after start", pid)
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+	}
+}

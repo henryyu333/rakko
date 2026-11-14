@@ -31,8 +31,8 @@ func claudeCandidates(env Env) []string {
 }
 
 // executableFile reports whether fi is a file this platform can execute:
-// Windows has no execute bit, and os/exec runs a .cmd or .bat through
-// cmd.exe.
+// Windows has no execute bit, so a regular file is as close as it gets.
+// A .cmd is still started by the launch helper, not by exec.
 func executableFile(fi os.FileInfo) bool {
 	return fi.Mode().IsRegular()
 }

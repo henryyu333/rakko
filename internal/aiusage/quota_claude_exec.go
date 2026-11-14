@@ -77,7 +77,10 @@ func runClaudeCommand(ctx context.Context, env Env, args []string, configDir str
 	}
 	defer os.RemoveAll(dir)
 
-	cmd := exec.Command(path, args...)
+	cmd, err := claudeCommand(path, args)
+	if err != nil {
+		return "", "", err
+	}
 	cmd.Dir = dir
 	cmd.Stdin = strings.NewReader("")
 	childEnv := cleanClaudeEnv(os.Environ())

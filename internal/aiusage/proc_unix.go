@@ -15,6 +15,11 @@ type procGroup struct {
 	pid int
 }
 
+// claudeCommand builds the run for one Claude Code invocation.
+func claudeCommand(path string, args []string) (*exec.Cmd, error) {
+	return exec.Command(path, args...), nil
+}
+
 // startInGroup starts cmd in a new session and returns the handle that can
 // end everything it starts.
 func startInGroup(cmd *exec.Cmd) (*procGroup, error) {

@@ -88,7 +88,15 @@ func runClaudeLoginTTY(ctx context.Context, argv []string, dir string, childEnv 
 		StartupInfo: windows.StartupInfo{Cb: uint32(unsafe.Sizeof(windows.StartupInfoEx{}))},
 	}
 	si.ProcThreadAttributeList = attrs.List()
-	commandLine, err := windows.UTF16PtrFromString(windows.ComposeCommandLine(argv))
+	// The sign-in may be an npm claude.cmd, whose arguments have to be
+	// written the way cmd.exe reads a batch file. The command line names the
+	// program as its first token, so CreateProcess resolves it — an
+	// unqualified cmd.exe through PATH — as before.
+	launch, err := claudeLaunch(argv)
+	if err != nil {
+		return err
+	}
+	commandLine, err := windows.UTF16PtrFromString(launch.cmdLine)
 	if err != nil {
 		return err
 	}
@@ -96,25 +104,36 @@ func runClaudeLoginTTY(ctx context.Context, argv []string, dir string, childEnv 
 	if err != nil {
 		return err
 	}
+	job, err := newJob()
+	if err != nil {
+		return err
+	}
 	block := envBlock(childEnv)
 	var pi windows.ProcessInformation
 	err = windows.CreateProcess(nil, commandLine, nil, nil, false,
-		windows.EXTENDED_STARTUPINFO_PRESENT|windows.CREATE_UNICODE_ENVIRONMENT,
+		windows.EXTENDED_STARTUPINFO_PRESENT|windows.CREATE_UNICODE_ENVIRONMENT|windows.CREATE_SUSPENDED,
 		&block[0], currentDir, &si.StartupInfo, &pi)
 	// CreateProcess copies the block; it must stay reachable until the call
 	// returns, and a bare *uint16 is not what the collector follows.
 	runtime.KeepAlive(block)
 	if err != nil {
+		windows.CloseHandle(job)
 		return fmt.Errorf("aiusage: starting the sign-in: %w", err)
 	}
-	windows.CloseHandle(pi.Thread)
-	defer windows.CloseHandle(pi.Process)
-
-	job, jobErr := newJob()
-	if jobErr == nil {
-		defer windows.CloseHandle(job)
-		_ = assignToJob(job, pi.ProcessId)
+	// The sign-in cannot run until the job holds it, so the browser it
+	// starts — or anything else it opens — dies with a cancelled login. A
+	// run that cannot be bound is ended and reported, not left suspended.
+	if err := bindToJob(job, pi.ProcessId); err != nil {
+		_ = windows.TerminateProcess(pi.Process, 1)
+		_, _ = windows.WaitForSingleObject(pi.Process, windows.INFINITE)
+		windows.CloseHandle(pi.Thread)
+		windows.CloseHandle(pi.Process)
+		windows.CloseHandle(job)
+		return err
 	}
+	windows.CloseHandle(pi.Thread)
+	defer windows.CloseHandle(job)
+	defer windows.CloseHandle(pi.Process)
 
 	done := make(chan error, 1)
 	go func() {
@@ -131,11 +150,7 @@ func runClaudeLoginTTY(ctx context.Context, argv []string, dir string, childEnv 
 	case err := <-done:
 		return err
 	case <-ctx.Done():
-		if jobErr == nil {
-			_ = windows.TerminateJobObject(job, 1)
-		} else {
-			_ = windows.TerminateProcess(pi.Process, 1)
-		}
+		_ = windows.TerminateJobObject(job, 1)
 		<-done
 		return ctx.Err()
 	}
