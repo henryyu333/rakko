@@ -774,5 +774,8 @@ func (s *Scanner) saveCache(ctx context.Context, files map[string]*fileState) {
 	if ctx.Err() != nil {
 		return // caller already stopped: leave the old cache in place
 	}
-	_ = atomicfile.WriteFile(s.cacheDir, cacheName, buf.Bytes(), 0o600)
+	// The cache is rebuilt from the transcripts on the next scan, so it
+	// keeps the cheap write it has always done: no sync of the temporary
+	// file, and a failure the scan lives with.
+	_ = atomicfile.WriteFileNoSync(s.cacheDir, cacheName, buf.Bytes())
 }

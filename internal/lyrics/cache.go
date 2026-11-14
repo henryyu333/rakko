@@ -116,5 +116,9 @@ func (c *Cache) writeLocked() {
 		return
 	}
 	data = append(data, '\n')
-	_ = atomicfile.WriteFile(c.dir, cacheFileName, data, 0o600)
+	// The answer stays in memory when the file cannot be replaced; the
+	// next answer rewrites it. The file is a cache rebuilt from its
+	// source, so it gets the cheap write the page has always done: no
+	// sync, and a failure nobody sees.
+	_ = atomicfile.WriteFileNoSync(c.dir, cacheFileName, data)
 }

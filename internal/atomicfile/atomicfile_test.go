@@ -46,3 +46,53 @@ func assertNoTempFiles(t *testing.T, dir string) {
 		}
 	}
 }
+
+// WriteFileNoSync replaces the target the same way, without the sync and
+// without changing the temporary file's mode — the write a rebuildable
+// cache has always done.
+func TestWriteFileNoSyncReplaces(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "lyrics.json")
+	if err := os.WriteFile(target, []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteFileNoSync(dir, "lyrics.json", []byte("new")); err != nil {
+		t.Fatalf("WriteFileNoSync: %v", err)
+	}
+	got, err := os.ReadFile(target)
+	if err != nil || string(got) != "new" {
+		t.Fatalf("target = %q, %v; want new", got, err)
+	}
+	assertNoTempFiles(t, dir)
+}
+
+// The file keeps the temporary file's mode, which is what CreateTemp and a
+// rename gave it before the shared replace.
+func TestWriteFileNoSyncKeepsTheTemporaryFileMode(t *testing.T) {
+	dir := t.TempDir()
+	if err := WriteFileNoSync(dir, "usage-scan.json", []byte("new")); err != nil {
+		t.Fatalf("WriteFileNoSync: %v", err)
+	}
+	ref, err := os.CreateTemp(dir, ".ref-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	refName := ref.Name()
+	if err := ref.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(refName, filepath.Join(dir, "ref.json")); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.Stat(filepath.Join(dir, "usage-scan.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := os.Stat(filepath.Join(dir, "ref.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Mode().Perm() != want.Mode().Perm() {
+		t.Fatalf("mode = %v, want the temporary file's %v", got.Mode(), want.Mode())
+	}
+}

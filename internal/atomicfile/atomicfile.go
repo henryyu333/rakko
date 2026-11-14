@@ -16,25 +16,44 @@ import (
 
 // WriteFile writes data to dir/name atomically, through a temporary file in
 // dir. perm is the temporary file's mode; on Windows only its read-only bit
-// survives, as usual.
+// survives, as usual. The temporary file is synced before the replace, so a
+// crash or a power loss leaves the old contents or the new ones, whole.
 func WriteFile(dir, name string, data []byte, perm os.FileMode) error {
+	return writeFile(dir, name, data, perm, true)
+}
+
+// WriteFileNoSync writes data to dir/name the same way, without syncing the
+// temporary file and without changing its mode. It is for a cache rebuilt
+// from its source: the write sits on a UI callback, and a crash may lose
+// the new contents without losing anything the user cannot get back.
+func WriteFileNoSync(dir, name string, data []byte) error {
+	return writeFile(dir, name, data, 0, false)
+}
+
+// writeFile replaces the target through a temporary file. A zero perm keeps
+// the mode CreateTemp gave the file.
+func writeFile(dir, name string, data []byte, perm os.FileMode, sync bool) error {
 	tmp, err := os.CreateTemp(dir, "."+name+".tmp-*")
 	if err != nil {
 		return err
 	}
 	tmpName := tmp.Name()
 	defer os.Remove(tmpName) // no-op once renamed
-	if err := tmp.Chmod(perm); err != nil {
-		tmp.Close()
-		return err
+	if perm != 0 {
+		if err := tmp.Chmod(perm); err != nil {
+			tmp.Close()
+			return err
+		}
 	}
 	if _, err := tmp.Write(data); err != nil {
 		tmp.Close()
 		return err
 	}
-	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		return err
+	if sync {
+		if err := tmp.Sync(); err != nil {
+			tmp.Close()
+			return err
+		}
 	}
 	if err := tmp.Close(); err != nil {
 		return err
