@@ -49,6 +49,7 @@ const (
 	wicFactoryCreateDecoderFromFilename = 3
 	wicFactoryCreateEncoder             = 8
 	wicFactoryCreateFormatConverter     = 10
+	wicFactoryCreateBitmapScaler        = 11
 	wicFactoryCreateStream              = 14
 )
 
@@ -64,6 +65,19 @@ const (
 	wicSourceCopyPixels = 7
 	wicConverterInit    = 8
 )
+
+// IWICBitmapScaler's own slot after IWICBitmapSource's five.
+const wicScalerInitialize = 8
+
+// WICBitmapInterpolationModeFant: a smooth downscale without the huge
+// kernel HighQualityCubic uses for a thumbnail.
+const wicInterpolationFant = 3
+
+// thumbMaxPixels bounds the source a thumbnail decodes, the same
+// 40-megapixel rule the shared Go thumbnail decoder applies: past it the
+// picture is listed with its generic icon instead of costing hundreds of
+// megabytes of pixels.
+const thumbMaxPixels = 40_000_000
 
 // IWICStream inherits IStream, whose twelve slots follow IUnknown's.
 const wicStreamInitializeFromFilename = 15
@@ -178,10 +192,19 @@ func wicOrientation(frame uintptr) int {
 	return o
 }
 
-// wicDecode decodes path's first frame to upright RGBA: 32bpp BGRA from
-// the system's converter, then the EXIF orientation is baked in so the
-// result has no orientation tag of its own.
+// wicDecode decodes path's first frame to upright premultiplied-alpha
+// RGBA: 32bpp PBGRA from the system's converter — the layout image.RGBA
+// requires — then the EXIF orientation is baked in so the result has no
+// orientation tag of its own.
 func wicDecode(path string) (*image.RGBA, error) {
+	return wicDecodeScaled(path, 0)
+}
+
+// wicDecodeScaled decodes path's first frame at most maxPx on its longer
+// side (unbounded when maxPx is not positive), scaling inside the WIC
+// pipeline so the output buffer is never the full-size image. The result
+// is upright premultiplied RGBA.
+func wicDecodeScaled(path string, maxPx int) (*image.RGBA, error) {
 	factory, err := wicFactory()
 	if err != nil {
 		return nil, err
@@ -201,32 +224,66 @@ func wicDecode(path string) (*image.RGBA, error) {
 	if w == 0 || h == 0 {
 		return nil, errors.New("windows: image has no pixels: " + path)
 	}
+	if int64(w)*int64(h) > thumbMaxPixels {
+		return nil, fmt.Errorf("windows: %s is %d×%d, above the %d-pixel thumbnail limit",
+			filepath.Base(path), w, h, int64(thumbMaxPixels))
+	}
+	orientation := wicOrientation(frame)
+	// Scale inside the pipeline, before any buffer is sized from the
+	// source: an 80px thumbnail of a 100-megapixel scan must not allocate
+	// the scan first.
+	source, outW, outH := frame, int(w), int(h)
+	var scaler uintptr
+	if maxPx > 0 && max(outW, outH) > maxPx {
+		outW, outH = scaledDims(outW, outH, maxPx)
+		hr = wiInvoke(factory, wicFactoryCreateBitmapScaler, uintptr(unsafe.Pointer(&scaler)))
+		if wiFailed(hr) {
+			return nil, wiErr("WIC bitmap scaler", hr)
+		}
+		defer wiRelease(scaler)
+		hr = wiInvoke(scaler, wicScalerInitialize, frame, uintptr(outW), uintptr(outH), wicInterpolationFant)
+		if wiFailed(hr) {
+			return nil, wicDecodeError(path, hr)
+		}
+		source = scaler
+	}
 	var converter uintptr
 	hr = wiInvoke(factory, wicFactoryCreateFormatConverter, uintptr(unsafe.Pointer(&converter)))
 	if wiFailed(hr) {
 		return nil, wiErr("WIC format converter", hr)
 	}
 	defer wiRelease(converter)
+	// PBGRA is premultiplied BGRA, the layout image.RGBA requires; asking
+	// for straight BGRA and wrapping it as image.RGBA double-premultiplied
+	// every semi-transparent pixel.
+	//
 	// The alpha threshold is a C double, which syscall.SyscallN cannot
-	// place in an XMM register; WIC ignores it for 32bppBGRA, the only
+	// place in an XMM register; WIC ignores it for 32bppPBGRA, the only
 	// format asked for here.
-	hr = wiInvoke(converter, wicConverterInit, frame,
-		uintptr(unsafe.Pointer(&wiGUIDPixelBGRA)), 0 /*WICBitmapDitherTypeNone*/, 0, 0, 0 /*WICBitmapPaletteTypeCustom*/)
+	hr = wiInvoke(converter, wicConverterInit, source,
+		uintptr(unsafe.Pointer(&wiGUIDPixelPBGRA)), 0 /*WICBitmapDitherTypeNone*/, 0, 0, 0 /*WICBitmapPaletteTypeCustom*/)
 	if wiFailed(hr) {
 		return nil, wicDecodeError(path, hr)
 	}
-	stride := int(w) * 4
-	buf := make([]byte, stride*int(h))
+	stride := outW * 4
+	buf := make([]byte, stride*outH)
 	hr = wiInvoke(converter, wicSourceCopyPixels, 0, uintptr(stride), uintptr(len(buf)),
 		uintptr(unsafe.Pointer(&buf[0])))
 	if wiFailed(hr) {
 		return nil, wicDecodeError(path, hr)
 	}
-	img := &image.RGBA{Pix: buf, Stride: stride, Rect: image.Rect(0, 0, int(w), int(h))}
+	img := &image.RGBA{Pix: buf, Stride: stride, Rect: image.Rect(0, 0, outW, outH)}
 	for i := 0; i < len(buf); i += 4 {
 		buf[i], buf[i+2] = buf[i+2], buf[i]
 	}
-	return upright(img, wicOrientation(frame)), nil
+	return upright(img, orientation), nil
+}
+
+// scaledDims is the size an image of w×h shrinks to when its longer side
+// is capped at maxPx: the same rounding scaleImage uses, never zero.
+func scaledDims(w, h, maxPx int) (int, int) {
+	long := max(w, h)
+	return max(1, w*maxPx/long), max(1, h*maxPx/long)
 }
 
 // wicDecodeError words a failed decode. A HEIC file whose HEVC decoder is
@@ -243,21 +300,27 @@ func wicDecodeError(path string, hr uintptr) error {
 	return wiErr("WIC decode of "+path, hr)
 }
 
-// wicPixelFormats are the layouts the HEIC encoder may ask for, keyed by
-// the GUID it leaves in SetPixelFormat.
+// wicPixelFormat is one layout the HEIC encoder may ask for.
 type wicPixelFormat struct {
 	guid    wiGUID
 	stride  func(w int) int
 	convert func(dst []byte, src *image.RGBA, w, h int)
 }
 
+// wicPixelFormats are the layouts the HEIC encoder may ask for, keyed by
+// the GUID it leaves in SetPixelFormat. src is image.RGBA, whose pixels
+// are premultiplied by contract; the straight-alpha layouts unpremultiply,
+// the premultiplied one and the opaque ones keep the stored channels.
 var wicPixelFormats = []wicPixelFormat{
 	{
 		guid: wiGUIDPixelBGRA, stride: func(w int) int { return w * 4 },
 		convert: func(dst []byte, src *image.RGBA, w, h int) {
-			copy(dst, src.Pix) // WIC BGRA and a Go RGBA differ only in channel order
 			for i := 0; i < len(dst); i += 4 {
-				dst[i], dst[i+2] = dst[i+2], dst[i]
+				a := src.Pix[i+3]
+				dst[i] = wicStraight(src.Pix[i+2], a) // B
+				dst[i+1] = wicStraight(src.Pix[i+1], a)
+				dst[i+2] = wicStraight(src.Pix[i], a)
+				dst[i+3] = a
 			}
 		},
 	},
@@ -265,24 +328,24 @@ var wicPixelFormats = []wicPixelFormat{
 		guid: wiGUIDPixelPBGRA, stride: func(w int) int { return w * 4 },
 		convert: func(dst []byte, src *image.RGBA, w, h int) {
 			for i := 0; i < len(dst); i += 4 {
-				a := uint32(src.Pix[i+3])
-				put := func(j int, v uint8) {
-					dst[i+j] = uint8(uint32(v) * a / 255)
-				}
-				put(0, src.Pix[i+2]) // B
-				put(1, src.Pix[i+1]) // G
-				put(2, src.Pix[i])   // R
-				dst[i+3] = src.Pix[i+3]
+				dst[i], dst[i+1], dst[i+2], dst[i+3] =
+					src.Pix[i+2], src.Pix[i+1], src.Pix[i], src.Pix[i+3]
 			}
 		},
 	},
 	{
 		// 32bppBGR: three channels and a byte the decoder ignores, the
-		// HEIF encoder's preferred layout.
+		// HEIF encoder's preferred layout. With no alpha channel the
+		// colour has to be the straight one, or a translucent pixel goes
+		// out darker than it looks.
 		guid: wiGUIDPixel32BGR, stride: func(w int) int { return w * 4 },
 		convert: func(dst []byte, src *image.RGBA, w, h int) {
 			for i := 0; i < len(dst); i += 4 {
-				dst[i], dst[i+1], dst[i+2], dst[i+3] = src.Pix[i+2], src.Pix[i+1], src.Pix[i], 0xFF
+				a := src.Pix[i+3]
+				dst[i] = wicStraight(src.Pix[i+2], a)
+				dst[i+1] = wicStraight(src.Pix[i+1], a)
+				dst[i+2] = wicStraight(src.Pix[i], a)
+				dst[i+3] = 0xFF
 			}
 		},
 	},
@@ -292,12 +355,28 @@ var wicPixelFormats = []wicPixelFormat{
 			for y := range h {
 				for x := range w {
 					s := src.Pix[y*src.Stride+x*4:]
+					a := s[3]
 					d := dst[y*w*3+x*3:]
-					d[0], d[1], d[2] = s[2], s[1], s[0]
+					d[0], d[1], d[2] = wicStraight(s[2], a), wicStraight(s[1], a), wicStraight(s[0], a)
 				}
 			}
 		},
 	},
+}
+
+// wicStraight unpremultiplies one channel of a premultiplied RGBA pixel.
+func wicStraight(v, a uint8) uint8 {
+	if a == 0 || v == 0 {
+		return 0
+	}
+	if a == 0xFF {
+		return v
+	}
+	out := (uint32(v)*0xFF + uint32(a)/2) / uint32(a)
+	if out > 0xFF {
+		out = 0xFF
+	}
+	return uint8(out)
 }
 
 // wicEncodeHEIC writes img as a HEIC file at path through the system's
@@ -341,7 +420,10 @@ func wicEncodeHEIC(img *image.RGBA, path string, quality float64) error {
 	}
 	defer wiRelease(frame)
 	if props != 0 {
-		wicSetQuality(props, quality)
+		// A refused quality leaves the encoder's default, which still
+		// produces a valid HEIC: failing the conversion over an advisory
+		// option would be worse than the default quality.
+		_ = wicSetQuality(props, quality)
 		defer wiRelease(props)
 	}
 	hr = wiInvoke(frame, wicFrameInitialize, props)
@@ -396,30 +478,36 @@ func wicEncodeError(hr uintptr) error {
 	return wiErr("WIC HEIC encode", hr)
 }
 
+// propBag2 is PROPBAG2: one property of an IPropertyBag2 write.
+type propBag2 struct {
+	dwType   uint32
+	vt       uint16
+	cfType   uint16
+	dwHint   uint32
+	pstrName *uint16
+	clsid    wiGUID
+	_        [4]byte
+}
+
 // wicSetQuality writes the encoder option "ImageQuality" into the frame's
-// property bag. A bag that refuses it keeps the encoder's default.
-func wicSetQuality(bag uintptr, quality float64) {
-	// IPropertyBag2::Write is slot 7; PROPBAG2 is the one property below.
-	type propBag2 struct {
-		dwType   uint32
-		vt       uint16
-		cfType   uint16
-		dwHint   uint32
-		pstrName *uint16
-		clsid    wiGUID
-		_        [4]byte
-	}
+// property bag. A bag that refuses it keeps the encoder's default, which
+// the caller needs to know: the option is advisory, but the failure is
+// still reported so a wrong call cannot hide behind it.
+func wicSetQuality(bag uintptr, quality float64) error {
+	// IPropertyBag2::Write is slot 4 (after IUnknown's three and Read).
 	name, err := windows.UTF16PtrFromString("ImageQuality")
 	if err != nil {
-		return
+		return err
 	}
 	pb := propBag2{dwType: 0 /*PROPBAG2_TYPE_DATA*/, vt: 4 /*VT_R4*/, pstrName: name}
 	// PROPVARIANT: vt, three reserved words, then the value union.
 	var value [4]uintptr
 	*(*uint16)(unsafe.Pointer(&value[0])) = 4 // VT_R4
 	*(*float32)(unsafe.Pointer(&value[1])) = float32(quality)
-	// A refusal here only means the encoder keeps its default quality.
-	wiInvoke(bag, 7, 1, uintptr(unsafe.Pointer(&pb)), uintptr(unsafe.Pointer(&value[0])))
+	if hr := wiInvoke(bag, 4, 1, uintptr(unsafe.Pointer(&pb)), uintptr(unsafe.Pointer(&value[0]))); wiFailed(hr) {
+		return wiErr("IPropertyBag2.Write(ImageQuality)", hr)
+	}
+	return nil
 }
 
 // wicPickPixelFormat finds the converter for the GUID the HEIC encoder

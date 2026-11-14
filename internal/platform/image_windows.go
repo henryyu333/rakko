@@ -199,15 +199,24 @@ func ResizeImage(src, dst string, format ImageFormat, maxPx int) error {
 }
 
 // Thumbnail decodes src — any format the system reads, HEIC and TIFF
-// included — upright, with its longer side at most maxPx, as straight
-// alpha RGBA.
+// included — upright, with its longer side at most maxPx, as premultiplied
+// RGBA. The WIC pipeline scales before the output buffer is allocated and
+// both decoders refuse a source past thumbMaxPixels, so listing a huge
+// picture cannot cost its full-size pixels.
 func Thumbnail(src string, maxPx int) (thumb *image.RGBA, err error) {
 	err = wiApartment(func() error {
-		img, e := decodeImage(src)
-		if e != nil {
+		img, e := wicDecodeScaled(src, maxPx)
+		if e == nil {
+			thumb = img
+			return nil
+		}
+		// A format WIC lacks (WebP on older Windows): the Go decoders,
+		// bounded the same way.
+		img, gerr := goDecodeScaled(src, maxPx)
+		if gerr != nil {
 			return e
 		}
-		thumb = scaleImage(img, maxPx)
+		thumb = img
 		return nil
 	})
 	return thumb, err

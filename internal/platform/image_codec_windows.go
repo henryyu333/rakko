@@ -17,6 +17,7 @@ import (
 	"image/jpeg"
 	"image/png"
 	"os"
+	"path/filepath"
 
 	_ "golang.org/x/image/bmp"
 	stddraw "golang.org/x/image/draw"
@@ -59,7 +60,35 @@ func goDecode(path string) (*image.RGBA, error) {
 	return img, nil
 }
 
-// rgbaOf copies any image to upright RGBA with straight alpha.
+// goDecodeScaled is goDecode for a thumbnail: the header is read first, so
+// an image past thumbMaxPixels is refused before any pixel buffer exists,
+// and the result is scaled to maxPx.
+func goDecodeScaled(path string, maxPx int) (*image.RGBA, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	cfg, _, err := image.DecodeConfig(f)
+	f.Close()
+	if err != nil {
+		return nil, err
+	}
+	if cfg.Width <= 0 || cfg.Height <= 0 {
+		return nil, errNoPixels
+	}
+	if int64(cfg.Width)*int64(cfg.Height) > thumbMaxPixels {
+		return nil, fmt.Errorf("windows: %s is %d×%d, above the %d-pixel thumbnail limit",
+			filepath.Base(path), cfg.Width, cfg.Height, int64(thumbMaxPixels))
+	}
+	img, err := goDecode(path)
+	if err != nil {
+		return nil, err
+	}
+	return scaleImage(img, maxPx), nil
+}
+
+// rgbaOf copies any image to upright premultiplied RGBA, the layout
+// image.RGBA defines.
 func rgbaOf(src image.Image) *image.RGBA {
 	if r, ok := src.(*image.RGBA); ok {
 		return r
