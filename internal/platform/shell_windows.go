@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -219,19 +220,11 @@ func TrashFile(path string) (trashed string, err error) {
 	if err := recyclableItem(abs, fi); err != nil {
 		return "", err
 	}
-	// The bin's item count is the only confirmation the shell gives that the
-	// item was recycled rather than deleted.
-	before, counted := recycleBinItems(abs)
 	if err := recycleItem(abs); err != nil {
 		return "", err
 	}
 	if _, serr := os.Lstat(abs); serr == nil {
 		return "", fmt.Errorf("platform: %s is still there after the delete", abs)
-	}
-	if counted {
-		if after, ok := recycleBinItems(abs); ok && after <= before {
-			return "", fmt.Errorf("platform: %s was not added to the recycle bin", abs)
-		}
 	}
 	return abs, nil
 }
@@ -352,26 +345,9 @@ func volumeGUID(mount string) (string, bool) {
 	return name, true
 }
 
-// recycleBinItems reports how many items the recycle bin holds for the volume
-// holding path.
-func recycleBinItems(path string) (int64, bool) {
-	root := filepath.VolumeName(path)
-	if root == "" {
-		return 0, false
-	}
-	p, err := windows.UTF16PtrFromString(root + string(filepath.Separator))
-	if err != nil {
-		return 0, false
-	}
-	info := shQueryRBInfo{cbSize: uint32(unsafe.Sizeof(shQueryRBInfo{}))}
-	if r, _, _ := procSHQueryRecycleBin.Call(uintptr(unsafe.Pointer(p)), uintptr(unsafe.Pointer(&info))); int32(r) < 0 {
-		return 0, false
-	}
-	return info.i64NumItems, true
-}
-
-// recycleItem hands the item to the shell's IFileOperation with the
-// flag that recycles on delete.
+// recycleItem hands the item to the shell's IFileOperation with the flag that
+// recycles on delete, and fails unless the shell put this item in the recycle
+// bin.
 func recycleItem(abs string) error {
 	// IFileOperation must be used from a single-threaded apartment, so the
 	// operation gets a thread of its own rather than borrowing whichever
@@ -380,9 +356,140 @@ func recycleItem(abs string) error {
 	go func() {
 		runtime.LockOSThread()
 		defer runtime.UnlockOSThread()
-		done <- fileOperationDelete(abs)
+		_, err := fileOperationDelete(abs)
+		done <- err
 	}()
 	return <-done
+}
+
+// --- the delete progress sink -----------------------------------------------
+
+// fileOperationSink is the IFileOperationProgressSink the delete advises, so
+// the operation's own answer — was this item put in the recycle bin? — decides
+// success. A global item count cannot: another process may empty or restore
+// the bin while the operation runs, and a count that grows does not say which
+// item it grew for.
+type fileOperationSink struct {
+	vtable   *[19]uintptr
+	refs     int32
+	deleted  bool
+	hrDelete int32
+	recycled bool
+}
+
+var fileOperationSinkVtable = [19]uintptr{
+	windows.NewCallback(fileOperationSinkQueryInterface), // QueryInterface
+	windows.NewCallback(fileOperationSinkAddRef),         // AddRef
+	windows.NewCallback(fileOperationSinkRelease),        // Release
+	windows.NewCallback(fileOperationSinkOK1),            // StartOperations
+	windows.NewCallback(fileOperationSinkOK2),            // FinishOperations
+	windows.NewCallback(fileOperationSinkOK4),            // PreRenameItem
+	windows.NewCallback(fileOperationSinkOK6),            // PostRenameItem
+	windows.NewCallback(fileOperationSinkOK5),            // PreMoveItem
+	windows.NewCallback(fileOperationSinkOK7),            // PostMoveItem
+	windows.NewCallback(fileOperationSinkOK5),            // PreCopyItem
+	windows.NewCallback(fileOperationSinkOK7),            // PostCopyItem
+	windows.NewCallback(fileOperationSinkOK3),            // PreDeleteItem
+	windows.NewCallback(fileOperationSinkPostDeleteItem), // PostDeleteItem
+	windows.NewCallback(fileOperationSinkOK4),            // PreNewItem
+	windows.NewCallback(fileOperationSinkOK8),            // PostNewItem
+	windows.NewCallback(fileOperationSinkOK3),            // UpdateProgress
+	windows.NewCallback(fileOperationSinkOK1),            // ResetTimer
+	windows.NewCallback(fileOperationSinkOK1),            // PauseTimer
+	windows.NewCallback(fileOperationSinkOK1),            // ResumeTimer
+}
+
+var fileOperationSinks struct {
+	sync.Mutex
+	byPointer map[uintptr]*fileOperationSink
+}
+
+func newFileOperationSink() *fileOperationSink {
+	sink := &fileOperationSink{vtable: &fileOperationSinkVtable, refs: 1, hrDelete: -1}
+	fileOperationSinks.Lock()
+	if fileOperationSinks.byPointer == nil {
+		fileOperationSinks.byPointer = map[uintptr]*fileOperationSink{}
+	}
+	fileOperationSinks.byPointer[uintptr(unsafe.Pointer(sink))] = sink
+	fileOperationSinks.Unlock()
+	return sink
+}
+
+// unroot drops the reference that keeps the Go object reachable; COM's own
+// references are released by the release callbacks.
+func (s *fileOperationSink) unroot() {
+	fileOperationSinks.Lock()
+	delete(fileOperationSinks.byPointer, uintptr(unsafe.Pointer(s)))
+	fileOperationSinks.Unlock()
+}
+
+// fileOperationSinkAt converts the interface pointer COM hands back into the
+// object.
+func fileOperationSinkAt(this uintptr) *fileOperationSink {
+	var p unsafe.Pointer
+	*(*uintptr)(unsafe.Pointer(&p)) = this
+	return (*fileOperationSink)(p)
+}
+
+var (
+	sinkIIDUnknown  = windows.GUID{}
+	sinkIIDProgress = windows.GUID{
+		Data1: 0x04b0f1a7,
+		Data2: 0x9490,
+		Data3: 0x44bc,
+		Data4: [8]byte{0x96, 0xe1, 0x42, 0x96, 0xa3, 0x12, 0x52, 0xe2},
+	}
+)
+
+func fileOperationSinkQueryInterface(this, iid, out uintptr) uintptr {
+	if iid == 0 || out == 0 {
+		return 0x80004003 // E_POINTER
+	}
+	id := *(*windows.GUID)(fileOperationSinkPointer(iid))
+	if id == sinkIIDUnknown || id == sinkIIDProgress {
+		*(*uintptr)(fileOperationSinkPointer(out)) = this
+		atomic.AddInt32(&fileOperationSinkAt(this).refs, 1)
+		return 0 // S_OK
+	}
+	*(*uintptr)(fileOperationSinkPointer(out)) = 0
+	return 0x80004002 // E_NOINTERFACE
+}
+
+func fileOperationSinkAddRef(this uintptr) uintptr {
+	return uintptr(atomic.AddInt32(&fileOperationSinkAt(this).refs, 1))
+}
+
+func fileOperationSinkRelease(this uintptr) uintptr {
+	return uintptr(atomic.AddInt32(&fileOperationSinkAt(this).refs, -1))
+}
+
+// PostDeleteItem records this item's outcome: hrDelete is the delete's own
+// HRESULT, and psiNewlyCreated names the item the operation created — the
+// recycle-bin entry, which is null when the item was deleted for good.
+func fileOperationSinkPostDeleteItem(this, _, _, hrDelete, newlyCreated uintptr) uintptr {
+	sink := fileOperationSinkAt(this)
+	sink.deleted = true
+	sink.hrDelete = int32(hrDelete)
+	sink.recycled = newlyCreated != 0
+	return 0
+}
+
+// The remaining notify methods accept the event and change nothing; their
+// signatures only differ in the number of arguments.
+func fileOperationSinkOK1(uintptr) uintptr                        { return 0 }
+func fileOperationSinkOK2(_, _ uintptr) uintptr                   { return 0 }
+func fileOperationSinkOK3(_, _, _ uintptr) uintptr                { return 0 }
+func fileOperationSinkOK4(_, _, _, _ uintptr) uintptr             { return 0 }
+func fileOperationSinkOK5(_, _, _, _, _ uintptr) uintptr          { return 0 }
+func fileOperationSinkOK6(_, _, _, _, _, _ uintptr) uintptr       { return 0 }
+func fileOperationSinkOK7(_, _, _, _, _, _, _ uintptr) uintptr    { return 0 }
+func fileOperationSinkOK8(_, _, _, _, _, _, _, _ uintptr) uintptr { return 0 }
+
+// fileOperationSinkPointer converts an interface pointer the shell passed in.
+func fileOperationSinkPointer(p uintptr) unsafe.Pointer {
+	var v unsafe.Pointer
+	*(*uintptr)(unsafe.Pointer(&v)) = p
+	return v
 }
 
 // comApartmentAction says what to do with a thread's CoInitializeEx result:
@@ -400,66 +507,86 @@ func comApartmentAction(hr int32) (usable, release bool, err error) {
 	}
 }
 
-// fileOperationDelete recycles one item. The shell reports a refused or
-// aborted operation through the HRESULTs here, which the caller propagates.
-func fileOperationDelete(abs string) error {
+// fileOperationDelete recycles one item and answers the progress sink's verdict
+// for it. The shell reports a refused or aborted operation through the
+// HRESULTs here, which the caller propagates.
+func fileOperationDelete(abs string) (recycled bool, err error) {
 	// IFileOperation requires a single-threaded apartment. The worker thread
 	// is this operation's own, so it starts one and releases it before the
 	// thread goes back to the pool.
 	hr, _, _ := procCoInitializeEx.Call(0, coinitApartmentThreaded)
 	usable, release, err := comApartmentAction(int32(hr))
 	if !usable {
-		return err
+		return false, err
 	}
 	if release {
 		defer procCoUninitialize.Call()
 	}
 	clsid, err := guidFromString(clsidFileOperation)
 	if err != nil {
-		return err
+		return false, err
 	}
 	iid, err := guidFromString(iidIFileOperation)
 	if err != nil {
-		return err
+		return false, err
 	}
 	itemIID, err := guidFromString(iidShellItem)
 	if err != nil {
-		return err
+		return false, err
 	}
 	var op uintptr
 	// CLSCTX_INPROC_SERVER|CLSCTX_LOCAL_SERVER = 1|4.
 	if r, _, _ := procCoCreateInstance.Call(uintptr(unsafe.Pointer(&clsid)), 0, 5,
 		uintptr(unsafe.Pointer(&iid)), uintptr(unsafe.Pointer(&op))); int32(r) < 0 {
-		return fmt.Errorf("platform: IFileOperation: CoCreateInstance failed (0x%08x)", uint32(int32(r)))
+		return false, fmt.Errorf("platform: IFileOperation: CoCreateInstance failed (0x%08x)", uint32(int32(r)))
 	}
 	defer comMethod(op, comRelease)
 
 	flags := uintptr(fofSilent | fofNoConfirm | fofNoErrorUI | fofxEarlyFailure | fofxRecycleOnDelete)
 	if r := comMethod(op, fileOperationSetOperationFlags, flags); int32(r) < 0 {
-		return fmt.Errorf("platform: IFileOperation.SetOperationFlags failed (0x%08x)", uint32(int32(r)))
+		return false, fmt.Errorf("platform: IFileOperation.SetOperationFlags failed (0x%08x)", uint32(int32(r)))
 	}
 	p, err := windows.UTF16PtrFromString(abs)
 	if err != nil {
-		return err
+		return false, err
 	}
 	var item uintptr
 	if r, _, _ := procSHCreateItemFromParsingName.Call(uintptr(unsafe.Pointer(p)), 0,
 		uintptr(unsafe.Pointer(&itemIID)), uintptr(unsafe.Pointer(&item))); int32(r) < 0 {
-		return fmt.Errorf("platform: SHCreateItemFromParsingName(%s) failed (0x%08x)", abs, uint32(int32(r)))
+		return false, fmt.Errorf("platform: SHCreateItemFromParsingName(%s) failed (0x%08x)", abs, uint32(int32(r)))
 	}
 	defer comMethod(item, comRelease)
 
 	if r := comMethod(op, fileOperationDeleteItem, item, 0); int32(r) < 0 {
-		return fmt.Errorf("platform: IFileOperation.DeleteItem(%s) failed (0x%08x)", abs, uint32(int32(r)))
+		return false, fmt.Errorf("platform: IFileOperation.DeleteItem(%s) failed (0x%08x)", abs, uint32(int32(r)))
 	}
+	// The sink answers for this item alone: PostDeleteItem reports the delete's
+	// HRESULT and whether a new item — the recycle-bin entry — was created.
+	sink := newFileOperationSink()
+	defer sink.unroot()
+	var cookie uint32
+	if r := comMethod(op, fileOperationAdvise, uintptr(unsafe.Pointer(sink)), uintptr(unsafe.Pointer(&cookie))); int32(r) < 0 {
+		return false, fmt.Errorf("platform: IFileOperation.Advise failed (0x%08x)", uint32(int32(r)))
+	}
+	defer comMethod(op, fileOperationUnadvise, uintptr(cookie))
+
 	if r := comMethod(op, fileOperationPerformOperations); int32(r) < 0 {
-		return fmt.Errorf("platform: the move of %s to the recycle bin failed (0x%08x)", abs, uint32(int32(r)))
+		return false, fmt.Errorf("platform: the move of %s to the recycle bin failed (0x%08x)", abs, uint32(int32(r)))
 	}
 	var aborted int32
 	if r := comMethod(op, fileOperationAnyAborted, uintptr(unsafe.Pointer(&aborted))); int32(r) >= 0 && aborted != 0 {
-		return errors.New("platform: the move to the recycle bin was cancelled")
+		return false, errors.New("platform: the move to the recycle bin was cancelled")
 	}
-	return nil
+	if !sink.deleted {
+		return false, fmt.Errorf("platform: the shell did not delete %s", abs)
+	}
+	if sink.hrDelete < 0 {
+		return false, fmt.Errorf("platform: the shell refused to delete %s (0x%08x)", abs, uint32(sink.hrDelete))
+	}
+	if !sink.recycled {
+		return false, fmt.Errorf("%w: the shell deleted %s instead of recycling it", ErrCannotRecycle, abs)
+	}
+	return true, nil
 }
 
 // RevealInFileManager selects path in a new Explorer window.

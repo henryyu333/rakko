@@ -134,7 +134,6 @@ var (
 	procShellExecute                = sysProc(shell32, "ShellExecuteW")
 	procSHGetFileInfo               = sysProc(shell32, "SHGetFileInfoW")
 	procSHCreateItemFromParsingName = sysProc(shell32, "SHCreateItemFromParsingName")
-	procSHQueryRecycleBin           = sysProc(shell32, "SHQueryRecycleBinW")
 	procSHGetKnownFolderPath        = sysProc(shell32, "SHGetKnownFolderPath")
 	procExtractIconEx               = sysProc(shell32, "ExtractIconExW")
 
@@ -231,6 +230,8 @@ const (
 
 	// The vtable slots of IUnknown and IFileOperation this package calls.
 	comRelease                     = 2
+	fileOperationAdvise            = 3
+	fileOperationUnadvise          = 4
 	fileOperationSetOperationFlags = 5
 	fileOperationDeleteItem        = 18
 	fileOperationPerformOperations = 21
@@ -398,14 +399,6 @@ type shFileInfo struct {
 	dwAttributes  uint32
 	szDisplayName [260]uint16
 	szTypeName    [80]uint16
-}
-
-// shQueryRBInfo mirrors SHQUERYRBINFO: what the recycle bin holds for one
-// volume.
-type shQueryRBInfo struct {
-	cbSize      uint32
-	i64Size     int64
-	i64NumItems int64
 }
 
 func getWindowLong(h uintptr, index int32) uintptr {

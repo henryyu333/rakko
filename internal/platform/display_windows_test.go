@@ -442,17 +442,58 @@ func TestFileOperations(t *testing.T) {
 	if err := os.WriteFile(text, []byte("z"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	before, counted := recycleBinItems(text)
-	if _, err := TrashFile(text); err != nil {
-		t.Fatalf("TrashFile: %v", err)
+	// The operation's own progress answer must say this item went to the bin:
+	// a count of the whole bin cannot.
+	recycled, err := fileOperationDelete(text)
+	if err != nil || !recycled {
+		t.Fatalf("fileOperationDelete = recycled %v, %v; want true, nil", recycled, err)
 	}
 	if _, err := os.Stat(text); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("the trashed file is still there: %v", err)
 	}
-	// The bin's item count must have grown: a delete that leaves the count
-	// alone took the permanent path the function promises never to take.
-	if after, ok := recycleBinItems(text); counted && ok && after <= before {
-		t.Fatalf("the recycle bin count stayed at %d: the file was deleted, not recycled", before)
+	// The whole path, pre-flight rules included, recycles too.
+	second := filepath.Join(dir, "trash-me-too.txt")
+	if err := os.WriteFile(second, []byte("z"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := TrashFile(second); err != nil {
+		t.Fatalf("TrashFile: %v", err)
+	}
+	if _, err := os.Stat(second); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the trashed file is still there: %v", err)
+	}
+}
+
+// TestFileOperationSinkPostDeleteItem checks the sink's verdict: a delete that
+// names a created item (the recycle-bin entry) counts as recycled, a delete
+// without one does not, and the delete's own HRESULT is kept.
+func TestFileOperationSinkPostDeleteItem(t *testing.T) {
+	sink := newFileOperationSink()
+	defer sink.unroot()
+	this := uintptr(unsafe.Pointer(sink))
+
+	fileOperationSinkPostDeleteItem(this, 0, 0, 0, 0)
+	if !sink.deleted || sink.recycled || sink.hrDelete != 0 {
+		t.Fatalf("successful delete with no new item: deleted=%v recycled=%v hr=%#x",
+			sink.deleted, sink.recycled, sink.hrDelete)
+	}
+	fileOperationSinkPostDeleteItem(this, 0, 0, uintptr(uint32(0x80070005)), 0x1234)
+	if !sink.recycled || sink.hrDelete >= 0 {
+		t.Fatalf("recycle-bin entry: recycled=%v hr=%#x, want true and a failure code",
+			sink.recycled, sink.hrDelete)
+	}
+
+	// The shell asks for the interface it advised; anything else is refused.
+	var out uintptr
+	if hr := fileOperationSinkQueryInterface(this, uintptr(unsafe.Pointer(&sinkIIDProgress)), uintptr(unsafe.Pointer(&out))); hr != 0 || out != this {
+		t.Fatalf("QueryInterface(progress) = %#x, out %#x; want S_OK and this", hr, out)
+	}
+	other, err := guidFromString("00000000-0000-0001-0000-000000000000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hr := fileOperationSinkQueryInterface(this, uintptr(unsafe.Pointer(&other)), uintptr(unsafe.Pointer(&out))); uint32(hr) != 0x80004002 || out != 0 {
+		t.Fatalf("QueryInterface(unknown) = %#x, out %#x; want E_NOINTERFACE", hr, out)
 	}
 }
 
