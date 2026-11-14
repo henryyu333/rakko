@@ -65,6 +65,34 @@ func TestSecondDisplayConversion(t *testing.T) {
 	}
 }
 
+// TestPixelRectBelongsToContainingDisplay checks which display a physical
+// window rectangle is scaled by. A window that starts on the primary display
+// just beside a higher-DPI neighbour must use the primary's DPI; the old
+// corner-distance rule blamed the neighbour and mis-scaled its rectangle.
+func TestPixelRectBelongsToContainingDisplay(t *testing.T) {
+	ms := []screenMonitor{
+		testMonitor(1, 0, 0, 1920, 1080, 96, `\\.\DISPLAY1`),
+		testMonitor(2, 1920, 0, 2560, 1440, 144, `\\.\DISPLAY2`),
+	}
+	edge := winRect{Left: 1800, Top: 100, Right: 1900, Bottom: 300}
+	if got, want := pixelsToDIPIn(ms, edge), (Rect{X: 1800, Y: 100, Width: 100, Height: 200}); got != want {
+		t.Fatalf("window at the primary's right edge = %+v, want %+v", got, want)
+	}
+	// A window spanning both belongs to the display it overlaps most: 420 px
+	// on the primary against 380 px on the neighbour.
+	spanning := winRect{Left: 1500, Top: 100, Right: 2300, Bottom: 300}
+	if got, want := pixelsToDIPIn(ms, spanning), (Rect{X: 1500, Y: 100, Width: 800, Height: 200}); got != want {
+		t.Fatalf("spanning window = %+v, want %+v", got, want)
+	}
+	// Past the right edge of the desktop the nearest display decides.
+	offscreen := winRect{Left: 4600, Top: 0, Right: 4700, Bottom: 100}
+	dpi := 144.0
+	want := Rect{X: 1920 + 2680*96/dpi, Y: 0, Width: 100 * 96 / dpi, Height: 100 * 96 / dpi}
+	if got := pixelsToDIPIn(ms, offscreen); got != want {
+		t.Fatalf("off-screen window = %+v, want %+v", got, want)
+	}
+}
+
 func TestNotchRectAnchor(t *testing.T) {
 	ms := []screenMonitor{testMonitor(7, 0, 0, 1920, 1080, 96, `\\.\DISPLAY1`)}
 	x, y, w, h, hasNotch := notchRectIn(ms, 7, false)

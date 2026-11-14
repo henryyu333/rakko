@@ -546,13 +546,7 @@ func pixelsToDIP(r winRect) Rect { return pixelsToDIPIn(enumMonitors(), r) }
 
 // pixelsToDIPIn is pixelsToDIP over an explicit display list.
 func pixelsToDIPIn(ms []screenMonitor, r winRect) Rect {
-	best, bestD := -1, int64(1)<<62
-	for i, m := range ms {
-		d := int64(abs32(r.Left-m.bounds.Left)) + int64(abs32(r.Top-m.bounds.Top))
-		if d < bestD {
-			best, bestD = i, d
-		}
-	}
+	best := monitorForPixels(ms, r)
 	if best < 0 {
 		return Rect{X: float64(r.Left), Y: float64(r.Top), Width: float64(r.width()), Height: float64(r.height())}
 	}
@@ -566,11 +560,73 @@ func pixelsToDIPIn(ms []screenMonitor, r winRect) Rect {
 	}
 }
 
+// abs32 returns the magnitude of v.
 func abs32(v int32) int32 {
 	if v < 0 {
 		return -v
 	}
 	return v
+}
+
+// monitorForPixels picks the display a physical rectangle belongs to: the one
+// containing its top-left corner, else the one it overlaps most, else the
+// nearest to its centre. Choosing the display whose corner happened to be
+// nearest put a window that starts beside a neighbouring display on the
+// neighbour, so its position and size were scaled by the wrong DPI.
+func monitorForPixels(ms []screenMonitor, r winRect) int {
+	if len(ms) == 0 {
+		return -1
+	}
+	for i, m := range ms {
+		if pointInRect(r.Left, r.Top, m.bounds) {
+			return i
+		}
+	}
+	best, bestArea := -1, int64(0)
+	for i, m := range ms {
+		if a := overlapArea(m.bounds, r); a > bestArea {
+			best, bestArea = i, a
+		}
+	}
+	if best >= 0 {
+		return best
+	}
+	// Off every display (a window dragged past the edge of the desktop):
+	// the nearest one decides the scale.
+	best, bestD := 0, int64(1)<<62
+	cx := (int64(r.Left) + int64(r.Right)) / 2
+	cy := (int64(r.Top) + int64(r.Bottom)) / 2
+	for i, m := range ms {
+		dx, dy := int64(0), int64(0)
+		if cx < int64(m.bounds.Left) {
+			dx = int64(m.bounds.Left) - cx
+		} else if cx > int64(m.bounds.Right) {
+			dx = cx - int64(m.bounds.Right)
+		}
+		if cy < int64(m.bounds.Top) {
+			dy = int64(m.bounds.Top) - cy
+		} else if cy > int64(m.bounds.Bottom) {
+			dy = cy - int64(m.bounds.Bottom)
+		}
+		if d := dx*dx + dy*dy; d < bestD {
+			best, bestD = i, d
+		}
+	}
+	return best
+}
+
+func pointInRect(x, y int32, r winRect) bool {
+	return x >= r.Left && x < r.Right && y >= r.Top && y < r.Bottom
+}
+
+// overlapArea is the area two rectangles share, 0 when they do not meet.
+func overlapArea(a, b winRect) int64 {
+	w := int64(min(a.Right, b.Right) - max(a.Left, b.Left))
+	h := int64(min(a.Bottom, b.Bottom) - max(a.Top, b.Top))
+	if w <= 0 || h <= 0 {
+		return 0
+	}
+	return w * h
 }
 
 // StableDisplayID returns a display's persistent identity: a hash of its
