@@ -41,6 +41,8 @@ var (
 	procGetClientRect       = sysProc(user32, "GetClientRect")
 	procGetForegroundWindow = sysProc(user32, "GetForegroundWindow")
 	procSetForegroundWindow = sysProc(user32, "SetForegroundWindow")
+	procBringWindowToTop    = sysProc(user32, "BringWindowToTop")
+	procAttachThreadInput   = sysProc(user32, "AttachThreadInput")
 	procGetActiveWindow     = sysProc(user32, "GetActiveWindow")
 	procGetWindowThreadPID  = sysProc(user32, "GetWindowThreadProcessId")
 	procEnumWindows         = sysProc(user32, "EnumWindows")

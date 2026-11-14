@@ -60,6 +60,23 @@ func ActivateApp(pid int) bool {
 	if r, _, _ := procIsIconic.Call(h); r != 0 {
 		procShowWindow.Call(h, 9 /* SW_RESTORE */)
 	}
+	// Windows lets only the foreground thread hand the foreground away;
+	// from a background panel SetForegroundWindow alone returns success
+	// without raising anything. Joining our input to the current
+	// foreground thread for the call is the documented way around it.
+	fg, _, _ := procGetForegroundWindow.Call()
+	if fg != 0 && fg != h {
+		myThread, _, _ := procGetCurrentThreadID.Call()
+		fgThread, _, _ := procGetWindowThreadPID.Call(fg)
+		if fgThread != 0 && fgThread != myThread {
+			if ok, _, _ := procAttachThreadInput.Call(myThread, fgThread, 1); ok != 0 {
+				procBringWindowToTop.Call(h)
+				r, _, _ := procSetForegroundWindow.Call(h)
+				procAttachThreadInput.Call(myThread, fgThread, 0)
+				return r != 0
+			}
+		}
+	}
 	r, _, _ := procSetForegroundWindow.Call(h)
 	return r != 0
 }
@@ -259,11 +276,22 @@ func execLookup(name string) (string, error) {
 	return p, err
 }
 
-// ReopenApp opens an app the way its taskbar icon does: a packaged app
-// through the Apps folder, a desktop one through its executable.
+// ReopenApp opens an app the way its taskbar icon does: an app that is
+// already running comes to the front, and one that is not launches. On
+// Windows the shell opens another instance of an executable, so the
+// running instance has to be found and activated first.
 func ReopenApp(bundleID string) bool {
 	if bundleID == "" {
 		return false
+	}
+	key := AppIDKey(bundleID)
+	for _, r := range RunningApps() {
+		if AppIDKey(r.AppID) != key && AppIDKey(`shell:AppsFolder\`+r.AppID) != key {
+			continue
+		}
+		if ActivateApp(r.PID) {
+			return true
+		}
 	}
 	if p := AppPath(bundleID); p != "" {
 		return shellExecute("open", p, "")
