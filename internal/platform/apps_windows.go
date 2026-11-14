@@ -84,28 +84,68 @@ func ActivateApp(pid int) bool {
 
 // topWindowOf returns the app window of pid a user would recognize: the
 // first visible titled window that is not a tool window, minimized ones
-// included (ActivateApp restores what it finds here).
+// included (ActivateApp restores what it finds here). A packaged app's
+// window belongs to ApplicationFrameHost, so a frame hosting pid counts
+// too.
 func topWindowOf(pid int) uintptr {
 	var found uintptr
 	appEnumWindows(func(h uintptr) bool {
-		if windowPID(h) != pid {
-			return true
+		if windowPID(h) == pid || hostedAppPID(h) == pid {
+			if appWindow(h) {
+				found = h
+				return false
+			}
 		}
-		if !appWindow(h) {
-			return true
-		}
-		found = h
-		return false
+		return true
 	})
 	return found
 }
 
-// appEnumWindows runs visit over every top-level window through the one
-// callback this process registers. Go's Windows callback thunks are never
-// released, so a closure per enumeration would run the table dry after
-// enough app switcher openings; the visit travels beside the callback as
-// the enumeration's application value instead.
+// appFrameWindowClass is the top-level window class ApplicationFrameHost
+// gives a packaged app: the frame belongs to the host process, while the
+// app's own window is a child of it.
+const appFrameWindowClass = "ApplicationFrameWindow"
+
+// hostedAppPID returns the packaged app's process inside a frame window,
+// or 0 when h is not a frame hosting one. The app's own process owns the
+// child window, so this is how a UWP app's identity and window are
+// recovered from ApplicationFrameHost's top-level window.
+func hostedAppPID(frame uintptr) int {
+	if windowClass(frame) != appFrameWindowClass {
+		return 0
+	}
+	owner := windowPID(frame)
+	var pid int
+	appEnumChildren(frame, func(c uintptr) bool {
+		p := windowPID(c)
+		if p == owner || p == 0 || p == ownProcessID() {
+			return true
+		}
+		if processFamilyID(p) != "" {
+			pid = p
+			return false
+		}
+		return true
+	})
+	return pid
+}
+
+// appEnumWindows runs visit over every top-level window, and
+// appEnumChildren over every child window of parent. Both go through the
+// one callback this process registers.
 func appEnumWindows(visit func(h uintptr) bool) {
+	enumWindowProc(visit, func(cb, id uintptr) { procEnumWindows.Call(cb, id) })
+}
+
+func appEnumChildren(parent uintptr, visit func(h uintptr) bool) {
+	enumWindowProc(visit, func(cb, id uintptr) { procEnumChildWindows.Call(parent, cb, id) })
+}
+
+// enumWindowProc hands visit to the process-wide callback: Go's Windows
+// callback thunks are never released, so a closure per enumeration would
+// run the table dry after enough app switcher openings. The visit travels
+// beside the callback as the enumeration's application value instead.
+func enumWindowProc(visit func(h uintptr) bool, run func(cb, id uintptr)) {
 	appEnumCallbackOnce.Do(func() {
 		appEnumCallback = newCallback(func(h, id uintptr) uintptr {
 			appEnumMu.Lock()
@@ -123,19 +163,76 @@ func appEnumWindows(visit func(h uintptr) bool) {
 	appEnumVisits[id] = visit
 	cb := appEnumCallback
 	appEnumMu.Unlock()
-	procEnumWindows.Call(cb, id)
+	run(cb, id)
 	appEnumMu.Lock()
 	delete(appEnumVisits, id)
 	appEnumMu.Unlock()
 }
 
 var (
-	appEnumMu           sync.Mutex
-	appEnumVisits       = map[uintptr]func(uintptr) bool{}
-	appEnumNextID       uintptr
-	appEnumCallback     uintptr
-	appEnumCallbackOnce sync.Once
+	appEnumMu            sync.Mutex
+	appEnumVisits        = map[uintptr]func(uintptr) bool{}
+	appEnumNextID        uintptr
+	appEnumCallback      uintptr
+	appEnumCallbackOnce  sync.Once
+	procEnumChildWindows = sysProc(user32, "EnumChildWindows")
 )
+
+var procGetPackageFamilyName = sysProc(kernel32, "GetPackageFamilyName")
+
+// processFamilyID is the package family name of pid, or "" for a desktop
+// process. GetApplicationUserModelID is not exported by the system DLLs on
+// current Windows builds, so the family name is the bridge from a process
+// to the package that names it.
+func processFamilyID(pid int) string {
+	if pid <= 0 {
+		return ""
+	}
+	h, _, _ := procOpenProcess.Call(0x1000 /* PROCESS_QUERY_LIMITED_INFORMATION */, 0, uintptr(pid))
+	if h == 0 {
+		return ""
+	}
+	defer procCloseHandle.Call(h)
+	size := uint32(256)
+	buf := make([]uint16, size)
+	r, _, _ := procGetPackageFamilyName.Call(h, uintptr(unsafe.Pointer(&size)), uintptr(unsafe.Pointer(&buf[0])))
+	const errorInsufficientBuffer = 122
+	if uint32(r) == errorInsufficientBuffer && int(size) > len(buf) {
+		buf = make([]uint16, size)
+		r, _, _ = procGetPackageFamilyName.Call(h, uintptr(unsafe.Pointer(&size)), uintptr(unsafe.Pointer(&buf[0])))
+	}
+	if r != 0 {
+		return ""
+	}
+	return windows.UTF16ToString(buf[:size])
+}
+
+// appIDForFamily is the identity of the Apps folder entry whose
+// AppUserModelID belongs to the package family: a packaged app's stable
+// identity, which the pinned defaults and the running-app snapshot share.
+func appIDForFamily(entries []appEntry, family string) string {
+	if family == "" {
+		return ""
+	}
+	prefix := strings.ToLower(`shell:AppsFolder\` + family + "!")
+	for _, e := range entries {
+		if strings.HasPrefix(strings.ToLower(e.Target), prefix) {
+			return e.Target[len(`shell:AppsFolder\`):]
+		}
+	}
+	return ""
+}
+
+// packagedAppID maps a packaged process to the identity the shell opens
+// for its package, or "" when the process is not packaged (or the Apps
+// folder does not list the package).
+func packagedAppID(pid int) string {
+	family := processFamilyID(pid)
+	if family == "" {
+		return ""
+	}
+	return appIDForFamily(appListFresh(), family)
+}
 
 // appWindow reports whether h is a window that names a running app: it is
 // visible, is not a tool window and has a title. A minimized window still
@@ -152,8 +249,10 @@ func appWindow(h uintptr) bool {
 	return windowText(h) != ""
 }
 
-// FrontmostPID returns the process identifier of the foreground app, 0
-// when there is none.
+// FrontmostPID returns the process identifier of the window that owns the
+// foreground, 0 when there is none. For a packaged app this is
+// ApplicationFrameHost, which is the process a targeted input call has to
+// reach.
 func FrontmostPID() int {
 	fg, _, _ := procGetForegroundWindow.Call()
 	if fg == 0 {
@@ -163,8 +262,17 @@ func FrontmostPID() int {
 }
 
 // FrontmostApp returns the foreground application's identity and name.
+// The identity is the app's own, even when its window is hosted by
+// ApplicationFrameHost.
 func FrontmostApp() (appID, name string) {
-	pid := FrontmostPID()
+	fg, _, _ := procGetForegroundWindow.Call()
+	if fg == 0 {
+		return "", ""
+	}
+	pid := windowPID(fg)
+	if hosted := hostedAppPID(fg); hosted != 0 {
+		pid = hosted
+	}
 	if pid == 0 {
 		return "", ""
 	}
@@ -173,6 +281,9 @@ func FrontmostApp() (appID, name string) {
 
 func appIDOf(pid int) string {
 	if id := processAUMID(pid); id != "" {
+		return id
+	}
+	if id := packagedAppID(pid); id != "" {
 		return id
 	}
 	return processExe(pid)
@@ -198,27 +309,50 @@ func appNameOf(pid int) string {
 // RunningApps lists the applications running now, in z-order, without this
 // one and without apps that have no identity to pin.
 func RunningApps() []RunningApp {
-	var out []RunningApp
-	seen := map[int]bool{}
+	type windowApp struct {
+		pid int
+	}
+	var windows []windowApp
 	self := ownProcessID()
 	appEnumWindows(func(h uintptr) bool {
 		pid := windowPID(h)
-		if pid == self || pid == 0 || seen[pid] {
+		if pid == self || pid == 0 {
 			return true
 		}
 		if !appWindow(h) {
 			return true
 		}
-		id := appIDOf(pid)
-		if id == "" {
-			return true
+		// A packaged app's top-level window belongs to ApplicationFrameHost:
+		// the frame host process would collapse every UWP app into one
+		// entry, so the hosted app's own process stands in.
+		if hosted := hostedAppPID(h); hosted != 0 {
+			pid = hosted
 		}
-		seen[pid] = true
-		out = append(out, RunningApp{AppID: id, PID: pid})
+		windows = append(windows, windowApp{pid: pid})
 		return true
 	})
-	// Names are resolved after the enumeration: the shell query behind a
-	// localized name must not run inside the window callback.
+	// Identities and names are resolved after the enumeration: the shell
+	// queries behind a package identity and a localized name must not run
+	// inside the window callback.
+	var out []RunningApp
+	seenPID := map[int]bool{}
+	seenID := map[string]bool{}
+	for _, w := range windows {
+		if seenPID[w.pid] {
+			continue
+		}
+		id := appIDOf(w.pid)
+		if id == "" {
+			continue
+		}
+		if key := AppIDKey(id); seenID[key] {
+			continue
+		} else {
+			seenID[key] = true
+		}
+		seenPID[w.pid] = true
+		out = append(out, RunningApp{AppID: id, PID: w.pid})
+	}
 	for i := range out {
 		if localized, ok := appListName(out[i].AppID); ok && localized != "" {
 			out[i].Name = localized
