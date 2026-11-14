@@ -36,6 +36,9 @@ func clipboardExcluded(appID string, excluded []string) bool {
 // app the user excluded, otherwise whatever the change's declared types
 // say (see platform.ClassifyClipboard).
 func clipCapture(types []string, sourceApp string, excluded []string) platform.ClipboardKind {
+	if len(types) == 0 {
+		return clipNotReady
+	}
 	if clipboardExcluded(sourceApp, excluded) {
 		return clipSkip
 	}
