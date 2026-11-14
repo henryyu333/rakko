@@ -186,6 +186,15 @@ func AppName(bundleID string) string {
 	return id
 }
 
+// AppIDKey is the identity key the app switcher compares identities by.
+// A Windows identity is either an AppUserModelID or a file path, and the
+// same executable reaches the switcher with the filesystem's own casing —
+// sometimes "System32", sometimes "system32" — so the key folds case and
+// cleans the separators.
+func AppIDKey(id string) string {
+	return strings.ToLower(filepath.Clean(id))
+}
+
 // AppPath resolves an app identity to the path the shell opens for it,
 // or "" when nothing installed answers for it. A desktop app resolves to
 // its executable; a packaged app resolves to its Apps folder entry, which

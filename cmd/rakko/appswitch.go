@@ -112,15 +112,15 @@ func (a *shelf) appSnapshot() []appEntry {
 	running := appRunning()
 	byID := make(map[string]platform.RunningApp, len(running))
 	for _, r := range running {
-		if _, dup := byID[r.AppID]; !dup {
-			byID[r.AppID] = r
+		if _, dup := byID[platform.AppIDKey(r.AppID)]; !dup {
+			byID[platform.AppIDKey(r.AppID)] = r
 		}
 	}
 	pinned := a.effectivePinnedIDs()
 	list := make([]appEntry, 0, len(pinned)+len(running))
 	for _, id := range pinned {
 		e := appEntry{bundleID: id, pinned: true}
-		if r, ok := byID[id]; ok {
+		if r, ok := byID[platform.AppIDKey(id)]; ok {
 			e.name, e.pid = r.Name, r.PID
 		} else if appPathFor(id) != "" {
 			e.name = a.switchAppName(id)
@@ -133,10 +133,10 @@ func (a *shelf) appSnapshot() []appEntry {
 	rest := make([]platform.RunningApp, 0, len(running))
 	pinSet := make(map[string]bool, len(pinned))
 	for _, id := range pinned {
-		pinSet[id] = true
+		pinSet[platform.AppIDKey(id)] = true
 	}
 	for _, r := range running {
-		if !pinSet[r.AppID] {
+		if !pinSet[platform.AppIDKey(r.AppID)] {
 			rest = append(rest, r)
 		}
 	}

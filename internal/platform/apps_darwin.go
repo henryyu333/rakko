@@ -275,6 +275,10 @@ func RunningApps() []RunningApp {
 	return out
 }
 
+// AppIDKey is the identity key the app switcher compares identities by.
+// A bundle identifier is compared as it is.
+func AppIDKey(id string) string { return id }
+
 // AppPath resolves a bundle identifier to its application
 // bundle path through NSWorkspace.URLForApplicationWithBundleIdentifier,
 // or "" when nothing installed answers for it — the app was uninstalled,
