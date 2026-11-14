@@ -53,6 +53,11 @@ const (
 	// STGM_READ. Preview handlers only want to read the item.
 	pvStgmRead = 0
 
+	// ASSOCF_NONE and ASSOCSTR_SHELLEXTENSION: the association query answers
+	// a shell extension's CLSID, with the handler's interface GUID as extra.
+	pvAssocfNone             = 0
+	pvAssocStrShellExtension = 16
+
 	pvWMSize    = 0x0005
 	pvWMClose   = 0x0010
 	pvWMDestroy = 0x0002
@@ -92,6 +97,7 @@ var (
 	shlwapi = windows.NewLazySystemDLL("shlwapi.dll")
 
 	procPVSHCreateStreamOnFileEx = sysProc(shlwapi, "SHCreateStreamOnFileEx")
+	procPVAssocQueryString       = sysProc(shlwapi, "AssocQueryStringW")
 )
 
 // Interface identifiers. The initializer IIDs are the ones the preview
@@ -503,19 +509,34 @@ type previewRegistryProbe struct {
 	key  string
 }
 
-// previewHandlerCLSID finds the handler Explorer would use: the per-user
-// registration first, then HKCR, then the SystemFileAssociations form of
-// both, and finally the file's perceived type ("text", "image", ...),
-// which is where the inbox handlers for whole classes of files live.
+// previewHandlerCLSID finds the handler Explorer would use. The shell's own
+// association query comes first, so a handler registered through the
+// extension's ProgID, a policy or a codec is found exactly as Explorer finds
+// it. The registry walk behind it keeps the lookup working in the states
+// AssocQueryString reports as unknown: the extension itself, the ProgID the
+// extension names, the all-files registration, the SystemFileAssociations
+// form of both, and finally the file's perceived type ("text", "image",
+// ...), which is where the inbox handlers for whole classes of files live.
 func previewHandlerCLSID(path string, isDir bool) (windows.GUID, bool) {
+	if !isDir {
+		if clsid, ok := previewAssocHandlerCLSID(path); ok {
+			return clsid, true
+		}
+	}
 	suffix := `\ShellEx\` + previewHandlerClass
 	for _, ext := range previewExtensions(path, isDir) {
-		for _, probe := range [...]previewRegistryProbe{
+		probes := []previewRegistryProbe{
 			{registry.CURRENT_USER, `Software\Classes\` + ext + suffix},
 			{registry.CLASSES_ROOT, ext + suffix},
 			{registry.CURRENT_USER, `Software\Classes\SystemFileAssociations\` + ext + suffix},
 			{registry.CLASSES_ROOT, `SystemFileAssociations\` + ext + suffix},
-		} {
+		}
+		if progID := previewProgID(ext); progID != "" {
+			probes = append(probes,
+				previewRegistryProbe{registry.CURRENT_USER, `Software\Classes\` + progID + suffix},
+				previewRegistryProbe{registry.CLASSES_ROOT, progID + suffix})
+		}
+		for _, probe := range probes {
 			if clsid, ok := previewCLSIDAt(probe); ok {
 				return clsid, true
 			}
@@ -538,6 +559,57 @@ func previewHandlerCLSID(path string, isDir bool) (windows.GUID, bool) {
 		}
 	}
 	return windows.GUID{}, false
+}
+
+// previewAssocHandlerCLSID asks the shell for the preview handler registered
+// for the file's association. AssocQueryStringW follows the extension's
+// ProgID and its per-user override, which is the documented place a handler
+// lives (Registering a preview handler: HKLM\Software\Classes\.ext\ProgID
+// \ShellEx\{8895b1c6-...}).
+func previewAssocHandlerCLSID(path string) (windows.GUID, bool) {
+	ext := strings.ToLower(filepath.Ext(path))
+	if ext == "" {
+		return windows.GUID{}, false
+	}
+	assoc, err := windows.UTF16PtrFromString(ext)
+	if err != nil {
+		return windows.GUID{}, false
+	}
+	extra := windows.StringToUTF16Ptr(previewHandlerClass)
+	var size uint32
+	procPVAssocQueryString.Call(pvAssocfNone, pvAssocStrShellExtension,
+		uintptr(unsafe.Pointer(assoc)), uintptr(unsafe.Pointer(extra)),
+		0, uintptr(unsafe.Pointer(&size)))
+	if size == 0 {
+		return windows.GUID{}, false
+	}
+	buf := make([]uint16, size)
+	hr, _, _ := procPVAssocQueryString.Call(pvAssocfNone, pvAssocStrShellExtension,
+		uintptr(unsafe.Pointer(assoc)), uintptr(unsafe.Pointer(extra)),
+		uintptr(unsafe.Pointer(&buf[0])), uintptr(unsafe.Pointer(&size)))
+	if int32(uint32(hr)) < 0 || size == 0 {
+		return windows.GUID{}, false
+	}
+	value := windows.UTF16ToString(buf[:size])
+	clsid, err := previewParseCLSID(value)
+	if err != nil {
+		return windows.GUID{}, false
+	}
+	return clsid, true
+}
+
+// previewProgID reads the ProgID an extension names, from the per-user
+// registration first.
+func previewProgID(ext string) string {
+	for _, probe := range [...]previewRegistryProbe{
+		{registry.CURRENT_USER, `Software\Classes\` + ext},
+		{registry.CLASSES_ROOT, ext},
+	} {
+		if v := previewStringValue(probe.root, probe.key, ""); v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func previewCLSIDAt(probe previewRegistryProbe) (windows.GUID, bool) {
@@ -701,7 +773,12 @@ func previewCheck(what string, hr uintptr) error {
 
 func previewFailed(hr uintptr) bool { return int32(hr) < 0 }
 
-// previewComCall calls method of the COM object p (a vtable call).
+// previewComCall calls method of the COM object p (a vtable call). The
+// pointers converted to uintptr in args must outlive the call, and a stack
+// copy would not survive a stack growth: the hidden pointer keeps them alive
+// and off the stack, as shareComCall and comMethod do.
+//
+//go:uintptrescapes
 func previewComCall(p *previewComObject, method int, args ...uintptr) uintptr {
 	fn := p.vtable[method]
 	call := make([]uintptr, 0, len(args)+1)

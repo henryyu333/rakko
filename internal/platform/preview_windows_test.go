@@ -2,7 +2,13 @@
 
 package platform
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	"golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/registry"
+)
 
 func TestPreviewExtensions(t *testing.T) {
 	cases := []struct {
@@ -89,5 +95,64 @@ func TestPreviewWindowRect(t *testing.T) {
 	want = Rect{X: 0, Y: 0, Width: 900, Height: 640}
 	if got != want {
 		t.Fatalf("previewWindowRect without a display = %+v, want %+v", got, want)
+	}
+}
+
+// TestPreviewHandlerThroughProgID covers the registration form the explorer
+// uses for most document types: the extension names a ProgID, and the ProgID
+// carries the preview handler. The lookup used to stop at the extension and
+// SystemFileAssociations, so those files fell back to "no preview available"
+// while Explorer previewed them.
+func TestPreviewHandlerThroughProgID(t *testing.T) {
+	const (
+		progID = "RakkoPreviewTest.Document"
+		ext    = ".rakkoprevtest"
+	)
+	handlerKey := `Software\Classes\` + progID + `\ShellEx\` + previewHandlerClass
+	progIDKey := `Software\Classes\` + progID
+	extKey := `Software\Classes\` + ext
+	want := windows.GUID{Data1: 0x1531d583, Data2: 0x8375, Data3: 0x4d3f, Data4: [8]byte{0xb5, 0xfb, 0xd2, 0x3b, 0xbd, 0x16, 0x9f, 0x22}}
+
+	remove := func() {
+		registry.DeleteKey(registry.CURRENT_USER, handlerKey)
+		registry.DeleteKey(registry.CURRENT_USER, progIDKey)
+		registry.DeleteKey(registry.CURRENT_USER, extKey)
+	}
+	remove()
+	t.Cleanup(remove)
+
+	handler, _, err := registry.CreateKey(registry.CURRENT_USER, handlerKey, registry.WRITE)
+	if err != nil {
+		t.Skipf("cannot write a test association: %v", err)
+	}
+	if err := handler.SetStringValue("", want.String()); err != nil {
+		handler.Close()
+		t.Fatalf("writing the handler value: %v", err)
+	}
+	handler.Close()
+	prog, _, err := registry.CreateKey(registry.CURRENT_USER, progIDKey, registry.WRITE)
+	if err != nil {
+		t.Fatalf("creating the ProgID: %v", err)
+	}
+	prog.Close()
+	extension, _, err := registry.CreateKey(registry.CURRENT_USER, extKey, registry.WRITE)
+	if err != nil {
+		t.Fatalf("creating the extension: %v", err)
+	}
+	if err := extension.SetStringValue("", progID); err != nil {
+		extension.Close()
+		t.Fatalf("naming the ProgID: %v", err)
+	}
+	extension.Close()
+
+	if got := previewProgID(ext); !strings.EqualFold(got, progID) {
+		t.Fatalf("previewProgID(%q) = %q, want %q", ext, got, progID)
+	}
+	got, ok := previewHandlerCLSID(`C:\work\report`+ext, false)
+	if !ok {
+		t.Fatalf("previewHandlerCLSID did not find the handler registered on %s", progID)
+	}
+	if got != want {
+		t.Fatalf("previewHandlerCLSID = %s, want %s", got, want)
 	}
 }
