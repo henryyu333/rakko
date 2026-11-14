@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"unsafe"
 
 	"github.com/egoist/mygo"
@@ -85,7 +86,7 @@ func ActivateApp(pid int) bool {
 // first visible titled window that is not a tool window.
 func topWindowOf(pid int) uintptr {
 	var found uintptr
-	cb := windowsEnumProc(func(h uintptr) bool {
+	appEnumWindows(func(h uintptr) bool {
 		if windowPID(h) != pid {
 			return true
 		}
@@ -95,9 +96,45 @@ func topWindowOf(pid int) uintptr {
 		found = h
 		return false
 	})
-	enumTopLevel(cb)
 	return found
 }
+
+// appEnumWindows runs visit over every top-level window through the one
+// callback this process registers. Go's Windows callback thunks are never
+// released, so a closure per enumeration would run the table dry after
+// enough app switcher openings; the visit travels beside the callback as
+// the enumeration's application value instead.
+func appEnumWindows(visit func(h uintptr) bool) {
+	appEnumCallbackOnce.Do(func() {
+		appEnumCallback = newCallback(func(h, id uintptr) uintptr {
+			appEnumMu.Lock()
+			fn := appEnumVisits[id]
+			appEnumMu.Unlock()
+			if fn != nil && !fn(h) {
+				return 0
+			}
+			return 1
+		})
+	})
+	appEnumMu.Lock()
+	appEnumNextID++
+	id := appEnumNextID
+	appEnumVisits[id] = visit
+	cb := appEnumCallback
+	appEnumMu.Unlock()
+	procEnumWindows.Call(cb, id)
+	appEnumMu.Lock()
+	delete(appEnumVisits, id)
+	appEnumMu.Unlock()
+}
+
+var (
+	appEnumMu           sync.Mutex
+	appEnumVisits       = map[uintptr]func(uintptr) bool{}
+	appEnumNextID       uintptr
+	appEnumCallback     uintptr
+	appEnumCallbackOnce sync.Once
+)
 
 // FrontmostPID returns the process identifier of the foreground app, 0
 // when there is none.
@@ -148,7 +185,7 @@ func RunningApps() []RunningApp {
 	var out []RunningApp
 	seen := map[int]bool{}
 	self := ownProcessID()
-	cb := windowsEnumProc(func(h uintptr) bool {
+	appEnumWindows(func(h uintptr) bool {
 		pid := windowPID(h)
 		if pid == self || pid == 0 || seen[pid] {
 			return true
@@ -164,7 +201,6 @@ func RunningApps() []RunningApp {
 		out = append(out, RunningApp{AppID: id, PID: pid})
 		return true
 	})
-	enumTopLevel(cb)
 	// Names are resolved after the enumeration: the shell query behind a
 	// localized name must not run inside the window callback.
 	for i := range out {
