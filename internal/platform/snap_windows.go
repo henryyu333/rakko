@@ -2,35 +2,101 @@
 
 package platform
 
-// Moving another app's window (the drag-to-the-notch split). The skeleton
-// has no way to address a foreign window without UI Automation, which the
-// window batch owns; the call reports "not movable" so snap declines.
-// WINDOWS-NEXT(snap)
+// Moving another app's window (the drag-to-the-notch split). The window
+// under the press is found with WindowFromPoint over the screen in public
+// DIP coordinates, and arranged with SetWindowPos. No accessibility grant
+// exists on Windows; a window of another integrity level (an elevated app)
+// simply refuses the move, which the shared flow reports.
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+	"unsafe"
+
+	"golang.org/x/sys/windows"
+)
 
 // ErrAppWindowResize is returned when a window accepted the move but
 // refused the size change.
-var ErrAppWindowResize = errors.New("platform: the window cannot be resized")
+var ErrAppWindowResize = errors.New("windows: the window cannot be resized")
 
 // AppWindow owns one foreign window handle. The zero value is inert.
 type AppWindow struct {
 	handle uintptr
 }
 
-// AppWindowAt returns the window containing the screen point.
-// WINDOWS-NEXT(snap)
+var (
+	procIsZoomed     = sysProc(user32, "IsZoomed")
+	procGetClassName = sysProc(user32, "GetClassNameW")
+)
+
+// shellWindows are the desktop surfaces behind every application: a press
+// on the wallpaper or the taskbar is not a window drag.
+var shellWindows = map[string]bool{
+	"Progman":                true,
+	"WorkerW":                true,
+	"Shell_TrayWnd":          true,
+	"Shell_SecondaryTrayWnd": true,
+}
+
+// windowClass is the window's registered class name.
+func windowClass(h uintptr) string {
+	buf := make([]uint16, 256)
+	n, _, _ := procGetClassName.Call(h, uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)))
+	if n == 0 {
+		return ""
+	}
+	return windows.UTF16ToString(buf[:n])
+}
+
+// AppWindowAt returns the window containing the screen point, with its
+// owner pid. The point is in the public DIP coordinates the rest of the
+// package uses. ok is false over the desktop, the taskbar, one of this
+// app's own overlay windows, or a window that cannot be moved.
 func AppWindowAt(x, y float64) (w AppWindow, pid int, ok bool) {
-	return AppWindow{}, 0, false
+	p := dipToPixels(Rect{X: x, Y: y, Width: 1, Height: 1})
+	pt := uintptr(uint32(p.Left)) | uintptr(uint32(p.Top))<<32
+	h, _, _ := procWindowFromPoint.Call(pt)
+	if h == 0 {
+		return AppWindow{}, 0, false
+	}
+	if root, _, _ := procGetAncestor.Call(h, gaRoot); root != 0 {
+		h = root
+	}
+	if r, _, _ := procIsWindowVisible.Call(h); r == 0 {
+		return AppWindow{}, 0, false
+	}
+	if r, _, _ := procIsIconic.Call(h); r != 0 {
+		return AppWindow{}, 0, false
+	}
+	if isToolWindow(h) || shellWindows[windowClass(h)] {
+		return AppWindow{}, 0, false
+	}
+	pid = windowPID(h)
+	if pid == 0 {
+		return AppWindow{}, 0, false
+	}
+	return AppWindow{handle: h}, pid, true
 }
 
 // Valid reports whether the ref holds a window.
-func (w AppWindow) Valid() bool { return w.handle != 0 }
+func (w AppWindow) Valid() bool {
+	return w.handle != 0 && isWindow(w.handle)
+}
 
-// Release releases the reference (nothing is held on Windows).
+func isWindow(h uintptr) bool {
+	if h == 0 {
+		return false
+	}
+	r, _, _ := procIsWindow.Call(h)
+	return r != 0
+}
+
+// Release releases the reference. A window handle is borrowed, not
+// reference counted, so there is nothing to give back.
 func (w AppWindow) Release() {}
 
-// Frame reads the window's position and size.
+// Frame reads the window's position and size in public DIP coordinates.
 func (w AppWindow) Frame() (Rect, bool) {
 	if w.handle == 0 {
 		return Rect{}, false
@@ -42,9 +108,59 @@ func (w AppWindow) Frame() (Rect, bool) {
 	return pixelsToDIP(r), true
 }
 
-// Settable reports whether the window can be moved and resized. Foreign
-// windows are not addressed yet.
-func (w AppWindow) Settable() (move, resize bool) { return false, false }
+// Settable reports whether the window can be moved and resized. Every
+// top-level window can be moved with SetWindowPos; only a window with a
+// sizing frame accepts a new size.
+func (w AppWindow) Settable() (move, resize bool) {
+	if !w.Valid() {
+		return false, false
+	}
+	const (
+		wsCaption    = 0x00C00000
+		wsThickFrame = 0x00040000
+	)
+	style := getWindowLong(w.handle, gwlStyle)
+	move = true
+	resize = style&wsThickFrame != 0
+	return move, resize
+}
 
-// MoveResize sets the window's position, then its size. WINDOWS-NEXT(snap)
-func (w AppWindow) MoveResize(r Rect, resize bool) error { return errDomain("snap") }
+// MoveResize sets the window's position, then its size when resize is
+// true. A maximized or minimized window is restored first: SetWindowPos on
+// a maximized window would only move its restore rectangle while the
+// window kept filling the screen. Position first, so a window resized at
+// its old origin cannot push its title bar under the taskbar before the
+// move lands. ErrAppWindowResize means the move may already have been
+// applied.
+func (w AppWindow) MoveResize(r Rect, resize bool) error {
+	if !w.Valid() {
+		return errors.New("windows: the window is gone")
+	}
+	h := w.handle
+	if r, _, _ := procIsIconic.Call(h); r != 0 {
+		procShowWindow.Call(h, 9 /* SW_RESTORE */)
+	} else if z, _, _ := procIsZoomed.Call(h); z != 0 {
+		procShowWindow.Call(h, 9 /* SW_RESTORE */)
+	}
+	p := dipToPixels(r)
+	flags := uintptr(swpNoZOrder | swpNoActivate)
+	if !resize {
+		flags |= swpNoSize
+	}
+	if res, _, err := procSetWindowPos.Call(h, 0,
+		uintptr(p.Left), uintptr(p.Top), uintptr(p.width()), uintptr(p.height()), flags); res == 0 {
+		return fmt.Errorf("windows: moving the window failed: %w", err)
+	}
+	got, ok := windowRect(h)
+	if !ok {
+		return nil // the window went away; nothing left to check
+	}
+	if abs32(got.Left-p.Left) > 2 || abs32(got.Top-p.Top) > 2 {
+		return fmt.Errorf("windows: the window refused the move (at %d,%d, want %d,%d)",
+			got.Left, got.Top, p.Left, p.Top)
+	}
+	if resize && (abs32(got.width()-p.width()) > 2 || abs32(got.height()-p.height()) > 2) {
+		return ErrAppWindowResize
+	}
+	return nil
+}
