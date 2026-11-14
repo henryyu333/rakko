@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 func TestSearchOpenFocusesWindow(t *testing.T) {
@@ -30,9 +30,9 @@ func TestSearchOpenFocusesWindow(t *testing.T) {
 		t.Fatal("no notch window")
 	}
 	prev := 0
-	onMain(func() { prev = mac.FrontmostPID() })
+	onMain(func() { prev = platform.FrontmostPID() })
 	t.Logf("frontmost before open: pid=%d", prev)
-	if prev == mac.OwnPID() {
+	if prev == platform.OwnPID() {
 		t.Skip("ShelfU is already frontmost; run the test from another app's session")
 	}
 	// Seed a couple of captures so the clipboard tab renders rows.
@@ -49,7 +49,7 @@ func TestSearchOpenFocusesWindow(t *testing.T) {
 	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); {
 		onMain(func() {
 			a.animate(time.Now())
-			key = mac.IsKeyWindow(a.win.NativeHandle())
+			key = platform.IsKeyWindow(a.win.NativeHandle())
 		})
 		if key {
 			break
@@ -73,18 +73,18 @@ func TestSearchOpenFocusesWindow(t *testing.T) {
 	// anchors to must be a real caret inside the window — if either is
 	// wrong, candidates are drawn behind the opaque panel or off-screen.
 	level := 0
-	onMain(func() { level = mac.WindowLevel(a.win.NativeHandle()) })
-	if level != mac.SearchKeyboardLevel {
-		t.Fatalf("focus-mode window level = %d, want %d (below the IM band at 20)", level, mac.SearchKeyboardLevel)
+	onMain(func() { level = platform.WindowLevel(a.win.NativeHandle()) })
+	if level != platform.SearchKeyboardLevel {
+		t.Fatalf("focus-mode window level = %d, want %d (below the IM band at 20)", level, platform.SearchKeyboardLevel)
 	}
 	t.Logf("firstResponder=%s windowLevel=%d (IM candidate band=20, menubar=24, status=25)",
-		mac.FirstResponderClass(a.win.NativeHandle()), level)
-	var frame, caret mac.NSRect
+		platform.FirstResponderClass(a.win.NativeHandle()), level)
+	var frame, caret platform.NSRect
 	var haveCaret bool
 	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); {
 		onMain(func() {
-			frame = mac.WindowFrame(a.win.NativeHandle())
-			caret, haveCaret = mac.IMECompositionRect(a.win.NativeHandle(), 0, 0)
+			frame = platform.WindowFrame(a.win.NativeHandle())
+			caret, haveCaret = platform.IMECompositionRect(a.win.NativeHandle(), 0, 0)
 		})
 		if haveCaret {
 			break
@@ -103,7 +103,7 @@ func TestSearchOpenFocusesWindow(t *testing.T) {
 		t.Logf("note: caret sits in the strip the menubar covers while the window is below level 24")
 	}
 
-	if num := mac.WindowNumber(a.win.NativeHandle()); num != 0 {
+	if num := platform.WindowNumber(a.win.NativeHandle()); num != 0 {
 		t.Logf("shelf CGWindowID=%d — screencapture -l %d shoots the panel", num, num)
 		// Leave the number where a shell watcher can pick it up while the
 		// hold below keeps the panel on screen.
@@ -127,7 +127,7 @@ func TestSearchOpenFocusesWindow(t *testing.T) {
 	restored := false
 	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); {
 		onMain(func() {
-			restored = !mac.AppActive() && mac.FrontmostPID() == prev
+			restored = !platform.AppActive() && platform.FrontmostPID() == prev
 		})
 		if restored {
 			break
@@ -138,9 +138,9 @@ func TestSearchOpenFocusesWindow(t *testing.T) {
 		t.Fatalf("the previous app %d was not re-activated on hide", prev)
 	}
 	restoredLevel := 0
-	onMain(func() { restoredLevel = mac.WindowLevel(a.win.NativeHandle()) })
-	if restoredLevel != mac.StatusWindowLevel {
-		t.Fatalf("window level after hide = %d, want %d — mouse flows keep the status level", restoredLevel, mac.StatusWindowLevel)
+	onMain(func() { restoredLevel = platform.WindowLevel(a.win.NativeHandle()) })
+	if restoredLevel != platform.StatusWindowLevel {
+		t.Fatalf("window level after hide = %d, want %d — mouse flows keep the status level", restoredLevel, platform.StatusWindowLevel)
 	}
 	t.Logf("focus restored to pid=%d", prev)
 }

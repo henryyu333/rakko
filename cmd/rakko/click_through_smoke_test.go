@@ -8,7 +8,7 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 // While idle, the resident overlay must let clicks through everywhere —
@@ -40,11 +40,11 @@ func TestIdleOverlayLetsClicksThrough(t *testing.T) {
 		onMain(func() {
 			// Another copy of ShelfU's panel at the notch takes these
 			// points; the hit test could only report it, not ours.
-			if w, ok := foreignIn(windows, mygo.Point{X: a.stripCenter(), Y: a.dispBounds.Y + a.notchH/2}, mac.StatusWindowLevel); ok {
+			if w, ok := foreignIn(windows, mygo.Point{X: a.stripCenter(), Y: a.dispBounds.Y + a.notchH/2}, platform.StatusWindowLevel); ok {
 				foreign, hasForeign = w, true
 				return
 			}
-			shelf := mac.WindowNumber(a.win.NativeHandle())
+			shelf := platform.WindowNumber(a.win.NativeHandle())
 			f := a.desiredFrame()
 			screenH := float64(a.dispBounds.Y + a.dispBounds.Height)
 			cx := float64(a.stripCenter())
@@ -60,7 +60,7 @@ func TestIdleOverlayLetsClicksThrough(t *testing.T) {
 			// the old player's 172pt depth.
 			for _, y := range []float64{6, float64(a.notchH) - 6, float64(f.Height) - 6} {
 				for _, dx := range []float64{0, -float64(sampleW)/2 + 10, float64(sampleW)/2 - 10} {
-					got := mac.WindowAtPoint(cx+dx, float64(a.dispBounds.Y)+y, screenH) == shelf
+					got := platform.WindowAtPoint(cx+dx, float64(a.dispBounds.Y)+y, screenH) == shelf
 					if got != wantShelf {
 						t.Errorf("%s: click at strip (%+.0f, %.0f) reached the shelf = %v, want %v (strip %+v)", state, dx, y, got, wantShelf, f)
 					}
@@ -102,7 +102,7 @@ func TestCapsuleTakesClicksOnlyOnItsBody(t *testing.T) {
 	var shelf int
 	var r mygo.Rectangle
 	onMain(func() {
-		shelf = mac.WindowNumber(a.win.NativeHandle())
+		shelf = platform.WindowNumber(a.win.NativeHandle())
 		r = a.peekPillRect()
 		if r.Width <= 0 {
 			t.Fatal("no drawn capsule to hit-test")
@@ -120,7 +120,7 @@ func TestCapsuleTakesClicksOnlyOnItsBody(t *testing.T) {
 			{float64(r.X + r.Width/2), float64(r.Y + r.Height/2)},
 			{float64(r.X+r.Width) - 8, float64(r.Y+r.Height) - 4},
 		} {
-			hit := mac.WindowAtPoint(p[0], float64(a.dispBounds.Y)+p[1]-float64(a.y), screenH)
+			hit := platform.WindowAtPoint(p[0], float64(a.dispBounds.Y)+p[1]-float64(a.y), screenH)
 			if hit != shelf {
 				t.Errorf("click inside the capsule body missed ShelfU at %v (hit %d)", p, hit)
 			}
@@ -146,7 +146,7 @@ func TestCapsuleTakesClicksOnlyOnItsBody(t *testing.T) {
 		time.Sleep(150 * time.Millisecond)
 		var hit int
 		onMain(func() {
-			hit = mac.WindowAtPoint(float64(px), float64(a.dispBounds.Y)+float64(py)-float64(a.y), screenH)
+			hit = platform.WindowAtPoint(float64(px), float64(a.dispBounds.Y)+float64(py)-float64(a.y), screenH)
 		})
 		if hit == shelf {
 			t.Errorf("click on the capsule's margin hit ShelfU at %v", p)
@@ -178,7 +178,7 @@ func TestShakingCapsuleHitBoxFollowsTheOffset(t *testing.T) {
 	var shelf int
 	var r mygo.Rectangle
 	onMain(func() {
-		shelf = mac.WindowNumber(a.win.NativeHandle())
+		shelf = platform.WindowNumber(a.win.NativeHandle())
 		r = a.peekPillRect() // X already carries the shake offset
 		if r.Width <= 0 {
 			t.Fatal("no capsule to hit-test")
@@ -196,7 +196,7 @@ func TestShakingCapsuleHitBoxFollowsTheOffset(t *testing.T) {
 	screenH := float64(a.dispBounds.Y + a.dispBounds.Height)
 	onMain(func() {
 		r := a.peekPillRect() // re-read: the shake may have moved the box
-		hit := mac.WindowAtPoint(float64(r.X+r.Width/2), float64(a.dispBounds.Y)+float64(r.Y+r.Height/2)-float64(a.y), screenH)
+		hit := platform.WindowAtPoint(float64(r.X+r.Width/2), float64(a.dispBounds.Y)+float64(r.Y+r.Height/2)-float64(a.y), screenH)
 		if hit != shelf {
 			t.Errorf("a press on the shaking capsule missed ShelfU (hit %d, shake=%.1f)", hit, a.fx.shakeX)
 		}
@@ -239,14 +239,14 @@ func TestDragBandKeepsShelfInTheMenuBar(t *testing.T) {
 		// Prove the band of this visible test window, not the installed
 		// copy beneath an absent fixture.
 		a.win.ShowInactive()
-		mac.OrderOverlayFront(a.winH)
+		platform.OrderOverlayFront(a.winH)
 	})
 	time.Sleep(700 * time.Millisecond)
 
 	var shelf int
 	var frame mygo.Rectangle
 	onMain(func() {
-		shelf = mac.WindowNumber(a.win.NativeHandle())
+		shelf = platform.WindowNumber(a.win.NativeHandle())
 		frame = a.win.Bounds()
 	})
 	barH := max(32, a.notchH)
@@ -264,13 +264,13 @@ func TestDragBandKeepsShelfInTheMenuBar(t *testing.T) {
 	belowX := float64(a.stripCenter())
 	for _, dy := range []float64{8, 20} {
 		py := float64(a.dispBounds.Y) + float64(a.y) + float64(barH) + dy
-		if hit := mac.WindowAtPoint(belowX, py, screenH); hit == shelf {
+		if hit := platform.WindowAtPoint(belowX, py, screenH); hit == shelf {
 			t.Errorf("WindowAtPoint %.0f,%.0f hit ShelfU %.0fpt below the bar before band entry", belowX, py, dy)
 		}
 	}
 	// Inside the band at the strip's centre, ShelfU's surface is present
 	// (Spaces-edge protection requires the drop to land on a window).
-	bandHit := mac.WindowAtPoint(belowX, float64(a.dispBounds.Y)+float64(a.y)+float64(barH)/2, screenH)
+	bandHit := platform.WindowAtPoint(belowX, float64(a.dispBounds.Y)+float64(a.y)+float64(barH)/2, screenH)
 	if bandHit != shelf {
 		t.Errorf("WindowAtPoint inside the band hit %d, want ShelfU %d", bandHit, shelf)
 	}
@@ -289,7 +289,7 @@ func TestDragBandKeepsShelfInTheMenuBar(t *testing.T) {
 	if frame.Height <= g.Y+g.Height {
 		t.Fatalf("in-band frame %+v does not cover the guard landing %d", frame, g.Y+g.Height)
 	}
-	landHit := mac.WindowAtPoint(belowX, landingY, screenH)
+	landHit := platform.WindowAtPoint(belowX, landingY, screenH)
 	if landHit != shelf {
 		t.Errorf("WindowAtPoint on the guard landing row hit %d, want ShelfU %d", landHit, shelf)
 	}

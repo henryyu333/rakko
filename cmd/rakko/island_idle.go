@@ -6,7 +6,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 // Idle islands on the other screens: every display without a camera
@@ -85,13 +85,13 @@ func (a *shelf) openMainIdleCapsule(f mygo.Rectangle) *mainIdleCapsule {
 	}
 	w.SetVisibleOnAllWorkspaces(true)
 	h := w.NativeHandle()
-	mac.ConfigureOverlayWindow(h)
+	platform.ConfigureOverlayWindow(h)
 	// One level below the panel's resting level, so the opening shell and
 	// the folding shell draw over it; it shows through only while their
 	// canvas is blank or exactly capsule-sized.
-	mac.SetWindowLevel(h, mac.StatusWindowLevel-1)
-	mac.SetOverlayAcceptsMouse(h, false)
-	mac.SetWindowFrame(h, f.X, f.Y, f.Width, f.Height)
+	platform.SetWindowLevel(h, platform.StatusWindowLevel-1)
+	platform.SetOverlayAcceptsMouse(h, false)
+	platform.SetWindowFrame(h, f.X, f.Y, f.Width, f.Height)
 	return &mainIdleCapsule{win: w, frame: f}
 }
 
@@ -112,7 +112,7 @@ func (a *shelf) syncMainIdleCapsule() {
 		return
 	}
 	a.mainIdle.frame = r
-	mac.SetWindowFrame(a.mainIdle.win.NativeHandle(), r.X, r.Y, r.Width, r.Height)
+	platform.SetWindowFrame(a.mainIdle.win.NativeHandle(), r.X, r.Y, r.Width, r.Height)
 }
 
 // showMainIdleCapsule raises the resting capsule over the resident window's
@@ -212,7 +212,7 @@ func (a *shelf) syncIdleIslands() {
 	displays := mygo.Screen.Displays()
 	ds := make([]islandDisplay, 0, len(displays))
 	for _, d := range displays {
-		_, _, _, _, hasNotch := mac.NotchRect(d.ID)
+		_, _, _, _, hasNotch := platform.NotchRect(d.ID)
 		ds = append(ds, islandDisplay{ID: d.ID, Bounds: d.Bounds, HasNotch: hasNotch})
 	}
 	want := idleIslandPlacements(ds, a.dispID, a.settings.ShellStyle, a.settings.IslandPos)
@@ -231,7 +231,7 @@ func (a *shelf) syncIdleIslands() {
 			}
 		} else if w.frame != pl.Frame {
 			w.frame = pl.Frame
-			mac.SetWindowFrame(w.win.NativeHandle(), pl.Frame.X, pl.Frame.Y, pl.Frame.Width, pl.Frame.Height)
+			platform.SetWindowFrame(w.win.NativeHandle(), pl.Frame.X, pl.Frame.Y, pl.Frame.Width, pl.Frame.Height)
 		}
 		next = append(next, w)
 	}
@@ -257,11 +257,11 @@ func (a *shelf) openIdleIsland(pl idlePlacement) *idleIslandWindow {
 	}
 	w.SetVisibleOnAllWorkspaces(true)
 	h := w.NativeHandle()
-	mac.ConfigureOverlayWindow(h)
+	platform.ConfigureOverlayWindow(h)
 	// The capsule is a picture: the resident window handles the pointer
 	// and the global mouse-down observer moves it here on a press.
-	mac.SetOverlayAcceptsMouse(h, false)
-	mac.SetWindowFrame(h, f.X, f.Y, f.Width, f.Height)
+	platform.SetOverlayAcceptsMouse(h, false)
+	platform.SetWindowFrame(h, f.X, f.Y, f.Width, f.Height)
 	w.ShowInactive()
 	return &idleIslandWindow{dispID: pl.DisplayID, win: w, frame: f}
 }

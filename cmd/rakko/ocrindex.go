@@ -23,7 +23,7 @@ import (
 // can match it. Items added before this feature existed are picked up on
 // the first tick after launch; items deleted mid-recognition drop the
 // result (SetOCR reports the missing id). Everything is local — the
-// recognizer is the same mac.RecognizeText the converter uses.
+// recognizer is the same platform.RecognizeText the converter uses.
 type ocrIndex struct {
 	host *shelf
 	// inflight marks item IDs a worker is recognizing now (the main

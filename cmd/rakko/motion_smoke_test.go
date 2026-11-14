@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 const motionShotDir = "/tmp/shelf-fix/motion"
@@ -33,7 +33,7 @@ func motionShot(t *testing.T, a *shelf, name string, wait time.Duration) string 
 	if a.win == nil {
 		t.Fatal("no notch window")
 	}
-	num := mac.WindowNumber(a.win.NativeHandle())
+	num := platform.WindowNumber(a.win.NativeHandle())
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}
@@ -151,7 +151,7 @@ func TestSmokeCapsuleSuccess(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	grow := filepath.Join(motionShotDir, "capsule-grow.png")
 	var num int
-	onMain(func() { num = mac.WindowNumber(a.win.NativeHandle()) })
+	onMain(func() { num = platform.WindowNumber(a.win.NativeHandle()) })
 	if num != 0 {
 		if out, err := exec.Command("screencapture", "-x", "-o", fmt.Sprintf("-l%d", num), grow).CombinedOutput(); err != nil {
 			t.Fatalf("capsule-grow: screencapture failed (%v): %s", err, out)
@@ -190,22 +190,22 @@ func TestSmokeCapsuleSuccess(t *testing.T) {
 	// does, through the global monitor while the window lets it through.
 	var stop func()
 	onMain(func() {
-		stop = mac.ObserveMouseDown(a.win.NativeHandle(), func(inside bool, button int) {
+		stop = platform.ObserveMouseDown(a.win.NativeHandle(), func(inside bool, button int) {
 			a.mouseDown(inside, button, mygo.Screen.CursorScreenPoint())
 		})
 	})
 	t.Cleanup(func() { onMain(stop) })
 	var pill mygo.Rectangle
 	onMain(func() { pill = a.peekPillRect() })
-	if mac.AccessibilityTrusted() {
+	if platform.AccessibilityTrusted() {
 		// The capsule intentionally passes through native hit-testing.
 		// Catch the click in our own small receiver, not another app.
 		x, y := pill.X+pill.Width/2, pill.Y+pill.Height-8
 		receiver := newSmokePointerBackdrop(t, mygo.Rectangle{X: x - 2, Y: y - 2, Width: 4, Height: 4})
-		onMain(func() { mac.SetWindowLevel(receiver.NativeHandle(), mac.StatusWindowLevel+1) })
+		onMain(func() { platform.SetWindowLevel(receiver.NativeHandle(), platform.StatusWindowLevel+1) })
 		var stopReceiver func()
 		onMain(func() {
-			stopReceiver = mac.ObserveMouseDown(receiver.NativeHandle(), func(inside bool, button int) {
+			stopReceiver = platform.ObserveMouseDown(receiver.NativeHandle(), func(inside bool, button int) {
 				if inside {
 					// Source observers ignore other test windows. Route
 					// this receiver as an outside-source click, the input
@@ -369,7 +369,7 @@ func TestSmokeClipListEdgeBlur(t *testing.T) {
 	time.Sleep(60 * time.Millisecond)
 	for _, delta := range []float64{40, -20} {
 		onMain(func() {
-			if !mac.SurfaceScroll(a.win.NativeHandle(), 280, 125, delta) {
+			if !platform.SurfaceScroll(a.win.NativeHandle(), 280, 125, delta) {
 				t.Error("the scroll event did not reach the list")
 			}
 		})
@@ -475,7 +475,7 @@ func TestSmokePeekMorphNeverClipped(t *testing.T) {
 	onMain(func() {
 		mod := &nowPlayingModule{host: a}
 		mod.have = true
-		mod.last = mac.NowPlayingState{Playing: true, Title: "Fashion Killa", Duration: 200, Elapsed: 30, Received: time.Now()}
+		mod.last = platform.NowPlayingState{Playing: true, Title: "Fashion Killa", Duration: 200, Elapsed: 30, Received: time.Now()}
 		a.np = mod
 		a.peeking = true
 		a.peekProgress, a.peekFrom = 1, 1

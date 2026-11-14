@@ -8,7 +8,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/locales"
 )
 
@@ -27,15 +27,15 @@ type awakeModule struct {
 	host *shelf
 
 	// State: id 0 means off; duration 0 with an id means 「一直」.
-	id       mac.PowerAssertionID
+	id       platform.PowerAssertionID
 	display  bool // 「屏幕也保持亮着」
 	duration time.Duration
 	until    time.Time // deadline for timed holds; zero for 「一直」
 	remain   string    // last countdown text drawn, to redraw on change
 
 	// create/release and now are test seams; nil means the real calls.
-	create  func(mac.PowerAssertionKind) (mac.PowerAssertionID, error)
-	release func(mac.PowerAssertionID)
+	create  func(platform.PowerAssertionKind) (platform.PowerAssertionID, error)
+	release func(platform.PowerAssertionID)
 	now     func() time.Time
 }
 
@@ -185,11 +185,11 @@ func (m *awakeModule) reassert() error {
 }
 
 // wantKind is the assertion type the current display flag asks for.
-func (m *awakeModule) wantKind() mac.PowerAssertionKind {
+func (m *awakeModule) wantKind() platform.PowerAssertionKind {
 	if m.display {
-		return mac.PowerAssertDisplaySleep
+		return platform.PowerAssertDisplaySleep
 	}
-	return mac.PowerAssertSystemSleep
+	return platform.PowerAssertSystemSleep
 }
 
 // fail reports a user-requested assertion failure in the panel's toast or
@@ -242,7 +242,7 @@ func (m *awakeModule) remainText(now time.Time) string {
 	if rem < 0 {
 		rem = 0
 	}
-	return l.AwakeRemaining(mac.FormatClock(rem.Seconds()))
+	return l.AwakeRemaining(platform.FormatClock(rem.Seconds()))
 }
 
 func (m *awakeModule) clock() time.Time {
@@ -252,19 +252,19 @@ func (m *awakeModule) clock() time.Time {
 	return time.Now()
 }
 
-func (m *awakeModule) createAssert(kind mac.PowerAssertionKind) (mac.PowerAssertionID, error) {
+func (m *awakeModule) createAssert(kind platform.PowerAssertionKind) (platform.PowerAssertionID, error) {
 	if m.create != nil {
 		return m.create(kind)
 	}
-	return mac.NewPowerAssertion(kind, awakeAssertionName)
+	return platform.NewPowerAssertion(kind, awakeAssertionName)
 }
 
-func (m *awakeModule) releaseAssert(id mac.PowerAssertionID) {
+func (m *awakeModule) releaseAssert(id platform.PowerAssertionID) {
 	if m.release != nil {
 		m.release(id)
 		return
 	}
-	mac.ReleasePowerAssertion(id)
+	platform.ReleasePowerAssertion(id)
 }
 
 // awakeSymbol is the design's slashed-moon glyph.

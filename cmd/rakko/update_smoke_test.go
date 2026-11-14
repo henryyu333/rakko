@@ -19,7 +19,7 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 )
 
@@ -127,7 +127,7 @@ func TestUpdateWindowShots(t *testing.T) {
 				if a.updateWin == nil {
 					return
 				}
-				num = mac.WindowNumber(a.updateWin.NativeHandle())
+				num = platform.WindowNumber(a.updateWin.NativeHandle())
 				bounds = a.updateWin.Bounds()
 				wantW, wantH = a.updateWinSize(stage)
 			})

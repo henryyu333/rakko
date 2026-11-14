@@ -10,7 +10,7 @@ import (
 	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/locales"
 )
 
@@ -159,7 +159,7 @@ func (m *nowPlayingModule) chipToggle(c *ui.Context, key string, playing bool, s
 		ui.Icon(c, toggleSymbol(playing)).Size(glyph, glyph).TextColor(ink)
 	})
 	if b.Clicked() {
-		m.send(mac.NPPlayPause)
+		m.send(platform.NPPlayPause)
 	}
 }
 
@@ -205,7 +205,7 @@ func (m *nowPlayingModule) coverArt(c *ui.Context, key string, size, radius floa
 
 // cardMeta is the card's second line 「歌手 · 应用名」, either part alone
 // when the other is unknown.
-func (m *nowPlayingModule) cardMeta(st mac.NowPlayingState) string {
+func (m *nowPlayingModule) cardMeta(st platform.NowPlayingState) string {
 	app := ""
 	if st.App != "" {
 		app = m.host.appName(st.App)
@@ -222,7 +222,7 @@ func (m *nowPlayingModule) cardMeta(st mac.NowPlayingState) string {
 
 // controlButton is one transport button: a white glyph, no fill, fill2
 // while hovered; size 32 for prev/next, 38 for play/pause.
-func (m *nowPlayingModule) controlButton(c *ui.Context, key string, icon *ui.SVG, label string, command mac.NowPlayingCommand, size, glyph float32) {
+func (m *nowPlayingModule) controlButton(c *ui.Context, key string, icon *ui.SVG, label string, command platform.NowPlayingCommand, size, glyph float32) {
 	b := ui.ButtonBase(c.Key(key)).Size(size, size).Center().Radius(size / 2).Label(label)
 	b.HandleInput(func(ev ui.InputEvent) bool {
 		// Claim the button's own pointer events: a card-level

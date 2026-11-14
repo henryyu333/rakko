@@ -17,7 +17,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 )
 
@@ -77,10 +77,10 @@ func (a *shelf) appsModeOn() bool { return a.apps.on }
 // appSeam 是测试替身挂口：系统查询与激活都走这几条，行为测试不用真的
 // 切到用户的应用。
 var (
-	appRunning    = mac.RunningApps
-	appPathFor    = mac.AppPathForBundleID
-	appNameFor    = mac.AppNameForBundleID
-	appReopen     = mac.ReopenApp
+	appRunning    = platform.RunningApps
+	appPathFor    = platform.AppPathForBundleID
+	appNameFor    = platform.AppNameForBundleID
+	appReopen     = platform.ReopenApp
 	appsInstalled = func() ([]mygo.InstalledApp, error) { return mygo.Shell.InstalledApps() }
 )
 
@@ -121,7 +121,7 @@ func (a *shelf) effectivePinnedIDs() []string {
 // name. Pinned apps already running appear once, in the pinned zone.
 func (a *shelf) appSnapshot() []appEntry {
 	running := appRunning()
-	byID := make(map[string]mac.RunningApp, len(running))
+	byID := make(map[string]platform.RunningApp, len(running))
 	for _, r := range running {
 		if _, dup := byID[r.BundleID]; !dup {
 			byID[r.BundleID] = r
@@ -141,7 +141,7 @@ func (a *shelf) appSnapshot() []appEntry {
 		}
 		list = append(list, e)
 	}
-	rest := make([]mac.RunningApp, 0, len(running))
+	rest := make([]platform.RunningApp, 0, len(running))
 	pinSet := make(map[string]bool, len(pinned))
 	for _, id := range pinned {
 		pinSet[id] = true

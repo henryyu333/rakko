@@ -9,7 +9,7 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 // Incoming system drags: detection, opening the shelf near the notch, and the
@@ -20,7 +20,7 @@ import (
 // untrusted is retried once Accessibility is granted, without a restart.
 type dragGuard struct {
 	stop      func()
-	region    mac.DragGuardRegion
+	region    platform.DragGuardRegion
 	attempted bool
 	trusted   bool // Accessibility state at the last attempt
 }
@@ -93,7 +93,7 @@ func (a *shelf) updateDragBand(p mygo.Point, active bool) {
 // band. Once inside, the corridor reaches the landing row below the bar,
 // inside the window that just grew for it. Drags that never entered are
 // never pushed onto rows below the bar.
-func (a *shelf) dragGuardRegion() mac.DragGuardRegion {
+func (a *shelf) dragGuardRegion() platform.DragGuardRegion {
 	_, baseH := a.anchorSize()
 	h := a.menuBand() - 1
 	if a.inBand {
@@ -103,7 +103,7 @@ func (a *shelf) dragGuardRegion() mac.DragGuardRegion {
 	// stays blocked, but its landing row is inside the shell: with the
 	// island that is its capsule (or the grown drop pill in-band), never a
 	// row below it where the cursor could not reach the drop target.
-	return mac.DragGuardRegion{
+	return platform.DragGuardRegion{
 		X: a.stripCenter() - a.bandW()/2, Y: a.y,
 		Width: a.bandW(), Height: a.sheetTop() + h,
 	}
@@ -150,7 +150,7 @@ func (a *shelf) notchGuardOn() bool {
 
 // parkNotchFilter is the native filter's park switch. Tests replace it to
 // observe what the monitor asks the guard to do without a real event tap.
-var parkNotchFilter = mac.ParkDragGuard
+var parkNotchFilter = platform.ParkDragGuard
 
 // Protect the notch's approach corridor, including its centre. The lower edge
 // is below the camera housing but still inside the shelf's drag trigger.
@@ -179,19 +179,19 @@ func (a *shelf) syncDragGuard() {
 		return
 	}
 	region := a.dragGuardRegion()
-	mac.SetDragPin(region, a.dragging && !a.suppressed && !a.quitting)
+	platform.SetDragPin(region, a.dragging && !a.suppressed && !a.quitting)
 	if a.guard.stop != nil {
 		if a.guard.region != region {
-			mac.SetDragGuardRegion(region)
+			platform.SetDragGuardRegion(region)
 			a.guard.region = region
 		}
 		return
 	}
-	if a.guard.attempted && (a.guard.trusted || !mac.AccessibilityTrusted()) {
+	if a.guard.attempted && (a.guard.trusted || !platform.AccessibilityTrusted()) {
 		return
 	}
-	stop, err := mac.StartDragGuard(region)
-	a.guard = dragGuard{stop: stop, region: region, attempted: true, trusted: mac.AccessibilityTrusted()}
+	stop, err := platform.StartDragGuard(region)
+	a.guard = dragGuard{stop: stop, region: region, attempted: true, trusted: platform.AccessibilityTrusted()}
 	if err != nil {
 		log.Printf("刘海拖拽保护未启用：%v", err)
 	}
@@ -206,7 +206,7 @@ func (a *shelf) beginOwnDrag() {
 }
 
 func (a *shelf) stopDragGuard() {
-	mac.SetDragPin(mac.DragGuardRegion{}, false)
+	platform.SetDragPin(platform.DragGuardRegion{}, false)
 	if a.guard.stop != nil {
 		a.guard.stop()
 	}
@@ -252,7 +252,7 @@ func (a *shelf) pointerDragged() {
 	a.syncMousePassThrough()
 	if a.dropHot && !a.visible {
 		// 拖入首次触及刘海投放带时给一下力反馈，提示落点在顶部。
-		mac.HapticTick()
+		platform.HapticTick()
 		a.show(true)
 	}
 }
@@ -345,7 +345,7 @@ func (a *shelf) monitorDrag(now time.Time) {
 	a.syncMousePassThrough()
 	if a.inBand && !a.suppressed && !a.visible {
 		// Incoming drags open immediately; empty-handed hover never does.
-		mac.HapticTick()
+		platform.HapticTick()
 		a.show(true)
 	}
 	if !active && !a.visible && !holdPeek {

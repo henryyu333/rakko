@@ -13,7 +13,7 @@ import (
 	"github.com/ebitengine/purego"
 	"github.com/egoist/mygo"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 // The smoke run pins real catalog cards: 隔空投送 floats, 转成 PDF docks,
@@ -66,7 +66,7 @@ func pinSmokeEnv(t *testing.T) *shelf {
 // pinShot captures a real window by CGWindowID into the review evidence directory.
 func pinShot(t *testing.T, w *mygo.Window, name string) {
 	t.Helper()
-	num := mac.WindowNumber(w.NativeHandle())
+	num := platform.WindowNumber(w.NativeHandle())
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}
@@ -82,7 +82,7 @@ func pinShot(t *testing.T, w *mygo.Window, name string) {
 // out): the card keeps the design's drop shadow.
 func pinShotFull(t *testing.T, w *mygo.Window, name string) {
 	t.Helper()
-	num := mac.WindowNumber(w.NativeHandle())
+	num := platform.WindowNumber(w.NativeHandle())
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}
@@ -119,9 +119,9 @@ func postMouse(t *testing.T, x, y float64, events ...uint32) {
 		t.Fatalf("CoreGraphics: %v", err)
 	}
 	var (
-		create  func(source uintptr, typ uint32, p mac.CGPoint, button uint32) uintptr
+		create  func(source uintptr, typ uint32, p platform.CGPoint, button uint32) uintptr
 		post    func(tap uint32, ev uintptr)
-		warp    func(p mac.CGPoint) int32
+		warp    func(p platform.CGPoint) int32
 		release func(cf uintptr)
 	)
 	purego.RegisterLibFunc(&create, lib, "CGEventCreateMouseEvent")
@@ -137,7 +137,7 @@ func postMouse(t *testing.T, x, y float64, events ...uint32) {
 		if typ == 3 || typ == 4 || typ == 27 {
 			button = 1
 		}
-		ev := create(0, typ, mac.CGPoint{X: x, Y: y}, button)
+		ev := create(0, typ, platform.CGPoint{X: x, Y: y}, button)
 		if ev == 0 {
 			t.Fatal("CGEventCreateMouseEvent returned nil")
 		}
@@ -145,7 +145,7 @@ func postMouse(t *testing.T, x, y float64, events ...uint32) {
 		release(ev)
 		time.Sleep(30 * time.Millisecond)
 	}
-	warp(mac.CGPoint{X: x, Y: y})
+	warp(platform.CGPoint{X: x, Y: y})
 }
 
 // settlePin lets the 30 ms monitor tick apply a frame, then reports it.
@@ -177,7 +177,7 @@ func TestPinSmokeWindowsAndShots(t *testing.T) {
 	time.Sleep(700 * time.Millisecond)
 
 	// Floating card, expanded.
-	if level := mac.WindowLevel(free.win.NativeHandle()); level != 3 {
+	if level := platform.WindowLevel(free.win.NativeHandle()); level != 3 {
 		t.Fatalf("pin window level = %d, want 3 (floating)", level)
 	}
 	pinShot(t, free.win, "pin-floating")

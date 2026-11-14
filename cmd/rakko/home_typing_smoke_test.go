@@ -24,7 +24,7 @@ import (
 	"github.com/ebitengine/purego"
 	"github.com/egoist/mygo"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 // typingMeter records when each frame was built, so the test can time the
@@ -77,7 +77,7 @@ func (m *typingMeter) reset() {
 func homeKeys(t *testing.T, text string, gap time.Duration) bool {
 	t.Helper()
 	var front bool
-	onMain(func() { front = mac.FrontmostPID() == mac.OwnPID() })
+	onMain(func() { front = platform.FrontmostPID() == platform.OwnPID() })
 	if !front {
 		return false
 	}
@@ -137,7 +137,7 @@ func takeHomeKeyboard(t *testing.T, a *shelf) bool {
 	t.Helper()
 	ready := func() bool {
 		var ok bool
-		onMain(func() { ok = mac.FrontmostPID() == mac.OwnPID() && a.win.IsFocused() })
+		onMain(func() { ok = platform.FrontmostPID() == platform.OwnPID() && a.win.IsFocused() })
 		return ok
 	}
 	if waitFront := waitMain(300*time.Millisecond, ready); waitFront {
@@ -145,7 +145,7 @@ func takeHomeKeyboard(t *testing.T, a *shelf) bool {
 	}
 	for range 3 {
 		onMain(func() {
-			mac.ActivateSelf()
+			platform.ActivateSelf()
 			a.win.Focus()
 		})
 		if waitMain(700*time.Millisecond, ready) {
@@ -247,7 +247,7 @@ func TestSmokeHomeTypingMotion(t *testing.T) {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 	a := redesignShelf(t)
 	// Production warms the index at launch; the harness does the same.
-	mac.WarmSpotlight()
+	platform.WarmSpotlight()
 	time.Sleep(1200 * time.Millisecond)
 	stop := startMotionTicker(a)
 	defer stop()

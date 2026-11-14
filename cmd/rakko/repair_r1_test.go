@@ -19,7 +19,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/layout"
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/store"
 )
 
@@ -252,7 +252,7 @@ func TestReduceMotionHoverShapeNeverSprings(t *testing.T) {
 			}
 			// A track arrives: the wings replace the chevron's bulge, a
 			// much wider shape.
-			a.np = &nowPlayingModule{host: a, have: true, last: mac.NowPlayingState{
+			a.np = &nowPlayingModule{host: a, have: true, last: platform.NowPlayingState{
 				Title: "夜曲", Playing: true, Duration: 200, Received: time.Now(),
 			}}
 			view.Frame() // the frame the state changes on

@@ -14,7 +14,7 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 // idleDragPoll is the fallback read of the drag pasteboard while the shell
@@ -259,7 +259,7 @@ func (a *shelf) scheduleMonitor(now time.Time) {
 	}
 	if a.monitorActive(now) {
 		if a.activeTickerStop == nil {
-			a.activeTickerStop = mac.StartMainTicker(pointerInterval, func() { a.monitorRun() })
+			a.activeTickerStop = platform.StartMainTicker(pointerInterval, func() { a.monitorRun() })
 		}
 		return
 	}
@@ -269,7 +269,7 @@ func (a *shelf) scheduleMonitor(now time.Time) {
 	}
 	gen := a.monitorGen.Add(1)
 	delay := a.monitorDelay(now)
-	mac.AfterMainOnce(delay, func() {
+	platform.AfterMainOnce(delay, func() {
 		if a.quitting || a.monitorGen.Load() != gen {
 			return
 		}
@@ -284,7 +284,7 @@ func (a *shelf) postMain(fn func()) {
 		a.wakeMainFn(fn)
 		return
 	}
-	mac.WakeMain(fn)
+	platform.WakeMain(fn)
 }
 
 // wakeMonitor asks for an immediate pass. Safe from any goroutine; repeated

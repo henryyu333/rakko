@@ -17,7 +17,7 @@ import (
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/store"
 	"rakko/locales"
 )
@@ -263,7 +263,7 @@ func (a *shelf) clipRowMeta(l locales.Messages, item store.Item) string {
 	return l.ClipMeta(a.appName(item.SourceApp), ago)
 }
 
-// clipAppIcon caches mac.AppIcon bitmaps per bundle id so a long list
+// clipAppIcon caches platform.AppIcon bitmaps per bundle id so a long list
 // never asks the workspace twice for the same app. The cache is bounded:
 // past appIconCacheLimit entries it is rebuilt on demand — clipboard rows
 // re-resolve their icons on the next paint, apps gone from the list are
@@ -279,7 +279,7 @@ func (a *shelf) clipAppIcon(bundle string) *ui.Bitmap {
 		a.appIcons = make(map[string]*ui.Bitmap)
 	}
 	var b *ui.Bitmap
-	if png := mac.AppIcon(bundle, 32); len(png) > 0 {
+	if png := platform.AppIcon(bundle, 32); len(png) > 0 {
 		if decoded, err := ui.DecodeBitmap(png); err == nil {
 			b = decoded
 		}

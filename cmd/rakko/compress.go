@@ -17,14 +17,14 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/store"
 )
 
 // Seams: tests substitute the encoder and the alpha probe.
 var (
-	fitImage   = mac.FitImage
-	imageAlpha = mac.ImageAlpha
+	fitImage   = platform.FitImage
+	imageAlpha = platform.ImageAlpha
 )
 
 // fitLimit is a target's byte budget, 0 for targets that are not 「压缩到」.
@@ -70,14 +70,14 @@ func compressOutExt(src string) string {
 }
 
 // compressFormat maps a compressed output's extension to its encoder.
-func compressFormat(dst string) mac.ImageFormat {
+func compressFormat(dst string) platform.ImageFormat {
 	switch strings.ToLower(strings.TrimPrefix(filepath.Ext(dst), ".")) {
 	case "jpg", "jpeg":
-		return mac.FormatJPEG
+		return platform.FormatJPEG
 	case "heic", "heif":
-		return mac.FormatHEIC
+		return platform.FormatHEIC
 	default:
-		return mac.FormatPNG
+		return platform.FormatPNG
 	}
 }
 

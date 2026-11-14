@@ -21,7 +21,7 @@ import (
 
 	"rakko/internal/companion"
 	"rakko/internal/lyrics"
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/store"
 	"rakko/locales"
 )
@@ -100,9 +100,9 @@ func (p *homePage) width() float32 {
 }
 
 // track is the system's current sound, when the now-playing feature is on.
-func (p *homePage) track() (mac.NowPlayingState, bool) {
+func (p *homePage) track() (platform.NowPlayingState, bool) {
 	if p.host.np == nil || !p.host.np.hasTrack() {
-		return mac.NowPlayingState{}, false
+		return platform.NowPlayingState{}, false
 	}
 	return p.host.np.track()
 }
@@ -187,7 +187,7 @@ func (p *homePage) apply(key string, r lyrics.Result, err error) {
 
 // homeTrackKey is the cache key for a track: title, artist and the
 // rounded duration LRCLIB matches on.
-func homeTrackKey(st mac.NowPlayingState) string {
+func homeTrackKey(st platform.NowPlayingState) string {
 	return lyrics.Key(lyrics.Track{Title: st.Title, Artist: st.Artist, Duration: int(math.Round(st.Duration))})
 }
 
@@ -234,7 +234,7 @@ func (a *shelf) lyricsCache() *lyrics.Cache {
 
 // playerBody is state ②: cover, title/artist, equalizer, the seek rail and
 // the transport, centred in the page.
-func (p *homePage) playerBody(c *ui.Context, w float32, st mac.NowPlayingState) ui.Element {
+func (p *homePage) playerBody(c *ui.Context, w float32, st platform.NowPlayingState) ui.Element {
 	ui.Column(c.Key("home-player")).Width(w).Height(pageBodyH).Justify(ui.Center).Translate(0, 23).Children(func() {
 		p.player(c, w, st)
 	})
@@ -243,7 +243,7 @@ func (p *homePage) playerBody(c *ui.Context, w float32, st mac.NowPlayingState) 
 
 // player draws the player in w points: one row of artwork and names, the
 // seek row, and the three transport buttons.
-func (p *homePage) player(c *ui.Context, w float32, st mac.NowPlayingState) {
+func (p *homePage) player(c *ui.Context, w float32, st platform.NowPlayingState) {
 	m := p.host.np
 	l := loc(c)
 	now := c.Now()
@@ -276,7 +276,7 @@ func (p *homePage) player(c *ui.Context, w float32, st mac.NowPlayingState) {
 		if dur > 0 {
 			rem = max(0, dur-pos)
 		}
-		nowLabel, remLabel := mac.FormatClock(pos), "-"+mac.FormatClock(rem)
+		nowLabel, remLabel := platform.FormatClock(pos), "-"+platform.FormatClock(rem)
 		nw, rw := clockLabelW(c, nowLabel, 11.5), clockLabelW(c, remLabel, 11.5)
 		panelLabel(c, nil, nowLabel, 11.5, 500).TextColor(ink3).Width(nw)
 		p.host.seekRail(c, "home-progress", frac, dur, 14, 5).Grow(1).MinWidth(0)
@@ -288,9 +288,9 @@ func (p *homePage) player(c *ui.Context, w float32, st mac.NowPlayingState) {
 		AlignItems(ui.Center).Children(func() {
 		p.lyricsButton(c)
 		ui.Row(c.Key("home-transport")).AlignItems(ui.Center).Gap(26).Children(func() {
-			m.controlButton(c, "home-prev", prevFill, l.PreviousTrack(), mac.NPPrevious, 30, 17)
-			m.controlButton(c, "home-toggle", toggleSymbol(st.Playing), playPauseText(l, st.Playing), mac.NPPlayPause, 38, 22)
-			m.controlButton(c, "home-next", nextFill, l.NextTrack(), mac.NPNext, 30, 17)
+			m.controlButton(c, "home-prev", prevFill, l.PreviousTrack(), platform.NPPrevious, 30, 17)
+			m.controlButton(c, "home-toggle", toggleSymbol(st.Playing), playPauseText(l, st.Playing), platform.NPPlayPause, 38, 22)
+			m.controlButton(c, "home-next", nextFill, l.NextTrack(), platform.NPNext, 30, 17)
 		})
 		if p.host.weekly != nil {
 			// The report keeps a door on the playing home too: the idle
@@ -339,7 +339,7 @@ func (p *homePage) lyricsButton(c *ui.Context) {
 
 // lyricsBody is state ①: the player in a 300pt column, a rule, and the
 // scrolling lyrics beside it.
-func (p *homePage) lyricsBody(c *ui.Context, w float32, st mac.NowPlayingState) ui.Element {
+func (p *homePage) lyricsBody(c *ui.Context, w float32, st platform.NowPlayingState) ui.Element {
 	right := w - homePlayerCol - 1 - 2*18
 	ui.Row(c.Key("home-with-lyrics")).Width(w).Height(pageBodyH).Gap(18).Children(func() {
 		ui.Column(c.Key("home-left")).Width(homePlayerCol).Height(pageBodyH).
@@ -382,7 +382,7 @@ func (p *homePage) lyricsNote(c *ui.Context, w float32) {
 // lyricsView is the scrolling lyric block: the current line bold and
 // centred, the others in ink3 fading with distance and toward both edges.
 // A change of line scrolls the block smoothly to centre it.
-func (p *homePage) lyricsView(c *ui.Context, st mac.NowPlayingState, w float32) {
+func (p *homePage) lyricsView(c *ui.Context, st platform.NowPlayingState, w float32) {
 	idx := lyrics.LineAt(p.lines, time.Duration(st.Position(c.Now())*float64(time.Second)))
 	if idx < 0 {
 		return
@@ -647,7 +647,7 @@ func homeAwakeRemain(l locales.Messages, m *awakeModule, now time.Time) string {
 	if rem < 0 {
 		rem = 0
 	}
-	return l.AwakeRemaining(mac.FormatClock(rem.Seconds()))
+	return l.AwakeRemaining(platform.FormatClock(rem.Seconds()))
 }
 
 // homeTrayCount is how many files and folders the tray holds now.

@@ -17,7 +17,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/store"
 )
 
@@ -31,7 +31,7 @@ const redesignShotDir = "/tmp/shelf-redesign"
 // path.
 func shotWindow(t *testing.T, w *mygo.Window, name string) string {
 	t.Helper()
-	num := mac.WindowNumber(w.NativeHandle())
+	num := platform.WindowNumber(w.NativeHandle())
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}
@@ -84,7 +84,7 @@ func fakeTrack(a *shelf, playing bool) {
 	mod := &nowPlayingModule{host: a}
 	mod.rememberArt(testCover(), false)
 	mod.have = true
-	mod.last = mac.NowPlayingState{
+	mod.last = platform.NowPlayingState{
 		Playing: playing, Title: "Fashion Killa", Artist: "A$AP Rocky", App: "com.apple.Music",
 		Duration: 236, Elapsed: 81, Rate: 1, Received: time.Now(),
 	}
@@ -274,7 +274,7 @@ func TestRedesignTrayMusic(t *testing.T) {
 			case store.KindImage:
 				a.thumbnails[it.ID] = thumb
 			case store.KindFile:
-				if icon := mac.FileIcon(it.Path, 56); len(icon) > 0 {
+				if icon := platform.FileIcon(it.Path, 56); len(icon) > 0 {
 					a.thumbnails[it.ID], _ = ui.DecodeBitmap(icon)
 				}
 			}

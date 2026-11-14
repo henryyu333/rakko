@@ -19,7 +19,7 @@ import (
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/store"
 )
 
@@ -775,7 +775,7 @@ func TestPanelSizeIsFixedPerLevel(t *testing.T) {
 		t.Fatalf("sheet frame = %d×%d, want %d×%d", sheet.Width, sheet.Height, sw, panelFrameH(sheetH))
 	}
 	add(gridCols)
-	a.np = &nowPlayingModule{host: a, have: true, last: mac.NowPlayingState{Title: "T", Artist: "A"}}
+	a.np = &nowPlayingModule{host: a, have: true, last: platform.NowPlayingState{Title: "T", Artist: "A"}}
 	a.modules = []module{a.np}
 	if got := a.desiredFrame(); got != sheet {
 		t.Fatalf("rows or a live activity resized the sheet: %+v -> %+v", sheet, got)

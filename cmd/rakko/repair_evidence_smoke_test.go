@@ -17,7 +17,7 @@ import (
 	"github.com/egoist/mygo"
 
 	"rakko/internal/layout"
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 // TestSmokePinnedOneColumnMusic: a music widget shrunk to 1 × 1 pins as a
@@ -57,7 +57,7 @@ func TestSmokePinnedOneColumnMusic(t *testing.T) {
 			t.Fatalf("pins = %+v", a.pins)
 		}
 		frame = a.pins[0].frame
-		num = mac.WindowNumber(a.pins[0].win.NativeHandle())
+		num = platform.WindowNumber(a.pins[0].win.NativeHandle())
 	})
 	if frame.Width != pinCardW2 {
 		t.Fatalf("the pinned 1 × 1 music card is %d wide, want %d", frame.Width, pinCardW2)

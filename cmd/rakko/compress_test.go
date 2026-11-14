@@ -11,7 +11,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 // sizedShelf is convertShelf with file bodies of the given sizes, so the
@@ -61,7 +61,7 @@ func TestCompressToTier(t *testing.T) {
 	if got := outputNames(a); !slices.Equal(got, []string{"a（压缩）.jpg", "logo（压缩）.png"}) {
 		t.Fatalf("outputs = %v", got)
 	}
-	if !slices.Equal(f.formats, []mac.ImageFormat{mac.FormatJPEG, mac.FormatPNG}) {
+	if !slices.Equal(f.formats, []platform.ImageFormat{platform.FormatJPEG, platform.FormatPNG}) {
 		t.Fatalf("formats = %v, want JPEG for a.jpg and PNG for the alpha logo", f.formats)
 	}
 	if a.store.Items[0].Path == "" || a.store.Items[0].Kind != "file" {

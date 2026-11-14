@@ -9,7 +9,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 )
 
@@ -210,7 +210,7 @@ func TestDragReturningToTheBandReopensThePanel(t *testing.T) {
 // wings/capsule's taller frames are not retained through a drag.
 func TestIncomingDragFrameStaysInMenuBand(t *testing.T) {
 	a := dragShelf()
-	a.np = &nowPlayingModule{host: a, have: true, last: mac.NowPlayingState{Title: "Track"}}
+	a.np = &nowPlayingModule{host: a, have: true, last: platform.NowPlayingState{Title: "Track"}}
 	f := a.desiredFrame()
 	bandW := max(180, a.notchW) + 2*dropBandPadX
 	hintW := int(180+dropHintExtraW) + 2*earR // band may widen ±ears to cover the hint's corners

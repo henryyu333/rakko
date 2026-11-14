@@ -198,7 +198,7 @@ func (a *shelf) frameRoom(expW, expH float32) (w, h int) {
 }
 
 // islandDisplay is the geometry idleIslandPlacements needs from a display;
-// HasNotch comes from mac.NotchRect, the same source place() uses.
+// HasNotch comes from platform.NotchRect, the same source place() uses.
 type islandDisplay struct {
 	ID       int64
 	Bounds   mygo.Rectangle

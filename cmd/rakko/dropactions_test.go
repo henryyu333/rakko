@@ -14,7 +14,7 @@ import (
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/store"
 )
 
@@ -190,7 +190,7 @@ func TestRunDropActionConvertDoesNotShelveSources(t *testing.T) {
 		t.Fatalf("picked %v", act.id)
 	}
 	a.runDropAction(act, fileDrop(t, png))
-	if !slices.Equal(f.formats, []mac.ImageFormat{mac.FormatJPEG}) {
+	if !slices.Equal(f.formats, []platform.ImageFormat{platform.FormatJPEG}) {
 		t.Fatalf("formats = %v, want one JPEG", f.formats)
 	}
 	if len(a.store.Items) != 1 {
@@ -482,7 +482,7 @@ func TestDropZoneSurvivesReleaseFrame(t *testing.T) {
 	}
 	// The cell drop now executes the action, not nothing.
 	a.runDropAction(dropActions([]string{img})[2], fileDrop(t, img)) // 转 JPEG
-	if !slices.Equal(f.formats, []mac.ImageFormat{mac.FormatJPEG}) {
+	if !slices.Equal(f.formats, []platform.ImageFormat{platform.FormatJPEG}) {
 		t.Fatalf("the released action never ran: formats %v", f.formats)
 	}
 	// Consumed: the zone closes, panel back to the tray page.

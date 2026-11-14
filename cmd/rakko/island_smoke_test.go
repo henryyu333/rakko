@@ -26,7 +26,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 )
 
@@ -55,9 +55,9 @@ func newIslandArena(t *testing.T, r mygo.Rectangle) {
 					Padding(8, 12, 0, 12)
 			}),
 		})
-		mac.ConfigurePinWindow(w.NativeHandle())
-		mac.SetWindowLevel(w.NativeHandle(), 2)
-		mac.SetWindowFrame(w.NativeHandle(), r.X, r.Y, r.Width, r.Height)
+		platform.ConfigurePinWindow(w.NativeHandle())
+		platform.SetWindowLevel(w.NativeHandle(), 2)
+		platform.SetWindowFrame(w.NativeHandle(), r.X, r.Y, r.Width, r.Height)
 		w.ShowInactive()
 		t.Cleanup(func() { onMain(w.Destroy) })
 	})
@@ -127,7 +127,7 @@ func islandRawShot(t *testing.T, a *shelf, name string, settle time.Duration) st
 	if err := os.MkdirAll(islandShotDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	num := mac.WindowNumber(a.win.NativeHandle())
+	num := platform.WindowNumber(a.win.NativeHandle())
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}

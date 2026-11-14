@@ -18,7 +18,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/aiusage"
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 	"rakko/internal/store"
 )
@@ -533,7 +533,7 @@ func TestCapsuleHoldsEveryPageAndTheCommands(t *testing.T) {
 
 func TestTwoActivityChipsFitTheRightEar(t *testing.T) {
 	a := &shelf{level: 2, notchW: 180, notchH: 32, topInset: 32, settings: settings.Default()}
-	a.np = &nowPlayingModule{host: a, have: true, last: mac.NowPlayingState{Playing: true, Title: "夜曲", Artist: "周杰伦"}}
+	a.np = &nowPlayingModule{host: a, have: true, last: platform.NowPlayingState{Playing: true, Title: "夜曲", Artist: "周杰伦"}}
 	p := newFakePower()
 	awake := newAwakeStub(p)
 	awake.start(time.Now(), 30*time.Minute)
@@ -564,7 +564,7 @@ func TestMusicAndCancelChipsFitTheRightEar(t *testing.T) {
 	j.total.Store(3)
 	j.done.Store(1)
 	a := &shelf{level: 2, notchW: 180, notchH: 32, topInset: 32, settings: settings.Default()}
-	a.np = &nowPlayingModule{host: a, have: true, last: mac.NowPlayingState{Playing: true, Title: "夜曲"}}
+	a.np = &nowPlayingModule{host: a, have: true, last: platform.NowPlayingState{Playing: true, Title: "夜曲"}}
 	a.conv = &converter{host: a, job: j, cancelOpen: true}
 	a.modules = []module{a.np, a.conv}
 	view := ui.NewTester(a.view, sheetW, panelTestH)

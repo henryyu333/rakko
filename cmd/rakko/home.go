@@ -10,8 +10,8 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
 	"rakko/internal/note"
+	"rakko/internal/platform"
 	"rakko/internal/store"
 )
 
@@ -111,7 +111,7 @@ func (a *shelf) computeHomeHits() []homeHit {
 	var tray, clip, notes, acts []homeHit
 	var trayPaths []string
 	shown := map[string]bool{}
-	if scope != mac.ScopeApps {
+	if scope != platform.ScopeApps {
 		if a.store != nil {
 			for _, it := range a.store.Items {
 				title := itemTitleIn(l, it)
@@ -160,13 +160,13 @@ func (a *shelf) computeHomeHits() []homeHit {
 	var apps, folders, files []homeHit
 	if items := a.homeSpotItems(); len(items) > 0 {
 		ag, fg, fh := spotGroupHits(q, items, shown)
-		if scope != mac.ScopeFiles {
+		if scope != platform.ScopeFiles {
 			label := l.HomeGroupApps()
 			for _, hit := range ag {
 				apps = append(apps, a.spotHitRow(label, hit))
 			}
 		}
-		if scope != mac.ScopeApps {
+		if scope != platform.ScopeApps {
 			folderLabel, fileLabel := l.HomeGroupFolders(), l.HomeGroupFiles()
 			for _, hit := range fg {
 				folders = append(folders, a.spotHitRow(folderLabel, hit))
@@ -176,7 +176,7 @@ func (a *shelf) computeHomeHits() []homeHit {
 			}
 		}
 	}
-	if scope == mac.ScopeAll {
+	if scope == platform.ScopeAll {
 		for _, act := range []struct {
 			name string
 			icon *ui.SVG
@@ -191,16 +191,16 @@ func (a *shelf) computeHomeHits() []homeHit {
 		}
 	}
 	var groups [][]homeHit
-	if scope != mac.ScopeApps {
+	if scope != platform.ScopeApps {
 		groups = append(groups, tray, clip, notes)
 	}
-	if scope != mac.ScopeFiles {
+	if scope != platform.ScopeFiles {
 		groups = append(groups, apps)
 	}
-	if scope != mac.ScopeApps {
+	if scope != platform.ScopeApps {
 		groups = append(groups, folders, files)
 	}
-	if scope == mac.ScopeAll {
+	if scope == platform.ScopeAll {
 		groups = append(groups, acts)
 	}
 	var out []homeHit
@@ -385,9 +385,9 @@ func (a *shelf) homeBar(c *ui.Context, w float32) {
 			// The mode capsule hangs right of the field, left of the clear
 			// button: 全部 draws none, and the empty bar carries the Tab hint
 			// because that is when Tab switches modes.
-			if a.homeScope != mac.ScopeAll {
+			if a.homeScope != platform.ScopeAll {
 				icon, name := fileSymbol, l.SearchModeFiles()
-				if a.homeScope == mac.ScopeApps {
+				if a.homeScope == platform.ScopeApps {
 					icon, name = appsSymbol, l.SearchModeApps()
 				}
 				mode := ui.ButtonBase(c.Key("home-mode")).Height(24).Radius(7).Background(fill2).
@@ -663,14 +663,14 @@ func (a *shelf) takeKeyboard() {
 		return
 	}
 	if !a.focusMode {
-		if pid := mac.FrontmostPID(); pid > 0 && pid != mac.OwnPID() {
+		if pid := platform.FrontmostPID(); pid > 0 && pid != platform.OwnPID() {
 			a.prevAppPID = pid
 		}
 	}
 	a.focusMode = true
 	a.noteStale() // the notes may have changed while the panel was shut
 	a.syncMousePassThrough()
-	mac.ActivateSelf()
+	platform.ActivateSelf()
 	a.win.Focus()
 	// The field has the keyboard: Esc and Space go to it, not to the
 	// global keys.

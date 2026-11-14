@@ -20,7 +20,7 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 )
 
@@ -69,13 +69,13 @@ func traceBlankFrames(t *testing.T, a *shelf) *blankTrace {
 				covered:         a.mainIdle != nil && a.mainIdle.shown,
 			})
 			tr.mu.Unlock()
-			mac.SetWindowFrame(h, x, y, w, hgt)
+			platform.SetWindowFrame(h, x, y, w, hgt)
 		}
 	})
 	t.Cleanup(func() {
 		onMain(func() {
 			frameTrace = nil
-			setNativeWindowFrame = mac.SetWindowFrame
+			setNativeWindowFrame = platform.SetWindowFrame
 		})
 	})
 	return tr

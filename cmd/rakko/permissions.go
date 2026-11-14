@@ -25,7 +25,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/locales"
 )
 
@@ -50,16 +50,16 @@ const (
 var (
 	// Full Disk Access has no read-only query API: the probe opens the
 	// TCC database, which only a granted process may read.
-	fullDiskAccessProbe   = mac.FullDiskAccessGranted
-	fullDiskAccessRequest = mac.RequestFullDiskAccess
-	accessibilityProbe    = mac.AccessibilityTrusted
+	fullDiskAccessProbe   = platform.FullDiskAccessGranted
+	fullDiskAccessRequest = platform.RequestFullDiskAccess
+	accessibilityProbe    = platform.AccessibilityTrusted
 	// ScreenCapturePreflight, not ScreenCaptureAllowed: showing state must
 	// never run the stale-record reset that belongs to the request path.
-	screenCaptureProbe   = mac.ScreenCapturePreflight
-	screenCaptureRequest = mac.RequestScreenCapture
+	screenCaptureProbe   = platform.ScreenCapturePreflight
+	screenCaptureRequest = platform.RequestScreenCapture
 	// openPrivacyPane is all a switched-off permission can do: macOS gives
 	// no app the power to revoke a grant, only the user in System Settings.
-	openPrivacyPane = mac.OpenPrivacySecurityPane
+	openPrivacyPane = platform.OpenPrivacySecurityPane
 
 	permissionAfterFunc = func(d time.Duration, fn func()) permissionTimer {
 		return time.AfterFunc(d, fn)
@@ -415,9 +415,9 @@ func relaunchPlanFor(exe string, args []string, pid int) relaunchPlan {
 // appBundleForExecutable reports the enclosing .app when exe lives at
 // <Bundle>.app/Contents/MacOS/<binary>. It is a pure path check; callers
 // only use it to choose the launch route. The Full Disk Access reveal needs
-// the same answer, so the check itself lives in internal/mac.
+// the same answer, so the check itself lives in internal/platform.
 func appBundleForExecutable(exe string) (string, bool) {
-	return mac.AppBundleForExecutable(exe)
+	return platform.AppBundleForExecutable(exe)
 }
 
 func shellQuote(s string) string {

@@ -18,7 +18,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 )
 
@@ -26,7 +26,7 @@ const snapShotDir = "/tmp/shelf-snap"
 
 func snapShot(t *testing.T, w *mygo.Window, name string) string {
 	t.Helper()
-	num := mac.WindowNumber(w.NativeHandle())
+	num := platform.WindowNumber(w.NativeHandle())
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}
@@ -98,7 +98,7 @@ func TestSnapSmokeDragToNotch(t *testing.T) {
 	if os.Getenv("RAKKO_BASKET_SMOKE") != "1" {
 		t.Skip("set RAKKO_BASKET_SMOKE=1 to run the real window drag")
 	}
-	if !mac.AccessibilityTrusted() {
+	if !platform.AccessibilityTrusted() {
 		t.Skip("the test process needs Accessibility for the real window drag")
 	}
 	a := redesignShelf(t)
@@ -135,7 +135,7 @@ func TestSnapSmokeDragToNotch(t *testing.T) {
 			w.Close()
 		})
 	})
-	onMain(func() { w.Show(); mac.ActivateSelf() })
+	onMain(func() { w.Show(); platform.ActivateSelf() })
 	snapTicker(t, a)
 	time.Sleep(500 * time.Millisecond)
 	frame := snapWindowFrame(t, w)
@@ -144,22 +144,22 @@ func TestSnapSmokeDragToNotch(t *testing.T) {
 
 	var axW, axPid int
 	onMain(func() {
-		win, pid, ok := mac.AXWindowAt(titleX, titleY)
+		win, pid, ok := platform.AXWindowAt(titleX, titleY)
 		if !ok {
 			t.Fatalf("AX found no window at the title bar (%.0f,%.0f)", titleX, titleY)
 		}
 		axW, axPid = 1, pid
 		f, _ := win.Frame()
-		t.Logf("AX window frame=%+v frontmost=%d", f, mac.FrontmostPID())
+		t.Logf("AX window frame=%+v frontmost=%d", f, platform.FrontmostPID())
 		win.Release()
 	})
-	t.Logf("AX window under the title bar: ok=%d pid=%d (own pid %d), test window #%d", axW, axPid, mac.OwnPID(), mac.WindowNumber(w.NativeHandle()))
+	t.Logf("AX window under the title bar: ok=%d pid=%d (own pid %d), test window #%d", axW, axPid, platform.OwnPID(), platform.WindowNumber(w.NativeHandle()))
 	onMain(func() {
 		d := mygo.Screen.PrimaryDisplay()
-		hit := mac.WindowAtPoint(titleX, titleY, float64(d.Bounds.Y+d.Bounds.Height))
+		hit := platform.WindowAtPoint(titleX, titleY, float64(d.Bounds.Y+d.Bounds.Height))
 		t.Logf("WindowAtPoint(%.0f,%.0f)=%d", titleX, titleY, hit)
-		notchHit := mac.WindowAtPoint(float64(a.stripCenter()), 10, float64(d.Bounds.Y+d.Bounds.Height))
-		t.Logf("notch WindowAtPoint=%d, overlay #%d", notchHit, mac.WindowNumber(a.win.NativeHandle()))
+		notchHit := platform.WindowAtPoint(float64(a.stripCenter()), 10, float64(d.Bounds.Y+d.Bounds.Height))
+		t.Logf("notch WindowAtPoint=%d, overlay #%d", notchHit, platform.WindowNumber(a.win.NativeHandle()))
 	})
 
 	const (
@@ -215,7 +215,7 @@ func TestSnapSmokeIslandPanel(t *testing.T) {
 	if os.Getenv("RAKKO_BASKET_SMOKE") != "1" {
 		t.Skip("set RAKKO_BASKET_SMOKE=1 to run the real window drag")
 	}
-	if !mac.AccessibilityTrusted() {
+	if !platform.AccessibilityTrusted() {
 		t.Skip("the test process needs Accessibility for the real window drag")
 	}
 	a := redesignShelf(t)
@@ -259,7 +259,7 @@ func TestSnapSmokeIslandPanel(t *testing.T) {
 			ui.Text(c, "ShelfU 拖窗口分屏 · 灵动岛冒烟").FontSize(20)
 		}),
 	})
-	onMain(func() { w.Show(); mac.ActivateSelf() })
+	onMain(func() { w.Show(); platform.ActivateSelf() })
 	t.Cleanup(func() { onMain(func() { w.Close() }) })
 	snapTicker(t, a)
 	time.Sleep(400 * time.Millisecond)
@@ -334,10 +334,10 @@ func postSnapEvent(x, y float64, typ uint32) error {
 		return err
 	}
 	var (
-		create  func(source uintptr, typ uint32, p mac.CGPoint, button uint32) uintptr
+		create  func(source uintptr, typ uint32, p platform.CGPoint, button uint32) uintptr
 		post    func(tap uint32, ev uintptr)
 		release func(cf uintptr)
-		warp    func(p mac.CGPoint) int32
+		warp    func(p platform.CGPoint) int32
 	)
 	purego.RegisterLibFunc(&create, lib, "CGEventCreateMouseEvent")
 	purego.RegisterLibFunc(&post, lib, "CGEventPost")
@@ -347,13 +347,13 @@ func postSnapEvent(x, y float64, typ uint32) error {
 	}
 	purego.RegisterLibFunc(&release, libCF, "CFRelease")
 	purego.RegisterLibFunc(&warp, lib, "CGWarpMouseCursorPosition")
-	ev := create(0, typ, mac.CGPoint{X: x, Y: y}, 0)
+	ev := create(0, typ, platform.CGPoint{X: x, Y: y}, 0)
 	if ev == 0 {
 		return fmt.Errorf("CGEventCreateMouseEvent returned nil")
 	}
 	post(0, ev)
 	release(ev)
-	warp(mac.CGPoint{X: x, Y: y})
+	warp(platform.CGPoint{X: x, Y: y})
 	time.Sleep(30 * time.Millisecond)
 	return nil
 }

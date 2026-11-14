@@ -10,7 +10,7 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 // serviceFlashGen is the generation counter that owns the auto-hide timer
@@ -34,7 +34,7 @@ func (a *shelf) takeServiceOwnership() {
 // startup notice, not fatal: the shelf still works through drag, paste and
 // the clipboard module.
 func (a *shelf) installServices() {
-	err := mac.InstallServiceProvider(func(paths []string, text string) {
+	err := platform.InstallServiceProvider(func(paths []string, text string) {
 		mygo.RunOnMain(func() { a.serviceReceive(paths, text) })
 	})
 	if err != nil {

@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"rakko/internal/layout"
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 const toolsShotDir = "/tmp/shelf-A"
@@ -41,7 +41,7 @@ func shotToolsPage(t *testing.T, a *shelf, name string, setup func()) {
 	if err := os.MkdirAll(toolsShotDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	num := mac.WindowNumber(a.win.NativeHandle())
+	num := platform.WindowNumber(a.win.NativeHandle())
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}

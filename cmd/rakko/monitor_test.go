@@ -8,7 +8,7 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 	"rakko/internal/weekly"
 )
@@ -59,7 +59,7 @@ func TestMonitorActiveConditionsEnterCadence(t *testing.T) {
 		{"note-window", func(a *shelf) { a.note = &noteUI{win: new(mygo.Window)} }},
 		{"rename-window", func(a *shelf) { a.rn = &renameUI{win: new(mygo.Window)} }},
 		{"converter", func(a *shelf) { a.conv = &converter{job: &convertJob{}} }},
-		{"awake-hold", func(a *shelf) { a.awake = &awakeModule{id: mac.PowerAssertionID(1)} }},
+		{"awake-hold", func(a *shelf) { a.awake = &awakeModule{id: platform.PowerAssertionID(1)} }},
 		{"usage-page", func(a *shelf) {
 			a.visible, a.level, a.tab = true, 2, pageUsage
 			a.usage = &usageFeature{host: a}
@@ -187,7 +187,7 @@ func TestMonitorDeadlines(t *testing.T) {
 			a.modules = append(a.modules, o)
 		}, 2 * time.Second},
 		{"awake", func(a *shelf) {
-			a.awake = &awakeModule{id: mac.PowerAssertionID(1), until: now.Add(5 * time.Second)}
+			a.awake = &awakeModule{id: platform.PowerAssertionID(1), until: now.Add(5 * time.Second)}
 			a.modules = append(a.modules, a.awake)
 		}, 5 * time.Second},
 		{"leaving", func(a *shelf) {
@@ -207,7 +207,7 @@ func TestMonitorDeadlines(t *testing.T) {
 			a.modules = append(a.modules, a.np)
 		}, 4 * time.Second},
 		{"now-playing-position", func(a *shelf) {
-			a.np = &nowPlayingModule{host: a, started: true, have: true, posNext: now.Add(700 * time.Millisecond), last: mac.NowPlayingState{Playing: true}}
+			a.np = &nowPlayingModule{host: a, started: true, have: true, posNext: now.Add(700 * time.Millisecond), last: platform.NowPlayingState{Playing: true}}
 			a.visible = true
 			a.modules = append(a.modules, a.np)
 		}, 700 * time.Millisecond},

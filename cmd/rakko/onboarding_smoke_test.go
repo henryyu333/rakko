@@ -26,7 +26,7 @@ import (
 	"github.com/ebitengine/purego"
 	"github.com/egoist/mygo"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 )
 
@@ -299,7 +299,7 @@ func waitWindow(t *testing.T, pid int, d time.Duration) (windowInfo, bool) {
 	ok := waitFor(t, d, func() bool {
 		found := false
 		onMain(func() {
-			for _, w := range mac.WindowsOfPID(pid) {
+			for _, w := range platform.WindowsOfPID(pid) {
 				if w.Bounds.Size.Width < 430 || w.Bounds.Size.Height < 240 {
 					continue
 				}
@@ -324,7 +324,7 @@ func waitWindow(t *testing.T, pid int, d time.Duration) (windowInfo, bool) {
 // the same notch).
 func (r *appRun) ownsPoint(x, y float32) bool {
 	var hit int
-	onMain(func() { hit = mac.WindowAtPoint(float64(x), float64(y), r.screenH) })
+	onMain(func() { hit = platform.WindowAtPoint(float64(x), float64(y), r.screenH) })
 	return hit == r.win
 }
 

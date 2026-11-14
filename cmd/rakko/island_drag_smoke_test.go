@@ -24,7 +24,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 )
 
@@ -49,7 +49,7 @@ func islandDragShot(t *testing.T, r mygo.Rectangle, name string) string {
 // islandDragWindowShot captures the resident window by CGWindowID.
 func islandDragWindowShot(t *testing.T, a *shelf, name string) string {
 	t.Helper()
-	num := mac.WindowNumber(a.win.NativeHandle())
+	num := platform.WindowNumber(a.win.NativeHandle())
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}
@@ -110,9 +110,9 @@ func newIslandBackdrop(t *testing.T, b mygo.Rectangle) *mygo.Window {
 				ui.Box(c).Fill().Background(ui.Hex("#253445"))
 			})})
 		h := w.NativeHandle()
-		mac.ConfigureOverlayWindow(h)
-		mac.SetWindowLevel(h, mac.StatusWindowLevel-1)
-		mac.SetWindowFrame(h, b.X, b.Y, b.Width, b.Height)
+		platform.ConfigureOverlayWindow(h)
+		platform.SetWindowLevel(h, platform.StatusWindowLevel-1)
+		platform.SetWindowFrame(h, b.X, b.Y, b.Width, b.Height)
 		w.ShowInactive()
 	})
 	t.Cleanup(func() { onMain(w.Destroy) })
@@ -130,7 +130,7 @@ func requireIslandOwnWindow(t *testing.T, x, y float64) int {
 	var hit int
 	onMain(func() {
 		primary := mygo.Screen.PrimaryDisplay()
-		hit = mac.WindowAtPoint(x, y, float64(primary.Bounds.Y+primary.Bounds.Height))
+		hit = platform.WindowAtPoint(x, y, float64(primary.Bounds.Y+primary.Bounds.Height))
 	})
 	for _, w := range ownSmokeWindows(t) {
 		if w.ID == hit && w.Onscreen && insideRect(p, w.Frame) {
@@ -147,7 +147,7 @@ func requireIslandOwnWindow(t *testing.T, x, y float64) int {
 func requireIslandOverlayPress(t *testing.T, a *shelf, p mygo.Point) {
 	t.Helper()
 	var id int
-	onMain(func() { id = mac.WindowNumber(a.win.NativeHandle()) })
+	onMain(func() { id = platform.WindowNumber(a.win.NativeHandle()) })
 	if hit := requireIslandOwnWindow(t, float64(p.X), float64(p.Y)); hit != id {
 		t.Fatalf("a press at %+v reaches window %d, not the shelf overlay %d: the pointer gate has not accepted the shell there", p, hit, id)
 	}
@@ -168,7 +168,7 @@ func postIslandMouse(t *testing.T, x, y float64, events ...uint32) {
 		t.Fatalf("CoreGraphics: %v", err)
 	}
 	var (
-		create  func(source uintptr, typ uint32, p mac.CGPoint, button uint32) uintptr
+		create  func(source uintptr, typ uint32, p platform.CGPoint, button uint32) uintptr
 		post    func(tap uint32, ev uintptr)
 		release func(cf uintptr)
 	)
@@ -185,7 +185,7 @@ func postIslandMouse(t *testing.T, x, y float64, events ...uint32) {
 			button = 1
 		}
 		requireIslandOwnWindow(t, x, y)
-		ev := create(0, typ, mac.CGPoint{X: x, Y: y}, button)
+		ev := create(0, typ, platform.CGPoint{X: x, Y: y}, button)
 		if ev == 0 {
 			t.Fatal("CGEventCreateMouseEvent returned nil")
 		}
@@ -326,7 +326,7 @@ func TestIslandDragSmokeShots(t *testing.T) {
 	islandDragTicker(t, a)
 	var stopObs func()
 	onMain(func() {
-		stopObs = mac.ObserveMouseDown(a.win.NativeHandle(), func(inside bool, button int) {
+		stopObs = platform.ObserveMouseDown(a.win.NativeHandle(), func(inside bool, button int) {
 			a.mouseDown(inside, button, mygo.Screen.CursorScreenPoint())
 		})
 	})

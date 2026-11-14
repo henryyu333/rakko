@@ -16,7 +16,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 const fixShotDir = "/tmp/shelf-fix"
@@ -41,9 +41,9 @@ func sampleMotion(a *shelf, span time.Duration) []motionSample {
 				w:  a.fx.w, h: a.fx.h, openK: a.fx.openK, peekK: a.fx.peekK,
 				window: a.win.Bounds(), desired: a.desiredFrame(), ignoring: a.ignoringMouse,
 			}
-			num := mac.WindowNumber(a.winH)
+			num := platform.WindowNumber(a.winH)
 			screenH := float64(a.dispBounds.Y + a.dispBounds.Height)
-			row.nativeHit = mac.WindowAtPoint(float64(a.stripCenter()), float64(a.y+a.notchH+4), screenH) == num
+			row.nativeHit = platform.WindowAtPoint(float64(a.stripCenter()), float64(a.y+a.notchH+4), screenH) == num
 		})
 		samples = append(samples, row)
 		time.Sleep(8 * time.Millisecond)
@@ -188,7 +188,7 @@ func fixCapsuleShot(t *testing.T, a *shelf, name string) {
 	var num int
 	onMain(func() {
 		a.syncWindowFrame()
-		num = mac.WindowNumber(a.winH)
+		num = platform.WindowNumber(a.winH)
 		if !a.fb.drawn || (!a.fb.live && !a.fb.armed) || a.fb.retracting {
 			t.Errorf("%s: capsule content did not draw (drawn=%v armed=%v retracting=%v)", name, a.fb.drawn, a.fb.armed, a.fb.retracting)
 		}
@@ -450,20 +450,20 @@ func TestSmokeSettledPanelBottomMarginPassesThrough(t *testing.T) {
 					Hidden: true, Frameless: true, DisableShadow: true, Panel: true, SkipTaskbar: true,
 					Content: ui.View(func(c *ui.Context) { ui.Text(c, "Receiver") }),
 				})
-				mac.SetWindowFrame(below.NativeHandle(), belowPoint.X-20, belowPoint.Y-20, 40, 40)
+				platform.SetWindowFrame(below.NativeHandle(), belowPoint.X-20, belowPoint.Y-20, 40, 40)
 				below.ShowInactive()
-				mac.SetWindowLevel(below.NativeHandle(), mac.StatusWindowLevel-1)
-				belowNum = mac.WindowNumber(below.NativeHandle())
+				platform.SetWindowLevel(below.NativeHandle(), platform.StatusWindowLevel-1)
+				belowNum = platform.WindowNumber(below.NativeHandle())
 				side = mygo.NewWindow(mygo.WindowOptions{
 					Title: "ShelfU side-margin click receiver", Width: frame.Width - 16, Height: 30,
 					Hidden: true, Frameless: true, DisableShadow: true, Panel: true, SkipTaskbar: true,
 					Content: ui.View(func(c *ui.Context) { ui.Text(c, "Receiver") }),
 				})
-				mac.SetWindowFrame(side.NativeHandle(), frame.X+8, midY-15, frame.Width-16, 30)
+				platform.SetWindowFrame(side.NativeHandle(), frame.X+8, midY-15, frame.Width-16, 30)
 				side.ShowInactive()
-				mac.SetWindowLevel(side.NativeHandle(), mac.StatusWindowLevel-1)
-				sideNum = mac.WindowNumber(side.NativeHandle())
-				shelfNum = mac.WindowNumber(a.winH)
+				platform.SetWindowLevel(side.NativeHandle(), platform.StatusWindowLevel-1)
+				sideNum = platform.WindowNumber(side.NativeHandle())
+				shelfNum = platform.WindowNumber(a.winH)
 			})
 			if below == nil || side == nil {
 				t.Fatal("no native receiver")
@@ -487,7 +487,7 @@ func TestSmokeSettledPanelBottomMarginPassesThrough(t *testing.T) {
 				time.Sleep(150 * time.Millisecond) // let WindowServer apply the flag
 				onMain(func() {
 					screenH := float64(a.dispBounds.Y + a.dispBounds.Height)
-					hit = mac.WindowAtPoint(float64(p.X), float64(p.Y), screenH)
+					hit = platform.WindowAtPoint(float64(p.X), float64(p.Y), screenH)
 				})
 				if hit != want {
 					t.Errorf("%s at (%d,%d): target=%d want %d (ShelfU=%d below=%d side=%d frame=%+v)",
@@ -514,7 +514,7 @@ func TestSmokeSettledPanelBottomMarginPassesThrough(t *testing.T) {
 			time.Sleep(150 * time.Millisecond)
 			onMain(func() {
 				screenH := float64(a.dispBounds.Y + a.dispBounds.Height)
-				topHit = mac.WindowAtPoint(float64(topPoint.X), float64(topPoint.Y), screenH)
+				topHit = platform.WindowAtPoint(float64(topPoint.X), float64(topPoint.Y), screenH)
 			})
 			if topHit == shelfNum {
 				t.Errorf("menu-bar margin at (%d,%d): the overlay took the press (window %d)", topPoint.X, topPoint.Y, topHit)

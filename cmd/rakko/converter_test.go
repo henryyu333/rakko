@@ -15,14 +15,14 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/docx"
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/store"
 )
 
 // convertFakes replaces the native converters with fakes that write a
 // small marker file, and runs jobs synchronously.
 type convertFakes struct {
-	formats  []mac.ImageFormat
+	formats  []platform.ImageFormat
 	pdfSrcs  [][]string
 	docText  [][]string
 	lines    []string
@@ -59,7 +59,7 @@ func fakeConverters(t *testing.T) *convertFakes {
 		writeDocx, writeDocxPages, convertWork, convertDispatch = oDocx, oPages, oWork, oDispatch
 		fitImage, imageAlpha = oFit, oAlpha
 	})
-	fitImage = func(src, dst string, format mac.ImageFormat, limit int64) (bool, error) {
+	fitImage = func(src, dst string, format platform.ImageFormat, limit int64) (bool, error) {
 		f.fit = append(f.fit, [2]string{src, dst})
 		f.formats = append(f.formats, format)
 		n := f.fitBytes
@@ -72,7 +72,7 @@ func fakeConverters(t *testing.T) *convertFakes {
 		return f.alpha[filepath.Base(src)], nil
 	}
 	f.size = [2]int{40, 20}
-	convertImage = func(src, dst string, format mac.ImageFormat) error {
+	convertImage = func(src, dst string, format platform.ImageFormat) error {
 		if f.onConver != nil {
 			f.onConver()
 		}
@@ -88,7 +88,7 @@ func fakeConverters(t *testing.T) *convertFakes {
 	}
 	recognizeText = func(string) ([]string, error) { return slices.Clone(f.lines), nil }
 	imageSize = func(string) (int, int, error) { return f.size[0], f.size[1], nil }
-	resizeImage = func(src, dst string, format mac.ImageFormat, px int) error {
+	resizeImage = func(src, dst string, format platform.ImageFormat, px int) error {
 		f.resized = append(f.resized, px)
 		f.formats = append(f.formats, format)
 		return os.WriteFile(dst, []byte("s"), 0o600)
@@ -101,7 +101,7 @@ func fakeConverters(t *testing.T) *convertFakes {
 		}
 		return out, nil
 	}
-	renderPDFPage = func(src string, page int, dst string, format mac.ImageFormat) error {
+	renderPDFPage = func(src string, page int, dst string, format platform.ImageFormat) error {
 		f.rendered = append(f.rendered, page)
 		f.formats = append(f.formats, format)
 		return os.WriteFile(dst, []byte("page"), 0o600)
@@ -228,7 +228,7 @@ func TestConvertSelectedImagesToJPEG(t *testing.T) {
 	if a.selection.count() != 2 || !a.selection.has(a.store.Items[0].ID) || !a.selection.has(a.store.Items[1].ID) {
 		t.Fatal("the outputs must be selected so one drag takes them")
 	}
-	if !slices.Equal(f.formats, []mac.ImageFormat{mac.FormatJPEG, mac.FormatJPEG}) {
+	if !slices.Equal(f.formats, []platform.ImageFormat{platform.FormatJPEG, platform.FormatJPEG}) {
 		t.Fatalf("formats = %v", f.formats)
 	}
 	if !strings.HasPrefix(a.status, "已转换 2 项") {
@@ -540,7 +540,7 @@ func TestResizeImages(t *testing.T) {
 	if err := view.ChooseMenuItem("缩小 2 张图片", "中（长边 1600 像素）"); err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(f.resized, []int{1600, 1600}) || !slices.Equal(f.formats, []mac.ImageFormat{mac.FormatPNG, mac.FormatJPEG}) {
+	if !slices.Equal(f.resized, []int{1600, 1600}) || !slices.Equal(f.formats, []platform.ImageFormat{platform.FormatPNG, platform.FormatJPEG}) {
 		t.Fatalf("resized %v as %v, want 1600 px as PNG then JPEG", f.resized, f.formats)
 	}
 	if got := outputNames(a); !slices.Equal(got, []string{"a 1600px.png", "b 1600px.jpg"}) {

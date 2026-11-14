@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/locales"
 )
 
@@ -124,14 +124,14 @@ func (m *clockModule) playing() {
 		m.playSound()
 		return
 	}
-	mac.PlayAlertSound()
+	platform.PlayAlertSound()
 }
 
 func (m *clockModule) mute() {
 	if m.stopSound != nil {
 		m.stopSound()
 	} else {
-		mac.StopAlertSound()
+		platform.StopAlertSound()
 	}
 }
 

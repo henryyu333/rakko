@@ -13,7 +13,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/layout"
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 	"rakko/internal/store"
 )
@@ -65,7 +65,7 @@ func musicShelf(t *testing.T) (*shelf, *ui.Tester) {
 	a.vol = &fakeVolume{v: 0.4, ok: true}
 	a.np = &nowPlayingModule{
 		host: a, have: true,
-		last: mac.NowPlayingState{
+		last: platform.NowPlayingState{
 			Title: "座右铭", Artist: "吴雨霏", Duration: 200, Elapsed: 20,
 			Rate: 1, Received: time.Now(),
 		},

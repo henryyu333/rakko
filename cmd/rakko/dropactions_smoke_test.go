@@ -18,7 +18,7 @@ import (
 
 	"github.com/egoist/mygo/transfer"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 // Real-window drop-zone checks, run only under RAKKO_BASKET_SMOKE=1 so the
@@ -130,7 +130,7 @@ func shotDropZone(t *testing.T, a *shelf, paths []string, name string) {
 	if err := os.MkdirAll(dropShotDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	num := mac.WindowNumber(a.win.NativeHandle())
+	num := platform.WindowNumber(a.win.NativeHandle())
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}

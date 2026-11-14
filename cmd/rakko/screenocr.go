@@ -23,7 +23,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/weekly"
 )
 
@@ -37,8 +37,8 @@ const ocrProgressDelay = 250 * time.Millisecond
 var (
 	// ScreenCapturePreflight, not the request path's check: showing the
 	// permission card must never clear a screen-recording record.
-	ocrPreflight  = mac.ScreenCapturePreflight
-	ocrGrant      = mac.RequestScreenCapture
+	ocrPreflight  = platform.ScreenCapturePreflight
+	ocrGrant      = platform.RequestScreenCapture
 	ocrCapture    = captureRegion
 	ocrWork       = func(fn func()) { go fn() }
 	ocrDispatch   = mygo.RunOnMain

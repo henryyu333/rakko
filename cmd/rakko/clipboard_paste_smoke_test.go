@@ -20,14 +20,14 @@ import (
 	"testing"
 	"time"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 func TestSmokePasteIntoReceiver(t *testing.T) {
 	if os.Getenv("RAKKO_BASKET_SMOKE") != "1" {
 		t.Skip("set RAKKO_BASKET_SMOKE=1 to run the native paste acceptance")
 	}
-	if !mac.AccessibilityTrusted() {
+	if !platform.AccessibilityTrusted() {
 		t.Skip("this process is not trusted for Accessibility: the real ⌘V chain cannot be exercised here")
 	}
 	a := redesignShelf(t)
@@ -39,7 +39,7 @@ func TestSmokePasteIntoReceiver(t *testing.T) {
 	// out) one.
 	t.Run("text", func(t *testing.T) {
 		pid, state := launchPasteReceiver(t, bin, "text")
-		if !mac.ActivateApp(pid) {
+		if !platform.ActivateApp(pid) {
 			t.Fatalf("activating the receiver %d", pid)
 		}
 		if got := waitFrontmost(t, pid); got != pid {
@@ -87,7 +87,7 @@ func TestSmokePasteIntoReceiver(t *testing.T) {
 	// Image: the same flow with a PNG row, pasted into a view that takes Paste.
 	t.Run("image", func(t *testing.T) {
 		pid, state := launchPasteReceiver(t, bin, "image")
-		if !mac.ActivateApp(pid) {
+		if !platform.ActivateApp(pid) {
 			t.Fatalf("activating the receiver %d", pid)
 		}
 		if got := waitFrontmost(t, pid); got != pid {
@@ -234,13 +234,13 @@ func waitFrontmost(t *testing.T, pid int) int {
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		var front int
-		onMain(func() { front = mac.FrontmostPID() })
+		onMain(func() { front = platform.FrontmostPID() })
 		if front == pid {
 			return front
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
 	var front int
-	onMain(func() { front = mac.FrontmostPID() })
+	onMain(func() { front = platform.FrontmostPID() })
 	return front
 }

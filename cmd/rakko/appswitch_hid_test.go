@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 const (
@@ -53,7 +53,7 @@ func hidSkip(t *testing.T) {
 
 // hidFrontPID/hidRunningPID 都在主线程读（mac 包的约定）。回调里不断言。
 func hidFrontPID() int {
-	if p := mainValue(func() any { return mac.FrontmostPID() }); p != nil {
+	if p := mainValue(func() any { return platform.FrontmostPID() }); p != nil {
 		return p.(int)
 	}
 	return 0
@@ -61,7 +61,7 @@ func hidFrontPID() int {
 
 func hidRunningPID(bundleID string) int {
 	if v := mainValue(func() any {
-		for _, r := range mac.RunningApps() {
+		for _, r := range platform.RunningApps() {
 			if r.BundleID == bundleID {
 				return r.PID
 			}
@@ -143,7 +143,7 @@ func hidWriteSentinel(t *testing.T) {
 // launch — and fails loudly when fixtures were not built/registered.
 func hidFixture(t *testing.T, bundleID string) string {
 	t.Helper()
-	p := mainValue(func() any { return mac.AppPathForBundleID(bundleID) }).(string)
+	p := mainValue(func() any { return platform.AppPathForBundleID(bundleID) }).(string)
 	if p == "" {
 		t.Fatalf("%s not resolvable through LaunchServices — build the switch fixtures first (dist.noindex/switch-fixtures)", bundleID)
 	}

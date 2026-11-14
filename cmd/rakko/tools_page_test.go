@@ -14,7 +14,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/layout"
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/store"
 )
 
@@ -609,7 +609,7 @@ func TestToolsEditBadgeIsVisibleAndClickableAtGridEdges(t *testing.T) {
 func TestToolsGridDrawsNoEdgeBlur(t *testing.T) {
 	a := &shelf{tab: pageTools, visible: true, level: 2, store: mustStore(t), dataDir: t.TempDir(),
 		thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{}, appNames: map[string]string{}}
-	a.np = &nowPlayingModule{host: a, have: true, last: mac.NowPlayingState{
+	a.np = &nowPlayingModule{host: a, have: true, last: platform.NowPlayingState{
 		Title: "夜曲", Artist: "周杰伦", Duration: 200, Elapsed: 20, Rate: 1, Received: time.Now(),
 	}}
 	// A fresh install fits the viewport; this test needs a grid that

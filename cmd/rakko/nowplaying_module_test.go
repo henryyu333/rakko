@@ -18,7 +18,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 )
 
@@ -47,7 +47,7 @@ func newStubNowPlaying(t *testing.T) *stubNowPlaying {
 		}
 		close(s.cmds)
 	}()
-	host := mac.NewNowPlayingHostWithSource(func(ctx context.Context) (io.WriteCloser, io.ReadCloser, func() error, error) {
+	host := platform.NewNowPlayingHostWithSource(func(ctx context.Context) (io.WriteCloser, io.ReadCloser, func() error, error) {
 		// The stub child "exits" when the host is stopped, so Stop does
 		// not wait out its one-second grace period.
 		wait := func() error { lineR.Close(); return nil }
@@ -72,7 +72,7 @@ func newStubNowPlaying(t *testing.T) *stubNowPlaying {
 // feed pushes one helper line and steps refreshes until the module has
 // folded it in (the helper runs on its own goroutine, so the line is
 // never there instantly).
-func (s *stubNowPlaying) feed(t *testing.T, line string) mac.NowPlayingState {
+func (s *stubNowPlaying) feed(t *testing.T, line string) platform.NowPlayingState {
 	t.Helper()
 	s.mod.refresh(time.Now())
 	before := s.mod.snap
@@ -94,10 +94,10 @@ func (s *stubNowPlaying) feed(t *testing.T, line string) mac.NowPlayingState {
 
 func TestNPSnapOf(t *testing.T) {
 	now := time.Now()
-	if got := npSnapOf(mac.NowPlayingState{}, false, true, now); got != (npSnap{}) {
+	if got := npSnapOf(platform.NowPlayingState{}, false, true, now); got != (npSnap{}) {
 		t.Fatalf("no state must project to the zero snapshot, got %+v", got)
 	}
-	st := mac.NowPlayingState{Playing: true, Title: "T", Artist: "A", ArtID: "id",
+	st := platform.NowPlayingState{Playing: true, Title: "T", Artist: "A", ArtID: "id",
 		Elapsed: 10, Rate: 1, Received: now.Add(-2 * time.Second)}
 	got := npSnapOf(st, true, true, now)
 	want := npSnap{have: true, playing: true, title: "T", artist: "A", artID: "id", position: 12}
@@ -114,7 +114,7 @@ func TestNPSnapOf(t *testing.T) {
 		t.Fatal("a position-bearing snapshot must differ from a closed one")
 	}
 	// A paused track keeps its frozen position but reports not playing.
-	paused := npSnapOf(mac.NowPlayingState{Title: "T", Elapsed: 10, Received: now.Add(-time.Hour)}, true, true, now)
+	paused := npSnapOf(platform.NowPlayingState{Title: "T", Elapsed: 10, Received: now.Add(-time.Hour)}, true, true, now)
 	if paused.playing || paused.position != 10 {
 		t.Fatalf("paused snapshot = %+v", paused)
 	}
@@ -211,7 +211,7 @@ func TestPeekGrowsIntoTheWingsForATrack(t *testing.T) {
 	if w, h := a.peekSize(); w != 220 || h != 32+peekBody {
 		t.Fatalf("idle peek = %.0fx%.0f, want 220x%d (notch +40/+%d)", w, h, 32+peekBody, peekBody)
 	}
-	a.np = &nowPlayingModule{host: a, have: true, last: mac.NowPlayingState{Title: "T"}}
+	a.np = &nowPlayingModule{host: a, have: true, last: platform.NowPlayingState{Title: "T"}}
 	// A track grows the peek into two wings; the exact share is an
 	// implementation detail — the invariant is bigger than idle and
 	// contained by the resident strip.
@@ -389,7 +389,7 @@ func TestPeekWingsLabelWithoutATitle(t *testing.T) {
 		peeking:      true,
 		peekProgress: 1,
 	}
-	a.np = &nowPlayingModule{host: a, have: true, last: mac.NowPlayingState{Playing: true}}
+	a.np = &nowPlayingModule{host: a, have: true, last: platform.NowPlayingState{Playing: true}}
 	view := ui.NewTester(a.view, sheetW, panelTestH)
 	if _, ok := view.Find("展开 Rakko"); !ok {
 		t.Fatalf("the untitled wings must still be labeled; texts %v", view.Texts())
@@ -448,7 +448,7 @@ func (s *stubNowPlaying) push(t *testing.T, line string) {
 func TestPlayPausePressHoldsUntilHelperAgrees(t *testing.T) {
 	s := newStubNowPlaying(t)
 	s.feed(t, `{"ok":true,"isPlaying":true,"appState":1,"title":"T","duration":100,"elapsed":5,"hasRate":true,"rate":1}`)
-	s.mod.send(mac.NPPlayPause)
+	s.mod.send(platform.NPPlayPause)
 	s.expectCommand(t, "toggle")
 	if s.mod.last.Playing {
 		t.Fatal("the press must flip the shown state at once")
@@ -492,7 +492,7 @@ func TestNowPlayingDecodesWebPArtwork(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := &nowPlayingModule{}
-	m.decodeArt(mac.NowPlayingState{ArtID: "w", Art: webp, App: "com.netease.163music"})
+	m.decodeArt(platform.NowPlayingState{ArtID: "w", Art: webp, App: "com.netease.163music"})
 	if m.art == nil || m.artIsIcon || m.artDone != "w" {
 		t.Fatalf("WebP artwork: art=%v icon=%v done=%q, want the decoded cover", m.art, m.artIsIcon, m.artDone)
 	}
@@ -501,7 +501,7 @@ func TestNowPlayingDecodesWebPArtwork(t *testing.T) {
 func TestNowPlayingDecodeArtOncePerTrack(t *testing.T) {
 	m := &nowPlayingModule{}
 	pngBytes := testPNG(t)
-	m.decodeArt(mac.NowPlayingState{ArtID: "a", Art: pngBytes})
+	m.decodeArt(platform.NowPlayingState{ArtID: "a", Art: pngBytes})
 	if m.art == nil || m.artIsIcon {
 		t.Fatal("a valid PNG must decode as the cover")
 	}
@@ -510,20 +510,20 @@ func TestNowPlayingDecodeArtOncePerTrack(t *testing.T) {
 	}
 	// The same track never re-decodes.
 	bitmap := m.art
-	m.decodeArt(mac.NowPlayingState{ArtID: "a", Art: pngBytes})
+	m.decodeArt(platform.NowPlayingState{ArtID: "a", Art: pngBytes})
 	if m.art != bitmap {
 		t.Fatal("the same track must reuse the decoded bitmap")
 	}
 	// A new track whose blob cannot be decoded drops the old artwork. Until
 	// a line names the app it is retried rather than latched.
-	m.decodeArt(mac.NowPlayingState{ArtID: "b", Art: []byte("not an image")})
+	m.decodeArt(platform.NowPlayingState{ArtID: "b", Art: []byte("not an image")})
 	if m.art != nil || m.artDone == "b" {
 		t.Fatalf("an undecodable blob without an app must clear the art and stay retryable: art=%v tried=%q", m.art, m.artDone)
 	}
 	// The helper declares the artwork missing (after its grace window) but
 	// no line has named an app yet: nothing to draw and nothing is latched,
 	// so a later line naming the bundle still gets its chance.
-	m.decodeArt(mac.NowPlayingState{ArtID: "c", ArtMissing: true})
+	m.decodeArt(platform.NowPlayingState{ArtID: "c", ArtMissing: true})
 	if m.art != nil || m.iconFor != "" || m.artDone == "c" {
 		t.Fatalf("artwork-less track without an app: art=%v iconFor=%q done=%q", m.art, m.iconFor, m.artDone)
 	}
@@ -532,21 +532,21 @@ func TestNowPlayingDecodeArtOncePerTrack(t *testing.T) {
 		lookups = append(lookups, bundle)
 		return nil
 	}
-	m.decodeArt(mac.NowPlayingState{ArtID: "c", ArtMissing: true})
+	m.decodeArt(platform.NowPlayingState{ArtID: "c", ArtMissing: true})
 	if m.iconFor != "" || len(lookups) != 0 {
 		t.Fatal("an app-less line must not look up or latch an icon")
 	}
-	m.decodeArt(mac.NowPlayingState{ArtID: "c", ArtMissing: true, App: "com.example.player"})
+	m.decodeArt(platform.NowPlayingState{ArtID: "c", ArtMissing: true, App: "com.example.player"})
 	if m.iconFor != "c" || len(lookups) != 1 || lookups[0] != "com.example.player" {
 		t.Fatalf("the named app must be looked up once: iconFor=%q lookups=%v", m.iconFor, lookups)
 	}
-	m.decodeArt(mac.NowPlayingState{ArtID: "c", ArtMissing: true, App: "com.example.player"})
+	m.decodeArt(platform.NowPlayingState{ArtID: "c", ArtMissing: true, App: "com.example.player"})
 	if len(lookups) != 1 {
 		t.Fatal("the fallback must be looked up once per track")
 	}
 	// Artwork that arrives late for a track still decodes (the helper's
 	// artMissing deadline is not the reader's last word).
-	m.decodeArt(mac.NowPlayingState{ArtID: "c", ArtMissing: true, Art: pngBytes})
+	m.decodeArt(platform.NowPlayingState{ArtID: "c", ArtMissing: true, Art: pngBytes})
 	if m.art == nil || m.artDone != "c" {
 		t.Fatal("late artwork must still decode and replace the fallback")
 	}
@@ -554,17 +554,17 @@ func TestNowPlayingDecodeArtOncePerTrack(t *testing.T) {
 		t.Fatal("late artwork must be shown as the cover, not an icon")
 	}
 	// A later missing line for the same track must not clear the cover.
-	m.decodeArt(mac.NowPlayingState{ArtID: "c", ArtMissing: true})
+	m.decodeArt(platform.NowPlayingState{ArtID: "c", ArtMissing: true})
 	if m.art == nil {
 		t.Fatal("a repeated missing line must not drop a decoded cover")
 	}
 	// An empty artwork without artMissing (title-first sample) is not
 	// remembered as tried, so its own late blob decodes.
-	m.decodeArt(mac.NowPlayingState{ArtID: "d"})
+	m.decodeArt(platform.NowPlayingState{ArtID: "d"})
 	if m.artDone == "d" {
 		t.Fatal("an empty artwork without artMissing must not be remembered as done")
 	}
-	m.decodeArt(mac.NowPlayingState{ArtID: "d", Art: pngBytes})
+	m.decodeArt(platform.NowPlayingState{ArtID: "d", Art: pngBytes})
 	if m.art == nil {
 		t.Fatal("late artwork must still decode")
 	}
@@ -578,7 +578,7 @@ func TestNowPlayingFallsBackToTheAppIcon(t *testing.T) {
 		}
 		return icon
 	}}
-	m.decodeArt(mac.NowPlayingState{ArtID: "x", ArtMissing: true, App: "com.example.player"})
+	m.decodeArt(platform.NowPlayingState{ArtID: "x", ArtMissing: true, App: "com.example.player"})
 	if m.art != icon || !m.artIsIcon || m.artState() != npArtIcon {
 		t.Fatalf("app icon fallback: art=%p isIcon=%v state=%d", m.art, m.artIsIcon, m.artState())
 	}
@@ -614,8 +614,8 @@ func TestNowPlayingStopsWhenHelperDies(t *testing.T) {
 
 func TestNowPlayingStartFailureIsRetriedLater(t *testing.T) {
 	m := &nowPlayingModule{host: &shelf{settings: settings.Settings{}}}
-	m.newHost = func() *mac.NowPlayingHost {
-		return mac.NewNowPlayingHostWithSource(func(context.Context) (io.WriteCloser, io.ReadCloser, func() error, error) {
+	m.newHost = func() *platform.NowPlayingHost {
+		return platform.NewNowPlayingHostWithSource(func(context.Context) (io.WriteCloser, io.ReadCloser, func() error, error) {
 			return nil, nil, nil, errors.New("no helper here")
 		})
 	}
@@ -629,9 +629,9 @@ func TestNowPlayingStartFailureIsRetriedLater(t *testing.T) {
 	}
 	// The next ticks inside the delay must not even try again.
 	tries := 0
-	m.newHost = func() *mac.NowPlayingHost {
+	m.newHost = func() *platform.NowPlayingHost {
 		tries++
-		return mac.NewNowPlayingHostWithSource(func(context.Context) (io.WriteCloser, io.ReadCloser, func() error, error) {
+		return platform.NewNowPlayingHostWithSource(func(context.Context) (io.WriteCloser, io.ReadCloser, func() error, error) {
 			return nil, nil, nil, errors.New("still nothing")
 		})
 	}

@@ -21,7 +21,7 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 // clockShotDir is where this run's pictures and frame CSVs go: the
@@ -51,7 +51,7 @@ func clockShot(t *testing.T, a *shelf, dir, name string) {
 	if a.win == nil {
 		t.Fatal("no notch window")
 	}
-	num := mac.WindowNumber(a.win.NativeHandle())
+	num := platform.WindowNumber(a.win.NativeHandle())
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}

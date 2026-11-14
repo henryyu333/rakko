@@ -21,7 +21,7 @@ import (
 	"github.com/egoist/mygo"
 
 	"rakko/internal/layout"
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 const noteShotDir = "/tmp/rakko-note"
@@ -33,7 +33,7 @@ func noteShotWindow(t *testing.T, win *mygo.Window, name string) {
 		t.Fatalf("%s: no window", name)
 	}
 	var num int
-	onMain(func() { num = mac.WindowNumber(win.NativeHandle()) })
+	onMain(func() { num = platform.WindowNumber(win.NativeHandle()) })
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}

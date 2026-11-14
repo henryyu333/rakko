@@ -11,7 +11,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 // The notch shell: geometry, the three states (idle, peek, expanded), their
@@ -41,7 +41,7 @@ var displayNearest = func(p mygo.Point) mygo.Display { return mygo.Screen.Displa
 
 // notchRect measures a display's camera housing; tests replace it with the
 // synthetic layout displayNearest returns.
-var notchRect = mac.NotchRect
+var notchRect = platform.NotchRect
 
 func (a *shelf) placeAt(p mygo.Point) {
 	d := displayNearest(p)
@@ -491,7 +491,7 @@ func (a *shelf) frameCoverAppsPop(r mygo.Rectangle, ph float32) mygo.Rectangle {
 
 // setNativeWindowFrame is the seam tests use to observe every native resize
 // the overlay asks for.
-var setNativeWindowFrame = mac.SetWindowFrame
+var setNativeWindowFrame = platform.SetWindowFrame
 
 // resizeStretches reports whether applying r would present the canvas that
 // is on the window enlarged. That is the only resize mygo's one-frame old
@@ -742,7 +742,7 @@ func (a *shelf) overPeekPill(p mygo.Point) bool {
 // their serials (see dragTracker.press).
 func (a *shelf) mouseDown(inside bool, button int, p mygo.Point) {
 	if button == 0 {
-		mac.NoteLeftPress()
+		platform.NoteLeftPress()
 	}
 	if a.quitting {
 		return
@@ -883,11 +883,11 @@ func (a *shelf) mouseDown(inside bool, button int, p mygo.Point) {
 func (a *shelf) windowLevel() int {
 	switch {
 	case a.dragging || a.pointerDrag:
-		return mac.PopUpMenuWindowLevel
+		return platform.PopUpMenuWindowLevel
 	case a.focusMode:
-		return mac.SearchKeyboardLevel
+		return platform.SearchKeyboardLevel
 	default:
-		return mac.StatusWindowLevel
+		return platform.StatusWindowLevel
 	}
 }
 
@@ -912,8 +912,8 @@ func (a *shelf) syncMousePassThrough() {
 		return
 	}
 	h := a.winH
-	mac.SetOverlayAcceptsMouse(h, accept)
-	mac.SetWindowLevel(h, a.windowLevel())
+	platform.SetOverlayAcceptsMouse(h, accept)
+	platform.SetWindowLevel(h, a.windowLevel())
 }
 
 // overlayWanted reports whether the current state needs the overlay to take
@@ -1061,7 +1061,7 @@ func (a *shelf) watchPointer() {
 		return
 	}
 	pointerWatched = true
-	mac.ObserveMouseMoved(func() {
+	platform.ObserveMouseMoved(func() {
 		for _, s := range pointerShelves {
 			s.pointerMoved()
 			s.syncPointerGate()
@@ -1135,7 +1135,7 @@ func (a *shelf) syncPointerGate() {
 	if a.win == nil {
 		return // headless surface: the flag is all there is
 	}
-	mac.SetOverlayAcceptsMouse(a.winH, accept)
+	platform.SetOverlayAcceptsMouse(a.winH, accept)
 }
 
 // overShell reports whether p is on the shell the last frame drew — the
@@ -1393,7 +1393,7 @@ func (a *shelf) show(edge bool) {
 	// keyboard came from here, while it is still the frontmost one.
 	if level == 1 && !a.snap.panel {
 		if !a.focusMode {
-			if pid := mac.FrontmostPID(); pid > 0 && pid != mac.OwnPID() {
+			if pid := platform.FrontmostPID(); pid > 0 && pid != platform.OwnPID() {
 				a.prevAppPID = pid
 			}
 		}
@@ -1566,8 +1566,8 @@ func (a *shelf) escape() {
 		}
 		return
 	}
-	if mac.QuickLookVisible() {
-		mac.CloseQuickLook()
+	if platform.QuickLookVisible() {
+		platform.CloseQuickLook()
 		return
 	}
 	if a.ocrSheet {

@@ -14,7 +14,7 @@ import (
 	"github.com/egoist/mygo/plugins/glass"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 const appearancePoll = 250 * time.Millisecond
@@ -84,4 +84,4 @@ func (a *shelf) panelFill(p *ui.Painter, path *ui.Path, body ui.Rect, botR float
 }
 
 // macReduceTransparency is a seam so headless tests never touch AppKit.
-var macReduceTransparency = func() bool { return mac.ReduceTransparency() }
+var macReduceTransparency = func() bool { return platform.ReduceTransparency() }

@@ -19,7 +19,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 	"rakko/locales"
 )
@@ -308,7 +308,7 @@ func (a *shelf) switchIcon(bundleID string) *ui.Bitmap {
 		return nil
 	}
 	var b *ui.Bitmap
-	if png := mac.AppIcon(bundleID, 64); len(png) > 0 {
+	if png := platform.AppIcon(bundleID, 64); len(png) > 0 {
 		if decoded, err := ui.DecodeBitmap(png); err == nil {
 			b = decoded
 		}

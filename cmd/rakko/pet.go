@@ -11,13 +11,13 @@ package main
 //
 // The window is the artwork's bounding box: AppKit cannot pass a click
 // through a picture only where the picture is transparent (measured in
-// internal/mac/overlay_hit.go), so the otter's clickable area is its own
+// internal/platform/overlay_hit.go), so the otter's clickable area is its own
 // rectangle — the same trade every desktop pet makes. Only the five
 // full-body pet_* pictures are drawn here; the panel's busts never appear,
 // because a bust where a whole body stands reads as another character.
 //
 // It reuses the pinned card's window policy (non-activating floating
-// panel, every Space, never key) through mac.ConfigurePetWindow, but not
+// panel, every Space, never key) through platform.ConfigurePetWindow, but not
 // its full-screen company: over a film the otter steps aside.
 
 import (
@@ -28,7 +28,7 @@ import (
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 )
 
@@ -325,8 +325,8 @@ func (a *shelf) openPetWindow() {
 	pet.win = w
 	pet.shownAt = time.Now()
 	w.SetVisibleOnAllWorkspaces(true)
-	mac.ConfigurePetWindow(w.NativeHandle())
-	mac.SetWindowFrame(w.NativeHandle(), f.X, f.Y, f.Width, f.Height)
+	platform.ConfigurePetWindow(w.NativeHandle())
+	platform.SetWindowFrame(w.NativeHandle(), f.X, f.Y, f.Width, f.Height)
 	w.ShowInactive()
 }
 
@@ -563,7 +563,7 @@ func (a *shelf) petMoves(now time.Time) bool {
 	if pet == nil || pet.reduceMotion {
 		return false
 	}
-	return !mac.DisplayAsleep(uint32(pet.display)) && !a.petCovered(now)
+	return !platform.DisplayAsleep(uint32(pet.display)) && !a.petCovered(now)
 }
 
 // petCovered reports the window hidden behind something else — another
@@ -578,7 +578,7 @@ func (a *shelf) petCovered(now time.Time) bool {
 	if !pet.shownAt.IsZero() && now.Sub(pet.shownAt) < petSettleTrust {
 		return false
 	}
-	return mac.WindowOccluded(pet.win.NativeHandle())
+	return platform.WindowOccluded(pet.win.NativeHandle())
 }
 
 // petLerp is one point on the slide.
@@ -600,7 +600,7 @@ func (pet *petWindow) slideAcross(to mygo.Rectangle, dur time.Duration) {
 // placeAt puts the native window at r without touching the logical place.
 func (pet *petWindow) placeAt(r mygo.Rectangle) {
 	if pet.win != nil {
-		mac.SetWindowFrame(pet.win.NativeHandle(), r.X, r.Y, r.Width, r.Height)
+		platform.SetWindowFrame(pet.win.NativeHandle(), r.X, r.Y, r.Width, r.Height)
 	}
 }
 

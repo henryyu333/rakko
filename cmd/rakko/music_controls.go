@@ -15,7 +15,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 // Speaker glyphs for the volume row.
@@ -33,8 +33,8 @@ type volumeControl interface {
 
 type systemVolume struct{}
 
-func (systemVolume) level() (float32, bool) { return mac.OutputVolume() }
-func (systemVolume) set(v float32) error    { return mac.SetOutputVolume(v) }
+func (systemVolume) level() (float32, bool) { return platform.OutputVolume() }
+func (systemVolume) set(v float32) error    { return platform.SetOutputVolume(v) }
 
 // volumeControl is the seam: nil means the real CoreAudio device.
 func (a *shelf) volumeControl() volumeControl {

@@ -14,7 +14,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/store"
 )
 
@@ -284,7 +284,7 @@ func TestPasteGivesUpWhenFocusNeverArrives(t *testing.T) {
 	h := newPasteHooks(t)
 	pasteFocusWait, pastePollInterval = 80*time.Millisecond, 5*time.Millisecond
 	a, _, rec := pasteShelf(t, "never front")
-	pasteFrontmost = func() int { return mac.OwnPID() }
+	pasteFrontmost = func() int { return platform.OwnPID() }
 	a.pasteClipSelection()
 	h.runWork()
 	if len(h.pastes.sent) != 0 {
@@ -397,7 +397,7 @@ func TestPasteRetriesActivationOnce(t *testing.T) {
 		if len(h.activated) > 0 {
 			return 4242
 		}
-		return mac.OwnPID()
+		return platform.OwnPID()
 	}
 	a.pasteClipSelection()
 	h.runWork()
@@ -415,7 +415,7 @@ func TestPasteTimeoutReportsOnMainThread(t *testing.T) {
 	h := newPasteHooks(t)
 	pasteFocusWait, pastePollInterval = 40*time.Millisecond, 5*time.Millisecond
 	a, _, _ := pasteShelf(t, "timeout item")
-	pasteFrontmost = func() int { return mac.OwnPID() } // 交接仍属于我们，但目标一直不来
+	pasteFrontmost = func() int { return platform.OwnPID() } // 交接仍属于我们，但目标一直不来
 	// 主线程回调先排队，不就地执行：这样能证明后台路径没有直接改 UI。
 	var queued []func()
 	dispatchMain = func(fn func()) { queued = append(queued, fn) }

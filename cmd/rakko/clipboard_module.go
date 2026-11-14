@@ -8,7 +8,7 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 // The recorder reads the system pasteboard in production; tests can supply
@@ -23,13 +23,13 @@ type clipReader interface {
 
 type systemClipReader struct{}
 
-func (systemClipReader) changeCount() int64 { return mac.ClipboardChangeCount() }
-func (systemClipReader) types() []string    { return mac.ClipboardTypes() }
+func (systemClipReader) changeCount() int64 { return platform.ClipboardChangeCount() }
+func (systemClipReader) types() []string    { return platform.ClipboardTypes() }
 func (systemClipReader) text() string       { return mygo.Clipboard.ReadText() }
 func (systemClipReader) image() []byte      { return mygo.Clipboard.ReadImage() }
 func (systemClipReader) sourceApp() string {
-	bundleID, _ := mac.FrontmostApp()
-	return captureSource(mac.FrontmostPID(), mac.OwnPID(), bundleID)
+	bundleID, _ := platform.FrontmostApp()
+	return captureSource(platform.FrontmostPID(), platform.OwnPID(), bundleID)
 }
 
 // clipPublishWait bounds how long a change may stay unreadable before the
@@ -111,7 +111,7 @@ func newClipboardModule(host *shelf) *clipboardModule {
 	if host.win != nil {
 		m.tracked = true
 		m.front = board.sourceApp()
-		m.stopObserve = mac.ObserveActiveApp(func() { m.noteActivation(time.Now()) })
+		m.stopObserve = platform.ObserveActiveApp(func() { m.noteActivation(time.Now()) })
 	}
 	return m
 }
@@ -127,8 +127,8 @@ func (m *clipboardModule) stop() {
 // noteActivation records one app switch with the app that was frontmost
 // before it. Runs on the main thread from NSWorkspace's notification.
 func (m *clipboardModule) noteActivation(now time.Time) {
-	bundleID, _ := mac.FrontmostApp()
-	bundleID = captureSource(mac.FrontmostPID(), mac.OwnPID(), bundleID)
+	bundleID, _ := platform.FrontmostApp()
+	bundleID = captureSource(platform.FrontmostPID(), platform.OwnPID(), bundleID)
 	if bundleID == m.front {
 		return
 	}
@@ -191,7 +191,7 @@ func (m *clipboardModule) startBackground() {
 		return
 	}
 	m.background = true
-	mac.PrimeClipboardChangeCount()
+	platform.PrimeClipboardChangeCount()
 	stop := m.host.stop
 	go func() {
 		t := time.NewTicker(clipPollInterval)
@@ -220,7 +220,7 @@ func (m *clipboardModule) startBackground() {
 // scalar needs no autorelease pool; the stress run in phase3 covers it.
 func (m *clipboardModule) backgroundCount() int64 {
 	if _, ok := m.board.(systemClipReader); ok {
-		return mac.ClipboardChangeCountFast()
+		return platform.ClipboardChangeCountFast()
 	}
 	return m.board.changeCount()
 }

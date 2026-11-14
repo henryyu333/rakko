@@ -19,7 +19,7 @@ import (
 	"github.com/ebitengine/purego"
 	"github.com/egoist/mygo"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 const spotShotDir = "/tmp/rakko-search/shots"
@@ -31,7 +31,7 @@ func spotShot(t *testing.T, a *shelf, name string) string {
 		t.Fatal("no notch window")
 	}
 	var num int
-	onMain(func() { num = mac.WindowNumber(a.win.NativeHandle()) })
+	onMain(func() { num = platform.WindowNumber(a.win.NativeHandle()) })
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}
@@ -53,7 +53,7 @@ func spotShot(t *testing.T, a *shelf, name string) string {
 func typeIntoHome(t *testing.T, text string) bool {
 	t.Helper()
 	var front bool
-	onMain(func() { front = mac.FrontmostPID() == mac.OwnPID() })
+	onMain(func() { front = platform.FrontmostPID() == platform.OwnPID() })
 	if !front {
 		return false
 	}
@@ -116,7 +116,7 @@ func TestSmokeHomeSpotlight(t *testing.T) {
 	// Production warms the index at launch; the harness has no launch path
 	// of its own, so it does the same and lets the query finish before the
 	// bar opens.
-	mac.WarmSpotlight()
+	platform.WarmSpotlight()
 	time.Sleep(1200 * time.Millisecond)
 	onMain(func() {
 		a.show(false)

@@ -16,7 +16,7 @@ import (
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/store"
 )
 
@@ -72,7 +72,7 @@ func (a *shelf) itemMenu(m *ui.Menu, item store.Item) {
 		a.quickLook(paths)
 	}
 	if m.Item(l.ItemAirDrop()).Disabled(!files && len(texts) == 0).Chosen() {
-		if err := mac.AirDrop(paths, texts); err != nil {
+		if err := platform.AirDrop(paths, texts); err != nil {
 			a.report(err)
 		}
 	}
@@ -300,7 +300,7 @@ func itemPNG(item store.Item) ([]byte, error) {
 	name := tmp.Name()
 	tmp.Close()
 	defer os.Remove(name)
-	if err := mac.ConvertImage(item.Path, name, mac.FormatPNG); err != nil {
+	if err := platform.ConvertImage(item.Path, name, platform.FormatPNG); err != nil {
 		return nil, err
 	}
 	return os.ReadFile(name)
@@ -334,7 +334,7 @@ func (a *shelf) appName(bundleID string) string {
 	if name, ok := a.appNames[bundleID]; ok {
 		return name
 	}
-	name := mac.AppNameForBundleID(bundleID)
+	name := platform.AppNameForBundleID(bundleID)
 	if name == "" {
 		name = bundleID
 	}
@@ -456,7 +456,7 @@ func (a *shelf) quickLook(paths []string) {
 	if len(paths) == 0 {
 		return
 	}
-	if err := mac.QuickLook(paths); err != nil {
+	if err := platform.QuickLook(paths); err != nil {
 		a.report(err)
 	}
 }
@@ -464,8 +464,8 @@ func (a *shelf) quickLook(paths []string) {
 // toggleQuickLook is Space while the shelf is in use: it closes an open
 // preview, or previews the selected files and images.
 func (a *shelf) toggleQuickLook() {
-	if mac.QuickLookVisible() {
-		mac.CloseQuickLook()
+	if platform.QuickLookVisible() {
+		platform.CloseQuickLook()
 		return
 	}
 	if a.store == nil || !a.visible {

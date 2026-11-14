@@ -25,7 +25,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/aiusage"
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 	"rakko/internal/store"
 )
@@ -228,7 +228,7 @@ func renderEvidence(t *testing.T, now time.Time) {
 	}
 	a := &shelf{store: s, dataDir: t.TempDir(), level: 1, visible: true, settings: settings.Default(),
 		thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{}, appNames: map[string]string{}}
-	a.np = &nowPlayingModule{host: a, have: true, last: mac.NowPlayingState{Playing: true, Title: "座右铭", Artist: "吴雨霏", App: "com.apple.Music", Duration: 243, Elapsed: 112, Rate: 1, Received: now}, artColor: ui.Hex("#C9A27E")}
+	a.np = &nowPlayingModule{host: a, have: true, last: platform.NowPlayingState{Playing: true, Title: "座右铭", Artist: "吴雨霏", App: "com.apple.Music", Duration: 243, Elapsed: 112, Rate: 1, Received: now}, artColor: ui.Hex("#C9A27E")}
 	a.modules = []module{a.np}
 	f := newUsageFeature(a, usageDeps{
 		fetchCodex:  func(context.Context) aiusage.Quota { return okQuota(aiusage.ToolCodex, "Plus", now) },
@@ -249,7 +249,7 @@ func renderEvidence(t *testing.T, now time.Time) {
 	view.Frame()
 	savePNG(t, view.Image(), "render-island-counts")
 
-	a.np = &nowPlayingModule{host: a, have: true, last: mac.NowPlayingState{Playing: true, Title: "座右铭", Artist: "吴雨霏", App: "com.apple.Music", Duration: 243, Elapsed: 112, Rate: 1, Received: now}, artColor: ui.Hex("#C9A27E")}
+	a.np = &nowPlayingModule{host: a, have: true, last: platform.NowPlayingState{Playing: true, Title: "座右铭", Artist: "吴雨霏", App: "com.apple.Music", Duration: 243, Elapsed: 112, Rate: 1, Received: now}, artColor: ui.Hex("#C9A27E")}
 	a.modules = []module{a.np}
 	a.level = 2
 	view.Frame()

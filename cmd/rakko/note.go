@@ -9,8 +9,8 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/layout"
-	"rakko/internal/mac"
 	"rakko/internal/note"
+	"rakko/internal/platform"
 	"rakko/locales"
 )
 
@@ -39,8 +39,8 @@ var (
 
 	// Seams around the app-level calls, as rename.go keeps them, so a
 	// headless test can drive the session without a window server.
-	noteActivate  = mac.ActivateSelf
-	noteReveal    = mac.RevealInFinder
+	noteActivate  = platform.ActivateSelf
+	noteReveal    = platform.RevealInFinder
 	noteShow      = func(w *mygo.Window) { w.Show() }
 	noteFocus     = func(w *mygo.Window) { w.Focus() }
 	noteClose     = func(w *mygo.Window) { w.Close() }

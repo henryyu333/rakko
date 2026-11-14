@@ -27,7 +27,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/transfer"
 	"rakko/internal/aiusage"
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 	"unsafe"
 )
@@ -41,7 +41,7 @@ func fix2Shot(t *testing.T, a *shelf, name string) string {
 		t.Fatal("no notch window")
 	}
 	var num int
-	onMain(func() { num = mac.WindowNumber(a.win.NativeHandle()) })
+	onMain(func() { num = platform.WindowNumber(a.win.NativeHandle()) })
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}
@@ -193,12 +193,12 @@ func postRealClick(t *testing.T, x, y float64, guard func()) {
 		t.Fatalf("CoreGraphics: %v", err)
 	}
 	var (
-		create   func(source uintptr, typ uint32, p mac.CGPoint, button uint32) uintptr
+		create   func(source uintptr, typ uint32, p platform.CGPoint, button uint32) uintptr
 		post     func(tap uint32, ev uintptr)
 		setField func(ev uintptr, field uint32, value int64)
 		createE  func(source uintptr) uintptr
-		getLoc   func(ev uintptr) mac.CGPoint
-		warp     func(p mac.CGPoint) int32
+		getLoc   func(ev uintptr) platform.CGPoint
+		warp     func(p platform.CGPoint) int32
 		release  func(cf uintptr)
 	)
 	purego.RegisterLibFunc(&create, lib, "CGEventCreateMouseEvent")
@@ -219,7 +219,7 @@ func postRealClick(t *testing.T, x, y float64, guard func()) {
 		moved    = 5
 		hidTap   = 0
 	)
-	var old mac.CGPoint
+	var old platform.CGPoint
 	if ev := createE(0); ev != 0 {
 		old = getLoc(ev)
 		release(ev)
@@ -228,13 +228,13 @@ func postRealClick(t *testing.T, x, y float64, guard func()) {
 		warp(old) // the user's pointer goes home no matter how the click ended
 		time.Sleep(50 * time.Millisecond)
 	}()
-	warp(mac.CGPoint{X: x, Y: y})
-	move := create(0, moved, mac.CGPoint{X: x, Y: y}, 0)
+	warp(platform.CGPoint{X: x, Y: y})
+	move := create(0, moved, platform.CGPoint{X: x, Y: y}, 0)
 	post(hidTap, move)
 	release(move)
 	guard()
 	for _, typ := range []uint32{leftDown, leftUp} {
-		ev := create(0, typ, mac.CGPoint{X: x, Y: y}, 0)
+		ev := create(0, typ, platform.CGPoint{X: x, Y: y}, 0)
 		if ev == 0 {
 			t.Fatal("CGEventCreateMouseEvent returned nil")
 		}
@@ -318,7 +318,7 @@ func TestSmokeTrayCmdCCopiesThroughTheRealKey(t *testing.T) {
 	})
 	expandShelf(t, a)
 	time.Sleep(500 * time.Millisecond) // selection frame -> ⌘C held
-	onMain(func() { keyIsKey = mac.IsKeyWindow(a.win.NativeHandle()) })
+	onMain(func() { keyIsKey = platform.IsKeyWindow(a.win.NativeHandle()) })
 	if keyIsKey {
 		// The search bar takes the keyboard when it opens, and a page
 		// gives it up but cannot resign key on its own when this app is
@@ -326,9 +326,9 @@ func TestSmokeTrayCmdCCopiesThroughTheRealKey(t *testing.T) {
 		// user would have been in — so the global ⌘C is what runs.
 		if out, err := exec.Command("pgrep", "-x", "Finder").Output(); err == nil {
 			if pid, perr := strconv.Atoi(strings.TrimSpace(string(out))); perr == nil && pid > 0 {
-				onMain(func() { mac.ActivateApp(pid) })
+				onMain(func() { platform.ActivateApp(pid) })
 				time.Sleep(300 * time.Millisecond)
-				onMain(func() { keyIsKey = mac.IsKeyWindow(a.win.NativeHandle()) })
+				onMain(func() { keyIsKey = platform.IsKeyWindow(a.win.NativeHandle()) })
 			}
 		}
 	}
@@ -352,7 +352,7 @@ func TestSmokeTrayCmdCCopiesThroughTheRealKey(t *testing.T) {
 	}
 	var status string
 	var types []string
-	onMain(func() { status, types = a.status, mac.ClipboardTypes() })
+	onMain(func() { status, types = a.status, platform.ClipboardTypes() })
 	t.Logf("keyWindow=%v clipboardTypes=%v PNG=%d want=%d status=%q", keyIsKey, types, len(got), len(pngBytes), status)
 	if !strings.Contains(status, "已复制图片") {
 		t.Errorf("status = %q, want the 已复制图片 toast", status)

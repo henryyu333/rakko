@@ -18,17 +18,17 @@ import (
 	"strings"
 	"time"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/store"
 )
 
 // 粘贴路径的接缝：辅助功能信任、前台应用、按键，以及等待焦点的时间。测试
 // 全部替换掉；生产走平台实现。
 var (
-	pasteTrusted   = mac.AccessibilityTrusted
-	pasteFrontmost = mac.FrontmostPID
-	pasteActivate  = mac.ActivateApp
-	pasteSend      = mac.PostCommandV
+	pasteTrusted   = platform.AccessibilityTrusted
+	pasteFrontmost = platform.FrontmostPID
+	pasteActivate  = platform.ActivateApp
+	pasteSend      = platform.PostCommandV
 	// pasteFocusWait 是收起面板后等待目标应用拿回键盘的上限，
 	// pastePollInterval 是检查间隔。
 	pasteFocusWait    = 250 * time.Millisecond
@@ -117,7 +117,7 @@ func (a *shelf) pasteItems(items []store.Item) {
 // hide 清掉 prevAppPID 之前读取。
 func (a *shelf) pasteTarget() int {
 	pid := a.prevAppPID
-	if pid <= 0 || pid == mac.OwnPID() {
+	if pid <= 0 || pid == platform.OwnPID() {
 		return 0
 	}
 	return pid
@@ -139,7 +139,7 @@ func (a *shelf) finishPaste(target int, gen int64) {
 			return
 		}
 		front, ours := 0, 0
-		dispatchMain(func() { front, ours = pasteFrontmost(), mac.OwnPID() })
+		dispatchMain(func() { front, ours = pasteFrontmost(), platform.OwnPID() })
 		if front == target {
 			break
 		}
@@ -152,7 +152,7 @@ func (a *shelf) finishPaste(target int, gen int64) {
 		if !retried && now.After(start.Add(pasteFocusWait/2)) {
 			retried = true
 			dispatchMain(func() {
-				if a.pasteSeq.Load() == gen && pasteFrontmost() == mac.OwnPID() {
+				if a.pasteSeq.Load() == gen && pasteFrontmost() == platform.OwnPID() {
 					pasteActivate(target)
 				}
 			})

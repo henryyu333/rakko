@@ -13,7 +13,7 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/store"
 )
 
@@ -22,9 +22,9 @@ import (
 type fakeSpot struct {
 	mu      sync.Mutex
 	terms   []string
-	scopes  []mac.SearchScope
+	scopes  []platform.SearchScope
 	cancels int
-	emit    func([]mac.SpotlightHit)
+	emit    func([]platform.SpotlightHit)
 	done    func()
 }
 
@@ -32,7 +32,7 @@ func withFakeSpot(t *testing.T) *fakeSpot {
 	t.Helper()
 	f := &fakeSpot{}
 	old := spotlightStart
-	spotlightStart = func(term string, scope mac.SearchScope, _ int, emit func([]mac.SpotlightHit), done func()) func() {
+	spotlightStart = func(term string, scope platform.SearchScope, _ int, emit func([]platform.SpotlightHit), done func()) func() {
 		f.mu.Lock()
 		f.terms = append(f.terms, term)
 		f.scopes = append(f.scopes, scope)
@@ -110,7 +110,7 @@ func TestHomeSpotDropsStaleBatches(t *testing.T) {
 
 	a.homeQuery = "rakko"
 	a.homeQueryChanged()
-	emit([]mac.SpotlightHit{{Path: "/tmp/old.txt", Name: "old.txt"}})
+	emit([]platform.SpotlightHit{{Path: "/tmp/old.txt", Name: "old.txt"}})
 	done()
 	if len(a.homeSpot.items) != 0 || a.homeSpot.done {
 		t.Fatalf("a stale batch landed: %+v", a.homeSpot)
@@ -126,7 +126,7 @@ func TestHomeSpotShowsFirstBatchBeforeTheEnd(t *testing.T) {
 	a.homeQuery = "rakko"
 	a.homeQueryChanged()
 	(*pending)()
-	f.emit([]mac.SpotlightHit{{Path: "/Applications/Rakko.app", Name: "Rakko", App: true}})
+	f.emit([]platform.SpotlightHit{{Path: "/Applications/Rakko.app", Name: "Rakko", App: true}})
 	if len(a.homeSpot.items) != 1 || a.homeSpot.done {
 		t.Fatalf("first batch not shown: %+v", a.homeSpot)
 	}
@@ -143,7 +143,7 @@ func TestHomeSpotShowsFirstBatchBeforeTheEnd(t *testing.T) {
 // text-only hit; recent use breaks ties inside one rank.
 func TestSpotGroupHitsRanksAndSplits(t *testing.T) {
 	now := time.Now()
-	items := []mac.SpotlightHit{
+	items := []platform.SpotlightHit{
 		{Path: "/Users/x/budget.xlsx", Name: "budget.xlsx", LastUsed: now},
 		{Path: "/Users/x/my-rakko-notes.txt", Name: "my-rakko-notes.txt", LastUsed: now.Add(-time.Hour)},
 		{Path: "/Users/x/rakko-old.txt", Name: "rakko-old.txt", LastUsed: now.Add(-2 * time.Hour)},
@@ -180,7 +180,7 @@ func TestHomeHitsGroupsFitTheSheet(t *testing.T) {
 	a.homeQuery = "rakko"
 	a.homeSpot.query = "rakko"
 	a.homeSpot.done = true
-	a.homeSpot.items = []mac.SpotlightHit{
+	a.homeSpot.items = []platform.SpotlightHit{
 		{Path: "/Applications/Rakko.app", Name: "Rakko", App: true},
 		{Path: "/Users/x/Rakko Files", Name: "Rakko Files", Folder: true},
 		{Path: "/Users/x/rakko.txt", Name: "rakko.txt"},

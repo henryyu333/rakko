@@ -13,7 +13,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/store"
 )
 
@@ -37,7 +37,7 @@ func fixLiveJob() *convertJob {
 // status words draw, the player does not.
 func TestCapsuleOutranksThePlayer(t *testing.T) {
 	a := motionWindow()
-	a.np = &nowPlayingModule{host: a, have: true, last: mac.NowPlayingState{
+	a.np = &nowPlayingModule{host: a, have: true, last: platform.NowPlayingState{
 		Playing: true, Title: "Song Title", Artist: "Artist", Duration: 200, Elapsed: 30,
 		Received: time.Now(),
 	}}

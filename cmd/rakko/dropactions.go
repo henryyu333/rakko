@@ -9,7 +9,7 @@ package main
 // dropping anywhere else, or dragging anything that isn't files, keeps
 // the plain receive path. mygo only tells a hover which formats the drag
 // offers, so the file paths come from the drag pasteboard via
-// mac.DragFiles.
+// platform.DragFiles.
 //
 // Layout follows design/drop-actions-v1.html: the 64pt 放入托盘 row (icon
 // well, title and 保存引用，随时拖出, up to three stacked thumbnails) over
@@ -27,7 +27,7 @@ import (
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/store"
 	"rakko/locales"
 )
@@ -74,20 +74,20 @@ var (
 		if a.win == nil {
 			return nil
 		}
-		return mac.DragFiles()
+		return platform.DragFiles()
 	}
 	dragFilesChange = func(a *shelf) int64 {
 		if a.win == nil {
 			return 0
 		}
-		return mac.DragFilesChange()
+		return platform.DragFilesChange()
 	}
 	dropFilesData = func(d transfer.Data) ([]string, error) { return d.Files() }
-	airDrop       = mac.AirDrop
+	airDrop       = platform.AirDrop
 	cursorPoint   = func() mygo.Point { return mygo.Screen.CursorScreenPoint() }
-	dragState     = func() (bool, int64) { return mac.DragState() }
-	dragTypes     = mac.DragTypes
-	dragLeftDown  = func() bool { return mac.LeftMouseDown() }
+	dragState     = func() (bool, int64) { return platform.DragState() }
+	dragTypes     = platform.DragTypes
+	dragLeftDown  = func() bool { return platform.LeftMouseDown() }
 )
 
 // dropZoneState is the drop zone's memory of the drag in flight. paths
@@ -754,7 +754,7 @@ func (a *shelf) finishDropThumb(path string, bmp *ui.Bitmap, seq int) {
 	}
 	delete(dropThumbBusy, path)
 	if bmp == nil {
-		if icon := mac.FileIcon(path, 26); len(icon) > 0 {
+		if icon := platform.FileIcon(path, 26); len(icon) > 0 {
 			bmp, _ = ui.DecodeBitmap(icon)
 		}
 	}

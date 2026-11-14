@@ -24,7 +24,7 @@ import (
 	"github.com/ebitengine/purego"
 	"github.com/egoist/mygo"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/store"
 )
 
@@ -33,7 +33,7 @@ const renameShotDir = "/tmp/shelf-rename"
 // renameShot screenshots the native window w to /tmp/shelf-rename/name.png.
 func renameShot(t *testing.T, w *mygo.Window, name string) string {
 	t.Helper()
-	num := mac.WindowNumber(w.NativeHandle())
+	num := platform.WindowNumber(w.NativeHandle())
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}
@@ -60,7 +60,7 @@ func postRightClick(t *testing.T, x, y float64) {
 		t.Fatalf("CoreGraphics: %v", err)
 	}
 	var (
-		create func(source uintptr, typ uint32, p mac.CGPoint, button uint32) uintptr
+		create func(source uintptr, typ uint32, p platform.CGPoint, button uint32) uintptr
 		post   func(tap uint32, ev uintptr)
 		setF   func(ev uintptr, field uint32, value int64)
 		rel    func(cf uintptr)
@@ -79,7 +79,7 @@ func postRightClick(t *testing.T, x, y float64) {
 		hidTap    = 0
 	)
 	for _, typ := range []uint32{rightDown, rightUp} {
-		ev := create(0, typ, mac.CGPoint{X: x, Y: y}, 1)
+		ev := create(0, typ, platform.CGPoint{X: x, Y: y}, 1)
 		if ev == 0 {
 			t.Fatal("CGEventCreateMouseEvent returned nil")
 		}
@@ -246,7 +246,7 @@ func TestRenameSmoke(t *testing.T) {
 	postEscape(t)
 
 	// The rename window, opened by the same function the menu item calls.
-	before := mac.FrontmostPID()
+	before := platform.FrontmostPID()
 	var items []store.Item
 	onMain(func() {
 		items = a.visibleItems()
@@ -373,18 +373,18 @@ func TestRenameSmoke(t *testing.T) {
 	sameSet(t, trayNames(a), names, "replace undo: tray")
 
 	// Closing hands the keyboard back to the app the window came from.
-	if before != 0 && before != mac.OwnPID() {
+	if before != 0 && before != platform.OwnPID() {
 		onMain(func() { a.rn.win.Close() })
 		back := false
 		for range 40 {
-			if mac.FrontmostPID() == before {
+			if platform.FrontmostPID() == before {
 				back = true
 				break
 			}
 			time.Sleep(50 * time.Millisecond)
 		}
 		if !back {
-			t.Fatalf("frontmost app after close = %d, want %d", mac.FrontmostPID(), before)
+			t.Fatalf("frontmost app after close = %d, want %d", platform.FrontmostPID(), before)
 		}
 	} else {
 		t.Logf("skipping focus handback: frontmost before open was self (%d)", before)

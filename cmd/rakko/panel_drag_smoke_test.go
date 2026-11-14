@@ -24,7 +24,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 )
 
@@ -122,7 +122,7 @@ func TestIslandPanelDragSmoke(t *testing.T) {
 	b := mygo.Screen.PrimaryDisplay().Bounds
 	backdrop := newIslandBackdrop(t, b)
 	var backdropID int
-	onMain(func() { backdropID = mac.WindowNumber(backdrop.NativeHandle()) })
+	onMain(func() { backdropID = platform.WindowNumber(backdrop.NativeHandle()) })
 	t.Cleanup(func() {
 		onMain(func() {
 			a.hide(hidePassive)
@@ -153,7 +153,7 @@ func TestIslandPanelDragSmoke(t *testing.T) {
 	islandDragTicker(t, a)
 	var stopObs func()
 	onMain(func() {
-		stopObs = mac.ObserveMouseDown(a.win.NativeHandle(), func(inside bool, button int) {
+		stopObs = platform.ObserveMouseDown(a.win.NativeHandle(), func(inside bool, button int) {
 			a.mouseDown(inside, button, mygo.Screen.CursorScreenPoint())
 		})
 	})
@@ -250,7 +250,7 @@ func TestIslandPanelDragSmoke(t *testing.T) {
 	// transparent margin and the window around it take no clicks. The gate
 	// answers per pointer, so each point is visited first.
 	var p placeProbe
-	onMain(func() { p = placeProbe{place: a.panelPlacement(), shelf: mac.WindowNumber(a.win.NativeHandle())} })
+	onMain(func() { p = placeProbe{place: a.panelPlacement(), shelf: platform.WindowNumber(a.win.NativeHandle())} })
 	for _, q := range []mygo.Point{
 		{X: p.place.X - 2, Y: p.place.Y + bandH/2},
 		{X: p.place.X + p.place.W/2, Y: p.place.Y + p.place.H + 2},
@@ -259,7 +259,7 @@ func TestIslandPanelDragSmoke(t *testing.T) {
 		time.Sleep(120 * time.Millisecond)
 		var hit int
 		onMain(func() {
-			hit = mac.WindowAtPoint(float64(q.X), float64(q.Y), float64(b.Y+b.Height))
+			hit = platform.WindowAtPoint(float64(q.X), float64(q.Y), float64(b.Y+b.Height))
 		})
 		if hit == p.shelf {
 			t.Fatalf("the shelf takes the %+v point, 2pt outside its panel %+v", q, p.place)

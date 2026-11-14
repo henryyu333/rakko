@@ -14,7 +14,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 // motionShelf is a closed, empty shelf without a native window: state
@@ -492,7 +492,7 @@ func TestCapsuleGrowNeverPaintsPastTheShell(t *testing.T) {
 // plus the spring's overshoot, so no mid-flight frame is clipped.
 func TestPeekMorphFlightKeepsStripRoom(t *testing.T) {
 	a := motionShelf()
-	a.np = &nowPlayingModule{host: a, have: true, last: mac.NowPlayingState{Title: "T"}}
+	a.np = &nowPlayingModule{host: a, have: true, last: platform.NowPlayingState{Title: "T"}}
 	pw, ph := a.peekSize()
 	a.fx.sizeMoving = true
 	f := a.desiredFrame()
@@ -576,7 +576,7 @@ func TestSettledCapsuleAsksForNoFrames(t *testing.T) {
 // shell (peekK) — instead of snapping back to the bare chevron mid-retract.
 func TestWingsFadeOutWithTheShell(t *testing.T) {
 	a := motionShelf()
-	a.np = &nowPlayingModule{host: a, have: true, last: mac.NowPlayingState{
+	a.np = &nowPlayingModule{host: a, have: true, last: platform.NowPlayingState{
 		Playing: true, Title: "Fashion Killa", Duration: 200, Elapsed: 30, Received: time.Now(),
 	}}
 	// peekK mid-decay, the pointer gone: the wings are still the shape on

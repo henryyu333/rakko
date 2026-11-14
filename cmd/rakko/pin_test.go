@@ -15,7 +15,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/layout"
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 	"rakko/internal/store"
 )
@@ -1081,8 +1081,8 @@ func TestPinChildControlsKeepContextMenu(t *testing.T) {
 			a := &shelf{store: mustStore(t), dataDir: t.TempDir()}
 			power := newFakePower()
 			a.awake = &awakeModule{host: a, create: power.create, release: power.release}
-			a.np = &nowPlayingModule{host: a, np: &mac.NowPlayingHost{}, have: true,
-				last: mac.NowPlayingState{Title: "Menu Track", Playing: true, Rate: 1}}
+			a.np = &nowPlayingModule{host: a, np: &platform.NowPlayingHost{}, have: true,
+				last: platform.NowPlayingState{Title: "Menu Track", Playing: true, Rate: 1}}
 			path := writeFile(t, t.TempDir(), "menu-thumb.png", testPNGBytes(t))
 			a.store.Items = append(a.store.Items, store.Item{ID: "menu-thumb", Kind: store.KindFile, Path: path})
 			it := a.pinRegister(&pinItem{cardID: tc.id, span: 2, cardW: pinCardW2, display: 1,
@@ -1159,7 +1159,7 @@ func TestDragPreviewCommitClearsTilt(t *testing.T) {
 func TestAwakePinUsesTheCompactDesktopLayout(t *testing.T) {
 	a := &shelf{dataDir: t.TempDir(), settings: settings.Default()}
 	fixed := time.Date(2026, 11, 12, 9, 0, 0, 0, time.Local)
-	a.awake = &awakeModule{host: a, id: mac.PowerAssertionID(1),
+	a.awake = &awakeModule{host: a, id: platform.PowerAssertionID(1),
 		duration: time.Hour, until: fixed.Add(42 * time.Minute),
 		now: func() time.Time { return fixed }}
 	w := pinCardWidth("awake", 2)

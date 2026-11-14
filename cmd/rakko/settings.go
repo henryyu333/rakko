@@ -22,7 +22,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 )
 
@@ -33,7 +33,7 @@ var (
 	setOpenAtLogin       = mygo.App.SetOpenAtLogin
 	openPath             = mygo.Shell.OpenPath
 	openExternal         = mygo.Shell.OpenExternal
-	accessibilityRequest = mac.RequestAccessibility
+	accessibilityRequest = platform.RequestAccessibility
 	appVersionProbe      = mygo.App.Version
 	setAppLocale         = mygo.App.SetLocale
 )
@@ -120,7 +120,7 @@ func settingsAppIcon(bundleID string) *ui.Bitmap {
 		return icon
 	}
 	var icon *ui.Bitmap
-	if png := mac.AppIcon(bundleID, 48); len(png) > 0 {
+	if png := platform.AppIcon(bundleID, 48); len(png) > 0 {
 		icon, _ = ui.DecodeBitmap(png)
 	}
 	settingsIcons[bundleID] = icon
@@ -150,7 +150,7 @@ func (a *shelf) openSettings() {
 	if a.settingsWin != nil {
 		a.loginOn, a.loginErr = openAtLogin(), ""
 		a.repaintSettings()
-		mac.ActivateSelf()
+		platform.ActivateSelf()
 		a.settingsWin.Show()
 		a.settingsWin.Focus()
 		return
@@ -174,13 +174,13 @@ func (a *shelf) openSettings() {
 	})
 	// The title bar follows the window's own dark chrome whatever the system
 	// appearance is, matching the mock's dark "ShelfU 设置" window.
-	mac.SetWindowAppearance(w.NativeHandle(), true)
+	platform.SetWindowAppearance(w.NativeHandle(), true)
 	w.SetBounds(frame)
 	w.OnClosed(a.settingsClosed)
 	w.OnBlur(a.settingsBlur)
 	a.settingsWin = w
 	w.Show()
-	mac.ActivateSelf()
+	platform.ActivateSelf()
 	w.Focus()
 }
 
@@ -189,7 +189,7 @@ func (a *shelf) openSettings() {
 // handle them), and the app the user came from is remembered so closing can
 // give the keyboard back.
 func (a *shelf) settingsTakeKeyboard() {
-	if pid := frontmostPID(); pid > 0 && pid != mac.OwnPID() {
+	if pid := frontmostPID(); pid > 0 && pid != platform.OwnPID() {
 		a.settingsPrevPID = pid
 	}
 	a.releaseKeys()

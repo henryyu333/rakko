@@ -29,7 +29,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 const (
@@ -74,7 +74,7 @@ type downloadsModule struct {
 	// never probe TCC.
 	scan    func(string) ([]downloadFile, error)
 	allowed func() bool
-	plist   func(string) (map[string]mac.PlistValue, bool)
+	plist   func(string) (map[string]platform.PlistValue, bool)
 	now     func() time.Time
 	next    time.Time
 
@@ -94,7 +94,7 @@ type downloadsModule struct {
 func newDownloadsModule(a *shelf) *downloadsModule {
 	return &downloadsModule{
 		host: a, dir: downloadsDir, scan: scanDownloadDir,
-		allowed: mac.FullDiskAccessGranted, plist: readPlist,
+		allowed: platform.FullDiskAccessGranted, plist: readPlist,
 		now: time.Now, prev: map[string]downloadFile{},
 	}
 }
@@ -378,24 +378,24 @@ func safariDownload(bundle string) (downloadFile, bool) {
 // readPlist reads a property list as the platform dictionary reader does,
 // with a first pass in the standard library: writing a temporary XML
 // plist is how tests exercise the download path without ObjC.
-var readPlist = func(path string) (map[string]mac.PlistValue, bool) {
+var readPlist = func(path string) (map[string]platform.PlistValue, bool) {
 	if vals, ok := readXMLPlist(path); ok {
 		return vals, true
 	}
-	return mac.PlistValues(path)
+	return platform.PlistValues(path)
 }
 
 // readXMLPlist is a minimal reader for the top-level dictionary of an XML
 // property list (integers, strings and booleans). Everything else yields
 // ok == false so the platform reader can try binary plists.
-func readXMLPlist(path string) (map[string]mac.PlistValue, bool) {
+func readXMLPlist(path string) (map[string]platform.PlistValue, bool) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, false
 	}
 	defer f.Close()
 	dec := xml.NewDecoder(f)
-	out := map[string]mac.PlistValue{}
+	out := map[string]platform.PlistValue{}
 	key := ""
 	depth := 0
 	for {
@@ -427,7 +427,7 @@ func readXMLPlist(path string) (map[string]mac.PlistValue, bool) {
 					if dec.DecodeElement(&s, &t) != nil {
 						return nil, false
 					}
-					out[key] = mac.PlistValue{Text: s}
+					out[key] = platform.PlistValue{Text: s}
 				case "integer":
 					var s string
 					if dec.DecodeElement(&s, &t) != nil {
@@ -437,7 +437,7 @@ func readXMLPlist(path string) (map[string]mac.PlistValue, bool) {
 					if err != nil {
 						return nil, false
 					}
-					out[key] = mac.PlistValue{Number: n, IsNumber: true}
+					out[key] = platform.PlistValue{Number: n, IsNumber: true}
 				case "real":
 					var s string
 					if dec.DecodeElement(&s, &t) != nil {
@@ -447,13 +447,13 @@ func readXMLPlist(path string) (map[string]mac.PlistValue, bool) {
 					if err != nil {
 						return nil, false
 					}
-					out[key] = mac.PlistValue{Number: int64(n), IsNumber: true}
+					out[key] = platform.PlistValue{Number: int64(n), IsNumber: true}
 				case "true", "false":
 					v := int64(0)
 					if t.Name.Local == "true" {
 						v = 1
 					}
-					out[key] = mac.PlistValue{Number: v, IsNumber: true}
+					out[key] = platform.PlistValue{Number: v, IsNumber: true}
 				}
 				key = ""
 			}

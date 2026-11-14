@@ -19,7 +19,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 // shotTarget is one display the session freezes, as mygo reports it.
@@ -258,7 +258,7 @@ func shotPixelSize(sel mygo.Rectangle, t shotTarget, imgW, imgH int) (int, int) 
 
 // shotWindowAt picks the frontmost ordinary window under p on the target
 // display, or none for the desktop. Windows are in front-to-back order.
-func shotWindowAt(windows []mac.ScreenWindow, p mygo.Point, t shotTarget) (mygo.Rectangle, bool) {
+func shotWindowAt(windows []platform.ScreenWindow, p mygo.Point, t shotTarget) (mygo.Rectangle, bool) {
 	area := t.Bounds
 	for _, w := range windows {
 		r := mygo.Rectangle{

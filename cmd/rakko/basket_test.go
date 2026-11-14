@@ -16,7 +16,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/lyrics"
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/store"
 )
 
@@ -60,7 +60,7 @@ func TestMain(m *testing.M) {
 	mygo.App.SetActivationPolicy(mygo.ActivationPolicyAccessory)
 	mygo.App.OnWindowAllClosed(func() {})
 	mygo.App.WhenReady(func() {
-		if err := mac.Init(); err != nil {
+		if err := platform.Init(); err != nil {
 			panic(err)
 		}
 		go func() {
@@ -105,7 +105,7 @@ func TestBasketWindowShownAndPlaced(t *testing.T) {
 	}
 	defer onMain(a.closeBasket)
 	want := a.basket.frame
-	num := mac.WindowNumber(a.basket.win.NativeHandle())
+	num := platform.WindowNumber(a.basket.win.NativeHandle())
 	if num == 0 {
 		t.Fatal("basket window has no CGWindowID")
 	}
@@ -117,12 +117,12 @@ func TestBasketWindowShownAndPlaced(t *testing.T) {
 	}
 	// WindowServer can report a transient frame while the window orders in;
 	// poll until it matches the requested rect.
-	var got mac.NSRect
+	var got platform.NSRect
 	match := false
 	for i := range 60 {
 		onMain(func() {
 			var ok bool
-			got, ok = mac.WindowScreenRect(num)
+			got, ok = platform.WindowScreenRect(num)
 			match = ok && int(got.Size.Width) == want.Width && int(got.Size.Height) == want.Height &&
 				int(got.Origin.X) == want.X && int(got.Origin.Y) == want.Y
 		})

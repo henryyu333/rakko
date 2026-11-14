@@ -25,7 +25,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/aiusage"
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 	"rakko/locales"
 )
@@ -622,19 +622,19 @@ func TestSettingsWindowSmoke(t *testing.T) {
 		t.Fatal("openSettings created a second window — not single instance")
 	}
 
-	num := mac.WindowNumber(first.NativeHandle())
+	num := platform.WindowNumber(first.NativeHandle())
 	if num == 0 {
 		t.Fatal("settings window has no CGWindowID")
 	}
 	// WindowServer must show it at the centered frame computed from the
 	// cursor display's work area.
 	want := settingsFrame(mygo.Screen.DisplayNearestPoint(mygo.Screen.CursorScreenPoint()).WorkArea)
-	var got mac.NSRect
+	var got platform.NSRect
 	settled := false
 	for range 60 {
 		onMain(func() {
 			var ok bool
-			got, ok = mac.WindowScreenRect(num)
+			got, ok = platform.WindowScreenRect(num)
 			settled = ok && int(got.Size.Width) == want.Width && int(got.Size.Height) == want.Height &&
 				int(got.Origin.X) == want.X && int(got.Origin.Y) == want.Y
 		})

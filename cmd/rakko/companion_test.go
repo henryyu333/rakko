@@ -19,7 +19,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/companion"
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 // companionFor seeds a data directory with a start that makes today day.
@@ -135,7 +135,7 @@ func TestHomeCompanionTakesTheLastLine(t *testing.T) {
 	a, view, _ := homeShotAgent(t, c)
 	// homeShotAgent already has an agent turn and two tray files; add the
 	// third resident line, keep awake.
-	a.awake = &awakeModule{host: a, id: mac.PowerAssertionID(1), duration: time.Hour,
+	a.awake = &awakeModule{host: a, id: platform.PowerAssertionID(1), duration: time.Hour,
 		until: time.Now().Add(42 * time.Minute), now: time.Now}
 	a.companion = companionFor(t, a.dataDir, 30, false)
 	view.Frame()

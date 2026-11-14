@@ -16,7 +16,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 	"rakko/internal/store"
 )
@@ -45,7 +45,7 @@ func hitShelf(t *testing.T) (*shelf, *ui.Tester, *[]string, *fakeVolume) {
 		store: st, dataDir: t.TempDir(), level: 2, visible: true, settings: settings.Default(),
 		thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{}, appNames: map[string]string{},
 	}
-	a.np = &nowPlayingModule{host: a, have: true, last: mac.NowPlayingState{
+	a.np = &nowPlayingModule{host: a, have: true, last: platform.NowPlayingState{
 		Title: "歌名", Duration: 200, Elapsed: 20, Rate: 1, Received: time.Now(),
 	}}
 	vol := &fakeVolume{v: 0.4, ok: true}

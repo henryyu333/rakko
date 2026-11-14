@@ -16,7 +16,7 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 const stageADir = "/tmp/shelf-stagef-A"
@@ -57,7 +57,7 @@ func stageAShot(t *testing.T, a *shelf, name string) string {
 	if a.win == nil {
 		t.Fatal("no notch window")
 	}
-	num := mac.WindowNumber(a.win.NativeHandle())
+	num := platform.WindowNumber(a.win.NativeHandle())
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}

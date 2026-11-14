@@ -15,7 +15,7 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 // TestNowPlayingPeekSmokeScreenshot draws the now-playing hover wings in
@@ -57,7 +57,7 @@ func TestNowPlayingPeekSmokeScreenshot(t *testing.T) {
 		mod.host = a
 		mod.rememberArt(art, false) // same path as decodeArt: bitmap + glow
 		mod.have = true
-		mod.last = mac.NowPlayingState{
+		mod.last = platform.NowPlayingState{
 			Playing: true, Title: "Fashion Killa", Artist: "A$AP Rocky",
 			Duration: 236, Elapsed: 28, Rate: 1, Received: time.Now(),
 		}
@@ -73,7 +73,7 @@ func TestNowPlayingPeekSmokeScreenshot(t *testing.T) {
 	// screenshot below. One extra invalidate lets a frame settle.
 	onMain(func() { a.win.Invalidate() })
 	time.Sleep(200 * time.Millisecond)
-	num := mac.WindowNumber(a.win.NativeHandle())
+	num := platform.WindowNumber(a.win.NativeHandle())
 	if num == 0 {
 		t.Fatal("notch window has no CGWindowID")
 	}

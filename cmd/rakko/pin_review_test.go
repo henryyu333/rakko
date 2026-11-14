@@ -11,7 +11,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/layout"
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/store"
 )
 
@@ -52,7 +52,7 @@ func TestPinReturnPillBeatsOtherContent(t *testing.T) {
 	for _, state := range []string{"player", "capsule", "retracting"} {
 		t.Run(state, func(t *testing.T) {
 			a := motionWindow()
-			a.np = &nowPlayingModule{host: a, have: true, last: mac.NowPlayingState{Playing: true, Title: "Review Track"}}
+			a.np = &nowPlayingModule{host: a, have: true, last: platform.NowPlayingState{Playing: true, Title: "Review Track"}}
 			if state != "player" {
 				a.toastStatus("已复制", time.Now().Add(time.Hour), statusOK)
 				a.fb.retracting = state == "retracting"

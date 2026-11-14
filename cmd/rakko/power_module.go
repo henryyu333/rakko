@@ -4,7 +4,7 @@ package main
 
 // Charging, full and low-battery notices. The state comes from IOKit's
 // power-source API on the shared 30 ms tick, gated to one dictionary copy
-// every two seconds. IOKit's own run-loop source (mac.StartPowerObserver)
+// every two seconds. IOKit's own run-loop source (platform.StartPowerObserver)
 // wakes that gate, so a plug-in posts on the next tick instead of at the
 // end of the poll interval; the poll stays as the fallback when the
 // observer cannot be installed and covers a missed notification. The
@@ -16,19 +16,19 @@ import (
 	"sync/atomic"
 	"time"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 const powerPollInterval = 2 * time.Second
 
 // powerObserver installs the system's power-source watcher; tests replace
 // it so the wake path runs without IOKit.
-var powerObserver = mac.StartPowerObserver
+var powerObserver = platform.StartPowerObserver
 
 type powerModule struct {
 	host *shelf
 	// probe is the seam: tests feed battery states instead of the machine.
-	probe func() (mac.BatteryStatus, bool)
+	probe func() (platform.BatteryStatus, bool)
 	now   func() time.Time
 	next  time.Time
 	// wake is set by the system's observer (from the main run loop) and
@@ -36,14 +36,14 @@ type powerModule struct {
 	wake atomic.Bool
 
 	seeded bool
-	last   mac.BatteryStatus
+	last   platform.BatteryStatus
 	low20  bool
 	low10  bool
 	full   bool
 }
 
 func newPowerModule(a *shelf) *powerModule {
-	return &powerModule{host: a, probe: mac.Battery, now: time.Now}
+	return &powerModule{host: a, probe: platform.Battery, now: time.Now}
 }
 
 // watchPower asks the system to wake the poll on every power-source
@@ -113,7 +113,7 @@ func (m *powerModule) tick(now time.Time) {
 
 // adopt records the state the app started on without announcing it: an
 // already-full battery or a low battery at launch is not a transition.
-func (m *powerModule) adopt(st mac.BatteryStatus) {
+func (m *powerModule) adopt(st platform.BatteryStatus) {
 	m.seeded = true
 	m.last = st
 	m.low20 = st.Percent <= 20
@@ -125,16 +125,16 @@ func (m *powerModule) resetCycle() {
 	m.low20, m.low10, m.full = false, false, false
 }
 
-func (m *powerModule) chargeNotice(st mac.BatteryStatus, now time.Time) {
+func (m *powerModule) chargeNotice(st platform.BatteryStatus, now time.Time) {
 	m.host.pushLive(liveEvent{kind: liveCharging, label: m.host.appLoc().LiveCharging(), pct: st.Percent}, liveHoldCharge, now)
 }
 
-func (m *powerModule) fullNotice(st mac.BatteryStatus, now time.Time) {
+func (m *powerModule) fullNotice(st platform.BatteryStatus, now time.Time) {
 	m.full = true
 	m.host.pushLive(liveEvent{kind: liveCharged, label: m.host.appLoc().LiveCharged(), pct: st.Percent}, liveHoldFull, now)
 }
 
-func (m *powerModule) lowNotice(st mac.BatteryStatus, now time.Time) {
+func (m *powerModule) lowNotice(st platform.BatteryStatus, now time.Time) {
 	m.host.pushLive(liveEvent{kind: liveLow, label: m.host.appLoc().LiveLow(), pct: st.Percent}, liveHoldLow, now)
 }
 

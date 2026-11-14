@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 const ocrShotDirC = "/tmp/shelf-C"
@@ -32,7 +32,7 @@ func shotOCR(t *testing.T, a *shelf, name string) string {
 		t.Fatal("no notch window")
 	}
 	var num int
-	onMain(func() { num = mac.WindowNumber(a.win.NativeHandle()) })
+	onMain(func() { num = platform.WindowNumber(a.win.NativeHandle()) })
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}

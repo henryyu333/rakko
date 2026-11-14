@@ -19,7 +19,7 @@ import (
 	"strings"
 	"time"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 const audioPollInterval = time.Second
@@ -28,7 +28,7 @@ type audioModule struct {
 	host *shelf
 	// list and battery are seams: tests never touch CoreAudio and never run
 	// system_profiler.
-	list    func() []mac.AudioOutput
+	list    func() []platform.AudioOutput
 	battery func(name string) []batteryLevel
 	// dispatch delivers the battery result to the main thread.
 	dispatch func(func())
@@ -48,7 +48,7 @@ type audioModule struct {
 
 func newAudioModule(a *shelf) *audioModule {
 	return &audioModule{
-		host: a, list: mac.OutputDevices, battery: readBluetoothLevels,
+		host: a, list: platform.OutputDevices, battery: readBluetoothLevels,
 		dispatch: mygoRunOnMain, now: time.Now, known: map[string]string{},
 		connGen: map[string]int{},
 	}

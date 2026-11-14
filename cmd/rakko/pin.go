@@ -14,7 +14,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/layout"
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 // Desktop pins: a tool card dragged out of the tools page becomes a small
@@ -307,7 +307,7 @@ func pinStagger(pins []*pinItem) {
 // pinApplyFrame pushes it.frame to the native window.
 func (it *pinItem) applyFrame() {
 	if it.win != nil {
-		mac.SetWindowFrame(it.win.NativeHandle(), it.frame.X, it.frame.Y, it.frame.Width, it.frame.Height)
+		platform.SetWindowFrame(it.win.NativeHandle(), it.frame.X, it.frame.Y, it.frame.Width, it.frame.Height)
 	}
 }
 
@@ -405,7 +405,7 @@ func (a *shelf) commitPin(it *pinItem) bool {
 		pinOpenWindow(it)
 	} else {
 		it.win.OnClose(it.onClose)
-		mac.ConfigurePinWindow(it.win.NativeHandle())
+		platform.ConfigurePinWindow(it.win.NativeHandle())
 		it.invalidate()
 	}
 	a.savePins()
@@ -435,12 +435,12 @@ func (it *pinItem) openWindow(preview bool) {
 	it.win = w
 	w.SetVisibleOnAllWorkspaces(true)
 	if preview {
-		mac.ConfigureDragPreview(w.NativeHandle(), it.owner.windowLevel()+1)
+		platform.ConfigureDragPreview(w.NativeHandle(), it.owner.windowLevel()+1)
 	} else {
-		mac.ConfigurePinWindow(w.NativeHandle())
+		platform.ConfigurePinWindow(w.NativeHandle())
 		w.OnClose(it.onClose)
 	}
-	mac.SetWindowFrame(w.NativeHandle(), f.X, f.Y, f.Width, f.Height)
+	platform.SetWindowFrame(w.NativeHandle(), f.X, f.Y, f.Width, f.Height)
 	w.ShowInactive()
 }
 

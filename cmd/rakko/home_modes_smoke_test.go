@@ -17,7 +17,7 @@ import (
 
 	"github.com/ebitengine/purego"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/locales"
 )
 
@@ -26,7 +26,7 @@ import (
 func postTab(t *testing.T) bool {
 	t.Helper()
 	var front bool
-	onMain(func() { front = mac.FrontmostPID() == mac.OwnPID() })
+	onMain(func() { front = platform.FrontmostPID() == platform.OwnPID() })
 	if !front {
 		return false
 	}
@@ -59,14 +59,14 @@ func postTab(t *testing.T) bool {
 }
 
 // scopeOf reads the bar's mode on the main thread.
-func scopeOf(a *shelf) mac.SearchScope {
-	var s mac.SearchScope
+func scopeOf(a *shelf) platform.SearchScope {
+	var s platform.SearchScope
 	onMain(func() { s = a.homeScope })
 	return s
 }
 
 // waitScope waits for the bar's mode to become want.
-func waitScope(t *testing.T, a *shelf, want mac.SearchScope, what string) {
+func waitScope(t *testing.T, a *shelf, want platform.SearchScope, what string) {
 	t.Helper()
 	if !waitMain(2*time.Second, func() bool { return scopeOf(a) == want }) {
 		t.Fatalf("%s: mode is %v, want %v", what, scopeOf(a), want)
@@ -93,9 +93,9 @@ func TestSmokeHomeModes(t *testing.T) {
 		t.Skip("set RAKKO_BASKET_SMOKE=1 to run the native window smoke test")
 	}
 	a := redesignShelf(t)
-	mac.WarmSpotlight()
+	platform.WarmSpotlight()
 	time.Sleep(1200 * time.Millisecond)
-	var def mac.SearchScope
+	var def platform.SearchScope
 	onMain(func() { def = a.defaultHomeScope() })
 	onMain(func() { a.show(false) })
 	time.Sleep(2 * time.Second)
@@ -105,7 +105,7 @@ func TestSmokeHomeModes(t *testing.T) {
 
 	// An empty bar takes a real Tab and walks the cycle from the default:
 	// 全部 → 应用 → 文件 → 全部.
-	next := func(s mac.SearchScope) mac.SearchScope { return (s + 1) % 3 }
+	next := func(s platform.SearchScope) platform.SearchScope { return (s + 1) % 3 }
 	for _, shot := range []string{"modes-apps-empty", "modes-files-empty", "modes-all-cycled"} {
 		want := next(scopeOf(a))
 		if postTab(t) {
@@ -123,8 +123,8 @@ func TestSmokeHomeModes(t *testing.T) {
 
 	// 应用: a term lists the 应用 group alone.
 	l := locales.In("zh-Hans")
-	onMain(func() { a.setHomeScope(mac.ScopeApps) })
-	waitScope(t, a, mac.ScopeApps, "the 应用 mode")
+	onMain(func() { a.setHomeScope(platform.ScopeApps) })
+	waitScope(t, a, platform.ScopeApps, "the 应用 mode")
 	if !typeIntoHome(t, "rakko") {
 		t.Log("the test app was not frontmost: setting the field directly")
 		onMain(func() {
@@ -133,7 +133,7 @@ func TestSmokeHomeModes(t *testing.T) {
 		})
 	}
 	if !waitMain(15*time.Second, func() bool {
-		return a.homeSpot.done && a.homeSpot.scope == mac.ScopeApps
+		return a.homeSpot.done && a.homeSpot.scope == platform.ScopeApps
 	}) {
 		t.Fatalf("the 应用 query never finished: %+v", a.homeSpot)
 	}
@@ -160,10 +160,10 @@ func TestSmokeHomeModes(t *testing.T) {
 	}
 
 	// 文件: the same term lists documents, never an app nor an action.
-	onMain(func() { a.setHomeScope(mac.ScopeFiles) })
-	waitScope(t, a, mac.ScopeFiles, "the 文件 mode")
+	onMain(func() { a.setHomeScope(platform.ScopeFiles) })
+	waitScope(t, a, platform.ScopeFiles, "the 文件 mode")
 	if !waitMain(15*time.Second, func() bool {
-		return a.homeSpot.done && a.homeSpot.scope == mac.ScopeFiles
+		return a.homeSpot.done && a.homeSpot.scope == platform.ScopeFiles
 	}) {
 		t.Fatalf("the 文件 query never finished: %+v", a.homeSpot)
 	}

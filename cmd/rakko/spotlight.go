@@ -21,7 +21,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 )
 
@@ -42,8 +42,8 @@ const homeGroupMax = 3
 // by the sequence number, and hits of another mode are never shown.
 type homeSpotState struct {
 	query   string
-	scope   mac.SearchScope
-	items   []mac.SpotlightHit
+	scope   platform.SearchScope
+	items   []platform.SpotlightHit
 	done    bool
 	seq     int
 	typedAt time.Time // when the field last changed, for the latency log
@@ -54,7 +54,7 @@ type homeSpotState struct {
 
 // spotlightWarm primes the index connection; a headless shelf has no
 // window to type into and skips it.
-var spotlightWarm = mac.WarmSpotlight
+var spotlightWarm = platform.WarmSpotlight
 
 // warmSpotlight pays the index's per-process setup before the user's first
 // keystroke, once per launch.
@@ -69,8 +69,8 @@ func (a *shelf) warmSpotlight() {
 
 // spotlightStart runs one query in a mode; tests replace it with a fake
 // that records the term and scope and delivers batches by hand.
-var spotlightStart = func(term string, scope mac.SearchScope, limit int, emit func([]mac.SpotlightHit), done func()) func() {
-	return mac.StartSpotlight(term, scope, limit, emit, done).Cancel
+var spotlightStart = func(term string, scope platform.SearchScope, limit int, emit func([]platform.SpotlightHit), done func()) func() {
+	return platform.StartSpotlight(term, scope, limit, emit, done).Cancel
 }
 
 // spotDebug logs the first batch's latency when RAKKO_SPOTLIGHT_DEBUG is
@@ -114,7 +114,7 @@ func (a *shelf) startHomeSpot(q string, seq int) {
 			q, time.Since(a.homeSpot.typedAt).Round(time.Millisecond))
 	}
 	a.homeSpot.scope = scope
-	a.homeSpot.cancel = spotlightStart(q, scope, 0, func(batch []mac.SpotlightHit) {
+	a.homeSpot.cancel = spotlightStart(q, scope, 0, func(batch []platform.SpotlightHit) {
 		if spotDebug {
 			log.Printf("spotlight %q: %d hits arrived %v after the query started",
 				q, len(batch), time.Since(started).Round(time.Millisecond))
@@ -149,7 +149,7 @@ func (a *shelf) startHomeSpot(q string, seq int) {
 // screen answer the old mode and go at once; a typed term is asked of the
 // new mode without waiting for the next keystroke, and the selection
 // returns to the first row.
-func (a *shelf) setHomeScope(scope mac.SearchScope) {
+func (a *shelf) setHomeScope(scope platform.SearchScope) {
 	if a.homeScope == scope {
 		return
 	}
@@ -170,12 +170,12 @@ func (a *shelf) setHomeScope(scope mac.SearchScope) {
 // panel and opening it again always starts from 全部 (resetHomeSearch).
 func (a *shelf) cycleHomeScope() {
 	switch a.homeScope {
-	case mac.ScopeAll:
-		a.setHomeScope(mac.ScopeApps)
-	case mac.ScopeApps:
-		a.setHomeScope(mac.ScopeFiles)
+	case platform.ScopeAll:
+		a.setHomeScope(platform.ScopeApps)
+	case platform.ScopeApps:
+		a.setHomeScope(platform.ScopeFiles)
 	default:
-		a.setHomeScope(mac.ScopeAll)
+		a.setHomeScope(platform.ScopeAll)
 	}
 }
 
@@ -228,7 +228,7 @@ func (a *shelf) homeSearching() bool {
 }
 
 // homeSpotItems are the hits that answer the bar's current text and mode.
-func (a *shelf) homeSpotItems() []mac.SpotlightHit {
+func (a *shelf) homeSpotItems() []platform.SpotlightHit {
 	if len(a.homeSpot.items) == 0 || a.homeSpot.scope != a.homeScope {
 		return nil
 	}
@@ -266,14 +266,14 @@ func (a *shelf) invalidateHome() {
 
 // defaultHomeScope is the mode the bar opens on, from the saved setting:
 // the one place the preference becomes the bar's scope.
-func (a *shelf) defaultHomeScope() mac.SearchScope {
+func (a *shelf) defaultHomeScope() platform.SearchScope {
 	switch a.settings.SearchMode.Normalized() {
 	case settings.SearchModeApps:
-		return mac.ScopeApps
+		return platform.ScopeApps
 	case settings.SearchModeFiles:
-		return mac.ScopeFiles
+		return platform.ScopeFiles
 	}
-	return mac.ScopeAll
+	return platform.ScopeAll
 }
 
 // setSearchMode saves the mode the bar opens on. The search on screen keeps
@@ -317,7 +317,7 @@ func spotRank(name, q string) int {
 // spotGroupHits splits the index's hits into the sheet's three Spotlight
 // groups and orders each: rank, then the most recently used, then name.
 // Paths already shown (the tray's rows) are skipped.
-func spotGroupHits(q string, items []mac.SpotlightHit, shown map[string]bool) (apps, folders, files []mac.SpotlightHit) {
+func spotGroupHits(q string, items []platform.SpotlightHit, shown map[string]bool) (apps, folders, files []platform.SpotlightHit) {
 	seen := make(map[string]bool, len(items))
 	for _, hit := range items {
 		if hit.Path == "" || seen[hit.Path] || shown[hit.Path] {
@@ -333,7 +333,7 @@ func spotGroupHits(q string, items []mac.SpotlightHit, shown map[string]bool) (a
 			files = append(files, hit)
 		}
 	}
-	for _, g := range [][]mac.SpotlightHit{apps, folders, files} {
+	for _, g := range [][]platform.SpotlightHit{apps, folders, files} {
 		sortSpotGroup(g, q)
 	}
 	return apps, folders, files
@@ -343,12 +343,12 @@ func spotGroupHits(q string, items []mac.SpotlightHit, shown map[string]bool) (a
 // then name. The rank and the lower-cased name are computed once per hit,
 // not once per comparison: a large index result sorts in milliseconds
 // instead of lower-casing every name on every comparison.
-func sortSpotGroup(g []mac.SpotlightHit, q string) {
+func sortSpotGroup(g []platform.SpotlightHit, q string) {
 	if len(g) < 2 {
 		return
 	}
 	type ranked struct {
-		hit  mac.SpotlightHit
+		hit  platform.SpotlightHit
 		rank int
 	}
 	rs := make([]ranked, len(g))
@@ -375,7 +375,7 @@ func sortSpotGroup(g []mac.SpotlightHit, q string) {
 // spotHitRow is one index hit as a sheet row: ⏎ opens it, ⌘⏎ reveals it in
 // Finder, and the secondary text is its folder with the home directory
 // written as ~.
-func (a *shelf) spotHitRow(group string, hit mac.SpotlightHit) homeHit {
+func (a *shelf) spotHitRow(group string, hit platform.SpotlightHit) homeHit {
 	path := hit.Path
 	return homeHit{
 		group: group,
@@ -390,7 +390,7 @@ func (a *shelf) spotHitRow(group string, hit mac.SpotlightHit) homeHit {
 			a.hide(hideExplicit)
 		},
 		reveal: func() {
-			mac.RevealInFinder(path)
+			platform.RevealInFinder(path)
 			a.hide(hideExplicit)
 		},
 	}
@@ -443,7 +443,7 @@ func (a *shelf) spotIcon(path string) *ui.Bitmap {
 		if imageExts[strings.ToLower(filepath.Ext(path))] {
 			if img := decodeThumb(path); img != nil {
 				b = ui.NewBitmap(img)
-			} else if img, err := mac.Thumbnail(path, thumbPx); err == nil && img != nil {
+			} else if img, err := platform.Thumbnail(path, thumbPx); err == nil && img != nil {
 				b = ui.NewBitmap(img)
 			}
 		}
@@ -469,7 +469,7 @@ func (a *shelf) spotIcon(path string) *ui.Bitmap {
 // fileIcon and runOnMain are seams: NSWorkspace's icon may only be asked
 // for on the main thread, and the tests check that it is.
 var (
-	fileIcon  = mac.FileIcon
+	fileIcon  = platform.FileIcon
 	runOnMain = mygo.RunOnMain
 )
 

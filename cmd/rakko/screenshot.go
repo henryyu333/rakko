@@ -31,7 +31,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 // Seams: the display list, the cursor, the capture command, the window
@@ -42,17 +42,17 @@ var (
 	shotDisplays       = func() []mygo.Display { return mygo.Screen.Displays() }
 	shotCursorPoint    = func() mygo.Point { return mygo.Screen.CursorScreenPoint() }
 	shotCaptureDisplay = captureShotDisplayFile
-	shotNormalWindow   = mac.NormalWindows
+	shotNormalWindow   = platform.NormalWindows
 	shotDispatch       = mygo.RunOnMain
 	shotWork           = func(fn func()) { go fn() }
 	shotClock          = time.Now
-	shotFrontPID       = mac.FrontmostPID
-	shotActivateSelf   = mac.ActivateSelf
-	shotActivateApp    = mac.ActivateApp
-	shotKeyWindow      = mac.IsKeyWindow
-	shotSetWindowLevel = mac.SetWindowLevel
-	shotOrderOverlay   = mac.OrderOverlayFront
-	shotPreflight      = mac.ScreenCapturePreflight
+	shotFrontPID       = platform.FrontmostPID
+	shotActivateSelf   = platform.ActivateSelf
+	shotActivateApp    = platform.ActivateApp
+	shotKeyWindow      = platform.IsKeyWindow
+	shotSetWindowLevel = platform.SetWindowLevel
+	shotOrderOverlay   = platform.OrderOverlayFront
+	shotPreflight      = platform.ScreenCapturePreflight
 	shotClipboard      = writeShotClipboard
 	shotReadSaveDir    = readScreenCaptureLocation
 	shotWriteFile      = os.WriteFile
@@ -167,7 +167,7 @@ type shotSession struct {
 	cursorDpy    int
 	hover        mygo.Rectangle
 	hoverOK      bool
-	windows      []mac.ScreenWindow
+	windows      []platform.ScreenWindow
 	windowsAt    time.Time
 	prevPID      int
 	captureMS    int64
@@ -222,7 +222,7 @@ func (a *shelf) startScreenshotOnMain() {
 		nextNum: 1,
 	}
 	s.prevPID = shotFrontPID()
-	if s.prevPID == mac.OwnPID() && a.prevAppPID > 0 {
+	if s.prevPID == platform.OwnPID() && a.prevAppPID > 0 {
 		// The panel (or a settings window) was frontmost when the hotkey
 		// arrived: the app to hand the keyboard back to is the one it was
 		// opened from.
@@ -404,12 +404,12 @@ func (s *shotSession) openWindow(di int) {
 	}
 	w.SetVisibleOnAllWorkspaces(true)
 	h := w.NativeHandle()
-	mac.ConfigureCaptureWindow(h)
-	mac.SetWindowFrame(h, b.X, b.Y, b.Width, b.Height)
+	platform.ConfigureCaptureWindow(h)
+	platform.SetWindowFrame(h, b.X, b.Y, b.Width, b.Height)
 	w.ShowInactive()
 	// mygo applies the AlwaysOnTop floating level when it orders a window
 	// front; the capture band must be the last word.
-	mac.SetWindowLevel(h, mac.CaptureWindowLevel)
+	platform.SetWindowLevel(h, platform.CaptureWindowLevel)
 	d.handle = h
 	d.win = w
 }
@@ -422,8 +422,8 @@ func (s *shotSession) assertCaptureLevel() {
 			continue // an editing box keeps its display below the IM band
 		}
 		if d.win != nil {
-			mac.SetWindowLevel(d.win.NativeHandle(), mac.CaptureWindowLevel)
-			mac.OrderOverlayFront(d.win.NativeHandle())
+			platform.SetWindowLevel(d.win.NativeHandle(), platform.CaptureWindowLevel)
+			platform.OrderOverlayFront(d.win.NativeHandle())
 		}
 	}
 }
@@ -441,7 +441,7 @@ func (s *shotSession) lowerForText() {
 	if d == nil || d.handle == 0 {
 		return
 	}
-	shotSetWindowLevel(d.handle, mac.SearchKeyboardLevel)
+	shotSetWindowLevel(d.handle, platform.SearchKeyboardLevel)
 	s.textLevelLow = true
 }
 
@@ -454,7 +454,7 @@ func (s *shotSession) restoreTextLevel() {
 	}
 	s.textLevelLow = false
 	if d := s.ownerDisplay(); d != nil && d.handle != 0 {
-		shotSetWindowLevel(d.handle, mac.CaptureWindowLevel)
+		shotSetWindowLevel(d.handle, platform.CaptureWindowLevel)
 		shotOrderOverlay(d.handle)
 	}
 }

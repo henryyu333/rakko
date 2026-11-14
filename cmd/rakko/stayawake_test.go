@@ -7,23 +7,23 @@ import (
 	"testing"
 	"time"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 // fakePower replaces the IOKit calls: it hands out fresh ids, records the
 // released ones and can be told to fail creation.
 type fakePower struct {
-	live  map[mac.PowerAssertionID]bool
-	next  mac.PowerAssertionID
+	live  map[platform.PowerAssertionID]bool
+	next  platform.PowerAssertionID
 	fail  error // create returns this while set
-	kinds []mac.PowerAssertionKind
+	kinds []platform.PowerAssertionKind
 }
 
 func newFakePower() *fakePower {
-	return &fakePower{live: map[mac.PowerAssertionID]bool{}, next: 1}
+	return &fakePower{live: map[platform.PowerAssertionID]bool{}, next: 1}
 }
 
-func (f *fakePower) create(kind mac.PowerAssertionKind) (mac.PowerAssertionID, error) {
+func (f *fakePower) create(kind platform.PowerAssertionKind) (platform.PowerAssertionID, error) {
 	if f.fail != nil {
 		return 0, f.fail
 	}
@@ -33,7 +33,7 @@ func (f *fakePower) create(kind mac.PowerAssertionKind) (mac.PowerAssertionID, e
 	return f.next, nil
 }
 
-func (f *fakePower) release(id mac.PowerAssertionID) {
+func (f *fakePower) release(id platform.PowerAssertionID) {
 	delete(f.live, id)
 }
 
@@ -110,11 +110,11 @@ func TestAwakeDisplaySwitch(t *testing.T) {
 	now := time.Now()
 	m.start(now, time.Hour)
 	m.setDisplay(now, true)
-	if p.held() != 1 || p.kinds[1] != mac.PowerAssertDisplaySleep {
+	if p.held() != 1 || p.kinds[1] != platform.PowerAssertDisplaySleep {
 		t.Fatalf("display on: held=%d kinds=%v", p.held(), p.kinds)
 	}
 	m.setDisplay(now, false)
-	if p.held() != 1 || p.kinds[2] != mac.PowerAssertSystemSleep {
+	if p.held() != 1 || p.kinds[2] != platform.PowerAssertSystemSleep {
 		t.Fatalf("display off: held=%d kinds=%v", p.held(), p.kinds)
 	}
 	// Same value is a no-op: no third assertion.
@@ -126,7 +126,7 @@ func TestAwakeDisplaySwitch(t *testing.T) {
 	m.stop(now)
 	m.setDisplay(now, true)
 	m.start(now, time.Hour)
-	if p.kinds[3] != mac.PowerAssertDisplaySleep {
+	if p.kinds[3] != platform.PowerAssertDisplaySleep {
 		t.Fatalf("started with kind %v, want display", p.kinds[3])
 	}
 }

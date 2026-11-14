@@ -24,7 +24,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 )
 
@@ -616,7 +616,7 @@ func (a *shelf) updateSetStage(stage updateStage) {
 func (a *shelf) openUpdateWindow() {
 	if a.updateWin != nil || a.updateWinMarked {
 		if a.updateWin != nil {
-			mac.ActivateSelf()
+			platform.ActivateSelf()
 			a.updateWin.Show()
 			a.updateWin.Focus()
 		}
@@ -634,7 +634,7 @@ func (a *shelf) openUpdateWindow() {
 	w.OnClosed(a.updateWindowClosed)
 	a.updateWin = w
 	w.Show()
-	mac.ActivateSelf()
+	platform.ActivateSelf()
 	w.Focus()
 }
 
@@ -682,7 +682,7 @@ func (a *shelf) updateWindowClosed() {
 	if a.settingsWin != nil {
 		// Settings gave the keyboard to this window; it is still there,
 		// so it — not the previous app — gets it back.
-		mac.ActivateSelf()
+		platform.ActivateSelf()
 		a.settingsWin.Focus()
 	}
 }

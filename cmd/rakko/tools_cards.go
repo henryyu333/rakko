@@ -33,7 +33,7 @@ import (
 
 	"rakko/internal/aiusage"
 	"rakko/internal/layout"
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/store"
 	"rakko/locales"
 )
@@ -682,7 +682,7 @@ func (a *shelf) awakeHero(m *awakeModule, now time.Time, l locales.Messages) str
 	if rem < 0 {
 		rem = 0
 	}
-	return mac.FormatClock(rem.Seconds())
+	return platform.FormatClock(rem.Seconds())
 }
 
 // awakeFrac is the keep-awake ring's remaining share.
@@ -1109,7 +1109,7 @@ func (a *shelf) usageCardLeftLabel(c *ui.Context) string {
 // size handle.
 func (a *shelf) toolPlayingTall(c *ui.Context, card ui.Element, surf toolCardSurface) {
 	m := a.np
-	st, ok := mac.NowPlayingState{}, false
+	st, ok := platform.NowPlayingState{}, false
 	if m != nil {
 		st, ok = m.track()
 	}
@@ -1152,7 +1152,7 @@ func (a *shelf) toolPlayingTall(c *ui.Context, card ui.Element, surf toolCardSur
 // toolPlayingWide is the same player in the pinned window: the cover and
 // its two lines on the left, the seek / transport / volume column beside
 // them, in the 84pt the pin gives every card.
-func (a *shelf) toolPlayingWide(c *ui.Context, card ui.Element, st mac.NowPlayingState) {
+func (a *shelf) toolPlayingWide(c *ui.Context, card ui.Element, st platform.NowPlayingState) {
 	m := a.np
 	card.Padding(8, 10, 8, 10).Justify(ui.Center).Children(func() {
 		ui.Row(c.Key("tc-np-wide")).AlignItems(ui.Center).Gap(8).FillWidth().Children(func() {
@@ -1180,7 +1180,7 @@ func (a *shelf) toolPlayingWide(c *ui.Context, card ui.Element, st mac.NowPlayin
 // which the 2 × 2 card stacks and the pinned window's column holds. The
 // row sits at the width its parent gives it; ctrlGap is the transport's
 // spacing, tighter in the pin's column.
-func (a *shelf) toolPlayingTallBars(c *ui.Context, st mac.NowPlayingState, ctrlGap float32) {
+func (a *shelf) toolPlayingTallBars(c *ui.Context, st platform.NowPlayingState, ctrlGap float32) {
 	m := a.np
 	now := c.Now()
 	dur := st.Duration
@@ -1203,16 +1203,16 @@ func (a *shelf) toolPlayingTallBars(c *ui.Context, st mac.NowPlayingState, ctrlG
 		}
 		// The labels are as wide as their own text at this font: a fixed
 		// width would cut -10:00 and 1:02:03.
-		nowLabel, remLabel := mac.FormatClock(pos), "-"+mac.FormatClock(rem)
+		nowLabel, remLabel := platform.FormatClock(pos), "-"+platform.FormatClock(rem)
 		nw, rw := clockLabelW(c, nowLabel, 9.5), clockLabelW(c, remLabel, 9.5)
 		panelLabel(c, nil, nowLabel, 9.5, 500).TextColor(ink3).Width(nw)
 		a.seekRail(c, "tc-np-progress", frac, dur, 12, 4).Grow(1).MinWidth(0)
 		panelLabel(c, nil, remLabel, 9.5, 500).TextColor(ink3).Width(rw)
 	})
 	ui.Row(c.Key("tc-np-ctl-tall")).Justify(ui.Center).AlignItems(ui.Center).Gap(ctrlGap).FillWidth().Children(func() {
-		m.controlButton(c, "tc-np-prev", prevFill, loc(c).PreviousTrack(), mac.NPPrevious, 26, 15)
-		m.controlButton(c, "tc-np-toggle", toggleSymbol(st.Playing), playPauseLabel(st.Playing), mac.NPPlayPause, 30, 19)
-		m.controlButton(c, "tc-np-next", nextFill, loc(c).NextTrack(), mac.NPNext, 26, 15)
+		m.controlButton(c, "tc-np-prev", prevFill, loc(c).PreviousTrack(), platform.NPPrevious, 26, 15)
+		m.controlButton(c, "tc-np-toggle", toggleSymbol(st.Playing), playPauseLabel(st.Playing), platform.NPPlayPause, 30, 19)
+		m.controlButton(c, "tc-np-next", nextFill, loc(c).NextTrack(), platform.NPNext, 26, 15)
 	})
 	a.volumeRow(c, "tc-np-vol", 12, 6)
 }
@@ -1255,9 +1255,9 @@ func (a *shelf) toolPlayingBody(c *ui.Context, card ui.Element, span int, surf t
 					}
 				})
 				ui.Row(c.Key("tc-np-ctl")).Gap(10).AlignItems(ui.Center).Children(func() {
-					m.controlButton(c, "tc-np-prev", prevFill, loc(c).PreviousTrack(), mac.NPPrevious, 15, 15)
-					m.controlButton(c, "tc-np-toggle", toggleSymbol(st.Playing), playPauseLabel(st.Playing), mac.NPPlayPause, 15, 15)
-					m.controlButton(c, "tc-np-next", nextFill, loc(c).NextTrack(), mac.NPNext, 15, 15)
+					m.controlButton(c, "tc-np-prev", prevFill, loc(c).PreviousTrack(), platform.NPPrevious, 15, 15)
+					m.controlButton(c, "tc-np-toggle", toggleSymbol(st.Playing), playPauseLabel(st.Playing), platform.NPPlayPause, 15, 15)
+					m.controlButton(c, "tc-np-next", nextFill, loc(c).NextTrack(), platform.NPNext, 15, 15)
 				})
 			})
 		})

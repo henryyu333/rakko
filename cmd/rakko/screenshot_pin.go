@@ -16,7 +16,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 // shotPin is one pinned screenshot window.
@@ -70,10 +70,10 @@ func (a *shelf) openShotPin(png []byte, frame mygo.Rectangle, scale float64) {
 	hnd := win.NativeHandle()
 	// The overlay policy gives a key-capable nonactivating panel; the
 	// floating level keeps it over ordinary windows, under the menu bar.
-	mac.ConfigureOverlayWindow(hnd)
-	mac.DisableWindowAnimation(hnd)
-	mac.SetWindowLevel(hnd, 3) // NSFloatingWindowLevel
-	mac.SetWindowFrame(hnd, frame.X, frame.Y, frame.Width, frame.Height)
+	platform.ConfigureOverlayWindow(hnd)
+	platform.DisableWindowAnimation(hnd)
+	platform.SetWindowLevel(hnd, 3) // NSFloatingWindowLevel
+	platform.SetWindowFrame(hnd, frame.X, frame.Y, frame.Width, frame.Height)
 	win.OnClose(func(*mygo.CloseEvent) { a.removeShotPin(p) })
 	win.ShowInactive()
 	a.shotPins = append(a.shotPins, p)
@@ -138,7 +138,7 @@ func (p *shotPin) input(ev ui.InputEvent) bool {
 		if area.Width > 0 {
 			p.frame = shotClampRect(p.frame, area)
 		}
-		mac.SetWindowFrame(p.win.NativeHandle(), p.frame.X, p.frame.Y, p.frame.Width, p.frame.Height)
+		platform.SetWindowFrame(p.win.NativeHandle(), p.frame.X, p.frame.Y, p.frame.Width, p.frame.Height)
 		return true
 	case ui.InputPointerUp:
 		if !p.pressed {
@@ -193,7 +193,7 @@ func (p *shotPin) zoomBy(k float64) {
 		f = shotClampRect(f, area)
 	}
 	p.zoom, p.frame = zoom, f
-	mac.SetWindowFrame(p.win.NativeHandle(), f.X, f.Y, f.Width, f.Height)
+	platform.SetWindowFrame(p.win.NativeHandle(), f.X, f.Y, f.Width, f.Height)
 }
 
 // menu is the pin's context menu: copy, save, close.

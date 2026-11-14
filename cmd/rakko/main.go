@@ -16,8 +16,8 @@ import (
 
 	"rakko/internal/agentnotify"
 	"rakko/internal/aiusage"
-	"rakko/internal/mac"
 	"rakko/internal/netproxy"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 	"rakko/internal/store"
 	"rakko/internal/weekly"
@@ -185,7 +185,7 @@ func main() {
 		a.store.Close()
 	})
 	mygo.App.WhenReady(func() {
-		if err := mac.Init(); err != nil {
+		if err := platform.Init(); err != nil {
 			log.Fatal(err)
 		}
 		a.ready(*show)
@@ -196,7 +196,7 @@ func main() {
 		// 窗口开着就归还给它；否则等价于菜单栏图标点击——切换而非强制
 		// 展开，避免常驻窗口随激活事件自行弹出。
 		if a.settingsWin != nil {
-			mac.ActivateSelf()
+			platform.ActivateSelf()
 			a.settingsWin.Focus()
 			return
 		}
@@ -261,11 +261,11 @@ func (a *shelf) ready(show bool) {
 	// Pay the index's per-process setup now, so the first search of the
 	// session is as fast as the ones after it.
 	a.warmSpotlight()
-	a.stopMouseObservation = mac.ObserveMouseDown(a.win.NativeHandle(), func(inside bool, button int) {
+	a.stopMouseObservation = platform.ObserveMouseDown(a.win.NativeHandle(), func(inside bool, button int) {
 		a.mouseDown(inside, button, mygo.Screen.CursorScreenPoint())
 	})
-	a.stopDragObservation = mac.ObserveLeftMouseDragged(a.pointerDragged)
-	a.stopAppearanceObs = mac.ObserveAccessibilityChange(func() {
+	a.stopDragObservation = platform.ObserveLeftMouseDragged(a.pointerDragged)
+	a.stopAppearanceObs = platform.ObserveAccessibilityChange(func() {
 		a.appearanceAt = time.Time{}
 		a.wakeMonitor()
 	})
@@ -368,10 +368,10 @@ func (a *shelf) ready(show bool) {
 	weeklyStore, weeklyErr := weekly.Open(a.dataDir)
 	wdeps := weeklyDeps{
 		now:           time.Now,
-		frontApp:      mac.FrontmostApp,
-		idleSeconds:   mac.IdleSeconds,
-		sessionActive: mac.SessionActive,
-		displayAsleep: mac.MainDisplayAsleep,
+		frontApp:      platform.FrontmostApp,
+		idleSeconds:   platform.IdleSeconds,
+		sessionActive: platform.SessionActive,
+		displayAsleep: platform.MainDisplayAsleep,
 		newScanner: func() weeklyScanner {
 			if usageEnv.Home == "" {
 				return nil
@@ -384,7 +384,7 @@ func (a *shelf) ready(show bool) {
 	a.weekly = newWeeklyFeature(a, wdeps, weeklyStore, weeklyErr)
 	a.registerPage(a.weekly)
 	a.modules = append(a.modules, a.weekly)
-	_, a.dragSerial = mac.DragState()
+	_, a.dragSerial = platform.DragState()
 	// The first-launch guide registers before the panel can open: a fresh
 	// install's flag is on already, and the page stays until finish/skip.
 	if a.onboardingPending() {
@@ -444,14 +444,14 @@ func (a *shelf) newNotchWindow() {
 	})
 	a.win.SetVisibleOnAllWorkspaces(true)
 	a.winH = a.win.NativeHandle()
-	mac.ConfigureNotchWindow(a.winH)
+	platform.ConfigureNotchWindow(a.winH)
 	// The gate belongs to the window, not to a placement: an app that
 	// starts with the panel open never places, and a test shelf must watch
 	// the pointer as production does.
 	a.watchPointer()
 	a.win.OnMove(a.windowGeometryChanged)
 	a.win.OnResize(a.windowGeometryChanged)
-	log.Printf("window collectionBehavior=0x%x", mac.CollectionBehavior(a.win.NativeHandle()))
+	log.Printf("window collectionBehavior=0x%x", platform.CollectionBehavior(a.win.NativeHandle()))
 }
 
 // trayMenu is rebuilt on every right-click so it reflects the current

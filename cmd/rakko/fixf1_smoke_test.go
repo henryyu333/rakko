@@ -29,7 +29,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 const fixf1ShotDir = "/tmp/shelf-fixf1"
@@ -50,7 +50,7 @@ func fixf1Shot(t *testing.T, a *shelf, w *mygo.Window, name string) string {
 		time.Sleep(30 * time.Millisecond)
 	}
 	time.Sleep(150 * time.Millisecond)
-	num := mac.WindowNumber(w.NativeHandle())
+	num := platform.WindowNumber(w.NativeHandle())
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}
@@ -142,7 +142,7 @@ func TestFixFToolsPageShots(t *testing.T) {
 	warpPointerTo(t, float64(frame.X+300), float64(frame.Y+170))
 	time.Sleep(60 * time.Millisecond)
 	onMain(func() {
-		if !mac.SurfaceScroll(a.win.NativeHandle(), 300, 170, 40) {
+		if !platform.SurfaceScroll(a.win.NativeHandle(), 300, 170, 40) {
 			t.Error("the scroll event did not reach the tools grid")
 		}
 	})

@@ -19,7 +19,7 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 )
 
@@ -30,7 +30,7 @@ func liveShot(t *testing.T, a *shelf, name string) string {
 	if a.win == nil {
 		t.Fatal("no notch window")
 	}
-	num := mac.WindowNumber(a.win.NativeHandle())
+	num := platform.WindowNumber(a.win.NativeHandle())
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}
@@ -102,30 +102,30 @@ func TestLiveSmokeStates(t *testing.T) {
 
 	// Charging through the power module: launch on battery, plug in at 80%,
 	// charge to 100%, unplug at 100% and drain to 20%.
-	var batt mac.BatteryStatus
+	var batt platform.BatteryStatus
 	pm := &powerModule{host: a, now: time.Now}
-	pm.probe = func() (mac.BatteryStatus, bool) { return batt, true }
-	stepPower := func(st mac.BatteryStatus) {
+	pm.probe = func() (platform.BatteryStatus, bool) { return batt, true }
+	stepPower := func(st platform.BatteryStatus) {
 		batt = st
 		pm.next = time.Time{}
 		pm.tick(time.Now())
 	}
-	onMain(func() { stepPower(mac.BatteryStatus{Percent: 50}) })
-	onMain(func() { stepPower(mac.BatteryStatus{Percent: 80, External: true}) })
+	onMain(func() { stepPower(platform.BatteryStatus{Percent: 50}) })
+	onMain(func() { stepPower(platform.BatteryStatus{Percent: 80, External: true}) })
 	shoot("01-charging")
-	onMain(func() { stepPower(mac.BatteryStatus{Percent: 100, External: true}) })
+	onMain(func() { stepPower(platform.BatteryStatus{Percent: 100, External: true}) })
 	shoot("02-charged")
 	onMain(func() {
-		stepPower(mac.BatteryStatus{Percent: 100})
-		stepPower(mac.BatteryStatus{Percent: 20})
+		stepPower(platform.BatteryStatus{Percent: 100})
+		stepPower(platform.BatteryStatus{Percent: 20})
 	})
 	shoot("03-low")
 
 	// Headphones through the audio module: devices come and go in its list;
 	// the AirPods' battery arrives from its lookup seam.
-	var devs []mac.AudioOutput
+	var devs []platform.AudioOutput
 	am := &audioModule{
-		host: a, list: func() []mac.AudioOutput { return devs }, now: time.Now,
+		host: a, list: func() []platform.AudioOutput { return devs }, now: time.Now,
 		known: map[string]string{}, dispatch: onMain,
 	}
 	am.battery = func(name string) []batteryLevel {
@@ -137,24 +137,24 @@ func TestLiveSmokeStates(t *testing.T) {
 	onMain(func() {
 		// Seed with the built-in output only: a nil list means "CoreAudio
 		// unavailable", which never starts the baseline.
-		devs = []mac.AudioOutput{{Name: "MacBook Air的揚聲器", UID: "built-in"}}
+		devs = []platform.AudioOutput{{Name: "MacBook Air的揚聲器", UID: "built-in"}}
 		am.tick(time.Now())
 	})
 	onMain(func() {
-		devs = append(devs, mac.AudioOutput{Name: "AirPods Pro", UID: "airpods", Bluetooth: true})
+		devs = append(devs, platform.AudioOutput{Name: "AirPods Pro", UID: "airpods", Bluetooth: true})
 		am.next = time.Time{}
 		am.tick(time.Now())
 	})
 	time.Sleep(250 * time.Millisecond) // the battery lookup's dispatch
 	shoot("04-pods")
 	onMain(func() {
-		devs = []mac.AudioOutput{{Name: "MacBook Air的揚聲器", UID: "built-in"}}
+		devs = []platform.AudioOutput{{Name: "MacBook Air的揚聲器", UID: "built-in"}}
 		am.next = time.Time{}
 		am.tick(time.Now())
 	})
 	shoot("06-disconnected")
 	onMain(func() {
-		devs = append(devs, mac.AudioOutput{Name: "Sony WH-1000XM5", UID: "sony", Bluetooth: true})
+		devs = append(devs, platform.AudioOutput{Name: "Sony WH-1000XM5", UID: "sony", Bluetooth: true})
 		am.next = time.Time{}
 		am.tick(time.Now())
 	})
@@ -217,12 +217,12 @@ func TestLiveMachineProbe(t *testing.T) {
 	if os.Getenv("RAKKO_BASKET_SMOKE") != "1" {
 		t.Skip("set RAKKO_BASKET_SMOKE=1 to run the native window smoke test")
 	}
-	var batt mac.BatteryStatus
+	var batt platform.BatteryStatus
 	var battOK bool
-	var devices []mac.AudioOutput
+	var devices []platform.AudioOutput
 	onMain(func() {
-		batt, battOK = mac.Battery()
-		devices = mac.OutputDevices()
+		batt, battOK = platform.Battery()
+		devices = platform.OutputDevices()
 	})
 	t.Logf("battery=%+v ok=%v", batt, battOK)
 	for _, d := range devices {

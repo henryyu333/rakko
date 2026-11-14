@@ -12,7 +12,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 // windowOwnerPID is the process that owns a window number, so a skip or a
@@ -80,11 +80,11 @@ func TestCollapsedMarginsReachUnderlyingWindow(t *testing.T) {
 			cursorPoint = func() mygo.Point { return point }
 			receiver = mygo.NewWindow(mygo.WindowOptions{Title: "ShelfU click receiver", Width: 40, Height: 40, Hidden: true, Frameless: true, DisableShadow: true, Panel: true, SkipTaskbar: true, Content: ui.View(func(c *ui.Context) { ui.Text(c, "Receiver") })})
 			h := receiver.NativeHandle()
-			mac.SetWindowFrame(h, point.X-10, point.Y-10, 40, 40)
+			platform.SetWindowFrame(h, point.X-10, point.Y-10, 40, 40)
 			receiver.ShowInactive()
-			mac.SetWindowLevel(h, mac.StatusWindowLevel-1)
-			receiverNum = mac.WindowNumber(h)
-			stop = mac.ObserveMouseDown(h, func(inside bool, button int) {
+			platform.SetWindowLevel(h, platform.StatusWindowLevel-1)
+			receiverNum = platform.WindowNumber(h)
+			stop = platform.ObserveMouseDown(h, func(inside bool, button int) {
 				if inside {
 					received++
 				}
@@ -95,13 +95,13 @@ func TestCollapsedMarginsReachUnderlyingWindow(t *testing.T) {
 		t.Cleanup(func() { onMain(func() { stop(); receiver.Close() }) })
 		time.Sleep(150 * time.Millisecond) // let WindowServer apply ordering and ignoresMouseEvents
 		onMain(func() {
-			mac.SetWindowFrame(receiver.NativeHandle(), point.X-10, point.Y-10, 40, 40)
-			hit = mac.WindowAtPoint(float64(point.X), float64(point.Y), float64(a.dispBounds.Y+a.dispBounds.Height))
+			platform.SetWindowFrame(receiver.NativeHandle(), point.X-10, point.Y-10, 40, 40)
+			hit = platform.WindowAtPoint(float64(point.X), float64(point.Y), float64(a.dispBounds.Y+a.dispBounds.Height))
 		})
 		if !ignoring || hit != receiverNum {
 			t.Fatalf("%s: margin ignores=%v native target=%d want receiver=%d", state, ignoring, hit, receiverNum)
 		}
-		if mac.AccessibilityTrusted() {
+		if platform.AccessibilityTrusted() {
 			// Another copy of ShelfU (the installed one) opens its own
 			// notch panel on hover and can sit above the receiver between
 			// the check above and the click: this pass-through test can
@@ -117,7 +117,7 @@ func TestCollapsedMarginsReachUnderlyingWindow(t *testing.T) {
 			time.Sleep(350 * time.Millisecond)
 			var now int
 			onMain(func() {
-				now = mac.WindowAtPoint(float64(point.X), float64(point.Y), float64(a.dispBounds.Y+a.dispBounds.Height))
+				now = platform.WindowAtPoint(float64(point.X), float64(point.Y), float64(a.dispBounds.Y+a.dispBounds.Height))
 			})
 			if now != receiverNum {
 				owner := windowOwnerPID(t, now)

@@ -15,7 +15,7 @@ import (
 )
 
 // islandShelf is a headless shelf on a 1470 × 956 display whose notch is
-// the usual centred 180 × 32 (mac.NotchRect's fallback box). hasNotch
+// the usual centred 180 × 32 (platform.NotchRect's fallback box). hasNotch
 // decides whether the screen has a camera housing; style is the saved
 // preference, and applyShellStyle is the same call place() makes.
 func islandShelf(hasNotch bool, style settings.ShellStyle) *shelf {

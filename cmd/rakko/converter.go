@@ -17,7 +17,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/docx"
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/store"
 	"rakko/internal/weekly"
 	"rakko/locales"
@@ -96,14 +96,14 @@ func resizeExt(item store.Item) string {
 }
 
 // extFormat is the encoder for an output extension.
-func extFormat(ext string) mac.ImageFormat {
+func extFormat(ext string) platform.ImageFormat {
 	switch ext {
 	case "jpg":
-		return mac.FormatJPEG
+		return platform.FormatJPEG
 	case "heic":
-		return mac.FormatHEIC
+		return platform.FormatHEIC
 	}
-	return mac.FormatPNG
+	return platform.FormatPNG
 }
 
 // convertShowAfter keeps instant conversions (a format change takes a few
@@ -112,14 +112,14 @@ const convertShowAfter = 250 * time.Millisecond
 
 // Seams: tests run jobs synchronously against fakes.
 var (
-	convertImage    = mac.ConvertImage
-	resizeImage     = mac.ResizeImage
-	imagesToPDF     = mac.ImagesToPDF
-	recognizeText   = mac.RecognizeText
-	imageSize       = mac.ImageSize
-	pdfPageCount    = mac.PDFPageCount
-	pdfText         = mac.PDFText
-	renderPDFPage   = mac.RenderPDFPage
+	convertImage    = platform.ConvertImage
+	resizeImage     = platform.ResizeImage
+	imagesToPDF     = platform.ImagesToPDF
+	recognizeText   = platform.RecognizeText
+	imageSize       = platform.ImageSize
+	pdfPageCount    = platform.PDFPageCount
+	pdfText         = platform.PDFText
+	renderPDFPage   = platform.RenderPDFPage
 	writeDocx       = docx.Write
 	writeDocxPages  = docx.WritePages
 	convertWork     = func(fn func()) { go fn() }
@@ -397,12 +397,12 @@ func (a *shelf) startConvert(items []store.Item, target convertTarget) bool {
 		if target != toZip {
 			job.total.Store(int32(len(tasks)))
 		}
-		format := mac.FormatPNG
+		format := platform.FormatPNG
 		switch target {
 		case toJPEG:
-			format = mac.FormatJPEG
+			format = platform.FormatJPEG
 		case toHEIC:
-			format = mac.FormatHEIC
+			format = platform.FormatHEIC
 		}
 		var outs []convertOut
 		for _, t := range tasks {
@@ -591,7 +591,7 @@ func wordFromPDF(src, dst string, job *convertJob) (noText bool, err error) {
 		if len(lines) == 0 {
 			job.ocr.Store(true)
 			tmp := filepath.Join(filepath.Dir(dst), fmt.Sprintf(".%s.page%d.png", filepath.Base(dst), i+1))
-			err := renderPDFPage(src, i+1, tmp, mac.FormatPNG)
+			err := renderPDFPage(src, i+1, tmp, platform.FormatPNG)
 			if err == nil {
 				lines, err = recognizeImageText(tmp)
 			}
@@ -616,7 +616,7 @@ func wordFromPDF(src, dst string, job *convertJob) (noText bool, err error) {
 // return CJK compatibility forms such as 「⼯」 for 「工」).
 func normalizeLines(lines []string) []string {
 	for i, l := range lines {
-		lines[i] = mac.NormalizeText(l)
+		lines[i] = platform.NormalizeText(l)
 	}
 	return lines
 }
@@ -638,7 +638,7 @@ func wordFromImage(src, dst string) (noText bool, err error) {
 	// a JPEG's orientation tag, and HEIC/WebP cannot be embedded at all.
 	tmp := filepath.Join(filepath.Dir(dst), "."+filepath.Base(dst)+".png")
 	defer os.Remove(tmp)
-	if err := convertImage(src, tmp, mac.FormatPNG); err != nil {
+	if err := convertImage(src, tmp, platform.FormatPNG); err != nil {
 		return false, err
 	}
 	data, err := os.ReadFile(tmp)

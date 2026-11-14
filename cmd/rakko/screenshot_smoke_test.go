@@ -22,7 +22,7 @@ import (
 	"github.com/ebitengine/purego"
 	"github.com/egoist/mygo"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 const screenshotShotDir = "/tmp/rakko-shot/smoke"
@@ -91,19 +91,19 @@ func TestScreenshotSmokeOverlay(t *testing.T) {
 		t.Fatal("overlay window missing")
 	}
 	var num int
-	onMain(func() { num = mac.WindowNumber(od.win.NativeHandle()) })
+	onMain(func() { num = platform.WindowNumber(od.win.NativeHandle()) })
 	if num == 0 {
 		t.Fatal("overlay window has no CGWindowID")
 	}
 	var level int
-	var srect mac.NSRect
+	var srect platform.NSRect
 	var onScreen bool
 	var menuHit int
 	onMain(func() {
-		level = mac.WindowLevel(od.win.NativeHandle())
-		srect, onScreen = mac.WindowScreenRect(num)
+		level = platform.WindowLevel(od.win.NativeHandle())
+		srect, onScreen = platform.WindowScreenRect(num)
 		primary := mygo.Screen.PrimaryDisplay()
-		menuHit = mac.WindowAtPoint(float64(d.Bounds.X+w/2), float64(d.Bounds.Y+10), float64(primary.Bounds.Y+primary.Bounds.Height))
+		menuHit = platform.WindowAtPoint(float64(d.Bounds.X+w/2), float64(d.Bounds.Y+10), float64(primary.Bounds.Y+primary.Bounds.Height))
 	})
 	t.Logf("overlay level=%d screenRect=%+v onscreen=%v menuHit=%d", level, srect, onScreen, menuHit)
 	if menuHit != num {
@@ -198,20 +198,20 @@ func TestScreenshotSmokeOverlay(t *testing.T) {
 	var keyIsKey bool
 	var textLevel int
 	onMain(func() {
-		keyIsKey = mac.IsKeyWindow(od.win.NativeHandle())
-		textLevel = mac.WindowLevel(od.win.NativeHandle())
+		keyIsKey = platform.IsKeyWindow(od.win.NativeHandle())
+		textLevel = platform.WindowLevel(od.win.NativeHandle())
 	})
 	t.Logf("text editing key window=%v level=%d", keyIsKey, textLevel)
-	if textLevel != mac.SearchKeyboardLevel {
-		t.Fatalf("the overlay under an editing box is at level %d, want %d below the input method's candidates", textLevel, mac.SearchKeyboardLevel)
+	if textLevel != platform.SearchKeyboardLevel {
+		t.Fatalf("the overlay under an editing box is at level %d, want %d below the input method's candidates", textLevel, platform.SearchKeyboardLevel)
 	}
 
 	// The candidate panel anchors to the text input client's caret rect:
 	// it must be a real rect inside the overlay and near the text box.
-	var caret mac.NSRect
+	var caret platform.NSRect
 	var caretOK bool
 	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); {
-		onMain(func() { caret, caretOK = mac.IMECompositionRect(od.win.NativeHandle(), 0, 0) })
+		onMain(func() { caret, caretOK = platform.IMECompositionRect(od.win.NativeHandle(), 0, 0) })
 		if caretOK {
 			break
 		}
@@ -220,10 +220,10 @@ func TestScreenshotSmokeOverlay(t *testing.T) {
 	if !caretOK {
 		t.Fatal("firstRectForCharacterRange returned no caret rect for the text box")
 	}
-	var frame mac.NSRect
+	var frame platform.NSRect
 	var box mygo.Rectangle
 	onMain(func() {
-		frame = mac.WindowFrame(od.win.NativeHandle())
+		frame = platform.WindowFrame(od.win.NativeHandle())
 		te := s.text
 		box = mygo.Rectangle{
 			X: te.at.X - shotTextBoxPadX, Y: te.at.Y - shotTextBoxPadY,
@@ -242,7 +242,7 @@ func TestScreenshotSmokeOverlay(t *testing.T) {
 		caretY < float64(near.Y) || caretY > float64(near.Y+near.Height) {
 		t.Fatalf("caret anchor %.1f,%.1f is not near the text box %+v", caretX, caretY, box)
 	}
-	t.Logf("editing box=%+v caretAnchor=%+v screen rect=%+v", box, mac.NSPoint{X: caretX, Y: caretY}, caret)
+	t.Logf("editing box=%+v caretAnchor=%+v screen rect=%+v", box, platform.NSPoint{X: caretX, Y: caretY}, caret)
 	postTyping(t, "hello")
 	time.Sleep(150 * time.Millisecond)
 	postReturn(t)
@@ -263,9 +263,9 @@ func TestScreenshotSmokeOverlay(t *testing.T) {
 		t.Fatalf("typed text = %q, want two lines", gotText)
 	}
 	var restoredLevel int
-	onMain(func() { restoredLevel = mac.WindowLevel(od.win.NativeHandle()) })
-	if restoredLevel != mac.CaptureWindowLevel {
-		t.Fatalf("after ⌘Return the overlay level = %d, want %d", restoredLevel, mac.CaptureWindowLevel)
+	onMain(func() { restoredLevel = platform.WindowLevel(od.win.NativeHandle()) })
+	if restoredLevel != platform.CaptureWindowLevel {
+		t.Fatalf("after ⌘Return the overlay level = %d, want %d", restoredLevel, platform.CaptureWindowLevel)
 	}
 	t.Logf("overlay level after editing=%d", restoredLevel)
 
@@ -337,7 +337,7 @@ func TestScreenshotRealCaptureTiming(t *testing.T) {
 	if os.Getenv("RAKKO_BASKET_SMOKE") != "1" {
 		t.Skip("set RAKKO_BASKET_SMOKE=1 to run the native capture timing")
 	}
-	if !mac.ScreenCapturePreflight() {
+	if !platform.ScreenCapturePreflight() {
 		t.Skip("no screen-recording grant: real capture timing unproven")
 	}
 	dir := t.TempDir()
@@ -372,7 +372,7 @@ func postShotMouse(t *testing.T, x, y float64, overlay int, events ...uint32) {
 		t.Fatalf("CoreGraphics: %v", err)
 	}
 	var (
-		create  func(source uintptr, typ uint32, p mac.CGPoint, button uint32) uintptr
+		create  func(source uintptr, typ uint32, p platform.CGPoint, button uint32) uintptr
 		post    func(tap uint32, ev uintptr)
 		release func(cf uintptr)
 	)
@@ -391,12 +391,12 @@ func postShotMouse(t *testing.T, x, y float64, overlay int, events ...uint32) {
 		var hit int
 		onMain(func() {
 			primary := mygo.Screen.PrimaryDisplay()
-			hit = mac.WindowAtPoint(x, y, float64(primary.Bounds.Y+primary.Bounds.Height))
+			hit = platform.WindowAtPoint(x, y, float64(primary.Bounds.Y+primary.Bounds.Height))
 		})
 		if hit != overlay {
 			t.Fatalf("refusing mouse event at %v,%v: WindowServer routes it to window %d, not the overlay %d", x, y, hit, overlay)
 		}
-		ev := create(0, typ, mac.CGPoint{X: x, Y: y}, button)
+		ev := create(0, typ, platform.CGPoint{X: x, Y: y}, button)
 		if ev == 0 {
 			t.Fatal("CGEventCreateMouseEvent returned nil")
 		}

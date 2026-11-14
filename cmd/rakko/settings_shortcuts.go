@@ -19,7 +19,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 )
 
@@ -107,11 +107,11 @@ func (a *shelf) shortcutAction(k shortcutKind) func() {
 	case shortcutOpenTray:
 		return func() { a.togglePageShortcut(pageTray, a.openTray) }
 	case shortcutPlayPause:
-		return func() { playerShortcut(a, mac.NPPlayPause) }
+		return func() { playerShortcut(a, platform.NPPlayPause) }
 	case shortcutPrevious:
-		return func() { playerShortcut(a, mac.NPPrevious) }
+		return func() { playerShortcut(a, platform.NPPrevious) }
 	case shortcutNext:
-		return func() { playerShortcut(a, mac.NPNext) }
+		return func() { playerShortcut(a, platform.NPNext) }
 	case shortcutTools:
 		return func() { a.togglePageShortcut(pageTools, func() { a.showPage(pageTools) }) }
 	case shortcutUsage:
@@ -142,7 +142,7 @@ func (a *shelf) togglePageShortcut(p pageID, open func()) {
 
 // playerShortcut forwards a transport command to the now-playing app; a
 // seam, so a test sees the command without a helper host.
-var playerShortcut = func(a *shelf, cmd mac.NowPlayingCommand) {
+var playerShortcut = func(a *shelf, cmd platform.NowPlayingCommand) {
 	if a.np != nil {
 		a.np.send(cmd)
 	}

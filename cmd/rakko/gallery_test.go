@@ -32,8 +32,8 @@ import (
 	"rakko/internal/aiusage"
 	"rakko/internal/layout"
 	"rakko/internal/lyrics"
-	"rakko/internal/mac"
 	"rakko/internal/note"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 	"rakko/internal/store"
 	"rakko/locales"
@@ -468,7 +468,7 @@ func galleryGroupA() []galleryItem {
 			saved := []string{"com.apple.finder", "com.apple.Safari", "com.apple.Terminal", "com.apple.Notes"}
 			a.settings.PinnedApps = &saved
 			stubApps(t, &appsStub{
-				running: []mac.RunningApp{
+				running: []platform.RunningApp{
 					{BundleID: "com.apple.finder", Name: "访达", PID: 101},
 					{BundleID: "com.apple.Terminal", Name: "终端", PID: 103},
 					{BundleID: "com.apple.dt.Xcode", Name: "Xcode", PID: 105},
@@ -500,7 +500,7 @@ func galleryGroupA() []galleryItem {
 				{ID: "com.apple.Preview", Name: "预览"},
 			}
 			stubApps(t, &appsStub{
-				running: []mac.RunningApp{
+				running: []platform.RunningApp{
 					{BundleID: "com.apple.finder", Name: "访达", PID: 101},
 					{BundleID: "com.apple.Terminal", Name: "终端", PID: 103},
 					{BundleID: "com.apple.dt.Xcode", Name: "Xcode", PID: 105},
@@ -760,7 +760,7 @@ func galleryGroupC() []galleryItem {
 
 func galleryGroupB() []galleryItem {
 	const g = "搜索条与结果"
-	bar := func(query string, focus bool, scope mac.SearchScope) func(t *testing.T, lang string) galleryRender {
+	bar := func(query string, focus bool, scope platform.SearchScope) func(t *testing.T, lang string) galleryRender {
 		return func(t *testing.T, lang string) galleryRender {
 			st := galleryEmptyStore(t)
 			a := galleryShelf(st, t.TempDir())
@@ -855,10 +855,10 @@ func galleryGroupB() []galleryItem {
 		}
 	}
 	return []galleryItem{
-		{ID: "B1", Group: g, Title: "搜索条", State: "空 · 占位「搜索」", Notch: true, Build: bar("", false, mac.ScopeAll)},
-		{ID: "B2", Group: g, Title: "搜索条", State: "输入中 · 加宽并显示光标", Notch: true, Build: bar("git merge --ff-only", true, mac.ScopeAll)},
-		{ID: "B19", Group: g, Title: "搜索条", State: "应用模式 · 空框带 Tab 键帽", Notch: true, Build: bar("", false, mac.ScopeApps)},
-		{ID: "B20", Group: g, Title: "搜索条", State: "文件模式 · 有输入无键帽", Notch: true, Build: bar("git merge --ff-only", true, mac.ScopeFiles)},
+		{ID: "B1", Group: g, Title: "搜索条", State: "空 · 占位「搜索」", Notch: true, Build: bar("", false, platform.ScopeAll)},
+		{ID: "B2", Group: g, Title: "搜索条", State: "输入中 · 加宽并显示光标", Notch: true, Build: bar("git merge --ff-only", true, platform.ScopeAll)},
+		{ID: "B19", Group: g, Title: "搜索条", State: "应用模式 · 空框带 Tab 键帽", Notch: true, Build: bar("", false, platform.ScopeApps)},
+		{ID: "B20", Group: g, Title: "搜索条", State: "文件模式 · 有输入无键帽", Notch: true, Build: bar("git merge --ff-only", true, platform.ScopeFiles)},
 		{ID: "B21", Group: g, Title: "搜索条", State: "时间到 · 黑色顶栏的停止胶囊", Notch: true, Build: func(t *testing.T, lang string) galleryRender {
 			a := galleryShelf(galleryEmptyStore(t), t.TempDir())
 			a.level, a.visible, a.progress = 1, true, 1
@@ -1247,7 +1247,7 @@ func gallerySearchShelf(t *testing.T, lang string) *shelf {
 		app, folder, file = "Setapp", "Settings Backup", "setup-notes.md"
 	}
 	a.homeSpot.query, a.homeSpot.done = query, true
-	a.homeSpot.items = []mac.SpotlightHit{
+	a.homeSpot.items = []platform.SpotlightHit{
 		{Path: "/Applications/" + app + ".app", Name: app, App: true},
 		{Path: "/Users/x/Documents/" + folder, Name: folder, Folder: true},
 		{Path: "/Users/x/Documents/" + file, Name: file},
@@ -1324,7 +1324,7 @@ func galleryGroupF() []galleryItem {
 			a.toolsLay = &layout.Layout{Version: layout.Version, Cards: cards}
 			fakeTrack(a, true)
 			now := time.Now()
-			a.awake = &awakeModule{host: a, id: mac.PowerAssertionID(1), duration: time.Hour,
+			a.awake = &awakeModule{host: a, id: platform.PowerAssertionID(1), duration: time.Hour,
 				until: now.Add(42 * time.Minute), now: func() time.Time { return now }}
 			attachGalleryUsage(a, now)
 			noteText := galleryText(lang,
@@ -2021,7 +2021,7 @@ func galleryGroupJ() []galleryItem {
 		{ID: "JP1", Group: g, Title: "固定卡片", State: "278 · 保持唤醒 2×2 · 84pt 紧凑布局", Build: func(t *testing.T, lang string) galleryRender {
 			a := galleryShelf(galleryEmptyStore(t), t.TempDir())
 			fixed := time.Date(2026, 11, 12, 9, 0, 0, 0, time.Local)
-			a.awake = &awakeModule{host: a, id: mac.PowerAssertionID(1), duration: time.Hour,
+			a.awake = &awakeModule{host: a, id: platform.PowerAssertionID(1), duration: time.Hour,
 				until: fixed.Add(42 * time.Minute), now: func() time.Time { return fixed }}
 			it := a.pinRegister(&pinItem{cardID: "awake", span: 2, rows: 2, cardW: pinCardW2,
 				display: 1, edge: pinFree, expanded: true,

@@ -21,7 +21,7 @@ import (
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 // shotSeams replaces every screenshot seam and restores them after the
@@ -60,7 +60,7 @@ func shotSeams(t *testing.T) {
 	shotKeyWindow = func(uintptr) bool { return true }
 	shotSetWindowLevel = func(uintptr, int) {}
 	shotOrderOverlay = func(uintptr) {}
-	shotNormalWindow = func() []mac.ScreenWindow { return nil }
+	shotNormalWindow = func() []platform.ScreenWindow { return nil }
 	shotOpenWindow = func(*shotSession, int) {}
 	shotCleanTemp = func() { os.MkdirAll(shotTempDir(), 0o700) }
 	shotPanelSettle = 0
@@ -214,9 +214,9 @@ func TestShotHandleHitAndResize(t *testing.T) {
 
 func TestShotWindowAtPicksFrontmost(t *testing.T) {
 	display := shotTarget{ID: 1, Bounds: mygo.Rectangle{Width: 1000, Height: 700}}
-	windows := []mac.ScreenWindow{
-		{Bounds: mac.NSRect{Origin: mac.NSPoint{X: 20, Y: 20}, Size: mac.NSSize{Width: 200, Height: 100}}},
-		{Bounds: mac.NSRect{Origin: mac.NSPoint{X: 100, Y: 50}, Size: mac.NSSize{Width: 300, Height: 300}}},
+	windows := []platform.ScreenWindow{
+		{Bounds: platform.NSRect{Origin: platform.NSPoint{X: 20, Y: 20}, Size: platform.NSSize{Width: 200, Height: 100}}},
+		{Bounds: platform.NSRect{Origin: platform.NSPoint{X: 100, Y: 50}, Size: platform.NSSize{Width: 300, Height: 300}}},
 	}
 	r, ok := shotWindowAt(windows, mygo.Point{X: 150, Y: 80}, display)
 	if !ok || r.X != 20 || r.Y != 20 || r.Width != 200 {
@@ -226,7 +226,7 @@ func TestShotWindowAtPicksFrontmost(t *testing.T) {
 		t.Fatal("empty desktop picked a window")
 	}
 	// A window hanging off the display is clipped to it.
-	wide := []mac.ScreenWindow{{Bounds: mac.NSRect{Origin: mac.NSPoint{X: -100, Y: 0}, Size: mac.NSSize{Width: 300, Height: 100}}}}
+	wide := []platform.ScreenWindow{{Bounds: platform.NSRect{Origin: platform.NSPoint{X: -100, Y: 0}, Size: platform.NSSize{Width: 300, Height: 100}}}}
 	r, ok = shotWindowAt(wide, mygo.Point{X: 10, Y: 10}, display)
 	if !ok || r.X != 0 || r.Width != 200 {
 		t.Fatalf("clipped window = %+v, %v", r, ok)
@@ -497,8 +497,8 @@ func TestShotEntryFreezesAndToggles(t *testing.T) {
 func TestShotPointerSelectsWindowOrDisplay(t *testing.T) {
 	shotSeams(t)
 	s := shotTestSession(t, mygo.Rectangle{Width: 100, Height: 80}, 100, 80)
-	shotNormalWindow = func() []mac.ScreenWindow {
-		return []mac.ScreenWindow{{Bounds: mac.NSRect{Origin: mac.NSPoint{X: 20, Y: 10}, Size: mac.NSSize{Width: 40, Height: 30}}}}
+	shotNormalWindow = func() []platform.ScreenWindow {
+		return []platform.ScreenWindow{{Bounds: platform.NSRect{Origin: platform.NSPoint{X: 20, Y: 10}, Size: platform.NSSize{Width: 40, Height: 30}}}}
 	}
 	down := ui.InputEvent{Kind: ui.InputPointerDown}
 	up := ui.InputEvent{Kind: ui.InputPointerUp}
@@ -1219,7 +1219,7 @@ func shotLevelSession(t *testing.T, a *shelf) (*shotSession, *[]shotLevelCall) {
 
 func TestShotTextLowersOnlyOwnerAndRestores(t *testing.T) {
 	s, calls := shotLevelSession(t, &shelf{})
-	if len(*calls) != 1 || (*calls)[0] != (shotLevelCall{"level", 101, mac.SearchKeyboardLevel}) {
+	if len(*calls) != 1 || (*calls)[0] != (shotLevelCall{"level", 101, platform.SearchKeyboardLevel}) {
 		t.Fatalf("entering the box called %+v", *calls)
 	}
 	if !s.textLevelLow {
@@ -1227,8 +1227,8 @@ func TestShotTextLowersOnlyOwnerAndRestores(t *testing.T) {
 	}
 	s.finishText()
 	want := []shotLevelCall{
-		{"level", 101, mac.SearchKeyboardLevel},
-		{"level", 101, mac.CaptureWindowLevel},
+		{"level", 101, platform.SearchKeyboardLevel},
+		{"level", 101, platform.CaptureWindowLevel},
 		{"front", 101, 0},
 	}
 	if len(*calls) != len(want) {
@@ -1289,7 +1289,7 @@ func TestShotTextLevelRestoresOnEndPaths(t *testing.T) {
 			path.act(t, s, a)
 			found := false
 			for i, c := range *calls {
-				if i > 0 && c.op == "level" && c.window == 101 && c.level == mac.CaptureWindowLevel {
+				if i > 0 && c.op == "level" && c.window == 101 && c.level == platform.CaptureWindowLevel {
 					found = true
 				}
 			}
@@ -1331,7 +1331,7 @@ func TestShotTextKeyboardLevel(t *testing.T) {
 			}
 			restored := false
 			for _, c := range *calls {
-				if c.op == "level" && c.window == 101 && c.level == mac.CaptureWindowLevel {
+				if c.op == "level" && c.window == 101 && c.level == platform.CaptureWindowLevel {
 					restored = true
 				}
 			}

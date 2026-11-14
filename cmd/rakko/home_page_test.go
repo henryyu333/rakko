@@ -21,20 +21,20 @@ import (
 	"rakko/internal/agentnotify"
 	"rakko/internal/aiusage"
 	"rakko/internal/lyrics"
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 	"rakko/internal/store"
 )
 
 // homeShelf builds a home page at level 2 with a track when st is not nil.
-func homeShelf(t *testing.T, st *mac.NowPlayingState) (*shelf, *ui.Tester, *homePage) {
+func homeShelf(t *testing.T, st *platform.NowPlayingState) (*shelf, *ui.Tester, *homePage) {
 	t.Helper()
 	return homeShelfWith(t, st, sheetW+2*earR, nil)
 }
 
 // homeShelfWith runs prep before the tester's first frame, so a test can
 // fill the lyric cache (or the page's lines) before the page looks for them.
-func homeShelfWith(t *testing.T, st *mac.NowPlayingState, width int, prep func(*shelf, *homePage)) (*shelf, *ui.Tester, *homePage) {
+func homeShelfWith(t *testing.T, st *platform.NowPlayingState, width int, prep func(*shelf, *homePage)) (*shelf, *ui.Tester, *homePage) {
 	t.Helper()
 	a := &shelf{
 		dataDir: t.TempDir(), settings: settings.Default(), level: 2, visible: true, tab: pageHome,
@@ -54,8 +54,8 @@ func homeShelfWith(t *testing.T, st *mac.NowPlayingState, width int, prep func(*
 	return a, view, p
 }
 
-func homeTrack() mac.NowPlayingState {
-	return mac.NowPlayingState{
+func homeTrack() platform.NowPlayingState {
+	return platform.NowPlayingState{
 		Title: "夜曲", Artist: "周杰伦", Album: "十一月的萧邦",
 		Duration: 227, Elapsed: 56, Rate: 1, Playing: true,
 	}
@@ -353,7 +353,7 @@ func homeHelfCompact(t *testing.T) (*shelf, *ui.Tester, *homePage) {
 	a, view, p := homeShelf(t, nil)
 	homeFixtureStore(t, a)
 	now := time.Now()
-	a.awake = &awakeModule{host: a, id: mac.PowerAssertionID(1), duration: time.Hour,
+	a.awake = &awakeModule{host: a, id: platform.PowerAssertionID(1), duration: time.Hour,
 		until: now.Add(42 * time.Minute), now: func() time.Time { return now }}
 	a.settings.AIUsage.Enabled = true
 	a.usage = &usageFeature{host: a, deps: usageDeps{
@@ -528,7 +528,7 @@ func homeHelfCompactWith(t *testing.T, c homeShotContent) (*shelf, *ui.Tester, *
 	a, view, p := homeShelf(t, nil)
 	homeShotFixtureStore(t, a, c)
 	now := time.Now()
-	a.awake = &awakeModule{host: a, id: mac.PowerAssertionID(1), duration: time.Hour,
+	a.awake = &awakeModule{host: a, id: platform.PowerAssertionID(1), duration: time.Hour,
 		until: now.Add(42 * time.Minute), now: func() time.Time { return now }}
 	a.settings.AIUsage.Enabled = true
 	a.usage = &usageFeature{host: a, deps: usageDeps{

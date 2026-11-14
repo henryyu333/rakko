@@ -15,7 +15,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 )
 
@@ -130,7 +130,7 @@ type appsStub struct {
 	// headless mirrors the caller's shelf: true when the scan delivery
 	// must ride the test's pump queue instead of the smoke run's loop.
 	headless      bool
-	running       []mac.RunningApp
+	running       []platform.RunningApp
 	paths         map[string]string
 	names         map[string]string
 	installed     []mygo.InstalledApp
@@ -171,7 +171,7 @@ func stubApps(t *testing.T, s *appsStub) *appsMain {
 			q.posted <- struct{}{}
 		}
 	}
-	appRunning = func() []mac.RunningApp { return s.running }
+	appRunning = func() []platform.RunningApp { return s.running }
 	appPathFor = func(id string) string { return s.paths[id] }
 	appNameFor = func(id string) string { return s.names[id] }
 	appsInstalled = func() ([]mygo.InstalledApp, error) {
@@ -236,7 +236,7 @@ func TestAppSnapshotDedupAndOrder(t *testing.T) {
 	saved := []string{"com.test.B", "com.test.missing", "com.test.A"}
 	a.settings.PinnedApps = &saved
 	stubApps(t, &appsStub{
-		running: []mac.RunningApp{
+		running: []platform.RunningApp{
 			{BundleID: "com.test.A", Name: "Alpha", PID: 10},
 			{BundleID: "com.test.B", Name: "Beta", PID: 11},
 			{BundleID: "com.test.B", Name: "Beta Again", PID: 12}, // duplicate id collapses
@@ -454,7 +454,7 @@ func TestAppSelectionWalkAndEnter(t *testing.T) {
 	saved := []string{"com.test.miss", "com.test.pin"}
 	a.settings.PinnedApps = &saved
 	st := &appsStub{
-		running: []mac.RunningApp{
+		running: []platform.RunningApp{
 			{BundleID: "com.test.pin", Name: "Pin", PID: 7},
 			{BundleID: "com.test.run", Name: "Run", PID: 8},
 		},
@@ -561,7 +561,7 @@ func TestAppsShownAndOverflow(t *testing.T) {
 	saved := []string{"com.t.a", "com.t.b", "com.t.c", "com.t.d"}
 	a.settings.PinnedApps = &saved
 	st := &appsStub{
-		running: []mac.RunningApp{
+		running: []platform.RunningApp{
 			{BundleID: "com.t.a", Name: "A", PID: 1},
 			{BundleID: "com.t.b", Name: "B", PID: 2},
 			{BundleID: "com.t.c", Name: "C", PID: 3},
@@ -737,7 +737,7 @@ func TestManageRowsModel(t *testing.T) {
 	saved := []string{"com.t.pin", "com.t.gone"}
 	a.settings.PinnedApps = &saved
 	st := &appsStub{
-		running: []mac.RunningApp{
+		running: []platform.RunningApp{
 			{BundleID: "com.t.pin", Name: "Pinned", PID: 3},
 			{BundleID: "com.t.orphan", Name: "Orphan", PID: 4},
 		},
@@ -787,7 +787,7 @@ func TestEnsureInstalledDegrades(t *testing.T) {
 	a := appSwitchShelf(t)
 	st := &appsStub{
 		headless:   true, // pump-driven scan delivery
-		running:    []mac.RunningApp{{BundleID: "com.t.x", Name: "X", PID: 1}},
+		running:    []platform.RunningApp{{BundleID: "com.t.x", Name: "X", PID: 1}},
 		paths:      map[string]string{},
 		installErr: errors.New("ls boom"),
 	}
@@ -858,7 +858,7 @@ func TestManageRowButtonsClick(t *testing.T) {
 	saved := []string{"com.t.one", "com.t.two"}
 	a.settings.PinnedApps = &saved
 	st := &appsStub{
-		running: []mac.RunningApp{
+		running: []platform.RunningApp{
 			{BundleID: "com.t.one", Name: "One", PID: 1},
 			{BundleID: "com.t.two", Name: "Two", PID: 2},
 		},
@@ -922,7 +922,7 @@ func TestAppsPopoverClicks(t *testing.T) {
 	saved := []string{"com.t.pin"}
 	a.settings.PinnedApps = &saved
 	st := &appsStub{
-		running: []mac.RunningApp{
+		running: []platform.RunningApp{
 			{BundleID: "com.t.pin", Name: "Pin", PID: 1},
 			{BundleID: "com.t.x", Name: "Xray", PID: 2},
 			{BundleID: "com.t.y", Name: "Yankee", PID: 3},
@@ -1119,7 +1119,7 @@ func TestWingTipHangsBelowTheShell(t *testing.T) {
 	a := appSwitchShelf(t)
 	pins := []string{"com.t.one", "com.t.two", "com.t.three", "com.t.four"}
 	stubApps(t, &appsStub{
-		running: []mac.RunningApp{
+		running: []platform.RunningApp{
 			{BundleID: "com.t.one", Name: "One", PID: 1},
 			{BundleID: "com.t.two", Name: "Two", PID: 2},
 			{BundleID: "com.t.three", Name: "Three", PID: 3},
@@ -1211,7 +1211,7 @@ func TestInstalledScanStates(t *testing.T) {
 	a := appSwitchShelf(t)
 	st := &appsStub{
 		headless:  true, // the scan delivery must ride the test's pump queue
-		running:   []mac.RunningApp{{BundleID: "com.t.x", Name: "X", PID: 1}},
+		running:   []platform.RunningApp{{BundleID: "com.t.x", Name: "X", PID: 1}},
 		paths:     map[string]string{},
 		installed: []mygo.InstalledApp{{ID: "com.t.cand", Name: "Cand"}},
 	}
@@ -1313,7 +1313,7 @@ func TestSwitchIconCacheBound(t *testing.T) {
 	for i := range a.apps.installed {
 		a.apps.installed[i] = mygo.InstalledApp{ID: fmt.Sprintf("com.t.%d", i)}
 	}
-	// mac.AppIcon returns nil for these fake bundles: misses are cached —
+	// platform.AppIcon returns nil for these fake bundles: misses are cached —
 	// the point is the cache bound, not icon resolution.
 	for i := range 120 {
 		a.switchIcon(fmt.Sprintf("com.t.%d", i))
@@ -1415,7 +1415,7 @@ func TestAppsMoreSeatWithoutRightWing(t *testing.T) {
 	saved := []string{"com.t.pin"}
 	a.settings.PinnedApps = &saved
 	stubApps(t, &appsStub{
-		running: []mac.RunningApp{
+		running: []platform.RunningApp{
 			{BundleID: "com.t.pin", Name: "Pin", PID: 1},
 			{BundleID: "com.t.a", Name: "Alpha", PID: 2},
 		},

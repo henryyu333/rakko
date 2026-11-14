@@ -14,7 +14,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/store"
 )
 
@@ -33,7 +33,7 @@ func modeShelf(t *testing.T) (*shelf, *ui.Tester) {
 	a.homeSpot.query, a.homeSpot.done = "find", true
 	// Four groups fit the sheet's 330 pt; the folder joins below where a
 	// test needs it alone.
-	a.homeSpot.items = []mac.SpotlightHit{
+	a.homeSpot.items = []platform.SpotlightHit{
 		{Path: "/Applications/Find.app", Name: "Find", App: true},
 		{Path: "/Users/x/Documents/find.txt", Name: "find.txt"},
 	}
@@ -47,7 +47,7 @@ func modeShelf(t *testing.T) (*shelf, *ui.Tester) {
 
 // setMode is what a mode switch must leave the shelf in without asking the
 // index: the hits answer the mode they were gathered for.
-func setMode(a *shelf, scope mac.SearchScope) {
+func setMode(a *shelf, scope platform.SearchScope) {
 	a.homeScope, a.homeSpot.scope = scope, scope
 }
 
@@ -76,7 +76,7 @@ func TestHomeModesShowTheirOwnGroups(t *testing.T) {
 		}
 	}
 
-	setMode(a, mac.ScopeApps)
+	setMode(a, platform.ScopeApps)
 	apps := groups(a.homeHits())
 	if !contains(apps, l.HomeGroupApps()) {
 		t.Fatalf("应用 shows %v, want the apps group", apps)
@@ -87,7 +87,7 @@ func TestHomeModesShowTheirOwnGroups(t *testing.T) {
 		}
 	}
 
-	setMode(a, mac.ScopeFiles)
+	setMode(a, platform.ScopeFiles)
 	files := groups(a.homeHits())
 	if !contains(files, l.HomeGroupTray()) || !contains(files, l.HomeGroupClipboard()) ||
 		!contains(files, l.HomeGroupFiles()) {
@@ -100,11 +100,11 @@ func TestHomeModesShowTheirOwnGroups(t *testing.T) {
 	}
 
 	// A folder is a file result too.
-	a.homeSpot.items = []mac.SpotlightHit{{Path: "/Users/x/Documents/find", Name: "find", Folder: true}}
+	a.homeSpot.items = []platform.SpotlightHit{{Path: "/Users/x/Documents/find", Name: "find", Folder: true}}
 	if gs := groups(a.homeHits()); !contains(gs, l.HomeGroupFolders()) {
 		t.Fatalf("文件 shows %v, want the folders group", gs)
 	}
-	setMode(a, mac.ScopeApps)
+	setMode(a, platform.ScopeApps)
 	if gs := groups(a.homeHits()); contains(gs, l.HomeGroupFolders()) {
 		t.Fatalf("应用 shows %v, want no folders", gs)
 	}
@@ -117,11 +117,11 @@ func TestHomeModesKeepTheirActions(t *testing.T) {
 	a.homeQuery = strings.ToLower(l.PanelSettings())
 	a.homeSpot.query = a.homeQuery
 
-	setMode(a, mac.ScopeAll)
+	setMode(a, platform.ScopeAll)
 	if gs := groups(a.homeHits()); !contains(gs, l.HomeGroupActions()) {
 		t.Fatalf("全部 shows %v, want the actions group", gs)
 	}
-	for _, scope := range []mac.SearchScope{mac.ScopeApps, mac.ScopeFiles} {
+	for _, scope := range []platform.SearchScope{platform.ScopeApps, platform.ScopeFiles} {
 		setMode(a, scope)
 		if gs := groups(a.homeHits()); contains(gs, l.HomeGroupActions()) {
 			t.Fatalf("scope %d shows the actions group: %v", scope, gs)
@@ -137,7 +137,7 @@ func TestHomeTabCyclesModesWhenTheBarIsEmpty(t *testing.T) {
 	a.homeSpot.query, a.homeSpot.items, a.homeSpot.done = "", nil, false
 	v.Frame()
 
-	for _, want := range []mac.SearchScope{mac.ScopeApps, mac.ScopeFiles, mac.ScopeAll} {
+	for _, want := range []platform.SearchScope{platform.ScopeApps, platform.ScopeFiles, platform.ScopeAll} {
 		v.Key(0, ui.KeyTab)
 		v.Frame()
 		if a.homeScope != want {
@@ -158,7 +158,7 @@ func TestHomeTabKeepsItsFocusRoleWithATerm(t *testing.T) {
 	}
 	v.Key(0, ui.KeyTab)
 	v.Frame()
-	if a.homeScope != mac.ScopeAll {
+	if a.homeScope != platform.ScopeAll {
 		t.Fatalf("Tab switched to scope %d with \"%s\" typed", a.homeScope, a.homeQuery)
 	}
 	// The bar takes the keyboard back on every frame while it is open, so
@@ -180,12 +180,12 @@ func TestHomeModeSwitchAsksAgainAtOnce(t *testing.T) {
 	a.homeQuery = "rakko"
 	a.homeQueryChanged()
 	(*pending)()
-	if len(f.terms) != 1 || f.scopes[0] != mac.ScopeAll {
+	if len(f.terms) != 1 || f.scopes[0] != platform.ScopeAll {
 		t.Fatalf("first query = %v in %v", f.terms, f.scopes)
 	}
 
 	a.cycleHomeScope()
-	if len(f.terms) != 2 || f.terms[1] != "rakko" || f.scopes[1] != mac.ScopeApps {
+	if len(f.terms) != 2 || f.terms[1] != "rakko" || f.scopes[1] != platform.ScopeApps {
 		t.Fatalf("应用 asked %v / %v, want \"rakko\" in the app scope", f.terms, f.scopes)
 	}
 	if f.cancels != 1 {
@@ -194,17 +194,17 @@ func TestHomeModeSwitchAsksAgainAtOnce(t *testing.T) {
 
 	stale := f.emit
 	a.cycleHomeScope()
-	if len(f.terms) != 3 || f.terms[2] != "rakko" || f.scopes[2] != mac.ScopeFiles {
+	if len(f.terms) != 3 || f.terms[2] != "rakko" || f.scopes[2] != platform.ScopeFiles {
 		t.Fatalf("文件 asked %v / %v, want \"rakko\" in the file scope", f.terms, f.scopes)
 	}
-	stale([]mac.SpotlightHit{{Path: "/Applications/Rakko.app", Name: "Rakko", App: true}})
+	stale([]platform.SpotlightHit{{Path: "/Applications/Rakko.app", Name: "Rakko", App: true}})
 	if len(a.homeSpot.items) != 0 {
 		t.Fatalf("a batch from the old mode landed: %+v", a.homeSpot.items)
 	}
 
 	// A hit the sheet does not belong to this mode never shows, even when
 	// the index sent it.
-	a.homeSpot.items = []mac.SpotlightHit{{Path: "/Applications/Rakko.app", Name: "Rakko", App: true}}
+	a.homeSpot.items = []platform.SpotlightHit{{Path: "/Applications/Rakko.app", Name: "Rakko", App: true}}
 	if got := a.homeHits(); len(got) != 0 {
 		t.Fatalf("文件 shows an app hit: %+v", got)
 	}
@@ -215,20 +215,20 @@ func TestHomeModeSwitchAsksAgainAtOnce(t *testing.T) {
 func TestHomeModeResetsWhenThePanelCloses(t *testing.T) {
 	a := &shelf{store: &store.Store{}}
 	a.show(false)
-	a.homeQuery, a.homeScope = "rakko", mac.ScopeFiles
+	a.homeQuery, a.homeScope = "rakko", platform.ScopeFiles
 	a.hide(hideExplicit)
 	a.finishClose()
-	if a.homeScope != mac.ScopeAll || a.homeQuery != "" {
+	if a.homeScope != platform.ScopeAll || a.homeQuery != "" {
 		t.Fatalf("the closed panel kept %d / %q", a.homeScope, a.homeQuery)
 	}
 
 	// Reopening after a close in flight goes through the same reset.
-	a.homeScope = mac.ScopeApps
+	a.homeScope = platform.ScopeApps
 	a.show(false)
-	if a.homeScope != mac.ScopeAll {
+	if a.homeScope != platform.ScopeAll {
 		t.Fatalf("the reopened bar starts on scope %d", a.homeScope)
 	}
-	if a.goHome(); a.homeScope != mac.ScopeAll {
+	if a.goHome(); a.homeScope != platform.ScopeAll {
 		t.Fatalf("going home left the bar in scope %d", a.homeScope)
 	}
 }
@@ -244,7 +244,7 @@ func TestHomeModeCapsuleVisibleOnlyOffAll(t *testing.T) {
 		t.Fatalf("全部 painted a mode capsule: %v", v.Texts())
 	}
 
-	a.homeScope = mac.ScopeApps
+	a.homeScope = platform.ScopeApps
 	v.Frame()
 	if !shows(v, l.SearchModeApps()) {
 		t.Fatalf("应用 has no capsule: %v", v.Texts())
@@ -264,7 +264,7 @@ func TestHomeModeCapsuleVisibleOnlyOffAll(t *testing.T) {
 		t.Fatalf("the Tab hint stayed with a term: %v", v.Texts())
 	}
 
-	a.homeScope = mac.ScopeFiles
+	a.homeScope = platform.ScopeFiles
 	a.homeQuery, a.homeSpot.query, a.homeSpot.items, a.homeSpot.done = "", "", nil, false
 	v.Frame()
 	if !shows(v, l.SearchModeFiles()) {
@@ -277,14 +277,14 @@ func TestHomeModeCapsuleVisibleOnlyOffAll(t *testing.T) {
 func TestHomeModeCapsuleCyclesOnClick(t *testing.T) {
 	a, v := modeShelf(t)
 	l := a.appLoc()
-	a.homeScope = mac.ScopeApps
+	a.homeScope = platform.ScopeApps
 	a.homeQuery, a.homeSpot.query, a.homeSpot.items, a.homeSpot.done = "", "", nil, false
 	v.Frame()
 	if err := v.Click(l.SearchModeApps()); err != nil {
 		t.Fatalf("the capsule did not take the click: %v", err)
 	}
 	v.Frame()
-	if a.homeScope != mac.ScopeFiles {
+	if a.homeScope != platform.ScopeFiles {
 		t.Fatalf("the click left the bar in scope %d, want 文件", a.homeScope)
 	}
 	if !v.Focused(l.HomeSearch()) {

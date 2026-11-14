@@ -31,7 +31,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 	"rakko/locales"
 )
@@ -628,7 +628,7 @@ var (
 		}
 		return "/Applications"
 	}()
-	onbTrashPath = mac.TrashFile
+	onbTrashPath = platform.TrashFile
 	onbOpenPlan  = relaunchStart
 	onbQuit      = relaunchQuit
 )

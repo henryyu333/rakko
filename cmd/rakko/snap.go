@@ -15,7 +15,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/locales"
 )
 
@@ -100,22 +100,22 @@ type snapGhost struct {
 // ShelfU's target stick.
 type snapConfirm struct {
 	win      snapWindow
-	target   mac.AXRect
+	target   platform.AXRect
 	resize   bool
 	at       time.Time
 	until    time.Time
-	last     mac.AXRect
+	last     platform.AXRect
 	haveLast bool
 	nearAt   time.Time
 }
 
 // snapWindow is the Accessible window a session follows. The production
-// value is mac.AXWindowRef; tests supply a fake without touching AX.
+// value is platform.AXWindowRef; tests supply a fake without touching AX.
 type snapWindow interface {
 	Valid() bool
-	Frame() (mac.AXRect, bool)
+	Frame() (platform.AXRect, bool)
 	Settable() (move, resize bool)
-	MoveResize(r mac.AXRect, resize bool) error
+	MoveResize(r platform.AXRect, resize bool) error
 	Release()
 }
 
@@ -124,32 +124,32 @@ type snapState struct {
 	armed     bool
 	press     mygo.Point
 	win       snapWindow
-	start     mac.AXRect   // window frame at the press
-	frame     mac.AXRect   // latest frame read while dragging
-	move      bool         // the window's position is settable
-	resize    bool         // the window's size is settable
-	trusted   bool         // Accessibility at the press
-	dragging  bool         // the press turned out to be a window drag
-	hot       int          // hovered tile, -1 for none
-	panel     bool         // the 排列窗口 panel is (or is closing as) the open panel
-	drawn     bool         // the shell currently drawn is the snap box
-	wasOpen   bool         // the shelf panel was already open when the snap panel took over
-	prevLevel int          // that panel's level, restored when the snap panel leaves
-	confirm   *snapConfirm // the arrangement still being verified after the drag
+	start     platform.AXRect // window frame at the press
+	frame     platform.AXRect // latest frame read while dragging
+	move      bool            // the window's position is settable
+	resize    bool            // the window's size is settable
+	trusted   bool            // Accessibility at the press
+	dragging  bool            // the press turned out to be a window drag
+	hot       int             // hovered tile, -1 for none
+	panel     bool            // the 排列窗口 panel is (or is closing as) the open panel
+	drawn     bool            // the shell currently drawn is the snap box
+	wasOpen   bool            // the shelf panel was already open when the snap panel took over
+	prevLevel int             // that panel's level, restored when the snap panel leaves
+	confirm   *snapConfirm    // the arrangement still being verified after the drag
 	ghost     *snapGhost
 }
 
 // Seams for the headless tests and the smoke run.
 var (
 	snapAXWindowAt = func(x, y float64) (snapWindow, int, bool) {
-		w, pid, ok := mac.AXWindowAt(x, y)
+		w, pid, ok := platform.AXWindowAt(x, y)
 		if !ok {
 			return nil, 0, false
 		}
 		return w, pid, true
 	}
-	snapOwnPID    = mac.OwnPID
-	snapOwnWindow = func(a *shelf, f mac.AXRect) bool { return a.snapOwnWindowFrame(f) }
+	snapOwnPID    = platform.OwnPID
+	snapOwnWindow = func(a *shelf, f platform.AXRect) bool { return a.snapOwnWindowFrame(f) }
 	// snapInvalidate repaints the shelf when a tile becomes (or stops
 	// being) the hovered one. A seam so the headless test can count it.
 	snapInvalidate = func(a *shelf) {
@@ -302,7 +302,7 @@ func (a *shelf) snapPress(inside bool, button int, p mygo.Point) {
 // so the frame is what identifies them. A normal window of the same
 // process (the smoke test's, for one) is not ShelfU's interface and may be
 // arranged.
-func (a *shelf) snapOwnWindowFrame(f mac.AXRect) bool {
+func (a *shelf) snapOwnWindowFrame(f platform.AXRect) bool {
 	if f.Width <= 0 || f.Height <= 0 {
 		return false
 	}
@@ -328,11 +328,11 @@ func (a *shelf) snapOwnWindowFrame(f mac.AXRect) bool {
 		}
 	}
 	for _, h := range handles {
-		num := mac.WindowNumber(h)
+		num := platform.WindowNumber(h)
 		if num == 0 {
 			continue
 		}
-		r, ok := mac.WindowScreenRect(num)
+		r, ok := platform.WindowScreenRect(num)
 		if !ok {
 			continue
 		}
@@ -438,13 +438,13 @@ func (a *shelf) snapRelease(p mygo.Point) {
 	resize := s.resize
 	if target >= 0 {
 		r := snapSlotRect(snapWorkAreaAt(screenPointOf(s.frame)), target)
-		want := mac.AXRect{
+		want := platform.AXRect{
 			X: float64(r.X), Y: float64(r.Y),
 			Width: float64(r.Width), Height: float64(r.Height),
 		}
 		err := s.win.MoveResize(want, resize)
 		switch {
-		case errors.Is(err, mac.ErrAXResize):
+		case errors.Is(err, platform.ErrAXResize):
 			resizeErr = true
 		case err != nil:
 			moveErr = true
@@ -525,7 +525,7 @@ func (a *shelf) cancelSnapConfirm() {
 
 // snapFrameNear reports whether two frames are the same arrangement
 // within the one-point rounding the window server applies.
-func snapFrameNear(a, b mac.AXRect) bool {
+func snapFrameNear(a, b platform.AXRect) bool {
 	return math.Abs(a.X-b.X) <= snapConfirmTol && math.Abs(a.Y-b.Y) <= snapConfirmTol &&
 		math.Abs(a.Width-b.Width) <= snapConfirmTol && math.Abs(a.Height-b.Height) <= snapConfirmTol
 }
@@ -625,7 +625,7 @@ func (a *shelf) snapAnchor() mygo.Rectangle {
 }
 
 // screenPointOf is the AX frame's centre as the point that picks a display.
-func screenPointOf(r mac.AXRect) mygo.Point {
+func screenPointOf(r platform.AXRect) mygo.Point {
 	return mygo.Point{X: int(math.Round(r.X + r.Width/2)), Y: int(math.Round(r.Y + r.Height/2))}
 }
 
@@ -703,7 +703,7 @@ func (a *shelf) advanceGhost(now time.Time) {
 	}
 	g.frame = r
 	if g.win != nil {
-		mac.SetWindowFrame(g.win.NativeHandle(), r.X, r.Y, r.Width, r.Height)
+		platform.SetWindowFrame(g.win.NativeHandle(), r.X, r.Y, r.Width, r.Height)
 		g.win.Invalidate()
 	}
 }
@@ -721,8 +721,8 @@ func (a *shelf) openGhostWindow(g *snapGhost) {
 	})
 	g.win = w
 	w.SetVisibleOnAllWorkspaces(true)
-	mac.ConfigureDragPreview(w.NativeHandle(), a.windowLevel())
-	mac.SetWindowFrame(w.NativeHandle(), f.X, f.Y, f.Width, f.Height)
+	platform.ConfigureDragPreview(w.NativeHandle(), a.windowLevel())
+	platform.SetWindowFrame(w.NativeHandle(), f.X, f.Y, f.Width, f.Height)
 	w.ShowInactive()
 }
 

@@ -26,7 +26,7 @@ import (
 	"github.com/ebitengine/purego"
 	"github.com/egoist/mygo"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 )
 
@@ -35,7 +35,7 @@ const appsShotDir = "/tmp/rakko-appswitch/native"
 // shotAppsWindow screenshots w into the R2 evidence directory.
 func shotAppsWindow(t *testing.T, w *mygo.Window, name string) string {
 	t.Helper()
-	num := mac.WindowNumber(w.NativeHandle())
+	num := platform.WindowNumber(w.NativeHandle())
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}
@@ -58,7 +58,7 @@ func shotAppsWindow(t *testing.T, w *mygo.Window, name string) string {
 // smoke shelf is also reset on entry AND on cleanup — island shape, drag
 // offset, live queue, panel and wings all go back, so no test inherits or
 // leaks switcher state.
-func appsSmokeShelf(t *testing.T, running []mac.RunningApp) *shelf {
+func appsSmokeShelf(t *testing.T, running []platform.RunningApp) *shelf {
 	t.Helper()
 	a := redesignShelf(t)
 	stubApps(t, &appsStub{
@@ -220,8 +220,8 @@ func clickOverlayAt(t *testing.T, a *shelf, x, y float64) {
 		var hit, num int
 		onMain(func() {
 			primary := mygo.Screen.PrimaryDisplay()
-			hit = mac.WindowAtPoint(x, y, float64(primary.Bounds.Y+primary.Bounds.Height))
-			num = mac.WindowNumber(a.win.NativeHandle())
+			hit = platform.WindowAtPoint(x, y, float64(primary.Bounds.Y+primary.Bounds.Height))
+			num = platform.WindowNumber(a.win.NativeHandle())
 		})
 		if hit != num {
 			t.Fatalf("refusing click at (%.0f,%.0f): native target %d is not our window %d", x, y, hit, num)
@@ -266,14 +266,14 @@ func hidMoveTo(t *testing.T, x, y float64) {
 		t.Fatalf("CoreGraphics: %v", err)
 	}
 	var (
-		create  func(source uintptr, typ uint32, p mac.CGPoint, button uint32) uintptr
+		create  func(source uintptr, typ uint32, p platform.CGPoint, button uint32) uintptr
 		post    func(tap uint32, ev uintptr)
 		release func(cf uintptr)
 	)
 	purego.RegisterLibFunc(&create, lib, "CGEventCreateMouseEvent")
 	purego.RegisterLibFunc(&post, lib, "CGEventPost")
 	purego.RegisterLibFunc(&release, libCFOrDie(lib), "CFRelease")
-	ev := create(0, 5 /* kCGEventMouseMoved */, mac.CGPoint{X: x, Y: y}, 0)
+	ev := create(0, 5 /* kCGEventMouseMoved */, platform.CGPoint{X: x, Y: y}, 0)
 	if ev == 0 {
 		t.Fatal("CGEventCreateMouseEvent returned nil")
 	}
@@ -325,7 +325,7 @@ func closeAppsWings(t *testing.T, a *shelf) {
 	})
 }
 
-var smokeApps = []mac.RunningApp{
+var smokeApps = []platform.RunningApp{
 	{BundleID: "com.smoke.pin1", Name: "Pin One", PID: 101},
 	{BundleID: "com.smoke.pin2", Name: "Pin Two", PID: 102},
 	{BundleID: "com.smoke.run1", Name: "Run One", PID: 103},
@@ -423,7 +423,7 @@ func TestSmokeAppsWingsOpenFromEntry(t *testing.T) {
 	// app raised, the same hover paints for one more frame pair: this is
 	// the state a real user who just clicked the launch/switch target
 	// sees, and it is the one worth shipping screenshots of.
-	mac.ActivateSelf()
+	platform.ActivateSelf()
 	time.Sleep(250 * time.Millisecond) // activation takes a beat
 	hidMoveTo(t, float64(x), float64(y))
 	time.Sleep(900 * time.Millisecond)

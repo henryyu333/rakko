@@ -17,7 +17,7 @@ import (
 	"rakko/internal/companion"
 	"rakko/internal/layout"
 	"rakko/internal/lyrics"
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 	"rakko/internal/store"
 	"rakko/internal/weekly"
@@ -55,38 +55,38 @@ type shelf struct {
 	settings                                                    settings.Settings
 	locale                                                      string // language the native surfaces say (tray, menus, dialogs); "" = source
 	modules                                                     []module
-	np                                                          *nowPlayingModule   // the peek wings read its state
-	pwr                                                         *powerModule        // battery / adapter events (live.go)
-	audio                                                       *audioModule        // headphone connect / disconnect
-	dl                                                          *downloadsModule    // browser downloads in ~/Downloads
-	live                                                        liveQueue           // transient charging / headphone / download-done events
-	conv                                                        *converter          // image conversion jobs; nil until the app starts
-	usage                                                       *usageFeature       // nil until the AI usage page registers itself
-	weekly                                                      *weeklyFeature      // nil until the 每周简报 page registers itself
-	agent                                                       *agentNotifyFeature // nil until the Agent 完成提醒 switch or a hook event needs it
-	onb                                                         *onboardingFeature  // the first-launch guide; nil on an upgraded install
-	approval                                                    *approvalFeature    // nil until Agent 审批 or an approval request needs it
-	lyrCache                                                    *lyrics.Cache       // synced lyrics for the home page; nil until first used
-	companion                                                   *companion.Store    // the first day and the support click; nil before startup loads it
-	clip                                                        *clipboardModule    // nil until monitoring starts
-	awake                                                       *awakeModule        // nil until the app starts
-	clock                                                       *clockModule        // the countdown and stopwatch; nil in fixtures
-	vol                                                         volumeControl       // system output volume; nil = CoreAudio
-	pages                                                       []panelPage         // registered pages in ear order (built-ins first)
-	pagesReady                                                  bool                // built-in pages have been registered
-	tab                                                         pageID              // current page of the expanded panel (registry in pages.go)
-	tabAt                                                       time.Time           // when the tab last switched; drives the pages' crossfade
-	tabFrom                                                     pageID              // the page being left by the last switch, drawn fading out
-	tabOutK                                                     float32             // opacity the outgoing picture starts at (1, or where an interrupted switch left it)
-	tabOutShift                                                 float32             // offset the outgoing picture starts at when a switch interrupted another
-	warmed                                                      map[pageID]bool     // pages already drawn once while the panel rested
-	warming                                                     pageID              // page queued for that warm draw
-	search                                                      string              // clipboard page's search text
-	homeQuery                                                   string              // the home search bar's text
-	homeScope                                                   mac.SearchScope     // what the bar searches: 全部 / 应用 / 文件, never saved
-	homeSel                                                     int                 // the selected result row
-	homeSpot                                                    homeSpotState       // the bar's Spotlight query and hits
-	homeRows                                                    []homeHit           // the current build pass's grouped rows
+	np                                                          *nowPlayingModule    // the peek wings read its state
+	pwr                                                         *powerModule         // battery / adapter events (live.go)
+	audio                                                       *audioModule         // headphone connect / disconnect
+	dl                                                          *downloadsModule     // browser downloads in ~/Downloads
+	live                                                        liveQueue            // transient charging / headphone / download-done events
+	conv                                                        *converter           // image conversion jobs; nil until the app starts
+	usage                                                       *usageFeature        // nil until the AI usage page registers itself
+	weekly                                                      *weeklyFeature       // nil until the 每周简报 page registers itself
+	agent                                                       *agentNotifyFeature  // nil until the Agent 完成提醒 switch or a hook event needs it
+	onb                                                         *onboardingFeature   // the first-launch guide; nil on an upgraded install
+	approval                                                    *approvalFeature     // nil until Agent 审批 or an approval request needs it
+	lyrCache                                                    *lyrics.Cache        // synced lyrics for the home page; nil until first used
+	companion                                                   *companion.Store     // the first day and the support click; nil before startup loads it
+	clip                                                        *clipboardModule     // nil until monitoring starts
+	awake                                                       *awakeModule         // nil until the app starts
+	clock                                                       *clockModule         // the countdown and stopwatch; nil in fixtures
+	vol                                                         volumeControl        // system output volume; nil = CoreAudio
+	pages                                                       []panelPage          // registered pages in ear order (built-ins first)
+	pagesReady                                                  bool                 // built-in pages have been registered
+	tab                                                         pageID               // current page of the expanded panel (registry in pages.go)
+	tabAt                                                       time.Time            // when the tab last switched; drives the pages' crossfade
+	tabFrom                                                     pageID               // the page being left by the last switch, drawn fading out
+	tabOutK                                                     float32              // opacity the outgoing picture starts at (1, or where an interrupted switch left it)
+	tabOutShift                                                 float32              // offset the outgoing picture starts at when a switch interrupted another
+	warmed                                                      map[pageID]bool      // pages already drawn once while the panel rested
+	warming                                                     pageID               // page queued for that warm draw
+	search                                                      string               // clipboard page's search text
+	homeQuery                                                   string               // the home search bar's text
+	homeScope                                                   platform.SearchScope // what the bar searches: 全部 / 应用 / 文件, never saved
+	homeSel                                                     int                  // the selected result row
+	homeSpot                                                    homeSpotState        // the bar's Spotlight query and hits
+	homeRows                                                    []homeHit            // the current build pass's grouped rows
 	homeRowsOK                                                  bool
 	spotIcons                                                   map[string]*ui.Bitmap // result path → Finder icon, cached for the sheet
 	spotPending                                                 map[string]bool       // result icons being rendered in the background
@@ -577,7 +577,7 @@ func (a *shelf) openClipboardSearch() {
 	a.cancelPaste()
 	a.edgeOpened = false
 	if a.win != nil && !a.focusMode {
-		if pid := mac.FrontmostPID(); pid > 0 && pid != mac.OwnPID() {
+		if pid := platform.FrontmostPID(); pid > 0 && pid != platform.OwnPID() {
 			a.prevAppPID = pid
 		}
 	}
@@ -594,7 +594,7 @@ func (a *shelf) openClipboardSearch() {
 	// and show() returns early. syncMousePassThrough applies windowLevel.
 	a.syncMousePassThrough()
 	a.show(false)
-	mac.ActivateSelf()
+	platform.ActivateSelf()
 	a.win.Focus()
 	// 键盘已经在这个窗口里：Esc 与空格交给窗口处理，全局注册会把
 	// 按键从搜索框手里抢走。
@@ -621,9 +621,9 @@ func (a *shelf) switchTab(id pageID) {
 // running) to prove who gets the keyboard when a keyboard-taking surface
 // closes.
 var (
-	appIsActive = mac.AppActive
-	activateApp = mac.ActivateApp
-	resignSelf  = mac.DeactivateSelf
+	appIsActive = platform.AppActive
+	activateApp = platform.ActivateApp
+	resignSelf  = platform.DeactivateSelf
 )
 
 // activatePreviousApp hands the keyboard back to the app the user came
@@ -639,7 +639,7 @@ func (a *shelf) activatePreviousApp(pid int) { a.handBack(pid, true) }
 func (a *shelf) handBackApp(pid int) { a.handBack(pid, false) }
 
 func (a *shelf) handBack(pid int, resignWhenGone bool) {
-	if pid <= 0 || pid == mac.OwnPID() || !appIsActive() {
+	if pid <= 0 || pid == platform.OwnPID() || !appIsActive() {
 		return
 	}
 	if !activateApp(pid) && resignWhenGone {

@@ -13,7 +13,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/store"
 )
 
@@ -29,7 +29,7 @@ func resultsShelf() *shelf {
 		appNames: map[string]string{"com.example.Editor": "Editor"}}
 	a.homeSpot.query = "find"
 	a.homeSpot.done = true
-	a.homeSpot.items = []mac.SpotlightHit{
+	a.homeSpot.items = []platform.SpotlightHit{
 		{Path: "/Applications/Find.app", Name: "Find", App: true},
 		{Path: "/Users/x/Documents/find", Name: "find", Folder: true},
 	}

@@ -18,7 +18,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 	"rakko/internal/store"
 )
@@ -196,47 +196,47 @@ func TestLiveSwitchSilencesActivity(t *testing.T) {
 func TestPowerEventsOncePerThreshold(t *testing.T) {
 	a := liveShelf()
 	m := &powerModule{host: a, now: time.Now}
-	var st mac.BatteryStatus
+	var st platform.BatteryStatus
 	ok := true
-	m.probe = func() (mac.BatteryStatus, bool) { return st, ok }
-	step := func(s mac.BatteryStatus, at time.Time) {
+	m.probe = func() (platform.BatteryStatus, bool) { return st, ok }
+	step := func(s platform.BatteryStatus, at time.Time) {
 		st = s
 		m.next = time.Time{}
 		m.tick(at)
 	}
 	now := time.Now()
-	step(mac.BatteryStatus{Percent: 50}, now) // seed on battery
+	step(platform.BatteryStatus{Percent: 50}, now) // seed on battery
 	if len(a.live.queued) != 0 {
 		t.Fatalf("the launch state posted %d notices", len(a.live.queued))
 	}
 
-	step(mac.BatteryStatus{Percent: 80, External: true}, now.Add(2*time.Second))
+	step(platform.BatteryStatus{Percent: 80, External: true}, now.Add(2*time.Second))
 	if len(a.live.queued) != 1 || a.live.queued[0].kind != liveCharging {
 		t.Fatalf("plugging in queued %+v", a.live.queued)
 	}
-	step(mac.BatteryStatus{Percent: 80, External: true, Charging: true}, now.Add(4*time.Second))
+	step(platform.BatteryStatus{Percent: 80, External: true, Charging: true}, now.Add(4*time.Second))
 	if len(a.live.queued) != 1 {
 		t.Fatalf("a steady charge posted again: %+v", a.live.queued)
 	}
-	step(mac.BatteryStatus{Percent: 100, External: true}, now.Add(6*time.Second))
+	step(platform.BatteryStatus{Percent: 100, External: true}, now.Add(6*time.Second))
 	if len(a.live.queued) != 2 || a.live.queued[1].kind != liveCharged {
 		t.Fatalf("full battery queued %+v", a.live.queued)
 	}
-	step(mac.BatteryStatus{Percent: 100, External: true}, now.Add(8*time.Second))
+	step(platform.BatteryStatus{Percent: 100, External: true}, now.Add(8*time.Second))
 	if len(a.live.queued) != 2 {
 		t.Fatalf("full battery repeated: %+v", a.live.queued)
 	}
 
 	// Discharge: each threshold once, then a new cycle brings them back.
 	a.clearLive()
-	step(mac.BatteryStatus{Percent: 30}, now.Add(10*time.Second))
+	step(platform.BatteryStatus{Percent: 30}, now.Add(10*time.Second))
 	if len(a.live.queued) != 0 {
 		t.Fatalf("unplugging above the threshold posted %+v", a.live.queued)
 	}
-	step(mac.BatteryStatus{Percent: 20}, now.Add(12*time.Second))
-	step(mac.BatteryStatus{Percent: 19}, now.Add(14*time.Second))
-	step(mac.BatteryStatus{Percent: 10}, now.Add(16*time.Second))
-	step(mac.BatteryStatus{Percent: 9}, now.Add(18*time.Second))
+	step(platform.BatteryStatus{Percent: 20}, now.Add(12*time.Second))
+	step(platform.BatteryStatus{Percent: 19}, now.Add(14*time.Second))
+	step(platform.BatteryStatus{Percent: 10}, now.Add(16*time.Second))
+	step(platform.BatteryStatus{Percent: 9}, now.Add(18*time.Second))
 	if len(a.live.queued) != 2 {
 		t.Fatalf("low battery queued %d notices, want the 20%% and 10%% thresholds", len(a.live.queued))
 	}
@@ -244,10 +244,10 @@ func TestPowerEventsOncePerThreshold(t *testing.T) {
 		t.Fatalf("low notices %+v, want 20 then 10", a.live.queued)
 	}
 	a.clearLive()
-	step(mac.BatteryStatus{Percent: 40, External: true}, now.Add(20*time.Second))
+	step(platform.BatteryStatus{Percent: 40, External: true}, now.Add(20*time.Second))
 	a.clearLive() // drop the charging notice
-	step(mac.BatteryStatus{Percent: 40}, now.Add(22*time.Second))
-	step(mac.BatteryStatus{Percent: 20}, now.Add(24*time.Second))
+	step(platform.BatteryStatus{Percent: 40}, now.Add(22*time.Second))
+	step(platform.BatteryStatus{Percent: 20}, now.Add(24*time.Second))
 	if len(a.live.queued) != 1 {
 		t.Fatalf("the new discharge cycle did not repeat 20%%: %+v", a.live.queued)
 	}
@@ -255,7 +255,7 @@ func TestPowerEventsOncePerThreshold(t *testing.T) {
 	// A Mac without a battery never speaks.
 	a.clearLive()
 	ok = false
-	step(mac.BatteryStatus{Percent: 5}, now.Add(26*time.Second))
+	step(platform.BatteryStatus{Percent: 5}, now.Add(26*time.Second))
 	if len(a.live.queued) != 0 {
 		t.Fatalf("a battery-less Mac posted %+v", a.live.queued)
 	}
@@ -271,9 +271,9 @@ func TestPowerObserverWakesThePoll(t *testing.T) {
 	powerObserver = func(fn func()) (uintptr, error) { wake = fn; return 1, nil }
 	t.Cleanup(func() { powerObserver = old })
 
-	st := mac.BatteryStatus{Percent: 40}
+	st := platform.BatteryStatus{Percent: 40}
 	probes := 0
-	probe := func() (mac.BatteryStatus, bool) { probes++; return st, true }
+	probe := func() (platform.BatteryStatus, bool) { probes++; return st, true }
 	m := &powerModule{host: a, now: time.Now, probe: probe}
 	if !m.watchPower() || wake == nil {
 		t.Fatal("the observer was not installed through the seam")
@@ -289,7 +289,7 @@ func TestPowerObserverWakesThePoll(t *testing.T) {
 		t.Fatal("the tick ignored the poll gate")
 	}
 	// IOKit's notification opens the gate for the next tick.
-	st = mac.BatteryStatus{Percent: 40, External: true}
+	st = platform.BatteryStatus{Percent: 40, External: true}
 	wake()
 	m.tick(now.Add(20 * time.Millisecond))
 	if probes != 2 {
@@ -303,7 +303,7 @@ func TestPowerObserverWakesThePoll(t *testing.T) {
 	// two-second poll as its only path.
 	powerObserver = func(func()) (uintptr, error) { return 0, errors.New("no IOKit") }
 	a.clearLive()
-	st = mac.BatteryStatus{Percent: 40}
+	st = platform.BatteryStatus{Percent: 40}
 	fallback := &powerModule{host: a, now: time.Now, probe: probe}
 	if fallback.watchPower() {
 		t.Fatal("a failed observer reported success")
@@ -314,7 +314,7 @@ func TestPowerObserverWakesThePoll(t *testing.T) {
 	if probes != before+1 {
 		t.Fatalf("the fallback probed %d times, want exactly the gated tick", probes-before)
 	}
-	st = mac.BatteryStatus{Percent: 40, External: true}
+	st = platform.BatteryStatus{Percent: 40, External: true}
 	fallback.tick(now.Add(powerPollInterval))
 	if len(a.live.queued) != 1 {
 		t.Fatalf("the poll missed the plug-in: %+v", a.live.queued)
@@ -323,30 +323,30 @@ func TestPowerObserverWakesThePoll(t *testing.T) {
 
 func TestAudioConnectAndDisconnect(t *testing.T) {
 	a := liveShelf()
-	devs := []mac.AudioOutput{
+	devs := []platform.AudioOutput{
 		{Name: "扬声器", UID: "built-in"},
 		{Name: "AirPods Pro", UID: "airpods", Bluetooth: true},
 	}
-	m := &audioModule{host: a, list: func() []mac.AudioOutput { return devs }, now: time.Now, known: map[string]string{}}
+	m := &audioModule{host: a, list: func() []platform.AudioOutput { return devs }, now: time.Now, known: map[string]string{}}
 	now := time.Now()
 	m.tick(now) // seed with the AirPods already connected
 	if len(a.live.queued) != 0 {
 		t.Fatalf("the launch state announced %+v", a.live.queued)
 	}
-	devs = []mac.AudioOutput{{Name: "扬声器", UID: "built-in"}}
+	devs = []platform.AudioOutput{{Name: "扬声器", UID: "built-in"}}
 	m.next = time.Time{}
 	m.tick(now.Add(time.Second))
 	if len(a.live.queued) != 1 || a.live.queued[0].kind != liveHeadsetOff || a.live.queued[0].label != "AirPods Pro" {
 		t.Fatalf("disconnect queued %+v", a.live.queued)
 	}
-	devs = append(devs, mac.AudioOutput{Name: "AirPods Pro", UID: "airpods", Bluetooth: true})
+	devs = append(devs, platform.AudioOutput{Name: "AirPods Pro", UID: "airpods", Bluetooth: true})
 	m.next = time.Time{}
 	m.tick(now.Add(2 * time.Second))
 	if len(a.live.queued) != 2 || a.live.queued[1].kind != liveHeadset {
 		t.Fatalf("reconnect queued %+v", a.live.queued)
 	}
 	// A keyboard is not an output and must never be announced.
-	devs = append(devs, mac.AudioOutput{Name: "键盘", UID: "keys"})
+	devs = append(devs, platform.AudioOutput{Name: "键盘", UID: "keys"})
 	m.next = time.Time{}
 	m.tick(now.Add(3 * time.Second))
 	if len(a.live.queued) != 2 {
@@ -635,8 +635,8 @@ func TestLiveHeadsetGlyph(t *testing.T) {
 // single module-wide generation.
 func TestAudioBatteryPerDevice(t *testing.T) {
 	a := liveShelf()
-	devs := []mac.AudioOutput{{Name: "扬声器", UID: "built-in"}}
-	m := &audioModule{host: a, list: func() []mac.AudioOutput { return devs }, now: time.Now, known: map[string]string{}}
+	devs := []platform.AudioOutput{{Name: "扬声器", UID: "built-in"}}
+	m := &audioModule{host: a, list: func() []platform.AudioOutput { return devs }, now: time.Now, known: map[string]string{}}
 	now := time.Now()
 	m.tick(now) // seed
 
@@ -652,8 +652,8 @@ func TestAudioBatteryPerDevice(t *testing.T) {
 	}
 	m.dispatch = func(fn func()) { dispatched <- fn }
 	devs = append(devs,
-		mac.AudioOutput{Name: "AirPods Pro", UID: "airpods", Bluetooth: true},
-		mac.AudioOutput{Name: "Sony WH-1000XM5", UID: "sony", Bluetooth: true})
+		platform.AudioOutput{Name: "AirPods Pro", UID: "airpods", Bluetooth: true},
+		platform.AudioOutput{Name: "Sony WH-1000XM5", UID: "sony", Bluetooth: true})
 	m.next = time.Time{}
 	m.tick(now.Add(time.Second))
 	if len(a.live.queued) != 2 {

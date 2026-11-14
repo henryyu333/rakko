@@ -16,7 +16,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/layout"
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 // Inspect WindowServer's list, not merely the application's window pointers.
@@ -105,7 +105,7 @@ func requireOwnMouseTarget(t *testing.T, x, y float64) {
 	var hit int
 	onMain(func() {
 		primary := mygo.Screen.PrimaryDisplay()
-		hit = mac.WindowAtPoint(x, y, float64(primary.Bounds.Y+primary.Bounds.Height))
+		hit = platform.WindowAtPoint(x, y, float64(primary.Bounds.Y+primary.Bounds.Height))
 	})
 	// The notch shell takes the mouse only while the pointer is on it, so
 	// WindowServer's answer depends on where the user left the cursor. The
@@ -128,7 +128,7 @@ func requireOwnMouseTarget(t *testing.T, x, y float64) {
 	time.Sleep(60 * time.Millisecond)
 	onMain(func() {
 		primary := mygo.Screen.PrimaryDisplay()
-		hit = mac.WindowAtPoint(x, y, float64(primary.Bounds.Y+primary.Bounds.Height))
+		hit = platform.WindowAtPoint(x, y, float64(primary.Bounds.Y+primary.Bounds.Height))
 	})
 	for _, w := range ownSmokeWindows(t) {
 		if w.ID == hit && w.Onscreen && insideRect(p, w.Frame) {
@@ -147,9 +147,9 @@ func warpPointerTo(t *testing.T, x, y float64) {
 	if err != nil {
 		t.Fatalf("CoreGraphics: %v", err)
 	}
-	var warp func(p mac.CGPoint) int32
+	var warp func(p platform.CGPoint) int32
 	purego.RegisterLibFunc(&warp, lib, "CGWarpMouseCursorPosition")
-	warp(mac.CGPoint{X: x, Y: y})
+	warp(platform.CGPoint{X: x, Y: y})
 }
 
 // A test-owned desktop substitute makes the entire drag path safe, including
@@ -171,9 +171,9 @@ func newSmokePointerBackdrop(t *testing.T, r mygo.Rectangle) *mygo.Window {
 			SkipTaskbar: true, DisableShadow: true, Content: ui.View(func(c *ui.Context) {
 				ui.Box(c).Fill().Background(ui.Hex("#253445"))
 			})})
-		mac.ConfigurePinWindow(w.NativeHandle())
-		mac.SetWindowLevel(w.NativeHandle(), 2)
-		mac.SetWindowFrame(w.NativeHandle(), r.X, r.Y, r.Width, r.Height)
+		platform.ConfigurePinWindow(w.NativeHandle())
+		platform.SetWindowLevel(w.NativeHandle(), 2)
+		platform.SetWindowFrame(w.NativeHandle(), r.X, r.Y, r.Width, r.Height)
 		w.ShowInactive()
 	})
 	t.Cleanup(func() { onMain(w.Destroy) })
@@ -217,7 +217,7 @@ func TestToolsNativeDragOutStaysVisible(t *testing.T) {
 		a.newNotchWindow()
 		a.syncWindowFrame()
 		a.win.ShowInactive()
-		panelNum, arenaNum = mac.WindowNumber(a.winH), mac.WindowNumber(arena.NativeHandle())
+		panelNum, arenaNum = platform.WindowNumber(a.winH), platform.WindowNumber(arena.NativeHandle())
 	})
 	t.Cleanup(func() {
 		onMain(func() {
@@ -308,7 +308,7 @@ func TestToolsNativeDragOutStaysVisible(t *testing.T) {
 	onMain(func() {
 		persisted, live = len(a.toolsLayout().Pins), len(a.pins)
 		d := mygo.Screen.PrimaryDisplay()
-		hit = mac.WindowAtPoint(float64(end.X), float64(end.Y), float64(d.Bounds.Height))
+		hit = platform.WindowAtPoint(float64(end.X), float64(end.Y), float64(d.Bounds.Height))
 		key := objcSend(objcSend(objc.ID(objc.GetClass("NSApplication")), "sharedApplication"), "keyWindow")
 		keyNum = int(objcSend(key, "windowNumber"))
 	})
@@ -398,7 +398,7 @@ func TestToolsNativeDragOutStaysVisible(t *testing.T) {
 	var id int
 	onMain(func() {
 		if pin.win != nil {
-			id = mac.WindowNumber(pin.win.NativeHandle())
+			id = platform.WindowNumber(pin.win.NativeHandle())
 		}
 	})
 	if id != previewNum {

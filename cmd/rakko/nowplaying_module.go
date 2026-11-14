@@ -14,7 +14,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 // nowPlayingModule shows what the system is playing. The closed notch stays
@@ -23,7 +23,7 @@ import (
 // right — and the expanded panel carries the full card (artwork,
 // title/artist, ⏮ ⏯ ⏭, elapsed and remaining time).
 //
-// The state comes from mac.NowPlayingHost, which reads MediaRemote
+// The state comes from platform.NowPlayingHost, which reads MediaRemote
 // through an Apple-signed perl host (macOS 15.4 and later deny
 // Apple-unsigned readers). The host runs for the life of the app: the
 // now-playing wings, the home player and the panel card are always on.
@@ -36,7 +36,7 @@ import (
 type nowPlayingModule struct {
 	host *shelf
 
-	np      *mac.NowPlayingHost
+	np      *platform.NowPlayingHost
 	started bool
 	retryAt time.Time // next start attempt after a failure
 	// seenRev is the helper revision the display was last built from, and
@@ -47,11 +47,11 @@ type nowPlayingModule struct {
 
 	// newHost builds the helper host; nil means the real Apple-signed perl
 	// host. A seam for tests.
-	newHost func() *mac.NowPlayingHost
+	newHost func() *platform.NowPlayingHost
 
 	// last is the state the module displays; only a fully parsed helper
 	// line updates it.
-	last mac.NowPlayingState
+	last platform.NowPlayingState
 	have bool
 
 	// snap is the last state the UI was invalidated for; comparing new
@@ -67,7 +67,7 @@ type nowPlayingModule struct {
 	// once per app, not once per track.
 	iconPNGs map[string][]byte
 
-	// newIcon resolves a bundle id's icon; nil means mac.AppIcon. A seam
+	// newIcon resolves a bundle id's icon; nil means platform.AppIcon. A seam
 	// for tests, which must not start AppKit.
 	newIcon func(bundle string) *ui.Bitmap
 
@@ -108,7 +108,7 @@ const (
 // Position counts only while the expanded panel can show it: with the
 // panel closed a once-a-second redraw would wake the compositor for a
 // card no one sees.
-func npSnapOf(st mac.NowPlayingState, have, panelVisible bool, now time.Time) npSnap {
+func npSnapOf(st platform.NowPlayingState, have, panelVisible bool, now time.Time) npSnap {
 	if !have {
 		return npSnap{}
 	}
@@ -154,7 +154,7 @@ func (m *nowPlayingModule) tick(now time.Time) {
 		m.np.Stop()
 		m.np, m.started = nil, false
 		m.retryAt = now.Add(npRetryDelay)
-		m.last, m.have = mac.NowPlayingState{}, false
+		m.last, m.have = platform.NowPlayingState{}, false
 		m.forgetArt()
 		m.artDone, m.iconFor = "", ""
 		m.optUntil = time.Time{}
@@ -185,7 +185,7 @@ func (m *nowPlayingModule) refreshDue(now time.Time) bool {
 
 // watch wakes the monitoring loop on each helper line and on the helper's
 // exit, so the module never needs a polling tick of its own.
-func (m *nowPlayingModule) watch(h *mac.NowPlayingHost) {
+func (m *nowPlayingModule) watch(h *platform.NowPlayingHost) {
 	a := m.host
 	go func() {
 		for {
@@ -236,11 +236,11 @@ func (m *nowPlayingModule) nextTick(now time.Time) time.Time {
 }
 
 // spawnHost builds the helper host through the test seam when one is set.
-func (m *nowPlayingModule) spawnHost() *mac.NowPlayingHost {
+func (m *nowPlayingModule) spawnHost() *platform.NowPlayingHost {
 	if m.newHost != nil {
 		return m.newHost()
 	}
-	return mac.NewNowPlayingHost()
+	return platform.NewNowPlayingHost()
 }
 
 // refresh pulls the latest state from the host and invalidates the
@@ -320,7 +320,7 @@ func (m *nowPlayingModule) artState() int {
 // sends WebP), so any registered image format is accepted; artwork that
 // cannot be decoded falls back to the app icon instead of a blank glyph.
 // rememberArt computes the average colour once per artwork.
-func (m *nowPlayingModule) decodeArt(st mac.NowPlayingState) {
+func (m *nowPlayingModule) decodeArt(st platform.NowPlayingState) {
 	if st.ArtID == "" || st.ArtID == m.artDone {
 		return
 	}
@@ -376,7 +376,7 @@ func (m *nowPlayingModule) appIconPNG(bundle string) []byte {
 	if b, ok := m.iconPNGs[bundle]; ok {
 		return b
 	}
-	m.iconPNGs[bundle] = mac.AppIcon(bundle, 64)
+	m.iconPNGs[bundle] = platform.AppIcon(bundle, 64)
 	return m.iconPNGs[bundle]
 }
 
@@ -397,7 +397,7 @@ func (m *nowPlayingModule) stop() {
 	}
 	m.started = false
 	m.retryAt = time.Time{}
-	m.last, m.have = mac.NowPlayingState{}, false
+	m.last, m.have = platform.NowPlayingState{}, false
 	m.forgetArt()
 	m.artDone, m.iconFor = "", ""
 	m.optUntil = time.Time{}
@@ -406,9 +406,9 @@ func (m *nowPlayingModule) stop() {
 
 // track returns the current state while it names something the card can
 // show, playing or paused (the controls are most useful while paused).
-func (m *nowPlayingModule) track() (mac.NowPlayingState, bool) {
+func (m *nowPlayingModule) track() (platform.NowPlayingState, bool) {
 	if !m.have || m.last.Title == "" {
-		return mac.NowPlayingState{}, false
+		return platform.NowPlayingState{}, false
 	}
 	return m.last, true
 }
@@ -452,12 +452,12 @@ func (m *nowPlayingModule) seekTo(seconds float64) {
 // the shown state at once — the next helper line (the helper samples hot
 // for a moment after a command) reconciles it with the truth, so a slow or
 // missing source notification cannot leave the button on the old glyph.
-func (m *nowPlayingModule) send(command mac.NowPlayingCommand) {
+func (m *nowPlayingModule) send(command platform.NowPlayingCommand) {
 	if m.np == nil {
 		return
 	}
 	m.np.Send(command)
-	if command != mac.NPPlayPause || !m.have {
+	if command != platform.NPPlayPause || !m.have {
 		return
 	}
 	now := time.Now()

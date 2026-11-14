@@ -22,7 +22,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/locales"
 )
 
@@ -208,7 +208,7 @@ func headsetBitmap(name string) *ui.Bitmap {
 	if b, ok := headsetSymbols[name]; ok {
 		return b
 	}
-	data := mac.SystemSymbol(name, 24)
+	data := platform.SystemSymbol(name, 24)
 	var b *ui.Bitmap
 	if src, err := png.Decode(bytes.NewReader(data)); err == nil {
 		dst := image.NewNRGBA(src.Bounds())

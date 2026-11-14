@@ -35,7 +35,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/store"
 	"rakko/locales"
 )
@@ -169,7 +169,7 @@ func zipText(b []byte) string {
 	if utf8.Valid(b) {
 		return string(b)
 	}
-	if s, ok := mac.DecodeGB18030(b); ok {
+	if s, ok := platform.DecodeGB18030(b); ok {
 		return s
 	}
 	return string(b)

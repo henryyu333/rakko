@@ -12,7 +12,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 )
 
@@ -58,11 +58,11 @@ func TestSettingsWindowAnswersClicksAndScroll(t *testing.T) {
 	// shared-class method — no subclassing, no reclassing, so every window
 	// keeps its stock mygo class (a reclass would break AppKit's KVO
 	// isa-swizzling on the titlebar view).
-	t.Logf("notch class=%s settings class=%s", mac.WindowClassName(notch), mac.WindowClassName(settings))
-	if cls := mac.WindowClassName(settings); cls != "MyGoWindow" {
+	t.Logf("notch class=%s settings class=%s", platform.WindowClassName(notch), platform.WindowClassName(settings))
+	if cls := platform.WindowClassName(settings); cls != "MyGoWindow" {
 		t.Fatalf("Settings window class %q, want plain MyGoWindow", cls)
 	}
-	if cls := mac.WindowClassName(notch); cls != "MyGoPanel" {
+	if cls := platform.WindowClassName(notch); cls != "MyGoPanel" {
 		t.Fatalf("notch window class %q, want plain MyGoPanel", cls)
 	}
 
@@ -70,7 +70,7 @@ func TestSettingsWindowAnswersClicksAndScroll(t *testing.T) {
 	// across its content.
 	onMain(func() {
 		for _, p := range [][2]float64{{230, 60}, {230, 260}, {230, 450}, {60, 300}} {
-			if !mac.SurfaceHitTest(settings, p[0], p[1]) {
+			if !platform.SurfaceHitTest(settings, p[0], p[1]) {
 				t.Errorf("Settings hitTest(%v,%v) rejected", p[0], p[1])
 			}
 		}
@@ -103,7 +103,7 @@ func TestSettingsWindowAnswersClicksAndScroll(t *testing.T) {
 	onMain(func() {
 		a.settingsWin.Invalidate()
 		before = a.settingsScroll.Y
-		if !mac.SurfaceScroll(settings, 230, 300, 240) {
+		if !platform.SurfaceScroll(settings, 230, 300, 240) {
 			t.Error("SurfaceScroll delivered no event")
 		}
 	})
@@ -119,7 +119,7 @@ func TestSettingsWindowAnswersClicksAndScroll(t *testing.T) {
 
 	// Screenshot the scrolled window for eyeballing; the id pins
 	// `screencapture -l` to this window alone.
-	if n := mac.WindowNumber(settings); n != 0 {
+	if n := platform.WindowNumber(settings); n != 0 {
 		out := os.TempDir() + "/shelf-settings-scrolled.png"
 		if err := exec.Command("screencapture", "-l", strconv.Itoa(n), "-x", out).Run(); err == nil {
 			t.Logf("scrolled Settings screenshot: %s", out)
@@ -135,10 +135,10 @@ func TestSettingsWindowAnswersClicksAndScroll(t *testing.T) {
 	if a.basket.win == nil {
 		t.Fatal("basket window was not created")
 	}
-	if cls := mac.WindowClassName(a.basket.win.NativeHandle()); cls != "MyGoPanel" {
+	if cls := platform.WindowClassName(a.basket.win.NativeHandle()); cls != "MyGoPanel" {
 		t.Errorf("basket window class %q carries a graft it never asked for", cls)
 	}
-	if !mac.SurfaceHitTest(a.basket.win.NativeHandle(), 110, 80) {
+	if !platform.SurfaceHitTest(a.basket.win.NativeHandle(), 110, 80) {
 		t.Error("basket surface rejected a centered hit")
 	}
 }
@@ -166,7 +166,7 @@ func TestSettingsClipboardAlwaysOnNative(t *testing.T) {
 	})
 	time.Sleep(250 * time.Millisecond)
 	var id int
-	onMain(func() { id = mac.WindowNumber(a.settingsWin.NativeHandle()) })
+	onMain(func() { id = platform.WindowNumber(a.settingsWin.NativeHandle()) })
 	if id == 0 {
 		t.Fatal("settings window was not published to WindowServer")
 	}

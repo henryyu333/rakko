@@ -18,7 +18,7 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 func TestSmokeShellOnlyTakesTheMouseOnItsShape(t *testing.T) {
@@ -34,7 +34,7 @@ func TestSmokeShellOnlyTakesTheMouseOnItsShape(t *testing.T) {
 	var shelfWin int
 	var screenH float64
 	onMain(func() {
-		shelfWin = mac.WindowNumber(a.win.NativeHandle())
+		shelfWin = platform.WindowNumber(a.win.NativeHandle())
 		screenH = float64(a.dispBounds.Y + a.dispBounds.Height)
 		f := a.desiredFrame()
 		report = append(report,
@@ -72,9 +72,9 @@ func TestSmokeShellOnlyTakesTheMouseOnItsShape(t *testing.T) {
 		var reached int
 		onMain(func() {
 			p := mygo.Point{X: probe.p.X, Y: a.y + probe.p.Y}
-			reached = mac.WindowAtPoint(float64(p.X), float64(p.Y), screenH)
+			reached = platform.WindowAtPoint(float64(p.X), float64(p.Y), screenH)
 			got = reached == shelfWin
-			ignoring = mac.OverlayIgnoresMouse(a.win.NativeHandle())
+			ignoring = platform.OverlayIgnoresMouse(a.win.NativeHandle())
 		})
 		line := fmt.Sprintf("%-32s at (%d,%d): reached window %d shelf=%v want=%v ignoresMouseEvents=%v",
 			probe.name, probe.p.X, probe.p.Y, reached, got, probe.wantShelf, ignoring)

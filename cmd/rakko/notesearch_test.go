@@ -16,8 +16,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
 	"rakko/internal/note"
+	"rakko/internal/platform"
 	"rakko/internal/store"
 )
 
@@ -215,7 +215,7 @@ func TestNoteFileDoesNotRepeatInSpotlightRows(t *testing.T) {
 	a.homeQuery = "发版"
 	a.homeSpot.query = a.homeQuery
 	// An index that did return the note file, beside an ordinary one.
-	a.homeSpot.items = []mac.SpotlightHit{
+	a.homeSpot.items = []platform.SpotlightHit{
 		{Path: path, Name: filepath.Base(path)},
 		{Path: other, Name: filepath.Base(other)},
 	}

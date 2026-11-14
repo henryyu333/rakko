@@ -9,7 +9,7 @@ import (
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 // Shake-to-summon basket: while a system file drag is in flight, wiggling
@@ -92,15 +92,15 @@ func (a *shelf) showBasket(p mygo.Point) {
 	})
 	a.basket.win = w
 	w.SetVisibleOnAllWorkspaces(true)
-	mac.ConfigureOverlayWindow(w.NativeHandle())
-	mac.SetWindowFrame(w.NativeHandle(), a.basket.frame.X, a.basket.frame.Y, a.basket.frame.Width, a.basket.frame.Height)
+	platform.ConfigureOverlayWindow(w.NativeHandle())
+	platform.SetWindowFrame(w.NativeHandle(), a.basket.frame.X, a.basket.frame.Y, a.basket.frame.Width, a.basket.frame.Height)
 	w.OnClose(func(e *mygo.CloseEvent) {
 		// A system close (Space switch, Exposé tidy-up) dismisses the card.
 		a.basket = basketState{}
 	})
 	w.ShowInactive()
-	mac.SetDragElevated(w.NativeHandle(), true)
-	mac.HapticTick()
+	platform.SetDragElevated(w.NativeHandle(), true)
+	platform.HapticTick()
 }
 
 // closeBasket tears the card down at once. Idempotent; only reached from

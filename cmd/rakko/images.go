@@ -11,7 +11,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/store"
 )
 
@@ -54,7 +54,7 @@ func (a *shelf) thumbnail(item store.Item) *ui.Bitmap {
 		// HEIC, TIFF, AVIF and pictures too large for decodeThumb: ImageIO
 		// decodes them downscaled and upright.
 		if b == nil && picture {
-			if img, err := mac.Thumbnail(item.Path, thumbPx); err == nil {
+			if img, err := platform.Thumbnail(item.Path, thumbPx); err == nil {
 				b = ui.NewBitmap(img)
 			}
 		}
@@ -74,7 +74,7 @@ func (a *shelf) thumbnail(item store.Item) *ui.Bitmap {
 				for _, current := range a.store.Items {
 					if current.ID == item.ID {
 						if b == nil {
-							if icon := mac.FileIcon(item.Path, 40); len(icon) > 0 {
+							if icon := platform.FileIcon(item.Path, 40); len(icon) > 0 {
 								b, _ = ui.DecodeBitmap(icon)
 							}
 						}

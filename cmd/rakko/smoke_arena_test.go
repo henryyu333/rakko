@@ -16,7 +16,7 @@ import (
 	"github.com/ebitengine/purego/objc"
 	"github.com/egoist/mygo"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 )
 
 // smokeWindow is one on-screen window as the window server lists it.
@@ -103,7 +103,7 @@ func foreignOverArena(t *testing.T, r mygo.Rectangle, minLayer int) (smokeWindow
 // or live activity does at the notch.
 func skipIfForeignOverlay(t *testing.T, p mygo.Point) {
 	t.Helper()
-	if w, ok := foreignAt(t, p, mac.StatusWindowLevel); ok {
+	if w, ok := foreignAt(t, p, platform.StatusWindowLevel); ok {
 		t.Skipf("window %d (pid %d, layer %d) covers %+v: another copy of ShelfU or an overlay app is at the notch",
 			w.ID, w.Owner, w.Layer, p)
 	}
@@ -112,7 +112,7 @@ func skipIfForeignOverlay(t *testing.T, p mygo.Point) {
 // skipIfForeignOverlayOver skips when one covers the whole area.
 func skipIfForeignOverlayOver(t *testing.T, r mygo.Rectangle) {
 	t.Helper()
-	if w, ok := foreignOverArena(t, r, mac.StatusWindowLevel); ok {
+	if w, ok := foreignOverArena(t, r, platform.StatusWindowLevel); ok {
 		t.Skipf("window %d (pid %d, layer %d) overlaps %+v: another copy of ShelfU or an overlay app is at the notch",
 			w.ID, w.Owner, w.Layer, r)
 	}

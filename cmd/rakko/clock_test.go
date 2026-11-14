@@ -17,7 +17,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/layout"
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 	"rakko/locales"
 )
@@ -299,7 +299,7 @@ func TestClockChipPriority(t *testing.T) {
 	// A running conversion's 取消 leads both clocks even beside a loaded
 	// track: while a clock is under way the strip follows the design's
 	// order, converter first, then countdown, then stopwatch.
-	st := mac.NowPlayingState{Title: "夜曲", Playing: true, Duration: 200, Elapsed: 10, Received: time.Now()}
+	st := platform.NowPlayingState{Title: "夜曲", Playing: true, Duration: 200, Elapsed: 10, Received: time.Now()}
 	np := &nowPlayingModule{host: a, have: true, last: st}
 	a.conv = &converter{host: a, job: &convertJob{started: time.Now().Add(-time.Second)}}
 	a.modules = []module{np, a.conv, timerChip{m}, stopwatchChip{m}}

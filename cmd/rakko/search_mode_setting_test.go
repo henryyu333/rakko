@@ -13,7 +13,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 	"rakko/internal/store"
 )
@@ -35,11 +35,11 @@ func modeSettingShelf(t *testing.T, mode settings.SearchMode) *shelf {
 func TestDefaultSearchModeOpensTheBar(t *testing.T) {
 	for _, c := range []struct {
 		mode  settings.SearchMode
-		scope mac.SearchScope
+		scope platform.SearchScope
 	}{
-		{settings.SearchModeAll, mac.ScopeAll},
-		{settings.SearchModeApps, mac.ScopeApps},
-		{settings.SearchModeFiles, mac.ScopeFiles},
+		{settings.SearchModeAll, platform.ScopeAll},
+		{settings.SearchModeApps, platform.ScopeApps},
+		{settings.SearchModeFiles, platform.ScopeFiles},
 	} {
 		a := modeSettingShelf(t, c.mode)
 		a.show(false)
@@ -57,11 +57,11 @@ func TestDefaultSearchModeOpensTheBar(t *testing.T) {
 		v.Frame()
 		l := a.appLoc()
 		name := l.SearchModeFiles()
-		if c.scope == mac.ScopeApps {
+		if c.scope == platform.ScopeApps {
 			name = l.SearchModeApps()
 		}
 		_, drawn := v.Find(name)
-		if drawn != (c.scope != mac.ScopeAll) {
+		if drawn != (c.scope != platform.ScopeAll) {
 			t.Fatalf("default %q: capsule %q drawn = %v", c.mode, name, drawn)
 		}
 		if _, all := v.Find(l.SearchModeAll()); all {
@@ -75,7 +75,7 @@ func TestDefaultSearchModeOpensTheBar(t *testing.T) {
 func TestTabChangesOneSearchOnly(t *testing.T) {
 	a := modeSettingShelf(t, settings.SearchModeFiles)
 	a.show(false)
-	if a.homeScope != mac.ScopeFiles {
+	if a.homeScope != platform.ScopeFiles {
 		t.Fatalf("the bar opened on scope %d, want 文件", a.homeScope)
 	}
 
@@ -86,7 +86,7 @@ func TestTabChangesOneSearchOnly(t *testing.T) {
 	v.Frame()
 	v.Key(0, ui.KeyTab)
 	v.Frame()
-	if a.homeScope != mac.ScopeAll {
+	if a.homeScope != platform.ScopeAll {
 		t.Fatalf("Tab from 文件 left scope %d, want 全部", a.homeScope)
 	}
 	if a.settings.SearchMode != settings.SearchModeFiles {
@@ -96,7 +96,7 @@ func TestTabChangesOneSearchOnly(t *testing.T) {
 	a.hide(hideExplicit)
 	a.finishClose()
 	a.show(false)
-	if a.homeScope != mac.ScopeFiles {
+	if a.homeScope != platform.ScopeFiles {
 		t.Fatalf("the reopened bar started on scope %d, want the saved 文件", a.homeScope)
 	}
 }
@@ -105,9 +105,9 @@ func TestTabChangesOneSearchOnly(t *testing.T) {
 func TestGoingHomeUsesTheDefaultMode(t *testing.T) {
 	a := modeSettingShelf(t, settings.SearchModeApps)
 	a.visible, a.level, a.focusMode = true, 2, true
-	a.homeScope = mac.ScopeAll
+	a.homeScope = platform.ScopeAll
 	a.goHome()
-	if a.homeScope != mac.ScopeApps {
+	if a.homeScope != platform.ScopeApps {
 		t.Fatalf("going home left scope %d, want the saved 应用", a.homeScope)
 	}
 }
@@ -116,14 +116,14 @@ func TestGoingHomeUsesTheDefaultMode(t *testing.T) {
 // settings.json and leaves the search on screen in its own mode.
 func TestSetSearchModeSavesForTheNextOpening(t *testing.T) {
 	a := modeSettingShelf(t, settings.SearchModeAll)
-	a.homeScope = mac.ScopeFiles
+	a.homeScope = platform.ScopeFiles
 	a.homeQuery = "rakko"
 
 	a.setSearchMode(settings.SearchModeApps)
 	if a.settings.SearchMode != settings.SearchModeApps {
 		t.Fatalf("the shelf kept %q", a.settings.SearchMode)
 	}
-	if a.homeScope != mac.ScopeFiles {
+	if a.homeScope != platform.ScopeFiles {
 		t.Fatalf("the visible search moved to scope %d", a.homeScope)
 	}
 	back, err := settings.Load(a.dataDir)
@@ -134,7 +134,7 @@ func TestSetSearchModeSavesForTheNextOpening(t *testing.T) {
 	// The next opening uses it.
 	a.visible = false
 	a.show(false)
-	if a.homeScope != mac.ScopeApps {
+	if a.homeScope != platform.ScopeApps {
 		t.Fatalf("the next opening used scope %d, want 应用", a.homeScope)
 	}
 }

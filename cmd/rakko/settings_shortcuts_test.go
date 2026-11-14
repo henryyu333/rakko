@@ -17,8 +17,8 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
 	"rakko/internal/note"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 	"rakko/locales"
 )
@@ -877,8 +877,8 @@ func TestRecordingANewShortcutSavesAndRegisters(t *testing.T) {
 // through the same channel the home player's buttons use.
 func TestPlayerShortcutsSendTransportCommands(t *testing.T) {
 	orig := playerShortcut
-	var got []mac.NowPlayingCommand
-	playerShortcut = func(_ *shelf, cmd mac.NowPlayingCommand) { got = append(got, cmd) }
+	var got []platform.NowPlayingCommand
+	playerShortcut = func(_ *shelf, cmd platform.NowPlayingCommand) { got = append(got, cmd) }
 	t.Cleanup(func() { playerShortcut = orig })
 
 	f := installFakeKeys(t)
@@ -889,7 +889,7 @@ func TestPlayerShortcutsSendTransportCommands(t *testing.T) {
 	for _, acc := range []string{"Ctrl+Alt+P", "Ctrl+Alt+Left", "Ctrl+Alt+Right"} {
 		f.press(acc)
 	}
-	if !slices.Equal(got, []mac.NowPlayingCommand{mac.NPPlayPause, mac.NPPrevious, mac.NPNext}) {
+	if !slices.Equal(got, []platform.NowPlayingCommand{platform.NPPlayPause, platform.NPPrevious, platform.NPNext}) {
 		t.Fatalf("commands = %v", got)
 	}
 }

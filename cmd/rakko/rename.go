@@ -19,7 +19,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/store"
 	"rakko/locales"
 )
@@ -108,9 +108,9 @@ const renameUndoLife = 10 * time.Second
 // Seams around app-level calls so headless tests can run the window's
 // session without a running app.
 var (
-	frontmostPID   = mac.FrontmostPID
-	ownPID         = mac.OwnPID
-	renameActivate = mac.ActivateSelf
+	frontmostPID   = platform.FrontmostPID
+	ownPID         = platform.OwnPID
+	renameActivate = platform.ActivateSelf
 	renameShow     = func(w *mygo.Window) { w.Show() }
 	renameFocus    = func(w *mygo.Window) { w.Focus() }
 )
@@ -381,7 +381,7 @@ func (a *shelf) openRename(items []store.Item) {
 		DisableResize:        true, DisableMaximize: true, DisableFullScreen: true,
 		Content: ui.View(a.renameView),
 	})
-	mac.SetWindowAppearance(w.NativeHandle(), true)
+	platform.SetWindowAppearance(w.NativeHandle(), true)
 	w.SetBounds(frame)
 	w.OnClosed(a.renameClosed)
 	r.win = w

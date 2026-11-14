@@ -26,7 +26,7 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 )
 
@@ -206,7 +206,7 @@ func resetHomeQuery(a *shelf) {
 
 // startHomeQuery shows the bar's typed state without asking the real index:
 // searching=true keeps the results sheet shut while the bar widens.
-func startHomeQuery(a *shelf, q string, done bool, hits []mac.SpotlightHit) {
+func startHomeQuery(a *shelf, q string, done bool, hits []platform.SpotlightHit) {
 	onMain(func() {
 		a.homeQuery = q
 		a.homeSpot.items = hits
@@ -218,10 +218,10 @@ func startHomeQuery(a *shelf, q string, done bool, hits []mac.SpotlightHit) {
 	})
 }
 
-func fakeHits(n int) []mac.SpotlightHit {
-	hits := make([]mac.SpotlightHit, 0, n)
+func fakeHits(n int) []platform.SpotlightHit {
+	hits := make([]platform.SpotlightHit, 0, n)
 	for i := range n {
-		hits = append(hits, mac.SpotlightHit{
+		hits = append(hits, platform.SpotlightHit{
 			Path: fmt.Sprintf("/tmp/Rakko-anim-fix/hits/file-%02d.txt", i),
 			Name: fmt.Sprintf("file-%02d", i),
 		})

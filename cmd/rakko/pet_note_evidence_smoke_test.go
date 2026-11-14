@@ -21,7 +21,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/layout"
-	"rakko/internal/mac"
+	"rakko/internal/platform"
 	"rakko/internal/settings"
 )
 
@@ -47,7 +47,7 @@ func petShot(t *testing.T, win *mygo.Window, name string) string {
 	if win == nil {
 		t.Fatalf("%s: no window", name)
 	}
-	num := mac.WindowNumber(win.NativeHandle())
+	num := platform.WindowNumber(win.NativeHandle())
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}
