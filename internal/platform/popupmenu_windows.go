@@ -97,8 +97,11 @@ func overlayRect() (winRect, bool) {
 }
 
 func placeOwnMenus() {
+	if !uiThreadInMenu() {
+		return
+	}
 	panel, hasPanel := overlayRect()
-	if !hasPanel || !uiThreadInMenu() {
+	if !hasPanel {
 		return
 	}
 	pid := windows.GetCurrentProcessId()
