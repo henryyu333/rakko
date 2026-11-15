@@ -188,6 +188,7 @@ func main() {
 			a.tray.Destroy()
 		}
 		a.flushLeaving(time.Now().Add(time.Second)) // dragged-out items leave for good
+		a.flushToolsLayout()
 		if a.weekly != nil {
 			a.weekly.flush()
 		}

@@ -236,7 +236,7 @@ func (p *toolsPage) endFreshDrag() {
 		return
 	}
 	at, spec := d.index, d.spec
-	if !p.host.mutateToolsChanged(func(l *layout.Layout) bool {
+	if !p.host.mutateToolsInteractive(func(l *layout.Layout) bool {
 		l.InsertCardSize(spec.ID, spec.Span, spec.Rows, at)
 		return true
 	}) {
@@ -353,7 +353,7 @@ func (p *toolsPage) endResize() {
 		return
 	}
 	if rs.cur[0] != rs.orig.Cols() || rs.cur[1] != rs.orig.Height() {
-		p.host.mutateToolsChanged(func(l *layout.Layout) bool {
+		p.host.mutateToolsInteractive(func(l *layout.Layout) bool {
 			l.SetCardSize(rs.id, rs.cur[0], rs.cur[1])
 			return true
 		})

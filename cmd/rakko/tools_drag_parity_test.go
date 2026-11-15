@@ -1,6 +1,10 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
+	"runtime"
+	"slices"
 	"testing"
 
 	"github.com/egoist/mygo"
@@ -66,18 +70,69 @@ func TestSyncDragPreviewQuantizesTiltOnWindows(t *testing.T) {
 	}
 }
 
-func TestLayoutWriteNoSyncRoundTrip(t *testing.T) {
+func TestToolsDeferredWriteCoalescesAndFlushesLatest(t *testing.T) {
 	dir := t.TempDir()
-	want := layout.Default()
-	want.MoveCard(want.Cards[len(want.Cards)-1].ID, 0)
-	if err := layout.WriteNoSync(dir, want); err != nil {
-		t.Fatalf("WriteNoSync: %v", err)
+	started := make(chan struct{})
+	release := make(chan struct{})
+	var writes []string
+	var q layoutSaveQueue
+	q.write = func(d string, l layout.Layout) error {
+		writes = append(writes, l.Cards[0].ID)
+		if len(writes) == 1 {
+			close(started)
+			<-release
+		}
+		return layout.Write(d, l)
 	}
-	got, err := layout.Load(dir)
+
+	a := parityWindow()
+	a.dataDir = dir
+	a.toolsSave = &q
+
+	cards := slices.Clone(a.toolsLayout().Cards)
+	if len(cards) < 3 {
+		t.Fatalf("need at least 3 default cards, got %d", len(cards))
+	}
+	firstMove := cards[len(cards)-1].ID
+	secondMove := cards[1].ID
+	lastMove := cards[2].ID
+
+	// Start write 1 and block inside it while two rapid reorders follow.
+	a.mutateToolsDeferred(func(l *layout.Layout) bool {
+		l.MoveCard(firstMove, 0)
+		return true
+	})
+	<-started
+
+	a.mutateToolsDeferred(func(l *layout.Layout) bool {
+		l.MoveCard(secondMove, 0)
+		return true
+	})
+	a.mutateToolsDeferred(func(l *layout.Layout) bool {
+		l.MoveCard(lastMove, 0)
+		return true
+	})
+	close(release)
+	a.flushToolsLayout()
+
+	// Write 2 must have been coalesced into write 3, and layout.json on disk must match the final order.
+	if len(writes) != 2 || writes[0] != firstMove || writes[1] != lastMove {
+		t.Fatalf("coalesced write sequence = %v, want [%s %s]", writes, firstMove, lastMove)
+	}
+	disk, err := layout.Load(dir)
 	if err != nil {
-		t.Fatalf("Load after WriteNoSync: %v", err)
+		t.Fatalf("layout.Load after flush: %v", err)
 	}
-	if len(got.Cards) != len(want.Cards) || got.Cards[0].ID != want.Cards[0].ID {
-		t.Fatalf("round-trip mismatch: got %+v, want %+v", got.Cards, want.Cards)
+	if len(disk.Cards) == 0 || disk.Cards[0].ID != lastMove {
+		t.Fatalf("persisted first card = %+v, want %q", disk.Cards, lastMove)
+	}
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat(filepath.Join(dir, layout.FileName))
+		if err != nil {
+			t.Fatalf("stat layout.json: %v", err)
+		}
+		if mode := info.Mode().Perm(); mode != 0o600 {
+			t.Fatalf("layout.json perm = %o, want 0600", mode)
+		}
 	}
 }

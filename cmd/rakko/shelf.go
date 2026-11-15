@@ -243,6 +243,7 @@ type shelf struct {
 	// 文件读不通时界面用默认布局，但禁止任何写回以免覆盖可恢复原件。
 	toolsLay       *layout.Layout
 	toolsLayBroken bool
+	toolsSave      *layoutSaveQueue
 	// toolsLayPeek is the default arrangement the page packs for sizing
 	// before toolsLay is loaded (the session frame asks every page for its
 	// box every frame; building the default each time would allocate in

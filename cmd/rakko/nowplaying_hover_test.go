@@ -100,11 +100,13 @@ func assertControlHoverAndPress(t *testing.T, view *ui.Tester, name string, labe
 
 		view.Move(1, 1)
 		view.Frame()
-		idle := circleLumSum(view.Image(), rect)
+		idleImg := view.Image()
+		idle := circleLumSum(idleImg, rect)
 
 		view.Move(cx, cy)
 		view.Frame()
-		hovered := circleLumSum(view.Image(), rect)
+		hoveredImg := view.Image()
+		hovered := circleLumSum(hoveredImg, rect)
 		if hovered <= idle {
 			t.Fatalf("%s %q: hover lum %d did not brighten over idle %d (rect=%+v)", name, label, hovered, idle, rect)
 		}
@@ -112,8 +114,16 @@ func assertControlHoverAndPress(t *testing.T, view *ui.Tester, name string, labe
 		// Corner at 45deg inside circle perimeter must also brighten (circular fill around glyph, not just center).
 		rx := int(rect.X + rect.W/2 + (rect.W/2-2.5)*0.7)
 		ry := int(rect.Y + rect.H/2 - (rect.H/2-2.5)*0.7)
-		if c := view.Image().RGBAAt(rx, ry); c.R == 0 && c.G == 0 && c.B == 0 {
+		if c := hoveredImg.RGBAAt(rx, ry); c.R == 0 && c.G == 0 && c.B == 0 {
 			t.Fatalf("%s %q: corner inside hover circle (%d,%d) remained black %+v", name, label, rx, ry, c)
+		}
+		if rect.W < 23 {
+			// Verify the out-of-layout 23x23 hover halo extends cleanly outside the 15x15 button bounds.
+			hx, hy := int(cx+9), int(cy)
+			hc, ic := hoveredImg.RGBAAt(hx, hy), idleImg.RGBAAt(hx, hy)
+			if int(hc.R)+int(hc.G)+int(hc.B) <= int(ic.R)+int(ic.G)+int(ic.B) {
+				t.Fatalf("%s %q: outer hover halo (%d,%d) rgb=%+v did not brighten over idle %+v", name, label, hx, hy, hc, ic)
+			}
 		}
 
 		view.Press(cx, cy)

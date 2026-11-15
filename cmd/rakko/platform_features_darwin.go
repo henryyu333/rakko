@@ -31,8 +31,9 @@ const (
 	toolsDragKeepsMouse = false
 	// Keep Mac drag preview paint/frame updates verbatim; Windows avoids 125Hz dual-window churn.
 	dragPreviewSkipRedundantPaint = false
-	// Interactive NTFS FlushFileBuffers stalls Windows drops; keep Mac sync writes verbatim.
-	toolsInteractiveNoSync = false
+	// Keep Mac layout writes synchronous verbatim; Windows defers interactive
+	// drop writes off the drop frame while still flushing via layout.Write.
+	toolsDeferLayoutWrite = false
 	// A right click selects its tile, as Finder does. The native menu holds
 	// the frame that selects it until the menu closes, so the ring appears
 	// right after; Windows paints the menu's owner while it is open, and

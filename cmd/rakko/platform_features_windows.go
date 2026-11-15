@@ -37,8 +37,9 @@ const (
 	toolsDragKeepsMouse = true
 	// Skip redundant SetWindowPos and tilt-unchanged repaints during 125Hz drag preview moves.
 	dragPreviewSkipRedundantPaint = true
-	// Avoid synchronous NTFS FlushFileBuffers on the UI thread during interactive card drops/resizes.
-	toolsInteractiveNoSync = true
+	// Move NTFS FlushFileBuffers (layout.Write) off the drop frame on Windows,
+	// coalescing rapid drags on a dedicated writer and flushing before exit.
+	toolsDeferLayoutWrite = true
 	// Windows keeps painting a native menu's owner while the menu is open,
 	// so selecting the right-clicked tile painted its accent ring behind
 	// the menu; the Mac shows the ring only after the menu closes. The

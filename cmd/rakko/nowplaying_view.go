@@ -220,14 +220,20 @@ func (m *nowPlayingModule) cardMeta(st platform.NowPlayingState) string {
 
 // controlButton is one transport button: a white glyph, no fill, fill2
 // while hovered, and fill3 while pressed. Home uses 30/38, tools 2×2
-// uses 26/30, and tools 2×1 uses 20.
+// uses 26/30, and tools 2×1 uses 15/15 (with an out-of-layout hover circle).
 func (m *nowPlayingModule) controlButton(c *ui.Context, key string, icon *ui.SVG, label string, command platform.NowPlayingCommand, size, glyph float32) {
 	b := ui.ButtonBase(c.Key(key)).Size(size, size).Center().Radius(size / 2).Label(label)
+	var bg ui.Color
+	active := false
 	switch {
 	case b.Pressed():
-		b.Background(fill3)
+		bg, active = fill3, true
 	case b.Hovered():
-		b.Background(fill2)
+		bg, active = fill2, true
+	}
+	bgSize := max(size, glyph+8)
+	if active && bgSize <= size {
+		b.Background(bg)
 	}
 	b.HandleInput(func(ev ui.InputEvent) bool {
 		// Claim the button's own pointer events: a card-level
@@ -238,6 +244,15 @@ func (m *nowPlayingModule) controlButton(c *ui.Context, key string, icon *ui.SVG
 		return ev.Button == 0 && ev.Kind >= ui.InputPointerDown && ev.Kind <= ui.InputPointerMove
 	})
 	b.Children(func() {
+		if active && bgSize > size {
+			off := (size - bgSize) / 2
+			ui.Box(c.Key(key+"-bg")).Absolute().Left(off).Top(off).
+				Size(bgSize, bgSize).Radius(bgSize / 2).Background(bg).
+				Center().Children(func() {
+				ui.Icon(c, icon).Size(glyph, glyph).TextColor(ink)
+			})
+			return
+		}
 		ui.Icon(c, icon).Size(glyph, glyph).TextColor(ink)
 	})
 	if b.Clicked() {

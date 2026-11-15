@@ -10,8 +10,10 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -395,6 +397,21 @@ func (a *shelf) mutateTools(fn func(*layout.Layout)) bool {
 // refused gesture (a size that does not fit, a drop on an occupied cell)
 // leaves the file untouched instead of rewriting the same layout.
 func (a *shelf) mutateToolsChanged(fn func(*layout.Layout) bool) bool {
+	return a.mutateToolsWrite(fn, false)
+}
+
+// mutateToolsInteractive commits the layout in memory immediately and, on
+// Windows, moves durable layout.Write persistence off the drop frame onto the
+// coalescing layoutSaveQueue so NTFS FlushFileBuffers never stalls settle.
+func (a *shelf) mutateToolsInteractive(fn func(*layout.Layout) bool) bool {
+	return a.mutateToolsWrite(fn, toolsDeferLayoutWrite)
+}
+
+func (a *shelf) mutateToolsDeferred(fn func(*layout.Layout) bool) bool {
+	return a.mutateToolsWrite(fn, true)
+}
+
+func (a *shelf) mutateToolsWrite(fn func(*layout.Layout) bool, deferWrite bool) bool {
 	l := a.toolsLayout()
 	l.Cards = slices.Clone(l.Cards)
 	l.Pins = slices.Clone(l.Pins)
@@ -402,13 +419,19 @@ func (a *shelf) mutateToolsChanged(fn func(*layout.Layout) bool) bool {
 		return false
 	}
 	if a.dataDir != "" && !a.toolsLayBroken {
-		write := layout.Write
-		if toolsInteractiveNoSync {
-			write = layout.WriteNoSync
-		}
-		if err := write(a.dataDir, l); err != nil {
-			a.report(fmt.Errorf("tools layout: %w", err))
-			return false // keep the pre-change layout and the file as they were
+		if deferWrite {
+			if a.toolsSave == nil {
+				a.toolsSave = &layoutSaveQueue{}
+			}
+			a.toolsSave.enqueue(a.dataDir, l, func(err error) {
+				log.Printf("tools layout: %v", err)
+			})
+		} else {
+			a.flushToolsLayout()
+			if err := layout.Write(a.dataDir, l); err != nil {
+				a.report(fmt.Errorf("tools layout: %w", err))
+				return false // keep the pre-change layout and the file as they were
+			}
 		}
 	}
 	a.toolsLay = &l
@@ -416,6 +439,80 @@ func (a *shelf) mutateToolsChanged(fn func(*layout.Layout) bool) bool {
 		a.win.Invalidate()
 	}
 	return true
+}
+
+// flushToolsLayout blocks until any deferred layout.Write has finished.
+func (a *shelf) flushToolsLayout() {
+	if a.toolsSave != nil {
+		a.toolsSave.flush()
+	}
+}
+
+// layoutSaveQueue serializes durable layout.Write calls off the UI drop frame,
+// coalescing rapid consecutive edits so the final arrangement always lands on disk.
+type layoutSaveQueue struct {
+	mu      sync.Mutex
+	cond    *sync.Cond
+	running bool
+	hasNext bool
+	dir     string
+	layout  layout.Layout
+	write   func(string, layout.Layout) error
+	onErr   func(error)
+}
+
+func (q *layoutSaveQueue) enqueue(dir string, l layout.Layout, onErr func(error)) {
+	snap := l
+	snap.Cards = slices.Clone(l.Cards)
+	snap.Pins = slices.Clone(l.Pins)
+	q.mu.Lock()
+	if q.cond == nil {
+		q.cond = sync.NewCond(&q.mu)
+	}
+	q.dir = dir
+	q.layout = snap
+	q.hasNext = true
+	q.onErr = onErr
+	if q.running {
+		q.mu.Unlock()
+		return
+	}
+	q.running = true
+	write := q.write
+	if write == nil {
+		write = layout.Write
+	}
+	q.mu.Unlock()
+
+	go func() {
+		for {
+			q.mu.Lock()
+			if !q.hasNext {
+				q.running = false
+				q.cond.Broadcast()
+				q.mu.Unlock()
+				return
+			}
+			dir, snap, errFn := q.dir, q.layout, q.onErr
+			q.hasNext = false
+			q.mu.Unlock()
+
+			if err := write(dir, snap); err != nil && errFn != nil {
+				errFn(err)
+			}
+		}
+	}()
+}
+
+func (q *layoutSaveQueue) flush() {
+	q.mu.Lock()
+	for q.running || q.hasNext {
+		if q.cond == nil {
+			q.cond = sync.NewCond(&q.mu)
+		}
+		q.cond.Wait()
+	}
+	q.mu.Unlock()
 }
 
 // resetToolsEdit ends editing and any gesture; called on hide and on
@@ -871,7 +968,7 @@ func (p *toolsPage) toolCardDrop(d *toolPress, cursor mygo.Point) {
 		// leaves the page; a library card released there is simply
 		// cancelled.
 		if !d.fresh {
-			a.mutateToolsChanged(func(l *layout.Layout) bool {
+			a.mutateToolsInteractive(func(l *layout.Layout) bool {
 				l.RemoveCard(d.id)
 				return true
 			})
@@ -893,7 +990,10 @@ func (p *toolsPage) toolCardDrop(d *toolPress, cursor mygo.Point) {
 	target := toolCell{id: d.id, x: d.cardX, y: d.cardY}
 	if inside {
 		if ins := d.index; ins >= 0 {
-			a.mutateTools(func(l *layout.Layout) { l.MoveCard(d.id, ins) })
+			a.mutateToolsInteractive(func(l *layout.Layout) bool {
+				l.MoveCard(d.id, ins)
+				return true
+			})
 			// The drop ends the pinned width: the panel follows the
 			// committed packing, and the settle flight aims at its cell.
 			p.dragCols, p.dragRows = 0, 0
