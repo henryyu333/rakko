@@ -1253,10 +1253,10 @@ func (a *shelf) toolPlayingBody(c *ui.Context, card ui.Element, span int, surf t
 						ui.Text(c, meta).SingleLine().FontSize(10).TextColor(ink3)
 					}
 				})
-				ui.Row(c.Key("tc-np-ctl")).Gap(10).AlignItems(ui.Center).Children(func() {
-					m.controlButton(c, "tc-np-prev", prevFill, loc(c).PreviousTrack(), platform.NPPrevious, 15, 15)
-					m.controlButton(c, "tc-np-toggle", toggleSymbol(st.Playing), playPauseLabel(st.Playing), platform.NPPlayPause, 15, 15)
-					m.controlButton(c, "tc-np-next", nextFill, loc(c).NextTrack(), platform.NPNext, 15, 15)
+				ui.Row(c.Key("tc-np-ctl")).Gap(4).AlignItems(ui.Center).Children(func() {
+					m.controlButton(c, "tc-np-prev", prevFill, loc(c).PreviousTrack(), platform.NPPrevious, 20, 13)
+					m.controlButton(c, "tc-np-toggle", toggleSymbol(st.Playing), playPauseLabel(st.Playing), platform.NPPlayPause, 20, 13)
+					m.controlButton(c, "tc-np-next", nextFill, loc(c).NextTrack(), platform.NPNext, 20, 13)
 				})
 			})
 		})
