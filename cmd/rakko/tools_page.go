@@ -30,12 +30,13 @@ const (
 	toolJiggle   = 300 * time.Millisecond
 )
 
-// toolsMoveSpring moves cards to their new cells after the panel's packing
+// toolMoveSpring moves cards to their new cells after the panel's packing
 // changes: 300 ms, Bounce 0.15 (design §2).
-var (
-	toolMoveSpring    = ui.Animation{Spring: ui.SpringOptions{Duration: 300 * time.Millisecond, Bounce: 0.15}}
-	toolsLayoutDispatch = mygo.RunOnMain
-)
+var toolMoveSpring = ui.Animation{Spring: ui.SpringOptions{Duration: 300 * time.Millisecond, Bounce: 0.15}}
+
+// toolsLayoutDispatch runs a deferred layout write's error report on the
+// main thread; tests replace it.
+var toolsLayoutDispatch = mygo.RunOnMain
 
 // toolCell is one card's position in content coordinates.
 type toolCell struct {
