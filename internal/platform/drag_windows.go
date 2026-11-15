@@ -2,9 +2,10 @@
 
 package platform
 
-// The drag session probes the shelf's monitor reads, and the corridor
-// filter that keeps a dragged pointer off the screen's top edge where an
-// auto-hidden taskbar or a window-snap region would react.
+// The drag session probes the shelf's monitor reads. Windows has no
+// top-edge system gesture (like macOS Spaces) that steals a drag near the
+// screen's top edge, so the drag-guard corridor is a no-op here and never
+// clamps or warps the user's cursor.
 //
 // Windows exposes no API for another process's OLE drag: the data object
 // stays in the source. What it does expose is the capture window OLE puts
@@ -19,7 +20,6 @@ package platform
 
 import (
 	"sync"
-	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -169,143 +169,24 @@ func slicesContains(list []string, v string) bool {
 	return false
 }
 
-// The corridor filter. Windows cannot rewrite a low-level mouse message the
-// way macOS' event tap can, but SetCursorPos from a polling goroutine moves
-// the hardware pointer just as well: the drag source samples the cursor on
-// the next move. The poll runs only while the left button is held, so an
-// idle app costs nothing.
-type dragClampState struct {
-	mu       sync.Mutex
-	guard    DragGuardRegion
-	guardOn  bool
-	pin      DragGuardRegion
-	pinOn    bool
-	parked   bool
-	running  bool
-	stop     chan struct{}
-	lastWarp int64
+// Windows has no top-edge system gesture (like macOS Spaces) to guard
+// against, so the drag-protection corridor is a no-op here and never moves
+// the cursor.
+
+// StartDragGuard is a no-op on Windows because there is no top-edge system
+// gesture to intercept.
+func StartDragGuard(DragGuardRegion) (func(), error) {
+	return func() {}, nil
 }
 
-var dragClamp dragClampState
+// SetDragGuardRegion is a no-op on Windows.
+func SetDragGuardRegion(DragGuardRegion) {}
 
-// StartDragGuard starts the corridor filter. On Windows it needs no
-// permission and cannot fail; the returned stop ends its corridor.
-func StartDragGuard(region DragGuardRegion) (func(), error) {
-	dragClamp.mu.Lock()
-	dragClamp.guard, dragClamp.guardOn = region, true
-	dragClamp.startLocked()
-	dragClamp.mu.Unlock()
-	var once sync.Once
-	return func() {
-		once.Do(func() {
-			dragClamp.mu.Lock()
-			dragClamp.guardOn = false
-			dragClamp.maybeStopLocked()
-			dragClamp.mu.Unlock()
-		})
-	}, nil
-}
+// ParkDragGuard is a no-op on Windows.
+func ParkDragGuard(bool) {}
 
-// SetDragGuardRegion updates the corridor of a running guard.
-func SetDragGuardRegion(region DragGuardRegion) {
-	dragClamp.mu.Lock()
-	dragClamp.guard = region
-	dragClamp.mu.Unlock()
-}
-
-// ParkDragGuard parks the corridor filter for the app's own island gesture.
-func ParkDragGuard(parked bool) {
-	dragClamp.mu.Lock()
-	dragClamp.parked = parked
-	dragClamp.mu.Unlock()
-}
-
-// SetDragPin keeps the cursor out of region during a file drag,
-// independently of the guard: it runs while the button is held even when
-// no guard is installed.
-func SetDragPin(region DragGuardRegion, active bool) {
-	dragClamp.mu.Lock()
-	dragClamp.pin, dragClamp.pinOn = region, active
-	if active {
-		dragClamp.startLocked()
-	} else {
-		dragClamp.maybeStopLocked()
-	}
-	dragClamp.mu.Unlock()
-}
-
-func (c *dragClampState) startLocked() {
-	if c.running {
-		return
-	}
-	c.running = true
-	c.stop = make(chan struct{})
-	go c.poll(c.stop)
-}
-
-func (c *dragClampState) maybeStopLocked() {
-	if c.guardOn || c.pinOn || !c.running {
-		return
-	}
-	close(c.stop)
-	c.running = false
-}
-
-func (c *dragClampState) poll(stop chan struct{}) {
-	ticker := time.NewTicker(8 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-stop:
-			return
-		case <-ticker.C:
-			c.step()
-		}
-	}
-}
-
-// step clamps the pointer one row below the active corridor while it is
-// inside. A warp to the row it is already on would generate another move
-// event for nothing, so the target is compared first.
-func (c *dragClampState) step() {
-	if !leftHeld() {
-		return
-	}
-	c.mu.Lock()
-	if c.parked {
-		c.mu.Unlock()
-		return
-	}
-	region, on := c.guard, c.guardOn
-	if c.pinOn {
-		region, on = c.pin, true
-	}
-	c.mu.Unlock()
-	if !on || region.Width <= 0 || region.Height <= 0 {
-		return
-	}
-	var p winPoint
-	if r, _, _ := procGetCursorPos.Call(uintptr(unsafe.Pointer(&p))); r == 0 {
-		return
-	}
-	px := dipToPixels(Rect{
-		X: float64(region.X), Y: float64(region.Y),
-		Width: float64(region.Width), Height: float64(region.Height),
-	})
-	target := px.Bottom // the first row below the corridor
-	if p.X < px.Left || p.X >= px.Right || p.Y < px.Top || p.Y >= target {
-		return
-	}
-	c.mu.Lock()
-	now := time.Now().UnixMilli()
-	if now == c.lastWarp {
-		c.mu.Unlock()
-		return
-	}
-	c.lastWarp = now
-	c.mu.Unlock()
-	procSetCursorPos.Call(uintptr(p.X), uintptr(target))
-}
+// SetDragPin is a no-op on Windows.
+func SetDragPin(DragGuardRegion, bool) {}
 
 // DragMayCarryFiles reports whether a drag with these declared types may
 // wake the shake-to-summon basket and the pin strips. Windows hides the
