@@ -22,4 +22,8 @@ const (
 	// note flipped above would land at the work area's top, under the
 	// topmost capsule, so it stays below and is clamped instead.
 	noteStaysBelowTallAnchor = true
+	// A Windows display has no camera housing, so the notch style's
+	// measured anchor is a simulated one: the shell draws the notch itself
+	// in the closed state, where a Mac leans on the system's own black.
+	simulatedNotchHousing = true
 )

@@ -404,6 +404,11 @@ var frameTrace func(canvasW, canvasH float32, native mygo.Rectangle, blank bool)
 // the frame it just built. Nil in production.
 var peekKindTrace func(peekKind)
 
+// blankFrameTrace, when a test sets it, sees whether the frame it just built was
+// the transparent one that draws nothing. It needs no native window, unlike
+// frameTrace. Nil in production.
+var blankFrameTrace func(blank bool)
+
 // view 画三种状态：空闲（完全不可见）、探头（悬停播放器、下拉箭头或拖拽
 // 提示）、展开（纯黑面板从刘海里长出来）。单元测试里 a.win 为 nil，
 // 直接按完整展开态渲染。
@@ -430,6 +435,9 @@ func (a *shelf) view(c *ui.Context) {
 		if frameTrace != nil && a.win != nil {
 			w, h := c.Size()
 			frameTrace(w, h, a.win.Bounds(), blank)
+		}
+		if blankFrameTrace != nil {
+			blankFrameTrace(blank)
 		}
 		if !blank {
 			a.idleIslandDrawn = idleDrawn
@@ -709,10 +717,17 @@ func (a *shelf) view(c *ui.Context) {
 					a.receive(drop.Data)
 				}
 			}
-			// The notch style draws nothing when idle: the canvas is
-			// already blank, so a resize may land on it directly.
-			blank = true
-			return
+			if !simulatedNotchHousing {
+				// The notch style draws nothing when idle: the canvas is
+				// already blank, so a resize may land on it directly, and
+				// the system's own housing is the black the user sees.
+				blank = true
+				return
+			}
+			// No system housing draws a notch on this platform, so the
+			// resting shell is the notch itself. The path below paints it
+			// from the same geometry the hover peek and the open panel grow
+			// out of: anchorSize() with the top ears and the bottom radius.
 		}
 	}
 	peeked := a.peeking || peekK > 0.01

@@ -19,4 +19,7 @@ const (
 	// A note whose anchor leaves no room above or below opens above it and
 	// is clamped to the top of the work area, as it always has.
 	noteStaysBelowTallAnchor = false
+	// A notched Mac's camera housing is black on screen whether the shell
+	// draws anything or not, so the closed notch shell stays empty there.
+	simulatedNotchHousing = false
 )
