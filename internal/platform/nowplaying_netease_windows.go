@@ -71,6 +71,13 @@ const (
 	// before it is sent once more. Pause and resume are idempotent; a skip
 	// would not be, so it is never repeated.
 	neSettleWait = 1200 * time.Millisecond
+	// neIntentHold is how long the user's latest play/pause target outranks
+	// the evidence. It covers the audio session's neAudioHold plus one settle
+	// window: a pause leaves the session loud for that long, so the evidence
+	// must not flip the card back before it has had its chance to agree. After
+	// that the evidence wins, so a command the client dropped is not drawn
+	// forever.
+	neIntentHold = neAudioHold + neSettleWait
 	// neBringBackWindow is how long the URL protocol's window restore is
 	// undone for. The handler is a fresh cloudmusic.exe that forwards the URL
 	// to the running client, and on 3.1.41 that client brings its window back
@@ -178,6 +185,11 @@ type neSource struct {
 	haveClock bool
 	// pending is a play/pause command waiting for the client to agree.
 	pending *nePending
+	// target is the play state the user last asked for, kept apart from the
+	// evidence until the client catches up. The audio session keeps reporting
+	// sound for neAudioHold after a pause, and that lag must not flip the card
+	// back or turn the next click into another pause.
+	target *neTarget
 
 	art        []byte
 	artKey     string
@@ -267,17 +279,20 @@ func (s *neSource) poll(now time.Time) (NowPlayingState, bool) {
 	}
 
 	s.haveClock = false
+	fresh := false
 	switch {
 	case havePos:
 		s.lastPos = pos
 		st.Duration, st.Elapsed, st.InfoAt = dur, pos, now
 		s.playing = s.moved(pos, now)
 		s.haveClock = true
+		fresh = true
 	case s.tierA:
 		// No memory tier means no clock at all: the card shows the track and
 		// its transport without a progress row pretending to know where the
 		// playhead is. Duration stays 0 for the same reason.
 		s.playing = s.audioActive(now)
+		fresh = true
 	default:
 		// A sample that cannot be used yet (track change, client busy):
 		// freeze the clock where it was and keep the last verdict, so the
@@ -286,6 +301,9 @@ func (s *neSource) poll(now time.Time) (NowPlayingState, bool) {
 		if s.meta.ok {
 			st.Duration = s.meta.track.Duration
 		}
+	}
+	if fresh {
+		s.playing = s.keepTarget(s.playing, now)
 	}
 	s.settle(now)
 	st.Playing = s.playing
@@ -309,6 +327,43 @@ func (s *neSource) hasTrack() bool {
 	return s.hwnd != 0 && s.title != ""
 }
 
+// neTarget is one play/pause state the user asked for and the client's
+// evidence has not confirmed yet. It is stored apart from s.playing, which is
+// what the card draws: evidence may lag the command (the audio session holds
+// "playing" for neAudioHold after a pause) and must not overwrite the user's
+// newer intent while the switch is still in flight.
+type neTarget struct {
+	want  bool
+	until time.Time
+}
+
+// nextWant is the play state a play/pause click asks for: the opposite of the
+// target still being confirmed, and only otherwise the opposite of the card.
+// Without this, a second click during the audio hold would ask to pause again
+// and the card could never be resumed from its own button.
+func (s *neSource) nextWant() bool {
+	if s.target != nil {
+		return !s.target.want
+	}
+	return !s.playing
+}
+
+// keepTarget folds the user's unconfirmed target into the play state the
+// evidence observed. Evidence that agrees ends the target; disagreement keeps
+// the target until neIntentHold has passed, after which evidence wins so a
+// command the client dropped cannot leave the card wrong forever.
+func (s *neSource) keepTarget(observed bool, now time.Time) bool {
+	t := s.target
+	if t == nil {
+		return observed
+	}
+	if observed == t.want || !now.Before(t.until) {
+		s.target = nil
+		return observed
+	}
+	return t.want
+}
+
 // act runs one transport command through the client's own URL protocol. The
 // protocol needs no focus, no keystrokes and no global input: the command is a
 // payload the running client executes in place, minimised or not. Its handler
@@ -328,7 +383,7 @@ func (s *neSource) act(a npAction, now time.Time) {
 	default:
 		want := s.playing
 		if a.command == NPPlayPause {
-			want = !s.playing
+			want = s.nextWant()
 		}
 		verb, confirm := neTransportVerb(a.command, want)
 		if verb == "" {
@@ -338,6 +393,7 @@ func (s *neSource) act(a npAction, now time.Time) {
 		switch {
 		case a.command == NPPlayPause:
 			s.playing = want
+			s.target = &neTarget{want: want, until: now.Add(neIntentHold)}
 			s.hintUntil, s.hintPlay = now.Add(neSeekGrace+400*time.Millisecond), want
 			if want {
 				s.active = now
@@ -376,6 +432,7 @@ func (s *neSource) close() {
 	s.hintUntil, s.trustAt, s.attachAt = time.Time{}, time.Time{}, time.Time{}
 	s.failures, s.tierA = 0, false
 	s.pending = nil
+	s.target = nil
 	s.art, s.artKey, s.artMissing = nil, "", false
 	s.active = time.Time{}
 }
@@ -907,11 +964,16 @@ func (s *neSource) control(cmd, value string) {
 	hwnd := s.hwnd
 	wasIconic := hwnd != 0 && neIsIconic(hwnd)
 	prev, _, _ := procGetForegroundWindow.Call()
+	// The guard's baseline is the input counter from before the handler is
+	// launched. Sampling it afterwards would make input the user produced
+	// while ShellExecuteW ran look like "no input since the command", and the
+	// guard would go on to fold a window the user just took.
+	armed := neInputTick()
 	procShellOpen.Call(0, uintptr(unsafe.Pointer(verb)), uintptr(unsafe.Pointer(url)), 0, 0, 4)
 	if hwnd == 0 {
 		return
 	}
-	s.guard.arm(hwnd, windows.HWND(prev), wasIconic)
+	s.guard.arm(hwnd, windows.HWND(prev), wasIconic, armed, neInputTick())
 }
 
 // neGuard is the one worker that undoes the URL handler's window restore.
@@ -945,11 +1007,31 @@ func neInputTick() uint32 {
 	return li.dwTime
 }
 
-func (g *neGuard) arm(hwnd, prev windows.HWND, wasIconic bool) {
+// arm starts, extends or replaces the one window-restore session. armed is the
+// input counter sampled just before ShellExecuteW and after is the one sampled
+// just after it: input that arrived while the handler was being launched
+// belongs to the user, so the guard is not started at all.
+//
+// The URL handler brings the client's window forward, so the foreground
+// window sampled by a second command in the same burst is already the client
+// itself. When the window is the same and no input has arrived since the first
+// command, the session only extends its deadline: the foreground window and
+// the visibility state the first command recorded stay the ones to restore.
+func (g *neGuard) arm(hwnd, prev windows.HWND, wasIconic bool, armed, after uint32) {
+	if armed != after {
+		return
+	}
 	g.mu.Lock()
+	if g.running && !g.canceled && g.hwnd == hwnd && g.input == armed {
+		if until := time.Now().Add(neBringBackWindow); until.After(g.until) {
+			g.until = until
+		}
+		g.mu.Unlock()
+		return
+	}
 	g.hwnd, g.prev, g.wasIconic = hwnd, prev, wasIconic
 	g.until = time.Now().Add(neBringBackWindow)
-	g.input = neInputTick()
+	g.input = armed
 	g.canceled = false
 	start := !g.running
 	g.running = true

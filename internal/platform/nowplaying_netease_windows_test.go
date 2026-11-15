@@ -132,6 +132,99 @@ func TestNEAdvancingIgnoresTheCommandHint(t *testing.T) {
 	}
 }
 
+// TestNEPlayPauseKeepsTheUsersTarget (P2-1): in tier A the client's audio
+// session reports sound for neAudioHold after a pause. The card must stay
+// paused while that evidence lags, and a second click in that window must ask
+// for resume instead of computing "pause" from the stale sound again.
+func TestNEPlayPauseKeepsTheUsersTarget(t *testing.T) {
+	now := time.Now()
+	s := &neSource{playing: true}
+
+	want := s.nextWant()
+	if want {
+		t.Fatal("the first click did not ask for pause")
+	}
+	s.playing = want
+	s.target = &neTarget{want: want, until: now.Add(neIntentHold)}
+
+	// The audio session still hears sound, as WASAPI does right after a pause.
+	if got := s.keepTarget(true, now.Add(600*time.Millisecond)); got {
+		t.Fatal("the audio hold flipped the card back to playing")
+	}
+	if s.target == nil {
+		t.Fatal("the pause target was dropped while the evidence disagreed")
+	}
+
+	if !s.nextWant() {
+		t.Fatal("the second click asked to pause again")
+	}
+}
+
+// TestNETargetYieldsWhenTheEvidenceAgreesOrExpires (P2-1): the target is not a
+// permanent override. Evidence that agrees with it ends it at once, and
+// evidence that still disagrees after neIntentHold wins, so a command the
+// client dropped cannot leave the card wrong forever.
+func TestNETargetYieldsWhenTheEvidenceAgreesOrExpires(t *testing.T) {
+	now := time.Now()
+	s := &neSource{target: &neTarget{want: false, until: now.Add(neIntentHold)}}
+	if got := s.keepTarget(false, now.Add(time.Second)); got {
+		t.Fatal("the evidence that agreed was overridden")
+	}
+	if s.target != nil {
+		t.Fatal("the target survived evidence that agreed with it")
+	}
+
+	s.target = &neTarget{want: false, until: now.Add(time.Second)}
+	if got := s.keepTarget(true, now.Add(neIntentHold)); !got {
+		t.Fatal("an expired target still overrode the evidence")
+	}
+	if s.target != nil {
+		t.Fatal("an expired target survived")
+	}
+}
+
+// TestNEGuardArmKeepsTheFirstOrigin (P2-2): the pause confirmation retries
+// arm(); by then the URL handler has already brought the client forward, so
+// the foreground sampled by the retry is the client itself. The session must
+// keep the window and visibility state the first command recorded and only
+// extend its deadline.
+func TestNEGuardArmKeepsTheFirstOrigin(t *testing.T) {
+	now := time.Now()
+	g := &neGuard{running: true, hwnd: 100, prev: 200, wasIconic: true, until: now.Add(-time.Minute), input: 7}
+	g.arm(100, 300, false, 7, 7)
+	if g.prev != 200 || !g.wasIconic || g.input != 7 {
+		t.Fatalf("a retry in the same burst replaced the session origin: %+v", g)
+	}
+	if !g.until.After(now) {
+		t.Fatal("the retry did not extend the deadline")
+	}
+}
+
+// TestNEGuardArmNewInputStartsASession (P2-2): input since the first command
+// means the window state changed under the user's hand; the new command opens
+// a fresh session with its own foreground window.
+func TestNEGuardArmNewInputStartsASession(t *testing.T) {
+	now := time.Now()
+	g := &neGuard{running: true, hwnd: 100, prev: 200, wasIconic: true, until: now.Add(time.Minute), input: 7}
+	g.arm(100, 300, false, 8, 8)
+	if g.prev != 300 || g.wasIconic || g.input != 8 {
+		t.Fatalf("user input did not start a new session: %+v", g)
+	}
+}
+
+// TestNEGuardArmDropsInputDuringTheLaunch (P2-3): the input baseline is
+// sampled before ShellExecuteW returns, so input the user produces during the
+// launch is seen as theirs and no restore is started.
+func TestNEGuardArmDropsInputDuringTheLaunch(t *testing.T) {
+	now := time.Now()
+	until := now.Add(time.Minute)
+	g := &neGuard{running: true, hwnd: 100, prev: 200, wasIconic: true, until: until, input: 7}
+	g.arm(100, 300, false, 8, 9)
+	if g.prev != 200 || !g.wasIconic || g.input != 7 || !g.until.Equal(until) {
+		t.Fatalf("input during the launch changed the guard: %+v", g)
+	}
+}
+
 // TestNECloseForgetsTheRun (P2-4): a client that quit and is started again is
 // a new process with its own version, handle and tier. Nothing from the old
 // run may survive close, or the restarted client would stay in tier A.
@@ -162,6 +255,7 @@ func TestNECloseForgetsTheRun(t *testing.T) {
 		failures:    1,
 		active:      now,
 		pending:     &nePending{want: true},
+		target:      &neTarget{want: true, until: now.Add(time.Minute)},
 		art:         []byte{1, 2, 3},
 		artKey:      "key",
 		artMissing:  true,
@@ -179,7 +273,7 @@ func TestNECloseForgetsTheRun(t *testing.T) {
 	if s.meta.ok || s.meta.track.Title != "" || s.meta.id != "" || s.meta.title != "" {
 		t.Fatalf("metadata survived close: %+v", s.meta)
 	}
-	if s.playing || s.rawPlaying || s.haveClock || s.pending != nil || s.failures != 0 {
+	if s.playing || s.rawPlaying || s.haveClock || s.pending != nil || s.target != nil || s.failures != 0 {
 		t.Fatal("play state survived close")
 	}
 	if s.art != nil || s.artKey != "" || s.artMissing || len(s.art) != 0 {
