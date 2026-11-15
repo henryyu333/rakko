@@ -304,3 +304,198 @@ func TestNEFixturesAreRedacted(t *testing.T) {
 		}
 	}
 }
+
+// TestNEMetaTitleChangeClearsThePreviousTrack (P2-6): the client's title names
+// a new song about a second before the memory fields and the queue files
+// catch up. The old album, cover and duration must be gone from that moment,
+// and both lookups must be due again rather than waiting for the old retry
+// timestamps.
+func TestNEMetaTitleChangeClearsThePreviousTrack(t *testing.T) {
+	now := time.Now()
+	m := neMeta{}
+	m.use(neTrack{ID: "1002", Title: "Second Song", Album: "Second Album"})
+	if !m.ok {
+		t.Fatal("a resolved track was not recorded")
+	}
+	m.forgetTitle("Third Song")
+	if m.ok || m.track.Title != "" || m.track.Album != "" {
+		t.Fatalf("the previous track survived a title change: %+v", m.track)
+	}
+	if !m.needByTitle("Third Song", "", now) {
+		t.Fatal("the new title was not looked up at once")
+	}
+	if !m.needByID("1003", now) {
+		t.Fatal("the new id was not looked up at once")
+	}
+	// Once the files name the new track, neither lookup is due again.
+	m.triedTitle("Third Song", now)
+	m.use(neTrack{ID: "1003", Title: "Third Song", Album: "Third Album"})
+	if m.needByTitle("Third Song", "", now) || m.needByID("1003", now) {
+		t.Fatal("a resolved track was looked up again")
+	}
+}
+
+// TestNEMetaRetriesAMissedID (P2-7): the first read after a track starts can
+// find the queue file before it is rewritten. That miss must be retried at
+// neMetaRetry, and a title fallback that resolved some other entry must not
+// stop the id lookup from being retried either.
+func TestNEMetaRetriesAMissedID(t *testing.T) {
+	now := time.Now()
+	m := neMeta{}
+	if !m.needByID("2001", now) {
+		t.Fatal("a new id was not looked up")
+	}
+	m.triedID("2001", now)
+	if m.needByID("2001", now.Add(neMetaRetry-time.Millisecond)) {
+		t.Fatal("the id was looked up before the retry interval")
+	}
+	if !m.needByID("2001", now.Add(neMetaRetry)) {
+		t.Fatal("the id was never looked up again")
+	}
+	// A title fallback resolved a different entry meanwhile: still retry.
+	m.use(neTrack{ID: "9999", Title: "Some Other Entry"})
+	if !m.needByID("2001", now.Add(neMetaRetry)) {
+		t.Fatal("a title fallback stopped the id lookup")
+	}
+	m.use(neTrack{ID: "2001", Title: "Queue Song"})
+	if m.needByID("2001", now.Add(2*neMetaRetry)) {
+		t.Fatal("a resolved id was looked up again")
+	}
+}
+
+// TestNEMetaRetriesAMissedTitle (P2-7, fallback tier): the same retry rule for
+// the tier that can only read the window title.
+func TestNEMetaRetriesAMissedTitle(t *testing.T) {
+	now := time.Now()
+	m := neMeta{}
+	if !m.needByTitle("Queue Song", "Queue Artist", now) {
+		t.Fatal("a new title was not looked up")
+	}
+	m.triedTitle("Queue Song", now)
+	if m.needByTitle("Queue Song", "Queue Artist", now.Add(neMetaRetry-time.Millisecond)) {
+		t.Fatal("the title was looked up before the retry interval")
+	}
+	if !m.needByTitle("Queue Song", "Queue Artist", now.Add(neMetaRetry)) {
+		t.Fatal("the title was never looked up again")
+	}
+	m.use(neTrack{ID: "3001", Title: "Queue Song", Artist: "Queue Artist"})
+	if m.needByTitle("Queue Song", "Queue Artist", now.Add(2*neMetaRetry)) {
+		t.Fatal("a resolved title was looked up again")
+	}
+}
+
+// TestNEPlayVerdictTierAIgnoresFrozenClock (P2-3): when the memory tier is
+// gone there is no position to derive a verdict from; the raw verdict is
+// frozen where the clock stopped, so tier A must confirm against the audio
+// session instead.
+func TestNEPlayVerdictTierAIgnoresFrozenClock(t *testing.T) {
+	if ev := nePlayVerdict(true, true, true, false); ev.playing {
+		t.Fatal("tier A confirmed a pause from the frozen clock verdict")
+	}
+	if ev := nePlayVerdict(true, false, true, true); !ev.playing || ev.clock {
+		t.Fatalf("tier A evidence = %+v, want the audio session's verdict", ev)
+	}
+	if ev := nePlayVerdict(false, true, true, false); !ev.playing || !ev.clock {
+		t.Fatalf("clock evidence = %+v, want the position's verdict", ev)
+	}
+	// The clock verdict is not trusted when no usable sample produced it.
+	if ev := nePlayVerdict(false, false, false, true); !ev.playing || ev.clock {
+		t.Fatalf("no-clock evidence = %+v, want the audio session's verdict", ev)
+	}
+}
+
+// TestNESettle (P2-2, P2-3): a play/pause command is confirmed against the
+// evidence of its own tier, waits for its window, and is sent once more only
+// when the client did not act.
+func TestNESettle(t *testing.T) {
+	now := time.Now()
+	wait := time.Second
+	p := &nePending{want: true, at: now.Add(wait)}
+	if got := neSettle(p, neEvidence{playing: false}, now); got != neVerdictWait {
+		t.Fatalf("before the wait window = %v, want wait", got)
+	}
+	if got := neSettle(p, neEvidence{playing: true}, now.Add(wait)); got != neVerdictDone {
+		t.Fatalf("client agreed = %v, want done", got)
+	}
+	if got := neSettle(p, neEvidence{playing: false}, now.Add(wait)); got != neVerdictRetry {
+		t.Fatalf("client ignored the command = %v, want one retry", got)
+	}
+	if got := neSettle(nil, neEvidence{playing: true}, now); got != neVerdictWait {
+		t.Fatal("no pending command must not confirm anything")
+	}
+}
+
+// TestNETransportVerb (P2-2): play/pause states the verb it wants and may be
+// confirmed; a skip is a single command with no confirmation path that could
+// send it twice.
+func TestNETransportVerb(t *testing.T) {
+	cases := []struct {
+		cmd     NowPlayingCommand
+		playing bool
+		verb    string
+		confirm bool
+	}{
+		{NPPlayPause, true, "pause", true},
+		{NPPlayPause, false, "resume", true},
+		{NPNext, true, "next", false},
+		{NPPrevious, false, "previous", false},
+		{NowPlayingCommand(0), true, "", false},
+	}
+	for _, c := range cases {
+		verb, confirm := neTransportVerb(c.cmd, c.playing)
+		if verb != c.verb || confirm != c.confirm {
+			t.Errorf("neTransportVerb(%v, %v) = %q, %v; want %q, %v",
+				c.cmd, c.playing, verb, confirm, c.verb, c.confirm)
+		}
+	}
+}
+
+// TestNECommandPath (P2-9): the identity the card resolves NetEase's icon
+// through comes from the client's own handler registration.
+func TestNECommandPath(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{`"D:\CloudMusic\cloudmusic.exe" "%1"`, `D:\CloudMusic\cloudmusic.exe`},
+		{`D:\CloudMusic\cloudmusic.exe "%1"`, `D:\CloudMusic\cloudmusic.exe`},
+		{`  "C:\Program Files\CloudMusic\cloudmusic.exe"  `, `C:\Program Files\CloudMusic\cloudmusic.exe`},
+		{`"unterminated`, ""},
+		{"", ""},
+	}
+	for _, c := range cases {
+		if got := neCommandPath(c.in); got != c.want {
+			t.Errorf("neCommandPath(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+// TestNEGuardDecide (P2-8): the window guard is serialised by construction
+// and must yield to the user. Input after the command ends it without folding
+// or refocusing anything; without input it folds the handler's restored
+// window back down and returns the foreground only while the handler still
+// holds it.
+func TestNEGuardDecide(t *testing.T) {
+	now := time.Now()
+	until := now.Add(2500 * time.Millisecond)
+	armed := uint32(100)
+
+	// The handler has just restored a minimised window.
+	if p := neGuardDecide(true, false, true, true, armed, armed, now, until); !p.Minimize || p.Done || p.Focus {
+		t.Fatalf("restored window plan = %+v, want minimize while the guard runs", p)
+	}
+	// Still minimised: nothing to do.
+	if p := neGuardDecide(true, true, false, true, armed, armed, now, until); p.Minimize {
+		t.Fatal("an already minimised window was folded again")
+	}
+	// The user moved the mouse or typed: leave the window and the focus alone.
+	if p := neGuardDecide(true, false, true, true, armed, armed+1, now, until); !p.Done || p.Minimize || p.Focus {
+		t.Fatalf("user input plan = %+v, want the guard to stop untouched", p)
+	}
+	// The guard ran out: fold the window once more and hand the foreground
+	// back while the client still holds it.
+	if p := neGuardDecide(true, false, true, true, armed, armed, until, until); !p.Done || !p.Minimize || !p.Focus {
+		t.Fatalf("expired plan = %+v, want final minimize and focus restore", p)
+	}
+	// The user is in another app: never steal the foreground.
+	if p := neGuardDecide(true, false, false, true, armed, armed, until, until); p.Focus {
+		t.Fatal("the foreground was taken from another app")
+	}
+}

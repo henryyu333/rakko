@@ -131,3 +131,89 @@ func TestNEAdvancingIgnoresTheCommandHint(t *testing.T) {
 		t.Fatal("the raw verdict lost the movement")
 	}
 }
+
+// TestNECloseForgetsTheRun (P2-4): a client that quit and is started again is
+// a new process with its own version, handle and tier. Nothing from the old
+// run may survive close, or the restarted client would stay in tier A.
+func TestNECloseForgetsTheRun(t *testing.T) {
+	now := time.Now()
+	s := &neSource{
+		hwnd:        123,
+		pid:         456,
+		exe:         `D:\CloudMusic\cloudmusic.exe`,
+		base:        0x1000,
+		offsets:     &neKnownOffsets[0],
+		tierA:       true,
+		attachAt:    now,
+		title:       "Song - Artist",
+		id:          "1002",
+		idAt:        now,
+		idHoldUntil: now.Add(time.Minute),
+		lastPos:     12,
+		prevPos:     11,
+		prevPosAt:   now,
+		still:       2,
+		playing:     true,
+		rawPlaying:  true,
+		haveClock:   true,
+		hintUntil:   now.Add(time.Minute),
+		hintPlay:    true,
+		trustAt:     now.Add(time.Minute),
+		failures:    1,
+		active:      now,
+		pending:     &nePending{want: true},
+		art:         []byte{1, 2, 3},
+		artKey:      "key",
+		artMissing:  true,
+	}
+	s.meta.use(neTrack{ID: "1002", Title: "Song"})
+
+	s.close()
+
+	if s.hwnd != 0 || s.pid != 0 || s.exe != "" || s.tierA || s.offsets != nil || s.base != 0 {
+		t.Fatalf("process identity survived close: %+v", s)
+	}
+	if s.title != "" || s.id != "" || !s.idAt.IsZero() || !s.idHoldUntil.IsZero() {
+		t.Fatalf("track identity survived close: title=%q id=%q", s.title, s.id)
+	}
+	if s.meta.ok || s.meta.track.Title != "" || s.meta.id != "" || s.meta.title != "" {
+		t.Fatalf("metadata survived close: %+v", s.meta)
+	}
+	if s.playing || s.rawPlaying || s.haveClock || s.pending != nil || s.failures != 0 {
+		t.Fatal("play state survived close")
+	}
+	if s.art != nil || s.artKey != "" || s.artMissing || len(s.art) != 0 {
+		t.Fatal("cover state survived close")
+	}
+}
+
+// TestNENoteFailureDropsTheTier (P2-5): a read that is refused, a NaN field or
+// a broken id pointer chain is passed to noteFailure; two in a row stop the
+// memory tier and close the handle instead of retrying a dead field forever.
+func TestNENoteFailureDropsTheTier(t *testing.T) {
+	s := &neSource{base: 0x1000, offsets: &neKnownOffsets[0], playing: true, haveClock: true}
+	s.noteFailure()
+	if s.tierA || s.failures != 1 {
+		t.Fatalf("one failure ended the tier: tierA=%v failures=%d", s.tierA, s.failures)
+	}
+	s.noteFailure()
+	if !s.tierA || s.failures != 0 || s.offsets != nil || s.base != 0 {
+		t.Fatalf("the second failure did not drop the tier: tierA=%v offsets=%v base=%#x", s.tierA, s.offsets != nil, s.base)
+	}
+	if s.haveClock {
+		t.Fatal("the frozen clock verdict was kept after the tier was dropped")
+	}
+}
+
+// TestNEAppID (P2-9): the card needs a real path to resolve the client's icon;
+// the bundle name is only the last resort.
+func TestNEAppID(t *testing.T) {
+	s := &neSource{}
+	if got := s.appID(); got != neApp {
+		t.Fatalf("appID without a path = %q, want %q", got, neApp)
+	}
+	s.exe = `D:\CloudMusic\cloudmusic.exe`
+	if got := s.appID(); got != s.exe {
+		t.Fatalf("appID = %q, want the executable path", got)
+	}
+}

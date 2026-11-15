@@ -16,9 +16,8 @@ package platform
 //   - two doubles and a song-id token in cloudmusic.dll, for the position and
 //     the play state (position frozen = paused), version-gated and validated
 //     on every sample;
-//   - the client's own global shortcuts (Ctrl+Alt+P / Left / Right) as the
-//     transport, and its orpheus:// URL protocol for the seek and as the
-//     fallback for a shortcut that is not registered.
+//   - the client's own orpheus:// URL protocol for the transport, which runs
+//     the command inside the client and injects no input into the system.
 //
 // Everything read here is read-only: no injection, no hooks, no writes into
 // the client. The memory tier is a capability that has to keep proving itself;
@@ -34,10 +33,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/registry"
 )
 
 const (
@@ -56,12 +57,6 @@ const (
 	// neSeekGrace ignores position jumps right after a seek (ours or the
 	// user's) instead of reading them as playback.
 	neSeekGrace = 1200 * time.Millisecond
-	// neMaxFailures is how many rejected samples in a row turn the memory
-	// tier off for the rest of this client's run.
-	neMaxFailures = 2
-	// neMetaRetry is how long to wait before re-reading the queue files for a
-	// song id they did not name.
-	neMetaRetry = 2 * time.Second
 	// neArtRetry is how long a missing cover is asked for again: the client
 	// writes the file shortly after the track starts.
 	neArtRetry = 5 * time.Second
@@ -72,8 +67,9 @@ const (
 	neAudioHold = 2500 * time.Millisecond
 	// neSilenceFloor is the peak below which a session counts as silent.
 	neSilenceFloor = 0.0005
-	// neSettleWait is how long a transport command gets to show an effect
-	// before the source falls back to the URL protocol.
+	// neSettleWait is how long a play/pause command gets to show an effect
+	// before it is sent once more. Pause and resume are idempotent; a skip
+	// would not be, so it is never repeated.
 	neSettleWait = 1200 * time.Millisecond
 	// neBringBackWindow is how long the URL protocol's window restore is
 	// undone for. The handler is a fresh cloudmusic.exe that forwards the URL
@@ -81,17 +77,6 @@ const (
 	// about 1.2 s after the launch returns — long after ShellExecute itself,
 	// which is why the guard outlives it instead of racing it.
 	neBringBackWindow = 2500 * time.Millisecond
-)
-
-// The client's default global shortcuts (设置 → 快捷键), which are the transport
-// path: they are registered system-wide, they work while the client is
-// minimised, and — unlike the orpheus:// protocol — they do not bring its
-// window back or take the foreground.
-const (
-	neVKAlt    = 0x12
-	neVKToggle = 0x50 // Ctrl+Alt+P: play/pause
-	neVKPrev   = 0x25 // Ctrl+Alt+Left
-	neVKNext   = 0x27 // Ctrl+Alt+Right
 )
 
 // swMinimize is the ShowWindow command the window guard folds the client back
@@ -135,26 +120,40 @@ var (
 
 // neSource is the NetEase side of the poller. It lives on the poller's own
 // thread and is not safe for concurrent use; the host marshals every call.
+// The one exception is neGuard.run, which only touches its own mutexed fields
+// and the client's window.
 type neSource struct {
 	hwnd windows.HWND
 	pid  uint32
 	proc windows.Handle
 	base uintptr
+	// exe is the client's executable, resolved once per run. It is the
+	// identity the card resolves the app icon through (AppPath).
+	exe string
 
 	offsets *neOffsets
 	// tierA is set once the memory tier has been ruled out (unknown version,
 	// elevated client, refused handle, repeated bad samples). It lasts for
 	// this client's run, so the fallback costs one attempt, not one per poll.
 	tierA bool
+	// attachAt is when the process was opened, so start-up samples that are
+	// not filled in yet are not counted as failures.
+	attachAt time.Time
 
 	title string
+	// idHoldUntil ignores the sampled song id for a moment after the title
+	// names a different track: the client writes the title about a second
+	// before it swaps the memory fields, so the old id must not resolve the
+	// new title's card.
+	idHoldUntil time.Time
 
-	id     string
-	idAt   time.Time
-	metaID string
-	metaAt time.Time
-	track  neTrack
-	haveTr bool
+	id   string
+	idAt time.Time
+	// prevID is the song id that named the track before the title moved.
+	// Until the memory fields name a different one, the client has not
+	// finished swapping and that id must not resolve the new title.
+	prevID string
+	meta   neMeta
 
 	lastPos   float64
 	prevPos   float64
@@ -171,7 +170,10 @@ type neSource struct {
 	// rawPlaying is the verdict from the position alone, before the
 	// optimistic hold a command applies.
 	rawPlaying bool
-	pending    *nePending
+	// haveClock says the verdict above came from the position on this poll.
+	haveClock bool
+	// pending is a play/pause command waiting for the client to agree.
+	pending *nePending
 
 	art        []byte
 	artKey     string
@@ -179,17 +181,7 @@ type neSource struct {
 	artMissing bool
 
 	audio neAudio
-}
-
-// nePending is one transport command waiting to be confirmed: a hotkey that
-// did nothing (the client's shortcuts switched off, or taken by another app)
-// falls back to the URL protocol once.
-type nePending struct {
-	cmd  NowPlayingCommand
-	want bool   // for play/pause: the state that was asked for
-	id   string // for skips: the track the command started from
-	at   time.Time
-	done bool
+	guard neGuard
 }
 
 // poll reads the client and returns its snapshot. ok is false when the client
@@ -205,45 +197,68 @@ func (s *neSource) poll(now time.Time) (NowPlayingState, bool) {
 		return NowPlayingState{}, false
 	}
 	titleName, titleArtist := neSplitTitle(raw)
-	titleChanged := raw != s.title
-	s.title = raw
+	if raw != s.title {
+		// The window names a different track. The album, cover and length
+		// resolved for the previous one are wrong from this moment: drop
+		// them and draw the window title until the queue files catch up.
+		s.title = raw
+		s.prevID = s.id
+		s.meta.forgetTitle(raw)
+		s.art, s.artKey, s.artMissing = nil, "", false
+		s.idHoldUntil = now.Add(neIDGrace)
+		s.trustAt = now.Add(neIDGrace)
+		s.prevPosAt, s.still = time.Time{}, 0
+	}
 
 	pos, dur, id, sampled := s.sample()
+	heldID := id != "" && (now.Before(s.idHoldUntil) || id == s.prevID)
+	if heldID {
+		// The title moved but the memory fields have not finished swapping:
+		// the id they still name is the previous track's, and resolving it
+		// would put the old album and cover back under the new title.
+		id = ""
+	}
 	if sampled && id != "" && id != s.id {
 		s.beginTrack(id, now)
 	}
-	switch {
-	case id != "":
-		if s.metaID != id {
-			s.resolveByID(id, now)
-		}
-	case titleChanged:
+	if id != "" {
+		s.resolveByID(id, now)
+	}
+	if !s.meta.ok {
+		// The id is unreadable, or its queue file did not name it yet: the
+		// title can still resolve the entry, on its own retry clock.
 		s.resolveByTitle(titleName, titleArtist, now)
 	}
 
-	// The position is believed only when the memory tier is on, the sample is
-	// sane for the track the card is about to draw, and the client has had
-	// time to finish swapping fields after a track change.
+	// A sample is usable only when the memory tier is on, it is sane for the
+	// track about to be drawn, and the client has finished swapping fields.
 	havePos := false
-	if sampled && !s.tierA && !now.Before(s.trustAt) && id == s.id && id != "" {
-		if neSampleOK(pos, dur, s.track, s.haveTr) {
-			havePos = true
-			s.failures = 0
-		} else {
-			s.failures++
-			if s.failures >= neMaxFailures {
-				// The fields moved (a client update we do not know) or the
-				// process changed under us: stop reading memory, keep the
-				// rest.
-				s.tierA = true
-				s.dropProcess()
+	if sampled && !s.tierA && !now.Before(s.trustAt) && id != "" && id == s.id {
+		havePos = neSampleOK(pos, dur, s.meta.track, s.meta.ok)
+	}
+	if s.memoryOn() && now.After(s.attachAt.Add(neIDGrace)) {
+		switch {
+		case !sampled:
+			// A refused read, a NaN field or a broken id pointer chain. Only
+			// outside a track change, where the client legitimately clears
+			// the fields for a moment.
+			if !now.Before(s.trustAt) {
+				s.noteFailure()
 			}
+		case heldID:
+			// A slow track swap is not a broken field: the id is readable,
+			// it just still names the previous track.
+		case havePos:
+			s.failures = 0
+		case !now.Before(s.trustAt):
+			// Readable but impossible for this track: a field that moved.
+			s.noteFailure()
 		}
 	}
 
-	st := NowPlayingState{App: neApp, Received: now}
-	if s.haveTr {
-		st.Title, st.Artist, st.Album = s.track.Title, s.track.Artist, s.track.Album
+	st := NowPlayingState{App: s.appID(), Received: now}
+	if s.meta.ok {
+		st.Title, st.Artist, st.Album = s.meta.track.Title, s.meta.track.Artist, s.meta.track.Album
 	}
 	if st.Title == "" {
 		st.Title = titleName
@@ -252,11 +267,13 @@ func (s *neSource) poll(now time.Time) (NowPlayingState, bool) {
 		st.Artist = titleArtist
 	}
 
+	s.haveClock = false
 	switch {
 	case havePos:
 		s.lastPos = pos
 		st.Duration, st.Elapsed, st.InfoAt = dur, pos, now
 		s.playing = s.moved(pos, now)
+		s.haveClock = true
 	case s.tierA:
 		// No memory tier means no clock at all: the card shows the track and
 		// its transport without a progress row pretending to know where the
@@ -267,11 +284,11 @@ func (s *neSource) poll(now time.Time) (NowPlayingState, bool) {
 		// freeze the clock where it was and keep the last verdict, so the
 		// card does not flicker between states.
 		st.Elapsed, st.InfoAt = s.lastPos, now
-		if s.haveTr {
-			st.Duration = s.track.Duration
+		if s.meta.ok {
+			st.Duration = s.meta.track.Duration
 		}
 	}
-	s.settle(now, id)
+	s.settle(now)
 	st.Playing = s.playing
 	if st.Playing {
 		st.Rate = 1
@@ -293,51 +310,48 @@ func (s *neSource) hasTrack() bool {
 	return s.hwnd != 0 && s.title != ""
 }
 
-// act runs one transport command. Play/pause, next and previous go through the
-// client's own global shortcuts, which act in place; seek has no shortcut, so it
-// goes through the orpheus:// protocol. A shortcut that has no effect (the user
-// switched the client's shortcuts off) is retried once through the protocol.
+// act runs one transport command through the client's own URL protocol. The
+// protocol needs no focus, no keystrokes and no global input: the command is a
+// payload the running client executes in place, minimised or not. Its handler
+// does restore and focus the client's window about a second later, which is
+// what the guard undoes.
+//
+// Play/pause carries a pending confirmation because pause and resume are
+// idempotent: a command the client ignored is sent once more. A skip is not
+// repeated — that would move two tracks — so it is sent exactly once.
 func (s *neSource) act(a npAction, now time.Time) {
 	switch {
 	case a.isSeek:
-		neRunOrpheus(s.hwnd, "seek", neSeconds(a.seek))
+		s.control("seek", neSeconds(a.seek))
 		s.prevPosAt = time.Time{}
 		s.trustAt = now.Add(neSeekGrace)
 		s.hintUntil, s.hintPlay = now.Add(neSeekGrace), s.playing
-	case a.command == NPPlayPause:
-		neSendShortcut(neVKToggle)
-		s.playing = !s.playing
-		s.hintUntil, s.hintPlay = now.Add(neSeekGrace+400*time.Millisecond), s.playing
-		if s.playing {
-			s.active = now
+	default:
+		want := s.playing
+		if a.command == NPPlayPause {
+			want = !s.playing
 		}
-		s.pending = &nePending{cmd: NPPlayPause, want: s.playing, at: now.Add(neSettleWait)}
-	case a.command == NPNext:
-		neSendShortcut(neVKNext)
-		s.afterSkip(now)
-		s.pending = &nePending{cmd: NPNext, id: s.id, at: now.Add(neSettleWait)}
-	case a.command == NPPrevious:
-		neSendShortcut(neVKPrev)
-		s.afterSkip(now)
-		s.pending = &nePending{cmd: NPPrevious, id: s.id, at: now.Add(neSettleWait)}
+		verb, confirm := neTransportVerb(a.command, want)
+		if verb == "" {
+			return
+		}
+		s.control(verb, "")
+		switch {
+		case a.command == NPPlayPause:
+			s.playing = want
+			s.hintUntil, s.hintPlay = now.Add(neSeekGrace+400*time.Millisecond), want
+			if want {
+				s.active = now
+			}
+			if confirm {
+				s.pending = &nePending{want: want, at: now.Add(neSettleWait)}
+			}
+		default:
+			// A skip is never repeated: one click, one command.
+			s.pending = nil
+			s.afterSkip(now)
+		}
 	}
-}
-
-// neSendShortcut sends one of the client's Ctrl+Alt chords. SendInput refuses
-// to cross into a higher integrity level, so an elevated client simply never
-// sees the key — which is why every transport command is confirmed and
-// retried through the protocol.
-func neSendShortcut(vk uint16) bool {
-	events := [...]input{
-		{typ: 1, ki: keybdInput{vk: vkControl}},
-		{typ: 1, ki: keybdInput{vk: neVKAlt}},
-		{typ: 1, ki: keybdInput{vk: vk}},
-		{typ: 1, ki: keybdInput{vk: vk, flags: keyEventKeyUp}},
-		{typ: 1, ki: keybdInput{vk: neVKAlt, flags: keyEventKeyUp}},
-		{typ: 1, ki: keybdInput{vk: vkControl, flags: keyEventKeyUp}},
-	}
-	sent, _, _ := procSendInput.Call(uintptr(len(events)), uintptr(unsafe.Pointer(&events[0])), unsafe.Sizeof(events[0]))
-	return sent == uintptr(len(events))
 }
 
 // afterSkip stops the position evidence until the client has swapped tracks.
@@ -346,19 +360,50 @@ func (s *neSource) afterSkip(now time.Time) {
 	s.trustAt = now.Add(neIDGrace)
 }
 
-// close releases the handles this source holds.
+// close releases the handles this source holds and forgets everything read
+// from it: a client that quit and is started again must be read from scratch,
+// including the tier its predecessor ended up in.
 func (s *neSource) close() {
 	s.dropProcess()
 	s.audio.close()
-	s.hwnd, s.pid, s.title = 0, 0, ""
-	s.track, s.haveTr, s.metaID = neTrack{}, false, ""
+	s.guard.cancel()
+	s.hwnd, s.pid, s.exe = 0, 0, ""
+	s.title = ""
+	s.id, s.idAt, s.idHoldUntil, s.prevID = "", time.Time{}, time.Time{}, ""
+	s.meta = neMeta{}
+	s.lastPos, s.prevPos, s.prevPosAt, s.still = 0, 0, time.Time{}, 0
+	s.playing, s.rawPlaying, s.haveClock = false, false, false
+	s.hintUntil, s.trustAt, s.attachAt = time.Time{}, time.Time{}, time.Time{}
+	s.failures, s.tierA = 0, false
+	s.pending = nil
 	s.art, s.artKey, s.artMissing = nil, "", false
+	s.active = time.Time{}
+}
+
+// memoryOn reports whether the memory tier is still reading this process.
+func (s *neSource) memoryOn() bool {
+	return !s.tierA && s.offsets != nil && s.proc != 0 && s.base != 0
+}
+
+// noteFailure counts one unusable sample and drops the memory tier when they
+// stop being isolated: a refused handle, a NaN field or a broken id pointer
+// chain that repeats is a field the offsets no longer describe.
+func (s *neSource) noteFailure() {
+	s.failures++
+	if s.failures < neMaxFailures {
+		return
+	}
+	s.tierA = true
+	s.failures = 0
+	s.haveClock = false
+	s.pending = nil
+	s.dropProcess()
 }
 
 // ensure finds the client's window, and attaches to its process once.
 func (s *neSource) ensure() bool {
 	if s.hwnd != 0 {
-		if s.alive() {
+		if s.alive() && s.windowPID() == s.pid {
 			return true
 		}
 		// The client restarted or quit: forget everything about the old one,
@@ -380,8 +425,55 @@ func (s *neSource) ensure() bool {
 		return false
 	}
 	s.hwnd, s.pid = hwnd, pid
+	s.exe = neExePath(pid)
 	s.attach()
 	return true
+}
+
+func (s *neSource) windowPID() uint32 {
+	var pid uint32
+	windows.GetWindowThreadProcessId(s.hwnd, &pid)
+	return pid
+}
+
+// appID is the identity the card resolves the app icon through. The client's
+// own executable resolves to its shell icon; the "netease" bundle has no path
+// of its own and would only draw the generic music glyph.
+func (s *neSource) appID() string {
+	if s.exe != "" {
+		return s.exe
+	}
+	return neApp
+}
+
+// neExePath reads the client's executable without the memory permission: a
+// query-only handle is enough, and when even that is refused (an elevated
+// client) the orpheus:// handler still names the same binary.
+func neExePath(pid uint32) string {
+	if pid == 0 {
+		return ""
+	}
+	if h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, pid); err == nil {
+		defer windows.CloseHandle(h)
+		if p := neProcessPath(h); p != "" {
+			return p
+		}
+	}
+	return neHandlerPath()
+}
+
+// neHandlerPath is the executable registered for the orpheus:// scheme.
+func neHandlerPath() string {
+	k, err := registry.OpenKey(registry.CLASSES_ROOT, `orpheus\shell\open\command`, registry.QUERY_VALUE)
+	if err != nil {
+		return ""
+	}
+	defer k.Close()
+	cmd, _, err := k.GetStringValue("")
+	if err != nil {
+		return ""
+	}
+	return neCommandPath(cmd)
 }
 
 func (s *neSource) alive() bool {
@@ -392,6 +484,7 @@ func (s *neSource) alive() bool {
 // attach opens the client once: the process handle, the module the offsets are
 // relative to, and the offset table matching its version.
 func (s *neSource) attach() {
+	s.attachAt = time.Now()
 	if s.tierA {
 		return
 	}
@@ -432,11 +525,11 @@ func (s *neSource) dropProcess() {
 }
 
 // beginTrack starts a new track: position evidence is dropped until the client
-// has settled, and the previous track's cover is forgotten.
+// has settled, the previous track's metadata and cover are forgotten, and both
+// lookups become due for the new one.
 func (s *neSource) beginTrack(id string, now time.Time) {
-	s.id, s.idAt = id, now
-	s.metaID, s.metaAt, s.haveTr = "", time.Time{}, false
-	s.track = neTrack{}
+	s.id, s.idAt, s.prevID = id, now, ""
+	s.meta = neMeta{}
 	s.prevPosAt, s.still = time.Time{}, 0
 	s.lastPos = 0
 	s.trustAt = now.Add(neIDGrace)
@@ -444,9 +537,11 @@ func (s *neSource) beginTrack(id string, now time.Time) {
 }
 
 // sample reads position, duration and the song id in one go. ok is false when
-// the memory tier is off or the reads failed.
+// the memory tier is off or any of the three reads failed: a refused read, a
+// NaN field and a broken pointer chain are all the same signal here, and the
+// caller counts them.
 func (s *neSource) sample() (pos, dur float64, id string, ok bool) {
-	if s.tierA || s.offsets == nil || s.proc == 0 || s.base == 0 {
+	if !s.memoryOn() {
 		return 0, 0, "", false
 	}
 	pos, ok1 := s.readFloat(s.base + s.offsets.pos)
@@ -454,7 +549,11 @@ func (s *neSource) sample() (pos, dur float64, id string, ok bool) {
 	if !ok1 || !ok2 {
 		return 0, 0, "", false
 	}
-	return pos, dur, s.songID(), true
+	id = s.songID()
+	if id == "" {
+		return 0, 0, "", false
+	}
+	return pos, dur, id, true
 }
 
 func (s *neSource) readFloat(at uintptr) (float64, bool) {
@@ -604,45 +703,35 @@ func (s *neSource) advancing(pos float64, now time.Time) bool {
 	}
 }
 
-// settle decides whether the transport command sent a moment ago took effect,
-// and falls back to the URL protocol when the hotkey did nothing.
-func (s *neSource) settle(now time.Time, id string) {
+// settle confirms the play/pause command sent a moment ago and sends it once
+// more when the client did not act on it. Pause and resume are idempotent, so
+// the repeat cannot undo anything; the verdict it is confirmed against is the
+// one the tier's evidence can actually provide — the audio session in tier A,
+// never the position verdict frozen when the clock was lost.
+func (s *neSource) settle(now time.Time) {
 	p := s.pending
-	if p == nil || now.Before(p.at) {
+	if p == nil {
 		return
 	}
-	switch p.cmd {
-	case NPPlayPause:
-		if s.rawPlaying == p.want {
-			s.pending = nil
-			return
-		}
-	case NPNext, NPPrevious:
-		if id != "" && id != p.id {
-			s.pending = nil
-			return
-		}
+	ev := nePlayVerdict(s.tierA, s.haveClock, s.rawPlaying, s.audioActive(now))
+	switch neSettle(p, ev, now) {
+	case neVerdictWait:
+		return
+	case neVerdictDone:
+		s.pending = nil
+		return
 	}
-	if !p.done {
-		// The client's global shortcut is off, or another app holds the
-		// combination. The protocol always works, at the cost of the
-		// client's window reappearing for a few frames.
-		switch p.cmd {
-		case NPPlayPause:
-			if p.want {
-				neRunOrpheus(s.hwnd, "resume", "")
-			} else {
-				neRunOrpheus(s.hwnd, "pause", "")
-			}
-			s.hintUntil, s.hintPlay = now.Add(neSeekGrace), p.want
-		case NPNext:
-			neRunOrpheus(s.hwnd, "next", "")
-			s.afterSkip(now)
-		case NPPrevious:
-			neRunOrpheus(s.hwnd, "previous", "")
-			s.afterSkip(now)
-		}
+	if p.done {
+		s.pending = nil
+		return
 	}
+	p.done = true
+	verb := "pause"
+	if p.want {
+		verb = "resume"
+	}
+	s.control(verb, "")
+	s.hintUntil, s.hintPlay = now.Add(neSeekGrace), p.want
 	s.pending = nil
 }
 
@@ -684,11 +773,10 @@ func neMusicDir() string {
 // queue. A song started from search results is in neither; it keeps the title
 // and the memory duration.
 func (s *neSource) resolveByID(id string, now time.Time) {
-	if s.metaID == id && !s.haveTr && now.Sub(s.metaAt) < neMetaRetry {
+	if !s.meta.needByID(id, now) {
 		return
 	}
-	s.metaID, s.metaAt = id, now
-	s.track, s.haveTr = neTrack{}, false
+	s.meta.triedID(id, now)
 	if dir := neMusicDir(); dir != "" {
 		if tracks, ok := neReadTracks(filepath.Join(dir, "webdata", "file", "fmPlay"), true); ok {
 			if t, hit := neFindTrack(tracks, id); hit {
@@ -707,13 +795,10 @@ func (s *neSource) resolveByID(id string, now time.Time) {
 // resolveByTitle is the fallback for a client the memory tier cannot read: the
 // window title names the song, and the queues know the entry it belongs to.
 func (s *neSource) resolveByTitle(title, artist string, now time.Time) {
-	if title == "" || (s.haveTr && s.track.Title == title) {
+	if !s.meta.needByTitle(title, artist, now) {
 		return
 	}
-	if now.Sub(s.metaAt) < neMetaRetry {
-		return
-	}
-	s.metaAt = now
+	s.meta.triedTitle(title, now)
 	if dir := neMusicDir(); dir != "" {
 		if tracks, ok := neReadTracks(filepath.Join(dir, "webdata", "file", "fmPlay"), true); ok {
 			if t, hit := neFindTitled(tracks, title, artist); hit {
@@ -733,10 +818,7 @@ func (s *neSource) useTrack(t neTrack) {
 	if t.Title == "" {
 		return
 	}
-	if s.artKey != "" {
-		s.art, s.artKey, s.artMissing = nil, "", false
-	}
-	s.track, s.haveTr = t, true
+	s.meta.use(t)
 }
 
 // neReadTracks parses one of the client's queue files.
@@ -775,14 +857,14 @@ func (s *neSource) artFor(key string, now time.Time) ([]byte, bool) {
 }
 
 func (s *neSource) readArt() ([]byte, bool) {
-	if !s.haveTr || s.track.PicURL == "" {
+	if !s.meta.ok || s.meta.track.PicURL == "" {
 		return nil, true
 	}
 	dir := neMusicDir()
 	if dir == "" {
 		return nil, true
 	}
-	for _, u := range neCoverURLs(s.track.PicURL) {
+	for _, u := range neCoverURLs(s.meta.track.PicURL) {
 		path := filepath.Join(dir, "Statics", neCoverHash(u)+".dat")
 		info, err := os.Stat(path)
 		if err != nil || info.IsDir() || info.Size() <= 0 || info.Size() > npMaxArt {
@@ -805,13 +887,13 @@ type neCommand struct {
 	Value string `json:"value,omitempty"`
 }
 
-// neRunOrpheus asks the running client to run one command through its own URL
-// scheme. The client's handler also brings its window back and takes the
-// foreground, whatever show mode the launch asks for (measured: SW_HIDE and
+// control asks the running client to run one command through its own URL
+// scheme. The payload is executed in place, so no keystroke is injected into
+// the system and no other program can receive it. The client's handler does
+// bring its window back and take the foreground (measured: SW_HIDE and
 // SW_SHOWNOACTIVATE both end with the window restored and focused), so the
-// window state and the foreground are put back afterwards. hwnd may be 0 when
-// the caller does not know the window; then nothing is restored.
-func neRunOrpheus(hwnd windows.HWND, cmd, value string) {
+// window is put back by the guard afterwards, off the poller's thread.
+func (s *neSource) control(cmd, value string) {
 	payload, err := json.Marshal(neCommand{Cmd: cmd, Value: value})
 	if err != nil {
 		return
@@ -824,33 +906,102 @@ func neRunOrpheus(hwnd windows.HWND, cmd, value string) {
 	if err != nil {
 		return
 	}
+	hwnd := s.hwnd
 	wasIconic := hwnd != 0 && neIsIconic(hwnd)
 	prev, _, _ := procGetForegroundWindow.Call()
 	procShellOpen.Call(0, uintptr(unsafe.Pointer(verb)), uintptr(unsafe.Pointer(url)), 0, 0, 4)
 	if hwnd == 0 {
 		return
 	}
-	// The handler restores and activates the window from its own thread, at a
-	// moment the launch call does not report; undo it off the poller thread so
-	// the card's clock keeps running.
-	go neRestoreDesktop(hwnd, wasIconic, windows.HWND(prev))
+	s.guard.arm(hwnd, windows.HWND(prev), wasIconic)
 }
 
-// neRestoreDesktop folds the client's window back down when the protocol
-// handler brought it up, and hands the foreground back to whoever had it.
-func neRestoreDesktop(hwnd windows.HWND, wasIconic bool, prev windows.HWND) {
-	deadline := time.Now().Add(neBringBackWindow)
-	for time.Now().Before(deadline) {
-		if wasIconic && !neIsIconic(hwnd) {
+// neGuard is the one worker that undoes the URL handler's window restore.
+// Commands coalesce into a single deadline: two in quick succession must not
+// leave two guards folding the window and pulling the foreground back and
+// forth, and a guard that is already running picks the later deadline up.
+type neGuard struct {
+	mu        sync.Mutex
+	running   bool
+	canceled  bool
+	hwnd      windows.HWND
+	prev      windows.HWND
+	wasIconic bool
+	until     time.Time
+	input     uint32
+}
+
+type lastInputInfo struct {
+	cbSize uint32
+	dwTime uint32
+}
+
+// neInputTick is the system's last-input timestamp. Any input after a command
+// is the user's own, and cancels the guard instead of being undone.
+func neInputTick() uint32 {
+	var li lastInputInfo
+	li.cbSize = uint32(unsafe.Sizeof(li))
+	if r, _, _ := procGetLastInputInfo.Call(uintptr(unsafe.Pointer(&li))); r == 0 {
+		return 0
+	}
+	return li.dwTime
+}
+
+func (g *neGuard) arm(hwnd, prev windows.HWND, wasIconic bool) {
+	g.mu.Lock()
+	g.hwnd, g.prev, g.wasIconic = hwnd, prev, wasIconic
+	g.until = time.Now().Add(neBringBackWindow)
+	g.input = neInputTick()
+	g.canceled = false
+	start := !g.running
+	g.running = true
+	g.mu.Unlock()
+	if start {
+		go g.run()
+	}
+}
+
+// cancel ends the guard without touching the window: the source is being
+// closed, so the window it would fold no longer belongs to it.
+func (g *neGuard) cancel() {
+	g.mu.Lock()
+	g.canceled = true
+	g.mu.Unlock()
+}
+
+func (g *neGuard) run() {
+	for {
+		g.mu.Lock()
+		hwnd, prev, wasIconic, until, armed := g.hwnd, g.prev, g.wasIconic, g.until, g.input
+		if g.canceled {
+			g.running, g.canceled = false, false
+			g.mu.Unlock()
+			return
+		}
+		g.mu.Unlock()
+		fg, _, _ := procGetForegroundWindow.Call()
+		plan := neGuardDecide(wasIconic, neIsIconic(hwnd), windows.HWND(fg) == hwnd, prev != 0,
+			armed, neInputTick(), time.Now(), until)
+		if plan.Minimize {
 			procShowWindowAsync.Call(uintptr(hwnd), swMinimize)
 		}
-		time.Sleep(15 * time.Millisecond)
-	}
-	if wasIconic {
-		procShowWindowAsync.Call(uintptr(hwnd), swMinimize)
-	}
-	if prev != 0 && prev != hwnd {
-		procSetForegroundWindow.Call(uintptr(prev))
+		if !plan.Done {
+			time.Sleep(20 * time.Millisecond)
+			continue
+		}
+		if plan.Focus {
+			procSetForegroundWindow.Call(uintptr(prev))
+		}
+		g.mu.Lock()
+		// A command that arrived while this one was finishing keeps the
+		// worker alive with the newer deadline.
+		if g.until.After(until) {
+			g.mu.Unlock()
+			continue
+		}
+		g.running = false
+		g.mu.Unlock()
+		return
 	}
 }
 

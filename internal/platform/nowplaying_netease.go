@@ -288,6 +288,197 @@ func neCoverHash(url string) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// neMetaRetry is how long to wait before reading the queue files again for a
+// song id or title they did not name: the client writes them shortly after a
+// track starts, so a first miss must not be final.
+const neMetaRetry = 2 * time.Second
+
+// neMaxFailures is how many unusable memory samples in a row turn the memory
+// tier off for the rest of this client's run.
+const neMaxFailures = 2
+
+// neMeta is the track metadata the client's queue files name. It keeps one
+// attempt timestamp per lookup key so a failed read is retried after
+// neMetaRetry, and a title change throws the previous track away at once
+// instead of showing its album and cover under the new title.
+type neMeta struct {
+	id      string
+	idAt    time.Time
+	title   string
+	titleAt time.Time
+	track   neTrack
+	ok      bool
+}
+
+// forget drops the resolved track but keeps when each key was last tried.
+func (m *neMeta) forget() {
+	m.track, m.ok = neTrack{}, false
+}
+
+// forgetTitle is called when the window names a different track: the previous
+// track's metadata is wrong from that moment, and both lookups are due again
+// for the new title.
+func (m *neMeta) forgetTitle(title string) {
+	m.forget()
+	m.id, m.idAt = "", time.Time{}
+	m.title, m.titleAt = title, time.Time{}
+}
+
+// use records the track a queue file named.
+func (m *neMeta) use(t neTrack) {
+	if t.Title == "" {
+		return
+	}
+	m.track, m.ok = t, true
+}
+
+// needByID reports whether the queue files should be read for id: never when
+// that id's track is already resolved, and not again inside neMetaRetry.
+func (m *neMeta) needByID(id string, now time.Time) bool {
+	if id == "" {
+		return false
+	}
+	if m.ok && m.track.ID == id {
+		return false
+	}
+	return m.id != id || now.Sub(m.idAt) >= neMetaRetry
+}
+
+func (m *neMeta) triedID(id string, now time.Time) {
+	m.id, m.idAt = id, now
+}
+
+// needByTitle is the fallback tier's version of needByID: the window title is
+// the only key there, and a resolved track is re-read only when the client
+// names a different one.
+func (m *neMeta) needByTitle(title, artist string, now time.Time) bool {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return false
+	}
+	if m.ok && m.track.Title == title && (artist == "" || m.track.Artist == artist) {
+		return false
+	}
+	return m.title != title || now.Sub(m.titleAt) >= neMetaRetry
+}
+
+func (m *neMeta) triedTitle(title string, now time.Time) {
+	m.title, m.titleAt = title, now
+}
+
+// neCommandPath is the executable in an orpheus:// handler command line, the
+// identity the card resolves NetEase's app icon through when the client holds
+// no process handle Rakko may open: `"D:\CloudMusic\cloudmusic.exe" "%1"`.
+func neCommandPath(cmd string) string {
+	cmd = strings.TrimSpace(cmd)
+	if cmd == "" {
+		return ""
+	}
+	if cmd[0] == '"' {
+		if i := strings.IndexByte(cmd[1:], '"'); i >= 0 {
+			return strings.TrimSpace(cmd[1 : i+1])
+		}
+		return ""
+	}
+	if i := strings.IndexAny(cmd, " \t"); i >= 0 {
+		return cmd[:i]
+	}
+	return cmd
+}
+
+// neTransportVerb is the URL-protocol command one transport action becomes,
+// and whether it carries a pending confirmation. Play/pause is a toggle the
+// client cannot resolve from a verb, so the source states the verb it wants
+// and confirms it; a skip is one verb that is never repeated, because sending
+// it twice would move two tracks.
+func neTransportVerb(cmd NowPlayingCommand, playing bool) (verb string, confirm bool) {
+	switch cmd {
+	case NPPlayPause:
+		if playing {
+			return "pause", true
+		}
+		return "resume", true
+	case NPNext:
+		return "next", false
+	case NPPrevious:
+		return "previous", false
+	}
+	return "", false
+}
+
+// neEvidence is what the source can see about a pending play/pause command:
+// the position clock where it works, the audio session where it does not.
+type neEvidence struct {
+	playing bool
+	clock   bool // playing came from the position, not the audio session
+}
+
+// nePlayVerdict picks the play state a pending command is confirmed against.
+// Tier A has no position to derive it from, so it must come from the audio
+// session: the last clock verdict is frozen at the moment the tier was lost
+// and would confirm a pause that never happened.
+func nePlayVerdict(tierA, haveClock, clockPlaying, audioPlaying bool) neEvidence {
+	if tierA || !haveClock {
+		return neEvidence{playing: audioPlaying}
+	}
+	return neEvidence{playing: clockPlaying, clock: true}
+}
+
+// nePending is one play/pause command waiting to be confirmed: a command the
+// client accepted is not repeated, and one it ignored is retried once, both
+// through the idempotent pause/resume verbs of the URL protocol.
+type nePending struct {
+	want bool
+	at   time.Time
+	done bool
+}
+
+// neVerdict is what a pending command's confirmation says.
+type neVerdict int
+
+const (
+	neVerdictWait neVerdict = iota
+	neVerdictDone
+	neVerdictRetry
+)
+
+// neSettle decides whether the play/pause command sent a moment ago has taken
+// effect. Only play/pause is confirmed: pause and resume are idempotent, so a
+// retry cannot undo anything, while a skip that is repeated would move two
+// tracks. A skip is therefore never retried, which is why only play/pause
+// carries a pending command at all.
+func neSettle(p *nePending, ev neEvidence, now time.Time) neVerdict {
+	if p == nil || now.Before(p.at) {
+		return neVerdictWait
+	}
+	if ev.playing == p.want {
+		return neVerdictDone
+	}
+	return neVerdictRetry
+}
+
+// neGuardPlan is what the window guard does on one tick.
+type neGuardPlan struct {
+	Minimize bool
+	Focus    bool
+	Done     bool
+}
+
+// neGuardDecide folds the client's window back down after its URL handler
+// restored and focused it. Input that arrives after the command belongs to the
+// user: it cancels the guard instead of being undone, so a window the user
+// opened or focused is left alone. The foreground is only handed back when the
+// handler still holds it at the end, never when the user has moved elsewhere.
+func neGuardDecide(wasIconic, iconic, foreground, prevKnown bool, armed, input uint32, now, until time.Time) neGuardPlan {
+	if input != armed {
+		return neGuardPlan{Done: true}
+	}
+	if !now.Before(until) {
+		return neGuardPlan{Minimize: wasIconic && !iconic, Focus: foreground && prevKnown, Done: true}
+	}
+	return neGuardPlan{Minimize: wasIconic && !iconic}
+}
+
 func neAbs(v float64) float64 {
 	if v < 0 {
 		return -v
