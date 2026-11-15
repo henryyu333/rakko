@@ -374,24 +374,33 @@ func (a *shelf) settingsView(c *ui.Context) {
 			var pr float32
 			pm, pr = winPanelLayout(a.settingsWinRadius)
 			capH = settingsCaptionHeight(c)
-			pageTop = max(float32(14), capH-pm+6)
 			panel.AlignSelf(ui.Stretch).Margin(pm, pm, pm, 0).Radius(pr)
 		} else {
 			panel.FillHeight().Margin(10, 10, 10, 0).Radius(20)
 		}
 		panel.Background(setPanel).Clip().Children(func() {
-			scroll := ui.Scroll(c.Key("page-scroll")).Fill().TrackScroll(&a.settingsScroll)
-			if forWindows {
-				scroll.ScrollbarInsets(max(capH-pm, 0), 0, 0)
-			}
-			scroll.Children(func() {
+			buildPage := func() {
 				ui.Column(c.Key("page")).FillWidth().Padding(pageTop, 18, 22, 18).Gap(18).Children(func() {
 					if a.settingsBroken {
 						settingsBrokenBanner(c)
 					}
 					a.settingsPageBody(c)
 				})
-			})
+			}
+			if forWindows {
+				// Keep the caption strip non-scrolling inside the rounded card so
+				// scrolled content clips below the top DragWindow overlay.
+				capPad := max(capH-pm, 0)
+				if capPad > 0 {
+					ui.Box(c.Key("caption-band")).Height(capPad).FillWidth()
+				}
+				pageTop = max(float32(14)-capPad, 6)
+				ui.Scroll(c.Key("page-scroll")).Grow(1).MinHeight(0).FillWidth().
+					TrackScroll(&a.settingsScroll).Children(buildPage)
+			} else {
+				ui.Scroll(c.Key("page-scroll")).Fill().
+					TrackScroll(&a.settingsScroll).Children(buildPage)
+			}
 		})
 		if forWindows {
 			bar := c.TitleBar()

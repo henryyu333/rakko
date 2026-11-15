@@ -147,3 +147,84 @@ func TestWindowsSettingsThemeWeightsAndSegmented(t *testing.T) {
 		t.Fatalf("clicking English segment gave changed=%v selected=%d, want true / 2", segChanged, selected)
 	}
 }
+
+func TestWindowsSettingsScrolledShortcutsTopRowStartsRecording(t *testing.T) {
+	orig := forWindows
+	forWindows = true
+	t.Cleanup(func() { forWindows = orig })
+
+	const caption = 32
+	a := &shelf{
+		dataDir: t.TempDir(), settings: settings.Default(), locale: "zh-Hans",
+		settingsPage: settingsPageShortcuts,
+		thumbnails:   map[string]*ui.Bitmap{}, thumbPending: map[string]bool{},
+		appNames: map[string]string{},
+	}
+	v := ui.NewTester(a.settingsView, settingsWidth, settingsHeight)
+	v.SetTitleBar(ui.TitleBar{Height: caption, Right: 138})
+	v.SetLocale("zh-Hans")
+	v.Frame()
+
+	for range 30 {
+		v.Scroll(settingsWidth*3/4, settingsHeight/2, 0, 400)
+		v.Frame()
+	}
+
+	l := a.appLoc()
+	editable := []struct {
+		kind  shortcutKind
+		label string
+	}{
+		{shortcutToggle, l.SettingsShortcutTray()},
+		{shortcutClipboard, l.SettingsShortcutClipboard()},
+		{shortcutOpenTray, l.SettingsShortcutOpenTray()},
+		{shortcutPlayPause, l.SettingsShortcutPlayPause()},
+		{shortcutPrevious, l.SettingsShortcutPrevious()},
+		{shortcutNext, l.SettingsShortcutNext()},
+		{shortcutCapture, l.SettingsShortcutOCR()},
+		{shortcutScreenshot, l.SettingsShortcutScreenshot()},
+		{shortcutTools, l.SettingsShortcutTools()},
+		{shortcutUsage, l.SettingsShortcutUsage()},
+		{shortcutAwake, l.SettingsShortcutAwake()},
+		{shortcutNote, l.SettingsShortcutNewNote()},
+		{shortcutPet, l.SettingsShortcutPet()},
+		{shortcutAppSwitch, l.SettingsShortcutAppSwitch()},
+	}
+
+	var topKind shortcutKind
+	var topLabel string
+	var topRect ui.Rect
+	found := false
+	for _, row := range editable {
+		r, ok := v.Find(row.label)
+		if !ok {
+			continue
+		}
+		if r.Y+r.H <= caption {
+			continue
+		}
+		if !found || r.Y < topRect.Y {
+			found = true
+			topKind = row.kind
+			topLabel = row.label
+			topRect = r
+		}
+	}
+	if !found {
+		t.Fatal("no editable shortcut row found after scrolling to bottom")
+	}
+	if topRect.Y < caption {
+		t.Fatalf("top visible shortcut row %q starts at y=%.1f, inside caption DragWindow [0,%d)", topLabel, topRect.Y, caption)
+	}
+
+	clickY := topRect.Y + topRect.H/2
+	if topRect.Y+4 >= caption {
+		clickY = topRect.Y + 4
+	}
+	v.ClickAt(topRect.X+topRect.W/2, clickY)
+	v.Frame()
+	if a.settingsRecording != topKind {
+		t.Fatalf("clicking top visible scrolled row %q (rect=%+v, clickY=%.1f) recorded %v, want %v",
+			topLabel, topRect, clickY, a.settingsRecording, topKind)
+	}
+}
