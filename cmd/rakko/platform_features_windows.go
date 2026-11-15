@@ -30,4 +30,9 @@ const (
 	// box; on Windows the dashed landing slot stays as long as the pointer
 	// is still over the page.
 	dragSlotFollowsPointer = true
+	// Windows keeps painting a native menu's owner while the menu is open,
+	// so selecting the right-clicked tile painted its accent ring behind
+	// the menu; the Mac shows the ring only after the menu closes. The
+	// reference has none open, so Windows leaves the selection alone.
+	contextMenuSelectsItem = false
 )

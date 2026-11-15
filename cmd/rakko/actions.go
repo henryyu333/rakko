@@ -20,12 +20,18 @@ import (
 
 // targets is what an action on item applies to: the whole selection when
 // item is part of a multi-item selection, otherwise item alone, which then
-// becomes the selection, as in Finder.
+// becomes the selection, as in Finder — on the Mac, where the menu's own
+// frame repaints it after the menu closes. Windows leaves the selection as
+// it was: its menu keeps repainting the window behind it, so selecting
+// there would show the ring around the tile while the menu is open, which
+// the Mac never shows.
 func (a *shelf) targets(item store.Item) []store.Item {
 	if a.selection.has(item.ID) && a.selection.count() > 1 {
 		return a.selection.chosen(a.visibleItems())
 	}
-	a.selection.only(item.ID)
+	if contextMenuSelectsItem {
+		a.selection.only(item.ID)
+	}
 	return []store.Item{item}
 }
 

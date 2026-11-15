@@ -26,4 +26,9 @@ const (
 	// no landing slot at all: the preview is the only copy the pointer sees,
 	// and it always hid the dashed box as soon as that window came up.
 	dragSlotFollowsPointer = false
+	// A right click selects its tile, as Finder does. The native menu holds
+	// the frame that selects it until the menu closes, so the ring appears
+	// right after; Windows paints the menu's owner while it is open, and
+	// keeps the selection as it was instead.
+	contextMenuSelectsItem = true
 )
