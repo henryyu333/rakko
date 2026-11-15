@@ -367,13 +367,14 @@ func (n *noteUI) open() bool {
 			Hidden: true, BackgroundColor: noteBg, AlwaysOnTop: n.top,
 			TitleBarStyle:     mygo.TitleBarHidden,
 			HideWindowButtons: true,
-			MinWidth:          noteMinW, MinHeight: noteMinH,
+			MinWidth:  noteMinW, MinHeight: noteMinH,
 			Content: ui.View(a.noteView),
 		})
 		w.OnClose(n.onClose)
 		w.OnBlur(n.onBlur)
 		w.OnResize(func() { n.frame = w.Bounds() })
 		w.OnMove(func() { n.frame = w.Bounds() })
+		platform.ConfigureFramedWindow(w.NativeHandle(), true)
 		n.win = w
 		n.booted = false
 	}

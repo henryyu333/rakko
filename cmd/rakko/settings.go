@@ -171,8 +171,11 @@ func (a *shelf) openSettings() {
 		Content: ui.View(a.settingsView),
 	})
 	// The title bar follows the window's own dark chrome whatever the system
-	// appearance is, matching the mock's dark "ShelfU 设置" window.
-	platform.SetWindowAppearance(w.NativeHandle(), true)
+	// appearance is, matching the mock's dark "ShelfU 设置" window. Its
+	// controls are Windows', drawn over the page's top-right corner: they
+	// draw for a dark page, and the page reserves their strip.
+	platform.ConfigureFramedWindow(w.NativeHandle(), true)
+	w.SetWindowButtonsTheme(mygo.ThemeDark)
 	w.SetBounds(frame)
 	w.OnClosed(a.settingsClosed)
 	w.OnBlur(a.settingsBlur)
@@ -313,23 +316,57 @@ func (a *shelf) settingsView(c *ui.Context) {
 			return false
 		})
 	}
-	win.Children(func() {
-		a.settingsSidebar(c)
-		ui.Column(c.Key("panel")).Grow(1).FillHeight().Margin(10, 10, 10, 0).
-			Radius(20).Background(setPanel).Clip().Children(func() {
-			ui.Scroll(c.Key("page-scroll")).Fill().TrackScroll(&a.settingsScroll).Children(func() {
-				ui.Column(c.Key("page")).FillWidth().Padding(14, 18, 22, 18).Gap(18).Children(func() {
-					if a.settingsBroken {
-						settingsBrokenBanner(c)
-					}
-					a.settingsPageBody(c)
+	frame := ui.Column(c.Key("frame")).Fill()
+	frame.Children(func() {
+		settingsCaptionStrip(c)
+		win.Children(func() {
+			a.settingsSidebar(c)
+			ui.Column(c.Key("panel")).Grow(1).FillHeight().Margin(10, 10, 10, 0).
+				Radius(20).Background(setPanel).Clip().Children(func() {
+				ui.Scroll(c.Key("page-scroll")).Fill().TrackScroll(&a.settingsScroll).Children(func() {
+					ui.Column(c.Key("page")).FillWidth().Padding(14, 18, 22, 18).Gap(18).Children(func() {
+						if a.settingsBroken {
+							settingsBrokenBanner(c)
+						}
+						a.settingsPageBody(c)
+					})
 				})
 			})
+			if recording && !pending {
+				a.settingsCaptureLayer(c)
+			}
 		})
-		if recording && !pending {
-			a.settingsCaptureLayer(c)
-		}
 	})
+}
+
+// settingsCaptionFallback is the height of Windows' caption when the window
+// has not answered with it yet: MyGo's controls are 32 DIPs tall.
+const settingsCaptionFallback = 32
+
+// settingsCaptionStrip reserves the strip Windows draws its caption
+// controls in, above the whole page, so the controls never cover the hero.
+// The strip drags the window like a title bar. macOS puts the traffic lights
+// in the sidebar instead (settingsSidebar) and gets no strip.
+func settingsCaptionStrip(c *ui.Context) {
+	if !forWindows {
+		return
+	}
+	h := c.TitleBar().Height
+	if h <= 0 {
+		h = settingsCaptionFallback
+	}
+	ui.Row(c.Key("caption")).Height(h).FillWidth().DragWindow()
+}
+
+// settingsSidebarTop is the height of the sidebar's first row. macOS puts
+// the traffic lights there, 40pt down from the window's top; Windows draws
+// its own controls in the strip above (settingsCaptionStrip), so the row
+// only carries the spacing that keeps the brand at the same place.
+func settingsSidebarTop() float32 {
+	if forWindows {
+		return 8
+	}
+	return 40
 }
 
 // settingsSidebar draws the pure black sidebar: the traffic lights' row, the
@@ -337,11 +374,18 @@ func (a *shelf) settingsView(c *ui.Context) {
 // at the bottom.
 func (a *shelf) settingsSidebar(c *ui.Context) {
 	l := loc(c)
-	ui.Column(c.Key("side")).Width(settingsSidebarWidth).FillHeight().Background(surface).
-		Padding(0, 12, 12, 12).Children(func() {
+	side := ui.Column(c.Key("side")).Width(settingsSidebarWidth).FillHeight().Background(surface).
+		Padding(0, 12, 12, 12)
+	if forWindows {
+		// Windows has no traffic lights to make room for in the sidebar: the
+		// strip above holds its caption controls. The empty black around the
+		// destinations drags the window, as macOS's traffic-light row does.
+		side.DragWindow()
+	}
+	side.Children(func() {
 		// The traffic lights are AppKit's, over this row; the row drags
 		// the window, as a title bar would.
-		ui.Box(c.Key("lights")).Height(40).FillWidth().DragWindow()
+		ui.Box(c.Key("lights")).Height(settingsSidebarTop()).FillWidth().DragWindow()
 
 		brand := ui.ButtonBase(c.Key("brand")).Height(44).FillWidth().Radius(9).
 			Padding(0, 8, 0, 8).AlignItems(ui.Center).Justify(ui.Start).Gap(8).Label(appName)

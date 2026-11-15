@@ -138,18 +138,27 @@ func (a *shelf) updateEscape() {
 	a.closeUpdateWindow()
 }
 
-// updateBar is the 28pt strip the AppKit traffic lights sit over (they are
+// updateBar is the strip the AppKit traffic lights sit over (they are
 // positioned at TrafficLightPosition, inside it). It drags the window;
-// only the small faces carry a title, as the design draws it.
+// only the small faces carry a title, as the design draws it. On Windows
+// the strip is at least as tall as MyGo's caption controls, which take the
+// top-right corner of the page, and the title starts at the left: there
+// are no lights to leave room for.
 func (a *shelf) updateBar(c *ui.Context, l locales.Messages, p updatePalette) {
-	bar := ui.Row(c.Key("bar")).FillWidth().Height(updateBarH).
+	height := float32(updateBarH)
+	if forWindows {
+		height = max(height, c.TitleBar().Height)
+	}
+	bar := ui.Row(c.Key("bar")).FillWidth().Height(height).
 		AlignItems(ui.Center).Padding(0, 20, 0, 20).Background(p.bar).DragWindow()
 	bar.Children(func() {
 		if a.updateWinStage != updateStageFound {
 			// The traffic lights float over this strip (20 in, three 12pt
 			// circles 8 apart); the title starts 14pt after them, as the
 			// design draws it.
-			ui.Box(c.Key("lights")).Width(66)
+			if !forWindows {
+				ui.Box(c.Key("lights")).Width(66)
+			}
 			ui.Text(c, updateWindowTitleIn(l, a.updateWinStage)).SingleLine().FontSize(13).FontWeight(600).TextColor(p.ink)
 		}
 	})

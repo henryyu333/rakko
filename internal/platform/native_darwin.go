@@ -678,6 +678,11 @@ func ConfigureNotchWindow(window uintptr) {
 	})
 }
 
+// ConfigureFramedWindow does nothing: AppKit rounds and shadows a framed
+// window of its own, and a dark page gets AppKit's dark controls from
+// SetWindowAppearance. Windows needs the call for DWM's corners and caption.
+func ConfigureFramedWindow(window uintptr, dark bool) {}
+
 // ConfigureOverlayWindow applies the shared nonactivating overlay policy
 // without claiming the pointer. Baskets and passive display capsules use
 // it; only ConfigureNotchWindow installs the panel's cursor tracking area.

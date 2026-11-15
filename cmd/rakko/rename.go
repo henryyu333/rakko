@@ -379,7 +379,8 @@ func (a *shelf) openRename(items []store.Item) {
 		DisableResize:        true, DisableMaximize: true, DisableFullScreen: true,
 		Content: ui.View(a.renameView),
 	})
-	platform.SetWindowAppearance(w.NativeHandle(), true)
+	platform.ConfigureFramedWindow(w.NativeHandle(), true)
+	w.SetWindowButtonsTheme(mygo.ThemeDark)
 	w.SetBounds(frame)
 	w.OnClosed(a.renameClosed)
 	r.win = w

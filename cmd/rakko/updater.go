@@ -550,7 +550,7 @@ func init() {
 	updateWinMake = func(a *shelf) *mygo.Window {
 		w0, h0 := a.updateWinSize(a.updateWinStage)
 		work := mygo.Screen.DisplayNearestPoint(mygo.Screen.CursorScreenPoint()).WorkArea
-		return mygo.NewWindow(mygo.WindowOptions{
+		w := mygo.NewWindow(mygo.WindowOptions{
 			Title: a.updateWindowTitle(), Width: w0, Height: h0,
 			X: work.X + (work.Width-w0)/2, Y: work.Y + (work.Height-h0)*2/5,
 			Hidden:          true,
@@ -565,6 +565,8 @@ func init() {
 			DisableMaximize:      true, DisableFullScreen: true,
 			Content: ui.View(a.updateView),
 		})
+		platform.ConfigureFramedWindow(w.NativeHandle(), false)
+		return w
 	}
 }
 

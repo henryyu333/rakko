@@ -222,6 +222,40 @@ func SetWindowAppearance(window uintptr, dark bool) {
 	}
 }
 
+// DWMWA_WINDOW_CORNER_PREFERENCE and its rounded value: Windows 11's own
+// rounding for windows that ask for it.
+const (
+	dwmwaWindowCornerPreference = 33
+	dwmcpRound                  = 2
+)
+
+// dwmMargins is DWM's MARGINS, in pixels, for DwmExtendFrameIntoClientArea.
+type dwmMargins struct{ Left, Right, Top, Bottom int32 }
+
+var procDwmExtendFrame = sysProc(dwmapi, "DwmExtendFrameIntoClientArea")
+
+// ConfigureFramedWindow finishes a window with a hidden title bar — the
+// Settings, note, rename and update windows — as Windows draws a finished
+// window: rounded corners on Windows 11, and the caption of a dark window
+// where the page is dark, so the glyphs MyGo draws over the page's
+// top-right corner are white on it. The frame is extended a pixel into the
+// client area, which is what DWM casts a shadow around: a window whose
+// client area reaches its edges, with nothing of the system frame left,
+// gets none. Windows 10 has no corner preference and keeps its square
+// windows.
+func ConfigureFramedWindow(window uintptr, dark bool) {
+	if window == 0 {
+		return
+	}
+	pref := int32(dwmcpRound)
+	procDwmSetWindowAttr.Call(window, dwmwaWindowCornerPreference, uintptr(unsafe.Pointer(&pref)), 4)
+	m := dwmMargins{Top: 1}
+	procDwmExtendFrame.Call(window, uintptr(unsafe.Pointer(&m)))
+	if dark {
+		SetWindowAppearance(window, true)
+	}
+}
+
 // IsKeyWindow reports whether the window has the keyboard: it is the
 // foreground window (or the active one inside this thread).
 func IsKeyWindow(window uintptr) bool {
