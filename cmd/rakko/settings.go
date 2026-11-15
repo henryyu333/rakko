@@ -311,7 +311,16 @@ func (a *shelf) settingsView(c *ui.Context) {
 	// caption strip (settingsCaptionStrip) inside one filling frame; macOS
 	// puts it straight in the window, as it always has.
 	content := func() {
-		win := ui.Row(c.Key("win")).Fill()
+		win := ui.Row(c.Key("win"))
+		if forWindows {
+			// Under the caption strip: the height left below it. Fill's
+			// 100% would count the strip again and reach past the window
+			// bottom, shrinking the page's visible scroll area.
+			_, h := c.Size()
+			win = win.Height(h - settingsCaptionHeight(c)).FillWidth()
+		} else {
+			win = win.Fill()
+		}
 		if pending {
 			// A click anywhere the buttons do not take drops the question.
 			win = win.HandleInput(func(ev ui.InputEvent) bool {
@@ -354,6 +363,16 @@ func (a *shelf) settingsView(c *ui.Context) {
 // has not answered with it yet: MyGo's controls are 32 DIPs tall.
 const settingsCaptionFallback = 32
 
+// settingsCaptionHeight is the height of the caption strip: the title
+// bar's, or MyGo's 32 DIPs before the window answers.
+func settingsCaptionHeight(c *ui.Context) float32 {
+	h := c.TitleBar().Height
+	if h <= 0 {
+		h = settingsCaptionFallback
+	}
+	return h
+}
+
 // settingsCaptionStrip reserves the strip Windows draws its caption
 // controls in, above the whole page, so the controls never cover the hero.
 // The strip drags the window like a title bar. macOS puts the traffic lights
@@ -362,11 +381,7 @@ func settingsCaptionStrip(c *ui.Context) {
 	if !forWindows {
 		return
 	}
-	h := c.TitleBar().Height
-	if h <= 0 {
-		h = settingsCaptionFallback
-	}
-	ui.Row(c.Key("caption")).Height(h).FillWidth().DragWindow()
+	ui.Row(c.Key("caption")).Height(settingsCaptionHeight(c)).FillWidth().DragWindow()
 }
 
 // settingsSidebarTop is the height of the sidebar's first row. macOS puts
