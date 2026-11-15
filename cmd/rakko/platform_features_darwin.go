@@ -16,4 +16,7 @@ const (
 	// the Mac's work area stops the window where the old rule already
 	// answered, and widening it would stow an otter the user dropped lower.
 	petPointerReturnSupported = false
+	// A note whose anchor leaves no room above or below opens above it and
+	// is clamped to the top of the work area, as it always has.
+	noteStaysBelowTallAnchor = false
 )

@@ -18,4 +18,8 @@ const (
 	// height below: the box alone can never reach it, so the pointer the
 	// drag carried there decides too.
 	petPointerReturnSupported = true
+	// The open panel's window is taller than the room above or below it; a
+	// note flipped above would land at the work area's top, under the
+	// topmost capsule, so it stays below and is clamped instead.
+	noteStaysBelowTallAnchor = true
 )

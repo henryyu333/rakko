@@ -463,15 +463,15 @@ func (a *shelf) freshNoteFrame() mygo.Rectangle {
 
 // noteFrameUnder is where a note window opens for an anchor and a work
 // area: centred under the anchor, above it when there is no room below,
-// and kept inside the area. A tall anchor at the top of the screen leaves
-// room on neither side; the note stays below and is clamped to the area,
-// not flipped above into the anchor's own top edge. Pure; unit-tested.
+// and kept inside the area. Where noteStaysBelowTallAnchor holds, an
+// anchor that leaves room on neither side keeps the note below, clamped to
+// the area, instead of flipping it above. Pure; unit-tested.
 func noteFrameUnder(anchor, area mygo.Rectangle) mygo.Rectangle {
 	const gap = 8
 	x := anchor.X + (anchor.Width-noteW)/2
 	y := anchor.Y + anchor.Height + gap
 	if y+noteH > area.Y+area.Height {
-		if above := anchor.Y - noteH - gap; above >= area.Y {
+		if above := anchor.Y - noteH - gap; !noteStaysBelowTallAnchor || above >= area.Y {
 			y = above
 		}
 	}
