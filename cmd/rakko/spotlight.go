@@ -376,26 +376,40 @@ func sortSpotGroup(g []platform.SearchHit, q string) {
 func (a *shelf) spotHitRow(group string, hit platform.SearchHit) homeHit {
 	path := hit.Path
 	sub := shortDir(path)
-	if hit.App && strings.HasPrefix(path, "shell:") {
-		// A packaged app has no file of its own: its identity is the Apps
-		// folder's shell path, which would read as "shell:AppsFolder"
-		// under the name. The group already says what it is.
-		sub = ""
+	revealPath := path
+	if hit.App {
+		switch {
+		case hit.StoreApp:
+			sub = a.appLoc().HomeWinStoreApp()
+			revealPath = ""
+		case hit.TargetPath != "":
+			sub = shortDir(hit.TargetPath)
+			revealPath = hit.TargetPath
+		case strings.HasPrefix(path, "shell:"):
+			// A packaged or virtual app with no resolved file target has no
+			// meaningful folder path to display under its name.
+			sub = ""
+			revealPath = ""
+		}
+	}
+	var reveal func()
+	if revealPath != "" {
+		reveal = func() {
+			platform.RevealInFileManager(revealPath)
+			a.hide(hideExplicit)
+		}
 	}
 	return homeHit{
-		group: group,
-		path:  path,
-		title: hit.Name,
-		sub:   sub,
+		group:  group,
+		path:   path,
+		title:  hit.Name,
+		sub:    sub,
+		reveal: reveal,
 		run: func() {
 			if err := mygo.Shell.OpenPath(path); err != nil {
 				a.report(err)
 				return
 			}
-			a.hide(hideExplicit)
-		},
-		reveal: func() {
-			platform.RevealInFileManager(path)
 			a.hide(hideExplicit)
 		},
 	}

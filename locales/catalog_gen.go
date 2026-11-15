@@ -9258,3 +9258,13 @@ func LiveApprovalAgainWin() string { return In(i18n.Locale()).LiveApprovalAgainW
 func (msgs Messages) LiveApprovalAgainWin() string {
 	return Catalog.Format(msgs.locale, "liveApprovalAgainWin", nil)
 }
+
+// HomeWinStoreApp says "Microsoft Store 应用"
+// in the language the app shows.
+func HomeWinStoreApp() string { return In(i18n.Locale()).HomeWinStoreApp() }
+
+// HomeWinStoreApp says "Microsoft Store 应用"
+// in the language of msgs.
+func (msgs Messages) HomeWinStoreApp() string {
+	return Catalog.Format(msgs.locale, "homeWinStoreApp", nil)
+}

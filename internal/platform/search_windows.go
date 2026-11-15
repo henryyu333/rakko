@@ -49,11 +49,13 @@ func (s SearchScope) wants(h SearchHit) bool {
 
 // SearchHit is one result.
 type SearchHit struct {
-	Path     string
-	Name     string
-	App      bool
-	Folder   bool
-	LastUsed time.Time
+	Path       string
+	Name       string
+	App        bool
+	Folder     bool
+	LastUsed   time.Time
+	TargetPath string // resolved disk path for apps whose Path is shell:AppsFolder\...
+	StoreApp   bool   // true for Microsoft Store / UWP packaged apps
 }
 
 // SearchRun is one term's queries.
@@ -108,7 +110,13 @@ func StartSearch(term string, scope SearchScope, limit int, emit func([]SearchHi
 					return
 				}
 				if strings.Contains(strings.ToLower(app.Name), lower) {
-					w.add(SearchHit{Path: app.Target, Name: app.Name, App: true})
+					w.add(SearchHit{
+						Path:       app.Target,
+						Name:       app.Name,
+						App:        true,
+						TargetPath: app.TargetPath,
+						StoreApp:   app.StoreApp,
+					})
 				}
 			}
 		}
@@ -674,8 +682,10 @@ func hiddenOrSystem(path string) bool {
 
 // appEntry is one row of the shell's Apps folder.
 type appEntry struct {
-	Name   string
-	Target string
+	Name       string
+	Target     string
+	TargetPath string
+	StoreApp   bool
 }
 
 var appList struct {

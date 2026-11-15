@@ -911,5 +911,6 @@
   "settingsKeysNotchGroupWin": "在顶部胶囊里",
   "settingsGroupNotchWin": "顶部胶囊",
   "settingsApprovalRowWin": "在顶部胶囊审批 Agent 请求",
-  "liveApprovalAgainWin": "再按一次 Ctrl+Enter"
+  "liveApprovalAgainWin": "再按一次 Ctrl+Enter",
+  "homeWinStoreApp": "Microsoft Store 应用"
 }

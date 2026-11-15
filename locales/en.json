@@ -911,5 +911,6 @@
   "settingsKeysNotchGroupWin": "In the Top Capsule",
   "settingsGroupNotchWin": "Top Capsule",
   "settingsApprovalRowWin": "Approve agent requests in the top capsule",
-  "liveApprovalAgainWin": "Press Ctrl+Enter Again"
+  "liveApprovalAgainWin": "Press Ctrl+Enter Again",
+  "homeWinStoreApp": "Microsoft Store app"
 }

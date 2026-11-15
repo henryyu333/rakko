@@ -26,11 +26,13 @@ import (
 
 // SearchHit is one result of a Spotlight query.
 type SearchHit struct {
-	Path     string
-	Name     string
-	App      bool
-	Folder   bool
-	LastUsed time.Time
+	Path       string
+	Name       string
+	App        bool
+	Folder     bool
+	LastUsed   time.Time
+	TargetPath string // resolved disk path for Windows apps whose Path is shell:AppsFolder\...
+	StoreApp   bool   // true for Microsoft Store / UWP packaged apps on Windows
 }
 
 // SearchScope is what a Spotlight search looks at.

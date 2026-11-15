@@ -38,6 +38,10 @@ var (
 		Data1: 0x43826D1E, Data2: 0xE718, Data3: 0x42EE,
 		Data4: [8]byte{0xBC, 0x55, 0xA1, 0xE2, 0x61, 0xC3, 0x7B, 0xFE},
 	}
+	iidIShellItem2 = windows.GUID{
+		Data1: 0x7E9FB0D3, Data2: 0x919F, Data3: 0x4307,
+		Data4: [8]byte{0xAB, 0x2E, 0x9B, 0x18, 0x60, 0x31, 0x0C, 0x93},
+	}
 	iidIEnumShellItems = windows.GUID{
 		Data1: 0x70629033, Data2: 0xE363, Data3: 0x4A28,
 		Data4: [8]byte{0xA5, 0x67, 0x0D, 0xB7, 0x80, 0x06, 0xE6, 0xD7},
@@ -45,6 +49,32 @@ var (
 	iidIShellItemImageFactory = windows.GUID{
 		Data1: 0xBCC18B79, Data2: 0xBA16, Data3: 0x442F,
 		Data4: [8]byte{0x80, 0xC4, 0x8A, 0x59, 0xC3, 0x0C, 0x46, 0x3B},
+	}
+	clsidShellLink = windows.GUID{
+		Data1: 0x00021401, Data2: 0x0000, Data3: 0x0000,
+		Data4: [8]byte{0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46},
+	}
+	iidIShellLinkW = windows.GUID{
+		Data1: 0x000214F9, Data2: 0x0000, Data3: 0x0000,
+		Data4: [8]byte{0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46},
+	}
+	iidIPersistFile = windows.GUID{
+		Data1: 0x0000010B, Data2: 0x0000, Data3: 0x0000,
+		Data4: [8]byte{0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46},
+	}
+	pkeyLinkTargetParsingPath = propKey{
+		fmtid: windows.GUID{
+			Data1: 0xB9B4B3FC, Data2: 0x2B51, Data3: 0x4A42,
+			Data4: [8]byte{0xB5, 0xD8, 0x32, 0x41, 0x46, 0xAF, 0xCF, 0x25},
+		},
+		pid: 2,
+	}
+	pkeyAppUserModelPackageFamilyName = propKey{
+		fmtid: windows.GUID{
+			Data1: 0x9F4C2855, Data2: 0x9F79, Data3: 0x4B39,
+			Data4: [8]byte{0xA8, 0xD0, 0xE1, 0xD4, 0x2D, 0xE1, 0xD5, 0xF3},
+		},
+		pid: 17,
 	}
 )
 
@@ -98,8 +128,15 @@ func appsFolderEntries() ([]appEntry, error) {
 		target := shellDisplayName(child, sigdnDesktopAbsoluteParsing)
 		// A desktop app often answers its executable path here, which the
 		// shell opens directly; a packaged app has none.
-		if fsPath := shellDisplayName(child, sigdnFileSysPath); fsPath != "" {
+		fsPath := shellDisplayName(child, sigdnFileSysPath)
+		if fsPath != "" {
 			target = fsPath
+		}
+		var linkTarget, pkgFam string
+		if item2 := winCOMQI(child, &iidIShellItem2); item2 != nil {
+			linkTarget = shellItem2String(item2, &pkeyLinkTargetParsingPath)
+			pkgFam = shellItem2String(item2, &pkeyAppUserModelPackageFamilyName)
+			winCOMRelease(item2)
 		}
 		winCOMRelease(child)
 		if name == "" || !appTargetUsable(target) {
@@ -110,12 +147,81 @@ func appsFolderEntries() ([]appEntry, error) {
 			continue
 		}
 		seen[target] = true
-		out = append(out, appEntry{Name: name, Target: target})
+		targetPath, storeApp := resolveAppLocation(fsPath, target, linkTarget, pkgFam)
+		out = append(out, appEntry{
+			Name:       name,
+			Target:     target,
+			TargetPath: targetPath,
+			StoreApp:   storeApp,
+		})
 	}
 	if len(out) == 0 {
 		return nil, errors.New("platform: the Apps folder listed nothing")
 	}
 	return out, nil
+}
+
+// shellItem2String reads a string property via IShellItem2::GetString (slot 17).
+func shellItem2String(item2 unsafe.Pointer, key *propKey) string {
+	var p unsafe.Pointer
+	hr := winCOMCall(item2, 17, uintptr(unsafe.Pointer(key)), uintptr(unsafe.Pointer(&p)))
+	if failedHR(hr) || p == nil {
+		return ""
+	}
+	defer windows.CoTaskMemFree(p)
+	return windows.UTF16PtrToString((*uint16)(p))
+}
+
+func isFileSysPath(p string) bool {
+	return strings.Contains(p, `:\`) || strings.HasPrefix(p, `\\`)
+}
+
+// resolveAppLocation derives the disk target path and Store-app flag during
+// Apps folder enumeration so search drawing never hits the disk.
+func resolveAppLocation(fsPath, target, linkTarget, pkgFam string) (targetPath string, storeApp bool) {
+	if pkgFam != "" {
+		return "", true
+	}
+	for _, cand := range []string{linkTarget, fsPath, target} {
+		if isFileSysPath(cand) {
+			targetPath = cand
+			break
+		}
+	}
+	if strings.EqualFold(filepath.Ext(targetPath), ".lnk") {
+		if resolved := resolveShortcutTarget(targetPath); isFileSysPath(resolved) {
+			targetPath = resolved
+		}
+	}
+	return targetPath, false
+}
+
+// resolveShortcutTarget reads the target path of a .lnk file via IShellLinkW.
+func resolveShortcutTarget(lnkPath string) string {
+	link := winCoCreateInstance(&clsidShellLink, &iidIShellLinkW)
+	if link == nil {
+		return ""
+	}
+	defer winCOMRelease(link)
+	pf := winCOMQI(link, &iidIPersistFile)
+	if pf == nil {
+		return ""
+	}
+	defer winCOMRelease(pf)
+	p16, err := windows.UTF16PtrFromString(lnkPath)
+	if err != nil {
+		return ""
+	}
+	// IPersistFile::Load (slot 5) with STGM_READ (0).
+	if hr := winCOMCall(pf, 5, uintptr(unsafe.Pointer(p16)), 0); failedHR(hr) {
+		return ""
+	}
+	var buf [windows.MAX_PATH]uint16
+	// IShellLinkW::GetPath (slot 3).
+	if hr := winCOMCall(link, 3, uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)), 0, 0); hr != 0 {
+		return ""
+	}
+	return windows.UTF16ToString(buf[:])
 }
 
 // shellDisplayName reads one SIGDN name of a shell item.

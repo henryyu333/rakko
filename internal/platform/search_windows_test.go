@@ -247,6 +247,86 @@ func TestStartSearchAppsDeliversAndFinishes(t *testing.T) {
 	}
 }
 
+func TestAppsFolderPopulatesLocationAndStoreFlag(t *testing.T) {
+	entries := appListFresh()
+	if len(entries) == 0 {
+		t.Skip("no Apps folder")
+	}
+	var desktopWithDir, storeApps int
+	for _, e := range entries {
+		if e.StoreApp {
+			storeApps++
+			if e.TargetPath != "" {
+				t.Fatalf("Store app %q (%q) unexpectedly set TargetPath=%q", e.Name, e.Target, e.TargetPath)
+			}
+			continue
+		}
+		if e.TargetPath != "" {
+			if !isFileSysPath(e.TargetPath) {
+				t.Fatalf("desktop app %q has non-filesystem TargetPath=%q", e.Name, e.TargetPath)
+			}
+			if strings.EqualFold(filepath.Ext(e.TargetPath), ".lnk") {
+				t.Fatalf("desktop app %q left unresolved .lnk TargetPath=%q", e.Name, e.TargetPath)
+			}
+			if dir := filepath.Dir(e.TargetPath); dir != "" && dir != "." {
+				desktopWithDir++
+			}
+		}
+	}
+	if desktopWithDir == 0 {
+		t.Fatal("no desktop app carried a resolved TargetPath directory")
+	}
+	if storeApps == 0 {
+		t.Fatal("no Microsoft Store / UWP app was marked StoreApp")
+	}
+
+	// Run a real query that matches a desktop app and verify TargetPath propagates.
+	var targetName string
+	var wantStore bool
+	for _, e := range entries {
+		if e.TargetPath != "" {
+			targetName = e.Name
+			wantStore = false
+			break
+		}
+	}
+	if targetName != "" {
+		hits := make(chan []SearchHit, 8)
+		done := make(chan struct{})
+		run := StartSearch(targetName, ScopeApps, 50, func(b []SearchHit) { hits <- b }, func() { close(done) })
+		defer run.Cancel()
+		select {
+		case <-done:
+		case <-time.After(10 * time.Second):
+			t.Fatal("app search timed out")
+		}
+		close(hits)
+		matched := false
+		for b := range hits {
+			for _, h := range b {
+				if h.Name == targetName && h.TargetPath != "" && h.StoreApp == wantStore {
+					matched = true
+				}
+			}
+		}
+		if !matched {
+			t.Fatalf("StartSearch(%q) did not propagate TargetPath", targetName)
+		}
+	}
+}
+
+func TestResolveAppLocation(t *testing.T) {
+	if gotPath, gotStore := resolveAppLocation("", `shell:AppsFolder\Microsoft.MicrosoftStickyNotes_8wekyb3d8bbwe!App`, "", "Microsoft.MicrosoftStickyNotes_8wekyb3d8bbwe"); !gotStore || gotPath != "" {
+		t.Fatalf("Store app = (%q, %v), want (\"\", true)", gotPath, gotStore)
+	}
+	if gotPath, gotStore := resolveAppLocation("", `shell:AppsFolder\Chrome`, `C:\Program Files\Google\Chrome\Application\chrome.exe`, ""); gotStore || gotPath != `C:\Program Files\Google\Chrome\Application\chrome.exe` {
+		t.Fatalf("desktop linkTarget = (%q, %v)", gotPath, gotStore)
+	}
+	if gotPath, gotStore := resolveAppLocation(`D:\Rakko\Rakko.exe`, `D:\Rakko\Rakko.exe`, "", ""); gotStore || gotPath != `D:\Rakko\Rakko.exe` {
+		t.Fatalf("direct fsPath = (%q, %v)", gotPath, gotStore)
+	}
+}
+
 func TestSearchIndexAnswers(t *testing.T) {
 	// "Microsoft" is in many indexed names and contents; the point is
 	// that the provider answers, not what it ranks.
