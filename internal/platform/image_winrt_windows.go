@@ -198,7 +198,6 @@ func wiApartment(fn func() error) error {
 	default:
 		return wiErr("RoInitialize", hr)
 	}
-	shareInitSecurity()
 	return fn()
 }
 

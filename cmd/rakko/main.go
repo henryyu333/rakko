@@ -195,13 +195,6 @@ func main() {
 		a.closeIdleIslands()
 		a.store.Close()
 	})
-	// Initialize the platform layer on the locked main thread before
-	// mygo.App.Run() starts its backend (which calls CoInitializeEx(STA) and
-	// OleInitialize), so Windows COM process security is configured before any
-	// interface is marshaled.
-	if err := platform.Init(); err != nil {
-		log.Fatal(err)
-	}
 	mygo.App.WhenReady(func() {
 		if err := platform.Init(); err != nil {
 			log.Fatal(err)

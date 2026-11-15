@@ -12,11 +12,10 @@ import (
 	"unsafe"
 )
 
-// Init prepares COM (apartment-threaded, the same STA model mygo's Windows
-// backend initializes in App.Run) on the main thread, configures the
-// process-wide COM security descriptor before any interface is marshaled, and
-// records the main thread ID. It installs nothing and requests no permission:
-// Windows has no equivalent of the macOS privacy grants.
+// Init prepares COM (apartment-threaded, the one a WinRT activation and the
+// shell interfaces expect) and records the main thread. It installs
+// nothing and requests no permission: Windows has no equivalent of the
+// macOS privacy grants.
 func Init() error {
 	recordMainThread()
 	r, _, _ := procCoInitializeEx.Call(0, 2 /* COINIT_APARTMENTTHREADED */)
@@ -25,7 +24,6 @@ func Init() error {
 	// leave the shell calls usable.
 	switch int32(r) {
 	case 0, 1, -2147417850:
-		shareInitSecurity()
 		return nil
 	}
 	return errComInit
