@@ -717,17 +717,12 @@ func (a *shelf) view(c *ui.Context) {
 					a.receive(drop.Data)
 				}
 			}
-			if !simulatedNotchHousing {
-				// The notch style draws nothing when idle: the canvas is
-				// already blank, so a resize may land on it directly, and
-				// the system's own housing is the black the user sees.
-				blank = true
-				return
-			}
-			// No system housing draws a notch on this platform, so the
-			// resting shell is the notch itself. The path below paints it
-			// from the same geometry the hover peek and the open panel grow
-			// out of: anchorSize() with the top ears and the bottom radius.
+			// The notch style draws nothing when idle: the canvas is
+			// already blank, so a resize may land on it directly. macOS
+			// relies on its hardware housing, and Windows leaves the top
+			// edge clear until hover or a live activity appears.
+			blank = true
+			return
 		}
 	}
 	peeked := a.peeking || peekK > 0.01

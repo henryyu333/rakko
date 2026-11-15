@@ -19,9 +19,10 @@ const (
 	// A note whose anchor leaves no room above or below opens above it and
 	// is clamped to the top of the work area, as it always has.
 	noteStaysBelowTallAnchor = false
-	// A notched Mac's camera housing is black on screen whether the shell
-	// draws anything or not, so the closed notch shell stays empty there.
-	simulatedNotchHousing = false
+	// An un-peeking notched shell on macOS spans the hardware camera
+	// housing (32pt + hover pad), which sits in the menu bar rather than
+	// over an application's title bar.
+	notchTopEdgeHoverOnly = false
 	// Once the desktop preview window carries a dragged card, the Mac shows
 	// no landing slot at all: the preview is the only copy the pointer sees,
 	// and it always hid the dashed box as soon as that window came up.

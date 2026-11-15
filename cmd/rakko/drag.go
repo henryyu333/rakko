@@ -293,7 +293,7 @@ func (a *shelf) monitorDrag(now time.Time) {
 	} else {
 		a.shake.reset()
 	}
-	overAnchor := a.overAnchor(p)
+	overAnchor := a.overHoverAnchor(p, now)
 	a.updateDragBand(p, active)
 	// pinTick runs before the peek logic below so holdPeek and the fold
 	// both see the pinReturning this tick computed; its fileDrag flag is

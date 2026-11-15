@@ -19,6 +19,10 @@ const (
 	dropHintExtraW = 32 // 拖拽带外提示：壳比刘海多出的宽度（两侧各半），单位 pt。
 	notchHoverPadX = 8  // 空手移入刘海探头的水平余量，单位 pt。
 	notchHoverPadY = 4  // 空手移入刘海探头的垂直余量，单位 pt。
+	// notchEdgeHoverH is the top-edge trigger strip height (in DIPs) used on
+	// platforms where an idle notch draws nothing: an invisible 36pt hot
+	// zone would otherwise sit over a maximized window's tabs or title bar.
+	notchEdgeHoverH = 3
 	// Idle, hover and drag share one transparent strip. Opening, closing and
 	// a level change resize the window; the drag filter protects its centre.
 	edgeLeaveDelay  = 350 * time.Millisecond

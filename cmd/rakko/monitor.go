@@ -394,11 +394,27 @@ func (a *shelf) monitorTick(now time.Time) {
 // for hover: the notch or island hot zone, the drop corridor, the peek
 // pill, the open-page shapes, a desktop card, the otter or the basket.
 func (a *shelf) pointerNearZone(p mygo.Point) bool {
-	if a.overAnchor(p) || a.dropBandX(p) || a.overPeekPill(p) || a.overAppsPop(p) {
-		return true
-	}
-	if a.win != nil && (a.overShell(p) || a.overBelow(p)) {
-		return true
+	if !notchTopEdgeHoverOnly {
+		if a.overAnchor(p) || a.dropBandX(p) || a.overPeekPill(p) || a.overAppsPop(p) {
+			return true
+		}
+		if a.win != nil && (a.overShell(p) || a.overBelow(p)) {
+			return true
+		}
+	} else {
+		now := time.Now()
+		if a.overHoverAnchor(p, now) || a.overAppsPop(p) {
+			return true
+		}
+		if (a.dragging || a.pointerDrag || dragLeftDown()) && a.dropBandX(p) {
+			return true
+		}
+		if (a.island || a.shellVisibleOnNotch(now)) && a.overPeekPill(p) {
+			return true
+		}
+		if a.win != nil && (a.island || a.overlayWanted()) && (a.overShell(p) || a.overBelow(p)) {
+			return true
+		}
 	}
 	if a.snap.panel || a.snap.drawn {
 		if insideRect(p, a.snapPanelBox()) {

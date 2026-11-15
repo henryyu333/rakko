@@ -99,6 +99,32 @@ func (a *shelf) overAnchor(p mygo.Point) bool {
 		p.Y >= a.notchY && p.Y <= a.notchY+a.notchH+notchHoverPadY
 }
 
+// shellVisibleOnNotch reports whether the closed or open notch shell
+// currently has something drawn (or animating/peeking) on screen, in which
+// case the user can see it and the full overAnchor hot zone applies.
+func (a *shelf) shellVisibleOnNotch(now time.Time) bool {
+	return a.visible || a.progress > 0.01 || a.fx.openK > 0.02 ||
+		a.peeking || a.peekProgress > 0.01 || a.fx.peek || a.fx.peekK > 0.002 ||
+		a.fb.drawn || a.fb.retracting || a.capsuleUp(now) ||
+		a.appsModeOn() || a.liveUp() || a.clockAlarmFree() ||
+		(a.clock != nil && a.clock.timerWingsUp()) ||
+		a.pinReturning || a.petReturning || (a.dragging && !a.ownDrag)
+}
+
+// overHoverAnchor reports whether p lies in the hover trigger for the shell.
+// When an idle notch draws nothing (notchTopEdgeHoverOnly), an unseen 36pt
+// zone would cover a maximized window's tabs or title bar, so the idle shell
+// triggers only at the screen's top edge (notchEdgeHoverH); once anything is
+// drawn on the shell, the full overAnchor zone keeps holding it.
+func (a *shelf) overHoverAnchor(p mygo.Point, now time.Time) bool {
+	if a.island || !notchTopEdgeHoverOnly || a.shellVisibleOnNotch(now) {
+		return a.overAnchor(p)
+	}
+	return a.notchW > 0 && a.notchH > 0 &&
+		p.X >= a.notchX-notchHoverPadX && p.X <= a.notchX+a.notchW+notchHoverPadX &&
+		p.Y >= a.notchY && p.Y < a.notchY+notchEdgeHoverH
+}
+
 // Hover changes only the drawing, not the native window geometry. Keeping one
 // stable transparent strip for idle/peek avoids resizing the backing surface
 // every time the pointer crosses the notch. Only opening the panel changes it.

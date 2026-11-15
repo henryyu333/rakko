@@ -22,10 +22,11 @@ const (
 	// note flipped above would land at the work area's top, under the
 	// topmost capsule, so it stays below and is clamped instead.
 	noteStaysBelowTallAnchor = true
-	// A Windows display has no camera housing, so the notch style's
-	// measured anchor is a simulated one: the shell draws the notch itself
-	// in the closed state, where a Mac leans on the system's own black.
-	simulatedNotchHousing = true
+	// With no hardware housing, the idle simulated notch draws nothing;
+	// requiring the pointer to touch the screen's top edge keeps an
+	// invisible 36pt hot zone from covering a maximized window's tabs or
+	// title bar.
+	notchTopEdgeHoverOnly = true
 	// The desktop preview window carries the card past the page's content
 	// box; on Windows the dashed landing slot stays as long as the pointer
 	// is still over the page.
