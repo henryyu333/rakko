@@ -371,7 +371,7 @@ func TestDownloadScanIdentifiesBrowsers(t *testing.T) {
 <key>DownloadEntryPath</key><string>%s</string>
 </dict></plist>`, target)))
 
-	files, err := scanDownloadDir(dir)
+	files, err := scanDownloadDir(dir, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -401,6 +401,86 @@ func TestDownloadScanIdentifiesBrowsers(t *testing.T) {
 	if got := downloadMegabytes(700); got != "700 B" {
 		t.Fatalf("bytes = %q", got)
 	}
+}
+
+// A browser that quits mid-download leaves its temporary file behind: the
+// 0-byte `.crdownload` would hold the wings on "0 B" for months. Partials
+// older than a day are abandoned; a fresh one still counts, and one that is
+// written again (its modification time moves) comes back.
+func TestDownloadScanIgnoresAbandonedPartials(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Date(2026, time.November, 15, 12, 0, 0, 0, time.Local)
+	stale := now.Add(-25 * time.Hour)
+	fresh := now.Add(-2 * time.Hour)
+	age := func(path string, at time.Time) {
+		t.Helper()
+		if err := os.Chtimes(path, at, at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	names := func(files []downloadFile) map[string]bool {
+		got := make(map[string]bool, len(files))
+		for _, f := range files {
+			got[f.name] = true
+		}
+		return got
+	}
+	scan := func(want map[string]bool) {
+		t.Helper()
+		files, err := scanDownloadDir(dir, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(files) != len(want) {
+			t.Fatalf("scan found %d downloads: %+v", len(files), files)
+		}
+		got := names(files)
+		for name := range want {
+			if !got[name] {
+				t.Fatalf("%q is missing from %+v", name, files)
+			}
+		}
+	}
+
+	abandoned := filepath.Join(dir, "未确认 545995.crdownload")
+	writeLiveFile(t, abandoned, nil)
+	age(abandoned, stale)
+	stalled := filepath.Join(dir, "linux.iso.part")
+	writeLiveFile(t, stalled, make([]byte, 512))
+	age(stalled, stale)
+	running := filepath.Join(dir, "movie.mp4.crdownload")
+	writeLiveFile(t, running, make([]byte, 700))
+	age(running, fresh)
+
+	bundle := filepath.Join(dir, "design.zip.download")
+	if err := os.Mkdir(bundle, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(dir, "design.zip")
+	plist := filepath.Join(bundle, "Info.plist")
+	writeLiveFile(t, plist, []byte(fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>DownloadEntryProgressBytesSoFar</key><integer>250</integer>
+<key>DownloadEntryProgressTotalToLoad</key><integer>1000</integer>
+<key>DownloadEntryPath</key><string>%s</string>
+</dict></plist>`, target)))
+	age(plist, stale)
+	age(bundle, stale)
+
+	scan(map[string]bool{"movie.mp4": true})
+
+	// The user hit 继续 in Chrome and in Safari: both files were written
+	// again, so both downloads are in flight.
+	age(abandoned, fresh)
+	age(plist, fresh)
+	scan(map[string]bool{"movie.mp4": true, "未确认 545995": true, "design.zip": true})
+
+	// Firefox's file stayed untouched, so it is still abandoned; once it is
+	// written again every download is in flight.
+	scan(map[string]bool{"movie.mp4": true, "未确认 545995": true, "design.zip": true})
+	age(stalled, fresh)
+	scan(map[string]bool{"movie.mp4": true, "未确认 545995": true, "design.zip": true, "linux.iso": true})
 }
 
 func TestDownloadCompletionPostsCapsule(t *testing.T) {
@@ -661,7 +741,7 @@ func TestDownloadPersistentScanFailureClearsWings(t *testing.T) {
 	var scanErr error
 	m := &downloadsModule{
 		host: a, dir: func() (string, error) { return "/tmp", nil },
-		scan: func(string) ([]downloadFile, error) {
+		scan: func(string, time.Time) ([]downloadFile, error) {
 			if scanErr != nil {
 				return nil, scanErr
 			}
@@ -709,7 +789,7 @@ func TestDownloadMissingFolderPausesAtOnce(t *testing.T) {
 	var scanErr error = missing
 	m := &downloadsModule{
 		host: a, dir: func() (string, error) { return "/tmp/nope", nil },
-		scan: func(string) ([]downloadFile, error) {
+		scan: func(string, time.Time) ([]downloadFile, error) {
 			if scanErr != nil {
 				return nil, scanErr
 			}
@@ -882,7 +962,7 @@ func TestDownloadPauseKeepsCompletionDuringFailure(t *testing.T) {
 	var scanErr error
 	m := &downloadsModule{
 		host: a, dir: func() (string, error) { return "/tmp", nil },
-		scan: func(string) ([]downloadFile, error) {
+		scan: func(string, time.Time) ([]downloadFile, error) {
 			if scanErr != nil {
 				return nil, scanErr
 			}
@@ -933,7 +1013,7 @@ func TestDownloadLongPauseRebaselinesSilently(t *testing.T) {
 	var scanErr error
 	m := &downloadsModule{
 		host: a, dir: func() (string, error) { return "/tmp", nil },
-		scan: func(string) ([]downloadFile, error) {
+		scan: func(string, time.Time) ([]downloadFile, error) {
 			if scanErr != nil {
 				return nil, scanErr
 			}

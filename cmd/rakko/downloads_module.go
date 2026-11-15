@@ -41,6 +41,13 @@ const (
 	// unrelated completions, so the first scan re-baselines in silence
 	// instead of naming files the user finished minutes ago.
 	downloadPauseMax = 2 * time.Minute
+	// downloadStaleAfter is how long a partial may go untouched before it
+	// counts as abandoned. A browser that crashed or quit mid-download
+	// never removes its `.crdownload`/`.part`/`.download` file, and a
+	// 0-byte one would otherwise hold the wings on "0 B" forever. A
+	// download that resumes writes to the file again, so its modification
+	// time moves forward and it is shown again.
+	downloadStaleAfter = 24 * time.Hour
 )
 
 // downloadsDir is where browsers leave their temporary files. It is a seam
@@ -65,8 +72,9 @@ type downloadsModule struct {
 	host *shelf
 	dir  func() (string, error)
 	// scan and allowed are seams: tests feed a temporary folder and
-	// never probe TCC.
-	scan    func(string) ([]downloadFile, error)
+	// never probe TCC. The scan takes the tick's clock so a stale partial
+	// is judged by the same time as the rest of the tick.
+	scan    func(string, time.Time) ([]downloadFile, error)
 	allowed func() bool
 	now     func() time.Time
 	next    time.Time
@@ -116,7 +124,7 @@ func (m *downloadsModule) tick(now time.Time) {
 		m.pause(now)
 		return
 	}
-	files, err := m.scan(dir)
+	files, err := m.scan(dir, now)
 	if err != nil {
 		// One transient error may pass; a folder that stays unreadable must
 		// not leave the wings frozen on an old download forever.
@@ -289,8 +297,12 @@ var fileExists = func(path string) bool {
 	return err == nil && st.Mode().IsRegular()
 }
 
-// scanDownloadDir lists the downloads in flight.
-func scanDownloadDir(dir string) ([]downloadFile, error) {
+// scanDownloadDir lists the downloads in flight. Partials older than
+// downloadStaleAfter are not in flight any more: they are the leftovers of
+// a browser that quit, and drawing them keeps a dead progress bar on the
+// shelf. Their modification time is the whole test, so a resumed download
+// reappears on the scan after the browser writes to it.
+func scanDownloadDir(dir string, now time.Time) ([]downloadFile, error) {
 	ents, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
@@ -302,11 +314,11 @@ func scanDownloadDir(dir string) ([]downloadFile, error) {
 			continue
 		}
 		path := filepath.Join(dir, name)
+		var f downloadFile
+		var ok bool
 		switch {
 		case strings.HasSuffix(name, ".download") && e.IsDir():
-			if f, ok := safariDownload(path); ok {
-				out = append(out, f)
-			}
+			f, ok = safariDownload(path)
 		case strings.HasSuffix(name, ".crdownload") || strings.HasSuffix(name, ".part"):
 			if e.IsDir() {
 				continue
@@ -320,13 +332,23 @@ func scanDownloadDir(dir string) ([]downloadFile, error) {
 				suffix = ".part"
 			}
 			target := filepath.Join(dir, strings.TrimSuffix(name, suffix))
-			out = append(out, downloadFile{
+			f, ok = downloadFile{
 				temp: path, name: filepath.Base(target), target: target,
 				done: info.Size(), mod: info.ModTime(),
-			})
+			}, true
+		}
+		if ok && partialInFlight(f.mod, now) {
+			out = append(out, f)
 		}
 	}
 	return out, nil
+}
+
+// partialInFlight reports whether a partial file is still being written. A
+// zero modification time means the platform could not say how old it is, and
+// hiding a live download over a missing timestamp would be a guess.
+func partialInFlight(mod, now time.Time) bool {
+	return mod.IsZero() || now.Sub(mod) <= downloadStaleAfter
 }
 
 // nextTick is the next folder scan.
