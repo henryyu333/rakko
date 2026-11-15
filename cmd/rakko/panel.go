@@ -545,7 +545,12 @@ func (a *shelf) view(c *ui.Context) {
 	if a.visible {
 		openTarget = 1
 	}
-	if a.peeking || a.apps.on || capsule || liveUp || alarmUp || downloadUp {
+	// The countdown's wings own the closed notch while it runs, as the
+	// manual promises: peekSize() answers their box and peekView() draws
+	// them, so the shell has to be open (peekTarget) for either to show.
+	// A download's wings already ask for it through downloadUp.
+	timerUp := a.clock != nil && a.clock.timerWingsUp()
+	if a.peeking || a.apps.on || capsule || liveUp || alarmUp || downloadUp || timerUp {
 		peekTarget = 1
 	}
 	// Keep one native drop target across all states. The transparent root does

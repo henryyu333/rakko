@@ -219,7 +219,6 @@ func (m *clockModule) finish(now time.Time) {
 // tick advances the deadline and the one-minute mute; the panel redraws
 // when its second changed.
 func (m *clockModule) tick(now time.Time) {
-	before := m.paintKey(now)
 	if m.phase == timerRunning && !now.Before(m.end) {
 		m.finish(now)
 	}
@@ -227,13 +226,29 @@ func (m *clockModule) tick(now time.Time) {
 		m.stopAlert()
 		m.refresh()
 	}
-	if m.host == nil {
+	if !m.timerReadingShown() {
 		return
 	}
-	shown := m.host.visible || m.host.peeking || m.host.peekProgress > 0.01
-	if shown && m.paintKey(now) != before {
+	// lastPaint is the reading the previous frame was asked to draw. The
+	// comparison used to compute a fresh key from this same now, which is
+	// equal to itself by definition: a running countdown or stopwatch sat
+	// frozen on screen until some other event happened to repaint it.
+	if key := m.paintKey(now); key != m.lastPaint {
+		m.lastPaint = key
 		m.refresh()
 	}
+}
+
+// timerReadingShown reports whether the countdown's reading is on screen:
+// the open panel or the hover peek, and the closed notch's wings while it
+// runs or waits paused. A paused reading does not change, so the tick then
+// finds the same paintKey and asks for no frame.
+func (m *clockModule) timerReadingShown() bool {
+	if m == nil || m.host == nil {
+		return false
+	}
+	h := m.host
+	return h.visible || h.peeking || h.peekProgress > 0.01 || m.timerWingsUp()
 }
 
 // paintKey is the second-granular text the panel shows, so tick repaints
@@ -272,10 +287,10 @@ func (m *clockModule) nextTick(now time.Time) time.Time {
 	if m.phase == timerDone && m.ringing {
 		add(m.doneAt.Add(timerRingFor))
 	}
-	if m.host != nil && (m.host.visible || m.host.peeking || m.host.peekProgress > 0.01) {
-		if m.phase == timerRunning || m.watchRun {
-			add(now.Truncate(time.Second).Add(time.Second))
-		}
+	if m.timerReadingShown() && (m.phase == timerRunning || m.watchRun) {
+		// The closed notch's wings keep counting too: the panel is shut,
+		// but what it shows still changes every second.
+		add(now.Truncate(time.Second).Add(time.Second))
 	}
 	return next
 }
