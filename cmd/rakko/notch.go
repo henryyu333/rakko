@@ -516,6 +516,15 @@ func (a *shelf) frameCoverAppsPop(r mygo.Rectangle, ph float32) mygo.Rectangle {
 // the overlay asks for.
 var setNativeWindowFrame = platform.SetWindowFrame
 
+// setOverlayAcceptsMouse and setWindowLayer are the seams for the overlay's
+// native mouse gate and band, so a test sees how often (and with what) the
+// window is touched. Both are ordering calls on Windows; asking every frame
+// raised the panel above the copy a tools drag lifts.
+var (
+	setOverlayAcceptsMouse = platform.SetOverlayAcceptsMouse
+	setWindowLayer         = platform.SetWindowLayer
+)
+
 // resizeStretches reports whether applying r would present the canvas that
 // is on the window enlarged. That is the only resize mygo's one-frame old
 // canvas can make visible: a shrink scales it down under the resting
@@ -930,13 +939,27 @@ func (a *shelf) syncMousePassThrough() {
 	a.syncWindowFrame()
 	setGatePolling(anyOverlayWanted())
 	accept := a.overlayAcceptsMouse()
+	layer := a.windowLevel()
+	// view() asks on every frame. Only a changed answer touches the native
+	// window: on Windows both calls re-order the window to the front of the
+	// topmost band, and doing that every frame kept the card a tools drag
+	// lifts in its preview window behind the panel — the panel was raised
+	// over the copy again before each frame could show it. macOS happened to
+	// hide this because its preview lives on a higher level.
+	acceptChanged := accept != !a.ignoringMouse
+	layerChanged := !a.layerKnown || layer != a.layerNow
 	a.ignoringMouse = !accept
+	a.layerKnown, a.layerNow = true, layer
 	if a.win == nil {
 		return
 	}
 	h := a.winH
-	platform.SetOverlayAcceptsMouse(h, accept)
-	platform.SetWindowLayer(h, a.windowLevel())
+	if acceptChanged {
+		setOverlayAcceptsMouse(h, accept)
+	}
+	if layerChanged {
+		setWindowLayer(h, layer)
+	}
 }
 
 // overlayWanted reports whether the current state needs the overlay to take
@@ -1158,7 +1181,7 @@ func (a *shelf) syncPointerGate() {
 	if a.win == nil {
 		return // headless surface: the flag is all there is
 	}
-	platform.SetOverlayAcceptsMouse(a.winH, accept)
+	setOverlayAcceptsMouse(a.winH, accept)
 }
 
 // overShell reports whether p is on the shell the last frame drew — the

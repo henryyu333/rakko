@@ -636,3 +636,27 @@ func TestOverlayClickThroughStyle(t *testing.T) {
 		t.Fatal("SetOverlayAcceptsMouse(true) did not clear WS_EX_TRANSPARENT")
 	}
 }
+
+// TestPinAndPreviewMousePolicies: the preview a tools drag follows the
+// pointer in must not take the press that belongs to the card being dragged;
+// the pin it becomes must, or the card on the desktop can neither be clicked
+// nor carried back to the notch. They are the same native window.
+func TestPinAndPreviewMousePolicies(t *testing.T) {
+	class, _ := windows.UTF16PtrFromString("STATIC")
+	title, _ := windows.UTF16PtrFromString("rakko-pin-test")
+	h, _, err := procCreateWindowEx.Call(0, uintptr(unsafe.Pointer(class)), uintptr(unsafe.Pointer(title)),
+		0x80000000 /* WS_POPUP */, 0, 0, 136, 84, 0, 0, 0, 0)
+	if h == 0 {
+		t.Fatalf("CreateWindowEx: %v", err)
+	}
+	defer procDestroyWindow.Call(h)
+
+	ConfigureDragPreview(h, LayerStatus)
+	if !OverlayIgnoresMouse(h) {
+		t.Fatal("a drag preview took the mouse from the card being dragged")
+	}
+	ConfigurePinWindow(h)
+	if OverlayIgnoresMouse(h) {
+		t.Fatal("the committed pin stayed click-through")
+	}
+}

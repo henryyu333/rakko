@@ -81,6 +81,11 @@ func ConfigurePinWindow(window uintptr) {
 	}
 	ensureToolWindow(window)
 	setExBits(window, wsExNoActivate, true)
+	// The card may be the window a drag opened as a preview, which ignores
+	// the mouse so the gesture stays with the card that started it. A
+	// committed pin is a real target: clicking it runs the card and a drag
+	// carries it back to the notch.
+	SetWindowIgnoresMouseEvents(window, false)
 	reorderFront(window, true)
 	followCurrentDesktop(window)
 }
@@ -97,13 +102,17 @@ func ConfigurePetWindow(window uintptr) {
 }
 
 // ConfigureDragPreview makes a drag preview a non-activating topmost
-// tool window; the band is the topmost one, as everywhere on Windows.
+// tool window; the band is the topmost one, as everywhere on Windows. It
+// ignores the mouse, like the preview on macOS: the press belongs to the
+// card that started the drag, and a preview window that took it would end
+// the gesture under the pointer the copy follows.
 func ConfigureDragPreview(window uintptr, layer Layer) {
 	if window == 0 {
 		return
 	}
 	ensureToolWindow(window)
 	setExBits(window, wsExNoActivate, true)
+	SetWindowIgnoresMouseEvents(window, true)
 	reorderFront(window, true)
 }
 

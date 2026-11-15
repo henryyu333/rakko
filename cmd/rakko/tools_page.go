@@ -532,7 +532,7 @@ func (p *toolsPage) body(c *ui.Context, _ bool, live bool) ui.Element {
 			// the scrollable content nor the offset, so a grid past the
 			// visible rows could neither scroll nor be reached.
 			ui.Box(c.Key("cards-stack")).Width(stageW).Height(contentH).Children(func() {
-				if d != nil && d.dragging && d.index >= 0 && !p.overLibrary() && p.preview.window() == nil {
+				if d != nil && d.dragging && d.index >= 0 && !p.overLibrary() && p.slotShows() {
 					for _, cell := range g.cells {
 						if cell.id == d.id {
 							p.toolSlot(c, cell, d)
@@ -559,6 +559,24 @@ func (p *toolsPage) body(c *ui.Context, _ bool, live bool) ui.Element {
 			layer.Children(func() { p.toolLiftedCard(c, *d) })
 		}
 	})
+}
+
+// slotShows reports whether the dashed landing slot belongs in this frame.
+// It hangs under the card's lift whenever that lift is the page's own copy;
+// once the copy leaves the content box the desktop preview window carries it
+// instead, and the slot still marks where the card will land as long as the
+// pointer is over the page. Dragging out of the panel shows no slot.
+func (p *toolsPage) slotShows() bool {
+	if p.preview.window() == nil {
+		return true
+	}
+	v := p.viewport
+	if v.W <= 0 || v.H <= 0 || p.host == nil {
+		return false
+	}
+	pt := p.host.pointerSample()
+	x, y := float32(pt.X-p.host.frame.X), float32(pt.Y-p.host.frame.Y)
+	return x >= v.X && x < v.X+v.W && y >= v.Y && y < v.Y+v.H
 }
 
 // overLibrary reports whether the pointer is below the grid's viewport,

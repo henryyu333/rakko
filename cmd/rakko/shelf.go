@@ -169,6 +169,8 @@ type shelf struct {
 	music                                                       musicControls // the player's seek / volume rails (music_controls.go)
 	fx                                                          shellMotion   // the shell drawn last, for the window frame
 	ignoringMouse                                               bool
+	layerKnown                                                  bool           // layerNow has been applied once
+	layerNow                                                    platform.Layer // the window band last applied
 	// pointerTick caches the pointer for one monitoring pass: the
 	// monitor, the gate and the drag logic must see one sample per tick,
 	// not one WindowServer round trip each.
