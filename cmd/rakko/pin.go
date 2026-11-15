@@ -762,15 +762,30 @@ func (a *shelf) savePins() {
 		}
 		pins = append(pins, stored)
 	}
-	a.mutateTools(func(l *layout.Layout) { l.Pins = pins })
+	a.mutateTools(func(l *layout.Layout) {
+		merged := slices.Clone(pins)
+		if skipUnknownPins {
+			for _, p := range l.Pins {
+				if toolCardDefFor(p.ID) == nil && !slices.ContainsFunc(merged, func(x layout.Pin) bool { return x.ID == p.ID }) {
+					merged = append(merged, p)
+				}
+			}
+		}
+		l.Pins = merged
+	})
 }
 
 // pinRestore opens the pinned cards' windows from the shared layout (the
-// tools page reads the same toolsLayout copy). A card the catalog does
-// not know yet still pins — an unknown id draws the empty cell toolCard
-// reserves.
+// tools page reads the same toolsLayout copy). On macOS, a card the catalog
+// does not know yet still pins — an unknown id draws the empty cell toolCard
+// reserves; on Windows (skipUnknownPins), ids absent from this platform's
+// catalog such as airdrop are skipped without opening a blank window, and
+// savePins keeps their layout.json entries intact.
 func (a *shelf) pinRestore() {
 	for _, p := range a.toolsLayout().Pins {
+		if skipUnknownPins && toolCardDefFor(p.ID) == nil {
+			continue
+		}
 		disp := pinParseDisplay(p.Display)
 		edge := pinEdgeOf(p.Edge)
 		w := pinCardWidth(p.ID, p.Span)

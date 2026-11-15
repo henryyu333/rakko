@@ -45,4 +45,6 @@ const (
 	hoverFilesFromOffer = false
 	// AirDrop is macOS-only; Windows omits Apple-specific sharing entry points.
 	airDropSupported = true
+	// macOS still opens an empty placeholder pin for unknown card IDs.
+	skipUnknownPins = false
 )

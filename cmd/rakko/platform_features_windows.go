@@ -52,4 +52,7 @@ const (
 	// Windows omits Apple-specific sharing features (AirDrop / nearby sharing)
 	// from context menus, drop actions, and the tools catalog.
 	airDropSupported = false
+	// Skip restoring desktop pins whose card ID is absent from this platform's
+	// catalog (e.g. airdrop from a Mac layout) while preserving their records.
+	skipUnknownPins = true
 )
