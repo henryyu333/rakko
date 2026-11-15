@@ -253,13 +253,13 @@ Coming from the older Shelf app? Rakko copies from `Application Support/Shelf/` 
 
 ### Windows (beta)
 
-The same Rakko runs on Windows 10 22H2 and Windows 11 (64-bit). With no notch on the screen it lives in a capsule at the top centre (or a simulated notch, in Settings → Appearance); the tray icon sits in the notification area.
+The same Rakko runs on Windows 10 22H2 and Windows 11 (64-bit). With no notch on the screen, the notch style stays invisible until you push the pointer against the top edge in the middle of the screen, then it slides out as on the Mac (Settings → Appearance can switch to an always-visible floating capsule); the tray icon sits in the notification area.
 
 1. Download `rakko-setup-<version>-amd64.exe` from the [Releases page](https://github.com/henryyu333/rakko/releases/latest) and run it. It installs for your account only, no administrator rights needed. A portable `rakko-<version>-windows-amd64.zip` is there too.
 2. The beta is not code-signed, so Windows may show "Windows protected your PC" the first time: click **More info** → **Run anyway**. Only do this for a file downloaded from this repository.
 3. Press `Ctrl+Alt+Space` to open the search bar.
 
-Shortcuts use Ctrl / Alt where the Mac uses ⌘ / ⌥ / ⌃. What differs from the Mac — no permission page, Nearby Share instead of AirDrop, Windows Search instead of Spotlight, Explorer's right-click "Add to Rakko", HEIC needing Microsoft's codec extensions — is listed in the manual's [Windows chapter](docs/MANUAL.zh-CN.md#windows-版) (Chinese).
+Shortcuts use Ctrl / Alt where the Mac uses ⌘ / ⌥ / ⌃. What differs from the Mac — no permission page, no AirDrop, Windows Search instead of Spotlight, Explorer's right-click "Add to Rakko", HEIC needing Microsoft's codec extensions — is listed in the manual's [Windows chapter](docs/MANUAL.zh-CN.md#windows-版) (Chinese).
 
 ## Everyday use
 
@@ -564,13 +564,13 @@ macOS 会把 Rakko 当成一个新应用，所以升级后系统权限和「开�
 
 ### Windows（测试版）
 
-同一个 Rakko 也能在 Windows 10 22H2 和 Windows 11（64 位）上用。Windows 屏幕没有刘海，它住在屏幕顶端居中的胶囊里（设置 →「外形与提示」可以改成模拟小刘海），托盘图标在任务栏右下角的通知区域。
+同一个 Rakko 也能在 Windows 10 22H2 和 Windows 11（64 位）上用。Windows 屏幕没有刘海，刘海样式平时不显示，把指针推到屏幕顶边正中时才像 Mac 一样探出来（设置 →「外形与提示」可以改成一直显示的悬浮胶囊），托盘图标在任务栏右下角的通知区域。
 
 1. 在 [Releases 页面](https://github.com/henryyu333/rakko/releases/latest)下载 `rakko-setup-<版本>-amd64.exe` 并运行。它只装在你自己的账户里，不需要管理员权限。也有免安装的 `rakko-<版本>-windows-amd64.zip`。
 2. 测试版没有代码签名，第一次运行时 Windows 可能提示「Windows 已保护你的电脑」：点「更多信息」→「仍要运行」。只对从本项目下载的文件这样做。
 3. 按 `Ctrl+Alt+Space` 打开搜索条。
 
-Mac 上的 ⌘ / ⌥ / ⌃ 在 Windows 上换成 Ctrl / Alt。和 Mac 不一样的地方（没有权限页、附近共享代替隔空投送、Windows 搜索代替 Spotlight、资源管理器右键「添加到 Rakko」、HEIC 需要微软的编解码扩展等）见使用说明的 [「Windows 版」](docs/MANUAL.zh-CN.md#windows-版)一章。
+Mac 上的 ⌘ / ⌥ / ⌃ 在 Windows 上换成 Ctrl / Alt。和 Mac 不一样的地方（没有权限页、没有隔空投送、Windows 搜索代替 Spotlight、资源管理器右键「添加到 Rakko」、HEIC 需要微软的编解码扩展等）见使用说明的 [「Windows 版」](docs/MANUAL.zh-CN.md#windows-版)一章。
 
 ## 日常使用
 
