@@ -500,3 +500,50 @@ func TestNEGuardDecide(t *testing.T) {
 		t.Fatal("the foreground was taken from another app")
 	}
 }
+
+// TestNETitleNamesTrack (P2-4): a client with no track leaves its own name in
+// the window title; drawing that as a song would put 「网易云音乐」 on the card
+// and hide the fact that the client has nothing playing.
+func TestNETitleNamesTrack(t *testing.T) {
+	cases := []struct {
+		in   string
+		want bool
+	}{
+		{"全世界失眠 - 陈奕迅", true},
+		{"网易云音乐 - 陈奕迅", true},
+		{"网易云音乐", false},
+		{"  网易云音乐  ", false},
+		{"", false},
+		{"   ", false},
+	}
+	for _, c := range cases {
+		if got := neTitleNamesTrack(c.in); got != c.want {
+			t.Errorf("neTitleNamesTrack(%q) = %v, want %v", c.in, got, c.want)
+		}
+	}
+}
+
+// TestNESampleFailure (P2-5): a refused read and a field that cannot describe
+// the track both count. An id chain that has never produced an id does not —
+// some playback paths leave the token empty and the clock still works — but a
+// chain that worked and then stopped does.
+func TestNESampleFailure(t *testing.T) {
+	cases := []struct {
+		name                               string
+		posOK, havePos, idOK, idSeen, held bool
+		want                               bool
+	}{
+		{"refused read", false, false, false, true, false, true},
+		{"NaN position", false, false, false, false, false, true},
+		{"sample disagrees with the track", true, false, true, true, false, true},
+		{"slow track swap", true, false, true, true, true, false},
+		{"id chain broke", true, true, false, true, false, true},
+		{"clock without an id", true, true, false, false, false, false},
+		{"healthy", true, true, true, true, false, false},
+	}
+	for _, c := range cases {
+		if got := neSampleFailure(c.posOK, c.havePos, c.idOK, c.idSeen, c.held); got != c.want {
+			t.Errorf("%s: neSampleFailure(...) = %v, want %v", c.name, got, c.want)
+		}
+	}
+}

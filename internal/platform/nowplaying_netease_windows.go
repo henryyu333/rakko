@@ -149,6 +149,10 @@ type neSource struct {
 
 	id   string
 	idAt time.Time
+	// idSeen says the client's id pointer chain has produced an id for this
+	// process, so a later empty id is a broken chain rather than a playback
+	// path that never names its song.
+	idSeen bool
 	// prevID is the song id that named the track before the title moved.
 	// Until the memory fields name a different one, the client has not
 	// finished swapping and that id must not resolve the new title.
@@ -191,9 +195,10 @@ func (s *neSource) poll(now time.Time) (NowPlayingState, bool) {
 		return NowPlayingState{}, false
 	}
 	raw := s.windowTitle()
-	if raw == "" {
-		// The window exists but names nothing (start-up, signed out, a modal
-		// replacing it). There is no track to show, so another source may.
+	if !neTitleNamesTrack(raw) {
+		// The window exists but names no track: it is still starting, signed
+		// out, showing a modal, or holding its own name. Another source may
+		// own the card meanwhile.
 		return NowPlayingState{}, false
 	}
 	titleName, titleArtist := neSplitTitle(raw)
@@ -210,15 +215,15 @@ func (s *neSource) poll(now time.Time) (NowPlayingState, bool) {
 		s.prevPosAt, s.still = time.Time{}, 0
 	}
 
-	pos, dur, id, sampled := s.sample()
-	heldID := id != "" && (now.Before(s.idHoldUntil) || id == s.prevID)
+	pos, dur, id, posOK, idOK := s.sample()
+	heldID := idOK && (now.Before(s.idHoldUntil) || id == s.prevID)
 	if heldID {
 		// The title moved but the memory fields have not finished swapping:
 		// the id they still name is the previous track's, and resolving it
 		// would put the old album and cover back under the new title.
 		id = ""
 	}
-	if sampled && id != "" && id != s.id {
+	if posOK && id != "" && id != s.id {
 		s.beginTrack(id, now)
 	}
 	if id != "" {
@@ -232,27 +237,20 @@ func (s *neSource) poll(now time.Time) (NowPlayingState, bool) {
 
 	// A sample is usable only when the memory tier is on, it is sane for the
 	// track about to be drawn, and the client has finished swapping fields.
+	// Without an id the window title identifies the track; the clock still
+	// works as long as the numbers are consistent with the resolved entry.
 	havePos := false
-	if sampled && !s.tierA && !now.Before(s.trustAt) && id != "" && id == s.id {
+	if posOK && !s.tierA && !now.Before(s.trustAt) && (id == "" || id == s.id) {
 		havePos = neSampleOK(pos, dur, s.meta.track, s.meta.ok)
 	}
-	if s.memoryOn() && now.After(s.attachAt.Add(neIDGrace)) {
-		switch {
-		case !sampled:
-			// A refused read, a NaN field or a broken id pointer chain. Only
-			// outside a track change, where the client legitimately clears
-			// the fields for a moment.
-			if !now.Before(s.trustAt) {
-				s.noteFailure()
-			}
-		case heldID:
-			// A slow track swap is not a broken field: the id is readable,
-			// it just still names the previous track.
-		case havePos:
-			s.failures = 0
-		case !now.Before(s.trustAt):
-			// Readable but impossible for this track: a field that moved.
+	if idOK {
+		s.idSeen = true
+	}
+	if s.memoryOn() && now.After(s.attachAt.Add(neIDGrace)) && !now.Before(s.trustAt) {
+		if neSampleFailure(posOK, havePos, idOK, s.idSeen, heldID) {
 			s.noteFailure()
+		} else if havePos {
+			s.failures = 0
 		}
 	}
 
@@ -370,6 +368,7 @@ func (s *neSource) close() {
 	s.hwnd, s.pid, s.exe = 0, 0, ""
 	s.title = ""
 	s.id, s.idAt, s.idHoldUntil, s.prevID = "", time.Time{}, time.Time{}, ""
+	s.idSeen = false
 	s.meta = neMeta{}
 	s.lastPos, s.prevPos, s.prevPosAt, s.still = 0, 0, time.Time{}, 0
 	s.playing, s.rawPlaying, s.haveClock = false, false, false
@@ -536,24 +535,22 @@ func (s *neSource) beginTrack(id string, now time.Time) {
 	s.art, s.artKey, s.artMissing = nil, "", false
 }
 
-// sample reads position, duration and the song id in one go. ok is false when
-// the memory tier is off or any of the three reads failed: a refused read, a
-// NaN field and a broken pointer chain are all the same signal here, and the
-// caller counts them.
-func (s *neSource) sample() (pos, dur float64, id string, ok bool) {
+// sample reads position, duration and the song id in one go. posOK is false
+// when the tier is off, a read was refused or a field held a NaN; idOK is
+// false when the id pointer chain named nothing. The two are reported apart
+// because the clock is still usable without an id, while the caller has to
+// count a chain that used to work and stopped.
+func (s *neSource) sample() (pos, dur float64, id string, posOK, idOK bool) {
 	if !s.memoryOn() {
-		return 0, 0, "", false
+		return 0, 0, "", false, false
 	}
 	pos, ok1 := s.readFloat(s.base + s.offsets.pos)
 	dur, ok2 := s.readFloat(s.base + s.offsets.dur)
 	if !ok1 || !ok2 {
-		return 0, 0, "", false
+		return 0, 0, "", false, false
 	}
 	id = s.songID()
-	if id == "" {
-		return 0, 0, "", false
-	}
-	return pos, dur, id, true
+	return pos, dur, id, true, id != ""
 }
 
 func (s *neSource) readFloat(at uintptr) (float64, bool) {

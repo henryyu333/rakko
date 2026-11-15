@@ -36,6 +36,17 @@ type neTrack struct {
 	Duration float64
 }
 
+// neIdleTitle is what the client calls its window when no track is loaded.
+const neIdleTitle = "网易云音乐"
+
+// neTitleNamesTrack reports whether the window title names a track. With no
+// track the client leaves its own name in the title ("网易云音乐"), which must
+// not be drawn as a song called after the app.
+func neTitleNamesTrack(title string) bool {
+	title = strings.TrimSpace(title)
+	return title != "" && title != neIdleTitle
+}
+
 // neSplitTitle splits the client's window title, "<song> - <artist>". The
 // title carries no state and no app suffix; a song whose name contains " - "
 // splits at its first separator, which is why the queue files (joined by the
@@ -411,6 +422,22 @@ func neTransportVerb(cmd NowPlayingCommand, wantPlaying bool) (verb string, conf
 type neEvidence struct {
 	playing bool
 	clock   bool // playing came from the position, not the audio session
+}
+
+// neSampleFailure decides whether one memory poll counts against the tier:
+// a refused position/duration read, a sample that cannot describe the track,
+// and an id pointer chain that worked before and now names nothing. A client
+// that has never published an id (some playback paths leave the token empty)
+// still has a usable clock, so that state alone is not a failure.
+func neSampleFailure(posOK, havePos, idOK, idSeen, held bool) bool {
+	if held {
+		// The id is readable, it just still names the previous track.
+		return false
+	}
+	if !posOK || !havePos {
+		return true
+	}
+	return idSeen && !idOK
 }
 
 // nePlayVerdict picks the play state a pending command is confirmed against.
