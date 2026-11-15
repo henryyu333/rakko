@@ -426,7 +426,7 @@ func (a *shelf) settingsAgentToolRow(c *ui.Context, prefix string, tool agentnot
 		logo, tint, mark := agentLogo(tool)
 		settingsMark(c, logo, tint, mark)
 		settingsRowText(c, tool.Name(), caption)
-		ui.Text(c, status).SingleLine().FontSize(11.5).FontWeight(500).TextColor(color)
+		ui.Text(c, status).SingleLine().FontSize(11.5).FontWeight(settingsWeight(500)).TextColor(color)
 		if !locked {
 			// With the group switch off nothing may be written, so the row
 			// carries no control that would do nothing.
@@ -610,7 +610,7 @@ func settingsConfirmButton(c *ui.Context, key, label string, primary bool, fn fu
 	b.Children(func() {
 		t := ui.Text(c, label).SingleLine().FontSize(12.5).TextColor(fg)
 		if primary {
-			t.FontWeight(600)
+			t.FontWeight(settingsWeight(600))
 		}
 	})
 	return b
@@ -639,7 +639,7 @@ func settingsKeycap(c *ui.Context, key, label string, on bool) {
 		box.InsetShadow(0, -1, 0, 0, ui.RGBA(255, 255, 255, 0.06))
 	}
 	box.Children(func() {
-		ui.Text(c, label).SingleLine().FontSize(12.5).FontWeight(600).TextColor(ink)
+		ui.Text(c, label).SingleLine().FontSize(12.5).FontWeight(settingsWeight(600)).TextColor(ink)
 	})
 }
 

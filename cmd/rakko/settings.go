@@ -65,6 +65,42 @@ var settingsTheme = func() *ui.Theme {
 	return t
 }()
 
+var settingsThemeWindows = func() *ui.Theme {
+	t := *settingsTheme
+	t.Font = "Segoe UI, Microsoft YaHei UI"
+	return &t
+}()
+
+func settingsThemeFor(windows bool) *ui.Theme {
+	if windows {
+		return settingsThemeWindows
+	}
+	return settingsTheme
+}
+
+// settingsWeight maps medium/semibold weights to 400 on Windows so DirectWrite
+// does not jump 500/600 to Microsoft YaHei UI's heavy 700 bold face.
+func settingsWeight(weight int) int {
+	if !forWindows {
+		return weight
+	}
+	if weight == 500 || weight == 600 {
+		return 400
+	}
+	return weight
+}
+
+// winPanelLayout chooses the Windows Settings card's outer margin and corner
+// radius from the window's corner radius: Windows 11 adds 8 DIP rounded corners
+// so the card uses matching generous framing; Windows 10's square window uses
+// a tighter 8 DIP frame and restrained 12 DIP corners.
+func winPanelLayout(winRadius float32) (margin, radius float32) {
+	if winRadius > 0 {
+		return 10, 16
+	}
+	return 8, 12
+}
+
 // The window's colours are theme.go's tokens: the inks and the state
 // colours are the panel's, and the settings-only surfaces sit in its
 // Settings window group.
@@ -162,6 +198,7 @@ func (a *shelf) openSettings() {
 		MinWidth: settingsMinWidth, MinHeight: settingsMinHeight,
 		X: frame.X, Y: frame.Y,
 		Hidden: true, BackgroundColor: "#000000",
+		UseContentSize: forWindows,
 		// The mock hides AppKit's title bar and puts the traffic lights in
 		// the sidebar: TrafficLightPosition sets their insets, and the
 		// window's own name still names it to the system.
@@ -177,7 +214,13 @@ func (a *shelf) openSettings() {
 	platform.SetWindowAppearance(w.NativeHandle(), true)
 	platform.ConfigureFramedWindow(w.NativeHandle(), true)
 	w.SetWindowButtonsTheme(mygo.ThemeDark)
-	w.SetBounds(frame)
+	if forWindows {
+		w.SetContentBounds(frame)
+		a.settingsWinRadius = float32(w.CornerRadius())
+	} else {
+		w.SetBounds(frame)
+		a.settingsWinRadius = 0
+	}
 	w.OnClosed(a.settingsClosed)
 	w.OnBlur(a.settingsBlur)
 	a.settingsWin = w
@@ -205,6 +248,7 @@ func (a *shelf) settingsClosed() {
 	a.stopPermissionFlow()
 	a.endShortcutRecording()
 	a.settingsWin = nil
+	a.settingsWinRadius = 0
 	if a.quitting {
 		return
 	}
@@ -291,7 +335,7 @@ func (a *shelf) setSettingsPage(page settingsPageID) {
 // it and every preference control is disabled so the file is never
 // rewritten.
 func (a *shelf) settingsView(c *ui.Context) {
-	c.SetTheme(settingsTheme)
+	c.SetTheme(settingsThemeFor(forWindows))
 	c.Root().Background(surface)
 	recording := a.settingsRecording != shortcutNone
 	pending := a.shortcutConfirm != nil
@@ -307,55 +351,56 @@ func (a *shelf) settingsView(c *ui.Context) {
 		c.OnShortcut(0, ui.KeyEscape, a.settingsWin.Close)
 		c.OnShortcut(ui.Cmd, ui.KeyW, a.settingsWin.Close)
 	}
-	// content builds the sidebar and page row. Windows puts it under the
-	// caption strip (settingsCaptionStrip) inside one filling frame; macOS
-	// puts it straight in the window, as it always has.
-	content := func() {
-		win := ui.Row(c.Key("win"))
-		if forWindows {
-			// Under the caption strip: the height left below it. Fill's
-			// 100% would count the strip again and reach past the window
-			// bottom, shrinking the page's visible scroll area.
-			_, h := c.Size()
-			win = win.Height(h - settingsCaptionHeight(c)).FillWidth()
-		} else {
-			win = win.Fill()
-		}
-		if pending {
-			// A click anywhere the buttons do not take drops the question.
-			win = win.HandleInput(func(ev ui.InputEvent) bool {
-				if ev.Kind == ui.InputPointerDown {
-					a.cancelShortcutConfirm()
-				}
-				return false
-			})
-		}
-		win.Children(func() {
-			a.settingsSidebar(c)
-			ui.Column(c.Key("panel")).Grow(1).FillHeight().Margin(10, 10, 10, 0).
-				Radius(20).Background(setPanel).Clip().Children(func() {
-				ui.Scroll(c.Key("page-scroll")).Fill().TrackScroll(&a.settingsScroll).Children(func() {
-					ui.Column(c.Key("page")).FillWidth().Padding(14, 18, 22, 18).Gap(18).Children(func() {
-						if a.settingsBroken {
-							settingsBrokenBanner(c)
-						}
-						a.settingsPageBody(c)
-					})
-				})
-			})
-			if recording && !pending {
-				a.settingsCaptureLayer(c)
+	// Both platforms fill the whole window with the sidebar and page row. On
+	// Windows an absolute transparent DragWindow overlay covers the top caption
+	// band up to the window buttons while the page top padding clears them.
+	win := ui.Row(c.Key("win")).Fill()
+	if pending {
+		// A click anywhere the buttons do not take drops the question.
+		win = win.HandleInput(func(ev ui.InputEvent) bool {
+			if ev.Kind == ui.InputPointerDown {
+				a.cancelShortcutConfirm()
 			}
+			return false
 		})
 	}
-	if !forWindows {
-		content()
-		return
-	}
-	frame := ui.Column(c.Key("frame")).Fill()
-	frame.Children(func() {
-		settingsCaptionStrip(c)
-		content()
+	win.Children(func() {
+		a.settingsSidebar(c)
+		panel := ui.Column(c.Key("panel")).Grow(1)
+		pageTop := float32(14)
+		var capH float32
+		var pm float32
+		if forWindows {
+			var pr float32
+			pm, pr = winPanelLayout(a.settingsWinRadius)
+			capH = settingsCaptionHeight(c)
+			pageTop = max(float32(14), capH-pm+6)
+			panel.AlignSelf(ui.Stretch).Margin(pm, pm, pm, 0).Radius(pr)
+		} else {
+			panel.FillHeight().Margin(10, 10, 10, 0).Radius(20)
+		}
+		panel.Background(setPanel).Clip().Children(func() {
+			scroll := ui.Scroll(c.Key("page-scroll")).Fill().TrackScroll(&a.settingsScroll)
+			if forWindows {
+				scroll.ScrollbarInsets(max(capH-pm, 0), 0, 0)
+			}
+			scroll.Children(func() {
+				ui.Column(c.Key("page")).FillWidth().Padding(pageTop, 18, 22, 18).Gap(18).Children(func() {
+					if a.settingsBroken {
+						settingsBrokenBanner(c)
+					}
+					a.settingsPageBody(c)
+				})
+			})
+		})
+		if forWindows {
+			bar := c.TitleBar()
+			ui.Box(c.Key("caption")).Absolute().Top(0).Left(0).Right(bar.Right).
+				Height(capH).DragWindow()
+		}
+		if recording && !pending {
+			a.settingsCaptureLayer(c)
+		}
 	})
 }
 
@@ -373,25 +418,10 @@ func settingsCaptionHeight(c *ui.Context) float32 {
 	return h
 }
 
-// settingsCaptionStrip reserves the strip Windows draws its caption
-// controls in, above the whole page, so the controls never cover the hero.
-// The strip drags the window like a title bar. macOS puts the traffic lights
-// in the sidebar instead (settingsSidebar) and gets no strip.
-func settingsCaptionStrip(c *ui.Context) {
-	if !forWindows {
-		return
-	}
-	ui.Row(c.Key("caption")).Height(settingsCaptionHeight(c)).FillWidth().DragWindow()
-}
-
-// settingsSidebarTop is the height of the sidebar's first row. macOS puts
-// the traffic lights there, 40pt down from the window's top; Windows draws
-// its own controls in the strip above (settingsCaptionStrip), so the row
-// only carries the spacing that keeps the brand at the same place.
+// settingsSidebarTop is the height of the sidebar's first row: 40pt above
+// the brand on both macOS (traffic lights) and Windows (floating top drag
+// strip).
 func settingsSidebarTop() float32 {
-	if forWindows {
-		return 8
-	}
 	return 40
 }
 
@@ -517,7 +547,7 @@ func settingsBrokenBanner(c *ui.Context) {
 	ui.Column(c.Key("broken")).Padding(10, 12).Gap(4).Radius(12).
 		Background(danger.Alpha(0.12)).
 		Border(0.5, danger.Alpha(0.35)).Children(func() {
-		ui.Text(c, l.SettingsBrokenTitle()).FontSize(12).FontWeight(600).TextColor(danger)
+		ui.Text(c, l.SettingsBrokenTitle()).FontSize(12).FontWeight(settingsWeight(600)).TextColor(danger)
 		ui.Text(c, l.SettingsBrokenBody()).FontSize(11).TextColor(ink3)
 	})
 }
@@ -635,15 +665,16 @@ var settingsFit func(string)
 // the way panelLabel does for the panel; a caption is not measured here
 // because it wraps on purpose and the row grows with it.
 func settingsLabel(c *ui.Context, text string, size float32, weight int) ui.Element {
+	w := settingsWeight(weight)
 	t := ui.Text(c, text).SingleLine().FontSize(size)
-	if weight != 0 {
-		t.FontWeight(weight)
+	if w != 0 {
+		t.FontWeight(w)
 	}
 	if settingsFit != nil {
 		if b := t.Bounds(); b.W > 0 {
-			w, _ := c.MeasureText(0, ui.Span{Text: text, Size: size, Weight: weight})
-			if w > b.W+0.5 {
-				settingsFit(fmt.Sprintf("%q needs %.1fpt, box is %.1fpt (size %g): the label is cut", text, w, b.W, size))
+			mw, _ := c.MeasureText(0, ui.Span{Text: text, Size: size, Weight: w})
+			if mw > b.W+0.5 {
+				settingsFit(fmt.Sprintf("%q needs %.1fpt, box is %.1fpt (size %g): the label is cut", text, mw, b.W, size))
 			}
 		}
 	}
@@ -756,7 +787,7 @@ func settingsButton(c *ui.Context, key, label string, primary bool, fn func()) u
 	b.Children(func() {
 		t := ui.Text(c, label).SingleLine().FontSize(12.5).TextColor(fg)
 		if primary {
-			t.FontWeight(600)
+			t.FontWeight(settingsWeight(600))
 		}
 	})
 	if b.Clicked() {
@@ -765,9 +796,64 @@ func settingsButton(c *ui.Context, key, label string, primary bool, fn func()) u
 	return b
 }
 
-// settingsSegmented is a segmented control named after its row.
+// settingsSegmented is a segmented control named after its row. On Windows,
+// mixed CJK/ASCII controls compensate for Segoe UI sitting ~1.5 DIP lower than
+// Microsoft YaHei UI so all segments share one visual baseline.
 func settingsSegmented(c *ui.Context, key, label string, selected *int, labels ...string) ui.Element {
-	return ui.Segmented(c.Key("seg-"+key), selected, labels...).Label(label)
+	if !forWindows {
+		return ui.Segmented(c.Key("seg-"+key), selected, labels...).Label(label)
+	}
+	return settingsSegmentedWin(c, key, label, selected, labels...)
+}
+
+func settingsHasNonASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] >= 0x80 {
+			return true
+		}
+	}
+	return false
+}
+
+func settingsSegmentedWin(c *ui.Context, key, label string, selected *int, labels ...string) ui.Element {
+	mixed := false
+	for _, s := range labels {
+		if settingsHasNonASCII(s) {
+			mixed = true
+			break
+		}
+	}
+	t := c.Theme()
+	parts := ui.SegmentedBase(c.Key("seg-"+key), selected, len(labels))
+	g := parts.Track.AlignItems(ui.Stretch).
+		Padding(t.Space(0.5)).Gap(t.Space(0.5)).
+		Radius(t.Radius).Background(t.Surface).Border(1, t.Border).Label(label)
+	padY, padX := t.Space(1), t.Space(3)
+	rad := max(t.Radius-t.Space(0.5), 0)
+	g.Children(func() {
+		for i, segLabel := range labels {
+			s := parts.Segment(i)
+			top, bot := padY, padY
+			if mixed && !settingsHasNonASCII(segLabel) {
+				// Shift ASCII-only labels ("English", "500") up by 1.5 DIPs so their
+				// cap/baseline aligns optically with YaHei CJK siblings.
+				const lift = float32(1.5)
+				top -= lift
+				bot += lift
+			}
+			s.Padding(top, padX, bot, padX).Gap(t.Space(1.5)).Radius(rad).TextColor(t.Text)
+			switch {
+			case i == *selected:
+				s.Background(t.SurfacePressed).Shadow(0, 1, 2, 0, ui.RGBA(0, 0, 0, 0.12))
+			case s.Pressed():
+				s.Background(t.SurfacePressed)
+			case s.Hovered():
+				s.Background(t.SurfaceHover)
+			}
+			s.Children(func() { ui.Text(c, segLabel).SingleLine() })
+		}
+	})
+	return g
 }
 
 // choiceSegments turns an integer preference and its usual choices into a

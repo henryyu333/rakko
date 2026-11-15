@@ -102,6 +102,7 @@ type shelf struct {
 	dataDir                                                     string                  // where state.json and settings.json live
 	settingsBroken                                              bool                    // settings.json unreadable: never overwrite it
 	settingsWin                                                 *mygo.Window            // the 设置 window; nil while closed
+	settingsWinRadius                                           float32                 // Windows 11 8 DIP corner radius, 0 elsewhere
 	settingsPrevPID                                             int                     // app to hand the keyboard back to when it closes
 	perm                                                        permissionFlow          // 系统权限 unified entry's guided walk; zero = idle
 	loginOn                                                     bool                    // 开机时自动启动，read back each time the window opens
