@@ -745,6 +745,7 @@
   "settingsNotchPage": "Appearance & Notifications",
   "settingsShapeGroup": "Appearance",
   "settingsNotchFoot": "Reduce Transparency draws the panel black.",
+  "settingsNotchFootWin": "Turning transparency effects off draws the panel black.",
   "settingsWindowGroup": "Windows",
   "settingsTidyGroup": "Keeping Things Tidy",
   "settingsClipGroup": "Recording",

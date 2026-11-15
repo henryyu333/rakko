@@ -7575,6 +7575,16 @@ func (msgs Messages) SettingsNotchFoot() string {
 	return Catalog.Format(msgs.locale, "settingsNotchFoot", nil)
 }
 
+// SettingsNotchFootWin says "关闭透明效果时面板画成纯黑。"
+// in the language the app shows.
+func SettingsNotchFootWin() string { return In(i18n.Locale()).SettingsNotchFootWin() }
+
+// SettingsNotchFootWin says "关闭透明效果时面板画成纯黑。"
+// in the language of msgs.
+func (msgs Messages) SettingsNotchFootWin() string {
+	return Catalog.Format(msgs.locale, "settingsNotchFootWin", nil)
+}
+
 // SettingsWindowGroup says "窗口"
 // in the language the app shows.
 func SettingsWindowGroup() string { return In(i18n.Locale()).SettingsWindowGroup() }

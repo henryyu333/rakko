@@ -24,6 +24,7 @@ func TestWindowsSettingsPagesSayWindowsWords(t *testing.T) {
 		"⌘", "⌃", "⌥", "⇧", "↩",
 		"访达", "Finder", "隔空投送", "AirDrop",
 		"菜单栏", "快速查看", "Quick Look",
+		"减少透明度", "Reduce Transparency",
 	}
 	for _, lang := range []string{"zh-Hans", "en"} {
 		a, view := newSettingsShelf(t)
@@ -66,6 +67,12 @@ func TestWindowsSettingsPagesSayWindowsWords(t *testing.T) {
 		want = osTextFor(true, l.SettingsGroupNotch(), l.SettingsGroupNotchWin())
 		if !strings.Contains(joined, want) {
 			t.Errorf("%s appearance page missing %q", lang, want)
+		}
+		// The footnote about the system switch that draws the panel black
+		// names Windows' own switch, not macOS's Reduce Transparency.
+		want = osTextFor(true, l.SettingsNotchFoot(), l.SettingsNotchFootWin())
+		if !strings.Contains(joined, want) {
+			t.Errorf("%s appearance page footnote is not %q: %q", lang, want, joined)
 		}
 	}
 }

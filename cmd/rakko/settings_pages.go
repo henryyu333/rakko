@@ -121,7 +121,7 @@ func (a *shelf) settingsNotchPage(c *ui.Context) {
 			}
 		})
 	})
-	settingsFootnote(c, "shape-foot", l.SettingsNotchFoot())
+	settingsFootnote(c, "shape-foot", osText(l.SettingsNotchFoot(), l.SettingsNotchFootWin()))
 
 	// 桌宠: the desktop otter's own two switches. A build without the
 	// artwork draws no otter, so the group is not there either — an empty

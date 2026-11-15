@@ -745,6 +745,7 @@
   "settingsNotchPage": "外形与提示",
   "settingsShapeGroup": "外形",
   "settingsNotchFoot": "减少透明度时面板画成纯黑。",
+  "settingsNotchFootWin": "关闭透明效果时面板画成纯黑。",
   "settingsWindowGroup": "窗口",
   "settingsTidyGroup": "整理",
   "settingsClipGroup": "记录",
