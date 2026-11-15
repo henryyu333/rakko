@@ -30,9 +30,12 @@ const (
 	toolJiggle   = 300 * time.Millisecond
 )
 
-// toolMoveSpring moves cards to their new cells after the panel's packing
+// toolsMoveSpring moves cards to their new cells after the panel's packing
 // changes: 300 ms, Bounce 0.15 (design §2).
-var toolMoveSpring = ui.Animation{Spring: ui.SpringOptions{Duration: 300 * time.Millisecond, Bounce: 0.15}}
+var (
+	toolMoveSpring    = ui.Animation{Spring: ui.SpringOptions{Duration: 300 * time.Millisecond, Bounce: 0.15}}
+	toolsLayoutDispatch = mygo.RunOnMain
+)
 
 // toolCell is one card's position in content coordinates.
 type toolCell struct {
@@ -407,10 +410,6 @@ func (a *shelf) mutateToolsInteractive(fn func(*layout.Layout) bool) bool {
 	return a.mutateToolsWrite(fn, toolsDeferLayoutWrite)
 }
 
-func (a *shelf) mutateToolsDeferred(fn func(*layout.Layout) bool) bool {
-	return a.mutateToolsWrite(fn, true)
-}
-
 func (a *shelf) mutateToolsWrite(fn func(*layout.Layout) bool, deferWrite bool) bool {
 	l := a.toolsLayout()
 	l.Cards = slices.Clone(l.Cards)
@@ -424,7 +423,14 @@ func (a *shelf) mutateToolsWrite(fn func(*layout.Layout) bool, deferWrite bool) 
 				a.toolsSave = &layoutSaveQueue{}
 			}
 			a.toolsSave.enqueue(a.dataDir, l, func(err error) {
-				log.Printf("tools layout: %v", err)
+				wrapped := fmt.Errorf("tools layout: %w", err)
+				select {
+				case <-a.stop:
+					// During OnWillQuit, main thread is waiting in flushToolsLayout().
+					log.Print(wrapped)
+				default:
+					toolsLayoutDispatch(func() { a.report(wrapped) })
+				}
 			})
 		} else {
 			a.flushToolsLayout()

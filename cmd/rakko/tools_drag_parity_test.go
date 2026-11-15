@@ -1,10 +1,12 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo"
@@ -98,20 +100,20 @@ func TestToolsDeferredWriteCoalescesAndFlushesLatest(t *testing.T) {
 	lastMove := cards[2].ID
 
 	// Start write 1 and block inside it while two rapid reorders follow.
-	a.mutateToolsDeferred(func(l *layout.Layout) bool {
+	a.mutateToolsWrite(func(l *layout.Layout) bool {
 		l.MoveCard(firstMove, 0)
 		return true
-	})
+	}, true)
 	<-started
 
-	a.mutateToolsDeferred(func(l *layout.Layout) bool {
+	a.mutateToolsWrite(func(l *layout.Layout) bool {
 		l.MoveCard(secondMove, 0)
 		return true
-	})
-	a.mutateToolsDeferred(func(l *layout.Layout) bool {
+	}, true)
+	a.mutateToolsWrite(func(l *layout.Layout) bool {
 		l.MoveCard(lastMove, 0)
 		return true
-	})
+	}, true)
 	close(release)
 	a.flushToolsLayout()
 
@@ -134,5 +136,40 @@ func TestToolsDeferredWriteCoalescesAndFlushesLatest(t *testing.T) {
 		if mode := info.Mode().Perm(); mode != 0o600 {
 			t.Fatalf("layout.json perm = %o, want 0600", mode)
 		}
+	}
+}
+
+func TestToolsDeferredWriteReportsErrorOnMain(t *testing.T) {
+	oldDispatch := toolsLayoutDispatch
+	var dispatched bool
+	toolsLayoutDispatch = func(fn func()) {
+		dispatched = true
+		fn()
+	}
+	t.Cleanup(func() { toolsLayoutDispatch = oldDispatch })
+
+	a := parityWindow()
+	a.setTab(pageTools)
+	a.dataDir = t.TempDir()
+	wantErr := errors.New("disk full")
+	a.toolsSave = &layoutSaveQueue{
+		write: func(string, layout.Layout) error { return wantErr },
+	}
+
+	cards := a.toolsLayout().Cards
+	if len(cards) < 2 {
+		t.Fatalf("need at least 2 default cards, got %d", len(cards))
+	}
+	a.mutateToolsWrite(func(l *layout.Layout) bool {
+		l.MoveCard(cards[len(cards)-1].ID, 0)
+		return true
+	}, true)
+	a.flushToolsLayout()
+
+	if !dispatched {
+		t.Fatal("failed deferred write did not dispatch to main thread")
+	}
+	if a.statusKind != statusErr || !strings.Contains(a.status, "tools layout: disk full") {
+		t.Fatalf("a.report status = (kind=%v, msg=%q), want statusErr containing %q", a.statusKind, a.status, "tools layout: disk full")
 	}
 }
