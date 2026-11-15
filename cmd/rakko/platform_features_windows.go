@@ -26,4 +26,8 @@ const (
 	// measured anchor is a simulated one: the shell draws the notch itself
 	// in the closed state, where a Mac leans on the system's own black.
 	simulatedNotchHousing = true
+	// The desktop preview window carries the card past the page's content
+	// box; on Windows the dashed landing slot stays as long as the pointer
+	// is still over the page.
+	dragSlotFollowsPointer = true
 )

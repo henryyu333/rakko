@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo"
-	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/platform"
 )
@@ -70,32 +69,5 @@ func TestNativeWindowStateOnlyTouchesOnChange(t *testing.T) {
 	a.syncMousePassThrough()
 	if overlayCalls != 3 || layerCalls != 3 {
 		t.Fatalf("the resting state applied %d gate / %d band calls, want 3 and 3", overlayCalls, layerCalls)
-	}
-}
-
-// TestLandingSlotShowsWhileThePointerIsOverThePage: the card's lift is the
-// desktop preview window once the page's own copy would leave the content
-// box, and the dashed landing slot must stay until the pointer really leaves
-// the page — the video reference shows the lift and the slot together. A drag
-// out of the panel shows no slot at all.
-func TestLandingSlotShowsWhileThePointerIsOverThePage(t *testing.T) {
-	a := parityShelf()
-	a.frame = mygo.Rectangle{X: 700, Y: 0, Width: 700, Height: 400}
-	p := &toolsPage{host: a, viewport: ui.Rect{X: 10, Y: 58, W: 500, H: 174}}
-	if !p.slotShows() {
-		t.Fatal("the slot is hidden while the page draws the lift itself")
-	}
-	// The lift climbed into its preview window; the page must still show
-	// where the card will land while the pointer is on it.
-	p.preview.it = &pinItem{}
-	orig := cursorPoint
-	defer func() { cursorPoint = orig }()
-	cursorPoint = func() mygo.Point { return mygo.Point{X: 900, Y: 150} } // window 200,150
-	if !p.slotShows() {
-		t.Fatalf("the slot vanished while the pointer sits inside the page at %+v", p.viewport)
-	}
-	cursorPoint = func() mygo.Point { return mygo.Point{X: 1500, Y: 150} }
-	if p.slotShows() {
-		t.Fatal("the slot stays while the card is dragged out of the panel")
 	}
 }

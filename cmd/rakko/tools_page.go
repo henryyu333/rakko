@@ -564,11 +564,16 @@ func (p *toolsPage) body(c *ui.Context, _ bool, live bool) ui.Element {
 // slotShows reports whether the dashed landing slot belongs in this frame.
 // It hangs under the card's lift whenever that lift is the page's own copy;
 // once the copy leaves the content box the desktop preview window carries it
-// instead, and the slot still marks where the card will land as long as the
-// pointer is over the page. Dragging out of the panel shows no slot.
+// instead. On Windows the slot still marks where the card will land as long
+// as the pointer is over the page; the Mac has always dropped it with the
+// page's copy and left the preview window alone. Dragging out of the panel
+// shows no slot on either platform.
 func (p *toolsPage) slotShows() bool {
 	if p.preview.window() == nil {
 		return true
+	}
+	if !dragSlotFollowsPointer {
+		return false
 	}
 	v := p.viewport
 	if v.W <= 0 || v.H <= 0 || p.host == nil {

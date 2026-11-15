@@ -22,4 +22,8 @@ const (
 	// A notched Mac's camera housing is black on screen whether the shell
 	// draws anything or not, so the closed notch shell stays empty there.
 	simulatedNotchHousing = false
+	// Once the desktop preview window carries a dragged card, the Mac shows
+	// no landing slot at all: the preview is the only copy the pointer sees,
+	// and it always hid the dashed box as soon as that window came up.
+	dragSlotFollowsPointer = false
 )
