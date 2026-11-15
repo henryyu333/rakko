@@ -3,6 +3,7 @@ package main
 import (
 	"testing"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/settings"
@@ -34,7 +35,8 @@ func TestWindowsSettingsLayoutFillsWindowAndClearsCaption(t *testing.T) {
 				thumbnails:        map[string]*ui.Bitmap{}, thumbPending: map[string]bool{},
 				appNames: map[string]string{},
 			}
-			v := ui.NewTester(a.settingsView, settingsWidth, settingsHeight)
+			h := settingsWindowHeight()
+			v := ui.NewTester(a.settingsView, settingsWidth, h)
 			v.SetTitleBar(ui.TitleBar{Height: caption, Right: 138})
 			v.SetLocale("en")
 			v.Frame()
@@ -49,17 +51,17 @@ func TestWindowsSettingsLayoutFillsWindowAndClearsCaption(t *testing.T) {
 				t.Fatalf("card top (410,%d) = %v, want panel #0E0F11", tc.wantGap+2, c)
 			}
 			// Bottom and right edges share the exact same margin.
-			if c := img.RGBAAt(settingsWidth/2, settingsHeight-tc.wantGap-2); c.R != 14 || c.G != 15 || c.B != 17 {
-				t.Fatalf("card bottom (410,%d) = %v, want panel #0E0F11", settingsHeight-tc.wantGap-2, c)
+			if c := img.RGBAAt(settingsWidth/2, h-tc.wantGap-2); c.R != 14 || c.G != 15 || c.B != 17 {
+				t.Fatalf("card bottom (410,%d) = %v, want panel #0E0F11", h-tc.wantGap-2, c)
 			}
-			if c := img.RGBAAt(settingsWidth/2, settingsHeight-2); c.R > 4 || c.G > 4 || c.B > 4 {
-				t.Fatalf("bottom margin (410,%d) = %v, want black frame", settingsHeight-2, c)
+			if c := img.RGBAAt(settingsWidth/2, h-2); c.R > 4 || c.G > 4 || c.B > 4 {
+				t.Fatalf("bottom margin (410,%d) = %v, want black frame", h-2, c)
 			}
-			if c := img.RGBAAt(settingsWidth-tc.wantGap-2, settingsHeight/2); c.R != 14 || c.G != 15 || c.B != 17 {
-				t.Fatalf("card right (%d,%d) = %v, want panel #0E0F11", settingsWidth-tc.wantGap-2, settingsHeight/2, c)
+			if c := img.RGBAAt(settingsWidth-tc.wantGap-2, h/2); c.R != 14 || c.G != 15 || c.B != 17 {
+				t.Fatalf("card right (%d,%d) = %v, want panel #0E0F11", settingsWidth-tc.wantGap-2, h/2, c)
 			}
-			if c := img.RGBAAt(settingsWidth-2, settingsHeight/2); c.R > 4 || c.G > 4 || c.B > 4 {
-				t.Fatalf("right margin (%d,%d) = %v, want black frame", settingsWidth-2, settingsHeight/2, c)
+			if c := img.RGBAAt(settingsWidth-2, h/2); c.R > 4 || c.G > 4 || c.B > 4 {
+				t.Fatalf("right margin (%d,%d) = %v, want black frame", settingsWidth-2, h/2, c)
 			}
 
 			// Sidebar brand & destinations sit cleanly below the 32 DIP top drag strip.
@@ -88,14 +90,14 @@ func TestWindowsSettingsLayoutFillsWindowAndClearsCaption(t *testing.T) {
 			a.settingsPage = settingsPageNotch
 			v.Frame()
 			for range 20 {
-				v.Scroll(settingsWidth*3/4, settingsHeight/2, 0, 400)
+				v.Scroll(settingsWidth*3/4, float32(h)/2, 0, 400)
 				v.Frame()
 			}
 			captionText := a.appLoc().SettingsSnapCaptionWin()
 			if r, ok := v.Find(captionText); !ok {
 				t.Fatalf("the last line %q is missing after scrolling", captionText)
-			} else if r.Y+r.H > float32(settingsHeight-tc.wantGap) {
-				t.Fatalf("the last line ends at y=%.0f, past card bottom %d", r.Y+r.H, settingsHeight-tc.wantGap)
+			} else if r.Y+r.H > float32(h-tc.wantGap) {
+				t.Fatalf("the last line ends at y=%.0f, past card bottom %d", r.Y+r.H, h-tc.wantGap)
 			}
 		})
 	}
@@ -160,13 +162,14 @@ func TestWindowsSettingsScrolledShortcutsTopRowStartsRecording(t *testing.T) {
 		thumbnails:   map[string]*ui.Bitmap{}, thumbPending: map[string]bool{},
 		appNames: map[string]string{},
 	}
-	v := ui.NewTester(a.settingsView, settingsWidth, settingsHeight)
+	h := settingsWindowHeight()
+	v := ui.NewTester(a.settingsView, settingsWidth, h)
 	v.SetTitleBar(ui.TitleBar{Height: caption, Right: 138})
 	v.SetLocale("zh-Hans")
 	v.Frame()
 
 	for range 30 {
-		v.Scroll(settingsWidth*3/4, settingsHeight/2, 0, 400)
+		v.Scroll(settingsWidth*3/4, float32(h)/2, 0, 400)
 		v.Frame()
 	}
 
@@ -226,5 +229,72 @@ func TestWindowsSettingsScrolledShortcutsTopRowStartsRecording(t *testing.T) {
 	if a.settingsRecording != topKind {
 		t.Fatalf("clicking top visible scrolled row %q (rect=%+v, clickY=%.1f) recorded %v, want %v",
 			topLabel, topRect, clickY, a.settingsRecording, topKind)
+	}
+}
+
+func TestWindowsSettingsHeightMatchesMacFirstScreen(t *testing.T) {
+	orig := forWindows
+	t.Cleanup(func() { forWindows = orig })
+
+	work := mygo.Rectangle{X: 0, Y: 0, Width: 1920, Height: 1040}
+	forWindows = false
+	if got := settingsWindowHeight(); got != settingsHeight {
+		t.Fatalf("macOS settingsWindowHeight() = %d, want %d", got, settingsHeight)
+	}
+	if got := settingsWindowMinHeight(); got != settingsMinHeight {
+		t.Fatalf("macOS settingsWindowMinHeight() = %d, want %d", got, settingsMinHeight)
+	}
+	if f := settingsFrame(work); f.Height != settingsHeight {
+		t.Fatalf("macOS settingsFrame.Height = %d, want %d", f.Height, settingsHeight)
+	}
+
+	forWindows = true
+	wantH := settingsHeight + settingsWinHeightExtra
+	if got := settingsWindowHeight(); got != wantH {
+		t.Fatalf("Windows settingsWindowHeight() = %d, want %d", got, wantH)
+	}
+	if got := settingsWindowMinHeight(); got != settingsMinHeight+settingsWinHeightExtra {
+		t.Fatalf("Windows settingsWindowMinHeight() = %d, want %d", got, settingsMinHeight+settingsWinHeightExtra)
+	}
+	f := settingsFrame(work)
+	if f.Height != wantH || f.Y != (work.Height-wantH)/2 {
+		t.Fatalf("Windows settingsFrame = %+v, want height=%d centered at y=%d", f, wantH, (work.Height-wantH)/2)
+	}
+	tiny := mygo.Rectangle{X: 10, Y: 20, Width: 400, Height: 300}
+	if clamped := settingsFrame(tiny); clamped.X != tiny.X || clamped.Y != tiny.Y {
+		t.Fatalf("clamped settingsFrame = %+v, want (%d,%d)", clamped, tiny.X, tiny.Y)
+	}
+
+	// Verify K2, K5, K6 bottom items appear on the initial screen without scrolling.
+	const caption = 32
+	for _, tc := range []struct {
+		name string
+		page settingsPageID
+		find func(*shelf) string
+	}{
+		{"K2-downloads", settingsPageNotch, func(s *shelf) string { return s.appLoc().SettingsLiveDownloads() }},
+		{"K5-codex", settingsPageAIUsage, func(*shelf) string { return "Codex" }},
+		{"K6-ocr", settingsPageShortcuts, func(s *shelf) string { return s.appLoc().SettingsShortcutOCR() }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a := &shelf{
+				dataDir: t.TempDir(), settings: settings.Default(), locale: "zh-Hans",
+				settingsPage: tc.page,
+				thumbnails:   map[string]*ui.Bitmap{}, thumbPending: map[string]bool{},
+				appNames: map[string]string{},
+			}
+			v := ui.NewTester(a.settingsView, settingsWidth, wantH)
+			v.SetTitleBar(ui.TitleBar{Height: caption, Right: 138})
+			v.SetLocale("zh-Hans")
+			v.Frame()
+			r, ok := v.Find(tc.find(a))
+			if !ok {
+				t.Fatalf("%s: %q not found on initial screen", tc.name, tc.find(a))
+			}
+			pm, _ := winPanelLayout(0)
+			if r.Y >= float32(wantH)-pm {
+				t.Fatalf("%s: %q starts at y=%.1f, below card bottom %.1f", tc.name, tc.find(a), r.Y, float32(wantH)-pm)
+			}
+		})
 	}
 }

@@ -194,8 +194,8 @@ func (a *shelf) openSettings() {
 	a.settingsRecording = shortcutNone
 	frame := settingsFrame(mygo.Screen.DisplayNearestPoint(mygo.Screen.CursorScreenPoint()).WorkArea)
 	w := mygo.NewWindow(mygo.WindowOptions{
-		Title: a.appLoc().WindowSettings(), Width: settingsWidth, Height: settingsHeight,
-		MinWidth: settingsMinWidth, MinHeight: settingsMinHeight,
+		Title: a.appLoc().WindowSettings(), Width: settingsWidth, Height: settingsWindowHeight(),
+		MinWidth: settingsMinWidth, MinHeight: settingsWindowMinHeight(),
 		X: frame.X, Y: frame.Y,
 		Hidden: true, BackgroundColor: "#000000",
 		UseContentSize: forWindows,
@@ -307,14 +307,36 @@ func (a *shelf) repaintSettings() {
 	}
 }
 
+// settingsWinHeightExtra is added to the Windows settings window height so
+// the initial viewport exposes the same rows as macOS despite the 32 DIP
+// caption strip, 6 DIP pageTop offset, and Windows font metrics.
+const settingsWinHeightExtra = 60
+
+// settingsWindowHeight adds settingsWinHeightExtra on Windows so the
+// scrollable page viewport matches macOS's first-screen density.
+func settingsWindowHeight() int {
+	if forWindows {
+		return settingsHeight + settingsWinHeightExtra
+	}
+	return settingsHeight
+}
+
+func settingsWindowMinHeight() int {
+	if forWindows {
+		return settingsMinHeight + settingsWinHeightExtra
+	}
+	return settingsMinHeight
+}
+
 // settingsFrame centers the settings window inside the cursor display's
 // work area (menu bar and Dock stay clear). Pure; unit-tested.
 func settingsFrame(work mygo.Rectangle) mygo.Rectangle {
+	h := settingsWindowHeight()
 	x := work.X + (work.Width-settingsWidth)/2
-	y := work.Y + (work.Height-settingsHeight)/2
+	y := work.Y + (work.Height-h)/2
 	x = min(max(x, work.X), max(work.X, work.X+work.Width-settingsWidth))
-	y = min(max(y, work.Y), max(work.Y, work.Y+work.Height-settingsHeight))
-	return mygo.Rectangle{X: x, Y: y, Width: settingsWidth, Height: settingsHeight}
+	y = min(max(y, work.Y), max(work.Y, work.Y+work.Height-h))
+	return mygo.Rectangle{X: x, Y: y, Width: settingsWidth, Height: h}
 }
 
 // setSettingsPage shows one page and starts it at the top, as a sidebar
