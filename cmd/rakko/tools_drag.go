@@ -78,15 +78,23 @@ func (a *shelf) syncDragPreview(pv *dragPreview, id string, span, cardW int, gra
 	}
 	display := displayIDAt(cursor, 0)
 	frame := pinClamp(pinFrameUnder(cursor, grabDX, grabDY, srcW, srcH, cardW), pinArea(display))
+	if dragPreviewSkipRedundantPaint {
+		tilt = float32(math.Round(float64(tilt)*4) / 4)
+	}
 	if pv.it == nil {
 		pv.it = &pinItem{owner: a, cardID: id, span: span, cardW: cardW,
 			display: display, edge: pinFree, expanded: true, preview: true, tilt: tilt, frame: frame}
 		pinOpenPreview(pv.it)
 		return
 	}
+	prevFrame, prevTilt := pv.it.frame, pv.it.tilt
 	pv.it.display, pv.it.frame, pv.it.tilt = display, frame, tilt
-	pv.it.applyFrame()
-	pv.it.invalidate()
+	if !dragPreviewSkipRedundantPaint || pv.it.frame != prevFrame {
+		pv.it.applyFrame()
+	}
+	if !dragPreviewSkipRedundantPaint || pv.it.tilt != prevTilt {
+		pv.it.invalidate()
+	}
 }
 
 func (p *toolsPage) closeDragPreview() { p.preview.close() }

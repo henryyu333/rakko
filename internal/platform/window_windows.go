@@ -172,7 +172,7 @@ func OrderOverlayFront(window uintptr) {
 // WS_EX_TRANSPARENT, which lets every click beside the shell reach the app
 // or the taskbar underneath.
 func SetOverlayAcceptsMouse(window uintptr, accept bool) {
-	if window == 0 {
+	if window == 0 || OverlayIgnoresMouse(window) == !accept {
 		return
 	}
 	if accept {

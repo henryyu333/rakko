@@ -660,3 +660,44 @@ func TestPinAndPreviewMousePolicies(t *testing.T) {
 		t.Fatal("the committed pin stayed click-through")
 	}
 }
+
+// TestOverlayAcceptsMouseIdempotentPreservesPreviewOrder ensures calling
+// SetOverlayAcceptsMouse(panel, true) when the panel already accepts mouse
+// does not call reorderFront and raise the panel in front of a drag preview.
+func TestOverlayAcceptsMouseIdempotentPreservesPreviewOrder(t *testing.T) {
+	class, _ := windows.UTF16PtrFromString("STATIC")
+	panelTitle, _ := windows.UTF16PtrFromString("rakko-panel-z-test")
+	previewTitle, _ := windows.UTF16PtrFromString("rakko-preview-z-test")
+	panel, _, err := procCreateWindowEx.Call(0, uintptr(unsafe.Pointer(class)), uintptr(unsafe.Pointer(panelTitle)),
+		0x80000000 /* WS_POPUP */, 0, 0, 200, 200, 0, 0, 0, 0)
+	if panel == 0 {
+		t.Fatalf("CreateWindowEx panel: %v", err)
+	}
+	defer procDestroyWindow.Call(panel)
+	preview, _, err := procCreateWindowEx.Call(0, uintptr(unsafe.Pointer(class)), uintptr(unsafe.Pointer(previewTitle)),
+		0x80000000 /* WS_POPUP */, 0, 0, 120, 90, 0, 0, 0, 0)
+	if preview == 0 {
+		t.Fatalf("CreateWindowEx preview: %v", err)
+	}
+	defer procDestroyWindow.Call(preview)
+
+	ConfigureOverlayWindow(panel)
+	ConfigureDragPreviewAbove(preview, LayerStatus)
+
+	isBelow := func(front, back uintptr) bool {
+		const gwHwndNext = 2
+		for h, _, _ := procGetWindow.Call(front, gwHwndNext); h != 0; h, _, _ = procGetWindow.Call(h, gwHwndNext) {
+			if h == back {
+				return true
+			}
+		}
+		return false
+	}
+	if !isBelow(preview, panel) {
+		t.Fatal("initial preview must sit in front of panel")
+	}
+	SetOverlayAcceptsMouse(panel, true)
+	if !isBelow(preview, panel) {
+		t.Fatal("idempotent SetOverlayAcceptsMouse(panel, true) raised panel above drag preview")
+	}
+}

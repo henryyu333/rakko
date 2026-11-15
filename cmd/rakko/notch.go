@@ -1011,10 +1011,26 @@ func (a *shelf) pointerSample() mygo.Point {
 // a headless surface has no window to gate, a drag owns the whole frame
 // (the drop and the Spaces edge guard land on the window, not on the drawn
 // shape), and an idle overlay ignores the mouse everywhere.
+// toolsDragActive reports whether the tools page currently owns a pointer
+// drag, resize handle drag, or desktop drag preview window.
+func (a *shelf) toolsDragActive() bool {
+	p, _ := a.page(pageTools).(*toolsPage)
+	if p == nil {
+		return false
+	}
+	return (p.press != nil && (p.press.dragging || p.press.fresh)) ||
+		(p.lp != nil && p.lp.started) ||
+		p.preview.window() != nil ||
+		p.rs != nil
+}
+
 func (a *shelf) overlayAcceptsMouse() bool {
 	wanted := a.overlayWanted()
 	if a.winH == 0 {
 		return wanted
+	}
+	if toolsDragKeepsMouse && a.toolsDragActive() {
+		return true
 	}
 	if a.dragging || a.pointerDrag || a.islandDrag {
 		return wanted

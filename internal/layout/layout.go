@@ -221,15 +221,33 @@ func load(dir string, def func() Layout) (Layout, error) {
 	return l, nil
 }
 
+func marshal(l Layout) ([]byte, error) {
+	data, err := json.MarshalIndent(l, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	return append(data, '\n'), nil
+}
+
 // Write saves l atomically: a temporary file in dir renamed over the
 // target, so a crash never leaves a half-written layout.json.
 func Write(dir string, l Layout) error {
-	data, err := json.MarshalIndent(l, "", "  ")
+	data, err := marshal(l)
 	if err != nil {
 		return err
 	}
-	data = append(data, '\n')
 	return atomicfile.WriteFile(dir, FileName, data, 0o600)
+}
+
+// WriteNoSync saves l atomically without blocking on a disk flush, for
+// interactive desktop gestures where ui responsiveness matters more than
+// surviving an immediate power loss.
+func WriteNoSync(dir string, l Layout) error {
+	data, err := marshal(l)
+	if err != nil {
+		return err
+	}
+	return atomicfile.WriteFileNoSync(dir, FileName, data)
 }
 
 // normalize repairs the recoverable parts of a loaded file (version 2):

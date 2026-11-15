@@ -402,7 +402,11 @@ func (a *shelf) mutateToolsChanged(fn func(*layout.Layout) bool) bool {
 		return false
 	}
 	if a.dataDir != "" && !a.toolsLayBroken {
-		if err := layout.Write(a.dataDir, l); err != nil {
+		write := layout.Write
+		if toolsInteractiveNoSync {
+			write = layout.WriteNoSync
+		}
+		if err := write(a.dataDir, l); err != nil {
 			a.report(fmt.Errorf("tools layout: %w", err))
 			return false // keep the pre-change layout and the file as they were
 		}
