@@ -425,7 +425,8 @@ func TestNESettle(t *testing.T) {
 	}
 }
 
-// TestNETransportVerb (P2-2): play/pause states the verb it wants and may be
+// TestNETransportVerb (P2-2): play/pause names the state it wants — resume
+// when the card is asked to play, pause when it is asked to stop — and may be
 // confirmed; a skip is a single command with no confirmation path that could
 // send it twice.
 func TestNETransportVerb(t *testing.T) {
@@ -435,8 +436,8 @@ func TestNETransportVerb(t *testing.T) {
 		verb    string
 		confirm bool
 	}{
-		{NPPlayPause, true, "pause", true},
-		{NPPlayPause, false, "resume", true},
+		{NPPlayPause, true, "resume", true},
+		{NPPlayPause, false, "pause", true},
 		{NPNext, true, "next", false},
 		{NPPrevious, false, "previous", false},
 		{NowPlayingCommand(0), true, "", false},

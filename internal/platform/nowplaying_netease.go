@@ -388,16 +388,16 @@ func neCommandPath(cmd string) string {
 
 // neTransportVerb is the URL-protocol command one transport action becomes,
 // and whether it carries a pending confirmation. Play/pause is a toggle the
-// client cannot resolve from a verb, so the source states the verb it wants
+// client cannot resolve from a verb, so the source states the state it wants
 // and confirms it; a skip is one verb that is never repeated, because sending
 // it twice would move two tracks.
-func neTransportVerb(cmd NowPlayingCommand, playing bool) (verb string, confirm bool) {
+func neTransportVerb(cmd NowPlayingCommand, wantPlaying bool) (verb string, confirm bool) {
 	switch cmd {
 	case NPPlayPause:
-		if playing {
-			return "pause", true
+		if wantPlaying {
+			return "resume", true
 		}
-		return "resume", true
+		return "pause", true
 	case NPNext:
 		return "next", false
 	case NPPrevious:
