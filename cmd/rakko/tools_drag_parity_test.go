@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -10,8 +11,10 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/layout"
+	"rakko/internal/settings"
 )
 
 func TestToolsDragActiveKeepsOverlayAcceptsMouse(t *testing.T) {
@@ -172,4 +175,145 @@ func TestToolsDeferredWriteReportsErrorOnMain(t *testing.T) {
 	if a.statusKind != statusErr || !strings.Contains(a.status, "tools layout: disk full") {
 		t.Fatalf("a.report status = (kind=%v, msg=%q), want statusErr containing %q", a.statusKind, a.status, "tools layout: disk full")
 	}
+}
+
+func TestToolsLibraryDragCancelClearsPointerSessionAndOverlayMouse(t *testing.T) {
+	oldCursor := cursorPoint
+	defer func() { cursorPoint = oldCursor }()
+
+	setup := func(t *testing.T) (*shelf, *toolsPage, *ui.Tester, ui.Rect) {
+		t.Helper()
+		a := parityShelf()
+		a.dataDir = t.TempDir()
+		a.settings = settings.Default()
+		a.tab = pageTools
+		a.level = 2
+		a.visible = true
+		a.progress = 1
+		a.fx.openK = 1
+		a.winH = 1
+		a.ensurePages()
+		a.toolsLay = &layout.Layout{Version: layout.Version, Cards: []layout.Card{{ID: "ocr"}, {ID: "zip"}}}
+		p := a.toolsPage()
+		p.editing = true
+
+		far := mygo.Point{X: a.dispBounds.Width - 5, Y: a.dispBounds.Height - 5}
+		cursorPoint = func() mygo.Point { return far }
+
+		w := int(math.Ceil(float64(a.pageShellW()))) + 2*earR
+		h := int(math.Ceil(float64(a.pageShellH()))) + navGap + navH + 2
+		view := ui.NewTester(a.view, w, h)
+		view.Frame()
+		view.Frame()
+		a.fx.w, a.fx.h = a.shellSize(1, 0, 0, 0, 0)
+
+		shotName := toolCardDefFor("shot").name(a.appLoc())
+		tile, ok := view.Find(shotName)
+		if !ok {
+			t.Fatalf("library tile %q not found; texts=%v", shotName, view.Texts())
+		}
+		view.Press(tile.X+tile.W/2, tile.Y+tile.H/2)
+		view.Move(tile.X+tile.W/2, tile.Y+tile.H/2-30)
+		view.Frame()
+		if p.lp == nil || !p.lp.started || p.press == nil || !p.press.fresh {
+			t.Fatalf("library drag did not start: lp=%+v press=%+v", p.lp, p.press)
+		}
+		if !a.toolsDragActive() {
+			t.Fatal("toolsDragActive() = false during active library drag")
+		}
+		if got := a.overlayAcceptsMouse(); got != toolsDragKeepsMouse {
+			t.Fatalf("during library drag outside shell: overlayAcceptsMouse=%v, want %v", got, toolsDragKeepsMouse)
+		}
+		return a, p, view, tile
+	}
+
+	assertCleared := func(t *testing.T, a *shelf, p *toolsPage) {
+		t.Helper()
+		if p.lp != nil {
+			t.Fatalf("p.lp stayed non-nil: %+v", p.lp)
+		}
+		if p.press != nil {
+			t.Fatalf("p.press stayed non-nil: %+v", p.press)
+		}
+		if p.rs != nil {
+			t.Fatalf("p.rs stayed non-nil: %+v", p.rs)
+		}
+		if a.toolsDragActive() {
+			t.Fatal("toolsDragActive() stayed true")
+		}
+		if a.overlayAcceptsMouse() {
+			t.Fatal("overlayAcceptsMouse() stayed true outside shell")
+		}
+	}
+
+	t.Run("escape-then-release-and-hide", func(t *testing.T) {
+		a, p, view, tile := setup(t)
+		a.escape()
+		// Checked before the next frame: the engine also ends the press of
+		// a tile that leaves the tree (a canceled release), but the page
+		// must not depend on that frame being built — a folded or idle
+		// overlay may never build it.
+		assertCleared(t, a, p)
+		view.Frame()
+		assertCleared(t, a, p)
+		view.Release(tile.X+tile.W/2, tile.Y+tile.H/2-30)
+		view.Frame()
+		a.hide(hideExplicit)
+		a.fx.openK = 0
+		a.progress = 0
+		a.finishClose()
+		assertCleared(t, a, p)
+	})
+
+	t.Run("leave-via-setTab", func(t *testing.T) {
+		a, p, view, tile := setup(t)
+		a.setTab(pageHome)
+		view.Frame()
+		assertCleared(t, a, p)
+		view.Release(tile.X+tile.W/2, tile.Y+tile.H/2-30)
+		a.hide(hideExplicit)
+		a.fx.openK = 0
+		a.progress = 0
+		a.finishClose()
+		assertCleared(t, a, p)
+	})
+
+	t.Run("leave-via-switchTab", func(t *testing.T) {
+		a, p, view, tile := setup(t)
+		a.switchTab(pageClipboard)
+		view.Frame()
+		assertCleared(t, a, p)
+		view.Release(tile.X+tile.W/2, tile.Y+tile.H/2-30)
+		assertCleared(t, a, p)
+	})
+
+	t.Run("hide-directly", func(t *testing.T) {
+		a, p, view, tile := setup(t)
+		a.hide(hideExplicit)
+		a.fx.openK = 0
+		a.progress = 0
+		assertCleared(t, a, p)
+		view.Release(tile.X+tile.W/2, tile.Y+tile.H/2-30)
+		a.finishClose()
+		assertCleared(t, a, p)
+	})
+
+	t.Run("done-button", func(t *testing.T) {
+		a, p, view, tile := setup(t)
+		done, ok := view.Find(a.appLoc().Done())
+		if !ok {
+			t.Fatalf("done button %q not found", a.appLoc().Done())
+		}
+		view.Release(tile.X+tile.W/2, tile.Y+tile.H/2-30)
+		// Re-start library drag and click Done without releasing first.
+		view.Press(tile.X+tile.W/2, tile.Y+tile.H/2)
+		view.Move(tile.X+tile.W/2, tile.Y+tile.H/2-30)
+		view.Frame()
+		if p.lp == nil || !p.lp.started {
+			t.Fatalf("re-started library drag failed: lp=%+v", p.lp)
+		}
+		view.ClickAt(done.X+done.W/2, done.Y+done.H/2)
+		view.Frame()
+		assertCleared(t, a, p)
+	})
 }

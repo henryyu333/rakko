@@ -1012,10 +1012,13 @@ func (a *shelf) pointerSample() mygo.Point {
 // (the drop and the Spaces edge guard land on the window, not on the drawn
 // shape), and an idle overlay ignores the mouse everywhere.
 // toolsDragActive reports whether the tools page currently owns a pointer
-// drag, resize handle drag, or desktop drag preview window.
+// drag, resize handle drag, or desktop drag preview window. Only an open
+// panel showing the tools page can own one: a gesture left over in a folded
+// panel (finishClose clears it after the fade) or on a page that is no
+// longer shown must not keep the overlay taking the mouse.
 func (a *shelf) toolsDragActive() bool {
 	p, _ := a.page(pageTools).(*toolsPage)
-	if p == nil {
+	if p == nil || !a.visible || a.tab != pageTools {
 		return false
 	}
 	return (p.press != nil && (p.press.dragging || p.press.fresh)) ||
@@ -1681,9 +1684,8 @@ func (a *shelf) escape() {
 		}
 		if p := a.toolsPage(); p != nil && p.editing {
 			// Esc ends editing; the panel keeps its content.
-			p.closeDragPreview()
-			p.editing, p.press = false, nil
-			p.rs, p.menu = nil, nil
+			p.endEditing()
+			a.syncMousePassThrough()
 			if a.win != nil {
 				a.win.Invalidate()
 			}
@@ -1813,6 +1815,9 @@ func (a *shelf) hide(exit hideExit) {
 	// The fold runs inside the envelope the open panel had: take it before
 	// the first closing frame, so no tick resizes the surface under the
 	// shell coming down.
+	if p := a.toolsPage(); p != nil {
+		p.cancelGestures()
+	}
 	a.beginSurfaceHold()
 	a.syncMousePassThrough()
 	// The guide's arrow keys leave with the panel they belong to.

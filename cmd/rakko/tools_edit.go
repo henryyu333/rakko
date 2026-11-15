@@ -295,9 +295,7 @@ func (p *toolsPage) toolResizeBand(c *ui.Context) {
 // beginResize starts a corner drag. The pointer's window position is all
 // the gesture needs: the delta stays valid while the panel grows under it.
 func (p *toolsPage) beginResize(id string, spec layout.Card, cell toolCell, wx, wy float32) {
-	p.closeMenu()
-	p.press = nil
-	p.closeDragPreview()
+	p.cancelGestures()
 	p.rs = &toolResize{
 		id: id, orig: spec, startX: wx, startY: wy,
 		w0: cell.w, h0: cell.h, cur: [2]int{spec.Cols(), spec.Height()},
@@ -365,8 +363,7 @@ func (p *toolsPage) endResize() {
 
 // openMenu opens the card's context menu at stage coordinates.
 func (p *toolsPage) openMenu(id string, x, y float32) {
-	p.closeMenu()
-	p.press, p.rs = nil, nil
+	p.cancelGestures()
 	p.menu = &toolMenu{id: id, x: x, y: y}
 	if p.host.win != nil {
 		p.host.win.Invalidate()
@@ -492,8 +489,9 @@ func (p *toolsPage) toolMenuView(c *ui.Context, live bool) {
 			editLabel = l.ToolsMenuDone()
 		}
 		menuItem(c, "menu-edit", editLabel, false, live, func() {
-			p.editing = !p.editing
-			p.press, p.rs, p.menu = nil, nil, nil
+			next := !p.editing
+			p.endEditing()
+			p.editing = next
 		})
 		menuItem(c, "menu-pin", l.ToolsMenuPin(), false, live, func() {
 			p.pinFromMenu(m.id)

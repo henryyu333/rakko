@@ -522,6 +522,26 @@ func (q *layoutSaveQueue) flush() {
 	q.mu.Unlock()
 }
 
+// cancelGestures ends every pointer session the page may hold — a card
+// press or drag, the library tile's press, a corner resize, the desktop
+// preview window — and closes the card menu. Each of them keeps the overlay
+// taking the mouse on Windows (toolsDragActive), so a path that abandons a
+// gesture must drop all of them, not only the ones it started.
+func (p *toolsPage) cancelGestures() {
+	p.closeDragPreview()
+	p.closeMenu()
+	p.press, p.lp, p.rs = nil, nil, nil
+	p.dragCols, p.dragRows = 0, 0
+}
+
+// endEditing leaves the editing mode with no gesture left behind.
+func (p *toolsPage) endEditing() {
+	p.cancelGestures()
+	p.editing = false
+	p.jiggleID = ""
+	p.chromeAt = time.Time{}
+}
+
 // resetToolsEdit ends editing and any gesture; called on hide and on
 // leaving the page so re-entry starts clean.
 func (a *shelf) resetToolsEdit() {
@@ -532,11 +552,7 @@ func (a *shelf) resetToolsEdit() {
 		}
 	}
 	if p := a.toolsPage(); p != nil {
-		p.closeDragPreview()
-		p.editing, p.press = false, nil
-		p.jiggleID = ""
-		p.dragCols, p.dragRows = 0, 0
-		p.rs, p.menu = nil, nil
+		p.endEditing()
 		if a.win != nil {
 			a.win.Invalidate()
 		}
@@ -566,9 +582,7 @@ func (a *shelf) toolDoneButton(c *ui.Context, live bool, key string) ui.Element 
 		Background(accent).Center().Label(loc(c).Done())
 	if live && b.Clicked() {
 		if p := a.toolsPage(); p != nil {
-			p.closeDragPreview()
-			p.editing, p.press = false, nil
-			p.rs, p.menu, p.chromeAt = nil, nil, time.Time{}
+			p.endEditing()
 		}
 	}
 	b.Children(func() {
@@ -1157,7 +1171,7 @@ func (p *toolsPage) toolChrome(c *ui.Context, live bool) {
 				l.RemoveCard(cell.id)
 				return true
 			}) {
-				p.press, p.menu, p.rs = nil, nil, nil
+				p.cancelGestures()
 			}
 		}
 		minus.HandleInput(func(ev ui.InputEvent) bool {
