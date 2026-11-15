@@ -4,7 +4,7 @@ go 1.27.4
 
 require (
 	github.com/ebitengine/purego v0.11.1
-	github.com/egoist/mygo v0.9.0
+	github.com/egoist/mygo v0.9.1
 	github.com/ledongthuc/pdf v0.0.0-20261020125853-5e46805f718e
 	golang.org/x/image v0.46.0
 	golang.org/x/net v0.59.0
