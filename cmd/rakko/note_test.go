@@ -437,6 +437,8 @@ func TestNoteFrameUnder(t *testing.T) {
 			mygo.Rectangle{X: 600 + (278-noteW)/2, Y: 192, Width: noteW, Height: noteH}},
 		{"no room below, opens above", mygo.Rectangle{X: 600, Y: 700, Width: 200, Height: 84},
 			mygo.Rectangle{X: 600 + (200-noteW)/2, Y: 700 - noteH - 8, Width: noteW, Height: noteH}},
+		{"tall anchor at the top, no room on either side", mygo.Rectangle{X: 0, Y: 0, Width: 470, Height: 659},
+			mygo.Rectangle{X: 0 + (470-noteW)/2, Y: 33 + 862 - noteH, Width: noteW, Height: noteH}},
 		{"clamped at the left edge", mygo.Rectangle{X: 0, Y: 100, Width: 100, Height: 84},
 			mygo.Rectangle{X: 0, Y: 192, Width: noteW, Height: noteH}},
 		{"clamped at the right edge", mygo.Rectangle{X: 1400, Y: 100, Width: 60, Height: 84},

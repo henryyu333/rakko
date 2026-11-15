@@ -367,7 +367,7 @@ func (n *noteUI) open() bool {
 			Hidden: true, BackgroundColor: noteBg, AlwaysOnTop: n.top,
 			TitleBarStyle:     mygo.TitleBarHidden,
 			HideWindowButtons: true,
-			MinWidth:  noteMinW, MinHeight: noteMinH,
+			MinWidth:          noteMinW, MinHeight: noteMinH,
 			Content: ui.View(a.noteView),
 		})
 		w.OnClose(n.onClose)
@@ -463,13 +463,17 @@ func (a *shelf) freshNoteFrame() mygo.Rectangle {
 
 // noteFrameUnder is where a note window opens for an anchor and a work
 // area: centred under the anchor, above it when there is no room below,
-// and kept inside the area. Pure; unit-tested.
+// and kept inside the area. A tall anchor at the top of the screen leaves
+// room on neither side; the note stays below and is clamped to the area,
+// not flipped above into the anchor's own top edge. Pure; unit-tested.
 func noteFrameUnder(anchor, area mygo.Rectangle) mygo.Rectangle {
 	const gap = 8
 	x := anchor.X + (anchor.Width-noteW)/2
 	y := anchor.Y + anchor.Height + gap
 	if y+noteH > area.Y+area.Height {
-		y = anchor.Y - noteH - gap
+		if above := anchor.Y - noteH - gap; above >= area.Y {
+			y = above
+		}
 	}
 	x = max(area.X, min(x, area.X+max(0, area.Width-noteW)))
 	y = max(area.Y, min(y, area.Y+max(0, area.Height-noteH)))
