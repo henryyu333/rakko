@@ -352,6 +352,11 @@ func (a *shelf) openRename(items []store.Item) {
 		a.modules = append(a.modules, renameModule{host: a})
 	}
 	r := a.rn
+	if forWindows {
+		// The panel is topmost and would cover the window's drawn title
+		// bar and its controls; close it as the Settings gear does.
+		a.hide(hideExplicit)
+	}
 	r.items = items
 	r.mode, r.find, r.replace = int(modeReplace), "", ""
 	r.addText, r.addSeg = "", 1
