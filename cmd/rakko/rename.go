@@ -379,6 +379,9 @@ func (a *shelf) openRename(items []store.Item) {
 		DisableResize:        true, DisableMaximize: true, DisableFullScreen: true,
 		Content: ui.View(a.renameView),
 	})
+	// The dark chrome regardless of the system appearance: AppKit's on
+	// macOS, DWM's caption on Windows, which also gets the framed look.
+	platform.SetWindowAppearance(w.NativeHandle(), true)
 	platform.ConfigureFramedWindow(w.NativeHandle(), true)
 	w.SetWindowButtonsTheme(mygo.ThemeDark)
 	w.SetBounds(frame)

@@ -171,9 +171,10 @@ func (a *shelf) openSettings() {
 		Content: ui.View(a.settingsView),
 	})
 	// The title bar follows the window's own dark chrome whatever the system
-	// appearance is, matching the mock's dark "ShelfU 设置" window. Its
-	// controls are Windows', drawn over the page's top-right corner: they
-	// draw for a dark page, and the page reserves their strip.
+	// appearance is, matching the mock's dark "ShelfU 设置" window.
+	// SetWindowAppearance pins it on macOS (AppKit) and on Windows (DWM's
+	// dark caption); ConfigureFramedWindow adds Windows' corners and shadow.
+	platform.SetWindowAppearance(w.NativeHandle(), true)
 	platform.ConfigureFramedWindow(w.NativeHandle(), true)
 	w.SetWindowButtonsTheme(mygo.ThemeDark)
 	w.SetBounds(frame)
