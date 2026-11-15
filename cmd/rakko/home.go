@@ -549,7 +549,7 @@ func (a *shelf) resultsView(c *ui.Context, r ui.Rect, opacity float32) {
 				reveal := ui.Row(c.Key("results-reveal")).Gap(5).AlignItems(ui.Center)
 				reveal.Children(func() {
 					panelLabel(c, nil, osText(l.ItemShowInFinder(), l.ItemShowInFinderWin()), 11.5, 600).TextColor(ink2)
-					keycap("reveal-cmd", shortcutLabel("CmdOrCtrl"))
+					keycap("reveal-cmd", osText("⌘", "Ctrl"))
 					keycap("reveal-enter", osText("↩", "Enter"))
 				})
 			}
