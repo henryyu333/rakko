@@ -34,4 +34,4 @@ require (
 tool github.com/egoist/mygo/cmd/mygo
 
 // 等 egoist/mygo 合并发版后删掉
-replace github.com/egoist/mygo => github.com/henryyu333/mygo v0.9.2-0.20261115155405-7cf9d0bab68f
+replace github.com/egoist/mygo => github.com/henryyu333/mygo v0.9.2-0.20261115201012-104c76999fc2
