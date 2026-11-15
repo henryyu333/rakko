@@ -17,9 +17,9 @@ var macOnlyText = regexp.MustCompile(`⌘|⌃|⌥|⇧|访达|Finder|隔空投送
 // is already that wording.
 var notchText = regexp.MustCompile(`刘海|(^|[^A-Za-z])[Nn]otch([^A-Za-z]|$)`)
 
-// macOnlySurfaces are pages the Windows build never opens: the permission
-// guide, and the bundle move that only exists in a macOS .app. Their
-// entries stay as macOS says them.
+// macOnlySurfaces are pages and entry points the Windows build never opens:
+// the permission guide, the bundle move that only exists in a macOS .app,
+// and macOS-only AirDrop controls. Their entries stay as macOS says them.
 var macOnlySurfaces = map[string]bool{
 	"permStep":                      true,
 	"permScreenDetail":              true,
@@ -27,6 +27,8 @@ var macOnlySurfaces = map[string]bool{
 	"permAccessibilityGloss":        true,
 	"permAccessibilityDetail":       true,
 	"onboardingMoveWhyTranslocated": true,
+	"itemAirDrop":                   true,
+	"cardAirDrop":                   true,
 }
 
 func readCatalog(t *testing.T, name string) map[string]string {

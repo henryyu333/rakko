@@ -266,7 +266,12 @@ func dropActionsForIn(l locales.Messages, paths []string, class dropClass) []dro
 	if len(paths) == 0 {
 		return nil
 	}
-	air := dropAction{id: "airdrop", icon: shareSymbol, label: osText(l.CardAirDrop(), l.CardAirDropWin()), isShare: true}
+	withShare := func(acts ...dropAction) []dropAction {
+		if airDropSupported {
+			acts = append(acts, dropAction{id: "airdrop", icon: shareSymbol, label: l.CardAirDrop(), isShare: true})
+		}
+		return acts
+	}
 	switch class {
 	case classImages:
 		allJPEG := true
@@ -284,30 +289,27 @@ func dropActionsForIn(l locales.Messages, paths []string, class dropClass) []dro
 		if allJPEG {
 			other = dropAction{id: "topng", icon: imgSymbol, label: l.CardToPNG(), target: toPNG}
 		}
-		return []dropAction{
-			{id: "fit1m", icon: shrinkSymbol, label: l.CardFit1M(), target: toFit1M},
-			{id: "topdf", icon: pdfSymbol, label: pdfLabel, sub: pdfSub, target: pdfTarget},
+		return withShare(
+			dropAction{id: "fit1m", icon: shrinkSymbol, label: l.CardFit1M(), target: toFit1M},
+			dropAction{id: "topdf", icon: pdfSymbol, label: pdfLabel, sub: pdfSub, target: pdfTarget},
 			other,
-			air,
-		}
+		)
 	case classPDFs:
-		return []dropAction{
-			{id: "toword", icon: docSymbol, label: l.CardToWord(), target: toWord},
-			{id: "topng", icon: imgSymbol, label: l.DropPagesAsImages(), target: toPNG},
+		return withShare(
+			dropAction{id: "toword", icon: docSymbol, label: l.CardToWord(), target: toWord},
+			dropAction{id: "topng", icon: imgSymbol, label: l.DropPagesAsImages(), target: toPNG},
 			zipAction(l, len(paths)),
-			air,
-		}
+		)
 	case classArchives:
 		sub := filepath.Base(paths[0])
 		if len(paths) > 1 {
 			sub = l.DropCountItems(len(paths))
 		}
-		return []dropAction{
-			{id: "extract", icon: unzipSymbol, label: l.CardExtract(), sub: sub, target: toExtract},
-			air,
-		}
+		return withShare(
+			dropAction{id: "extract", icon: unzipSymbol, label: l.CardExtract(), sub: sub, target: toExtract},
+		)
 	}
-	return []dropAction{zipAction(l, len(paths)), air}
+	return withShare(zipAction(l, len(paths)))
 }
 
 // zipAction builds the 打成 zip cell; its subtitle previews the count the
@@ -689,7 +691,9 @@ func (a *shelf) runDropActionFiles(act dropAction, files []string, data transfer
 		a.setTab(pageTray)
 	}
 	if act.isShare {
-		a.shareNearby(files, nil)
+		if err := shareNearby(files, nil); err != nil {
+			a.report(err)
+		}
 		return
 	}
 	items := make([]store.Item, len(files))

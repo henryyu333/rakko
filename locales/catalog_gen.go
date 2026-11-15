@@ -9089,16 +9089,6 @@ func (msgs Messages) ItemQuickLookWin() string {
 	return Catalog.Format(msgs.locale, "itemQuickLookWin", nil)
 }
 
-// ItemAirDropWin says "附近共享…"
-// in the language the app shows.
-func ItemAirDropWin() string { return In(i18n.Locale()).ItemAirDropWin() }
-
-// ItemAirDropWin says "附近共享…"
-// in the language of msgs.
-func (msgs Messages) ItemAirDropWin() string {
-	return Catalog.Format(msgs.locale, "itemAirDropWin", nil)
-}
-
 // ItemCopiedImageWin says "已复制图片 · 在其他应用按 Ctrl+V 粘贴"
 // in the language the app shows.
 func ItemCopiedImageWin() string { return In(i18n.Locale()).ItemCopiedImageWin() }
@@ -9137,16 +9127,6 @@ func UsageLocalTitleWin() string { return In(i18n.Locale()).UsageLocalTitleWin()
 // in the language of msgs.
 func (msgs Messages) UsageLocalTitleWin() string {
 	return Catalog.Format(msgs.locale, "usageLocalTitleWin", nil)
-}
-
-// CardAirDropWin says "附近共享"
-// in the language the app shows.
-func CardAirDropWin() string { return In(i18n.Locale()).CardAirDropWin() }
-
-// CardAirDropWin says "附近共享"
-// in the language of msgs.
-func (msgs Messages) CardAirDropWin() string {
-	return Catalog.Format(msgs.locale, "cardAirDropWin", nil)
 }
 
 // NoteRevealWin says "在文件资源管理器中显示"

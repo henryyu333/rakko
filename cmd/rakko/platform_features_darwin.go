@@ -43,4 +43,6 @@ const (
 	// drop zone already knows the dragged paths before the pointer enters
 	// the panel window.
 	hoverFilesFromOffer = false
+	// AirDrop is macOS-only; Windows omits Apple-specific sharing entry points.
+	airDropSupported = true
 )

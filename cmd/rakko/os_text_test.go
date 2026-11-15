@@ -52,21 +52,18 @@ func TestShortcutSpellingFollowsThePlatform(t *testing.T) {
 	}
 }
 
-// The tools page's card title is one of the few hard-coded strings; it must
-// still name the Windows feature.
-func TestToolCatalogShareNameFollowsThePlatform(t *testing.T) {
-	orig := forWindows
-	t.Cleanup(func() { forWindows = orig })
-
-	for _, tc := range []struct {
-		windows bool
-		want    string
-	}{{false, "隔空投送"}, {true, "附近共享"}} {
-		forWindows = tc.windows
-		for _, def := range toolCatalog() {
-			if def.id == "airdrop" && def.title != tc.want {
-				t.Errorf("airdrop card title = %q, want %q", def.title, tc.want)
+// The tools catalog offers AirDrop on macOS and omits nearby sharing on Windows.
+func TestToolCatalogAirDropFollowsPlatform(t *testing.T) {
+	found := false
+	for _, def := range toolCatalog() {
+		if def.id == "airdrop" {
+			found = true
+			if def.title != "隔空投送" {
+				t.Errorf("airdrop card title = %q, want 隔空投送", def.title)
 			}
 		}
+	}
+	if found != airDropSupported {
+		t.Errorf("toolCatalog contains airdrop = %v, want %v", found, airDropSupported)
 	}
 }

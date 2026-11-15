@@ -49,4 +49,7 @@ const (
 	// pointer enters Rakko's window; hover file paths arrive through
 	// ui.DataDragOver's transfer.Offer.Files.
 	hoverFilesFromOffer = true
+	// Windows omits Apple-specific sharing features (AirDrop / nearby sharing)
+	// from context menus, drop actions, and the tools catalog.
+	airDropSupported = false
 )

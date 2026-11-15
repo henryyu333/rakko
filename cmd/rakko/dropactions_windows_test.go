@@ -71,12 +71,17 @@ func TestWindowsDropZoneUsesHoverOfferFiles(t *testing.T) {
 		t.Fatalf("offer state: known=%v count=%d; want true, 1", a.hoverOfferKnown, a.hoverOfferCount)
 	}
 
-	// Render panel: shows PDF drop zone with Windows share label ("附近共享").
+	// Render panel: shows PDF drop zone with 3 action cells and no nearby-share entry.
 	a.visible = true
 	view := ui.NewTester(a.view, sheetW, winDropTestH)
-	for _, want := range []string{"投放", "1 个 PDF", "放入托盘", "转 Word", "每页存成图片", "打成 zip", "附近共享"} {
+	for _, want := range []string{"投放", "1 个 PDF", "放入托盘", "转 Word", "每页存成图片", "打成 zip"} {
 		if !view.HasText(want) {
 			t.Fatalf("Windows PDF drop zone missing %q; texts=%v", want, view.Texts())
+		}
+	}
+	for _, forbid := range []string{"附近共享", "隔空投送"} {
+		if view.HasText(forbid) {
+			t.Fatalf("Windows PDF drop zone must not show %q; texts=%v", forbid, view.Texts())
 		}
 	}
 
