@@ -135,30 +135,110 @@ var (
 	procShareKeybdEvent        = sysProc(user32, "keybd_event")
 )
 
-var shareSecurityOnce sync.Once
+var (
+	shareSecurityOnce sync.Once
+	shareSecurityHR   uintptr
+	shareSecuritySD   *windows.SECURITY_DESCRIPTOR
+)
 
-func init() {
-	procCoInitializeEx.Call(0, coinitApartmentThreaded)
-	shareInitSecurity()
+const (
+	// COM_RIGHTS_EXECUTE and COM_RIGHTS_EXECUTE_LOCAL (objbase.h) are the
+	// access bits CoInitializeSecurity checks on a process SECURITY_DESCRIPTOR
+	// DACL for local incoming COM calls.
+	shareComRightsExecute      = 0x1
+	shareComRightsExecuteLocal = 0x2
+	shareComLocalAccessMask    = shareComRightsExecute | shareComRightsExecuteLocal
+
+	rpcCAuthnLevelConnect   = 2
+	rpcCImpLevelImpersonate = 3
+)
+
+func shareCurrentUserSID() string {
+	tu, err := windows.GetCurrentProcessToken().GetTokenUser()
+	if err != nil || tu == nil || tu.User.Sid == nil {
+		return ""
+	}
+	return tu.User.Sid.String()
 }
 
-// shareInitSecurity opens the process's COM server to AppContainer callers
-// such as ShellExperienceHost.exe, which reads the share DataPackage across
-// processes, and pins the process MTA so IStorageItem instances resolved on a
-// short-lived worker thread stay valid after that worker uninitializes COM.
-// Without a null security descriptor, COM falls back to the process token's
-// default DACL, which omits ALL APPLICATION PACKAGES on an administrator token
-// and fails the share callback with E_ACCESSDENIED (0x80070005). It must run
-// before any interface is marshaled; a later call returns RPC_E_TOO_LATE and
-// leaves the earlier setting in place.
+// shareSecuritySDDL builds the SDDL string for the process COM security
+// descriptor. It grants local COM execution (COM_RIGHTS_EXECUTE |
+// COM_RIGHTS_EXECUTE_LOCAL) only to:
+//   - the current process user (userSID, when non-empty)
+//   - SYSTEM (SY, S-1-5-18)
+//   - BUILTIN\Administrators (BA, S-1-5-32-544)
+//   - ALL APPLICATION PACKAGES (AC, S-1-15-2-1), required by the Windows Share
+//     panel host (ShellExperienceHost.exe, an AppContainer process) when it
+//     calls back into our DataTransferManager handler and IStorageItem list.
+func shareSecuritySDDL(userSID string) string {
+	owner := "BA"
+	if userSID != "" {
+		owner = userSID
+	}
+	m := fmt.Sprintf("0x%x", shareComLocalAccessMask)
+	sddl := "O:" + owner + "G:" + owner + "D:" +
+		"(A;;" + m + ";;;SY)" +
+		"(A;;" + m + ";;;BA)" +
+		"(A;;" + m + ";;;S-1-15-2-1)"
+	if userSID != "" {
+		sddl += "(A;;" + m + ";;;" + userSID + ")"
+	}
+	return sddl
+}
+
+// shareBuildSecurityDescriptor parses the SDDL string via
+// ConvertStringSecurityDescriptorToSecurityDescriptorW and converts the
+// resulting self-relative descriptor to the absolute format that
+// CoInitializeSecurity requires (non-null Owner, non-null Group, DACL).
+func shareBuildSecurityDescriptor(userSID string) (*windows.SECURITY_DESCRIPTOR, error) {
+	relSD, err := windows.SecurityDescriptorFromString(shareSecuritySDDL(userSID))
+	if err != nil {
+		return nil, err
+	}
+	return relSD.ToAbsolute()
+}
+
+// shareInitSecurity configures the process-wide COM access DACL with
+// RPC_C_AUTHN_LEVEL_CONNECT so ShellExperienceHost.exe (an AppContainer
+// process) can read the share DataPackage and IStorageItem objects across
+// processes without opening COM to arbitrary callers, and pins the process MTA
+// so IStorageItem instances resolved on a short-lived worker thread stay valid
+// after that worker uninitializes COM.
+//
+// Without an explicit ACE for ALL APPLICATION PACKAGES (S-1-15-2-1), COM's
+// default security descriptor omits AppContainer callers (on both administrator
+// and standard-user tokens) and fails the share callback with E_ACCESSDENIED
+// (0x80070005).
+//
+// CoInitializeSecurity is a process-wide one-shot setting that must run before
+// any COM/WinRT interface is activated or marshaled (otherwise combase
+// initializes default security automatically and returns RPC_E_TOO_LATE =
+// 0x80010119). mygo's package init locks the main goroutine to the main OS
+// thread without initializing COM, and mygo.App.Run() later initializes the
+// main thread as STA (COINIT_APARTMENTTHREADED) and calls OleInitialize before
+// firing WhenReady callbacks. Calling platform.Init() on the main thread
+// before mygo.App.Run() therefore initializes the same STA apartment model
+// with no conflict and runs shareInitSecurity() before any marshal occurs.
 func shareInitSecurity() {
 	shareSecurityOnce.Do(func() {
-		const (
-			rpcCAuthnLevelNone      = 1
-			rpcCImpLevelImpersonate = 3
-		)
-		procShareCoInitSecurity.Call(0, ^uintptr(0), 0, 0,
-			rpcCAuthnLevelNone, rpcCImpLevelImpersonate, 0, 0, 0)
+		if sd, err := shareBuildSecurityDescriptor(shareCurrentUserSID()); err == nil {
+			hr, _, _ := procShareCoInitSecurity.Call(
+				uintptr(unsafe.Pointer(sd)),
+				^uintptr(0),
+				0,
+				0,
+				rpcCAuthnLevelConnect,
+				rpcCImpLevelImpersonate,
+				0,
+				0,
+				0,
+			)
+			runtime.KeepAlive(sd)
+			shareSecurityHR = hr
+			if !shareFailed(hr) {
+				shareSecuritySD = sd
+			}
+		}
 		var mtaCookie uintptr
 		procShareIncrementMTAUsage.Call(uintptr(unsafe.Pointer(&mtaCookie)))
 	})

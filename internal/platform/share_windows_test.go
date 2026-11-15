@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -762,5 +763,45 @@ func TestShareWindowCreatesActivatableHost(t *testing.T) {
 	again, err := shareWindow()
 	if err != nil || again != hwnd {
 		t.Fatalf("second shareWindow = (%#x, %v), want (%#x, nil)", again, err, hwnd)
+	}
+}
+
+func TestShareInitSecurity(t *testing.T) {
+	if err := Init(); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	if shareFailed(shareSecurityHR) {
+		t.Fatalf("CoInitializeSecurity failed: 0x%08x", uint32(shareSecurityHR))
+	}
+	if shareSecuritySD == nil || !shareSecuritySD.IsValid() {
+		t.Fatal("shareSecuritySD is nil or invalid")
+	}
+	ctrl, _, err := shareSecuritySD.Control()
+	if err != nil {
+		t.Fatalf("shareSecuritySD.Control: %v", err)
+	}
+	if ctrl&windows.SE_SELF_RELATIVE != 0 {
+		t.Fatalf("shareSecuritySD control = %#x, want absolute format (SE_SELF_RELATIVE clear)", ctrl)
+	}
+	owner, _, err := shareSecuritySD.Owner()
+	if err != nil || owner == nil {
+		t.Fatalf("shareSecuritySD.Owner = (%v, %v), want non-nil owner", owner, err)
+	}
+	group, _, err := shareSecuritySD.Group()
+	if err != nil || group == nil {
+		t.Fatalf("shareSecuritySD.Group = (%v, %v), want non-nil group", group, err)
+	}
+	rel, err := shareSecuritySD.ToSelfRelative()
+	if err != nil {
+		t.Fatalf("ToSelfRelative: %v", err)
+	}
+	sddl := rel.String()
+	for _, want := range []string{"(A;;CCDC;;;SY)", "(A;;CCDC;;;BA)", "(A;;CCDC;;;AC)"} {
+		if !strings.Contains(sddl, want) {
+			t.Fatalf("security descriptor SDDL %q missing %q", sddl, want)
+		}
+	}
+	if strings.Contains(sddl, "WD") {
+		t.Fatalf("security descriptor SDDL %q must not grant Everyone (WD)", sddl)
 	}
 }

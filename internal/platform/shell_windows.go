@@ -524,6 +524,7 @@ func fileOperationDelete(abs string) (recycled bool, err error) {
 	if release {
 		defer procCoUninitialize.Call()
 	}
+	shareInitSecurity()
 	clsid, err := guidFromString(clsidFileOperation)
 	if err != nil {
 		return false, err

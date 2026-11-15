@@ -157,6 +157,7 @@ func winCOMCallFloat(obj unsafe.Pointer, index int, f float32) uintptr {
 // already one (Init); a worker goroutine and a headless test are not.
 func winCOMInit() {
 	procCoInitializeEx.Call(0, coinitApartmentThreaded)
+	shareInitSecurity()
 }
 
 // rpcEChangedMode is the HRESULT CoInitializeEx answers when the thread
@@ -173,6 +174,7 @@ func enterCOMApartment(mode uintptr) (leave func(), ok bool) {
 	if uint32(hr) == rpcEChangedMode || failedHR(hr) {
 		return func() {}, false
 	}
+	shareInitSecurity()
 	return func() { procCoUninitialize.Call() }, true
 }
 
