@@ -303,6 +303,7 @@ func (h *NowPlayingHost) run(stop chan struct{}) {
 				winCOMRelease(p.session)
 				p.session = nil
 			}
+			p.ne.close()
 			return
 		case a := <-h.cmds:
 			p.act(a)
@@ -322,16 +323,49 @@ type npPoller struct {
 	art     []byte
 	artAt   time.Time
 	missing bool
+
+	// ne is the NetEase Cloud Music source. The client publishes no SMTC
+	// session (its CEF disables MediaSessionService), so it is read the way
+	// it does publish: its window title, its queue files, its own cover
+	// cache and a validated memory sample. Commands go through its global
+	// shortcuts, or its orpheus:// protocol for the seek and as a fallback.
+	ne neSource
+	// src is the source the last published snapshot came from, so a
+	// transport command goes back to the same app.
+	src npSource
+	// smtcActive is when SMTC last played or moved, for the merge rule.
+	smtcActive time.Time
+	smtcOK     bool
+	smtcLast   NowPlayingState
 }
 
-// poll reads the current session and publishes its snapshot.
+// poll reads both sources and publishes the one the card should draw.
 func (p *npPoller) poll() {
-	session := p.currentSession()
-	if session == nil {
+	now := time.Now()
+	smtc, smtcOK := p.smtcSnapshot(now)
+	netEase, neOK := p.ne.poll(now)
+	st, src := npChoose(
+		npCandidate{st: smtc, ok: smtcOK, active: p.smtcActive},
+		npCandidate{st: netEase, ok: neOK, active: p.ne.active},
+	)
+	p.src = src
+	if src == npSourceNone {
 		p.host.publish(NowPlayingState{})
 		return
 	}
-	now := time.Now()
+	st.Received = now
+	p.host.publish(st)
+}
+
+// smtcSnapshot reads the current SMTC session. ok is false when there is no
+// session, or when the session names nothing (an app that opened the media
+// controls without a track).
+func (p *npPoller) smtcSnapshot(now time.Time) (NowPlayingState, bool) {
+	session := p.currentSession()
+	if session == nil {
+		p.smtcOK = false
+		return NowPlayingState{}, false
+	}
 	st := NowPlayingState{App: p.app, Received: now}
 	if info := p.readPlaybackInfo(session); info != nil {
 		st.Playing = info.playing
@@ -363,10 +397,16 @@ func (p *npPoller) poll() {
 	if st.Title == "" && st.Duration == 0 && !st.Playing {
 		// A session that exists but names nothing (an app that opened the
 		// media controls without a track) is no track at all.
-		p.host.publish(NowPlayingState{})
-		return
+		p.smtcOK = false
+		return NowPlayingState{}, false
 	}
-	p.host.publish(st)
+	// The merge rule needs to know when this source last did something: a
+	// playing session, or one whose position moved.
+	if st.Playing || (p.smtcOK && abs64(st.Elapsed-p.smtcLast.Elapsed) > 0.3) {
+		p.smtcActive = now
+	}
+	p.smtcOK, p.smtcLast = true, st
+	return st, true
 }
 
 // currentSession returns the current session, opening it when the
@@ -579,8 +619,13 @@ func (p *npPoller) artFor(key string, ref unsafe.Pointer) ([]byte, bool) {
 	return nil, true
 }
 
-// act runs one queued command on the poller's thread.
+// act runs one queued command on the poller's thread, against the app the
+// card is showing.
 func (p *npPoller) act(a npAction) {
+	if p.src == npSourceNetEase || (p.src == npSourceNone && p.ne.hasTrack()) {
+		p.ne.act(a, time.Now())
+		return
+	}
 	session := p.currentSession()
 	if session == nil {
 		return
