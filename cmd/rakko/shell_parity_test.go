@@ -6,6 +6,7 @@ package main
 // a system-drawn black strip made invisible on macOS.
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -76,6 +77,91 @@ func TestClosedCountdownShowsItsWings(t *testing.T) {
 	}
 	if _, ok := view.Find("5:00"); !ok {
 		t.Fatalf("the wings did not draw the remaining time: %v", view.Texts())
+	}
+}
+
+// TestHoverPeekDoesNotRepaintTheHiddenStopwatch: with the panel shut, the
+// pointer over the notch opens the peek shell, whose peekView() draws at
+// most the countdown's wings — never the stopwatch. Treating the peek as
+// the cards being up put the hidden reading back into nextTick() and
+// paintKey(), so the still wings repainted once a second under the cursor.
+// The open panel's page is where the stopwatch really draws (the band's
+// chip and the tools page's card), and there it must keep ticking.
+func TestHoverPeekDoesNotRepaintTheHiddenStopwatch(t *testing.T) {
+	a := parityShelf()
+	a.clock = newClockModule(a)
+	a.clock.playSound = func() {}
+	a.modules = []module{a.clock, timerChip{a.clock}, stopwatchChip{a.clock}}
+	now := time.Now()
+	a.clock.startTimer(now, 5*time.Minute)
+	a.clock.pauseTimer(now)
+	// 1:05 reads differently from the paused countdown's 5:00.
+	a.clock.startWatch(now.Add(-65 * time.Second))
+	a.peeking = true
+	if due := a.clock.nextTick(now); !due.IsZero() {
+		t.Fatalf("the hovered peek asked for a frame at %v", due)
+	}
+	a.clock.tick(now)
+	first := a.clock.lastPaint
+	a.clock.tick(now.Add(time.Second))
+	if a.clock.lastPaint != first {
+		t.Fatalf("the hovered wings repainted for a hidden second: %q → %q", first, a.clock.lastPaint)
+	}
+
+	// The peek draws the wings and nothing else; the same stopwatch draws
+	// its chip once the panel's page is on screen.
+	view := ui.NewTester(a.view, 640, 300)
+	view.Frame()
+	if texts := strings.Join(view.Texts(), " | "); !strings.Contains(texts, "5:00") {
+		t.Fatalf("the hover peek did not draw the countdown's wings: %s", texts)
+	} else if strings.Contains(texts, "1:05") {
+		t.Fatalf("the hover peek drew the hidden stopwatch: %s", texts)
+	}
+	a.peeking = false
+	a.visible = true
+	view.Frame()
+	if texts := strings.Join(view.Texts(), " | "); !strings.Contains(texts, "1:05") {
+		t.Fatalf("the open page did not draw the stopwatch's reading: %s", texts)
+	}
+
+	// No countdown at all: the peek is the chevron, so a running stopwatch
+	// still asks for nothing while only the peek is up.
+	b := parityShelf()
+	b.clock = newClockModule(b)
+	b.clock.startWatch(now)
+	b.peeking = true
+	if due := b.clock.nextTick(now); !due.IsZero() {
+		t.Fatalf("the chevron peek asked for the stopwatch's second at %v", due)
+	}
+	b.clock.tick(now)
+	chevron := b.clock.lastPaint
+	b.clock.tick(now.Add(time.Second))
+	if b.clock.lastPaint != chevron {
+		t.Fatalf("the chevron peek repainted for its hidden second: %q → %q", chevron, b.clock.lastPaint)
+	}
+}
+
+// TestOpenPageRefreshesTheStopwatchEachSecond: the panel's page draws the
+// stopwatch's chip (and the tools card), so its reading must move every
+// second there — the page, not the peek, is what keeps the tick awake.
+func TestOpenPageRefreshesTheStopwatchEachSecond(t *testing.T) {
+	a := parityShelf()
+	a.clock = newClockModule(a)
+	now := time.Now()
+	a.clock.startWatch(now)
+	a.visible = true
+	due := a.clock.nextTick(now)
+	if due.IsZero() || due.After(now.Truncate(time.Second).Add(time.Second)) {
+		t.Fatalf("the open page never asked for the stopwatch's next second: %v", due)
+	}
+	a.clock.tick(now)
+	first := a.clock.lastPaint
+	if !strings.Contains(first, "0:00") {
+		t.Fatalf("the open page's key lacks the stopwatch's reading: %q", first)
+	}
+	a.clock.tick(now.Add(time.Second))
+	if a.clock.lastPaint == first {
+		t.Fatalf("the open page kept the stopwatch on %q across the next second", first)
 	}
 }
 

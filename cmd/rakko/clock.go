@@ -239,36 +239,39 @@ func (m *clockModule) tick(now time.Time) {
 	}
 }
 
-// cardShown reports whether the open panel or the hover peek is on screen:
-// both draw the two cards, and the stopwatch shows nowhere else.
-func (m *clockModule) cardShown() bool {
+// pageShown reports whether the open panel's page is on screen: the band's
+// clock chips draw on any page there, and the tools page's two cards too.
+// The hover peek never draws either — peekView() shows the countdown's
+// wings, the player, a capsule or a glyph, and the search bar's level has
+// no band — so a peek must not count as the cards being up.
+func (m *clockModule) pageShown() bool {
 	if m == nil || m.host == nil {
 		return false
 	}
 	h := m.host
-	return h.visible || h.peeking || h.peekProgress > 0.01
+	return h.visible && h.currentLevel() == 2
 }
 
 // timerReadingShown reports whether the countdown's reading is on screen:
-// the open panel or the hover peek, and the closed notch's wings while it
-// runs or waits paused. A paused reading does not change, so the tick then
-// finds the same paintKey and asks for no frame.
+// the open panel's page, and the closed notch's wings while it runs or
+// waits paused. A paused reading does not change, so the tick then finds
+// the same paintKey and asks for no frame.
 func (m *clockModule) timerReadingShown() bool {
-	return m.cardShown() || m.timerWingsUp()
+	return m.pageShown() || m.timerWingsUp()
 }
 
 // paintKey is the second-granular text the screen shows, so tick repaints
 // only when a drawn number moved. Only readings that are actually up count:
-// the closed notch's wings never draw the stopwatch, so its seconds must
-// not ask for a frame while the panel is shut.
+// the peek draws at most the countdown's wings, never the stopwatch, so its
+// seconds must not ask for a frame while the panel only peeks.
 func (m *clockModule) paintKey(now time.Time) string {
 	var b strings.Builder
-	cards := m.cardShown()
+	page := m.pageShown()
 	b.WriteString(strconv.Itoa(int(m.phase)))
-	if m.phase != timerIdle && (cards || m.timerWingsUp()) {
+	if m.phase != timerIdle && (page || m.timerWingsUp()) {
 		b.WriteString(clockTextCeil(m.timerRemainAt(now)))
 	}
-	if (m.watchRun || m.watchElapsed > 0) && cards {
+	if (m.watchRun || m.watchElapsed > 0) && page {
 		b.WriteString(clockText(m.watchElapsedAt(now)))
 	}
 	if m.edit != nil {
@@ -297,10 +300,10 @@ func (m *clockModule) nextTick(now time.Time) time.Time {
 		add(m.doneAt.Add(timerRingFor))
 	}
 	// The closed notch's wings keep counting too: the panel is shut, but
-	// what it shows still changes every second. A paused countdown's wings
-	// stand still and the stopwatch has no wings, so a hidden stopwatch
-	// asks for nothing.
-	if m.timerReadingShown() && (m.phase == timerRunning || m.cardShown() && m.watchRun) {
+	// what it shows still changes every second. The stopwatch only asks
+	// while the panel's page shows its reading; a paused countdown's wings
+	// and a hover peek draw no changing stopwatch, so they ask for nothing.
+	if m.phase == timerRunning && m.timerReadingShown() || m.watchRun && m.pageShown() {
 		add(now.Truncate(time.Second).Add(time.Second))
 	}
 	return next
