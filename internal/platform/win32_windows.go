@@ -65,8 +65,10 @@ func ensureCOM() error {
 	r, _, _ := procCoInitializeEx.Call(0, coinitApartmentThreaded)
 	switch uint32(int32(r)) {
 	case 0, 1: // S_OK, S_FALSE (already an STA)
+		shareInitSecurity()
 		return nil
 	case 0x80010106: // RPC_E_CHANGED_MODE: the thread is an MTA already
+		shareInitSecurity()
 		return nil
 	}
 	return fmt.Errorf("platform: CoInitializeEx: 0x%08x", uint32(int32(r)))

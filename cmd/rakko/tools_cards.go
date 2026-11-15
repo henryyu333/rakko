@@ -566,9 +566,7 @@ func (a *shelf) runToolCard(id string) bool {
 		if len(paths) == 0 {
 			return false
 		}
-		if err := shareNearby(paths, nil); err != nil {
-			a.report(err)
-		}
+		a.shareNearby(paths, nil)
 		return true
 	}
 	target := a.toolCardTarget(id, len(items))

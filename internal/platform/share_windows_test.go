@@ -699,3 +699,68 @@ func TestShareShowFailureReachesTheErrorNotice(t *testing.T) {
 		t.Fatal("the failed panel never reached the error notice")
 	}
 }
+
+func TestShareHostRect(t *testing.T) {
+	ms := []screenMonitor{
+		{
+			bounds: winRect{Left: 0, Top: 0, Right: 1920, Bottom: 1080},
+			work:   winRect{Left: 0, Top: 0, Right: 1920, Bottom: 1040},
+			dpi:    96,
+		},
+		{
+			bounds: winRect{Left: 1920, Top: 0, Right: 4800, Bottom: 1620},
+			work:   winRect{Left: 1920, Top: 0, Right: 4800, Bottom: 1560},
+			dpi:    144,
+		},
+	}
+
+	gotPrimary := shareHostRectIn(ms, winPoint{X: 960, Y: 10})
+	wantPrimary := winRect{Left: 560, Top: 290, Right: 1360, Bottom: 930}
+	if gotPrimary != wantPrimary {
+		t.Fatalf("primary shareHostRectIn = %+v, want %+v", gotPrimary, wantPrimary)
+	}
+
+	gotHiDPI := shareHostRectIn(ms, winPoint{X: 2500, Y: 100})
+	wantHiDPI := winRect{Left: 2760, Top: 435, Right: 3960, Bottom: 1395}
+	if gotHiDPI != wantHiDPI {
+		t.Fatalf("hi-DPI shareHostRectIn = %+v, want %+v", gotHiDPI, wantHiDPI)
+	}
+
+	small := []screenMonitor{
+		{
+			bounds: winRect{Left: 0, Top: 0, Right: 600, Bottom: 400},
+			work:   winRect{Left: 0, Top: 0, Right: 600, Bottom: 400},
+			dpi:    96,
+		},
+	}
+	gotSmall := shareHostRectIn(small, winPoint{X: 100, Y: 100})
+	wantSmall := winRect{Left: 0, Top: 0, Right: 600, Bottom: 400}
+	if gotSmall != wantSmall {
+		t.Fatalf("small shareHostRectIn = %+v, want %+v", gotSmall, wantSmall)
+	}
+}
+
+func TestShareWindowCreatesActivatableHost(t *testing.T) {
+	hwnd, err := shareWindow()
+	if err != nil {
+		t.Fatalf("shareWindow: %v", err)
+	}
+	if hwnd == 0 {
+		t.Fatal("shareWindow returned 0")
+	}
+	if got := windowClass(hwnd); got != "RakkoShareHost" {
+		t.Fatalf("shareWindow class = %q, want RakkoShareHost", got)
+	}
+	ex := windowExStyle(hwnd)
+	if ex&wsExNoActivate != 0 {
+		t.Fatalf("shareWindow exStyle = %#x, must not carry WS_EX_NOACTIVATE", ex)
+	}
+	const wantEx = wsExToolWindow | wsExLayered | wsExTransparent
+	if ex&wantEx != wantEx {
+		t.Fatalf("shareWindow exStyle = %#x, want bits %#x", ex, wantEx)
+	}
+	again, err := shareWindow()
+	if err != nil || again != hwnd {
+		t.Fatalf("second shareWindow = (%#x, %v), want (%#x, nil)", again, err, hwnd)
+	}
+}

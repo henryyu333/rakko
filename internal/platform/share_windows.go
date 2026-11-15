@@ -124,7 +124,45 @@ var (
 	procWindowsCreateString    = sysProc(combase, "WindowsCreateString")
 	procWindowsDeleteString    = sysProc(combase, "WindowsDeleteString")
 	procCoTaskMemAlloc         = sysProc(ole32, "CoTaskMemAlloc")
+	procShareCoInitSecurity    = sysProc(ole32, "CoInitializeSecurity")
+	procShareIncrementMTAUsage = sysProc(ole32, "CoIncrementMTAUsage")
+	procShareRegisterClassEx   = sysProc(user32, "RegisterClassExW")
+	procShareDefWindowProc     = sysProc(user32, "DefWindowProcW")
+	procShareGetModuleHandle   = sysProc(kernel32, "GetModuleHandleW")
+	procShareSetLayeredAttr    = sysProc(user32, "SetLayeredWindowAttributes")
+	procShareSetActiveWindow   = sysProc(user32, "SetActiveWindow")
+	procShareSetFocus          = sysProc(user32, "SetFocus")
+	procShareKeybdEvent        = sysProc(user32, "keybd_event")
 )
+
+var shareSecurityOnce sync.Once
+
+func init() {
+	procCoInitializeEx.Call(0, coinitApartmentThreaded)
+	shareInitSecurity()
+}
+
+// shareInitSecurity opens the process's COM server to AppContainer callers
+// such as ShellExperienceHost.exe, which reads the share DataPackage across
+// processes, and pins the process MTA so IStorageItem instances resolved on a
+// short-lived worker thread stay valid after that worker uninitializes COM.
+// Without a null security descriptor, COM falls back to the process token's
+// default DACL, which omits ALL APPLICATION PACKAGES on an administrator token
+// and fails the share callback with E_ACCESSDENIED (0x80070005). It must run
+// before any interface is marshaled; a later call returns RPC_E_TOO_LATE and
+// leaves the earlier setting in place.
+func shareInitSecurity() {
+	shareSecurityOnce.Do(func() {
+		const (
+			rpcCAuthnLevelNone      = 1
+			rpcCImpLevelImpersonate = 3
+		)
+		procShareCoInitSecurity.Call(0, ^uintptr(0), 0, 0,
+			rpcCAuthnLevelNone, rpcCImpLevelImpersonate, 0, 0, 0)
+		var mtaCookie uintptr
+		procShareIncrementMTAUsage.Call(uintptr(unsafe.Pointer(&mtaCookie)))
+	})
+}
 
 // shareIIDError records a malformed identifier instead of panicking: a bad
 // constant must not take the whole app down during package init. ShareNearby
@@ -294,6 +332,7 @@ type shareSheetState struct {
 	hiddenWindow  uintptr
 	hiddenWindowE error
 	hiddenTried   bool
+	hostGen       atomic.Uint64
 }
 
 var shareSheet shareSheetState
@@ -373,7 +412,13 @@ func shareShowNow(pkg *sharePackage) error {
 func shareOpenPanel(pkg *sharePackage) error {
 	pkg.addRef()
 	previous := shareSheet.payload.Swap(pkg)
-	if hr := shareComCall(shareSheet.interop, shareInteropShowUI, shareSheet.hwnd); shareFailed(hr) {
+	shareActivateHost(shareSheet.hwnd)
+	hr := shareComCall(shareSheet.interop, shareInteropShowUI, shareSheet.hwnd)
+	if shareFailed(hr) {
+		shareSheet.hostGen.Add(1)
+		if shareSheet.hwnd != 0 {
+			procShowWindow.Call(shareSheet.hwnd, 0 /* SW_HIDE */)
+		}
 		shareSheet.payload.Store(previous)
 		pkg.release()
 		return shareError("showing the share panel", hr)
@@ -382,32 +427,48 @@ func shareOpenPanel(pkg *sharePackage) error {
 	return nil
 }
 
-// shareWindow answers an HWND this process owns: the foreground window when
-// it is ours, else our first visible top-level window, else a small hidden
-// window made for the panel.
+const (
+	shareHostWidthDIP  = 800
+	shareHostHeightDIP = 640
+	shareHostTopPadDIP = 290
+)
+
+type shareWndClassExW struct {
+	cbSize        uint32
+	style         uint32
+	lpfnWndProc   uintptr
+	cbClsExtra    int32
+	cbWndExtra    int32
+	hInstance     uintptr
+	hIcon         uintptr
+	hCursor       uintptr
+	hbrBackground uintptr
+	lpszMenuName  *uint16
+	lpszClassName *uint16
+	hIconSm       uintptr
+}
+
+var shareHostClassOnce sync.Once
+
+// shareWindow answers an activatable invisible host HWND this process owns.
+// Rakko's overlay windows carry WS_EX_NOACTIVATE so clicking them never steals
+// focus, whereas ShowShareUIForWindow requires the anchor window to be the
+// foreground window when called (otherwise it returns S_OK without raising
+// DataRequested) and on Windows 10 clamps the Share CoreWindow inside the
+// anchor window's bounds.
 func shareWindow() (uintptr, error) {
-	if fg, _, _ := procGetForegroundWindow.Call(); fg != 0 && windowPID(fg) == ownProcessID() {
-		return fg, nil
-	}
-	var own uintptr
-	enumTopLevel(func(h uintptr) bool {
-		if r, _, _ := procIsWindowVisible.Call(h); r == 0 || windowPID(h) != ownProcessID() {
-			return true
+	if shareSheet.hiddenWindow != 0 {
+		if r, _, _ := procIsWindow.Call(shareSheet.hiddenWindow); r != 0 {
+			return shareSheet.hiddenWindow, nil
 		}
-		own = h
-		return false
-	})
-	if own != 0 {
-		return own, nil
+		shareSheet.hiddenWindow = 0
+		shareSheet.hiddenTried = false
 	}
 	if shareSheet.hiddenTried {
-		if shareSheet.hiddenWindow == 0 {
-			return 0, shareSheet.hiddenWindowE
-		}
-		return shareSheet.hiddenWindow, nil
+		return 0, shareSheet.hiddenWindowE
 	}
 	shareSheet.hiddenTried = true
-	class, err := windows.UTF16PtrFromString("STATIC")
+	class, err := windows.UTF16PtrFromString("RakkoShareHost")
 	if err != nil {
 		shareSheet.hiddenWindowE = err
 		return 0, err
@@ -417,16 +478,157 @@ func shareWindow() (uintptr, error) {
 		shareSheet.hiddenWindowE = err
 		return 0, err
 	}
-	const wsPopup = 0x80000000
-	h, _, callErr := procCreateWindowEx.Call(0,
+	hInst, _, _ := procShareGetModuleHandle.Call(0)
+	shareHostClassOnce.Do(func() {
+		wc := shareWndClassExW{
+			cbSize:        uint32(unsafe.Sizeof(shareWndClassExW{})),
+			lpfnWndProc:   procShareDefWindowProc.Addr(),
+			hInstance:     hInst,
+			lpszClassName: class,
+		}
+		procShareRegisterClassEx.Call(uintptr(unsafe.Pointer(&wc)))
+	})
+	r := shareHostRect()
+	const (
+		wsPopup = 0x80000000
+		exStyle = wsExToolWindow | wsExLayered | wsExTransparent
+	)
+	h, _, callErr := procCreateWindowEx.Call(exStyle,
 		uintptr(unsafe.Pointer(class)), uintptr(unsafe.Pointer(title)), wsPopup,
-		0, 0, 1, 1, 0, 0, 0, 0)
+		uintptr(r.Left), uintptr(r.Top), uintptr(r.width()), uintptr(r.height()),
+		0, 0, hInst, 0)
 	if h == 0 {
 		shareSheet.hiddenWindowE = fmt.Errorf("windows: could not create a window for the share panel: %v", callErr)
 		return 0, shareSheet.hiddenWindowE
 	}
+	procShareSetLayeredAttr.Call(h, 0, 1, lwaAlpha)
 	shareSheet.hiddenWindow = h
 	return h, nil
+}
+
+// shareHostRect returns the physical pixel rectangle for the share host window
+// on the display containing the cursor.
+func shareHostRect() winRect {
+	var pt winPoint
+	procGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
+	return shareHostRectIn(enumMonitors(), pt)
+}
+
+// shareHostRectIn places an 800x640 DIP host box on the display containing
+// cursor, below Rakko's top panel when room permits so the Share UI and the
+// open shelf do not overlap.
+func shareHostRectIn(ms []screenMonitor, cursor winPoint) winRect {
+	if len(ms) == 0 {
+		return winRect{
+			Left:   560,
+			Top:    shareHostTopPadDIP,
+			Right:  560 + shareHostWidthDIP,
+			Bottom: shareHostTopPadDIP + shareHostHeightDIP,
+		}
+	}
+	idx := monitorForPixels(ms, winRect{
+		Left: cursor.X, Top: cursor.Y,
+		Right: cursor.X + 1, Bottom: cursor.Y + 1,
+	})
+	if idx < 0 {
+		idx = primaryMonitor(ms)
+	}
+	m := ms[idx]
+	dpi := m.dpi
+	if dpi <= 0 {
+		dpi = 96
+	}
+	work := m.work
+	if work.width() <= 0 || work.height() <= 0 {
+		work = m.bounds
+	}
+	w := int32(scaleBy(shareHostWidthDIP, dpi, 96))
+	h := int32(scaleBy(shareHostHeightDIP, dpi, 96))
+	if w > work.width() {
+		w = work.width()
+	}
+	if h > work.height() {
+		h = work.height()
+	}
+	left := work.Left + (work.width()-w)/2
+	top := work.Top + (work.height()-h)/2
+	minTop := m.bounds.Top + int32(scaleBy(shareHostTopPadDIP, dpi, 96))
+	if top < minTop && minTop+h <= work.Bottom {
+		top = minTop
+	}
+	return winRect{Left: left, Top: top, Right: left + w, Bottom: top + h}
+}
+
+// shareActivateHost positions, shows and foregrounds hwnd so
+// ShowShareUIForWindow accepts it, then schedules hiding hwnd once the Share
+// CoreWindow has closed.
+func shareActivateHost(hwnd uintptr) {
+	if hwnd == 0 {
+		return
+	}
+	r := shareHostRect()
+	const swShow = 5
+	procSetWindowPos.Call(hwnd, hwndTop,
+		uintptr(r.Left), uintptr(r.Top), uintptr(r.width()), uintptr(r.height()),
+		swpShowWindow)
+	procShowWindow.Call(hwnd, swShow)
+
+	fg, _, _ := procGetForegroundWindow.Call()
+	var fgTid uintptr
+	if fg != 0 {
+		fgTid, _, _ = procGetWindowThreadPID.Call(fg, 0)
+	}
+	curTid, _, _ := procGetCurrentThreadID.Call()
+	attached := false
+	if fgTid != 0 && fgTid != curTid {
+		res, _, _ := procAttachThreadInput.Call(curTid, fgTid, 1)
+		attached = res != 0
+	}
+	procBringWindowToTop.Call(hwnd)
+	procSetForegroundWindow.Call(hwnd)
+	procShareSetActiveWindow.Call(hwnd)
+	procShareSetFocus.Call(hwnd)
+	if attached {
+		procAttachThreadInput.Call(curTid, fgTid, 0)
+	}
+	if nowFg, _, _ := procGetForegroundWindow.Call(); nowFg != hwnd {
+		const (
+			vkMenu         = 0x12
+			keyeventfKeyUp = 0x0002
+		)
+		procShareKeybdEvent.Call(vkMenu, 0, keyeventfKeyUp, 0)
+		procBringWindowToTop.Call(hwnd)
+		procSetForegroundWindow.Call(hwnd)
+		procShareSetActiveWindow.Call(hwnd)
+		procShareSetFocus.Call(hwnd)
+	}
+
+	gen := shareSheet.hostGen.Add(1)
+	go func() {
+		start := time.Now()
+		deadline := start.Add(5 * time.Minute)
+		seenShare := false
+		for time.Now().Before(deadline) {
+			time.Sleep(100 * time.Millisecond)
+			if shareSheet.hostGen.Load() != gen {
+				return
+			}
+			curFg, _, _ := procGetForegroundWindow.Call()
+			if curFg != 0 && windowClass(curFg) == "Windows.UI.Core.CoreWindow" {
+				seenShare = true
+				continue
+			}
+			if !seenShare && time.Since(start) < 4*time.Second {
+				continue
+			}
+			shareWakeMain(func() {
+				if shareSheet.hostGen.Load() == gen {
+					procShowWindow.Call(hwnd, 0 /* SW_HIDE */)
+				}
+			})
+			return
+		}
+	}()
 }
 
 // shareManagerFor answers the DataTransferManager of hwnd, registering the
@@ -732,7 +934,8 @@ func shareDelegateInvoke(this, sender, args uintptr) uintptr {
 		shareFailRequest(request, payload.failure)
 		return shareOK
 	}
-	if hr := shareComCall(request, shareRequestSetData, payload.pkg); shareFailed(hr) {
+	hr = shareComCall(request, shareRequestSetData, payload.pkg)
+	if shareFailed(hr) {
 		shareFailRequest(request, "Rakko could not prepare these items for sharing")
 	}
 	return shareOK
@@ -768,8 +971,27 @@ func shareStartPrepare(pkg *sharePackage, paths []string) {
 			return
 		}
 		items, err := shareResolveItemsFn(paths)
+		shareWaitForDropSettle()
 		shareWakeMain(func() { sharePrepared(pkg, items, err) })
 	}()
+}
+
+// shareWaitForDropSettle waits on the worker thread when a file share was
+// started from an OLE drop, so IDropTarget::Drop and the source's DoDragDrop
+// loop finish unwinding before the main thread activates the share host
+// window. Outside a drag it returns at once.
+func shareWaitForDropSettle() {
+	if !leftHeld() && windowClass(captureWindow()) != oleDragCaptureClass {
+		return
+	}
+	deadline := time.Now().Add(250 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if !leftHeld() && windowClass(captureWindow()) != oleDragCaptureClass {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	time.Sleep(40 * time.Millisecond)
 }
 
 // sharePrepared finishes a share on the main thread: the resolved items join

@@ -24,6 +24,7 @@ func Init() error {
 	// leave the shell calls usable.
 	switch int32(r) {
 	case 0, 1, -2147417850:
+		shareInitSecurity()
 		return nil
 	}
 	return errComInit

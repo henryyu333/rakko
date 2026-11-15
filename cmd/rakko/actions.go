@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -49,6 +50,18 @@ func usable(items []store.Item) (paths, texts []string) {
 	return paths, texts
 }
 
+// shareNearby opens the system share sheet for paths and texts. On Windows the
+// system Share UI runs in ShellExperienceHost.exe, so the shelf releases its
+// global Escape and Space hold first to let Escape dismiss the Share UI.
+func (a *shelf) shareNearby(paths, texts []string) {
+	if runtime.GOOS == "windows" {
+		a.releaseKeys()
+	}
+	if err := shareNearby(paths, texts); err != nil {
+		a.report(err)
+	}
+}
+
 // itemMenu is the right-click menu of a row. Its items depend only on the
 // targets, so the menu is built the same way when it opens and when an
 // item is chosen.
@@ -76,9 +89,7 @@ func (a *shelf) itemMenu(m *ui.Menu, item store.Item) {
 		a.previewPaths(paths)
 	}
 	if m.Item(osText(l.ItemAirDrop(), l.ItemAirDropWin())).Disabled(!files && len(texts) == 0).Chosen() {
-		if err := platform.ShareNearby(paths, texts); err != nil {
-			a.report(err)
-		}
+		a.shareNearby(paths, texts)
 	}
 	a.convertMenu(m, items)
 	// 批量改名：全部目标都还存在于磁盘上的真实文件/文件夹时可用

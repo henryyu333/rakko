@@ -689,9 +689,7 @@ func (a *shelf) runDropActionFiles(act dropAction, files []string, data transfer
 		a.setTab(pageTray)
 	}
 	if act.isShare {
-		if err := shareNearby(files, nil); err != nil {
-			a.report(err)
-		}
+		a.shareNearby(files, nil)
 		return
 	}
 	items := make([]store.Item, len(files))
