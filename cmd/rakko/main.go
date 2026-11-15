@@ -468,8 +468,9 @@ func (a *shelf) newNotchWindow() {
 	a.winH = a.win.NativeHandle()
 	platform.ConfigureNotchWindow(a.winH)
 	// The panel is topmost, and a system popup menu opened from it is not:
-	// keep the menus this process shows above the panel, which needs the
-	// window's own handle (no-op on macOS).
+	// lift the menus this process shows into the topmost band, so one opened
+	// over the panel is not painted over. The watch needs the window's own
+	// handle (no-op on macOS).
 	platform.WatchOwnMenus(a.winH)
 	// The gate belongs to the window, not to a placement: an app that
 	// starts with the panel open never places, and a test shelf must watch

@@ -11,18 +11,27 @@ import (
 )
 
 // The system's popup menus are windows of this class, owned by the window
-// they were opened from. The overlay's content is composited above the
-// window stack, so a menu opened over the panel is painted over wherever
-// the panel draws (its page and capsule), hiding the menu's first items.
+// they were opened from. A menu opened over the topmost overlay is owned by
+// it but is not itself topmost, so the overlay's content is composited
+// above it and hides the menu's first items. The watch lifts the menu into
+// the topmost band instead of moving it: the system placed it at the
+// pointer, where the user expects it, and a mouse or a finger is already
+// there.
 const popupMenuClass = "#32768"
 
+// gwOwner is GW_OWNER of GetWindow: the window a popup or a dialog belongs
+// to, which a menu's window names as the window it was opened from.
+const gwOwner = 4
+
+var procGetWindow = user32.NewProc("GetWindow")
+
 // ownMenus is the watch's state: the overlay the menus belong to, its UI
-// thread, and the menus already moved. The overlay's handle comes from the
+// thread, and the menus already raised. The overlay's handle comes from the
 // app once the window exists; nothing here guesses which window it is.
 var ownMenus struct {
 	once   sync.Once
 	mu     sync.Mutex
-	moved  map[uintptr]bool
+	raised map[uintptr]bool
 	window uintptr // the overlay window, once the app has created it
 	thread uint32  // that window's UI thread
 }
@@ -33,25 +42,25 @@ const (
 	guiPopupMenuMode  = 0x00000010
 )
 
-// WatchOwnMenus keeps the system menus this process shows clear of the
-// overlay window. A menu opened over the panel is moved just outside the
-// panel's window, at the row it was opened from, where nothing of the
-// overlay paints over it. Menus of other windows are left where the system
-// put them.
+// WatchOwnMenus keeps the system menus this process shows above the overlay
+// window. The menu keeps the place the system gave it — at the pointer — and
+// the watch only moves it into the topmost band, above the panel's content.
+// Menus of other windows, and of this process's other windows, are left as
+// the system drew them.
 //
 // window is the overlay's own handle: the watch asks that window's UI
-// thread whether a menu loop is running and compares the menus with that
-// one rectangle, so an idle overlay costs a thread query every tick and a
-// collapsed capsule is measured as what it is. A zero handle (or none) does
-// nothing, so the call is a no-op until the app has its window.
+// thread whether a menu loop is running and follows the menu's owner chain
+// back to that window, so an idle overlay costs a thread query every tick
+// and a menu of the Settings window is not touched. A zero handle (or none)
+// does nothing, so the call is a no-op until the app has its window.
 func WatchOwnMenus(window uintptr) {
 	ownMenus.mu.Lock()
 	ownMenus.window = window
 	if window != 0 {
 		ownMenus.thread = uint32(windowThread(window))
 	}
-	if ownMenus.moved == nil {
-		ownMenus.moved = map[uintptr]bool{}
+	if ownMenus.raised == nil {
+		ownMenus.raised = map[uintptr]bool{}
 	}
 	ownMenus.mu.Unlock()
 	if window == 0 {
@@ -61,64 +70,77 @@ func WatchOwnMenus(window uintptr) {
 		go func() {
 			for {
 				time.Sleep(20 * time.Millisecond)
-				placeOwnMenus()
+				raiseOwnMenus()
 			}
 		}()
 	})
 }
 
-// overlayRect is the overlay's window rectangle, empty until the app hands
-// the watch its handle.
-func overlayRect() (winRect, bool) {
+// overlayWindow is the overlay's window handle, zero until the app hands
+// the watch one.
+func overlayWindow() uintptr {
 	ownMenus.mu.Lock()
-	window := ownMenus.window
-	ownMenus.mu.Unlock()
-	if window == 0 {
-		return winRect{}, false
-	}
-	return windowRect(window)
+	defer ownMenus.mu.Unlock()
+	return ownMenus.window
 }
 
-func placeOwnMenus() {
+// raiseOwnMenus lifts the process's open popup menu above the overlay. The
+// menu is topmost for as long as it shows: a menu is dismissed by its loop,
+// which destroys the window, and a submenu is a menu window of its own that
+// the watch raises when it appears.
+func raiseOwnMenus() {
 	if !uiThreadInMenu() {
 		return
 	}
-	panel, hasPanel := overlayRect()
-	if !hasPanel {
+	overlay := overlayWindow()
+	if overlay == 0 {
 		return
 	}
 	pid := windows.GetCurrentProcessId()
-	monitors := enumMonitors()
 	enumTopLevel(func(h uintptr) bool {
-		var class [16]uint16
-		n, _, _ := procGetClassName.Call(h, uintptr(unsafe.Pointer(&class[0])), uintptr(len(class)))
-		if n == 0 || windows.UTF16ToString(class[:n]) != popupMenuClass {
+		if !isPopupMenu(h) || windowPID(h) != int(pid) {
 			return true
 		}
-		if windowPID(h) != int(pid) {
+		if !belongsTo(h, overlay) || alreadyRaised(h) {
 			return true
 		}
-		ownMenus.mu.Lock()
-		moved := ownMenus.moved[h]
-		ownMenus.mu.Unlock()
-		if moved {
-			return true
-		}
-		r, has := windowRect(h)
-		if !has || !overlaps(r, panel) {
-			return true
-		}
-		ownMenus.mu.Lock()
-		if len(ownMenus.moved) > 32 {
-			ownMenus.moved = map[uintptr]bool{}
-		}
-		ownMenus.moved[h] = true
-		ownMenus.mu.Unlock()
-		x, y := besidePanel(r, panel, monitors)
-		procSetWindowPos.Call(h, 0, uintptr(x), uintptr(y), 0, 0,
-			swpNoSize|swpNoZOrder|swpNoActivate)
+		procSetWindowPos.Call(h, hwndTopmost, 0, 0, 0, 0, swpNoMove|swpNoSize|swpNoActivate)
 		return true
 	})
+}
+
+// isPopupMenu reports whether h is one of the system's menu windows.
+func isPopupMenu(h uintptr) bool {
+	var class [16]uint16
+	n, _, _ := procGetClassName.Call(h, uintptr(unsafe.Pointer(&class[0])), uintptr(len(class)))
+	return n != 0 && windows.UTF16ToString(class[:n]) == popupMenuClass
+}
+
+// belongsTo walks the owner chain of h — a menu and its submenus name the
+// window they were opened from — and reports whether owner is on it.
+func belongsTo(h, owner uintptr) bool {
+	for depth := 0; depth < 8 && h != 0; depth++ {
+		if h == owner {
+			return true
+		}
+		h, _, _ = procGetWindow.Call(h, gwOwner)
+	}
+	return false
+}
+
+// alreadyRaised marks h as lifted and reports whether it was marked before:
+// one SetWindowPos per menu window, however long the menu stays open.
+func alreadyRaised(h uintptr) bool {
+	ownMenus.mu.Lock()
+	defer ownMenus.mu.Unlock()
+	if ownMenus.raised[h] {
+		return true
+	}
+	if len(ownMenus.raised) > 32 {
+		ownMenus.raised = map[uintptr]bool{}
+	}
+	ownMenus.raised[h] = true
+	return false
 }
 
 // uiThreadInMenu reports whether the overlay's thread runs a popup menu
@@ -145,45 +167,4 @@ func uiThreadInMenu() bool {
 		return false
 	}
 	return info.flags&(guiInMenuMode|guiSystemMenuMode|guiPopupMenuMode) != 0
-}
-
-func overlaps(a, b winRect) bool {
-	return a.Left < b.Right && a.Right > b.Left && a.Top < b.Bottom && a.Bottom > b.Top
-}
-
-// monitorWorkAt answers the work area of the monitor holding the point,
-// and whether a monitor holds it at all.
-func monitorWorkAt(monitors []screenMonitor, x, y int32) (winRect, bool) {
-	for _, m := range monitors {
-		if x >= m.bounds.Left && x < m.bounds.Right && y >= m.bounds.Top && y < m.bounds.Bottom {
-			return m.work, true
-		}
-	}
-	return winRect{}, false
-}
-
-// besidePanel places a menu just right of the panel, at the height it was
-// opened at, or left of it when the screen has no room on the right. The
-// height is kept inside the work area of the monitor the menu opened on —
-// a monitor above the primary one has a negative top, so nothing here
-// assumes zero — and a menu the watch cannot place on any monitor is left
-// where the system put it.
-func besidePanel(menu, panel winRect, monitors []screenMonitor) (int32, int32) {
-	y := menu.Top
-	if work, ok := monitorWorkAt(monitors, menu.Left, menu.Top); ok {
-		if height := menu.height(); y+height > work.Bottom-8 {
-			y = work.Bottom - 8 - height
-		}
-		if y < work.Top+8 {
-			y = work.Top + 8
-		}
-		width := menu.width()
-		if room := work.Right - (panel.Right + 8); room >= width {
-			return panel.Right + 8, y
-		}
-		if room := (panel.Left - 8) - work.Left; room >= width {
-			return panel.Left - 8 - width, y
-		}
-	}
-	return menu.Left, y
 }
