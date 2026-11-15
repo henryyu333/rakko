@@ -440,6 +440,23 @@ func neSampleFailure(posOK, havePos, idOK, idSeen, held bool) bool {
 	return idSeen && !idOK
 }
 
+// neIDHold reports whether a sampled song id must be ignored for metadata
+// resolution, and whether that is only the track-change grace. The id that
+// named the previous track can stay readable long after the grace has passed
+// (the client has not finished swapping, or it never will); it must still not
+// resolve the new title, but it no longer earns the sample an exemption from
+// failure counting.
+func neIDHold(idOK bool, id, prevID string, now, until time.Time) (ignore, grace bool) {
+	if !idOK {
+		return false, false
+	}
+	grace = now.Before(until)
+	if grace || (prevID != "" && id == prevID) {
+		return true, grace
+	}
+	return false, false
+}
+
 // nePlayVerdict picks the play state a pending command is confirmed against.
 // Tier A has no position to derive it from, so it must come from the audio
 // session: the last clock verdict is frozen at the moment the tier was lost

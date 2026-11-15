@@ -384,6 +384,51 @@ func TestNEMetaRetriesAMissedTitle(t *testing.T) {
 	}
 }
 
+// TestNEIDHold (P2-4): the previous track's id must never resolve the new
+// title, but only the grace excuses the sample: after it, the stale id is
+// still ignored while an unusable clock counts as a failure again.
+func TestNEIDHold(t *testing.T) {
+	now := time.Now()
+	graceWindow := 1500 * time.Millisecond
+	until := now.Add(graceWindow)
+	cases := []struct {
+		name                  string
+		idOK                  bool
+		id, prevID            string
+		at                    time.Time
+		wantIgnore, wantGrace bool
+	}{
+		{"no id at all", false, "", "1001", now, false, false},
+		{"new id inside the grace", true, "1002", "1001", now, true, true},
+		{"old id inside the grace", true, "1001", "1001", now, true, true},
+		{"old id after the grace", true, "1001", "1001", until, true, false},
+		{"new id after the grace", true, "1002", "1001", until, false, false},
+		{"first id after the grace", true, "1002", "", until, false, false},
+	}
+	for _, c := range cases {
+		ignore, grace := neIDHold(c.idOK, c.id, c.prevID, c.at, until)
+		if ignore != c.wantIgnore || grace != c.wantGrace {
+			t.Errorf("%s: neIDHold = (%v, %v), want (%v, %v)",
+				c.name, ignore, grace, c.wantIgnore, c.wantGrace)
+		}
+	}
+}
+
+// TestNEStaleIDStillCountsAClockFailure (P2-4): a client whose id field stays
+// on the previous track must not be permanently exempt from failure counting;
+// the invalid clock sample still counts, so the memory tier eventually falls
+// back instead of reading a dead field forever.
+func TestNEStaleIDStillCountsAClockFailure(t *testing.T) {
+	now := time.Now()
+	ignore, grace := neIDHold(true, "1001", "1001", now.Add(1500*time.Millisecond), now)
+	if !ignore || grace {
+		t.Fatalf("after the grace: ignore=%v grace=%v, want the stale id ignored without the grace", ignore, grace)
+	}
+	if !neSampleFailure(true, false, true, true, grace) {
+		t.Fatal("an unusable clock after the grace was exempted by the stale id")
+	}
+}
+
 // TestNEPlayVerdictTierAIgnoresFrozenClock (P2-3): when the memory tier is
 // gone there is no position to derive a verdict from; the raw verdict is
 // frozen where the clock stopped, so tier A must confirm against the audio

@@ -216,11 +216,12 @@ func (s *neSource) poll(now time.Time) (NowPlayingState, bool) {
 	}
 
 	pos, dur, id, posOK, idOK := s.sample()
-	heldID := idOK && (now.Before(s.idHoldUntil) || id == s.prevID)
-	if heldID {
-		// The title moved but the memory fields have not finished swapping:
-		// the id they still name is the previous track's, and resolving it
-		// would put the old album and cover back under the new title.
+	// After the title moved, the memory fields still name the previous track's
+	// id. That id must never resolve metadata under the new title, but only
+	// the grace period excuses the sample itself: once the client has had time
+	// to swap, an unusable clock counts as a failure again.
+	ignoreID, graceHeld := neIDHold(idOK, id, s.prevID, now, s.idHoldUntil)
+	if ignoreID {
 		id = ""
 	}
 	if posOK && id != "" && id != s.id {
@@ -247,7 +248,7 @@ func (s *neSource) poll(now time.Time) (NowPlayingState, bool) {
 		s.idSeen = true
 	}
 	if s.memoryOn() && now.After(s.attachAt.Add(neIDGrace)) && !now.Before(s.trustAt) {
-		if neSampleFailure(posOK, havePos, idOK, s.idSeen, heldID) {
+		if neSampleFailure(posOK, havePos, idOK, s.idSeen, graceHeld) {
 			s.noteFailure()
 		} else if havePos {
 			s.failures = 0
