@@ -98,6 +98,43 @@ func TestClosedWingsAskForTheNextSecond(t *testing.T) {
 	}
 }
 
+// TestHiddenStopwatchDoesNotRepaintTheClosedWings: a paused countdown's
+// wings are a still image, and the closed notch never shows the stopwatch.
+// A running stopwatch still woke the tick every second — nextTick asked for
+// the next boundary and paintKey carried the hidden reading — so the whole
+// strip repainted once a second for a number nobody could see. A running
+// countdown's wings must keep moving exactly as before.
+func TestHiddenStopwatchDoesNotRepaintTheClosedWings(t *testing.T) {
+	a := parityShelf()
+	a.clock = newClockModule(a)
+	now := time.Now()
+	a.clock.startTimer(now, 5*time.Minute)
+	a.clock.pauseTimer(now)
+	a.clock.startWatch(now)
+	if due := a.clock.nextTick(now); !due.IsZero() {
+		t.Fatalf("the hidden stopwatch asked for a frame at %v", due)
+	}
+	a.clock.tick(now)
+	first := a.clock.lastPaint
+	a.clock.tick(now.Add(time.Second))
+	if a.clock.lastPaint != first {
+		t.Fatalf("the closed wings repainted for a hidden second: %q → %q", first, a.clock.lastPaint)
+	}
+
+	a.clock.resumeTimer(now.Add(2 * time.Second))
+	at := now.Add(3 * time.Second)
+	due := a.clock.nextTick(at)
+	if due.IsZero() || due.After(at.Truncate(time.Second).Add(time.Second)) {
+		t.Fatalf("the running wings stopped asking for the next second: %v", due)
+	}
+	a.clock.tick(at)
+	running := a.clock.lastPaint
+	a.clock.tick(at.Add(time.Second))
+	if a.clock.lastPaint == running {
+		t.Fatalf("the running wings kept the reading %q across the next second", running)
+	}
+}
+
 // TestCountdownReadingAsksForAFrameEachSecond: the drawn reading is a
 // countdown, so the tick must ask for a new frame when the second changes.
 // It compared a freshly computed key with itself and never asked, which left
