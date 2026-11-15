@@ -39,4 +39,8 @@ const (
 	// right after; Windows paints the menu's owner while it is open, and
 	// keeps the selection as it was instead.
 	contextMenuSelectsItem = true
+	// macOS reads NSDragPboard directly at any time during a drag, so the
+	// drop zone already knows the dragged paths before the pointer enters
+	// the panel window.
+	hoverFilesFromOffer = false
 )

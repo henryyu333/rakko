@@ -678,10 +678,23 @@ func (a *shelf) view(c *ui.Context) {
 	// drag ends as if cancelled — nothing is added, the panel stays open
 	// and 拖出后从托盘移除 does not fire.
 	accepts := !a.ownDrag
+	var offer transfer.Offer
 	var over bool
 	if accepts {
-		_, over = ui.DataDragOver(zone, opts)
+		offer, over = ui.DataDragOver(zone, opts)
 	}
+	if hoverFilesFromOffer && a.win != nil && over && !a.dragging && !a.ownDrag {
+		if active, serial := dragState(); active {
+			if serial != a.dragSerial {
+				a.dragSerial = serial
+				a.dragOpenTools = a.visible && a.tab == pageTools
+				a.suppressed, a.inBand = false, false
+				a.resetHoverOffer(serial)
+			}
+			a.dragging, a.pointerDrag = true, true
+		}
+	}
+	a.noteHoverOffer(over, offer)
 	if idle {
 		// 空闲态收到内容只入库不展开：刘海样式那时窗口本就不显示，也无从
 		// 接受拖放。灵动岛的空闲胶囊一直可见，照常画下去。
@@ -1261,6 +1274,10 @@ func (a *shelf) tabBody(c *ui.Context, over bool) {
 		case a.ocrSheet:
 			a.sheetFrame(c, func() { a.dropBar(c, loc(c).DropOcrTitle(), "", "") },
 				func() { a.ocrSheetStage(c) })
+		case a.awaitingHoverOffer(c.Now()):
+			// Hold off painting the tray page briefly while Windows OLE
+			// DragEnter delivers transfer.Offer.Files after edge-open.
+			c.After(max(a.hoverWaitUntil.Sub(c.Now()), time.Millisecond))
 		default:
 			a.pageBody(c, over)
 		}
@@ -1691,8 +1708,9 @@ func (a *shelf) toastLayer(c *ui.Context, over bool) {
 		}
 		a.renameUndoPill(c)
 		// The drop zone carries its own release hint in the back row;
-		// the 松开放入 capsule stays hidden while it is up.
-		if (over || (a.dragging && !a.ownDrag)) && !a.drop.on && a.tab != pageTools {
+		// the 松开放入 capsule stays hidden while it is up (or while
+		// waiting for an edge-opened Windows drag's initial Offer).
+		if (over || (a.dragging && !a.ownDrag)) && !a.drop.on && !a.awaitingHoverOffer(c.Now()) && a.tab != pageTools {
 			a.pill(c, "drop", l.DropRelease(), false)
 		}
 	})

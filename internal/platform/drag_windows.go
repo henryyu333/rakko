@@ -14,9 +14,11 @@ package platform
 // Explorer, browsers and every other OLE source alike.
 //
 // The formats and file paths of that drag are not readable from outside
-// the source. DragTypes and DragFiles therefore stay empty before a drop;
-// the window that takes the drop still learns its formats from mygo's own
-// OLE target, and the drop itself carries the files.
+// the source before the cursor reaches Rakko's window. DragTypes and
+// DragFiles therefore stay empty; once the drag enters a Rakko window,
+// mygo's OLE drop target reads CF_HDROP paths without reading file contents
+// and delivers them through ui.DataDragOver's transfer.Offer.Files, and the
+// drop itself delivers the full transfer data.
 
 import (
 	"sync"
@@ -110,13 +112,15 @@ func DragState() (active bool, serial int64) {
 // them for the drop itself.
 func DragTypes() []string { return nil }
 
-// DragFiles returns the file paths of the drag session in flight. As
-// DragTypes explains, the source's data object is not reachable from
-// another process; the paths arrive with the drop.
+// DragFiles returns the file paths of the drag session in flight. Outside
+// Rakko's window the source's OLE data object is unreachable, so this
+// returns nil; hover paths arrive via transfer.Offer.Files once OLE
+// DragEnter reaches a Rakko window.
 func DragFiles() []string { return nil }
 
 // DragFilesChange is the serial that marks the drag board's last rewrite.
-// There is no readable drag board, so it stays 0.
+// Windows exposes no global drag pasteboard serial outside the target
+// window, so this stays 0.
 func DragFilesChange() int64 { return 0 }
 
 // winDragFileTypes are the Windows clipboard formats that declare whole

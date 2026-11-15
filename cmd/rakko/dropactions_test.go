@@ -761,3 +761,23 @@ func TestDropThumbCapAndStaleWriteBack(t *testing.T) {
 		t.Fatalf("deferred path did not start: pending %d", len(pending))
 	}
 }
+
+func TestDarwinDropZoneIgnoresHoverOfferAndWait(t *testing.T) {
+	dir := t.TempDir()
+	img := writeFile(t, dir, "1.png", testPNGBytes(t))
+	a, _ := dropViewShelf(t, []string{img})
+	a.dragSerial = 5
+	a.noteHoverOffer(true, transfer.Offer{
+		Formats: []transfer.Format{transfer.FileList},
+		Files:   []string{"/tmp/other.pdf"},
+	})
+	if a.hoverOfferKnown || a.hoverOfferFiles != nil || a.hoverOfferCount != 0 {
+		t.Fatalf("darwin modified Windows hover offer state: known=%v files=%v count=%d",
+			a.hoverOfferKnown, a.hoverOfferFiles, a.hoverOfferCount)
+	}
+	a.hoverWaitUntil = time.Now().Add(time.Second)
+	a.edgeOpened = true
+	if a.awaitingHoverOffer(time.Now()) {
+		t.Fatal("darwin should never wait for Windows Offer.Files")
+	}
+}

@@ -1472,6 +1472,11 @@ func (a *shelf) show(edge bool) {
 	a.lastAct = time.Now() // using the shelf is activity: the otter stays awake
 	a.snap.drawn = a.snap.panel
 	a.visible, a.edgeOpened, a.received = true, edge, false
+	if hoverFilesFromOffer && edge && a.dragging && !a.ownDrag && !a.dragOpenTools && !a.hoverOfferKnown {
+		a.hoverWaitUntil = time.Now().Add(dropOfferWaitGrace)
+	} else {
+		a.hoverWaitUntil = time.Time{}
+	}
 	a.dropZoneSnap(edge)
 	a.fx.openMoving = true
 	a.animationFrom, a.animationStart = a.progress, time.Now()

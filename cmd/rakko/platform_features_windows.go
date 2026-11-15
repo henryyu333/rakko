@@ -45,4 +45,8 @@ const (
 	// the menu; the Mac shows the ring only after the menu closes. The
 	// reference has none open, so Windows leaves the selection alone.
 	contextMenuSelectsItem = false
+	// Windows keeps OLE drag objects in the source process until the
+	// pointer enters Rakko's window; hover file paths arrive through
+	// ui.DataDragOver's transfer.Offer.Files.
+	hoverFilesFromOffer = true
 )

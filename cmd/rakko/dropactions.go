@@ -5,9 +5,9 @@ package main
 // a row of action cells picked for the dragged files. Dropping on a cell
 // runs that action (the same conversion pipeline the item menu drives);
 // dropping anywhere else, or dragging anything that isn't files, keeps
-// the plain receive path. mygo only tells a hover which formats the drag
-// offers, so the file paths come from the drag pasteboard via
-// platform.DragFiles.
+// the plain receive path. macOS reads the dragged paths from the drag
+// pasteboard via platform.DragFiles; Windows receives them on hover via
+// ui.DataDragOver's transfer.Offer.Files once the pointer enters the window.
 //
 // Layout follows design/drop-actions-v1.html: the 64pt 放入托盘 row (icon
 // well, title and 保存引用，随时拖出, up to three stacked thumbnails) over
@@ -69,12 +69,18 @@ var dropCellOpts = transfer.DropOptions{
 // in tests.
 var (
 	dragFiles = func(a *shelf) []string {
+		if hoverFilesFromOffer {
+			return a.hoverOfferFiles
+		}
 		if a.win == nil {
 			return nil
 		}
 		return platform.DragFiles()
 	}
 	dragFilesChange = func(a *shelf) int64 {
+		if hoverFilesFromOffer {
+			return a.hoverOfferCount
+		}
 		if a.win == nil {
 			return 0
 		}
@@ -129,6 +135,42 @@ func (d *dropZoneState) catchOn(now time.Time) bool {
 // release's drop still finds its cells: a few frames is plenty — the
 // native drop has already been answered by then.
 const dropHoldGrace = 300 * time.Millisecond
+
+// dropOfferWaitGrace bounds how long an edge-opened panel on Windows waits
+// for OLE DragEnter to deliver transfer.Offer before drawing the tray page,
+// avoiding a Tray -> Drop Zone jump when files arrive slightly after show().
+const dropOfferWaitGrace = 120 * time.Millisecond
+
+func (a *shelf) resetHoverOffer(serial int64) {
+	a.hoverOfferSerial = serial
+	a.hoverOfferCount = 0
+	a.hoverOfferFiles = nil
+	a.hoverOfferKnown = false
+}
+
+func (a *shelf) noteHoverOffer(over bool, offer transfer.Offer) {
+	if !hoverFilesFromOffer {
+		return
+	}
+	if a.hoverOfferSerial != a.dragSerial {
+		a.resetHoverOffer(a.dragSerial)
+	}
+	if !over {
+		return
+	}
+	a.hoverOfferKnown = true
+	a.hoverWaitUntil = time.Time{}
+	if !slices.Equal(a.hoverOfferFiles, offer.Files) {
+		a.hoverOfferFiles = slices.Clone(offer.Files)
+		a.hoverOfferCount++
+	}
+}
+
+func (a *shelf) awaitingHoverOffer(now time.Time) bool {
+	return hoverFilesFromOffer && a.edgeOpened && a.dragging && !a.ownDrag &&
+		!a.dragOpenTools && !a.hoverOfferKnown && len(a.drop.files) == 0 &&
+		!a.hoverWaitUntil.IsZero() && now.Before(a.hoverWaitUntil)
+}
 
 // dropDebugFiles pins the zone's contents for the screenshot harness:
 // RAKKO_DEBUG_DROP_FILES=/a.png,/b.zip (path-list separated) makes a

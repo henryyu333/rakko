@@ -99,6 +99,11 @@ type shelf struct {
 	dragOpenTools                                               bool // 本次外部拖拽开始时面板开在工具页（design §1: 只有这时才用卡片接文件）
 	dragging, suppressed, pointerDrag, ownDrag, dropHot, inBand bool
 	drop                                                        dropZoneState           // incoming-drag zone memory; zero while no drag hovers
+	hoverOfferSerial                                            int64                   // dragSerial the hovered Offer.Files snapshot belongs to
+	hoverOfferCount                                             int64                   // increments when hovered Offer.Files changes during a drag
+	hoverOfferFiles                                             []string                // local file paths delivered via ui.DataDragOver on Windows
+	hoverOfferKnown                                             bool                    // true once ui.DataDragOver answered over==true in this drag
+	hoverWaitUntil                                              time.Time               // grace deadline after edge-open waiting for OLE DragEnter
 	dataDir                                                     string                  // where state.json and settings.json live
 	settingsBroken                                              bool                    // settings.json unreadable: never overwrite it
 	settingsWin                                                 *mygo.Window            // the 设置 window; nil while closed

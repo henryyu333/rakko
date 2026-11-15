@@ -206,6 +206,8 @@ func (a *shelf) pointerDragged() {
 		a.dragSerial = serial
 		a.dragOpenTools = a.visible && a.tab == pageTools
 		a.suppressed, a.inBand = false, false // a new drag re-enters
+		a.resetHoverOffer(serial)
+		a.hoverWaitUntil = time.Time{}
 	}
 	if !active {
 		return
@@ -256,6 +258,8 @@ func (a *shelf) monitorDrag(now time.Time) {
 		a.dragSerial = serial
 		a.dragOpenTools = a.visible && a.tab == pageTools // 同 pointerDragged
 		a.suppressed, a.inBand = false, false             // a new drag re-enters
+		a.resetHoverOffer(serial)
+		a.hoverWaitUntil = time.Time{}
 	}
 	a.dragging = active
 	if !active {
