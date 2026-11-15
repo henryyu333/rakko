@@ -306,19 +306,20 @@ func (a *shelf) settingsView(c *ui.Context) {
 		c.OnShortcut(0, ui.KeyEscape, a.settingsWin.Close)
 		c.OnShortcut(ui.Cmd, ui.KeyW, a.settingsWin.Close)
 	}
-	win := ui.Row(c.Key("win")).Fill()
-	if pending {
-		// A click anywhere the buttons do not take drops the question.
-		win = win.HandleInput(func(ev ui.InputEvent) bool {
-			if ev.Kind == ui.InputPointerDown {
-				a.cancelShortcutConfirm()
-			}
-			return false
-		})
-	}
-	frame := ui.Column(c.Key("frame")).Fill()
-	frame.Children(func() {
-		settingsCaptionStrip(c)
+	// content builds the sidebar and page row. Windows puts it under the
+	// caption strip (settingsCaptionStrip) inside one filling frame; macOS
+	// puts it straight in the window, as it always has.
+	content := func() {
+		win := ui.Row(c.Key("win")).Fill()
+		if pending {
+			// A click anywhere the buttons do not take drops the question.
+			win = win.HandleInput(func(ev ui.InputEvent) bool {
+				if ev.Kind == ui.InputPointerDown {
+					a.cancelShortcutConfirm()
+				}
+				return false
+			})
+		}
 		win.Children(func() {
 			a.settingsSidebar(c)
 			ui.Column(c.Key("panel")).Grow(1).FillHeight().Margin(10, 10, 10, 0).
@@ -336,6 +337,15 @@ func (a *shelf) settingsView(c *ui.Context) {
 				a.settingsCaptureLayer(c)
 			}
 		})
+	}
+	if !forWindows {
+		content()
+		return
+	}
+	frame := ui.Column(c.Key("frame")).Fill()
+	frame.Children(func() {
+		settingsCaptionStrip(c)
+		content()
 	})
 }
 
