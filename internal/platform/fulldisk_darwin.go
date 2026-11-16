@@ -72,6 +72,15 @@ func CanReadDownloads() bool {
 	return false
 }
 
+// DownloadsDir returns the user's Downloads folder.
+func DownloadsDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, "Downloads"), nil
+}
+
 // RequestFullDiskAccess is the user-initiated path to grant the permission:
 // it opens the 完整磁盘访问 pane and selects the running .app bundle in a
 // Finder window, so the user can press + or drag the bundle into the list.

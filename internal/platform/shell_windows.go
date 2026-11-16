@@ -58,6 +58,25 @@ func IdleSeconds() (float64, error) {
 // protects with Full Disk Access. Windows has no such gate, so it is true.
 func CanReadDownloads() bool { return true }
 
+var folderIDDownloads = windows.GUID{
+	Data1: 0x374DE290, Data2: 0x123F, Data3: 0x4565,
+	Data4: [8]byte{0x91, 0x64, 0x39, 0xC4, 0x92, 0x5E, 0x46, 0x7B},
+}
+
+// DownloadsDir returns the user's Downloads known folder (which may have been
+// relocated off the system drive), falling back to ~/Downloads when the known
+// folder query does not resolve an existing directory.
+func DownloadsDir() (string, error) {
+	if p := knownFolderPath(&folderIDDownloads); p != "" {
+		return p, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, "Downloads"), nil
+}
+
 // CanCaptureScreen reports whether screen capture is permitted. Windows
 // has no screen-recording consent gate; a capture can still fail on a
 // protected surface, which the capture path reports itself.

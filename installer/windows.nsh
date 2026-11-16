@@ -3,16 +3,17 @@
 ; everything here is under HKCU and the app's own key names.
 
 !macro customInstall
-  ; 添加到 Rakko on files and folders. Player mode invokes the verb once
-  ; with every selected item, so %* carries the whole selection.
+  ; 添加到 Rakko on files and folders. Explorer invokes the static verb
+  ; once per selected item with "%1", and single-instance forwarding hands
+  ; every path to the running shelf.
   WriteRegStr HKCU "Software\Classes\*\shell\Rakko" "" "添加到 Rakko"
   WriteRegStr HKCU "Software\Classes\*\shell\Rakko" "Icon" '"$INSTDIR\Rakko.exe",0'
   WriteRegStr HKCU "Software\Classes\*\shell\Rakko" "MultiSelectModel" "Player"
-  WriteRegStr HKCU "Software\Classes\*\shell\Rakko\command" "" '"$INSTDIR\Rakko.exe" --add-to-rakko %*'
+  WriteRegStr HKCU "Software\Classes\*\shell\Rakko\command" "" '"$INSTDIR\Rakko.exe" --add-to-rakko "%1"'
   WriteRegStr HKCU "Software\Classes\Directory\shell\Rakko" "" "添加到 Rakko"
   WriteRegStr HKCU "Software\Classes\Directory\shell\Rakko" "Icon" '"$INSTDIR\Rakko.exe",0'
   WriteRegStr HKCU "Software\Classes\Directory\shell\Rakko" "MultiSelectModel" "Player"
-  WriteRegStr HKCU "Software\Classes\Directory\shell\Rakko\command" "" '"$INSTDIR\Rakko.exe" --add-to-rakko %*'
+  WriteRegStr HKCU "Software\Classes\Directory\shell\Rakko\command" "" '"$INSTDIR\Rakko.exe" --add-to-rakko "%1"'
 
   ; 发送到 entry: SendTo appends the selected paths to the shortcut's
   ; arguments.

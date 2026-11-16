@@ -21,16 +21,21 @@ package agentnotify
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
+
+	"rakko/internal/atomicfile"
 )
 
-// writeShim writes (or replaces) one tool's shim. It is idempotent: a second
-// connect writes the same bytes.
+// writeShim writes (or replaces) one tool's shim atomically through a
+// temporary file in the same directory so a write failure cannot truncate a
+// working entry. It is idempotent: a second connect writes the same bytes.
 func writeShim(dataDir string, kind hookKind, tool Tool, exe string, args []string) error {
 	if err := os.MkdirAll(dataDir, 0o700); err != nil {
 		return err
 	}
-	return os.WriteFile(shimPath(dataDir, kind, tool), []byte(shimBody(kind, tool, exe, args)), 0o600)
+	path := shimPath(dataDir, kind, tool)
+	return atomicfile.WriteFile(filepath.Dir(path), filepath.Base(path), []byte(shimBody(kind, tool, exe, args)), 0o600)
 }
 
 func shimBody(kind hookKind, tool Tool, exe string, args []string) string {

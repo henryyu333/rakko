@@ -52,20 +52,7 @@ const (
 
 // downloadsDir is where browsers leave their temporary files. It is a seam
 // so tests read their own directory and the app never touches the user's.
-var downloadsDir = func() (string, error) {
-	home, err := osUserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepathJoin(home, "Downloads"), nil
-}
-
-// Indirections kept tiny so the module can be tested without the home
-// directory.
-var (
-	osUserHomeDir = func() (string, error) { return os.UserHomeDir() }
-	filepathJoin  = filepath.Join
-)
+var downloadsDir = platform.DownloadsDir
 
 // downloadsModule watches one folder and projects it onto the notch.
 type downloadsModule struct {
