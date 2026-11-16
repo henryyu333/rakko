@@ -352,14 +352,19 @@ func (n *noteUI) open() bool {
 			a.report(err)
 		}
 	}
+	frame := n.frame
 	if n.win == nil {
 		n.prevPID = 0
 		if pid := frontmostPID(); pid > 0 && pid != ownPID() {
 			n.prevPID = pid
 		}
-		frame := n.frame
 		if frame.Width == 0 || frame.Height == 0 {
 			frame = a.freshNoteFrame()
+		}
+		if forWindows {
+			// The open panel is topmost on Windows and would cover a note
+			// opened over it; close it as Settings and Rename do.
+			a.hide(hideExplicit)
 		}
 		w := noteNewWindow(mygo.WindowOptions{
 			Title: a.noteWindowTitle(), Width: frame.Width, Height: frame.Height,
@@ -392,6 +397,9 @@ func (n *noteUI) open() bool {
 func (n *noteUI) showFront() bool {
 	if n.win == nil {
 		return n.open()
+	}
+	if forWindows {
+		n.host.hide(hideExplicit)
 	}
 	noteShow(n.win)
 	noteActivate()
@@ -458,22 +466,48 @@ func (a *shelf) freshNoteFrame() mygo.Rectangle {
 	if anchor.Width == 0 || anchor.Height == 0 {
 		return centeredFrame(noteW, noteH, area)
 	}
-	return noteFrameUnder(anchor, area)
+	frame := noteFrameUnder(anchor, area)
+	if forWindows {
+		frame = a.noteClearShell(frame, area)
+	}
+	return frame
+}
+
+// noteClearShell keeps a note window opened at the top of a Windows work area
+// from landing underneath the topmost simulated notch or island capsule.
+func (a *shelf) noteClearShell(frame, area mygo.Rectangle) mygo.Rectangle {
+	const shellGap = 6
+	var shell mygo.Rectangle
+	switch {
+	case a.island:
+		shell = a.islandRect()
+	case a.hasNotch:
+		shell = mygo.Rectangle{X: a.notchX, Y: a.notchY, Width: a.notchW, Height: a.notchH}
+	default:
+		return frame
+	}
+	if shell.Width <= 0 || shell.Height <= 0 {
+		return frame
+	}
+	if frame.X >= shell.X+shell.Width || frame.X+frame.Width <= shell.X {
+		return frame
+	}
+	minY := shell.Y + shell.Height + shellGap
+	if frame.Y < minY {
+		frame.Y = min(minY, area.Y+max(0, area.Height-frame.Height))
+	}
+	return frame
 }
 
 // noteFrameUnder is where a note window opens for an anchor and a work
 // area: centred under the anchor, above it when there is no room below,
-// and kept inside the area. Where noteStaysBelowTallAnchor holds, an
-// anchor that leaves room on neither side keeps the note below, clamped to
-// the area, instead of flipping it above. Pure; unit-tested.
+// and kept inside the area. Pure; unit-tested.
 func noteFrameUnder(anchor, area mygo.Rectangle) mygo.Rectangle {
 	const gap = 8
 	x := anchor.X + (anchor.Width-noteW)/2
 	y := anchor.Y + anchor.Height + gap
 	if y+noteH > area.Y+area.Height {
-		if above := anchor.Y - noteH - gap; !noteStaysBelowTallAnchor || above >= area.Y {
-			y = above
-		}
+		y = anchor.Y - noteH - gap
 	}
 	x = max(area.X, min(x, area.X+max(0, area.Width-noteW)))
 	y = max(area.Y, min(y, area.Y+max(0, area.Height-noteH)))

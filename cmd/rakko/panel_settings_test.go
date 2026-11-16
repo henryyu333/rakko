@@ -9,11 +9,10 @@ import (
 	"rakko/internal/store"
 )
 
-// TestPanelSettingsGearKeepsThePanelWhereThePlatformAllowsIt: the page
-// capsule's gear opens Settings; on Windows the overlay closes first, since
-// its content composites over the window stack, while on macOS the panel
-// stays open behind the window as it always has.
-func TestPanelSettingsGearKeepsThePanelWhereThePlatformAllowsIt(t *testing.T) {
+// TestPanelSettingsGearHidesThePanel: the page capsule's gear closes the
+// panel before opening Settings on every platform, matching search's own
+// Settings row and avoiding the panel lingering behind or over Settings.
+func TestPanelSettingsGearHidesThePanel(t *testing.T) {
 	dir := t.TempDir()
 	s, err := store.Open(dir)
 	if err != nil {
@@ -43,7 +42,7 @@ func TestPanelSettingsGearKeepsThePanelWhereThePlatformAllowsIt(t *testing.T) {
 	if opened != 1 {
 		t.Fatalf("settings opened %d times, want 1", opened)
 	}
-	if want := !overlayHidesForSettings; a.visible != want {
-		t.Fatalf("panel visible = %v after the gear, want %v on this platform", a.visible, want)
+	if a.visible {
+		t.Fatal("panel stayed visible after clicking the settings gear")
 	}
 }

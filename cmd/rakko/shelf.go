@@ -146,6 +146,8 @@ type shelf struct {
 	escHeld, spaceHeld, cmdCHeld                                bool
 	onbKeysHeld                                                 map[string]bool // the guide's held Left/Right/Enter
 	selection                                                   selection
+	menuHoldSel                                                 map[string]bool // pre-menu selection drawn while a native menu is open
+	menuHoldSet, menuWasOpen                                    bool
 	stopMouseObservation, stopDragObservation                   func()
 	stopAppearanceObs                                           func()
 	leftSince                                                   time.Time

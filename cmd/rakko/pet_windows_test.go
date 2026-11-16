@@ -2,11 +2,10 @@
 
 package main
 
-// The capsule's return zone is 41pt tall plus its hover margin; a 96pt
-// otter parked at the work area's top edge has its centre half its height
-// below that band, so on Windows the pointer the drag carried to the
-// capsule decides whether a release is a return. The release and the
-// 松开收进刘海 pill read the same answer.
+// Both platforms share the box-based petReturnTarget rule: a carried otter
+// returns to the island capsule when its own box overlaps the capsule's zone,
+// even when parked at the top of a Windows work area, and an otter released
+// below the capsule stays on the desktop.
 
 import (
 	"testing"
@@ -14,19 +13,20 @@ import (
 	"github.com/egoist/mygo"
 )
 
-func TestPetReturnAcceptsThePointerOnWindows(t *testing.T) {
+func TestPetReturnUsesBoxOnWindows(t *testing.T) {
 	a := &shelf{}
 	a.island = true
 	capsule := a.islandRect()
-	release := mygo.Point{X: capsule.X + capsule.Width/2, Y: capsule.Y + 20}
-	centre := mygo.Point{X: release.X + 37, Y: release.Y + 48}
-	if a.pinReturnZone(centre) {
-		t.Fatalf("the otter's centre %v already reaches the capsule %+v; the pointer is not what decides", centre, capsule)
+
+	// Box parked on the capsule at the top of the work area: stows.
+	onCapsule := mygo.Rectangle{X: capsule.X + 20, Y: 0, Width: 74, Height: 96}
+	if !petReturnTarget(a, onCapsule) {
+		t.Fatalf("otter box %+v overlapping capsule %+v did not count as a return", onCapsule, capsule)
 	}
-	if !petReturnTarget(a, centre, release) {
-		t.Fatalf("a release at %v on the capsule %+v did not count as a return", release, capsule)
-	}
-	if petReturnTarget(a, centre, mygo.Point{X: 400, Y: 700}) {
-		t.Fatal("a release away from the capsule counted as a return")
+
+	// Box released below the capsule: stays on desktop.
+	belowCapsule := mygo.Rectangle{X: capsule.X + 20, Y: capsule.Y + capsule.Height + notchHoverPadY, Width: 74, Height: 96}
+	if petReturnTarget(a, belowCapsule) {
+		t.Fatalf("otter box %+v below capsule %+v counted as a return", belowCapsule, capsule)
 	}
 }

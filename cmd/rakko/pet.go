@@ -503,8 +503,7 @@ func (a *shelf) petTick(now time.Time, p mygo.Point, down bool) {
 			pet.slideAt = time.Time{}
 			pet.applyFrame()
 		}
-		centre := mygo.Point{X: pet.frame.X + pet.frame.Width/2, Y: pet.frame.Y + pet.frame.Height/2}
-		returning = pet.moving && petReturnTarget(a, centre, p)
+		returning = pet.moving && petReturnTarget(a, pet.frame)
 	}
 	// A pet held over the notch grows 松开收进刘海 exactly where a card
 	// held there grows 松开放回: the release reads the same zone.
@@ -640,16 +639,20 @@ func (pet *petWindow) lockMove(dx, dy int) {
 }
 
 // petReturnTarget reports whether a carried otter counts as put back into
-// the shell: its own box in the return zone, or — where the platform's work
-// area stops the box short of that zone — the pointer the drag carried
-// there (see petPointerReturnSupported). The release and the 松开收进刘海
-// pill read this one answer, so a hint never promises what a release will
-// not do.
-func petReturnTarget(a *shelf, centre, p mygo.Point) bool {
-	if a.pinReturnZone(centre) {
-		return true
+// the shell: its own box reaching the notch's return zone, or overlapping the
+// island capsule's zone when the shell is a floating capsule. The release and
+// the 松开收进刘海 pill read this one answer, so a hint never promises what
+// a release will not do.
+func petReturnTarget(a *shelf, frame mygo.Rectangle) bool {
+	if a.island {
+		r := a.islandRect()
+		return frame.X < r.X+r.Width+notchHoverPadX &&
+			frame.X+frame.Width > r.X-notchHoverPadX &&
+			frame.Y < r.Y+r.Height+notchHoverPadY &&
+			frame.Y+frame.Height > r.Y-notchHoverPadY
 	}
-	return petPointerReturnSupported && a.pinReturnZone(p)
+	centre := mygo.Point{X: frame.X + frame.Width/2, Y: frame.Y + frame.Height/2}
+	return a.pinReturnZone(centre)
 }
 
 // petRelease settles a moved otter: 收进刘海 when it was carried to the
@@ -662,13 +665,12 @@ func (a *shelf) petRelease(p mygo.Point) {
 	}
 	pet.display = displayIDAt(p, pet.display)
 	area := petArea(pet.display)
-	frame := mygo.Rectangle{
+	frame := petClampFrame(mygo.Rectangle{
 		X: p.X - pet.grabX, Y: p.Y - pet.grabY,
 		Width: pet.frame.Width, Height: pet.frame.Height,
-	}
-	centre := mygo.Point{X: frame.X + frame.Width/2, Y: frame.Y + frame.Height/2}
-	// 收进刘海：归位区是顶部那条带；平台自己的见 petReturnTarget。
-	if petReturnTarget(a, centre, p) {
+	}, area)
+	// 收进刘海：归位区是顶部那条带；盒子到达后才收起。
+	if petReturnTarget(a, frame) {
 		a.hidePet()
 		return
 	}

@@ -628,11 +628,7 @@ func (a *shelf) navView(c *ui.Context, r ui.Rect, opacity float32) {
 		if b := button("settings", l.PanelSettings(), false, func() {
 			ui.Icon(c, gearSymbol).Size(16, 16).TextColor(ink2)
 		}); b.Clicked() {
-			if overlayHidesForSettings {
-				// Windows composites the overlay above the window stack:
-				// left open, it would sit over the Settings window.
-				a.hide(hideExplicit)
-			}
+			a.hide(hideExplicit)
 			openSettingsWindow(a)
 		}
 		if b := button("collapse", l.PanelCollapse(), false, func() {

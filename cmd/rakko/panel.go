@@ -460,6 +460,10 @@ func (a *shelf) view(c *ui.Context) {
 			a.syncMainIdleCapsuleVisibility(blank)
 		}
 	}()
+	if !menuOpen(a) {
+		a.menuHoldSet = false
+		a.menuHoldSel = nil
+	}
 	// A page that got switched off (or a stale id) must not stay current:
 	// fold back to the tray before anything reads a.tab.
 	a.normalizeTab()

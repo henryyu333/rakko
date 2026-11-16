@@ -8,28 +8,12 @@ package main
 const (
 	permissionsSupported = true
 	disableMoveOverlay   = true
-	// AppKit keeps the Settings window above the panel's level, so the
-	// panel stays open behind it, as it always has.
-	overlayHidesForSettings = false
-	// A carried otter returns to the notch only when its own box reaches the
-	// notch's zone: the pointer being over the notch is not enough, because
-	// the Mac's work area stops the window where the old rule already
-	// answered, and widening it would stow an otter the user dropped lower.
-	petPointerReturnSupported = false
-	// A note whose anchor leaves no room above or below opens above it and
-	// is clamped to the top of the work area, as it always has.
-	noteStaysBelowTallAnchor = false
 	// An un-peeking notched shell on macOS spans the hardware camera
 	// housing (32pt + hover pad), which sits in the menu bar rather than
 	// over an application's title bar.
 	notchTopEdgeHoverOnly = false
 	// On macOS, drag previews live in a higher NSWindowLevel above the panel.
 	toolsDragKeepsMouse = false
-	// A right click selects its tile, as Finder does. The native menu holds
-	// the frame that selects it until the menu closes, so the ring appears
-	// right after; Windows paints the menu's owner while it is open, and
-	// keeps the selection as it was instead.
-	contextMenuSelectsItem = true
 	// macOS reads NSDragPboard directly at any time during a drag, so the
 	// drop zone already knows the dragged paths before the pointer enters
 	// the panel window.

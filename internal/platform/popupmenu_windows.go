@@ -143,6 +143,24 @@ func alreadyRaised(h uintptr) bool {
 	return false
 }
 
+// MenuOpen reports whether window's UI thread is currently running a system
+// popup menu loop (TrackPopupMenuEx).
+func MenuOpen(window uintptr) bool {
+	if window == 0 {
+		return uiThreadInMenu()
+	}
+	tid := uint32(windowThread(window))
+	if tid == 0 {
+		return false
+	}
+	var info guiThreadInfo
+	info.cbSize = uint32(unsafe.Sizeof(info))
+	if ok, _, _ := procGetGUIThreadInfo.Call(uintptr(tid), uintptr(unsafe.Pointer(&info))); ok == 0 {
+		return false
+	}
+	return info.flags&(guiInMenuMode|guiSystemMenuMode|guiPopupMenuMode) != 0
+}
+
 // uiThreadInMenu reports whether the overlay's thread runs a popup menu
 // loop right now: the cheap answer that keeps the pass from enumerating
 // the desktop fifty times a second for nothing.

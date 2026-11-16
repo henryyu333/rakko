@@ -323,6 +323,16 @@ func (a *shelf) monitorTick(now time.Time) {
 	if a.quitting {
 		return
 	}
+	if menuOpen(a) {
+		a.menuWasOpen = true
+	} else if a.menuWasOpen {
+		a.menuWasOpen = false
+		a.menuHoldSet = false
+		a.menuHoldSel = nil
+		if a.win != nil {
+			a.win.Invalidate()
+		}
+	}
 	a.pointerTick, a.pointerTickValid = cursorPoint(), true
 	defer func() { a.pointerTickValid = false }()
 

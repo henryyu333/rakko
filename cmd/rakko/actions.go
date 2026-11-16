@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -18,20 +19,25 @@ import (
 	"rakko/internal/store"
 )
 
+// menuOpen reports whether the overlay's native context menu is currently open;
+// tests replace it to simulate a menu loop without a window server.
+var menuOpen = func(a *shelf) bool { return platform.MenuOpen(a.winH) }
+
 // targets is what an action on item applies to: the whole selection when
 // item is part of a multi-item selection, otherwise item alone, which then
-// becomes the selection, as in Finder — on the Mac, where the menu's own
-// frame repaints it after the menu closes. Windows leaves the selection as
-// it was: its menu keeps repainting the window behind it, so selecting
-// there would show the ring around the tile while the menu is open, which
-// the Mac never shows.
+// becomes the selection, as in Finder. While a native menu is still open
+// (notably on Windows, whose modal loop keeps repainting the owner behind
+// the menu), items keep drawing the pre-menu selection so the accent ring
+// appears only after the menu closes, matching macOS.
 func (a *shelf) targets(item store.Item) []store.Item {
 	if a.selection.has(item.ID) && a.selection.count() > 1 {
 		return a.selection.chosen(a.visibleItems())
 	}
-	if contextMenuSelectsItem {
-		a.selection.only(item.ID)
+	if !a.menuHoldSet {
+		a.menuHoldSel = maps.Clone(a.selection.ids)
+		a.menuHoldSet = true
 	}
+	a.selection.only(item.ID)
 	return []store.Item{item}
 }
 

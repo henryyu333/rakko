@@ -9,19 +9,6 @@ package main
 const (
 	permissionsSupported = false
 	disableMoveOverlay   = false
-	// The overlay's content is composited above the window stack: a
-	// Settings window opened under it would show the panel's page and
-	// capsule through its own, so the panel closes first.
-	overlayHidesForSettings = true
-	// The capsule's return zone is 41pt tall plus its hover margin, while a
-	// 96pt otter parked at the work area's top edge has its centre half its
-	// height below: the box alone can never reach it, so the pointer the
-	// drag carried there decides too.
-	petPointerReturnSupported = true
-	// The open panel's window is taller than the room above or below it; a
-	// note flipped above would land at the work area's top, under the
-	// topmost capsule, so it stays below and is clamped instead.
-	noteStaysBelowTallAnchor = true
 	// With no hardware housing, the idle simulated notch draws nothing;
 	// requiring the pointer to touch the screen's top edge keeps an
 	// invisible 36pt hot zone from covering a maximized window's tabs or
@@ -31,11 +18,6 @@ const (
 	// is active so crossing the panel edge never toggles WS_EX_TRANSPARENT or re-layers
 	// the panel in front of the drag preview HWND (which shares the single topmost band).
 	toolsDragKeepsMouse = true
-	// Windows keeps painting a native menu's owner while the menu is open,
-	// so selecting the right-clicked tile painted its accent ring behind
-	// the menu; the Mac shows the ring only after the menu closes. The
-	// reference has none open, so Windows leaves the selection alone.
-	contextMenuSelectsItem = false
 	// Windows keeps OLE drag objects in the source process until the
 	// pointer enters Rakko's window; hover file paths arrive through
 	// ui.DataDragOver's transfer.Offer.Files.

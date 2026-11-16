@@ -29,6 +29,13 @@ import (
 // image, or the file's Finder icon), the name under it, a pin badge top
 // right and the accent ring while selected. Moved files dim to 38% and
 // name 「· 已移动」.
+func (a *shelf) itemSelected(id string) bool {
+	if a.menuHoldSet && menuOpen(a) {
+		return a.menuHoldSel[id]
+	}
+	return a.selection.has(id)
+}
+
 func (a *shelf) itemTile(c *ui.Context, item store.Item) {
 	l := loc(c)
 	title := itemTitleIn(l, item)
@@ -42,7 +49,7 @@ func (a *shelf) itemTile(c *ui.Context, item store.Item) {
 		// 键盘移动选中行后把它留在可见范围内。
 		tile.ScrollIntoView()
 	}
-	selected := a.selection.has(item.ID)
+	selected := a.itemSelected(item.ID)
 	switch {
 	case selected:
 		tile.Background(accent16).Border(1.5, accent.Alpha(0.9))
@@ -169,7 +176,7 @@ func (a *shelf) clipRow(c *ui.Context, item store.Item, number int) {
 	if a.reveal == item.ID {
 		row.ScrollIntoView()
 	}
-	selected := a.selection.has(item.ID)
+	selected := a.itemSelected(item.ID)
 	switch {
 	case selected:
 		row.Background(accent24)

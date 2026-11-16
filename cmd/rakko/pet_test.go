@@ -409,19 +409,27 @@ func TestPetReturnNeedsTheBoxOnTheMac(t *testing.T) {
 	if !a.settings.Pet.Shown {
 		t.Fatal("the otter stayed but was saved as stowed")
 	}
-	centre := mygo.Point{X: release.X + pet.frame.Width/2, Y: release.Y + pet.frame.Height/2}
-	if petReturnTarget(a, centre, release) {
-		t.Fatalf("centre %v / pointer %v counted as a return on the Mac", centre, release)
+	frame := mygo.Rectangle{X: release.X, Y: release.Y, Width: pet.frame.Width, Height: pet.frame.Height}
+	if petReturnTarget(a, frame) {
+		t.Fatalf("frame %+v counted as a return on the Mac", frame)
 	}
 
-	// The island's band is just as short: a pointer on the capsule with the
-	// window parked at the work area's top edge is not a return there.
+	// The island's zone checks the otter's own box overlapping the capsule:
+	// an otter dropped away from the capsule stays out, while one overlapping
+	// the capsule stows and one dropped just below it does not.
 	a.island = true
 	pet2 := windowlessPet(a, 0, 36, 74, 96)
 	pet2.moving, pet2.pressed, pet2.grabX, pet2.grabY = true, true, 0, 0
 	a.petRelease(mygo.Point{X: 0, Y: 16})
 	if a.pet == nil {
 		t.Fatal("the island capsule stowed an otter whose box was not in the zone on the Mac")
+	}
+	capsule := a.islandRect()
+	if !petReturnTarget(a, mygo.Rectangle{X: capsule.X + 20, Y: capsule.Y, Width: 74, Height: 96}) {
+		t.Fatalf("otter box overlapping capsule %+v did not count as a return", capsule)
+	}
+	if petReturnTarget(a, mygo.Rectangle{X: capsule.X + 20, Y: capsule.Y + capsule.Height + notchHoverPadY, Width: 74, Height: 96}) {
+		t.Fatalf("otter box below capsule %+v counted as a return", capsule)
 	}
 }
 

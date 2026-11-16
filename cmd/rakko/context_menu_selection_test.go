@@ -45,26 +45,41 @@ func itemNamed(t *testing.T, a *shelf, name string) string {
 	return ""
 }
 
-// TestContextMenuSelection: right-clicking an unselected tile acts on that
-// tile alone. On the Mac it also selects it, as Finder does; the ring is
-// painted once the menu closes. Windows keeps painting the menu's owner, so
-// selecting there would draw the ring behind the menu, and it leaves the
-// selection as it was instead. Both show the single-file menu.
+// TestContextMenuSelection: right-clicking an unselected tile selects that
+// tile alone on every platform. While the native menu is still open, frames
+// continue to paint the pre-menu selection so the accent ring appears only
+// after the menu closes, matching macOS.
 func TestContextMenuSelection(t *testing.T) {
 	a, view := trayWithFiles(t, "a.txt", "b.txt")
 	view.Frame()
+
+	oldMenuOpen := menuOpen
+	holdOpen := true
+	menuOpen = func(s *shelf) bool { return holdOpen && s.menuHoldSet }
+	t.Cleanup(func() { menuOpen = oldMenuOpen })
+
 	if err := view.RightClick("a.txt"); err != nil {
 		t.Fatal(err)
 	}
 	if !slices.Contains(view.Menu(), "移除") {
 		t.Fatalf("menu on an unselected tile should act on it alone: %v", view.Menu())
 	}
-	if contextMenuSelectsItem {
-		if a.selection.count() != 1 || !a.selection.has(itemNamed(t, a, "a.txt")) {
-			t.Fatalf("selection = %d items; the Mac selects the clicked tile", a.selection.count())
-		}
-	} else if a.selection.count() != 0 {
-		t.Fatalf("selection = %d items; Windows leaves it alone behind its menu", a.selection.count())
+	if a.selection.count() != 1 || !a.selection.has(itemNamed(t, a, "a.txt")) {
+		t.Fatalf("selection = %d items; right-clicking an unselected tile must select it", a.selection.count())
+	}
+
+	// While the native popup menu loop is active, owner repaints must keep the
+	// pre-menu selection so the accent ring appears only after it closes.
+	idA := itemNamed(t, a, "a.txt")
+	view.Frame()
+	if a.itemSelected(idA) {
+		t.Fatal("tile painted as selected while the native menu was still open")
+	}
+
+	holdOpen = false
+	view.Frame()
+	if !a.itemSelected(idA) {
+		t.Fatal("tile did not show selected after the native menu closed")
 	}
 }
 
