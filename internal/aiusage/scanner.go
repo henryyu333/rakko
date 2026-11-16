@@ -79,10 +79,11 @@ type Scanner struct {
 	files map[string]*fileState
 
 	// lastFailed names the readers the last finished pass could not read
-	// (a vanished root, an unreadable log, a failed database). The page
-	// needs it to tell "no usage" from "usage it could not see": a zero
-	// total with failed sources is not a zero week.
+	// (a vanished root, an unreadable log, a failed database).
 	lastFailed []Tool
+	// lastUnreadable names both failed readers and installed tools whose
+	// usage cannot be read locally (e.g. API-only tools like Cursor).
+	lastUnreadable []Tool
 }
 
 // NewScanner makes a Scanner for the given home directory (the parent of
@@ -92,8 +93,8 @@ func NewScanner(home, cacheDir string) *Scanner {
 	return &Scanner{home: home, cacheDir: cacheDir, files: map[string]*fileState{}}
 }
 
-// wholeParser decodes a file that is one JSON document, not JSONL.
-type wholeParser func([]byte, map[string]*string) ([]rec, error)
+// wholeParser decodes a file that is parsed as a whole unit (JSON or compressed JSONL).
+type wholeParser func(string, []byte, map[string]*string) ([]rec, error)
 
 // fileSpec is how one collected file is parsed.
 type fileSpec struct {
@@ -128,37 +129,58 @@ func (s *Scanner) Scan(ctx context.Context, progress func(done, total int64)) er
 	}
 	s.loadCache(ctx)
 
-	specs := agentSpecs(s.home)
 	want := map[string]fileSpec{}
 	failed := map[Tool]bool{}
-	dbPath := ""
+	unreadable := map[Tool]bool{}
+	type dbJob struct {
+		tool Tool
+		spec dbSpec
+	}
+	var dbJobs []dbJob
+	seenDB := map[string]bool{}
 	if s.home == "" {
 		s.mu.Lock()
 		s.files = map[string]*fileState{}
 		s.lastFailed = nil
+		s.lastUnreadable = nil
 		s.mu.Unlock()
 		return nil
 	}
-	for _, sp := range specs {
-		if sp.db != "" {
-			dbPath = sp.db
+	for _, entry := range registry {
+		if entry.unreadable {
+			if entry.isInstalled(s.home) {
+				unreadable[entry.tool] = true
+			}
 			continue
 		}
-		for _, root := range sp.roots {
-			paths, err := collectLogs(ctx, root.dir, root.match)
-			if err != nil {
-				if ctx.Err() != nil {
-					return ctx.Err()
+		if entry.dbs != nil {
+			for _, db := range entry.dbs(s.home) {
+				if db.path != "" && !seenDB[db.path] {
+					seenDB[db.path] = true
+					dbJobs = append(dbJobs, dbJob{tool: entry.tool, spec: db})
 				}
-				failed[sp.tool] = true
-				continue
 			}
-			for _, p := range paths {
-				spec := fileSpec{tool: sp.tool, whole: root.whole}
-				if root.whole && sp.tool == ToolGrok {
-					spec.parse = parseGrokUsageFile
+		}
+		if entry.roots != nil {
+			for _, root := range entry.roots(s.home) {
+				paths, err := collectLogs(ctx, root.dir, root.match)
+				if err != nil {
+					if ctx.Err() != nil {
+						return ctx.Err()
+					}
+					failed[entry.tool] = true
+					continue
 				}
-				want[p] = spec
+				for _, p := range paths {
+					if root.filter != nil && !root.filter(p) {
+						continue
+					}
+					spec := fileSpec{tool: entry.tool, whole: root.whole}
+					if root.whole {
+						spec.parse = entry.parseWhole
+					}
+					want[p] = spec
+				}
 			}
 		}
 	}
@@ -167,11 +189,10 @@ func (s *Scanner) Scan(ctx context.Context, progress func(done, total int64)) er
 	prev := s.files
 	s.mu.RUnlock()
 
-	// Carry the opencode database state (handled below) and drop every
-	// other cached file not seen in this walk. Every parsed record stays in
-	// its own file's state — duplicates are removed when Summary
-	// aggregates, so a surviving copy still counts when the file that "won"
-	// a key disappears.
+	// Carry active DB states (handled below) and drop every other cached
+	// file not seen in this walk. Every parsed record stays in its own
+	// file's state — duplicates are removed when Summary aggregates, so a
+	// surviving copy still counts when the file that "won" a key disappears.
 	files := make(map[string]*fileState, len(prev))
 	for p, st := range prev {
 		if st == nil {
@@ -180,7 +201,7 @@ func (s *Scanner) Scan(ctx context.Context, progress func(done, total int64)) er
 		if _, ok := want[p]; ok {
 			continue
 		}
-		if dbPath != "" && p == dbPath {
+		if seenDB[p] {
 			continue
 		}
 	}
@@ -299,21 +320,21 @@ loop:
 		progress(done, total)
 	}
 
-	// opencode: replace the whole record set when the database (or its WAL)
-	// changed. A read failure marks the reader failed; its records are
-	// dropped below so the total only covers readers that answered.
-	if dbPath != "" {
-		if size, mod, ok := dbSignature(dbPath); ok {
-			old := prev[dbPath]
+	// SQLite-backed readers: replace the whole record set when the database
+	// (or its WAL) changed. A read failure marks the reader failed; its
+	// records are dropped below so the total only covers readers that answered.
+	for _, db := range dbJobs {
+		if size, mod, ok := dbSignature(db.spec.path); ok {
+			old := prev[db.spec.path]
 			if old != nil && old.size == size && old.modNano == mod {
-				files[dbPath] = old
-			} else if recs, err := readOpencode(ctx, dbPath, s.cacheDir, pool); err != nil {
+				files[db.spec.path] = old
+			} else if recs, err := db.spec.read(ctx, db.spec.path, s.cacheDir, pool); err != nil {
 				if ctx.Err() != nil {
 					scanErr = ctx.Err()
 				}
-				failed[ToolOpencode] = true
+				failed[db.tool] = true
 			} else {
-				files[dbPath] = &fileState{tool: ToolOpencode, size: size, modNano: mod, recs: recs}
+				files[db.spec.path] = &fileState{tool: db.tool, size: size, modNano: mod, recs: recs}
 			}
 		}
 	}
@@ -333,9 +354,16 @@ loop:
 	failedTools := make([]Tool, 0, len(failed))
 	for t := range failed {
 		failedTools = append(failedTools, t)
+		unreadable[t] = true
 	}
 	sort.Slice(failedTools, func(i, j int) bool { return failedTools[i] < failedTools[j] })
 	s.lastFailed = failedTools
+	unreadableTools := make([]Tool, 0, len(unreadable))
+	for t := range unreadable {
+		unreadableTools = append(unreadableTools, t)
+	}
+	sort.Slice(unreadableTools, func(i, j int) bool { return unreadableTools[i] < unreadableTools[j] })
+	s.lastUnreadable = unreadableTools
 	s.mu.Unlock()
 	// A cancelled pass commits its in-memory progress but must not touch
 	// the disk: saveCache re-checks ctx through serialization and again
@@ -351,6 +379,14 @@ func (s *Scanner) FailedTools() []Tool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return append([]Tool(nil), s.lastFailed...)
+}
+
+// UnreadableTools lists both failed readers and installed tools whose usage
+// cannot be read locally (such as API-only tools), in tool order.
+func (s *Scanner) UnreadableTools() []Tool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return append([]Tool(nil), s.lastUnreadable...)
 }
 
 // dbSignature reports the opencode database's size and newest modification
@@ -429,7 +465,7 @@ func scanWholeFile(ctx context.Context, path string, st *fileState, parse wholeP
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	recs, err := parse(data, pool)
+	recs, err := parse(path, data, pool)
 	if err != nil {
 		return err
 	}
@@ -484,7 +520,7 @@ func scanFile(ctx context.Context, path string, from int64, st *fileState, pool 
 			st.tailStart, st.tailSum = st.offset, hashLine(line)
 			st.offset += int64(n)
 			advance(int64(n))
-			st.parseLine(line, pool)
+			st.parseLine(path, line, pool)
 		}
 		if err != nil {
 			if err == io.EOF {
@@ -505,24 +541,12 @@ func hashLine(b []byte) uint64 {
 // the record it yields to st.recs, keeping its dedupe key: keys are applied
 // at aggregation time (Summary), not while parsing, so duplicate copies
 // survive in every file that holds them.
-func (st *fileState) parseLine(line []byte, pool map[string]*string) {
-	var (
-		r   rec
-		key string
-		ok  bool
-	)
-	switch st.tool {
-	case ToolOmp, ToolPi:
-		r, key, ok = parseOmpLine(line, pool)
-	case ToolClaude:
-		r, key, ok = parseClaudeLine(line, pool)
-	case ToolCodex:
-		r, ok = st.tail.parseCodexLine(line, pool)
-	case ToolGrok:
-		r, key, ok = parseGrokUpdateLine(line, pool)
-	default:
+func (st *fileState) parseLine(path string, line []byte, pool map[string]*string) {
+	entry, found := registryByTool[st.tool]
+	if !found || entry.parseLine == nil {
 		return
 	}
+	r, key, ok := entry.parseLine(path, line, pool, st)
 	if !ok {
 		return
 	}
