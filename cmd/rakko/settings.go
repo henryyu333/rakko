@@ -212,6 +212,7 @@ func (a *shelf) openSettings() {
 	platform.SetWindowAppearance(w.NativeHandle(), true)
 	platform.ConfigureFramedWindow(w.NativeHandle(), true)
 	w.SetWindowButtonsTheme(mygo.ThemeDark)
+	frame = settingsFrameForChrome(work, winW, winH, forWindows, w.Bounds(), w.ContentBounds())
 	w.SetContentBounds(frame)
 	a.syncSettingsMinSize(w)
 	w.OnResize(func() {
@@ -335,6 +336,35 @@ func settingsFrame(work mygo.Rectangle, w, h int) mygo.Rectangle {
 	x = min(max(x, work.X), max(work.X, work.X+work.Width-w))
 	y = min(max(y, work.Y), max(work.Y, work.Y+work.Height-h))
 	return mygo.Rectangle{X: x, Y: y, Width: w, Height: h}
+}
+
+// settingsFrameForChrome clamps the Settings window inside work by its outer
+// frame on Windows (accounting for non-client borders derived from outer - inner)
+// and returns the resulting content bounds. On macOS, it matches settingsFrame.
+func settingsFrameForChrome(work mygo.Rectangle, w, h int, windows bool, outer, inner mygo.Rectangle) mygo.Rectangle {
+	if !windows {
+		return settingsFrame(work, w, h)
+	}
+	padW := max(0, outer.Width-inner.Width)
+	padH := max(0, outer.Height-inner.Height)
+	padL := max(0, inner.X-outer.X)
+	padT := max(0, inner.Y-outer.Y)
+	w = max(w, settingsMinWidth)
+	h = max(h, settingsMinHeight)
+	availW := max(0, work.Width-padW)
+	availH := max(0, work.Height-padH)
+	if availW > 0 && w > availW {
+		w = availW
+	}
+	if availH > 0 && h > availH {
+		h = availH
+	}
+	outerW, outerH := w+padW, h+padH
+	outerX := work.X + (work.Width-outerW)/2
+	outerY := work.Y + (work.Height-outerH)/2
+	outerX = min(max(outerX, work.X), max(work.X, work.X+work.Width-outerW))
+	outerY = min(max(outerY, work.Y), max(work.Y, work.Y+work.Height-outerH))
+	return mygo.Rectangle{X: outerX + padL, Y: outerY + padT, Width: w, Height: h}
 }
 
 // setSettingsPage switches to page and resets scroll without changing the

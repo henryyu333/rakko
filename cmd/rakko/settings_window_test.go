@@ -1016,3 +1016,30 @@ func TestSettingsResizeAndRememberSmoke(t *testing.T) {
 	t.Logf("mac close+reopen remembered content size: %dx%d (want %dx%d)", bReopen.Width, bReopen.Height, remW, remH)
 	onMain(func() { second.Destroy() })
 }
+
+func TestSettingsFrameForChrome(t *testing.T) {
+	smallWork := mygo.Rectangle{X: 0, Y: 0, Width: 800, Height: 600}
+	outer := mygo.Rectangle{X: 100, Y: 100, Width: 656, Height: 608}
+	inner := mygo.Rectangle{X: 108, Y: 100, Width: 640, Height: 600}
+
+	// Windows: remembered 900x700 clamped so outer frame (content + 16x8 chrome) stays inside 800x600.
+	winContent := settingsFrameForChrome(smallWork, 900, 700, true, outer, inner)
+	if winContent.Width != 800-16 || winContent.Height != 600-8 {
+		t.Fatalf("win content = %dx%d, want %dx%d", winContent.Width, winContent.Height, 800-16, 600-8)
+	}
+	winOuterX := winContent.X - 8
+	winOuterY := winContent.Y - 0
+	winOuterW := winContent.Width + 16
+	winOuterH := winContent.Height + 8
+	if winOuterX < smallWork.X || winOuterY < smallWork.Y ||
+		winOuterX+winOuterW > smallWork.X+smallWork.Width ||
+		winOuterY+winOuterH > smallWork.Y+smallWork.Height {
+		t.Fatalf("win outer frame (%d,%d %dx%d) exceeds work area %+v", winOuterX, winOuterY, winOuterW, winOuterH, smallWork)
+	}
+
+	// macOS: unaffected by Windows chrome padding.
+	macContent := settingsFrameForChrome(smallWork, 900, 700, false, outer, inner)
+	if macContent != settingsFrame(smallWork, 900, 700) {
+		t.Fatalf("mac content = %+v, want %+v", macContent, settingsFrame(smallWork, 900, 700))
+	}
+}
