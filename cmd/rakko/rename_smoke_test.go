@@ -255,6 +255,9 @@ func TestRenameSmoke(t *testing.T) {
 	if a.rn == nil || a.rn.win == nil {
 		t.Fatal("rename window was not created")
 	}
+	if a.visible {
+		t.Fatal("the panel stayed visible after opening rename")
+	}
 	renameShot(t, a.rn.win, "form")
 
 	// A conflict renders in red: an existing 旅行 1.jpg blocks the replace.

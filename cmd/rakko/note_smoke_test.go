@@ -87,6 +87,9 @@ func TestNoteSmokeWindowAndCards(t *testing.T) {
 	if !opened || a.note == nil || a.note.win == nil {
 		t.Fatal("the note card did not open its window")
 	}
+	if a.visible {
+		t.Fatal("the panel stayed visible after opening the note")
+	}
 	want := "# 周五发版前\n– 改 README 顶栏描述\n– 补 v1.13 截图\n– 问 Codex 额度为什么 5 小时窗口跳\n– [ ] 桌宠姿态验收"
 	onMain(func() {
 		a.note.draft = want
@@ -120,7 +123,9 @@ func TestNoteSmokeWindowAndCards(t *testing.T) {
 	}
 	t.Logf("note file %s holds %d bytes", path, len(data))
 
-	// 2 × 1 card: heading and preview, drawn from the saved file.
+	// 2 × 1 card: heading and preview, drawn from the saved file. Opening
+	// the note folded the panel, so expand Tools again before shooting it.
+	noteShowTools(t, a, 2)
 	onMain(func() {
 		a.win.Invalidate()
 		a.syncWindowFrame()
@@ -312,6 +317,9 @@ func TestNoteSmokeTypesAndOutlivesPanel(t *testing.T) {
 	onMain(func() { opened = a.runToolCard("note") })
 	if !opened || a.note == nil || a.note.win == nil {
 		t.Fatal("the note card did not open its window")
+	}
+	if a.visible {
+		t.Fatal("the panel stayed visible after opening the note")
 	}
 	// Keys reach whatever window is key: only type when it is ours.
 	var key bool

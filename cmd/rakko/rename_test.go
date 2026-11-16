@@ -534,10 +534,14 @@ func TestOpenRenameKeepsRememberedApp(t *testing.T) {
 	t.Cleanup(func() {
 		frontmostPID, renameActivate, renameShow, renameFocus = origFront, origActivate, origShow, origFocus
 	})
+	a.visible = true
 	a.rn = &renameUI{host: a, win: &mygo.Window{}, prevPID: 4242}
 	a.openRename(a.visibleItems())
 	if a.rn.prevPID != 4242 {
 		t.Fatalf("re-opening lost the remembered app: %d", a.rn.prevPID)
+	}
+	if a.visible {
+		t.Fatal("panel stayed visible after openRename")
 	}
 }
 

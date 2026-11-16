@@ -450,3 +450,23 @@ func TestNoteFrameUnder(t *testing.T) {
 		}
 	}
 }
+
+// TestNoteShowFrontHidesPanel verifies raising an existing note folds the
+// panel on every platform.
+func TestNoteShowFrontHidesPanel(t *testing.T) {
+	a, n := noteTestShelf(t)
+	a.visible = true
+	n.win = &mygo.Window{}
+	origShow, origAct, origFocus := noteShow, noteActivate, noteFocus
+	noteShow = func(*mygo.Window) {}
+	noteActivate = func() {}
+	noteFocus = func(*mygo.Window) {}
+	t.Cleanup(func() { noteShow, noteActivate, noteFocus = origShow, origAct, origFocus })
+
+	if !n.showFront() {
+		t.Fatal("showFront returned false")
+	}
+	if a.visible {
+		t.Fatal("panel stayed visible after showFront")
+	}
+}

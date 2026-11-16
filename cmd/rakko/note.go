@@ -361,11 +361,9 @@ func (n *noteUI) open() bool {
 		if frame.Width == 0 || frame.Height == 0 {
 			frame = a.freshNoteFrame()
 		}
-		if forWindows {
-			// The open panel is topmost on Windows and would cover a note
-			// opened over it; close it as Settings and Rename do.
-			a.hide(hideExplicit)
-		}
+		// Close the panel before opening the note so both platforms keep
+		// it out of the way, as Settings and Rename do.
+		a.hide(hideExplicit)
 		w := noteNewWindow(mygo.WindowOptions{
 			Title: a.noteWindowTitle(), Width: frame.Width, Height: frame.Height,
 			X: frame.X, Y: frame.Y,
@@ -398,9 +396,7 @@ func (n *noteUI) showFront() bool {
 	if n.win == nil {
 		return n.open()
 	}
-	if forWindows {
-		n.host.hide(hideExplicit)
-	}
+	n.host.hide(hideExplicit)
 	noteShow(n.win)
 	noteActivate()
 	noteFocus(n.win)
