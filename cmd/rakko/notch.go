@@ -27,6 +27,9 @@ func (a *shelf) place(p mygo.Point) {
 		}
 		a.syncWindowFrame()
 		a.win.SetOpacity(1)
+		if a.winH != 0 && a.ignoringMouse {
+			setOverlayAcceptsMouse(a.winH, false)
+		}
 	}
 	a.syncDragGuard()
 	a.syncIdleIslands()
@@ -816,6 +819,14 @@ func (a *shelf) mouseDown(inside bool, button int, p mygo.Point) {
 		return
 	}
 	a.wakeMonitor()
+	if a.fullscreenSuppressed() {
+		if button == 0 {
+			a.ownPress = false
+			a.syncDragGuard()
+		}
+		a.releaseKeys()
+		return
+	}
 	// A left press on our own window is the user's gesture, not an
 	// incoming drag: park the notch corridor for as long as the button is
 	// held (released in monitorDrag), so a small wobble on a band icon
@@ -1604,6 +1615,9 @@ func (a *shelf) show(edge bool) {
 	a.syncDragGuard()
 	if a.win != nil {
 		a.win.SetOpacity(1)
+		if a.winH != 0 && a.ignoringMouse {
+			setOverlayAcceptsMouse(a.winH, false)
+		}
 		a.win.ShowInactive()
 		// ShowInactive 不夺焦，面板收不到按键，只能临时注册全局 Esc 与空格。
 		a.holdKeys()

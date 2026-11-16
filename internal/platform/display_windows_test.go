@@ -631,6 +631,17 @@ func TestOverlayClickThroughStyle(t *testing.T) {
 	if windowExStyle(h)&wsExLayered == 0 {
 		t.Fatal("the click-through window must be layered")
 	}
+	// If another caller (such as SetOpacity(1)) clears WS_EX_LAYERED while
+	// WS_EX_TRANSPARENT remains, OverlayIgnoresMouse must report false so
+	// SetOverlayAcceptsMouse(h, false) restores WS_EX_LAYERED.
+	setExBitsNoFrame(h, wsExLayered, false)
+	if OverlayIgnoresMouse(h) {
+		t.Fatal("OverlayIgnoresMouse must be false when WS_EX_LAYERED was cleared")
+	}
+	SetOverlayAcceptsMouse(h, false)
+	if !OverlayIgnoresMouse(h) || windowExStyle(h)&wsExLayered == 0 {
+		t.Fatal("SetOverlayAcceptsMouse(false) did not restore WS_EX_LAYERED")
+	}
 	SetOverlayAcceptsMouse(h, true)
 	if OverlayIgnoresMouse(h) {
 		t.Fatal("SetOverlayAcceptsMouse(true) did not clear WS_EX_TRANSPARENT")

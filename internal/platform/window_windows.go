@@ -209,10 +209,12 @@ func SetWindowIgnoresMouseEvents(window uintptr, ignore bool) {
 	setExBitsNoFrame(window, wsExTransparent, ignore)
 }
 
-// OverlayIgnoresMouse reads the click-through bit SetOverlayAcceptsMouse
-// drives.
+// OverlayIgnoresMouse reads whether the window currently has both
+// WS_EX_TRANSPARENT and WS_EX_LAYERED, which Windows requires together for
+// mouse clicks to pass through to other applications.
 func OverlayIgnoresMouse(window uintptr) bool {
-	return windowExStyle(window)&wsExTransparent != 0
+	ex := windowExStyle(window)
+	return ex&wsExTransparent != 0 && ex&wsExLayered != 0
 }
 
 // SetDragElevated raises the overlay above the taskbar for the duration of
