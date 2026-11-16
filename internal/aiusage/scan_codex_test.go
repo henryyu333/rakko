@@ -1,6 +1,14 @@
 package aiusage
 
-import "testing"
+import (
+	"bytes"
+	"context"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/klauspost/compress/zstd"
+)
 
 func TestParseCodexLine(t *testing.T) {
 	pool := map[string]*string{}
@@ -62,5 +70,51 @@ func TestParseCodexLineSkips(t *testing.T) {
 		if _, ok := tail.parseCodexLine([]byte(line), pool); ok {
 			t.Fatalf("%s: should be skipped", name)
 		}
+	}
+}
+
+func TestScanCodexZstdAndDedupe(t *testing.T) {
+	home := t.TempDir()
+	cacheDir := t.TempDir()
+	rolloutContent := []byte(
+		`{"timestamp":"2026-11-16T08:00:00.000Z","type":"turn_context","payload":{"model":"gpt-5.3-codex"}}` + "\n" +
+			`{"timestamp":"2026-11-16T08:00:01.000Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":500,"cached_input_tokens":200,"cache_write_input_tokens":0,"output_tokens":50,"reasoning_output_tokens":0,"total_tokens":550},"last_token_usage":{"input_tokens":500,"cached_input_tokens":200,"cache_write_input_tokens":0,"output_tokens":50,"reasoning_output_tokens":0,"total_tokens":550}}}}` + "\n",
+	)
+	var zbuf bytes.Buffer
+	zw, err := zstd.NewWriter(&zbuf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := zw.Write(rolloutContent); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Same rollout in both .jsonl and archived .jsonl.zst must count once.
+	writeTestFile(t, filepath.Join(home, ".codex", "sessions", "2026", "11", "16", "rollout-dup.jsonl"), rolloutContent)
+	writeTestFile(t, filepath.Join(home, ".codex", "archived_sessions", "rollout-dup.jsonl.zst"), zbuf.Bytes())
+
+	// Separate .jsonl.zst-only rollout in sessions must also be read.
+	zstOnlyContent := []byte(
+		`{"timestamp":"2026-11-16T09:00:00.000Z","type":"turn_context","payload":{"model":"gpt-5.3-codex"}}` + "\n" +
+			`{"timestamp":"2026-11-16T09:00:01.000Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":100,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":20,"reasoning_output_tokens":0,"total_tokens":120},"last_token_usage":{"input_tokens":100,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":20,"reasoning_output_tokens":0,"total_tokens":120}}}}` + "\n",
+	)
+	var zbuf2 bytes.Buffer
+	zw2, _ := zstd.NewWriter(&zbuf2)
+	_, _ = zw2.Write(zstOnlyContent)
+	_ = zw2.Close()
+	writeTestFile(t, filepath.Join(home, ".codex", "sessions", "2026", "11", "16", "rollout-zstonly.jsonl.zst"), zbuf2.Bytes())
+
+	s := NewScanner(home, cacheDir)
+	if err := s.Scan(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	sum := s.Summary(RangeAll, time.Date(2026, 11, 17, 0, 0, 0, 0, time.UTC))
+	got := sum.ByTool[ToolCodex]
+	// rollout-dup: in=300, cr=200, out=50; rollout-zstonly: in=100, out=20 => 2 requests total.
+	if got.Requests != 2 || got.Input != 400 || got.CacheRead != 200 || got.Output != 70 {
+		t.Fatalf("codex totals = %+v, want reqs=2 in=400 cr=200 out=70", got)
 	}
 }

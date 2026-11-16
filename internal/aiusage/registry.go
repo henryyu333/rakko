@@ -182,13 +182,15 @@ var registry = []toolEntry{
 			base := envOrHome("CODEX_HOME", home, ".codex")
 			return []rootSpec{
 				{dir: filepath.Join(base, "sessions"), match: "rollout-*.jsonl"},
+				{dir: filepath.Join(base, "sessions"), match: "rollout-*.jsonl.zst", whole: true},
 				{dir: filepath.Join(base, "archived_sessions"), match: "*.jsonl"},
+				{dir: filepath.Join(base, "archived_sessions"), match: "*.jsonl.zst", whole: true},
 			}
 		},
-		parseLine: func(_ string, line []byte, pool map[string]*string, st *fileState) (rec, string, bool) {
-			r, ok := st.tail.parseCodexLine(line, pool)
-			return r, "", ok
+		parseLine: func(path string, line []byte, pool map[string]*string, st *fileState) (rec, string, bool) {
+			return st.tail.parseCodexLineWithKey(path, line, pool)
 		},
+		parseWhole: parseCodexZstdFile,
 	},
 	{
 		tool: ToolPi,
@@ -212,7 +214,8 @@ var registry = []toolEntry{
 		name: "opencode",
 		detect: func(home string) []string {
 			return []string{
-				filepath.Join(xdgDataHome(home), "opencode"),
+				filepath.Join(xdgDataHome(home), "opencode", "storage"),
+				filepath.Join(xdgDataHome(home), "opencode", "auth.json"),
 				filepath.Join(xdgConfigHome(home), "opencode", "opencode.json"),
 				filepath.Join(xdgConfigHome(home), "opencode", "opencode.jsonc"),
 				opencodeDBPath(home),
@@ -253,7 +256,10 @@ var registry = []toolEntry{
 		name: "Antigravity",
 		detect: func(home string) []string {
 			base := envOrHome("GEMINI_CLI_HOME", home, ".gemini")
-			return []string{filepath.Join(base, "antigravity-cli")}
+			return []string{
+				filepath.Join(base, "antigravity-cli", "brain"),
+				filepath.Join(base, "antigravity-cli", "conversations"),
+			}
 		},
 		roots: func(home string) []rootSpec {
 			base := envOrHome("GEMINI_CLI_HOME", home, ".gemini")
@@ -299,10 +305,10 @@ var registry = []toolEntry{
 			out := []string{
 				filepath.Join(xdgConfigHome(home), "devin", "config.json"),
 				filepath.Join(xdgConfigHome(home), "devin", "cli"),
-				filepath.Join(xdgDataHome(home), "devin"),
+				filepath.Join(xdgDataHome(home), "devin", "cli", "sessions.db"),
 			}
 			if runtime.GOOS == "windows" {
-				out = append(out, filepath.Join(winLocalAppData(home), "devin"))
+				out = append(out, filepath.Join(winLocalAppData(home), "devin", "cli", "sessions.db"))
 			}
 			return out
 		},
@@ -436,8 +442,16 @@ var registry = []toolEntry{
 			return []string{
 				joinHome(home, ".copilot", "config.json"),
 				joinHome(home, ".copilot", "session-state"),
+				joinHome(home, ".copilot", "session-store.db"),
+				joinHome(home, ".copilot", "data.db"),
 				joinHome(home, ".copilot", "logs"),
 				joinHome(home, ".copilot", "otel"),
+			}
+		},
+		dbs: func(home string) []dbSpec {
+			return []dbSpec{
+				{path: joinHome(home, ".copilot", "session-store.db"), read: readCopilotDB},
+				{path: joinHome(home, ".copilot", "data.db"), read: readCopilotDB},
 			}
 		},
 		roots: func(home string) []rootSpec {
@@ -477,7 +491,7 @@ var registry = []toolEntry{
 		tool: ToolCline,
 		name: "Cline",
 		detect: func(home string) []string {
-			out := []string{joinHome(home, ".cline")}
+			out := []string{joinHome(home, ".cline", "data")}
 			for _, d := range vscodeGlobalStorageDirs(home, "saoudrizwan.claude-dev") {
 				out = append(out, filepath.Dir(d))
 			}
@@ -544,7 +558,12 @@ var registry = []toolEntry{
 		tool: ToolOpenClaw,
 		name: "OpenClaw",
 		detect: func(home string) []string {
-			return []string{joinHome(home, ".openclaw")}
+			return []string{
+				joinHome(home, ".openclaw", "openclaw.json"),
+				joinHome(home, ".openclaw", "agents"),
+				joinHome(home, ".openclaw", "credentials"),
+				joinHome(home, ".openclaw", "identity"),
+			}
 		},
 		roots: func(home string) []rootSpec {
 			return []rootSpec{{
@@ -564,8 +583,13 @@ var registry = []toolEntry{
 		name: "Kimi",
 		detect: func(home string) []string {
 			return []string{
-				joinHome(home, ".kimi"),
-				joinHome(home, ".kimi-code"),
+				joinHome(home, ".kimi", "config.toml"),
+				joinHome(home, ".kimi", "kimi.json"),
+				joinHome(home, ".kimi", "sessions"),
+				joinHome(home, ".kimi", "credentials"),
+				joinHome(home, ".kimi-code", "config.toml"),
+				joinHome(home, ".kimi-code", "sessions"),
+				joinHome(home, ".kimi-code", "auth.json"),
 			}
 		},
 		roots: func(home string) []rootSpec {
@@ -582,7 +606,11 @@ var registry = []toolEntry{
 		tool: ToolJunie,
 		name: "Junie",
 		detect: func(home string) []string {
-			return []string{joinHome(home, ".junie")}
+			return []string{
+				joinHome(home, ".junie", "sessions"),
+				joinHome(home, ".junie", "config.json"),
+				joinHome(home, ".junie", "auth.json"),
+			}
 		},
 		roots: func(home string) []rootSpec {
 			return []rootSpec{{dir: joinHome(home, ".junie", "sessions"), match: "events.jsonl"}}
@@ -612,7 +640,12 @@ var registry = []toolEntry{
 		tool: ToolLMStudio,
 		name: "LM Studio",
 		detect: func(home string) []string {
-			return []string{envOrHome("LM_STUDIO_HOME", home, ".lmstudio")}
+			base := envOrHome("LM_STUDIO_HOME", home, ".lmstudio")
+			return []string{
+				filepath.Join(base, "settings.json"),
+				filepath.Join(base, "server-logs"),
+				filepath.Join(base, ".internal"),
+			}
 		},
 		roots: func(home string) []rootSpec {
 			base := envOrHome("LM_STUDIO_HOME", home, ".lmstudio")
@@ -652,7 +685,7 @@ var registry = []toolEntry{
 		unreadable: true,
 		detect: func(home string) []string {
 			out := []string{
-				joinHome(home, ".trae"),
+				joinHome(home, ".trae", "User"),
 				filepath.Join(appSupportDir(home), "Trae"),
 			}
 			if runtime.GOOS == "darwin" {
@@ -666,7 +699,10 @@ var registry = []toolEntry{
 		name:       "Warp",
 		unreadable: true,
 		detect: func(home string) []string {
-			out := []string{joinHome(home, ".warp")}
+			out := []string{
+				joinHome(home, ".warp", "launch_configurations"),
+				joinHome(home, ".warp", "keybindings.yaml"),
+			}
 			switch runtime.GOOS {
 			case "darwin":
 				out = append(out, joinHome(home, "Library", "Group Containers", "2BBY89MBSN.dev.warp"))
@@ -682,8 +718,9 @@ var registry = []toolEntry{
 		unreadable: true,
 		detect: func(home string) []string {
 			return []string{
-				filepath.Join(xdgDataHome(home), "amp"),
-				filepath.Join(xdgConfigHome(home), "amp"),
+				filepath.Join(xdgDataHome(home), "amp", "secrets.json"),
+				filepath.Join(xdgDataHome(home), "amp", "threads"),
+				filepath.Join(xdgConfigHome(home), "amp", "settings.json"),
 			}
 		},
 	},
@@ -692,7 +729,11 @@ var registry = []toolEntry{
 		name:       "Capy",
 		unreadable: true,
 		detect: func(home string) []string {
-			return []string{joinHome(home, ".capy")}
+			return []string{
+				joinHome(home, ".capy", "config.json"),
+				joinHome(home, ".capy", "auth.json"),
+				joinHome(home, ".capy", "sessions"),
+			}
 		},
 	},
 	{

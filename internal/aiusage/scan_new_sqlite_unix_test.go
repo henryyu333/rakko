@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"testing"
 	"time"
@@ -126,5 +127,59 @@ func TestScanHermesDeltaAcrossDays(t *testing.T) {
 	bDay2 := sum7d.Buckets[len(sum7d.Buckets)-1].Tokens[ToolHermes]
 	if bDay1 != 120 || bDay2 != 65 {
 		t.Fatalf("day1=%d day2=%d, want 120 and 65", bDay1, bDay2)
+	}
+}
+
+func TestScanCopilotSQLite(t *testing.T) {
+	if _, err := os.Stat(sqlite3Path); err != nil {
+		t.Skip("sqlite3 not installed")
+	}
+	home := t.TempDir()
+	sessionStore := filepath.Join(home, ".copilot", "session-store.db")
+	dataDB := filepath.Join(home, ".copilot", "data.db")
+	if err := os.MkdirAll(filepath.Dir(sessionStore), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runSQLite(t, sessionStore, `
+		CREATE TABLE assistant_usage_events (
+			id INTEGER PRIMARY KEY,
+			session_id TEXT,
+			created_at TEXT,
+			model TEXT,
+			token_details_json TEXT
+		);
+		INSERT INTO assistant_usage_events VALUES (
+			1, 's1', '2026-11-16T10:00:00Z', 'claude-sonnet-4-5-20250929',
+			'{"fresh_input_tokens":300,"output_tokens":80,"cache_read_tokens":1000,"cache_write_tokens":50}'
+		);
+	`)
+	runSQLite(t, dataDB, `
+		CREATE TABLE assistant_usage_events (
+			id INTEGER PRIMARY KEY,
+			session_id TEXT,
+			timestamp TEXT,
+			model TEXT,
+			input_tokens INTEGER,
+			output_tokens INTEGER,
+			cache_read_tokens INTEGER,
+			cache_write_tokens INTEGER
+		);
+		INSERT INTO assistant_usage_events VALUES (
+			1, 's2', '2026-11-16T11:00:00Z', 'gpt-5.3-codex',
+			200, 40, 0, 0
+		);
+	`)
+
+	s := NewScanner(home, t.TempDir())
+	if err := s.Scan(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	sum := s.Summary(RangeAll, time.Date(2026, 11, 17, 0, 0, 0, 0, time.UTC))
+	got := sum.ByTool[ToolCopilot]
+	if got.Requests != 2 || got.Input != 500 || got.Output != 120 || got.CacheRead != 1000 || got.CacheWrite != 50 {
+		t.Fatalf("copilot totals = %+v, want reqs=2 in=500 out=120 cr=1000 cw=50", got)
+	}
+	if slices.Contains(s.UnreadableTools(), ToolCopilot) {
+		t.Fatalf("UnreadableTools() = %v, should not include copilot when SQLite data exists", s.UnreadableTools())
 	}
 }

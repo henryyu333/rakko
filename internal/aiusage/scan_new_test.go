@@ -203,3 +203,34 @@ func TestInstalledWithoutDataFilesAreUnreadable(t *testing.T) {
 		}
 	}
 }
+
+func TestSkillsOnlyDirsNotReportedAsInstalled(t *testing.T) {
+	home := t.TempDir()
+	for _, p := range []string{
+		filepath.Join(home, ".junie", "skills", "s1", "SKILL.md"),
+		filepath.Join(home, ".openclaw", "skills", "s1", "SKILL.md"),
+		filepath.Join(home, ".kimi", "skills", "s1", "SKILL.md"),
+		filepath.Join(home, ".cline", "skills", "s1", "SKILL.md"),
+		filepath.Join(home, ".warp", "skills", "s1", "SKILL.md"),
+		filepath.Join(home, ".capy", "skills", "s1", "SKILL.md"),
+		filepath.Join(home, ".trae", "skills", "s1", "SKILL.md"),
+		filepath.Join(home, ".claude", "skills", "s1", "SKILL.md"),
+		filepath.Join(home, ".claude", "AGENTS.md"),
+		filepath.Join(home, ".codex", "skills", "s1", "SKILL.md"),
+	} {
+		writeTestFile(t, p, []byte("# skill\n"))
+	}
+	s := NewScanner(home, t.TempDir())
+	if err := s.Scan(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	got := s.UnreadableTools()
+	for _, tl := range []Tool{
+		ToolJunie, ToolOpenClaw, ToolKimi, ToolCline,
+		ToolWarp, ToolCapy, ToolTrae, ToolClaude, ToolCodex,
+	} {
+		if slices.Contains(got, tl) {
+			t.Fatalf("UnreadableTools() = %v, should not include skills-only %s", got, tl)
+		}
+	}
+}

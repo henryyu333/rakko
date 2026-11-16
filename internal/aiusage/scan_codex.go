@@ -1,8 +1,15 @@
 package aiusage
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
+	"path/filepath"
+	"strings"
+
+	"github.com/klauspost/compress/zstd"
 )
 
 // Codex session entries: ~/.codex/sessions/**/rollout-*.jsonl and
@@ -88,4 +95,50 @@ func (t *codexTail) parseCodexLine(line []byte, pool map[string]*string) (r rec,
 	}
 	r.in, r.cr, r.cw, r.out = in, u.CachedInput, u.CacheWrite, u.Output
 	return r, true
+}
+
+func codexRolloutID(path string) string {
+	b := filepath.Base(path)
+	b = strings.TrimSuffix(b, ".zst")
+	b = strings.TrimSuffix(b, ".jsonl")
+	return b
+}
+
+func (t *codexTail) parseCodexLineWithKey(path string, line []byte, pool map[string]*string) (rec, string, bool) {
+	r, ok := t.parseCodexLine(line, pool)
+	if !ok {
+		return rec{}, "", false
+	}
+	key := fmt.Sprintf("codex:%s|%d|%d|%d|%d|%d|%d|%d",
+		codexRolloutID(path), r.at,
+		t.prev[0], t.prev[1], t.prev[2], t.prev[3], t.prev[4], t.prev[5],
+	)
+	return r, key, true
+}
+
+func parseCodexZstdFile(path string, data []byte, pool map[string]*string) ([]rec, error) {
+	zr, err := zstd.NewReader(bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	defer zr.Close()
+	var tail codexTail
+	var out []rec
+	br := bufio.NewReaderSize(zr, 256<<10)
+	for {
+		line, err := br.ReadBytes('\n')
+		if len(line) > 0 {
+			if r, key, ok := tail.parseCodexLineWithKey(path, line, pool); ok {
+				r.key = key
+				out = append(out, r)
+			}
+		}
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return out, err
+		}
+	}
+	return out, nil
 }
