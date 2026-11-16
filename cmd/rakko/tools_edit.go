@@ -240,6 +240,14 @@ func (p *toolsPage) endFreshDragAt(wx, wy float32, now time.Time) {
 	if now.IsZero() {
 		now = time.Now()
 	}
+	d.px, d.py = p.windowToContent(wx, wy)
+	d.cardX, d.cardY = d.px-d.grabDX, d.py-d.grabDY
+	if p.overLibrary() {
+		d.index = -1
+		d.candIndex, d.candSince = -1, time.Time{}
+	} else if i := toolInsertIndexFreshStable(p.host.toolsLayoutNow().Cards, p.dragCols, d.spec, d.index, d.px, d.py, p.host.inactiveWidget, &d.candIndex, &d.candSince, now); i >= 0 {
+		d.index = i
+	}
 	startX, startY, startScale, startRot, svx, svy := p.captureSettleOrigin(d, now)
 	visWinX, visWinY := wx-d.grabDX, wy-d.grabDY
 	if d.visReady {

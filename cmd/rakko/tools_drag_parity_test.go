@@ -825,3 +825,33 @@ func TestFreshDragZeroVelocityWhenPausedBeforeRelease(t *testing.T) {
 		t.Fatalf("paused fresh drag retained velocity on release: (%v,%v)", p.press.settleVX, p.press.settleVY)
 	}
 }
+
+func TestFreshDragReleaseOverLibraryCancels(t *testing.T) {
+	cards := []layout.Card{{ID: "ocr"}}
+	a, p, view := setupToolsDragTester(t, cards)
+	lib, ok := view.Find("截图")
+	if !ok {
+		t.Fatal("missing 截图 in library")
+	}
+	ocr, ok := view.Find("框选文字")
+	if !ok {
+		t.Fatal("missing 框选文字 in grid")
+	}
+	sx, sy := lib.X+lib.W/2, lib.Y+lib.H/2
+	gx, gy := ocr.X+ocr.W/2, ocr.Y+ocr.H/2
+
+	view.Press(sx, sy)
+	view.Move(gx, gy)
+	view.Frame()
+	if p.press == nil || !p.press.fresh || p.press.index < 0 {
+		t.Fatalf("expected fresh drag hovering grid, got press=%+v", p.press)
+	}
+	// Release directly over the library without an intermediate Move.
+	view.Release(sx, sy)
+	if got := len(a.toolsLayoutNow().Cards); got != 1 {
+		t.Fatalf("cards count = %d, want 1 (release over library must cancel)", got)
+	}
+	if p.press != nil && !p.press.freshCancel {
+		t.Fatalf("expected freshCancel on release over library, got press=%+v", p.press)
+	}
+}
