@@ -607,7 +607,7 @@ func (f *weeklyFeature) rakkoSection(c *ui.Context, w float32, wk weekly.Week) {
 		})
 		unknown := (f.store != nil && f.store.Corrupt()) || !f.weekTracked(wk.Start)
 		ui.Row(c.Key("weekly-counts")).Width(w).Margin(12, 0, 0, 0).Justify(ui.SpaceBetween).Children(func() {
-			f.count(c, "convert", docSymbol, wk.Rakko.Convert, l.WeeklyRakkoConvert(), unknown)
+			f.count(c, "convert", convertSymbol, wk.Rakko.Convert, l.WeeklyRakkoConvert(), unknown)
 			f.count(c, "ocr", ocrSymbol, wk.Rakko.OCR, l.WeeklyRakkoText(), unknown)
 			f.count(c, "tray", trayNavSymbol, wk.Rakko.Tray, l.WeeklyRakkoTray(), unknown)
 		})

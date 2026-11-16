@@ -96,7 +96,7 @@ func toolCatalog() []toolCardDef {
 	return append(defs,
 		toolCardDef{id: "playing", kind: cardWidget, title: "音乐", icon: musicSymbol, span: 2, rows: 2, accepts: never, available: always},
 		toolCardDef{id: "awake", kind: cardWidget, title: "保持唤醒", icon: cupSymbol, span: 1, variableSpan: true, accepts: never, available: always},
-		toolCardDef{id: "recent", kind: cardWidget, title: "最近文件", icon: docSymbol, span: 2, accepts: never, available: always},
+		toolCardDef{id: "recent", kind: cardWidget, title: "最近文件", icon: recentSymbol, span: 2, accepts: never, available: always},
 		toolCardDef{id: "clip", kind: cardWidget, title: "剪贴板最新", icon: clipNavSymbol, span: 2, accepts: never, available: always},
 		toolCardDef{id: "note", kind: cardWidget, title: "便利贴", icon: noteSymbol, span: 1, variableSpan: true, accepts: never, available: always},
 		toolCardDef{id: "usage", kind: cardWidget, title: "AI 用量", icon: gaugeSymbol, span: 1, accepts: never, available: usageAvailable},
@@ -846,7 +846,7 @@ func (a *shelf) toolRecentBody(c *ui.Context, card ui.Element, span int, surf to
 		if wide {
 			top := a.cardTop(c, card, "recent-top")
 			top.Children(func() {
-				a.cardGlyphLead(c, card, "recent-lead", docSymbol, 18, 18, ink2)
+				a.cardGlyphLead(c, card, "recent-lead", recentSymbol, 18, 18, ink2)
 				fitText(c, loc(c).RecentFiles(), 12, 600, w-2*cardPad-25).TextColor(ink2)
 			})
 			row := ui.Row(c.Key("recent-thumbs")).Absolute().Left(cardPad).Right(cardPad).
@@ -859,7 +859,7 @@ func (a *shelf) toolRecentBody(c *ui.Context, card ui.Element, span int, surf to
 			})
 			return
 		}
-		a.cardGlyphLead(c, card, "recent-lead", docSymbol, 18, 18, ink2).
+		a.cardGlyphLead(c, card, "recent-lead", recentSymbol, 18, 18, ink2).
 			Absolute().Left(cardPad).Top(cardPad)
 		if len(items) > 0 {
 			ui.Text(c, strconv.Itoa(len(items))).SingleLine().FontSize(10.5).FontWeight(600).

@@ -32,7 +32,7 @@ const (
 var (
 	// noteSymbol is the design's sticky note glyph; revealSymbol the
 	// folder on the bar's show-in-file-manager button.
-	noteSymbol   = symbol(`<path d="M5 3.5h14V15l-4.5 5H5z"/><path d="M14.5 20v-5H19M8.5 8.5h7M8.5 12h4.5"/>`)
+	noteSymbol   = symbol(`<path d="M12 3.9H5.7a1.8 1.8 0 0 0-1.8 1.8v12.6a1.8 1.8 0 0 0 1.8 1.8h12.6a1.8 1.8 0 0 0 1.8-1.8v-6.3"/><path d="M17.7375 3.5625a0.9 0.9 0 0 1 2.7 2.7l-8.1117 8.1126a1.8 1.8 0 0 1-.7677.4545l-2.5857.756a0.45 0.45 0 0 1-.558-.558l.756-2.5857a1.8 1.8 0 0 1 .4554-.7668z"/>`)
 	revealSymbol = symbol(`<path d="M3.5 6.5A1.5 1.5 0 0 1 5 5h3.8L11 7h8a1.5 1.5 0 0 1 1.5 1.5v9.5A1.5 1.5 0 0 1 19 19.5H5a1.5 1.5 0 0 1-1.5-1.5z"/>`)
 
 	// Seams around the app-level calls, as rename.go keeps them, so a
