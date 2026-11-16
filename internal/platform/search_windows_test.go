@@ -376,3 +376,23 @@ func TestSearchScanWalksCommonFolders(t *testing.T) {
 		t.Fatal("searchSkipDir does not name the heavy directories")
 	}
 }
+
+func TestAppNameReverseDomainFallback(t *testing.T) {
+	cases := []struct {
+		id   string
+		want string
+	}{
+		{"com.apple.finder", "Finder"},
+		{"com.apple.TextEdit", "TextEdit"},
+		{"com.apple.dt.Xcode", "Xcode"},
+		{"org.mozilla.firefox", "Firefox"},
+		{"com.microsoft.VSCode", "VSCode"},
+		{"Microsoft.NotInstalledApp_8wekyb3d8bbwe!App", "Microsoft.NotInstalledApp"},
+		{"plain", "plain"},
+	}
+	for _, tc := range cases {
+		if got := AppName(tc.id); got != tc.want {
+			t.Errorf("AppName(%q) = %q, want %q", tc.id, got, tc.want)
+		}
+	}
+}

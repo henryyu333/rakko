@@ -80,6 +80,7 @@ func ConfigurePinWindow(window uintptr) {
 		return
 	}
 	ensureToolWindow(window)
+	clearStyleBits(window, wsCaption)
 	setExBits(window, wsExNoActivate, true)
 	// The card may be the window a drag opened as a preview, which ignores
 	// the mouse so the gesture stays with the card that started it. A

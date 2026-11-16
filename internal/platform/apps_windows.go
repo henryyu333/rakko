@@ -291,7 +291,57 @@ func AppName(bundleID string) string {
 	if i := strings.Index(id, "_"); i > 0 {
 		id = id[:i]
 	}
+	if id == bundleID {
+		if name, ok := reverseDomainAppName(id); ok {
+			return name
+		}
+	}
 	return id
+}
+
+// reverseDomainAppName extracts a readable application name from an unresolved
+// reverse-domain bundle identifier synced from macOS (e.g. "com.apple.finder"
+// -> "Finder", "com.apple.TextEdit" -> "TextEdit").
+func reverseDomainAppName(id string) (string, bool) {
+	if strings.ContainsAny(id, "\\/:!_ \t\r\n") {
+		return "", false
+	}
+	parts := strings.Split(id, ".")
+	if len(parts) < 3 {
+		return "", false
+	}
+	tld := parts[0]
+	if len(tld) < 2 || len(tld) > 10 {
+		return "", false
+	}
+	for i := 0; i < len(tld); i++ {
+		if tld[i] < 'a' || tld[i] > 'z' {
+			return "", false
+		}
+	}
+	last := parts[len(parts)-1]
+	if last == "" {
+		return "", false
+	}
+	for _, p := range parts[1 : len(parts)-1] {
+		if p == "" {
+			return "", false
+		}
+	}
+	allLowerASCII := true
+	hasUpper := false
+	for i := 0; i < len(last); i++ {
+		c := last[i]
+		if c >= 'A' && c <= 'Z' {
+			hasUpper = true
+		} else if !((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
+			allLowerASCII = false
+		}
+	}
+	if allLowerASCII && !hasUpper && last[0] >= 'a' && last[0] <= 'z' {
+		last = strings.ToUpper(last[:1]) + last[1:]
+	}
+	return last, true
 }
 
 // AppIDKey is the identity key the app switcher compares identities by.

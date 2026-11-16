@@ -391,7 +391,9 @@ func TestSettingsViewExcludedAppRemoval(t *testing.T) {
 	a.settings.ExcludedApps = []string{"com.example.One", "com.example.Two"}
 	view = ui.NewTester(a.settingsView, settingsWidth, settingsHeight)
 	openSettingsPage(t, view, "剪贴板")
-	if !view.HasText("com.example.Two") {
+	wantTwo := a.appName("com.example.Two")
+	wantOne := a.appName("com.example.One")
+	if !view.HasText(wantTwo) {
 		t.Fatal("excluded app not listed")
 	}
 	clickVisible(t, view, "移除 com.example.One")
@@ -402,7 +404,7 @@ func TestSettingsViewExcludedAppRemoval(t *testing.T) {
 	if len(saved.ExcludedApps) != 1 || saved.ExcludedApps[0] != "com.example.Two" {
 		t.Fatalf("exclusion removal not saved: %+v", saved.ExcludedApps)
 	}
-	if view.HasText("com.example.One") {
+	if view.HasText(wantOne) {
 		t.Fatal("removed app still rendered")
 	}
 }

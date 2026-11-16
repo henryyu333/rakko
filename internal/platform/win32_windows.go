@@ -170,6 +170,8 @@ const (
 	gwlExStyle = -20
 	gwlpID     = -12
 
+	wsCaption = 0x00C00000
+
 	wsExTopmost     = 0x00000008
 	wsExTransparent = 0x00000020
 	wsExToolWindow  = 0x00000080
@@ -425,6 +427,21 @@ func setExBits(h uintptr, bits uintptr, on bool) {
 		return
 	}
 	setWindowLong(h, gwlExStyle, next)
+	procSetWindowPos.Call(h, 0, 0, 0, 0, 0,
+		swpNoMove|swpNoSize|swpNoZOrder|swpNoActivate|swpFrameChanged)
+}
+
+// clearStyleBits clears standard GWL_STYLE bits and notifies Windows of the
+// frame change. Notably, removing WS_CAPTION lets a frameless panel shrink
+// below the 20px minimum width Win32 enforces on captioned windows (such as an
+// 8x56 docked pin strip).
+func clearStyleBits(h uintptr, bits uintptr) {
+	st := getWindowLong(h, gwlStyle)
+	next := st &^ bits
+	if next == st {
+		return
+	}
+	setWindowLong(h, gwlStyle, next)
 	procSetWindowPos.Call(h, 0, 0, 0, 0, 0,
 		swpNoMove|swpNoSize|swpNoZOrder|swpNoActivate|swpFrameChanged)
 }
