@@ -418,7 +418,7 @@ func (a *shelf) approvalTail(c *ui.Context, ap *approval, now time.Time) {
 			}
 		}
 		term := ui.Box(c.Key("approval-terminal")).Height(approvalBtnH).Radius(approvalBtnR).
-			Padding(0, 8).Center()
+			Padding(0, 8).Center().Role(ui.RoleButton).Label(l.LiveApprovalTerminal())
 		term.Children(func() {
 			ui.Text(c, l.LiveApprovalTerminal()).FontSize(13).FontWeight(500).TextColor(ink2)
 		})
@@ -452,7 +452,7 @@ func (a *shelf) approvalAllow(c *ui.Context, ap *approval, now time.Time) {
 		base = approvalHoldBase
 	}
 	btn := ui.Box(c.Key("approval-allow")).Height(approvalBtnH).MinWidth(92).Radius(approvalBtnR).
-		Padding(0, 12).Center().Label(label)
+		Padding(0, 12).Center().Role(ui.RoleButton).Label(label)
 	btn.Draw(func(p *ui.Painter, r ui.Rect) {
 		p.FillPath(liveRoundPath(r.X, r.Y, r.W, r.H, approvalBtnR), base)
 		if progress > 0 {
@@ -516,7 +516,7 @@ func (a *shelf) approvalResult(c *ui.Context, ap *approval) {
 // approvalFillButton is a 32 pt button with a background.
 func approvalFillButton(c *ui.Context, key, text string, bg, fg ui.Color, weight int) ui.Element {
 	btn := ui.Box(c.Key(key)).Height(approvalBtnH).Radius(approvalBtnR).Padding(0, 12).
-		Center().Background(bg).Label(text)
+		Center().Background(bg).Role(ui.RoleButton).Label(text)
 	btn.Children(func() {
 		ui.Text(c, text).SingleLine().FontSize(13).FontWeight(weight).TextColor(fg)
 	})
@@ -526,7 +526,7 @@ func approvalFillButton(c *ui.Context, key, text string, bg, fg ui.Color, weight
 // approvalTextButton is the quiet action: no fill until hovered.
 func approvalTextButton(c *ui.Context, key, text string, fg ui.Color) ui.Element {
 	btn := ui.Box(c.Key(key)).Height(approvalBtnH).Radius(approvalBtnR).Padding(0, 8).
-		Center().Label(text)
+		Center().Role(ui.RoleButton).Label(text)
 	btn.Children(func() {
 		ui.Text(c, text).SingleLine().FontSize(13).FontWeight(500).TextColor(fg)
 	})

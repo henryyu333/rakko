@@ -150,13 +150,14 @@ func (s *shotSession) buildBarButton(c *ui.Context, group string, it shotBarItem
 	b := ui.Box(c.Key(key)).Absolute().
 		Left(float32(it.rect.X-d.Bounds.X)).Top(float32(it.rect.Y-d.Bounds.Y)).
 		Size(float32(it.rect.Width), float32(it.rect.Height)).
-		Radius(7).Center().Cursor(ui.CursorPointer).KeepFocus()
+		Radius(7).Center().Cursor(ui.CursorPointer).KeepFocus().
+		Role(ui.RoleButton)
 	if name, keys := shotBarTip(c, it); name != "" {
 		tip := name
 		if keys != "" {
 			tip += " · " + keys
 		}
-		b.Tooltip(tip)
+		b.Tooltip(tip).Label(name)
 	}
 	hovered := b.Hovered()
 	disabled := false
@@ -272,6 +273,16 @@ func shotBarTip(c *ui.Context, it shotBarItem) (name, keys string) {
 		return l.ShotActionCancel(), ""
 	case shotBarCopy:
 		return l.ShotCopyButton(), osText("⌘C", shortcutLabel("Cmd+C"))
+	case shotBarColor:
+		names := []string{l.ShotColorRed(), l.ShotColorYellow(), l.ShotColorGreen(), l.ShotColorBlue(), l.ShotColorWhite()}
+		if it.index >= 0 && it.index < len(names) {
+			return names[it.index], ""
+		}
+	case shotBarWidth:
+		names := []string{l.ShotWidthThin(), l.ShotWidthMedium(), l.ShotWidthThick()}
+		if it.index >= 0 && it.index < len(names) {
+			return names[it.index], ""
+		}
 	}
 	return "", ""
 }

@@ -9268,3 +9268,83 @@ func HomeWinStoreApp() string { return In(i18n.Locale()).HomeWinStoreApp() }
 func (msgs Messages) HomeWinStoreApp() string {
 	return Catalog.Format(msgs.locale, "homeWinStoreApp", nil)
 }
+
+// ShotColorRed says "红色"
+// in the language the app shows.
+func ShotColorRed() string { return In(i18n.Locale()).ShotColorRed() }
+
+// ShotColorRed says "红色"
+// in the language of msgs.
+func (msgs Messages) ShotColorRed() string {
+	return Catalog.Format(msgs.locale, "shotColorRed", nil)
+}
+
+// ShotColorYellow says "黄色"
+// in the language the app shows.
+func ShotColorYellow() string { return In(i18n.Locale()).ShotColorYellow() }
+
+// ShotColorYellow says "黄色"
+// in the language of msgs.
+func (msgs Messages) ShotColorYellow() string {
+	return Catalog.Format(msgs.locale, "shotColorYellow", nil)
+}
+
+// ShotColorGreen says "绿色"
+// in the language the app shows.
+func ShotColorGreen() string { return In(i18n.Locale()).ShotColorGreen() }
+
+// ShotColorGreen says "绿色"
+// in the language of msgs.
+func (msgs Messages) ShotColorGreen() string {
+	return Catalog.Format(msgs.locale, "shotColorGreen", nil)
+}
+
+// ShotColorBlue says "蓝色"
+// in the language the app shows.
+func ShotColorBlue() string { return In(i18n.Locale()).ShotColorBlue() }
+
+// ShotColorBlue says "蓝色"
+// in the language of msgs.
+func (msgs Messages) ShotColorBlue() string {
+	return Catalog.Format(msgs.locale, "shotColorBlue", nil)
+}
+
+// ShotColorWhite says "白色"
+// in the language the app shows.
+func ShotColorWhite() string { return In(i18n.Locale()).ShotColorWhite() }
+
+// ShotColorWhite says "白色"
+// in the language of msgs.
+func (msgs Messages) ShotColorWhite() string {
+	return Catalog.Format(msgs.locale, "shotColorWhite", nil)
+}
+
+// ShotWidthThin says "细"
+// in the language the app shows.
+func ShotWidthThin() string { return In(i18n.Locale()).ShotWidthThin() }
+
+// ShotWidthThin says "细"
+// in the language of msgs.
+func (msgs Messages) ShotWidthThin() string {
+	return Catalog.Format(msgs.locale, "shotWidthThin", nil)
+}
+
+// ShotWidthMedium says "中"
+// in the language the app shows.
+func ShotWidthMedium() string { return In(i18n.Locale()).ShotWidthMedium() }
+
+// ShotWidthMedium says "中"
+// in the language of msgs.
+func (msgs Messages) ShotWidthMedium() string {
+	return Catalog.Format(msgs.locale, "shotWidthMedium", nil)
+}
+
+// ShotWidthThick says "粗"
+// in the language the app shows.
+func ShotWidthThick() string { return In(i18n.Locale()).ShotWidthThick() }
+
+// ShotWidthThick says "粗"
+// in the language of msgs.
+func (msgs Messages) ShotWidthThick() string {
+	return Catalog.Format(msgs.locale, "shotWidthThick", nil)
+}

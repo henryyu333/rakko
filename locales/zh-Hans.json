@@ -912,5 +912,13 @@
   "settingsGroupNotchWin": "顶部胶囊",
   "settingsApprovalRowWin": "在顶部胶囊审批 Agent 请求",
   "liveApprovalAgainWin": "再按一次 Ctrl+Enter",
-  "homeWinStoreApp": "Microsoft Store 应用"
+  "homeWinStoreApp": "Microsoft Store 应用",
+  "shotColorRed": "红色",
+  "shotColorYellow": "黄色",
+  "shotColorGreen": "绿色",
+  "shotColorBlue": "蓝色",
+  "shotColorWhite": "白色",
+  "shotWidthThin": "细",
+  "shotWidthMedium": "中",
+  "shotWidthThick": "粗"
 }
