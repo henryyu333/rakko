@@ -1,109 +1,115 @@
 package main
 
 import (
+	"math"
 	"testing"
 
-	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/settings"
+	"rakko/locales"
 )
 
-// TestWindowsSettingsLayoutFillsWindowAndClearsCaption verifies that the
-// Windows Settings sidebar and page card fill the window without the old 32 DIP
-// black strip pushing content down, keep symmetric top/right/bottom margins,
-// keep hero text/art clear of the top-right caption controls, and allow
-// scrolling cleanly to the end of long pages.
-func TestWindowsSettingsLayoutFillsWindowAndClearsCaption(t *testing.T) {
-	orig := forWindows
-	forWindows = true
-	t.Cleanup(func() { forWindows = orig })
+// TestUnifiedSettingsIslandAndLayout verifies that macOS and Windows share
+// the exact 640pt v6 "小岛" layout: #0B0B0D window background, centered top
+// navigation island clearing Windows' 138 DIP caption buttons on every page,
+// and single-column scrollable content below the 64pt top bar.
+func TestUnifiedSettingsIslandAndLayout(t *testing.T) {
+	origWin := forWindows
+	t.Cleanup(func() {
+		forWindows = origWin
+	})
 
-	const caption = 32
 	for _, tc := range []struct {
-		name      string
-		winRadius float32
-		wantGap   int
+		name string
+		win  bool
 	}{
-		{name: "win10-square", winRadius: 0, wantGap: 8},
-		{name: "win11-rounded", winRadius: 8, wantGap: 10},
+		{"macOS", false},
+		{"Windows", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			a := &shelf{
-				dataDir: t.TempDir(), settings: settings.Default(), locale: "en",
-				settingsWinRadius: tc.winRadius,
-				thumbnails:        map[string]*ui.Bitmap{}, thumbPending: map[string]bool{},
-				appNames: map[string]string{},
-			}
-			h := settingsWindowHeight()
-			v := ui.NewTester(a.settingsView, settingsWidth, h)
-			v.SetTitleBar(ui.TitleBar{Height: caption, Right: 138})
-			v.SetLocale("en")
-			v.Frame()
+			forWindows = tc.win
+			for _, lang := range []string{"zh-Hans", "en"} {
+				t.Run(lang, func(t *testing.T) {
+					l := locales.In(lang)
+					tabs := []struct {
+						id    settingsPageID
+						label string
+					}{
+						{settingsPageGeneral, l.General()},
+						{settingsPageNotch, l.SettingsNotchNav()},
+						{settingsPageTray, l.SettingsTraySection()},
+						{settingsPageClipboard, l.SettingsClipboardSection()},
+						{settingsPageAIUsage, l.SettingsAISection()},
+						{settingsPageShortcuts, l.SettingsShortcutsSection()},
+					}
+					if permissionsSupported {
+						tabs = append(tabs, struct {
+							id    settingsPageID
+							label string
+						}{settingsPagePermissions, l.PermTitle()})
+					}
+					tabs = append(tabs, struct {
+						id    settingsPageID
+						label string
+					}{settingsPageAbout, l.SettingsAboutPage()})
 
-			img := v.Image()
-			// Outer black frame stays pure black inside the card margin.
-			if c := img.RGBAAt(settingsWidth/2, 2); c.R > 4 || c.G > 4 || c.B > 4 {
-				t.Fatalf("top margin (410,2) = %v, want black frame", c)
-			}
-			// Card panel (#0E0F11) begins right at wantGap (not pushed down 32 DIPs).
-			if c := img.RGBAAt(settingsWidth/2, tc.wantGap+2); c.R != 14 || c.G != 15 || c.B != 17 {
-				t.Fatalf("card top (410,%d) = %v, want panel #0E0F11", tc.wantGap+2, c)
-			}
-			// Bottom and right edges share the exact same margin.
-			if c := img.RGBAAt(settingsWidth/2, h-tc.wantGap-2); c.R != 14 || c.G != 15 || c.B != 17 {
-				t.Fatalf("card bottom (410,%d) = %v, want panel #0E0F11", h-tc.wantGap-2, c)
-			}
-			if c := img.RGBAAt(settingsWidth/2, h-2); c.R > 4 || c.G > 4 || c.B > 4 {
-				t.Fatalf("bottom margin (410,%d) = %v, want black frame", h-2, c)
-			}
-			if c := img.RGBAAt(settingsWidth-tc.wantGap-2, h/2); c.R != 14 || c.G != 15 || c.B != 17 {
-				t.Fatalf("card right (%d,%d) = %v, want panel #0E0F11", settingsWidth-tc.wantGap-2, h/2, c)
-			}
-			if c := img.RGBAAt(settingsWidth-2, h/2); c.R > 4 || c.G > 4 || c.B > 4 {
-				t.Fatalf("right margin (%d,%d) = %v, want black frame", settingsWidth-2, h/2, c)
-			}
+					a := &shelf{
+						dataDir: t.TempDir(), settings: settings.Default(), locale: lang,
+						thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{},
+						appNames: map[string]string{},
+					}
+					h := a.measureSettingsHeight(settingsPageGeneral)
+					v := ui.NewTester(a.settingsView, settingsWidth, h)
+					if tc.win {
+						v.SetTitleBar(ui.TitleBar{Height: 32, Right: 138})
+					}
+					v.SetLocale(lang)
+					v.Frame()
 
-			// Sidebar brand & destinations sit cleanly below the 32 DIP top drag strip.
-			if r, ok := v.Find(appName); !ok {
-				t.Fatal("sidebar brand is missing")
-			} else if r.Y < caption {
-				t.Fatalf("sidebar brand at y=%.0f overlaps top drag strip (%d)", r.Y, caption)
-			}
-			// Clicking brand navigates to About (not blocked by top drag strip).
-			v.Click(appName)
-			v.Frame()
-			if a.settingsPage != settingsPageAbout {
-				t.Fatalf("clicking brand went to page %v, want About", a.settingsPage)
-			}
-			a.settingsPage = settingsPageGeneral
-			v.Frame()
+					img := v.Image()
+					if c := img.RGBAAt(2, 2); c.R != 11 || c.G != 11 || c.B != 13 {
+						t.Fatalf("background at (2,2) = %v, want #0B0B0D", c)
+					}
 
-			// Hero / first group sits cleanly below the caption strip.
-			if r, ok := v.Find(a.appLoc().SettingsStartupGroup()); !ok {
-				t.Fatal("General startup group is missing")
-			} else if r.Y < caption+settingsHeroHeight {
-				t.Fatalf("startup group at y=%.0f puts hero above caption clearance (%d)", r.Y, caption)
-			}
+					for _, tab := range tabs {
+						if err := v.Click(tab.label); err != nil {
+							t.Fatalf("click tab %q: %v", tab.label, err)
+						}
+						v.SetSize(settingsWidth, a.measureSettingsHeight(tab.id))
+						v.Frame()
+						v.Frame()
+						if a.settingsPage != tab.id {
+							t.Fatalf("clicking %q left page=%v, want %v", tab.label, a.settingsPage, tab.id)
+						}
 
-			// Scroll to the end of a long page: the last line must sit inside the window.
-			a.settingsPage = settingsPageNotch
-			v.Frame()
-			for range 20 {
-				v.Scroll(settingsWidth*3/4, float32(h)/2, 0, 400)
-				v.Frame()
-			}
-			captionText := a.appLoc().SettingsSnapCaptionWin()
-			if r, ok := v.Find(captionText); !ok {
-				t.Fatalf("the last line %q is missing after scrolling", captionText)
-			} else if r.Y+r.H > float32(h-tc.wantGap) {
-				t.Fatalf("the last line ends at y=%.0f, past card bottom %d", r.Y+r.H, h-tc.wantGap)
+						first, ok := v.Find(tabs[0].label)
+						if !ok {
+							t.Fatalf("first tab %q missing", tabs[0].label)
+						}
+						last, ok := v.Find(tabs[len(tabs)-1].label)
+						if !ok {
+							t.Fatalf("last tab %q missing", tabs[len(tabs)-1].label)
+						}
+						islandLeft := first.X - settingsIslandPad
+						islandRight := last.X + last.W + settingsIslandPad
+						center := (islandLeft + islandRight) / 2
+						if diff := math.Abs(float64(center - float32(settingsWidth)/2)); diff > 1.0 {
+							t.Errorf("page %v: island center=%.1f, want %.1f (diff=%.1f)",
+								tab.id, center, float32(settingsWidth)/2, diff)
+						}
+						if tc.win && islandRight > float32(settingsWidth-138) {
+							t.Errorf("page %v (%s): island right %.1f overlaps 138pt caption buttons (max %.1f)",
+								tab.id, lang, islandRight, float32(settingsWidth-138))
+						}
+					}
+				})
 			}
 		})
 	}
 }
 
-func TestWindowsSettingsThemeWeightsAndSegmented(t *testing.T) {
+func TestSettingsThemeAndSegmentedParity(t *testing.T) {
 	if got := settingsThemeFor(false).Font; got != "" {
 		t.Fatalf("macOS settingsTheme.Font = %q, want empty", got)
 	}
@@ -115,22 +121,6 @@ func TestWindowsSettingsThemeWeightsAndSegmented(t *testing.T) {
 	forWindows = true
 	t.Cleanup(func() { forWindows = orig })
 
-	if got := settingsWeight(600); got != 400 {
-		t.Fatalf("settingsWeight(600) on Windows = %d, want 400", got)
-	}
-	if got := settingsWeight(500); got != 400 {
-		t.Fatalf("settingsWeight(500) on Windows = %d, want 400", got)
-	}
-	if got := settingsWeight(700); got != 700 {
-		t.Fatalf("settingsWeight(700) on Windows = %d, want 700", got)
-	}
-	forWindows = false
-	if got := settingsWeight(600); got != 600 {
-		t.Fatalf("settingsWeight(600) on macOS = %d, want 600", got)
-	}
-
-	// Verify mixed CJK/ASCII segmented control switches selections on Windows.
-	forWindows = true
 	selected := 0
 	var segChanged bool
 	v := ui.NewTester(func(c *ui.Context) {
@@ -162,14 +152,14 @@ func TestWindowsSettingsScrolledShortcutsTopRowStartsRecording(t *testing.T) {
 		thumbnails:   map[string]*ui.Bitmap{}, thumbPending: map[string]bool{},
 		appNames: map[string]string{},
 	}
-	h := settingsWindowHeight()
+	h := a.measureSettingsHeight(settingsPageShortcuts)
 	v := ui.NewTester(a.settingsView, settingsWidth, h)
 	v.SetTitleBar(ui.TitleBar{Height: caption, Right: 138})
 	v.SetLocale("zh-Hans")
 	v.Frame()
 
 	for range 30 {
-		v.Scroll(settingsWidth*3/4, float32(h)/2, 0, 400)
+		v.Scroll(settingsWidth/2, float32(h)/2, 0, 400)
 		v.Frame()
 	}
 
@@ -203,7 +193,7 @@ func TestWindowsSettingsScrolledShortcutsTopRowStartsRecording(t *testing.T) {
 		if !ok {
 			continue
 		}
-		if r.Y+r.H <= caption {
+		if r.Y+r.H <= settingsTopH {
 			continue
 		}
 		if !found || r.Y < topRect.Y {
@@ -216,85 +206,14 @@ func TestWindowsSettingsScrolledShortcutsTopRowStartsRecording(t *testing.T) {
 	if !found {
 		t.Fatal("no editable shortcut row found after scrolling to bottom")
 	}
-	if topRect.Y < caption {
-		t.Fatalf("top visible shortcut row %q starts at y=%.1f, inside caption DragWindow [0,%d)", topLabel, topRect.Y, caption)
+	if topRect.Y < settingsTopH {
+		t.Fatalf("top visible shortcut row %q starts at y=%.1f, inside top DragWindow [0,%d)", topLabel, topRect.Y, settingsTopH)
 	}
 
-	clickY := topRect.Y + topRect.H/2
-	if topRect.Y+4 >= caption {
-		clickY = topRect.Y + 4
-	}
-	v.ClickAt(topRect.X+topRect.W/2, clickY)
+	v.ClickAt(topRect.X+topRect.W/2, topRect.Y+topRect.H/2)
 	v.Frame()
 	if a.settingsRecording != topKind {
-		t.Fatalf("clicking top visible scrolled row %q (rect=%+v, clickY=%.1f) recorded %v, want %v",
-			topLabel, topRect, clickY, a.settingsRecording, topKind)
-	}
-}
-
-func TestWindowsSettingsHeightMatchesMacFirstScreen(t *testing.T) {
-	orig := forWindows
-	t.Cleanup(func() { forWindows = orig })
-
-	work := mygo.Rectangle{X: 0, Y: 0, Width: 1920, Height: 1040}
-	forWindows = false
-	if got := settingsWindowHeight(); got != settingsHeight {
-		t.Fatalf("macOS settingsWindowHeight() = %d, want %d", got, settingsHeight)
-	}
-	if got := settingsWindowMinHeight(); got != settingsMinHeight {
-		t.Fatalf("macOS settingsWindowMinHeight() = %d, want %d", got, settingsMinHeight)
-	}
-	if f := settingsFrame(work); f.Height != settingsHeight {
-		t.Fatalf("macOS settingsFrame.Height = %d, want %d", f.Height, settingsHeight)
-	}
-
-	forWindows = true
-	wantH := settingsHeight + settingsWinHeightExtra
-	if got := settingsWindowHeight(); got != wantH {
-		t.Fatalf("Windows settingsWindowHeight() = %d, want %d", got, wantH)
-	}
-	if got := settingsWindowMinHeight(); got != settingsMinHeight+settingsWinHeightExtra {
-		t.Fatalf("Windows settingsWindowMinHeight() = %d, want %d", got, settingsMinHeight+settingsWinHeightExtra)
-	}
-	f := settingsFrame(work)
-	if f.Height != wantH || f.Y != (work.Height-wantH)/2 {
-		t.Fatalf("Windows settingsFrame = %+v, want height=%d centered at y=%d", f, wantH, (work.Height-wantH)/2)
-	}
-	tiny := mygo.Rectangle{X: 10, Y: 20, Width: 400, Height: 300}
-	if clamped := settingsFrame(tiny); clamped.X != tiny.X || clamped.Y != tiny.Y {
-		t.Fatalf("clamped settingsFrame = %+v, want (%d,%d)", clamped, tiny.X, tiny.Y)
-	}
-
-	// Verify K2, K5, K6 bottom items appear on the initial screen without scrolling.
-	const caption = 32
-	for _, tc := range []struct {
-		name string
-		page settingsPageID
-		find func(*shelf) string
-	}{
-		{"K2-downloads", settingsPageNotch, func(s *shelf) string { return s.appLoc().SettingsLiveDownloads() }},
-		{"K5-codex", settingsPageAIUsage, func(*shelf) string { return "Codex" }},
-		{"K6-ocr", settingsPageShortcuts, func(s *shelf) string { return s.appLoc().SettingsShortcutOCR() }},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			a := &shelf{
-				dataDir: t.TempDir(), settings: settings.Default(), locale: "zh-Hans",
-				settingsPage: tc.page,
-				thumbnails:   map[string]*ui.Bitmap{}, thumbPending: map[string]bool{},
-				appNames: map[string]string{},
-			}
-			v := ui.NewTester(a.settingsView, settingsWidth, wantH)
-			v.SetTitleBar(ui.TitleBar{Height: caption, Right: 138})
-			v.SetLocale("zh-Hans")
-			v.Frame()
-			r, ok := v.Find(tc.find(a))
-			if !ok {
-				t.Fatalf("%s: %q not found on initial screen", tc.name, tc.find(a))
-			}
-			pm, _ := winPanelLayout(0)
-			if r.Y >= float32(wantH)-pm {
-				t.Fatalf("%s: %q starts at y=%.1f, below card bottom %.1f", tc.name, tc.find(a), r.Y, float32(wantH)-pm)
-			}
-		})
+		t.Fatalf("clicking top visible scrolled row %q (rect=%+v) recorded %v, want %v",
+			topLabel, topRect, a.settingsRecording, topKind)
 	}
 }

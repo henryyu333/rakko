@@ -141,7 +141,7 @@ func clickPermissionSwitch(t *testing.T, view *ui.Tester) {
 	if !ok {
 		t.Fatal("screen recording permission row missing")
 	}
-	view.ClickAt(r.X+10, r.Y+r.H/2+51)
+	view.ClickAt(r.X+10, r.Y+r.H/2+58)
 }
 
 func TestPermissionTrayItemCountsMissing(t *testing.T) {
@@ -271,15 +271,15 @@ func TestPermissionSwitchStates(t *testing.T) {
 	// Two missing: still off, and the caption names them in list order.
 	st.fda, st.ax, st.screen = true, false, false
 	view.Frame()
-	if view.HasText("还差 2 项：辅助功能、屏幕录制") {
-		t.Fatal("idle switch shows a missing-permissions caption")
+	if !view.HasText("还差 2 项：辅助功能、屏幕录制") {
+		t.Fatalf("missing-permissions caption absent; texts=%v", view.Texts())
 	}
 
-	// All granted: on, and the caption says so.
+	// All granted: on, and no missing caption remains.
 	st.ax, st.screen = true, true
 	view.Frame()
-	if view.HasText("已全部开启（3/3）") {
-		t.Fatal("idle switch shows an all-granted caption")
+	if view.HasText("还差") {
+		t.Fatalf("all-granted switch still shows missing caption; texts=%v", view.Texts())
 	}
 }
 
@@ -451,8 +451,8 @@ func TestPermissionFlowStops(t *testing.T) {
 		t.Fatalf("停止 left the flow at %v", a.perm.stage)
 	}
 	view.Frame()
-	if view.HasText("还差 3 项：完整磁盘访问、辅助功能、屏幕录制") {
-		t.Fatal("stopped flow shows an idle caption")
+	if view.HasText("停止") || !view.HasText("还差 3 项：完整磁盘访问、辅助功能、屏幕录制") {
+		t.Fatalf("stopped flow did not return to idle missing caption: %v", view.Texts())
 	}
 	clk.fireLast(t)
 	if a.perm.stage != permissionIdle || st.fdaRequests != 1 {

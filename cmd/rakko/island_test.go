@@ -347,8 +347,8 @@ func TestSettingsShellStyleRow(t *testing.T) {
 	stubSettingsSeams(t, false, nil, nil)
 	a, view := newSettingsShelf(t)
 	openSettingsPage(t, view, "外形与提示")
-	if !view.HasText("刘海样式") || !view.HasText("没有刘海的屏幕总是显示为灵动岛") {
-		t.Fatalf("刘海样式 row or its caption is missing: %v", view.Texts())
+	if !view.HasText("刘海") || !view.HasText("灵动岛") {
+		t.Fatalf("shape preview tiles missing: %v", view.Texts())
 	}
 	clickVisible(t, view, "灵动岛")
 	if a.settings.ShellStyle != settings.ShellStyleIsland {

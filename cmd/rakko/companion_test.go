@@ -242,9 +242,7 @@ func TestSettingsAboutCompanionCorrupt(t *testing.T) {
 }
 
 // TestSettingsAboutButtonsFitNarrowWindow keeps the About button row inside
-// the panel's content area at the window's minimum width and its default
-// width, in both languages. Each settingsButton() reports its own box, so
-// the row's last button must end before the page's right padding.
+// the panel's content area at the window's 640pt width in both languages.
 func TestSettingsAboutButtonsFitNarrowWindow(t *testing.T) {
 	if !galleryStageOtter(t) {
 		t.Skip("no otter art")
@@ -255,9 +253,7 @@ func TestSettingsAboutButtonsFitNarrowWindow(t *testing.T) {
 		page   string
 		labels []string
 	}{
-		{settingsMinWidth, "en", "About", []string{"Check for Updates", "Open Data Folder", "Buy Me a Coffee"}},
 		{settingsWidth, "en", "About", []string{"Check for Updates", "Open Data Folder", "Buy Me a Coffee"}},
-		{settingsMinWidth, "zh-Hans", "关于", []string{"检查更新", "打开数据文件夹", "请我喝杯咖啡"}},
 		{settingsWidth, "zh-Hans", "关于", []string{"检查更新", "打开数据文件夹", "请我喝杯咖啡"}},
 	}
 	for _, c := range cases {
@@ -268,7 +264,7 @@ func TestSettingsAboutButtonsFitNarrowWindow(t *testing.T) {
 		view.Frame()
 		openSettingsPage(t, view, c.page)
 		view.Frame()
-		contentRight := float32(c.width - 10 - 18) // panel margin 10, page padding 18
+		contentRight := float32(c.width - settingsPagePadX)
 		for _, label := range c.labels {
 			r, ok := view.Find(label)
 			if !ok {

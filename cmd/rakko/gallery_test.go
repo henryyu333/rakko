@@ -2062,12 +2062,17 @@ func galleryGroupK() []galleryItem {
 			stubSettingsSeams(t, false, nil, nil)
 			stubKeyboard(t)
 			stubPermissions(t)
-			a, view := newSettingsShelf(t)
-			a.settingsPage = p
+			a := &shelf{
+				dataDir: t.TempDir(), settings: settings.Default(), locale: lang,
+				settingsPage: p,
+				thumbnails:   map[string]*ui.Bitmap{}, thumbPending: map[string]bool{},
+				appNames: map[string]string{},
+			}
 			if tweak != nil {
 				tweak(t, a)
 			}
-			a.locale = lang
+			h := a.measureSettingsHeight(p)
+			view := ui.NewTester(a.settingsView, settingsWidth, h)
 			view.SetLocale(lang)
 			view.SetScale(galleryScale)
 			view.Frame()
@@ -2076,13 +2081,17 @@ func galleryGroupK() []galleryItem {
 		}
 	}
 	return []galleryItem{
-		{ID: "K1", Group: g, Title: "通用", State: "登录项、语言、默认搜索模式", Wide: true, Build: page(settingsPageGeneral, nil)},
+		{ID: "K1", Group: g, Title: "通用", State: "启动、语言、默认搜索模式", Wide: true, Build: page(settingsPageGeneral, nil)},
 		{ID: "K16", Group: g, Title: "通用", State: "默认搜索模式 · 应用", Wide: true, Build: page(settingsPageGeneral, func(t *testing.T, a *shelf) {
 			a.settings.SearchMode = settings.SearchModeApps
 		})},
-		{ID: "K2", Group: g, Title: "外形与提示", State: "灵动岛、桌宠、实时活动、贴边排列", Wide: true, Build: page(settingsPageNotch, nil)},
-		{ID: "K3", Group: g, Title: "托盘", State: "保留时长与拖出后移除", Wide: true, Build: page(settingsPageTray, nil)},
-		{ID: "K4", Group: g, Title: "剪贴板", State: "条数上限与排除的应用", Wide: true, Build: page(settingsPageClipboard, func(t *testing.T, a *shelf) {
+		{ID: "K2", Group: g, Title: "外形与提示", State: "刘海、桌宠、实时活动、分屏", Wide: true, Build: page(settingsPageNotch, nil)},
+		{ID: "K19", Group: g, Title: "外形与提示", State: "选灵动岛 · 灵动岛位置", Wide: true, Build: page(settingsPageNotch, func(t *testing.T, a *shelf) {
+			a.settings.ShellStyle = settings.ShellStyleIsland
+			a.island = true
+		})},
+		{ID: "K3", Group: g, Title: "托盘", State: "整理 · 保留时长与拖出后移除", Wide: true, Build: page(settingsPageTray, nil)},
+		{ID: "K4", Group: g, Title: "剪贴板", State: "条数上限与不记录这些应用", Wide: true, Build: page(settingsPageClipboard, func(t *testing.T, a *shelf) {
 			a.settings.ExcludedApps = []string{"com.apple.Terminal", "com.apple.Safari", "com.apple.Notes"}
 			a.appNames = map[string]string{
 				"com.apple.Terminal": "Terminal", "com.apple.Safari": "Safari",
@@ -2100,23 +2109,24 @@ func galleryGroupK() []galleryItem {
 			attachGalleryUsage(a, now)
 			a.settingsPage = settingsPageAIUsage
 			a.locale = lang
-			view := ui.NewTester(a.settingsView, settingsWidth, settingsHeight)
+			h := a.measureSettingsHeight(settingsPageAIUsage)
+			view := ui.NewTester(a.settingsView, settingsWidth, h)
 			view.SetLocale(lang)
 			view.SetScale(galleryScale)
 			view.Frame()
 			for range 20 {
-				if r, ok := view.Find("Gemini CLI"); ok && r.W > 0 && r.H > 0 && r.Y >= 0 && r.Y+r.H <= settingsHeight {
+				if r, ok := view.Find("Gemini CLI"); ok && r.W > 0 && r.H > 0 && r.Y >= 0 && r.Y+r.H <= float32(h) {
 					break
 				}
-				view.Scroll(settingsWidth/2, settingsHeight/2, 0, 140)
+				view.Scroll(settingsWidth/2, float32(h)/2, 0, 140)
 				view.Frame()
 			}
 			view.Frame()
 			return galleryRender{view: view}
 		}},
-		{ID: "K6", Group: g, Title: "快捷键", State: "四个全局组合与面板只读键", Wide: true, Build: page(settingsPageShortcuts, nil)},
+		{ID: "K6", Group: g, Title: "快捷键", State: "全局组合与面板只读键", Wide: true, Build: page(settingsPageShortcuts, nil)},
 		{ID: "K7", Group: g, Title: "系统权限", State: "三项权限与一个开关", Wide: true, Build: page(settingsPagePermissions, nil)},
-		{ID: "K8", Group: g, Title: "关于", State: "版本、更新、隐私与源码", Wide: true, Build: page(settingsPageAbout, func(t *testing.T, a *shelf) {
+		{ID: "K8", Group: g, Title: "关于", State: "海獭、更新、隐私与源码", Wide: true, Build: page(settingsPageAbout, func(t *testing.T, a *shelf) {
 			a.settings.AutoCheckUpdates = true
 			a.updateLastCheck = galleryTodayAt(9, 12)
 			a.updateLastResult = updateResultLatest
@@ -2133,25 +2143,7 @@ func galleryGroupK() []galleryItem {
 			a.updateLastResult = updateResultLatest
 			a.companion = companionFor(t, a.dataDir, 128, true)
 		})},
-		{ID: "K19", Group: g, Title: "关于", State: "最小宽度 760 · 第 128 天", Wide: true, Build: func(t *testing.T, lang string) galleryRender {
-			stubSettingsSeams(t, false, nil, nil)
-			stubKeyboard(t)
-			stubPermissions(t)
-			a, view := newSettingsShelf(t)
-			view.SetSize(settingsMinWidth, settingsHeight)
-			a.settingsPage = settingsPageAbout
-			a.settings.AutoCheckUpdates = true
-			a.updateLastCheck = galleryTodayAt(9, 12)
-			a.updateLastResult = updateResultLatest
-			a.companion = companionFor(t, a.dataDir, 128, false)
-			a.locale = lang
-			view.SetLocale(lang)
-			view.SetScale(galleryScale)
-			view.Frame()
-			view.Frame()
-			return galleryRender{view: view}
-		}},
-		{ID: "K9", Group: g, Title: "快捷键", State: "录制中 · 按下新的组合键…", Wide: true, Build: page(settingsPageShortcuts, func(t *testing.T, a *shelf) {
+		{ID: "K9", Group: g, Title: "快捷键", State: "录制中 · 按下新的组合键", Wide: true, Build: page(settingsPageShortcuts, func(t *testing.T, a *shelf) {
 			a.settingsRecording = shortcutToggle
 		})},
 		{ID: "K10", Group: g, Title: "快捷键", State: "已被占用", Wide: true, Build: page(settingsPageShortcuts, func(t *testing.T, a *shelf) {
@@ -2165,9 +2157,14 @@ func galleryGroupK() []galleryItem {
 			stubSettingsSeams(t, false, nil, nil)
 			st, _ := stubPermissions(t)
 			st.fda, st.ax, st.screen = true, false, false
-			a, view := newSettingsShelf(t)
-			a.settingsPage = settingsPagePermissions
-			a.locale = lang
+			a := &shelf{
+				dataDir: t.TempDir(), settings: settings.Default(), locale: lang,
+				settingsPage: settingsPagePermissions,
+				thumbnails:   map[string]*ui.Bitmap{}, thumbPending: map[string]bool{},
+				appNames: map[string]string{},
+			}
+			h := a.measureSettingsHeight(settingsPagePermissions)
+			view := ui.NewTester(a.settingsView, settingsWidth, h)
 			view.SetLocale(lang)
 			view.SetScale(galleryScale)
 			view.Frame()
@@ -2178,9 +2175,14 @@ func galleryGroupK() []galleryItem {
 			stubSettingsSeams(t, false, nil, nil)
 			st, _ := stubPermissions(t)
 			st.fda, st.ax, st.screen = true, true, true
-			a, view := newSettingsShelf(t)
-			a.settingsPage = settingsPagePermissions
-			a.locale = lang
+			a := &shelf{
+				dataDir: t.TempDir(), settings: settings.Default(), locale: lang,
+				settingsPage: settingsPagePermissions,
+				thumbnails:   map[string]*ui.Bitmap{}, thumbPending: map[string]bool{},
+				appNames: map[string]string{},
+			}
+			h := a.measureSettingsHeight(settingsPagePermissions)
+			view := ui.NewTester(a.settingsView, settingsWidth, h)
 			view.SetLocale(lang)
 			view.SetScale(galleryScale)
 			view.Frame()
@@ -2194,10 +2196,15 @@ func galleryGroupK() []galleryItem {
 			oldOpen := openSettingsWindow
 			openSettingsWindow = func(*shelf) {}
 			t.Cleanup(func() { openSettingsWindow = oldOpen })
-			a, view := newSettingsShelf(t)
-			a.settingsPage = settingsPagePermissions
+			a := &shelf{
+				dataDir: t.TempDir(), settings: settings.Default(), locale: lang,
+				settingsPage: settingsPagePermissions,
+				thumbnails:   map[string]*ui.Bitmap{}, thumbPending: map[string]bool{},
+				appNames: map[string]string{},
+			}
 			a.showPermissions()
-			a.locale = lang
+			h := a.measureSettingsHeight(settingsPagePermissions)
+			view := ui.NewTester(a.settingsView, settingsWidth, h)
 			view.SetLocale(lang)
 			view.SetScale(galleryScale)
 			view.Frame()

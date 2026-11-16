@@ -69,7 +69,7 @@ func TestSettingsWindowAnswersClicksAndScroll(t *testing.T) {
 	// Hit-test, while the notch is idle: the Settings surface answers
 	// across its content.
 	onMain(func() {
-		for _, p := range [][2]float64{{230, 60}, {230, 260}, {230, 450}, {60, 300}} {
+		for _, p := range [][2]float64{{320, 32}, {320, 150}, {320, 250}, {120, 200}} {
 			if !platform.SurfaceHitTest(settings, p[0], p[1]) {
 				t.Errorf("Settings hitTest(%v,%v) rejected", p[0], p[1])
 			}
@@ -80,13 +80,13 @@ func TestSettingsWindowAnswersClicksAndScroll(t *testing.T) {
 	}
 
 	// Scroll: a wheel event on the Settings surface must move the tracked
-	// scroll state. Use the first page that is taller than the 560pt
-	// window; which page that is moves as the pages are trimmed.
+	// scroll state. Use the first page that is taller than the 600pt
+	// max window height; which page that is moves as the pages are trimmed.
 	var before, after float32
 	tall := false
-	for _, page := range []settingsPageID{settingsPageAIUsage, settingsPageShortcuts, settingsPageNotch, settingsPagePermissions, settingsPageAbout} {
+	for _, page := range []settingsPageID{settingsPageAIUsage, settingsPageShortcuts, settingsPageNotch, settingsPageAbout} {
 		onMain(func() {
-			a.settingsPage = page
+			a.setSettingsPage(page)
 			a.settingsScroll.Y = 0
 			a.settingsWin.Invalidate()
 		})
@@ -103,7 +103,7 @@ func TestSettingsWindowAnswersClicksAndScroll(t *testing.T) {
 	onMain(func() {
 		a.settingsWin.Invalidate()
 		before = a.settingsScroll.Y
-		if !platform.SurfaceScroll(settings, 230, 300, 240) {
+		if !platform.SurfaceScroll(settings, 320, 300, 240) {
 			t.Error("SurfaceScroll delivered no event")
 		}
 	})

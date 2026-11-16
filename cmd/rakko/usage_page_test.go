@@ -569,7 +569,7 @@ func TestUsageSettingsSection(t *testing.T) {
 	for _, want := range []string{
 		"AI 用量", "在刘海里显示 AI 用量", "套餐额度",
 		"Claude Code", "Codex", "额度显示", "已用", "剩余",
-		"本机用量自动统计本机所有 AI 工具的 token，只读本机日志，不联网、不上传。",
+		"本机用量只读本机日志，不联网、不上传。",
 	} {
 		if !view.HasText(want) {
 			t.Fatalf("AI 用量 page missing %q; texts=%v", want, view.Texts())
@@ -627,7 +627,7 @@ func TestUsageSettingsQuotaLockedWhileOff(t *testing.T) {
 	if a.settings.AIUsage != before {
 		t.Fatalf("locked quota switches answered clicks: %+v", a.settings.AIUsage)
 	}
-	if !view.HasText("本机用量自动统计本机所有 AI 工具的 token，只读本机日志，不联网、不上传。") {
+	if !view.HasText("本机用量只读本机日志，不联网、不上传。") {
 		t.Fatal("the local-usage note must stay visible")
 	}
 	clickVisible(t, view, "在刘海里显示 AI 用量")

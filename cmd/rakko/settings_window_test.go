@@ -102,8 +102,8 @@ func newSettingsShelf(t *testing.T) (*shelf, *ui.Tester) {
 
 func TestSettingsFrameCentersAndClamps(t *testing.T) {
 	work := rectHelper(0, 25, 1512, 955)
-	f := settingsFrame(work)
-	if f.Width != settingsWidth || f.Height != settingsHeight {
+	f := settingsFrame(work, 420)
+	if f.Width != settingsWidth || f.Height != 420 {
 		t.Fatalf("frame size changed: %+v", f)
 	}
 	cx, cy := f.X+f.Width/2, f.Y+f.Height/2
@@ -111,11 +111,96 @@ func TestSettingsFrameCentersAndClamps(t *testing.T) {
 	if cx != wx || cy != wy {
 		t.Fatalf("window not centered: center=(%d,%d) want (%d,%d)", cx, cy, wx, wy)
 	}
+	// Heights clamp to [300, 600].
+	if small := settingsFrame(work, 120); small.Height != settingsMinHeight {
+		t.Fatalf("clamped min height = %d, want %d", small.Height, settingsMinHeight)
+	}
+	if tall := settingsFrame(work, 900); tall.Height != settingsMaxHeight {
+		t.Fatalf("clamped max height = %d, want %d", tall.Height, settingsMaxHeight)
+	}
 	// A work area smaller than the window must clamp, not go negative.
 	tiny := rectHelper(100, 50, 200, 150)
-	f2 := settingsFrame(tiny)
-	if f2.X < tiny.X || f2.Y < tiny.Y {
+	f2 := settingsFrame(tiny, 420)
+	if f2.X < tiny.X || f2.Y < tiny.Y || f2.Height != tiny.Height {
 		t.Fatalf("frame left the work area: %+v vs %+v", f2, tiny)
+	}
+}
+
+func TestSettingsResizedFrameAnchorsTopAndClampsWorkArea(t *testing.T) {
+	work := rectHelper(0, 25, 1440, 815)
+	cur := rectHelper(400, 200, settingsWidth, 320)
+	// Normal growth keeps top edge fixed at 200.
+	grown := settingsResizedFrame(cur, work, 580)
+	if grown.X != 400 || grown.Y != 200 || grown.Height != 580 {
+		t.Fatalf("normal resize = %+v, want X=400 Y=200 Height=580", grown)
+	}
+	// Near the bottom of the work area (25+815 = 840), top stays anchored while
+	// height clamps so bottom never passes 840.
+	low := rectHelper(400, 420, settingsWidth, 320)
+	clamped := settingsResizedFrame(low, work, 600)
+	if clamped.Y != 420 || clamped.Y+clamped.Height != 840 {
+		t.Fatalf("clamped resize = %+v, want Y=420 bottom=840", clamped)
+	}
+}
+
+func TestSettingsDynamicPageHeightsAndOrangeDot(t *testing.T) {
+	stubSettingsSeams(t, false, nil, nil)
+	st, _ := stubPermissions(t)
+	a, _ := newSettingsShelf(t)
+
+	// General and Tray are compact; Shortcuts and AI hit the 600pt cap.
+	genH := a.measureSettingsHeight(settingsPageGeneral)
+	if genH < settingsMinHeight || genH >= settingsMaxHeight {
+		t.Fatalf("General height = %d, want in [%d, %d)", genH, settingsMinHeight, settingsMaxHeight)
+	}
+	keyH := a.measureSettingsHeight(settingsPageShortcuts)
+	if keyH != settingsMaxHeight {
+		t.Fatalf("Shortcuts height = %d, want %d", keyH, settingsMaxHeight)
+	}
+
+	// Selecting Dynamic Island adds the Island Position row on Appearance.
+	a.settings.ShellStyle = settings.ShellStyleNotch
+	a.island = false
+	notchH := a.measureSettingsHeight(settingsPageNotch)
+	a.settings.ShellStyle = settings.ShellStyleIsland
+	a.island = true
+	islandH := a.measureSettingsHeight(settingsPageNotch)
+	if islandH <= notchH {
+		t.Fatalf("Dynamic Island height %d did not grow over Notch %d", islandH, notchH)
+	}
+
+	// Missing permissions show an orange dot on the Permissions tab icon.
+	st.fda, st.ax, st.screen = true, true, false
+	v := ui.NewTester(a.settingsView, settingsWidth, genH)
+	v.SetScale(2)
+	v.Frame()
+	v.Frame()
+	permTab, ok := v.Find("系统权限")
+	if !ok {
+		t.Fatal("permissions tab missing")
+	}
+	hasOrange := func(img *image.RGBA, r ui.Rect) bool {
+		b := img.Bounds()
+		x0, x1 := max(int(r.X*2), b.Min.X), min(int((r.X+r.W)*2), b.Max.X)
+		y0, y1 := max(int(r.Y*2), b.Min.Y), min(int((r.Y+r.H)*2), b.Max.Y)
+		for y := y0; y < y1; y++ {
+			for x := x0; x < x1; x++ {
+				cr, cg, cb, _ := img.At(x, y).RGBA()
+				if cr>>8 > 220 && cg>>8 >= 130 && cg>>8 <= 185 && cb>>8 < 40 {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	if !hasOrange(v.Image(), permTab) {
+		t.Fatal("missing permission did not paint orange dot on Permissions island icon")
+	}
+	st.screen = true
+	v.Frame()
+	v.Frame()
+	if hasOrange(v.Image(), permTab) {
+		t.Fatal("granted permissions still show orange dot on Permissions island icon")
 	}
 }
 
@@ -129,8 +214,9 @@ func rectHelper(x, y, w, h int) mygo.Rectangle {
 func openSettingsPage(t *testing.T, view *ui.Tester, title string) {
 	t.Helper()
 	if err := view.Click(title); err != nil {
-		t.Fatalf("sidebar item %q: %v", title, err)
+		t.Fatalf("island item %q: %v", title, err)
 	}
+	view.Advance(350 * time.Millisecond)
 	view.Frame()
 }
 
@@ -181,20 +267,18 @@ func TestChoiceSegments(t *testing.T) {
 func TestSettingsViewShowsSections(t *testing.T) {
 	stubSettingsSeams(t, false, nil, nil)
 	a, view := newSettingsShelf(t)
-	// Every preference the old single page held is still in the window,
-	// on the page where a user looks for it.
 	pages := []struct {
 		nav   string
 		texts []string
 	}{
 		{"通用", []string{"开机时自动启动", "默认搜索模式"}},
-		{"外形与提示", []string{"刘海样式", "充电提示", "耳机连接提示", "下载进度", "拖窗口到刘海分屏"}},
-		{"托盘", []string{"自动清理旧内容", "拖出后从托盘移除"}},
-		{"剪贴板", []string{"保留条数", "排除的应用"}},
-		{"AI", []string{"在刘海里显示 AI 用量", "额度显示", "套餐额度", "本机用量自动统计本机所有 AI 工具的 token"}},
-		{"快捷键", []string{"显示 / 收起", "剪贴板搜索", "框选文字", "打开托盘", "在刘海里"}},
+		{"外形与提示", []string{"外形", "刘海", "灵动岛", "充电提示", "耳机连接提示", "下载进度", "拖窗口到刘海分屏"}},
+		{"托盘", []string{"自动清理旧内容", "置顶的不清理", "拖出后从托盘移除", "置顶的保留"}},
+		{"剪贴板", []string{"保留条数", "不记录这些应用"}},
+		{"AI", []string{"在刘海里显示 AI 用量", "额度显示", "套餐额度", "本机用量只读本机日志，不联网、不上传。"}},
+		{"快捷键", []string{"全局", "显示 / 收起", "剪贴板搜索", "框选文字", "打开托盘", "在刘海里"}},
 		{"系统权限", []string{"完整磁盘访问", "辅助功能", "屏幕录制"}},
-		{"关于", []string{"检查更新", "自动检查更新", "自动下载并安装更新", "打开数据文件夹", "源代码", "隐私"}},
+		{"关于", []string{"检查更新", "自动检查更新", "自动下载并安装更新", "上次检查", "打开数据文件夹", "源代码", "隐私"}},
 	}
 	for _, p := range pages {
 		openSettingsPage(t, view, p.nav)
@@ -245,12 +329,13 @@ func TestAIUsageQuotaRowsLeadWithToolMarks(t *testing.T) {
 		if tc.rust != (rust > 0 && white == 0) || tc.white != (white > 0 && rust == 0) {
 			t.Errorf("%s: rust=%d white=%d, want its own mark only", toolName(tc.tool), rust, white)
 		}
-		if mark.W < settingsRowMark-1 || mark.W > settingsRowMark+1 ||
-			mark.H < settingsRowMark-1 || mark.H > settingsRowMark+1 {
-			t.Errorf("%s: mark is %.1f × %.1f, want %d", toolName(tc.tool), mark.W, mark.H, settingsRowMark)
+		if mark.W < settingsMarkArt-1 || mark.W > settingsMarkArt+1 ||
+			mark.H < settingsMarkArt-1 || mark.H > settingsMarkArt+1 {
+			t.Errorf("%s: mark is %.1f × %.1f, want %d", toolName(tc.tool), mark.W, mark.H, settingsMarkArt)
 		}
-		if off := mark.X - (row.X + settingsRowPadX); off < -1 || off > 1 {
-			t.Errorf("%s: mark starts %.1fpt from the row's left, want %d", toolName(tc.tool), mark.X-row.X, settingsRowPadX)
+		wantLeft := row.X + settingsRowPadX + (settingsMarkSlot-settingsMarkArt)/2
+		if off := mark.X - wantLeft; off < -1 || off > 1 {
+			t.Errorf("%s: mark starts %.1fpt from the row's left, want %.1f", toolName(tc.tool), mark.X-row.X, wantLeft-row.X)
 		}
 		if gap := (mark.Y + mark.H/2) - (row.Y + row.H/2); gap < -1 || gap > 1 {
 			t.Errorf("%s: mark centre sits %.1fpt off the row's centre", toolName(tc.tool), gap)
@@ -604,6 +689,8 @@ func TestSettingsWindowSmoke(t *testing.T) {
 	// A fixture row for 排除的应用 so the shot shows an app icon + 移除.
 	prefs.ExcludedApps = []string{"com.apple.Safari"}
 	a.settings = prefs
+	a.settingsPage = settingsPageGeneral
+	a.settingsScroll = ui.ScrollState{}
 	var first *mygo.Window
 	onMain(func() {
 		a.openSettings()
@@ -630,7 +717,7 @@ func TestSettingsWindowSmoke(t *testing.T) {
 	}
 	// WindowServer must show it at the centered frame computed from the
 	// cursor display's work area.
-	want := settingsFrame(mygo.Screen.DisplayNearestPoint(mygo.Screen.CursorScreenPoint()).WorkArea)
+	want := settingsFrame(mygo.Screen.DisplayNearestPoint(mygo.Screen.CursorScreenPoint()).WorkArea, a.measureSettingsHeight(a.settingsPage))
 	var got platform.Rect
 	settled := false
 	for range 60 {
@@ -669,8 +756,8 @@ func TestSettingsWindowSmoke(t *testing.T) {
 		t.Fatalf("decode %s: %v", shot, err)
 	}
 	box := opaqueBounds(img)
-	if box.Dx() < settingsWidth || box.Dy() < settingsHeight {
-		t.Fatalf("screenshot %s shows only %v of paint; want ~%dx%d", shot, box, settingsWidth, settingsHeight)
+	if box.Dx() < want.Width || box.Dy() < want.Height {
+		t.Fatalf("screenshot %s shows only %v of paint; want ~%dx%d", shot, box, want.Width, want.Height)
 	}
 	// The shot must be a dark window with light text on top.
 	dark, light := 0, 0

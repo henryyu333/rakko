@@ -199,34 +199,13 @@ func TestEnglishSettingsWindowLayout(t *testing.T) {
 		audit("bottom/" + nav)
 	}
 
-	// A caption that wraps ends above the next row's text, never on it.
-	openSettingsPage(t, view, l.SettingsNotchNav())
-	a.settingsScroll.Y = 0
-	view.Frame()
-	view.Frame()
-	for _, pair := range [][2]string{
-		{l.ShellStyleCaption(), l.SettingsIslandPosRow()},
-	} {
-		cap, ok := view.Find(pair[0])
-		if !ok {
-			t.Fatalf("caption %q missing", pair[0])
-		}
-		next, ok := view.Find(pair[1])
-		if !ok {
-			continue // the island row only exists on a floating island
-		}
-		if gap := next.Y - (cap.Y + cap.H); gap < 2 {
-			t.Errorf("%q ends %.1fpt above %q: the caption presses the next row", pair[0], gap, pair[1])
-		}
-	}
-
-	// A one-line row keeps the design's 50pt height.
+	// A one-line row keeps the design's 44pt minimum height.
 	openSettingsPage(t, view, l.General())
 	a.settingsScroll.Y = 0
 	view.Frame()
 	view.Frame()
-	if r, ok := view.Find(l.SettingsLoginRow()); ok && r.H != 50 {
-		t.Errorf("a one-line row is %.1fpt tall, want 50", r.H)
+	if r, ok := view.Find(l.SettingsLoginRow()); ok && r.H != settingsRowMinHeight {
+		t.Errorf("a one-line row is %.1fpt tall, want %d", r.H, settingsRowMinHeight)
 	}
 	for _, note := range cut {
 		t.Errorf("settings: %s", note)

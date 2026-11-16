@@ -64,15 +64,13 @@ func TestWindowsSettingsPagesSayWindowsWords(t *testing.T) {
 		openSettingsPage(t, view, l.SettingsNotchNav())
 		view.Frame()
 		joined := strings.Join(view.Texts(), "\n")
-		want = osTextFor(true, l.SettingsGroupNotch(), l.SettingsGroupNotchWin())
+		want = osTextFor(true, l.ShellStyleNotch(), l.ShellStyleNotchWin())
 		if !strings.Contains(joined, want) {
 			t.Errorf("%s appearance page missing %q", lang, want)
 		}
-		// The footnote about the system switch that draws the panel black
-		// names Windows' own switch, not macOS's Reduce Transparency.
-		want = osTextFor(true, l.SettingsNotchFoot(), l.SettingsNotchFootWin())
+		want = osTextFor(true, l.SettingsSnapRow(), l.SettingsSnapRowWin())
 		if !strings.Contains(joined, want) {
-			t.Errorf("%s appearance page footnote is not %q: %q", lang, want, joined)
+			t.Errorf("%s appearance page missing %q", lang, want)
 		}
 	}
 }
