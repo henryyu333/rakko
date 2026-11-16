@@ -85,6 +85,12 @@ Requires Windows 10 22H2 or Windows 11, 64-bit.
 2. Rakko is not code-signed, so Windows may say "Windows protected your PC": click **More info** → **Run anyway**. Only do this for a file downloaded from this repository.
 3. Push the pointer against the top centre of the screen, or press `Ctrl+Alt+Space`.
 
+Prefer PowerShell? This installs the latest release for your account, with the installer's SHA-256 checked against the release:
+
+```powershell
+irm https://github.com/henryyu333/rakko/releases/latest/download/install.ps1 | iex
+```
+
 Rakko sits in the notification area. Settings → Appearance can switch the hidden top edge to an always-visible floating capsule. While a game or video runs full screen, the top edge is left alone; the shortcut still opens Rakko. Explorer's right-click menu gains **Add to Rakko**, and Send To gains **Rakko**.
 
 Shortcuts use Ctrl and Alt where the Mac uses ⌘, ⌥ and ⌃. AirDrop and the permissions page are Mac-only; Windows Search takes Spotlight's place, and HEIC needs Microsoft's codec extensions. The manual's [Windows chapter](docs/MANUAL.zh-CN.md#windows-版) lists the rest.
@@ -188,6 +194,12 @@ curl -fsSL https://github.com/henryyu333/rakko/releases/latest/download/install.
 1. 下载 **[Rakko-Setup.exe](https://github.com/henryyu333/rakko/releases/latest/download/Rakko-Setup.exe)** 并运行。只安装给当前用户，不需要管理员权限。
 2. Rakko 没有代码签名，Windows 可能提示「Windows 已保护你的电脑」：点 **更多信息** → **仍要运行**。只放行从本仓库下载的文件。
 3. 把鼠标推到屏幕顶部中间，或按 `Ctrl+Alt+Space`。
+
+习惯用 PowerShell 的话，下面这行会为当前用户安装最新版，并按 Release 里的校验值核对安装包：
+
+```powershell
+irm https://github.com/henryyu333/rakko/releases/latest/download/install.ps1 | iex
+```
 
 Rakko 的图标在任务栏通知区域。设置 →「外形与提示」可以把隐藏的顶边换成常驻的浮动胶囊。全屏玩游戏或看视频时，碰到顶边不会打扰前台程序，快捷键照样能打开。资源管理器的右键菜单会多出 **添加到 Rakko**，「发送到」里会多出 **Rakko**。
 
