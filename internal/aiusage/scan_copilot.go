@@ -111,13 +111,43 @@ func readCopilotDataDB(ctx context.Context, dbPath, cacheDir string, pool map[st
 	if !supported {
 		return nil, nil, errUnsupportedDBSchema
 	}
-	var ledger map[string]cumSnapshot
-	var oldRecs []rec
-	if old != nil {
-		ledger, oldRecs = old.ledgerPrev, old.recs
-	}
+	ledger, oldRecs := copilotSessionsBaseline(old)
 	out, snap := applyCumulativeRows(rows, ledger, oldRecs, copilotKeyPrefix, time.Now().UnixMilli())
 	return out, snap, nil
+}
+
+// copilotSessionsBaseline returns the ledger to continue from. A cache
+// written before data.db `sessions` went through the ledger holds one
+// whole-total record per session (key copilot\x00<sid>\x00, no snapshot);
+// those totals become the baseline so the first scan after the upgrade adds
+// only the growth since then. Anything else without a snapshot (an events
+// cache, duplicate sessions) has no baseline and the ledger starts fresh.
+func copilotSessionsBaseline(old *fileState) (map[string]cumSnapshot, []rec) {
+	if old == nil {
+		return nil, nil
+	}
+	if len(old.ledgerPrev) > 0 {
+		return old.ledgerPrev, old.recs
+	}
+	if len(old.recs) == 0 {
+		return nil, nil
+	}
+	snap := make(map[string]cumSnapshot, len(old.recs))
+	recs := make([]rec, 0, len(old.recs))
+	for _, rc := range old.recs {
+		sid, evID, ok := parseCopilotRecKey(rc.key)
+		if !ok || sid == "" || evID != "" {
+			return nil, nil
+		}
+		key := copilotSessionLedgerKey(sid)
+		if _, dup := snap[key]; dup {
+			return nil, nil
+		}
+		snap[key] = cumSnapshot{Calls: max(rc.reqs, 0), In: rc.in, Out: rc.out, CR: rc.cr, CW: rc.cw}
+		rc.key = makeLedgerRecKey(copilotKeyPrefix, key, 0, 0)
+		recs = append(recs, rc)
+	}
+	return snap, recs
 }
 
 // readCopilotEvents reads `assistant_usage_events`; ok is false when the
@@ -200,10 +230,15 @@ func readCopilotDataSessions(ctx context.Context, dbPath, cacheDir string, pool 
 		if sessionID == "" {
 			continue
 		}
-		first := copilotRowMillis(row["created_at"])
+		// A session first seen whole is placed at its last update, as the
+		// per-request sources record it: OTEL copies without a session ID
+		// are matched against it by time and tokens.
 		last := copilotRowMillis(row["updated_at"])
 		if last == 0 {
 			last = copilotRowMillis(row["timestamp"])
+		}
+		if last == 0 {
+			last = copilotRowMillis(row["created_at"])
 		}
 		cr := firstInt64(row, "total_cached_tokens", "cache_read_tokens", "cached_input_tokens")
 		cw := firstInt64(row, "total_cache_write_tokens", "cache_write_tokens")
@@ -215,7 +250,7 @@ func readCopilotDataSessions(ctx context.Context, dbPath, cacheDir string, pool 
 		out = append(out, cumRow{
 			Key:     copilotSessionLedgerKey(sessionID),
 			Model:   intern(pool, copilotFirstString(row, "model")),
-			FirstAt: first,
+			FirstAt: last,
 			LastAt:  last,
 			Calls:   firstInt64(row, "total_requests", "request_count", "turn_count"),
 			In:      in,

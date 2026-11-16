@@ -177,6 +177,63 @@ func TestScanCopilotDataSessionsDeltaAcrossDays(t *testing.T) {
 	}
 }
 
+// A cache written before data.db `sessions` went through the ledger holds
+// one whole-total record per session and no snapshot. The first scan after
+// the upgrade keeps that record on its day and adds only the growth.
+func TestCopilotSessionsLegacyCacheBecomesBaseline(t *testing.T) {
+	day15 := time.Date(2026, 11, 15, 10, 0, 0, 0, time.Local)
+	day16 := time.Date(2026, 11, 16, 10, 0, 0, 0, time.Local)
+	model := "gpt-5.3-codex"
+	old := &fileState{tool: ToolCopilot, recs: []rec{{
+		at: day15.UnixMilli(), model: &model, in: 1000, reqs: 1,
+		key: makeCopilotRecKey("s1", ""),
+	}}}
+	ledger, oldRecs := copilotSessionsBaseline(old)
+	rows := []cumRow{{
+		Key: copilotSessionLedgerKey("s1"), Model: &model,
+		FirstAt: day16.UnixMilli(), LastAt: day16.UnixMilli(), Calls: 2, In: 1500,
+	}}
+	recs, snap := applyCumulativeRows(rows, ledger, oldRecs, copilotKeyPrefix, day16.UnixMilli())
+	s := &Scanner{files: map[string]*fileState{"/h/.copilot/data.db": {tool: ToolCopilot, recs: recs, ledgerPrev: snap}}}
+	if got := s.Summary(RangeToday, day15).ByTool[ToolCopilot]; got.Input != 1000 || got.Requests != 1 {
+		t.Fatalf("15th = %+v, want in=1000 reqs=1 (kept from the old cache)", got)
+	}
+	if got := s.Summary(RangeToday, day16).ByTool[ToolCopilot]; got.Input != 500 || got.Requests != 1 {
+		t.Fatalf("16th = %+v, want in=500 reqs=1 (only the growth)", got)
+	}
+}
+
+// A session first seen whole sits at its last update, so a flat OTEL copy
+// of the same request (no session ID) still collapses into it.
+func TestCopilotSessionsAndAnonymousOTELCountOnce(t *testing.T) {
+	if _, err := os.Stat(sqlite3Path); err != nil {
+		t.Skip("sqlite3 not installed")
+	}
+	home := t.TempDir()
+	dataDB := filepath.Join(home, ".copilot", "data.db")
+	if err := os.MkdirAll(filepath.Dir(dataDB), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runSQLite(t, dataDB, `
+		CREATE TABLE sessions (
+			id TEXT PRIMARY KEY, created_at TEXT, updated_at TEXT, model TEXT,
+			total_input_tokens INTEGER, total_output_tokens INTEGER, total_requests INTEGER
+		);
+		INSERT INTO sessions VALUES ('s1', '2026-11-16T09:00:00Z', '2026-11-16T10:00:00Z', 'gpt-5.3-codex', 300, 0, 1);
+	`)
+	writeTestFile(t, filepath.Join(home, ".copilot", "otel", "events.jsonl"), []byte(
+		`{"id":"otel-1","timestamp":"2026-11-16T10:00:00Z","model":"gpt-5.3-codex","usage":{"input_tokens":300,"output_tokens":0}}`+"\n",
+	))
+	s := NewScanner(home, t.TempDir())
+	if err := s.Scan(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	got := s.Summary(RangeAll, time.Date(2026, 11, 17, 0, 0, 0, 0, time.UTC)).ByTool[ToolCopilot]
+	if got.Input != 300 || got.Requests != 1 {
+		t.Fatalf("copilot = %+v, want in=300 reqs=1", got)
+	}
+}
+
 func TestScanCopilotSQLite(t *testing.T) {
 	if _, err := os.Stat(sqlite3Path); err != nil {
 		t.Skip("sqlite3 not installed")
