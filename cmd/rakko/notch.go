@@ -111,13 +111,19 @@ func (a *shelf) shellVisibleOnNotch(now time.Time) bool {
 		a.pinReturning || a.petReturning || (a.dragging && !a.ownDrag)
 }
 
+// fullscreenSuppressed reports whether a foreign fullscreen app owns the
+// display while the user has not explicitly opened the shelf panel.
+func (a *shelf) fullscreenSuppressed() bool {
+	return a.winH != 0 && !a.visible && foregroundFullscreen()
+}
+
 // overHoverAnchor reports whether p lies in the hover trigger for the shell.
 // When an idle notch draws nothing (notchTopEdgeHoverOnly), an unseen 36pt
 // zone would cover a maximized window's tabs or title bar, so the idle shell
 // triggers only at the screen's top edge (notchEdgeHoverH); once anything is
 // drawn on the shell, the full overAnchor zone keeps holding it.
 func (a *shelf) overHoverAnchor(p mygo.Point, now time.Time) bool {
-	if a.winH != 0 && !a.shellVisibleOnNotch(now) && foregroundFullscreen() {
+	if a.fullscreenSuppressed() {
 		return false
 	}
 	if a.island || !notchTopEdgeHoverOnly || a.shellVisibleOnNotch(now) {
@@ -1039,6 +1045,9 @@ func (a *shelf) overlayAcceptsMouse() bool {
 	if a.winH == 0 {
 		return wanted
 	}
+	if a.fullscreenSuppressed() {
+		return false
+	}
 	if toolsDragKeepsMouse && a.toolsDragActive() {
 		return true
 	}
@@ -1051,9 +1060,6 @@ func (a *shelf) overlayAcceptsMouse() bool {
 		// whatever is under the strip. The island's resting capsule is a
 		// real, visible target and takes presses on its own shape, except
 		// while a foreign fullscreen app owns the display.
-		if foregroundFullscreen() {
-			return false
-		}
 		return a.island && a.overShell(p)
 	}
 	if a.overShell(p) || a.overBelow(p) || a.overAppsPop(p) {

@@ -218,7 +218,8 @@ func (a *shelf) pointerDragged() {
 		a.place(p)
 	}
 	a.updateDragBand(p, true)
-	if !a.suppressed {
+	suppressedFS := a.fullscreenSuppressed()
+	if !a.suppressed && !suppressedFS {
 		a.setPeek(true)
 	}
 	// Collapsed pin strips wake on the drag event itself, not the 30 ms
@@ -229,7 +230,7 @@ func (a *shelf) pointerDragged() {
 	}
 	a.syncDragGuard()
 	a.syncMousePassThrough()
-	if a.dropHot && !a.visible {
+	if a.dropHot && !a.visible && !suppressedFS {
 		// 拖入首次触及刘海投放带时给一下力反馈，提示落点在顶部。
 		platform.HapticTick()
 		a.show(true)
@@ -315,21 +316,22 @@ func (a *shelf) monitorDrag(now time.Time) {
 	// zone, which reaches past the pill's own body. The app switcher holds
 	// the shell for its mode, not for the pointer.
 	holdPeek := overAnchor || a.pinReturning || a.petReturning || a.apps.on || (a.peeking && a.overPeekPill(p))
+	suppressedFS := a.fullscreenSuppressed()
 	// Dragging or hovering reveals the pill; only a click or a real incoming
 	// drag in the trigger zone can open the full panel.
-	if active || holdPeek {
+	if !suppressedFS && (active || holdPeek) {
 		if !a.suppressed || overAnchor {
 			a.setPeek(true)
 		}
 	}
 	a.syncDragGuard()
 	a.syncMousePassThrough()
-	if a.inBand && !a.suppressed && !a.visible {
+	if a.inBand && !a.suppressed && !a.visible && !suppressedFS {
 		// Incoming drags open immediately; empty-handed hover never does.
 		platform.HapticTick()
 		a.show(true)
 	}
-	if !active && !a.visible && !holdPeek {
+	if (!active && !a.visible && !holdPeek) || suppressedFS {
 		a.setPeek(false)
 	}
 	// 自动收起：仅拖拽唤出的托盘在未收到内容、光标离开面板与触发区
