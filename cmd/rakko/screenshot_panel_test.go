@@ -19,11 +19,18 @@ func TestPanelFullyOpenForCapture(t *testing.T) {
 	if !a.panelFullyOpenForCapture() {
 		t.Fatal("fully open stable panel should stay open")
 	}
+	// Opened from the hover pill: the pointer still rests on the notch, so
+	// peeking stays set while the panel is fully open (user report 11-17).
+	hovered := &shelf{visible: true, peeking: true}
+	hovered.fx.openK = 1
+	if !hovered.panelFullyOpenForCapture() {
+		t.Fatal("a panel opened from the hover pill must stay open for the capture")
+	}
 	for name, mutate := range map[string]func(*shelf){
-		"hidden":  func(s *shelf) { s.visible = false },
-		"peeking": func(s *shelf) { s.peeking = true },
-		"closing": func(s *shelf) { s.closeAt = time.Now().Add(time.Second) },
-		"opening": func(s *shelf) { s.fx.openK = 0.8 },
+		"hidden":    func(s *shelf) { s.visible = false },
+		"peek pill": func(s *shelf) { s.visible, s.peeking = false, true },
+		"closing":   func(s *shelf) { s.closeAt = time.Now().Add(time.Second) },
+		"opening":   func(s *shelf) { s.fx.openK = 0.8 },
 	} {
 		s := &shelf{visible: true}
 		s.fx.openK = 1

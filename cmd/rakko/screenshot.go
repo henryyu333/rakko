@@ -243,8 +243,12 @@ func (a *shelf) startScreenshotOnMain() {
 	})
 }
 
+// panelFullyOpenForCapture reports a panel the capture keeps in the picture.
+// peeking is not part of it: a panel opened from the hover pill keeps that
+// flag while the pointer rests on the notch, but once visible the shell
+// follows openK alone. The open spring may rest a hair under 1.
 func (a *shelf) panelFullyOpenForCapture() bool {
-	return a.visible && !a.peeking && a.closeAt.IsZero() && a.fx.openK >= 1
+	return a.visible && a.closeAt.IsZero() && a.fx.openK >= 0.99
 }
 
 // freeze captures every display in parallel off the UI thread, decodes the
