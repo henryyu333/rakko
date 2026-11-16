@@ -2,6 +2,8 @@
 
 package main
 
+import "time"
+
 // What the Windows build offers: no system-permission walk (Windows has no
 // equivalent grants, so the page, its tray item and its guide step are
 // absent), and no move lock — mygo's Windows backend answers
@@ -28,4 +30,6 @@ const (
 	// Skip restoring desktop pins whose card ID is absent from this platform's
 	// catalog (e.g. airdrop from a Mac layout) while preserving their records.
 	skipUnknownPins = true
+	// Match shotPanelSettle when folding the panel before freezing the screen for OCR.
+	ocrPanelSettle = 300 * time.Millisecond
 )

@@ -2,6 +2,8 @@
 
 package main
 
+import "time"
+
 // What the Mac build offers that the Windows skeleton does not: the system
 // permission walk, and the overlay window's move lock (the island's own
 // drag gesture is the only way it moves).
@@ -22,4 +24,6 @@ const (
 	airDropSupported = true
 	// macOS still opens an empty placeholder pin for unknown card IDs.
 	skipUnknownPins = false
+	// macOS launches screencapture -i interactively, so folding the panel needs no pre-sleep.
+	ocrPanelSettle = 0 * time.Millisecond
 )

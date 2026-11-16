@@ -41,6 +41,7 @@ var (
 	ocrDispatch   = mygo.RunOnMain
 	ocrRecognize  = recognizeImageText
 	ocrAfterFunc  = time.AfterFunc
+	ocrSleep      = time.Sleep
 	ocrInvalidate = func(a *shelf) {
 		if a.win != nil {
 			a.win.Invalidate()
@@ -76,24 +77,29 @@ func (a *shelf) startScreenOCR() {
 		a.ocrBusyAt = time.Now()
 		a.ocrRunID++
 		keepPanel := a.panelFullyOpenForCapture()
+		hideFirst := !keepPanel && (a.visible || a.peeking || !a.closeAt.IsZero())
 		a.ocrRestoreKeys = false
-		if !keepPanel && (a.visible || a.peeking || !a.closeAt.IsZero()) {
+		if hideFirst {
 			a.hide(hideExplicit)
 		} else if keepPanel {
 			a.ocrRestoreKeys = a.win != nil || a.escHeld || a.spaceHeld || a.cmdCHeld
 			a.releaseKeys()
+			a.syncOnboardingKeys()
 		}
 		timer := ocrAfterFunc(ocrProgressDelay, func() {
 			ocrInvalidate(a) // wakes the live progress capsule
 		})
-		ocrWork(func() { a.screenOCRRound(timer) })
+		ocrWork(func() { a.screenOCRRound(timer, hideFirst) })
 	})
 }
 
 // screenOCRRound is the worker half: capture, recognize under the app's
 // one Vision lock, then hand the verdict to the main thread. Nothing it
 // fails to produce (Esc, denial, an unreadable shot) says anything.
-func (a *shelf) screenOCRRound(timer *time.Timer) {
+func (a *shelf) screenOCRRound(timer *time.Timer, waitPanel bool) {
+	if waitPanel && ocrPanelSettle > 0 {
+		ocrSleep(ocrPanelSettle)
+	}
 	path := filepath.Join(os.TempDir(), fmt.Sprintf("shelf-ocr-%d.png", os.Getpid()))
 	defer os.Remove(path)
 	if err := ocrCapture(path); err != nil {
@@ -127,6 +133,7 @@ func (a *shelf) finishScreenOCR(timer *time.Timer, text string, produced bool, e
 			a.holdKeys()
 		}
 	}
+	a.syncOnboardingKeys()
 	switch {
 	case err != nil:
 		a.report(err)

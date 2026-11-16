@@ -120,3 +120,148 @@ func TestScreenshotKeepsFullyOpenPanelAndBlocksOverlayReorder(t *testing.T) {
 		t.Fatalf("handBackApp called %d times while panel stayed open", handedBack)
 	}
 }
+
+func TestCaptureReleasesAndRestoresOnboardingKeys(t *testing.T) {
+	displays, capture, dispatch, work := shotDisplays, shotCaptureDisplay, shotDispatch, shotWork
+	front, preflight, openWin, clean := shotFrontPID, shotPreflight, shotOpenWindow, shotCleanTemp
+	cursor, normalWin, keyWin, actSelf := shotCursorPoint, shotNormalWindow, shotKeyWindow, shotActivateSelf
+	setLevel, orderOverlay, after := shotSetWindowLayer, shotOrderOverlay, shotAfter
+	oldReg, oldUnreg := registerKey, unregisterKey
+	op, oc, ow, od, oaf, oinv := ocrPreflight, ocrCapture, ocrWork, ocrDispatch, ocrAfterFunc, ocrInvalidate
+	t.Cleanup(func() {
+		shotDisplays, shotCaptureDisplay, shotDispatch, shotWork = displays, capture, dispatch, work
+		shotFrontPID, shotPreflight, shotOpenWindow, shotCleanTemp = front, preflight, openWin, clean
+		shotCursorPoint, shotNormalWindow, shotKeyWindow, shotActivateSelf = cursor, normalWin, keyWin, actSelf
+		shotSetWindowLayer, shotOrderOverlay, shotAfter = setLevel, orderOverlay, after
+		registerKey, unregisterKey = oldReg, oldUnreg
+		ocrPreflight, ocrCapture, ocrWork, ocrDispatch, ocrAfterFunc, ocrInvalidate = op, oc, ow, od, oaf, oinv
+	})
+
+	shotDispatch = func(fn func()) { fn() }
+	shotWork = func(fn func()) { fn() }
+	shotDisplays = func() []mygo.Display {
+		return []mygo.Display{{ID: 1, Bounds: mygo.Rectangle{Width: 1000, Height: 800}, WorkArea: mygo.Rectangle{Width: 1000, Height: 800}, ScaleFactor: 1, Primary: true}}
+	}
+	shotCursorPoint = func() mygo.Point { return mygo.Point{X: 100, Y: 100} }
+	shotNormalWindow = func() []platform.ScreenWindow { return nil }
+	shotKeyWindow = func(uintptr) bool { return false }
+	shotActivateSelf = func() {}
+	shotSetWindowLayer = func(uintptr, platform.Layer) {}
+	shotOrderOverlay = func(uintptr) {}
+	shotAfter = func(time.Duration, func()) *time.Timer { return time.NewTimer(time.Hour) }
+	shotPreflight = func() bool { return true }
+	shotFrontPID = func() int { return 4242 }
+	shotOpenWindow = func(*shotSession, int) {}
+	shotCleanTemp = func() { _ = os.MkdirAll(shotTempDir(), 0o700) }
+	shotCaptureDisplay = func(_ int, path string) error {
+		f, err := os.Create(path)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		img := image.NewRGBA(image.Rect(0, 0, 10, 10))
+		img.Set(0, 0, color.RGBA{A: 255})
+		return stdpng.Encode(f, img)
+	}
+
+	held := map[string]bool{}
+	registerKey = func(k string, _ func()) error { held[k] = true; return nil }
+	unregisterKey = func(k string) { delete(held, k) }
+
+	a := &shelf{visible: true, level: 2, tab: pageOnboarding}
+	a.settings.Onboarding.Pending = true
+	a.fx.openK = 1
+	a.syncOnboardingKeys()
+	for _, k := range onbKeys {
+		if !held[k] || !a.onbKeysHeld[k] {
+			t.Fatalf("expected onboarding key %q held before capture", k)
+		}
+	}
+
+	// Screenshot keeping panel must release onboarding keys and restore on close.
+	a.startScreenshotOnMain()
+	for _, k := range onbKeys {
+		if held[k] || a.onbKeysHeld[k] {
+			t.Fatalf("onboarding key %q stayed held during screenshot", k)
+		}
+	}
+	a.shot.close(true)
+	for _, k := range onbKeys {
+		if !held[k] || !a.onbKeysHeld[k] {
+			t.Fatalf("onboarding key %q not restored after screenshot close", k)
+		}
+	}
+
+	// Screen OCR keeping panel must release onboarding keys while scanning and restore after.
+	var pendingOCR func()
+	ocrPreflight = func() bool { return true }
+	ocrDispatch = func(fn func()) { fn() }
+	ocrWork = func(fn func()) { pendingOCR = fn }
+	ocrCapture = func(string) error { return nil }
+	ocrAfterFunc = func(time.Duration, func()) *time.Timer { return time.NewTimer(time.Hour) }
+	ocrInvalidate = func(*shelf) {}
+
+	a.startScreenOCR()
+	if !a.ocrScan || pendingOCR == nil {
+		t.Fatal("screen OCR did not start")
+	}
+	for _, k := range onbKeys {
+		if held[k] || a.onbKeysHeld[k] {
+			t.Fatalf("onboarding key %q stayed held during screen OCR", k)
+		}
+	}
+	pendingOCR()
+	for _, k := range onbKeys {
+		if !held[k] || !a.onbKeysHeld[k] {
+			t.Fatalf("onboarding key %q not restored after screen OCR", k)
+		}
+	}
+
+	// If the user leaves onboarding before OCR finishes, keys stay released.
+	pendingOCR = nil
+	a.startScreenOCR()
+	a.tab = pageHome
+	pendingOCR()
+	for _, k := range onbKeys {
+		if held[k] || a.onbKeysHeld[k] {
+			t.Fatalf("onboarding key %q restored after leaving onboarding page", k)
+		}
+	}
+}
+
+func TestScreenOCRSettleWaitOnlyWhenHidingPanel(t *testing.T) {
+	op, oc, ow, od, oaf, osleep, oinv := ocrPreflight, ocrCapture, ocrWork, ocrDispatch, ocrAfterFunc, ocrSleep, ocrInvalidate
+	t.Cleanup(func() {
+		ocrPreflight, ocrCapture, ocrWork, ocrDispatch, ocrAfterFunc, ocrSleep, ocrInvalidate = op, oc, ow, od, oaf, osleep, oinv
+	})
+
+	ocrPreflight = func() bool { return true }
+	ocrDispatch = func(fn func()) { fn() }
+	ocrWork = func(fn func()) { fn() }
+	ocrCapture = func(string) error { return nil }
+	ocrAfterFunc = func(time.Duration, func()) *time.Timer { return time.NewTimer(time.Hour) }
+	ocrInvalidate = func(*shelf) {}
+
+	var sleeps []time.Duration
+	ocrSleep = func(d time.Duration) { sleeps = append(sleeps, d) }
+
+	// Fully open panel stays open -> never sleeps before capture.
+	a := &shelf{visible: true}
+	a.fx.openK = 1
+	a.startScreenOCR()
+	if len(sleeps) != 0 {
+		t.Fatalf("keepPanel slept %v, want no sleep", sleeps)
+	}
+
+	// Peeking/opening panel must hide first -> sleeps ocrPanelSettle iff > 0.
+	sleeps = nil
+	b := &shelf{peeking: true}
+	b.startScreenOCR()
+	if ocrPanelSettle > 0 {
+		if len(sleeps) != 1 || sleeps[0] != ocrPanelSettle {
+			t.Fatalf("hideFirst sleeps = %v, want [%v]", sleeps, ocrPanelSettle)
+		}
+	} else if len(sleeps) != 0 {
+		t.Fatalf("hideFirst slept %v when ocrPanelSettle==0", sleeps)
+	}
+}

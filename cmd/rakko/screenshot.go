@@ -229,6 +229,7 @@ func (a *shelf) startScreenshotOnMain() {
 	} else if keepPanel {
 		s.releasedKeys = a.win != nil || a.escHeld || a.spaceHeld || a.cmdCHeld
 		a.releaseKeys()
+		a.syncOnboardingKeys()
 	}
 	shotWork(func() {
 		if hideFirst {
@@ -547,6 +548,7 @@ func (s *shotSession) close(restore bool) {
 	if s.a.win != nil {
 		s.a.win.Invalidate()
 	}
+	s.a.syncOnboardingKeys()
 	if s.a.visible {
 		if s.a.focusMode {
 			if s.a.win != nil {

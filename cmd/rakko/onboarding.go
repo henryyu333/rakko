@@ -546,7 +546,7 @@ var onbKeys = []string{"Left", "Right", "Enter"}
 // held only while the guide's page is the one drawn, so arrows and Enter
 // never reach the guide from another page or from a closed panel.
 func (a *shelf) syncOnboardingKeys() {
-	want := a.onboardingPending() && a.visible && a.currentLevel() == 2 && a.tab == pageOnboarding
+	want := a.onboardingPending() && a.visible && a.currentLevel() == 2 && a.tab == pageOnboarding && a.shot == nil && !a.ocrScan
 	for _, k := range onbKeys {
 		held := a.onbKeysHeld[k]
 		switch {

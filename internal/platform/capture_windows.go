@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"image"
 	"image/png"
-	"time"
 	"unsafe"
 
 	"github.com/egoist/mygo"
@@ -118,10 +117,6 @@ func encodePNG(img *image.RGBA) []byte {
 // macOS's screencapture -i. It blocks until the user picks or cancels and
 // may be called from any goroutine.
 func PickScreenRegion(path string) error {
-	// The caller folds its panel away just before asking; the fold runs on
-	// the main thread, so give it the same moment the screenshot overlay
-	// waits before freezing.
-	time.Sleep(pickPanelSettle)
 	done := make(chan error, 1)
 	mygo.RunOnMain(func() {
 		if err := openRegionPicker(path, done); err != nil {

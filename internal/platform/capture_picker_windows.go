@@ -14,17 +14,11 @@ package platform
 import (
 	"fmt"
 	"image"
-	"time"
 	"unsafe"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 )
-
-// pickPanelSettle is how long the picker waits before freezing, so a panel
-// that was folding away when the hotkey arrived is not in the picture.
-// It matches the screenshot overlay's own settle time.
-const pickPanelSettle = 300 * time.Millisecond
 
 // pickDisplay is one frozen display with its overlay window.
 type pickDisplay struct {
