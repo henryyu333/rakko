@@ -58,3 +58,29 @@ func TestNoteClearShellModes(t *testing.T) {
 		t.Fatalf("win island noteClearShell want Y=%d", wantY)
 	}
 }
+
+func TestNoteClearShellVerticalOverlap(t *testing.T) {
+	area := mygo.Rectangle{X: 0, Y: 0, Width: 1920, Height: 1040}
+
+	// Island in the lower half, note in the upper half: no vertical overlap, keep note in place.
+	lowIsland := &shelf{island: true, hasNotch: true, x: 960 - sheetW/2, islandTop: 800}
+	topNote := mygo.Rectangle{X: 800, Y: 50, Width: noteW, Height: noteH}
+	if got := lowIsland.noteClearShell(topNote, area); got != topNote {
+		t.Fatalf("non-overlapping note moved: got %+v, want %+v", got, topNote)
+	}
+
+	// Island in the lower half, note overlaps it and cannot fit below: flip above the island.
+	overlapLow := mygo.Rectangle{X: 800, Y: 680, Width: noteW, Height: noteH}
+	wantAbove := lowIsland.islandRect().Y - 6 - noteH
+	if got := lowIsland.noteClearShell(overlapLow, area); got.Y != wantAbove {
+		t.Fatalf("overlapping note with no room below: got Y=%d, want %d", got.Y, wantAbove)
+	}
+
+	// Island in the upper half, note overlaps it and fits below: push below the island.
+	highIsland := &shelf{island: true, hasNotch: true, x: 960 - sheetW/2, islandTop: 8}
+	overlapHigh := mygo.Rectangle{X: 800, Y: 0, Width: noteW, Height: noteH}
+	wantBelow := highIsland.islandRect().Y + highIsland.islandRect().Height + 6
+	if got := highIsland.noteClearShell(overlapHigh, area); got.Y != wantBelow {
+		t.Fatalf("overlapping note under top island: got Y=%d, want %d", got.Y, wantBelow)
+	}
+}

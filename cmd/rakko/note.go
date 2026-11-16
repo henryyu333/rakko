@@ -490,9 +490,25 @@ func (a *shelf) noteClearShell(frame, area mygo.Rectangle) mygo.Rectangle {
 	if frame.X >= shell.X+shell.Width || frame.X+frame.Width <= shell.X {
 		return frame
 	}
-	minY := shell.Y + shell.Height + shellGap
-	if frame.Y < minY {
-		frame.Y = min(minY, area.Y+max(0, area.Height-frame.Height))
+	if frame.Y >= shell.Y+shell.Height || frame.Y+frame.Height <= shell.Y {
+		return frame
+	}
+	belowY := shell.Y + shell.Height + shellGap
+	if belowY+frame.Height <= area.Y+area.Height {
+		frame.Y = belowY
+		return frame
+	}
+	aboveY := shell.Y - shellGap - frame.Height
+	if aboveY >= area.Y {
+		frame.Y = aboveY
+		return frame
+	}
+	spaceBelow := (area.Y + area.Height) - (shell.Y + shell.Height)
+	spaceAbove := shell.Y - area.Y
+	if spaceAbove > spaceBelow {
+		frame.Y = max(area.Y, aboveY)
+	} else {
+		frame.Y = min(belowY, area.Y+max(0, area.Height-frame.Height))
 	}
 	return frame
 }
