@@ -32,6 +32,7 @@ func toolsFixture(t *testing.T) (*shelf, *ui.Tester) {
 	}
 	t.Cleanup(func() { s.Close() })
 	a := &shelf{store: s, dataDir: t.TempDir(), tab: pageTools, level: 2, visible: true}
+	flushToolsLayoutOnCleanup(t, a)
 	return a, toolsTester(a)
 }
 

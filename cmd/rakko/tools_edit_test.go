@@ -23,6 +23,7 @@ func editPage(t *testing.T, cards []layout.Card) (*shelf, *toolsPage, *ui.Tester
 		dataDir: t.TempDir(), settings: settings.Default(), tab: pageTools, level: 2, visible: true,
 		thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{}, appNames: map[string]string{},
 	}
+	flushToolsLayoutOnCleanup(t, a)
 	a.ensurePages()
 	a.toolsLay = &layout.Layout{Version: layout.Version, Cards: cards}
 	p := a.toolsPage()

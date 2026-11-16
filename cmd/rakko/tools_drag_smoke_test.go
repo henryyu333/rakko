@@ -211,6 +211,7 @@ func TestToolsNativeDragOutStaysVisible(t *testing.T) {
 		progress: 1, topInset: 32, notchW: 180, notchH: 32, hasNotch: true,
 		x: area.X + area.Width/2 - sheetW/2, y: area.Y + 24,
 		dispBounds: mygo.Screen.PrimaryDisplay().Bounds}
+	flushToolsLayoutOnCleanup(t, a)
 	a.notchX, a.notchY = area.X+area.Width/2-90, a.y
 	var panelNum, arenaNum int
 	onMain(func() {

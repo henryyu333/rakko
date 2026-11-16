@@ -366,6 +366,7 @@ func setupToolsDragTester(t *testing.T, cards []layout.Card) (*shelf, *toolsPage
 
 	a = parityShelf()
 	a.dataDir = t.TempDir()
+	flushToolsLayoutOnCleanup(t, a)
 	a.settings = settings.Default()
 	a.tab = pageTools
 	a.level = 2

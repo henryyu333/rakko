@@ -354,6 +354,7 @@ func TestPinLayoutRoundTrip(t *testing.T) {
 func pinViewShelf(t *testing.T, cardID string, expanded bool) (*shelf, *pinItem, *ui.Tester) {
 	t.Helper()
 	a := &shelf{dataDir: t.TempDir()}
+	flushToolsLayoutOnCleanup(t, a)
 	it := a.pinRegister(&pinItem{
 		cardID: cardID, cardW: pinCardW, display: 1, edge: pinLeft, expanded: expanded,
 		frame: mygo.Rectangle{X: 0, Y: 300, Width: pinCardW, Height: pinCardH},
@@ -415,6 +416,7 @@ func TestToolsDragOutPins(t *testing.T) {
 	t.Cleanup(func() { cursorPoint = oldCursor })
 
 	a := &shelf{dataDir: t.TempDir()}
+	flushToolsLayoutOnCleanup(t, a)
 	a.setTools(layout.Default())
 	p := &toolsPage{host: a, editing: true}
 

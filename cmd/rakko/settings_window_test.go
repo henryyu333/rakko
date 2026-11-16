@@ -97,6 +97,7 @@ func newSettingsShelf(t *testing.T) (*shelf, *ui.Tester) {
 		thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{},
 		appNames: map[string]string{},
 	}
+	flushToolsLayoutOnCleanup(t, a)
 	return a, ui.NewTester(a.settingsView, settingsWidth, settingsHeight)
 }
 
@@ -685,6 +686,7 @@ func TestSettingsWindowSmoke(t *testing.T) {
 	// Give the smoke instance a writable data dir and real settings.
 	dir := t.TempDir()
 	a.dataDir = dir
+	flushToolsLayoutOnCleanup(t, a)
 	prefs, _ := settings.Load(dir)
 	// A fixture row for 排除的应用 so the shot shows an app icon + 移除.
 	prefs.ExcludedApps = []string{"com.apple.Safari"}

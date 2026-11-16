@@ -43,6 +43,24 @@ func parityWindow() *shelf {
 	return a
 }
 
+// flushToolsLayoutOnCleanup makes a test's data directory safe to delete: an
+// interactive tools gesture (a drop that reorders, a resize, a library tile
+// dragged into the grid) hands its durable layout.Write to layoutSaveQueue,
+// which finishes on its own goroutine. A test that returned first would leave
+// that write landing in the directory t.TempDir removes underneath it, so
+// every test driving those gestures waits here, before the directory's own
+// cleanup runs.
+func flushToolsLayoutOnCleanup(t *testing.T, shelves ...*shelf) {
+	t.Helper()
+	t.Cleanup(func() {
+		for _, a := range shelves {
+			if a != nil {
+				a.flushToolsLayout()
+			}
+		}
+	})
+}
+
 // TestClosedCountdownShowsItsWings: the manual promises the running (and
 // paused) countdown on the closed notch: a ring in the left wing and the
 // remaining time in the right one. peekView() has always drawn them, but
