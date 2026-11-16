@@ -311,6 +311,70 @@ func TestScanHermesCostOnlyReconcile(t *testing.T) {
 	}
 }
 
+func TestScanHermesSQLiteZeroResetAndLateCost(t *testing.T) {
+	if _, err := os.Stat(sqlite3Path); err != nil {
+		t.Skip("sqlite3 not installed")
+	}
+	home := t.TempDir()
+	cacheDir := t.TempDir()
+	hermesDB := filepath.Join(home, ".hermes", "state.db")
+	if err := os.MkdirAll(filepath.Dir(hermesDB), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	day1 := time.Date(2026, 11, 16, 10, 0, 0, 0, time.UTC)
+	day2 := time.Date(2026, 11, 17, 10, 0, 0, 0, time.UTC)
+	day3 := time.Date(2026, 11, 18, 10, 0, 0, 0, time.UTC)
+	d1 := strconv.FormatInt(day1.Unix(), 10)
+	d2 := strconv.FormatInt(day2.Unix(), 10)
+	d3 := strconv.FormatInt(day3.Unix(), 10)
+
+	runSQLite(t, hermesDB, `
+		CREATE TABLE sessions (id TEXT PRIMARY KEY, started_at REAL, ended_at REAL, last_activity_at REAL);
+		CREATE TABLE session_model_usage (
+			session_id TEXT, model TEXT, billing_provider TEXT, billing_base_url TEXT,
+			billing_mode TEXT, task TEXT, api_call_count INTEGER,
+			input_tokens INTEGER, output_tokens INTEGER, cache_read_tokens INTEGER,
+			cache_write_tokens INTEGER, estimated_cost_usd REAL, actual_cost_usd REAL,
+			first_seen REAL, last_seen REAL
+		);
+		INSERT INTO sessions VALUES ('szero', `+d1+`, NULL, `+d1+`);
+		INSERT INTO sessions VALUES ('scost', `+d1+`, NULL, `+d1+`);
+		INSERT INTO session_model_usage VALUES ('szero', 'claude-sonnet-4-5-20250929', 'p', 'u', '', '', 2, 100, 0, 0, 0, 0, 0.10, `+d1+`, `+d1+`);
+		INSERT INTO session_model_usage VALUES ('scost', 'claude-sonnet-4-5-20250929', 'p', 'u', '', '', 1, 100000, 0, 0, 0, 0, 0, `+d1+`, `+d1+`);
+	`)
+
+	scan := func() Totals {
+		s := NewScanner(home, cacheDir)
+		if err := s.Scan(context.Background(), nil); err != nil {
+			t.Fatal(err)
+		}
+		return s.Summary(RangeAll, day3).ByTool[ToolHermes]
+	}
+
+	_ = scan()
+
+	// Step 2: szero resets all counters to 0 (row stays in DB!); scost grows 100k -> 200k still without cost.
+	runSQLite(t, hermesDB, `
+		UPDATE session_model_usage SET api_call_count = 0, input_tokens = 0, actual_cost_usd = 0, last_seen = `+d2+` WHERE session_id = 'szero';
+		UPDATE session_model_usage SET api_call_count = 2, input_tokens = 200000, last_seen = `+d2+` WHERE session_id = 'scost';
+	`)
+	bumpFileMtime(t, hermesDB, 1)
+	_ = scan()
+
+	// Step 3: szero grows 0 -> 60 ($0.06) -> szero must total 160 ($0.16), NOT 60!
+	// scost receives actual_cost_usd = 0.20 without token/call change -> scost must total $0.20 (NOT $0.60+$0.20)!
+	runSQLite(t, hermesDB, `
+		UPDATE session_model_usage SET api_call_count = 1, input_tokens = 60, actual_cost_usd = 0.06, last_seen = `+d3+` WHERE session_id = 'szero';
+		UPDATE session_model_usage SET actual_cost_usd = 0.20, last_seen = `+d3+` WHERE session_id = 'scost';
+	`)
+	bumpFileMtime(t, hermesDB, 2)
+	got := scan()
+	// szero: in=160, reqs=3, cost=0.16; scost: in=200000, reqs=2, cost=0.20 -> total in=200160, reqs=5, cost=0.36.
+	if got.Input != 200160 || got.Requests != 5 || got.Unpriced != 0 || math.Abs(got.Cost-0.36) > 1e-9 {
+		t.Fatalf("SQLite Hermes zero-reset + late-cost = %+v, want in=200160 reqs=5 unpriced=0 cost=0.36", got)
+	}
+}
+
 func TestScanCopilotDedupeDBAndOTEL(t *testing.T) {
 	if _, err := os.Stat(sqlite3Path); err != nil {
 		t.Skip("sqlite3 not installed")
@@ -374,6 +438,82 @@ func TestScanCopilotDedupeDBAndOTEL(t *testing.T) {
 		got := s.Summary(RangeAll, time.Date(2026, 11, 17, 0, 0, 0, 0, time.UTC)).ByTool[ToolCopilot]
 		if got.Requests != 1 || got.Input != 300 || got.Output != 80 {
 			t.Fatalf("copilot db-priority = %+v, want reqs=1 in=300 out=80", got)
+		}
+	})
+
+	t.Run("otel_wrapper_id_vs_db_request_id_and_mismatched_two_dbs", func(t *testing.T) {
+		home := t.TempDir()
+		sessionStore := filepath.Join(home, ".copilot", "session-store.db")
+		dataDB := filepath.Join(home, ".copilot", "data.db")
+		if err := os.MkdirAll(filepath.Dir(sessionStore), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		// session-store.db has request_id='req-shared' for s1.
+		runSQLite(t, sessionStore, `
+			CREATE TABLE assistant_usage_events (
+				id INTEGER PRIMARY KEY, session_id TEXT, request_id TEXT,
+				created_at TEXT, model TEXT, input_tokens INTEGER, output_tokens INTEGER
+			);
+			INSERT INTO assistant_usage_events VALUES (1, 's1', 'req-shared', '2026-11-16T10:00:00Z', 'gpt-5.3-codex', 300, 80);
+		`)
+		// data.db has NO request_id column at all (mismatched ID fields between DBs),
+		// plus a `sessions` table or `assistant_usage_events` row for s1 AND s2!
+		runSQLite(t, dataDB, `
+			CREATE TABLE assistant_usage_events (
+				id INTEGER PRIMARY KEY, session_id TEXT,
+				created_at TEXT, model TEXT, input_tokens INTEGER, output_tokens INTEGER
+			);
+			INSERT INTO assistant_usage_events VALUES (99, 's1', '2026-11-16T10:00:00Z', 'gpt-5.3-codex', 300, 80);
+			INSERT INTO assistant_usage_events VALUES (100, 's2', '2026-11-16T10:02:00Z', 'gpt-5.3-codex', 200, 50);
+		`)
+		// OTEL has top-level `id: "otel-line-1"` AND `request_id: "req-shared"` (no session_id),
+		// plus an OTEL span for s2 (`gen_ai.conversation.id: "s2"`), plus OTEL-only s3.
+		writeTestFile(t, filepath.Join(home, ".copilot", "otel", "events.jsonl"), []byte(
+			`{"id":"otel-line-1","uuid":"u-line-1","request_id":"req-shared","timestamp":"2026-11-16T10:00:00Z","model":"gpt-5.3-codex","usage":{"input_tokens":300,"output_tokens":80}}`+"\n"+
+				`{"type":"span","spanId":"sp-s2","endTime":[1794823320,0],"attributes":{"gen_ai.operation.name":"chat","gen_ai.conversation.id":"s2","gen_ai.response.model":"gpt-5.3-codex","gen_ai.usage.input_tokens":200,"gen_ai.usage.output_tokens":50}}`+"\n"+
+				`{"type":"span","spanId":"sp-s3","endTime":[1794823400,0],"attributes":{"gen_ai.operation.name":"chat","gen_ai.conversation.id":"s3","gen_ai.response.model":"gpt-5.3-codex","gen_ai.usage.input_tokens":150,"gen_ai.usage.output_tokens":30}}`+"\n",
+		))
+		s := NewScanner(home, t.TempDir())
+		if err := s.Scan(context.Background(), nil); err != nil {
+			t.Fatal(err)
+		}
+		got := s.Summary(RangeAll, time.Date(2026, 11, 17, 0, 0, 0, 0, time.UTC)).ByTool[ToolCopilot]
+		if got.Requests != 3 || got.Input != 650 || got.Output != 160 {
+			t.Fatalf("copilot mismatched DBs + OTEL = %+v, want reqs=3 in=650 out=160", got)
+		}
+	})
+
+	t.Run("data_db_sessions_totals_fallback", func(t *testing.T) {
+		home := t.TempDir()
+		sessionStore := filepath.Join(home, ".copilot", "session-store.db")
+		dataDB := filepath.Join(home, ".copilot", "data.db")
+		if err := os.MkdirAll(filepath.Dir(sessionStore), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		runSQLite(t, sessionStore, `
+			CREATE TABLE assistant_usage_events (
+				id INTEGER PRIMARY KEY, session_id TEXT,
+				created_at TEXT, model TEXT, input_tokens INTEGER, output_tokens INTEGER
+			);
+			INSERT INTO assistant_usage_events VALUES (1, 's1', '2026-11-16T10:00:00Z', 'gpt-5.3-codex', 300, 80);
+		`)
+		// data.db has `sessions` aggregate table: s1 must be skipped (owned by session-store.db), s2 kept!
+		runSQLite(t, dataDB, `
+			CREATE TABLE sessions (
+				id TEXT PRIMARY KEY, created_at TEXT, model TEXT,
+				total_input_tokens INTEGER, total_output_tokens INTEGER, total_cached_tokens INTEGER
+			);
+			INSERT INTO sessions VALUES ('s1', '2026-11-16T10:00:00Z', 'gpt-5.3-codex', 300, 80, 0);
+			INSERT INTO sessions VALUES ('s2', '2026-11-16T11:00:00Z', 'gpt-5.3-codex', 500, 60, 400);
+		`)
+		s := NewScanner(home, t.TempDir())
+		if err := s.Scan(context.Background(), nil); err != nil {
+			t.Fatal(err)
+		}
+		got := s.Summary(RangeAll, time.Date(2026, 11, 17, 0, 0, 0, 0, time.UTC)).ByTool[ToolCopilot]
+		// s1: in=300, out=80; s2: in=500-400=100, out=60, cr=400 -> total in=400, out=140, cr=400, reqs=2.
+		if got.Requests != 2 || got.Input != 400 || got.Output != 140 || got.CacheRead != 400 {
+			t.Fatalf("copilot data.db sessions fallback = %+v, want reqs=2 in=400 out=140 cr=400", got)
 		}
 	})
 }

@@ -457,12 +457,23 @@ var registry = []toolEntry{
 		roots: func(home string) []rootSpec {
 			out := []rootSpec{{dir: joinHome(home, ".copilot", "otel"), match: "*.jsonl"}}
 			if p := strings.TrimSpace(os.Getenv("COPILOT_OTEL_FILE_EXPORTER_PATH")); p != "" {
-				out = append(out, rootSpec{dir: p, match: "*.jsonl"})
+				if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
+					clean := filepath.Clean(p)
+					out = append(out, rootSpec{
+						dir:   filepath.Dir(clean),
+						match: filepath.Base(clean),
+						filter: func(cand string) bool {
+							return filepath.Clean(cand) == clean
+						},
+					})
+				} else {
+					out = append(out, rootSpec{dir: p, match: "*.jsonl"})
+				}
 			}
 			return out
 		},
 		parseLine: func(path string, line []byte, pool map[string]*string, _ *fileState) (rec, string, bool) {
-			return parseFlexJSONLLine("copilot", path, line, pool)
+			return parseCopilotOTELLine(path, line, pool)
 		},
 	},
 	{
@@ -726,7 +737,14 @@ var registry = []toolEntry{
 			}
 			switch runtime.GOOS {
 			case "darwin":
-				out = append(out, joinHome(home, "Library", "Group Containers", "2BBY89MBSN.dev.warp"))
+				groupAppSupport := joinHome(home, "Library", "Group Containers", "2BBY89MBSN.dev.warp", "Library", "Application Support")
+				out = append(out,
+					filepath.Join(groupAppSupport, "dev.warp.Warp-Stable", "warp.sqlite"),
+					filepath.Join(groupAppSupport, "dev.warp.Warp-Preview", "warp.sqlite"),
+					joinHome(home, "Library", "Application Support", "dev.warp.Warp-Stable", "warp.sqlite"),
+					"/Applications/Warp.app",
+					joinHome(home, "Applications", "Warp.app"),
+				)
 			case "windows":
 				out = append(out,
 					filepath.Join(winLocalAppData(home), "warp", "Warp", "data"),

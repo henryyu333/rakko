@@ -2,8 +2,9 @@ package aiusage
 
 import (
 	"math"
+	"slices"
 	"sort"
-	"strings"
+	"strconv"
 	"time"
 )
 
@@ -159,31 +160,29 @@ func (s *Scanner) summarize(r Range, loc *time.Location, bounds []time.Time, fro
 	// Cross-file and intra-file dedupe lives here (not at parse time) so a
 	// duplicate record survives in every file that holds it: whichever copy
 	// shows up first wins, and deleting the "winner" can't erase the usage.
-	//
-	// For Copilot, SQLite DBs take precedence over OTEL JSONL when a shared
-	// request/message ID is unavailable.
-	hasCopilotDB := false
-	copilotDBHasFallback := false
-	for path, st := range s.files {
-		if st == nil || st.tool != ToolCopilot || st.unsupportedSchema || !strings.HasSuffix(path, ".db") {
-			continue
+	emit := func(tool Tool, rc rec) {
+		if rc.at < fromMs || rc.at >= toMs {
+			return
 		}
-		hasCopilotDB = true
-		for _, rc := range st.recs {
-			if strings.HasPrefix(rc.key, "copilot:ev|") {
-				copilotDBHasFallback = true
-				break
-			}
+		addRecord(&summary.Total, rc)
+		bt := summary.ByTool[tool]
+		addRecord(&bt, rc)
+		summary.ByTool[tool] = bt
+		if i := idx(rc.at); i >= 0 && i < len(summary.Buckets) {
+			summary.Buckets[i].Tokens[tool] += rc.tokens()
 		}
 	}
 
 	seen := map[Tool]map[string]bool{}
+	var copilotPaths []string
 	for path, st := range s.files {
 		if st == nil {
 			continue
 		}
-		isCopilotOTEL := st.tool == ToolCopilot && hasCopilotDB && !strings.HasSuffix(path, ".db")
-		if isCopilotOTEL && copilotDBHasFallback {
+		if st.tool == ToolCopilot {
+			if !st.unsupportedSchema {
+				copilotPaths = append(copilotPaths, path)
+			}
 			continue
 		}
 		keys := seen[st.tool]
@@ -192,28 +191,140 @@ func (s *Scanner) summarize(r Range, loc *time.Location, bounds []time.Time, fro
 			seen[st.tool] = keys
 		}
 		for _, rc := range st.recs {
-			if isCopilotOTEL && rc.key == "" {
-				continue
-			}
 			if rc.key != "" {
 				if keys[rc.key] {
 					continue
 				}
 				keys[rc.key] = true
 			}
-			if rc.at < fromMs || rc.at >= toMs {
+			emit(st.tool, rc)
+		}
+	}
+	if len(copilotPaths) > 0 {
+		summarizeCopilot(s.files, copilotPaths, emit)
+	}
+	return summary
+}
+
+// summarizeCopilot resolves multi-source Copilot usage deterministically:
+//  1. Source rank: session-store.db (1) > data.db (2) > OTEL JSONL (3).
+//  2. Session ownership: for every non-empty session_id, only the minimum rank
+//     with records for that session is kept; lower-rank sources for that
+//     session are skipped completely.
+//  3. Event & content deduplication: within the winning rank (or when
+//     session_id is missing on a lower-rank record such as flat OTEL logs),
+//     records deduplicate by unified event ID and by canonical content
+//     signature `(session_id, at_ms, model, in, out, cr, cw)` with multiplicity
+//     tracked per rank so genuine identical requests in one file stay intact
+//     while cross-source copies collapse.
+func summarizeCopilot(files map[string]*fileState, paths []string, emit func(Tool, rec)) {
+	slices.SortFunc(paths, func(a, b string) int {
+		ra, rb := copilotSourceRank(a), copilotSourceRank(b)
+		if ra != rb {
+			return ra - rb
+		}
+		if a < b {
+			return -1
+		}
+		if a > b {
+			return 1
+		}
+		return 0
+	})
+
+	minSessionRank := map[string]int{}
+	for _, p := range paths {
+		st := files[p]
+		if st == nil || len(st.recs) == 0 {
+			continue
+		}
+		rank := copilotSourceRank(p)
+		for _, rc := range st.recs {
+			sid, _, ok := parseCopilotRecKey(rc.key)
+			if !ok || sid == "" {
 				continue
 			}
-			addRecord(&summary.Total, rc)
-			bt := summary.ByTool[st.tool]
-			addRecord(&bt, rc)
-			summary.ByTool[st.tool] = bt
-			if i := idx(rc.at); i >= 0 && i < len(summary.Buckets) {
-				summary.Buckets[i].Tokens[st.tool] += rc.tokens()
+			if cur, exists := minSessionRank[sid]; !exists || rank < cur {
+				minSessionRank[sid] = rank
 			}
 		}
 	}
-	return summary
+
+	seenEventID := map[string]bool{}
+	// totalSigCounts tracks how many records with each anonymous content
+	// signature `(at_ms, model, in, out, cr, cw)` have already been emitted
+	// across higher-rank sources so sessionless lower-rank copies (e.g. OTEL
+	// lines lacking session_id) do not double count DB events.
+	emittedAnonSig := map[string]int{}
+
+	for i := 0; i < len(paths); {
+		rank := copilotSourceRank(paths[i])
+		j := i + 1
+		for j < len(paths) && copilotSourceRank(paths[j]) == rank {
+			j++
+		}
+
+		rankAddedAnon := map[string]int{}
+		rankSeenAnonOcc := map[string]bool{}
+		rankSeenSessOcc := map[string]bool{}
+
+		for _, p := range paths[i:j] {
+			st := files[p]
+			if st == nil {
+				continue
+			}
+			fileAnonOcc := map[string]int{}
+			fileSessOcc := map[string]int{}
+			for _, rc := range st.recs {
+				sid, evID, ok := parseCopilotRecKey(rc.key)
+				if !ok {
+					evID = rc.key
+				}
+				if sid != "" && minSessionRank[sid] < rank {
+					continue
+				}
+				if evID != "" {
+					if seenEventID[evID] {
+						continue
+					}
+				}
+				anonSig := copilotContentSig("", rc)
+				if sid == "" {
+					occ := fileAnonOcc[anonSig]
+					fileAnonOcc[anonSig] = occ + 1
+					if occ < emittedAnonSig[anonSig] {
+						continue
+					}
+					if evID == "" {
+						occKey := anonSig + "|" + strconv.Itoa(occ)
+						if rankSeenAnonOcc[occKey] {
+							continue
+						}
+						rankSeenAnonOcc[occKey] = true
+					}
+				} else if evID == "" {
+					sSig := copilotContentSig(sid, rc)
+					occ := fileSessOcc[sSig]
+					fileSessOcc[sSig] = occ + 1
+					occKey := sSig + "|" + strconv.Itoa(occ)
+					if rankSeenSessOcc[occKey] {
+						continue
+					}
+					rankSeenSessOcc[occKey] = true
+				}
+
+				if evID != "" {
+					seenEventID[evID] = true
+				}
+				rankAddedAnon[anonSig]++
+				emit(ToolCopilot, rc)
+			}
+		}
+		for sig, n := range rankAddedAnon {
+			emittedAnonSig[sig] += n
+		}
+		i = j
+	}
 }
 
 func addRecord(t *Totals, rc rec) {
@@ -222,7 +333,9 @@ func addRecord(t *Totals, rc rec) {
 	t.CacheRead += rc.cr
 	t.CacheWrite += rc.cw
 	reqs := rc.reqs
-	if reqs <= 0 {
+	if reqs == zeroReqs {
+		reqs = 0
+	} else if reqs <= 0 {
 		reqs = 1
 	}
 	t.Requests += reqs
@@ -232,10 +345,10 @@ func addRecord(t *Totals, rc rec) {
 		if c, ok := estimateCost(*rc.model, rc.in, rc.out, rc.cr, rc.cw); ok {
 			t.Cost += c
 		} else {
-			t.Unpriced++
+			t.Unpriced += reqs
 		}
 	} else {
-		t.Unpriced++
+		t.Unpriced += reqs
 	}
 }
 

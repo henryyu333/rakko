@@ -7,51 +7,175 @@ import (
 	"strings"
 )
 
-// Copilot CLI / Desktop SQLite usage:
-//   - ~/.copilot/session-store.db
-//   - ~/.copilot/data.db
+// Copilot CLI / Desktop multi-source usage:
+//   - Rank 1: ~/.copilot/session-store.db (`assistant_usage_events`)
+//   - Rank 2: ~/.copilot/data.db (`assistant_usage_events` or `sessions` totals)
+//   - Rank 3: ~/.copilot/otel/*.jsonl (+ COPILOT_OTEL_FILE_EXPORTER_PATH)
 //
-// Both may contain `assistant_usage_events` with per-request model, timestamp
-// (`created_at` or `timestamp`), and token counts (either in
-// `token_details_json` or top-level `input_tokens` / `output_tokens` /
-// `cache_read_tokens` / `cache_write_tokens` columns). Databases without
-// `assistant_usage_events` (e.g. session-store before telemetry was added)
-// report errUnsupportedDBSchema so they are not counted as readable data.
+// Source precedence & deduplication model:
+//  1. Session ownership: for every non-empty Copilot session_id, only the
+//     highest-rank source containing usage for that session contributes records;
+//     lower-rank sources for that session are ignored completely (solving
+//     mismatched ID columns between DBs or between DB and OTEL).
+//  2. Unified event identity: within the same rank or when session_id is absent,
+//     every source shares the exact same event ID priority
+//     (`service_request_id` > `api_call_id` > `message_id` > `request_id` >
+//     `gen_ai.response.id` > `event_id` > `uuid` > non-numeric `id` / `spanId`)
+//     and canonical content signature `(session_id, at_ms, model, in, out, cr, cw)`.
+//     At summary time, a lower-rank record without session_id is suppressed if
+//     either its event ID or its content signature (with multiplicity) was
+//     already emitted by a higher-rank source.
+
+const copilotKeyPrefix = "copilot\x00"
+
+func makeCopilotRecKey(sessionID, eventID string) string {
+	return copilotKeyPrefix + sessionID + "\x00" + eventID
+}
+
+func parseCopilotRecKey(k string) (sessionID, eventID string, ok bool) {
+	if !strings.HasPrefix(k, copilotKeyPrefix) {
+		return "", "", false
+	}
+	rest := k[len(copilotKeyPrefix):]
+	sep := strings.IndexByte(rest, '\x00')
+	if sep < 0 {
+		return "", "", false
+	}
+	return rest[:sep], rest[sep+1:], true
+}
+
+func copilotSourceRank(path string) int {
+	base := strings.ToLower(path)
+	if i := strings.LastIndexAny(base, `/\`); i >= 0 {
+		base = base[i+1:]
+	}
+	switch base {
+	case "session-store.db":
+		return 1
+	case "data.db":
+		return 2
+	default:
+		if strings.HasSuffix(base, ".db") {
+			return 2
+		}
+		return 3
+	}
+}
+
+func copilotContentSig(sessionID string, rc rec) string {
+	m := ""
+	if rc.model != nil {
+		m = *rc.model
+	}
+	return fmt.Sprintf("%s|%d|%s|%d|%d|%d|%d", sessionID, rc.at, m, rc.in, rc.out, rc.cr, rc.cw)
+}
 
 func readCopilotDB(ctx context.Context, dbPath, cacheDir string, pool map[string]*string) ([]rec, error) {
-	if err := requireSQLiteTable(ctx, "copilot", dbPath, cacheDir, "assistant_usage_events"); err != nil {
+	hasEvents, err := sqliteTableExists(ctx, "copilot", dbPath, cacheDir, "assistant_usage_events")
+	if err != nil {
 		return nil, err
+	}
+	if hasEvents {
+		var rows []map[string]any
+		if err := readSQLiteJSON(ctx, "copilot", dbPath, cacheDir, `SELECT * FROM assistant_usage_events`, &rows); err != nil {
+			return nil, err
+		}
+		out := make([]rec, 0, len(rows))
+		for _, row := range rows {
+			at := copilotRowMillis(row["created_at"])
+			if at == 0 {
+				at = copilotRowMillis(row["timestamp"])
+			}
+			if at == 0 {
+				continue
+			}
+			model, _ := row["model"].(string)
+			in, outTok, cr, cw := copilotRowTokens(row)
+			if in+outTok+cr+cw <= 0 {
+				continue
+			}
+			sessionID := copilotFirstString(row, "session_id", "sessionId", "conversation_id")
+			evID := copilotEventID(row)
+			out = append(out, rec{
+				at:    at,
+				model: intern(pool, model),
+				in:    in,
+				out:   outTok,
+				cr:    cr,
+				cw:    cw,
+				key:   makeCopilotRecKey(sessionID, evID),
+			})
+		}
+		return out, nil
 	}
 
+	// Fallback for `~/.copilot/data.db` builds that store per-session totals in
+	// `sessions` without `assistant_usage_events`.
+	if copilotSourceRank(dbPath) == 2 {
+		hasSessions, err := sqliteTableExists(ctx, "copilot", dbPath, cacheDir, "sessions")
+		if err != nil {
+			return nil, err
+		}
+		if hasSessions {
+			recs, supported, err := readCopilotDataSessions(ctx, dbPath, cacheDir, pool)
+			if err != nil {
+				return nil, err
+			}
+			if supported {
+				return recs, nil
+			}
+		}
+	}
+	return nil, errUnsupportedDBSchema
+}
+
+func readCopilotDataSessions(ctx context.Context, dbPath, cacheDir string, pool map[string]*string) ([]rec, bool, error) {
+	var cols []struct {
+		Name string `json:"name"`
+	}
+	if err := readSQLiteJSON(ctx, "copilot", dbPath, cacheDir, `PRAGMA table_info('sessions')`, &cols); err != nil {
+		return nil, false, err
+	}
+	hasTokenCol := false
+	for _, c := range cols {
+		if c.Name == "total_input_tokens" || c.Name == "input_tokens" {
+			hasTokenCol = true
+			break
+		}
+	}
+	if !hasTokenCol {
+		return nil, false, nil
+	}
 	var rows []map[string]any
-	if err := readSQLiteJSON(ctx, "copilot", dbPath, cacheDir, `SELECT * FROM assistant_usage_events`, &rows); err != nil {
-		return nil, err
+	if err := readSQLiteJSON(ctx, "copilot", dbPath, cacheDir, `SELECT * FROM sessions`, &rows); err != nil {
+		return nil, false, err
 	}
 	out := make([]rec, 0, len(rows))
-	sigCount := make(map[string]int, len(rows))
 	for _, row := range rows {
-		at := copilotRowMillis(row["created_at"])
+		at := copilotRowMillis(row["updated_at"])
+		if at == 0 {
+			at = copilotRowMillis(row["created_at"])
+		}
 		if at == 0 {
 			at = copilotRowMillis(row["timestamp"])
 		}
 		if at == 0 {
 			continue
 		}
-		model, _ := row["model"].(string)
-		in, outTok, cr, cw := copilotRowTokens(row)
+		cr := firstInt64(row, "total_cached_tokens", "cache_read_tokens", "cached_input_tokens")
+		cw := firstInt64(row, "total_cache_write_tokens", "cache_write_tokens")
+		rawIn := firstInt64(row, "total_input_tokens", "input_tokens")
+		in := rawIn
+		if _, hasTotal := row["total_input_tokens"]; hasTotal && rawIn >= cr+cw {
+			in = rawIn - cr - cw
+		}
+		outTok := firstInt64(row, "total_output_tokens", "output_tokens")
 		if in+outTok+cr+cw <= 0 {
 			continue
 		}
-		var key string
-		if evID := copilotEventID(row); evID != "" {
-			key = "copilot:" + evID
-		} else {
-			sessionID, _ := row["session_id"].(string)
-			sig := fmt.Sprintf("%s|%d|%s|%d|%d|%d|%d", sessionID, at, model, in, outTok, cr, cw)
-			occ := sigCount[sig]
-			sigCount[sig] = occ + 1
-			key = fmt.Sprintf("copilot:ev|%s|%d", sig, occ)
-		}
+		model := copilotFirstString(row, "model")
+		sessionID := copilotFirstString(row, "id", "session_id")
+		reqs := firstInt64(row, "total_requests", "request_count", "turn_count")
 		out = append(out, rec{
 			at:    at,
 			model: intern(pool, model),
@@ -59,38 +183,187 @@ func readCopilotDB(ctx context.Context, dbPath, cacheDir string, pool map[string
 			out:   outTok,
 			cr:    cr,
 			cw:    cw,
-			key:   key,
+			key:   makeCopilotRecKey(sessionID, ""),
+			reqs:  reqs,
 		})
 	}
-	return out, nil
+	return out, true, nil
 }
 
-func copilotEventID(row map[string]any) string {
-	for _, k := range []string{"message_id", "request_id", "event_id", "uuid"} {
-		if s, ok := row[k].(string); ok {
+// parseCopilotOTELLine parses both flat JSONL usage events and standard OTel
+// GenAI `type:"span"` chat lines exported via COPILOT_OTEL_FILE_EXPORTER_PATH,
+// using the exact same identity priority and key format as readCopilotDB.
+func parseCopilotOTELLine(_ string, line []byte, pool map[string]*string) (r rec, key string, ok bool) {
+	var m map[string]any
+	if json.Unmarshal(line, &m) != nil || len(m) == 0 {
+		return r, "", false
+	}
+	attrs, _ := m["attributes"].(map[string]any)
+	msg, _ := m["message"].(map[string]any)
+
+	in, outTok, cr, cw := copilotOTELTokens(m, attrs, msg)
+	if in+outTok+cr+cw <= 0 {
+		return r, "", false
+	}
+
+	at := copilotOTELMillis(m)
+	if at == 0 {
+		return r, "", false
+	}
+
+	model := copilotFirstString(m, "model")
+	if model == "" && attrs != nil {
+		model = copilotFirstString(attrs, "gen_ai.response.model", "gen_ai.request.model", "model")
+	}
+	if model == "" && msg != nil {
+		model = copilotFirstString(msg, "model")
+	}
+
+	sessionID := copilotFirstString(m, "session_id", "sessionId", "conversation_id")
+	if sessionID == "" && attrs != nil {
+		sessionID = copilotFirstString(attrs, "gen_ai.conversation.id", "github.copilot.session_id", "session_id")
+	}
+
+	evID := copilotUnifiedID(m, attrs, msg)
+	r = rec{
+		at:    at,
+		model: intern(pool, model),
+		in:    in,
+		out:   outTok,
+		cr:    cr,
+		cw:    cw,
+	}
+	if c, hasCost := copilotFloat64(m["cost"]); hasCost {
+		r.cost, r.priced = c, true
+	}
+	return r, makeCopilotRecKey(sessionID, evID), true
+}
+
+func copilotOTELTokens(m, attrs, msg map[string]any) (in, out, cr, cw int64) {
+	for _, container := range []map[string]any{m, msg} {
+		if container == nil {
+			continue
+		}
+		for _, field := range []string{"usage", "tokens"} {
+			if sub, ok := container[field].(map[string]any); ok {
+				raw, err := json.Marshal(sub)
+				if err == nil {
+					var fu flexUsageJSON
+					if json.Unmarshal(raw, &fu) == nil {
+						in, out, cr, cw = fu.toCounts()
+						if in+out+cr+cw > 0 {
+							return in, out, cr, cw
+						}
+					}
+				}
+			}
+		}
+	}
+	if attrs != nil {
+		if op := copilotFirstString(attrs, "gen_ai.operation.name"); op != "" && op != "chat" {
+			return 0, 0, 0, 0
+		}
+		cr = firstInt64(attrs, "gen_ai.usage.cache_read.input_tokens", "gen_ai.usage.cache_read_input_tokens")
+		cw = firstInt64(attrs, "gen_ai.usage.cache_creation.input_tokens", "gen_ai.usage.cache_write_input_tokens")
+		rawIn := firstInt64(attrs, "gen_ai.usage.input_tokens", "gen_ai.usage.prompt_tokens")
+		in = rawIn
+		if rawIn >= cr+cw && (cr > 0 || cw > 0) {
+			in = rawIn - cr - cw
+		}
+		out = firstInt64(attrs, "gen_ai.usage.output_tokens", "gen_ai.usage.completion_tokens")
+	}
+	return in, out, cr, cw
+}
+
+func copilotOTELMillis(m map[string]any) int64 {
+	for _, k := range []string{"timestamp", "created_at", "time"} {
+		if at := copilotRowMillis(m[k]); at > 0 {
+			return at
+		}
+	}
+	for _, k := range []string{"endTime", "startTime"} {
+		if arr, ok := m[k].([]any); ok && len(arr) >= 1 {
+			sec := copilotInt64(arr[0])
+			var nsec int64
+			if len(arr) >= 2 {
+				nsec = copilotInt64(arr[1])
+			}
+			if sec > 0 {
+				return sec*1000 + nsec/1e6
+			}
+		}
+	}
+	return 0
+}
+
+func copilotFloat64(v any) (float64, bool) {
+	if f, ok := v.(float64); ok {
+		return f, true
+	}
+	return 0, false
+}
+
+func copilotFirstString(m map[string]any, keys ...string) string {
+	if m == nil {
+		return ""
+	}
+	for _, k := range keys {
+		if s, ok := m[k].(string); ok {
 			if s = strings.TrimSpace(s); s != "" {
 				return s
 			}
 		}
 	}
-	if s, ok := row["id"].(string); ok {
-		s = strings.TrimSpace(s)
-		if s != "" && !isAllDigits(s) {
+	return ""
+}
+
+// copilotEventID and copilotUnifiedID apply the single shared priority order
+// across SQLite rows and OTEL events so identical requests yield the same ID
+// even when OTEL also carries a wrapper `id` / `spanId` or `uuid`.
+func copilotEventID(row map[string]any) string {
+	return copilotUnifiedID(row, nil, nil)
+}
+
+func copilotUnifiedID(top, attrs, msg map[string]any) string {
+	// 1. Canonical cross-source request / message IDs first.
+	if s := copilotFirstString(top, "service_request_id", "serviceRequestId"); s != "" {
+		return s
+	}
+	if s := copilotFirstString(attrs, "github.copilot.service_request_id", "service_request_id"); s != "" {
+		return s
+	}
+	if s := copilotFirstString(top, "api_call_id", "apiCallId", "message_id", "messageId", "request_id", "requestId"); s != "" {
+		return s
+	}
+	if s := copilotFirstString(attrs, "gen_ai.response.id", "message_id", "request_id"); s != "" {
+		return s
+	}
+	if msg != nil {
+		if s := copilotFirstString(msg, "id", "message_id", "request_id"); s != "" && !isAllDigits(s) {
 			return s
 		}
+	}
+	// 2. Generic event / span identifiers when canonical message/request IDs are absent.
+	if s := copilotFirstString(top, "event_id", "eventId", "uuid"); s != "" {
+		return s
+	}
+	if s := copilotFirstString(top, "id"); s != "" && !isAllDigits(s) {
+		return s
+	}
+	if s := copilotFirstString(top, "spanId", "span_id"); s != "" {
+		return s
 	}
 	return ""
 }
 
 func isAllDigits(s string) bool {
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		if s[i] < '0' || s[i] > '9' {
 			return false
 		}
 	}
 	return len(s) > 0
 }
-
 func copilotRowMillis(v any) int64 {
 	switch x := v.(type) {
 	case string:

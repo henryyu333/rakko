@@ -35,7 +35,7 @@ type rec struct {
 	cost            float64
 	priced          bool
 	key             string
-	reqs            int64 // 0 means 1
+	reqs            int64 // default 0 means 1 request; -1 means 0 requests (cost-only adjustment)
 }
 
 func (r rec) tokens() int64 { return r.in + r.out + r.cr + r.cw }
@@ -647,9 +647,10 @@ type cacheJSON struct {
 	Files map[string]*cacheFileJSON `json:"files"`
 }
 
-// cacheVersion identifies the cache file's format and semantics; version 4
-// adds unsupported-schema markers and per-row Hermes record ownership.
-const cacheVersion = 4
+// cacheVersion identifies the cache file's format and semantics; version 5
+// stores Hermes per-epoch ownership in rec.key (without duplicating records in
+// hermesSnapshot) and encodes 0-request cost-reconciliation records.
+const cacheVersion = 5
 
 func (s *Scanner) cachePath() string { return filepath.Join(s.cacheDir, cacheName) }
 
@@ -732,8 +733,12 @@ func decodeRec(tup []json.RawMessage, pool map[string]*string) (rec, bool) {
 	r.in, r.out, r.cr, r.cw = in, out, cr, cw
 	r.cost, r.priced, r.key = cost, priced != 0, key
 	if len(tup) >= 10 {
-		if reqs, err := rawI64(tup[9]); err == nil && reqs > 0 {
-			r.reqs = reqs
+		if reqs, err := rawI64(tup[9]); err == nil {
+			if reqs == 0 {
+				r.reqs = -1
+			} else if reqs > 0 {
+				r.reqs = reqs
+			}
 		}
 	}
 	return r, true
@@ -756,6 +761,15 @@ func rawStr(b json.RawMessage) string {
 		return ""
 	}
 	return s
+}
+
+func appendJSONString(buf *bytes.Buffer, s string) {
+	b, err := json.Marshal(s)
+	if err != nil {
+		buf.WriteString(`""`)
+		return
+	}
+	buf.Write(b)
 }
 
 // saveCache writes files to cacheDir atomically (temp file + rename).
@@ -793,16 +807,18 @@ func (s *Scanner) saveCache(ctx context.Context, files map[string]*fileState) {
 			buf.WriteByte(',')
 		}
 		first = false
-		buf.WriteString(strconv.Quote(p))
-		buf.WriteString(`:{`)
-		buf.WriteString(`"t":` + strconv.Quote(string(st.tool)))
+		appendJSONString(&buf, p)
+		buf.WriteString(`:{"t":`)
+		appendJSONString(&buf, string(st.tool))
 		buf.WriteString(`,"s":` + strconv.FormatInt(st.size, 10))
 		buf.WriteString(`,"o":` + strconv.FormatInt(st.offset, 10))
 		buf.WriteString(`,"m":` + strconv.FormatInt(st.modNano, 10))
 		buf.WriteString(`,"ls":` + strconv.FormatInt(st.tailStart, 10))
 		buf.WriteString(`,"lh":` + strconv.FormatUint(st.tailSum, 10))
 		if st.tail.havePrev || st.tail.model != "" {
-			buf.WriteString(`,"c":{"m":` + strconv.Quote(st.tail.model) + `,"p":[`)
+			buf.WriteString(`,"c":{"m":`)
+			appendJSONString(&buf, st.tail.model)
+			buf.WriteString(`,"p":[`)
 			for i, v := range st.tail.prev {
 				if i > 0 {
 					buf.WriteByte(',')
@@ -837,7 +853,7 @@ func (s *Scanner) saveCache(ctx context.Context, files map[string]*fileState) {
 			if r.model != nil {
 				m = *r.model
 			}
-			buf.WriteString(strconv.Quote(m))
+			appendJSONString(&buf, m)
 			buf.WriteByte(',')
 			buf.WriteString(strconv.FormatInt(r.in, 10))
 			buf.WriteByte(',')
@@ -859,8 +875,10 @@ func (s *Scanner) saveCache(ctx context.Context, files map[string]*fileState) {
 			}
 			buf.WriteString(strconv.Itoa(p))
 			buf.WriteByte(',')
-			buf.WriteString(strconv.Quote(r.key))
-			if r.reqs > 1 {
+			appendJSONString(&buf, r.key)
+			if r.reqs == -1 {
+				buf.WriteString(`,0`)
+			} else if r.reqs > 1 {
 				buf.WriteByte(',')
 				buf.WriteString(strconv.FormatInt(r.reqs, 10))
 			}

@@ -242,7 +242,11 @@ func TestDetectIgnoresBareRootDirs(t *testing.T) {
 		ToolKiro:         {joinHome(home, ".kiro"), filepath.Join(appSupportDir(home), "Kiro"), filepath.Join(winLocalAppData(home), "Kiro")},
 		ToolTrae:         {joinHome(home, ".trae"), filepath.Join(appSupportDir(home), "Trae")},
 		ToolCursor:       {joinHome(home, ".cursor"), filepath.Join(winAppData(home), "Cursor")},
-		ToolWarp:         {joinHome(home, ".warp"), filepath.Join(winLocalAppData(home), "warp")},
+		ToolWarp: {
+			joinHome(home, ".warp"),
+			joinHome(home, "Library", "Group Containers", "2BBY89MBSN.dev.warp"),
+			filepath.Join(winLocalAppData(home), "warp"),
+		},
 	}
 	for tl, forbidden := range bareRoots {
 		entry := registryByTool[tl]
@@ -257,6 +261,7 @@ func TestDetectIgnoresBareRootDirs(t *testing.T) {
 	for _, dir := range []string{
 		filepath.Join(appSupportDir(home), "CherryStudio", "Cache"),
 		filepath.Join(appSupportDir(home), "Kiro", "logs"),
+		joinHome(home, "Library", "Group Containers", "2BBY89MBSN.dev.warp"),
 	} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatal(err)
@@ -266,7 +271,7 @@ func TestDetectIgnoresBareRootDirs(t *testing.T) {
 	if err := s.Scan(context.Background(), nil); err != nil {
 		t.Fatal(err)
 	}
-	for _, tl := range []Tool{ToolCherryStudio, ToolKiro} {
+	for _, tl := range []Tool{ToolCherryStudio, ToolKiro, ToolWarp} {
 		// Only assert when host /Applications doesn't have the desktop app.
 		if tl == ToolCherryStudio {
 			if _, err := os.Stat("/Applications/Cherry Studio.app"); err == nil {
@@ -274,6 +279,10 @@ func TestDetectIgnoresBareRootDirs(t *testing.T) {
 			}
 		} else if tl == ToolKiro {
 			if _, err := os.Stat("/Applications/Kiro.app"); err == nil {
+				continue
+			}
+		} else if tl == ToolWarp {
+			if _, err := os.Stat("/Applications/Warp.app"); err == nil {
 				continue
 			}
 		}
