@@ -198,6 +198,12 @@ func addRecord(t *Totals, rc rec) {
 	t.Requests++
 	if rc.priced {
 		t.Cost += rc.cost
+	} else if rc.model != nil {
+		if c, ok := estimateCost(*rc.model, rc.in, rc.out, rc.cr, rc.cw); ok {
+			t.Cost += c
+		} else {
+			t.Unpriced++
+		}
 	} else {
 		t.Unpriced++
 	}

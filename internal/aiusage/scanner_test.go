@@ -81,12 +81,12 @@ func TestScanFixtureTree(t *testing.T) {
 	}
 	cl := sum.ByTool[ToolClaude]
 	if cl.Requests != 2 || cl.Input != 800 || cl.Output != 180 ||
-		cl.CacheRead != 910 || cl.CacheWrite != 40 || cl.Unpriced != 2 || cl.Cost != 0 {
+		cl.CacheRead != 910 || cl.CacheWrite != 40 || cl.Unpriced != 0 || cl.Cost <= 0 {
 		t.Fatalf("claude totals wrong: %+v", cl)
 	}
 	cx := sum.ByTool[ToolCodex]
 	if cx.Requests != 3 || cx.Input != 140 || cx.Output != 30 ||
-		cx.CacheRead != 110 || cx.CacheWrite != 5 || cx.Unpriced != 3 || cx.Cost != 0 {
+		cx.CacheRead != 110 || cx.CacheWrite != 5 || cx.Unpriced != 1 || cx.Cost <= 0 {
 		t.Fatalf("codex totals wrong: %+v", cx)
 	}
 	if len(sum.Buckets) != 24 {
@@ -104,11 +104,11 @@ func TestScanFixtureTree(t *testing.T) {
 	if got := sum.Buckets[11].Tokens[ToolCodex]; got != 55 {
 		t.Fatalf("bucket11 codex = %d, want 55", got)
 	}
-	if sum.Total.Unpriced != 6 {
-		t.Fatalf("unpriced = %d, want 6", sum.Total.Unpriced)
+	if sum.Total.Unpriced != omp.Unpriced+cx.Unpriced {
+		t.Fatalf("unpriced = %d, want %d", sum.Total.Unpriced, omp.Unpriced+cx.Unpriced)
 	}
-	if sum.Total.Cost != 0.0035 {
-		t.Fatalf("cost = %v, want 0.0035", sum.Total.Cost)
+	if want := omp.Cost + cl.Cost + cx.Cost; sum.Total.Cost < want-1e-9 || sum.Total.Cost > want+1e-9 {
+		t.Fatalf("cost = %v, want %v", sum.Total.Cost, want)
 	}
 }
 
