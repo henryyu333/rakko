@@ -277,15 +277,18 @@ func (it *pinItem) dropPreviewPaddingNow() {
 // pointer is still inside the panel shape (with hysteresis), where the panel
 // itself draws the card and no desktop preview window opens.
 func (a *shelf) syncDragPreview(pv *dragPreview, id string, span, cardW int, grabDX, grabDY, srcW, srcH float32, cursor mygo.Point, inside bool, tilt float32) {
-	a.syncDragPreviewMorph(pv, layout.Card{ID: id, Span: span, Rows: 1}, cardW, grabDX, grabDY, srcW, srcH, cursor, inside, tilt, 1, 1, time.Time{}, 1, false)
+	a.syncDragPreviewMorph(pv, layout.Card{ID: id, Span: span, Rows: 1}, cardW, grabDX, grabDY, srcW, srcH, cursor, inside, tilt, 1, 1, time.Time{}, 1, false, time.Now())
 }
 
-func (a *shelf) syncDragPreviewMorph(pv *dragPreview, spec layout.Card, cardW int, grabDX, grabDY, srcW, srcH float32, cursor mygo.Point, inside bool, tilt, morphFrom, morphTo float32, morphAt time.Time, liftK float32, reduceMotion bool) {
+// syncDragPreviewMorph places or closes the preview window at now: the
+// morph phase is read on the caller's clock, so an event's own time decides
+// the pose of the frame it produces instead of a second read of the wall
+// clock (a test's clock stands still between Advances).
+func (a *shelf) syncDragPreviewMorph(pv *dragPreview, spec layout.Card, cardW int, grabDX, grabDY, srcW, srcH float32, cursor mygo.Point, inside bool, tilt, morphFrom, morphTo float32, morphAt time.Time, liftK float32, reduceMotion bool, now time.Time) {
 	if inside || a.winH == 0 {
 		pv.close()
 		return
 	}
-	now := time.Now()
 	m := dragMorphValue(morphFrom, morphTo, morphAt, now, reduceMotion)
 	v := computeDragCardVisual(spec, cardW, grabDX, grabDY, liftK, m, reduceMotion)
 	display := displayIDAt(cursor, 0)
@@ -436,7 +439,7 @@ func (p *toolsPage) syncDragPreviewAt(cursor mygo.Point, now time.Time) {
 		tilt = 0
 	}
 	liftK := d.liftProgress(now, p.reduceMotion)
-	a.syncDragPreviewMorph(&p.preview, spec, cardW, d.grabDX, d.grabDY, w, h, cursor, false, tilt, d.morphFrom, d.morphTo, d.morphAt, liftK, p.reduceMotion)
+	a.syncDragPreviewMorph(&p.preview, spec, cardW, d.grabDX, d.grabDY, w, h, cursor, false, tilt, d.morphFrom, d.morphTo, d.morphAt, liftK, p.reduceMotion, now)
 	if pv := p.preview.window(); pv != nil {
 		d.visReady = true
 		d.visWinX = float32(pv.frame.X+pv.padL-a.frame.X) + pv.subX
@@ -469,7 +472,7 @@ func (p *toolsPage) armDragPreview(d *toolPress, cursor mygo.Point, now time.Tim
 	// and take it back afterwards.
 	it := p.preview.armed
 	p.preview.it, p.preview.armed = it, nil
-	a.syncDragPreviewMorph(&p.preview, spec, cardW, d.grabDX, d.grabDY, w, h, cursor, false, tilt, d.morphFrom, d.morphTo, d.morphAt, liftK, p.reduceMotion)
+	a.syncDragPreviewMorph(&p.preview, spec, cardW, d.grabDX, d.grabDY, w, h, cursor, false, tilt, d.morphFrom, d.morphTo, d.morphAt, liftK, p.reduceMotion, now)
 	p.preview.armed, p.preview.it = p.preview.it, nil
 	if p.preview.armed == nil {
 		p.preview.armed = it
