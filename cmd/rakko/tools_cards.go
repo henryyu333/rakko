@@ -278,6 +278,7 @@ func (a *shelf) toolCard(c *ui.Context, spec layout.Card, surf toolCardSurface, 
 	card.Background(card.AnimateColor("bg", bg, ui.Animation{Duration: 200 * time.Millisecond, Ease: ui.EaseOut}))
 	// The pointer presses the card to 0.97 (100 ms); a card with files
 	// it accepts over it grows to 1.03 on a light spring (200 ms).
+	pressScale := float32(1)
 	if a.win != nil && !c.Preferences().ReduceMotion {
 		target, anim := float32(1), ui.Animation{Duration: 100 * time.Millisecond, Ease: ui.EaseOut}
 		switch {
@@ -286,14 +287,23 @@ func (a *shelf) toolCard(c *ui.Context, spec layout.Card, surf toolCardSurface, 
 		case card.Pressed():
 			target = 0.97
 		}
-		scale := card.AnimateTo("press", target, anim)
-		card.Scale(scale, scale).TransformOrigin(0.5, 0.5)
+		pressScale = card.AnimateTo("press", target, anim)
 	} else {
 		switch {
 		case over:
-			card.Scale(1.03, 1.03).TransformOrigin(0.5, 0.5)
+			pressScale = 1.03
 		case card.Pressed():
-			card.Scale(0.97, 0.97).TransformOrigin(0.5, 0.5)
+			pressScale = 0.97
+		}
+	}
+	if pressScale != 1 {
+		card.Scale(pressScale, pressScale).TransformOrigin(0.5, 0.5)
+	}
+	if surf == cardEdit && len(keySfx) == 0 {
+		if tp := a.toolsPage(); tp != nil && tp.press != nil && tp.press.id == spec.ID && !tp.press.settling {
+			tp.press.cardScale = pressScale
+			tp.press.cardW = toolColW(spec.Cols())
+			tp.press.cardH = toolRowH(spec.Height())
 		}
 	}
 	if dragPaint && toolCardDimmed(def, class) && !busy {
@@ -310,6 +320,21 @@ func (a *shelf) toolCard(c *ui.Context, spec layout.Card, surf toolCardSurface, 
 		}
 	}
 	return card
+}
+
+// toolCardDragBody populates card with the card's interior for surf without
+// applying toolCard's background, hover, press, or drag-highlight wrappers, so
+// drawDragCard can crossfade cleanly between cardEdit and cardDesktop.
+func (a *shelf) toolCardDragBody(c *ui.Context, card ui.Element, spec layout.Card, surf toolCardSurface) {
+	def := toolCardDefFor(spec.ID)
+	if def == nil {
+		return
+	}
+	if surf == cardEdit {
+		a.toolCardEditBody(c, card, def, spec)
+		return
+	}
+	a.toolCardBody(c, card, def, cardPaint{}, spec, surf)
 }
 
 // toolCardEditBody is the card's editing form (v2 §6): the status

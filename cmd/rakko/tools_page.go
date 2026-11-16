@@ -51,28 +51,102 @@ type toolCell struct {
 type toolPress struct {
 	id         string
 	downAt     time.Time
-	downX      float32 // pointer position at the down (content space)
+	liftAt     time.Time // when dragging crossed toolDragSlop (120 ms lift transition)
+	downX      float32   // pointer position at the down (content space)
 	downY      float32
 	px, py     float32 // latest pointer position
 	grabDX     float32 // pointer offset inside the card at the down
 	grabDY     float32
 	cardX      float32 // the card element's rendered left/top this frame
 	cardY      float32 //   (the animation's answer, so moves stay aligned)
+	cardW      float32
+	cardH      float32
+	cardScale  float32 // press scale applied to card element (inverted for pointer mapping)
 	dragging   bool    // slop passed: the lifted copy follows the pointer
 	suppress   bool    // moved without edit: the release is not a click
 	settling   bool    // released: flying to the committed cell or back
 	settleJump bool    // the settle channels were Jump'ed to the start
 	settleX    float32
 	settleY    float32
-	index      int // current insertion index while dragging
+	index      int       // current insertion index while dragging
+	candIndex  int       // candidate slot index waiting for dwell hysteresis
+	candSince  time.Time // when candIndex became closest
 
 	// A card dragged in from the library has no parked cell: fresh marks
-	// it, spec is its default rectangle.
-	fresh    bool
-	spec     layout.Card
-	vx       float32   // horizontal pointer velocity, for the lift's tilt
-	lastX    float32   // pointer x at the last move
-	lastMove time.Time // time of the last move (tilt relax after 60 ms)
+	// it, spec is its default rectangle, freshTileRect is its drawer tile.
+	fresh         bool
+	freshCancel   bool
+	freshTileRect ui.Rect
+	spec          layout.Card
+	vx, vy        float32   // pointer velocity in pt/s
+	lastX, lastY  float32   // pointer position at the last move
+	lastMove      time.Time // time of the last move (tilt relax after 60 ms)
+
+	// Panel <-> preview window morph state (0 = lifted card, 1 = desktop pin).
+	morphFrom float32
+	morphTo   float32
+	morphAt   time.Time
+
+	// Last drawn visual state so release springs directly from screen pixels.
+	visReady     bool
+	visWinX      float32
+	visWinY      float32
+	visW, visH   float32
+	visScale     float32
+	visRot       float32
+	settleStartX float32
+	settleStartY float32
+	settleScale  float32
+	settleRot    float32
+	settleVX     float32
+	settleVY     float32
+}
+
+func (d *toolPress) liftProgress(now time.Time, reduce bool) float32 {
+	if reduce || d.liftAt.IsZero() {
+		return 1
+	}
+	p := float32(now.Sub(d.liftAt)) / float32(durLift)
+	if p <= 0 {
+		return 0
+	}
+	if p >= 1 {
+		return 1
+	}
+	inv := 1 - p
+	return 1 - inv*inv*inv
+}
+
+func (d *toolPress) setMorph(from, to float32, at time.Time) {
+	d.morphFrom, d.morphTo, d.morphAt = from, to, at
+}
+
+func (d *toolPress) dragMorphAt(now time.Time) float32 {
+	return dragMorphValue(d.morphFrom, d.morphTo, d.morphAt, now, false)
+}
+
+func (d *toolPress) cardLocalToStage(lx, ly float32) (float32, float32) {
+	s := d.cardScale
+	if s <= 0 {
+		s = 1
+	}
+	if d.cardW > 0 && d.cardH > 0 {
+		lx = d.cardW/2 + (lx-d.cardW/2)*s
+		ly = d.cardH/2 + (ly-d.cardH/2)*s
+	}
+	return d.cardX + lx, d.cardY + ly
+}
+
+func (d *toolPress) recordVelocity(dx, dy float32, evTime time.Time) {
+	if !d.lastMove.IsZero() {
+		dt := evTime.Sub(d.lastMove).Seconds()
+		if dt < 0.004 {
+			dt = 0.008
+		}
+		d.vx = d.vx*0.75 + (dx/float32(dt))*0.25
+		d.vy = d.vy*0.75 + (dy/float32(dt))*0.25
+	}
+	d.lastX, d.lastY, d.lastMove = d.px, d.py, evTime
 }
 
 // toolsPage is the card grid page.
@@ -133,7 +207,13 @@ func (a *shelf) toolsPage() *toolsPage {
 func (p *toolsPage) gridCards() ([]layout.Card, int) {
 	l := p.host.toolsLayoutNow()
 	d := p.press
-	if d == nil || !p.editing || !d.dragging {
+	if d == nil || !p.editing || (!d.dragging && !d.settling) {
+		return p.withResize(l.Cards), 0
+	}
+	if d.settling {
+		if !d.freshCancel && p.dragCols > 0 {
+			return p.withResize(l.Cards), p.dragCols
+		}
 		return p.withResize(l.Cards), 0
 	}
 	cols := p.dragCols
@@ -144,7 +224,11 @@ func (p *toolsPage) gridCards() ([]layout.Card, int) {
 		d.index = -1
 		return p.withResize(l.Cards), cols
 	}
+	now := time.Now()
 	if d.fresh {
+		if ins := toolInsertIndexFreshStable(l.Cards, cols, d.spec, d.index, d.px, d.py, p.host.inactiveWidget, &d.candIndex, &d.candSince, now); ins >= 0 {
+			d.index = ins
+		}
 		d.index = max(0, min(d.index, len(l.Cards)))
 		out := make([]layout.Card, 0, len(l.Cards)+1)
 		out = append(out, l.Cards[:d.index]...)
@@ -152,7 +236,7 @@ func (p *toolsPage) gridCards() ([]layout.Card, int) {
 		out = append(out, l.Cards[d.index:]...)
 		return p.withResize(out), cols
 	}
-	if ins := toolInsertIndex(l.Cards, cols, d.id, d.index, d.px, d.py); ins >= 0 {
+	if ins := toolInsertIndexStable(l.Cards, cols, d.id, d.index, d.px, d.py, p.host.inactiveWidget, &d.candIndex, &d.candSince, now); ins >= 0 {
 		d.index = ins
 		return p.withResize(toolVirtualCards(l.Cards, d.id, ins)), cols
 	}
@@ -404,11 +488,11 @@ func (a *shelf) mutateToolsChanged(fn func(*layout.Layout) bool) bool {
 	return a.mutateToolsWrite(fn, false)
 }
 
-// mutateToolsInteractive commits the layout in memory immediately and, on
-// Windows, moves durable layout.Write persistence off the drop frame onto the
-// coalescing layoutSaveQueue so NTFS FlushFileBuffers never stalls settle.
+// mutateToolsInteractive commits the layout in memory immediately and moves
+// durable layout.Write persistence off the drop frame onto the coalescing
+// layoutSaveQueue on both platforms.
 func (a *shelf) mutateToolsInteractive(fn func(*layout.Layout) bool) bool {
-	return a.mutateToolsWrite(fn, toolsDeferLayoutWrite)
+	return a.mutateToolsWrite(fn, true)
 }
 
 func (a *shelf) mutateToolsWrite(fn func(*layout.Layout) bool, deferWrite bool) bool {
@@ -676,34 +760,96 @@ func (p *toolsPage) body(c *ui.Context, _ bool, live bool) ui.Element {
 		if editing {
 			ui.Box(c.Key("library-space")).FillWidth().Height(toolLibraryH)
 		}
-		if d != nil && d.dragging && p.preview.window() == nil {
-			layer := ui.Column(c.Key("tools-lift")).Absolute().Left(0).Top(0).Right(0).Bottom(0).IgnoreInput(true)
-			layer.Children(func() { p.toolLiftedCard(c, *d) })
-		}
 	})
 }
 
-// slotShows reports whether the dashed landing slot belongs in this frame.
-// It hangs under the card's lift whenever that lift is the page's own copy;
-// once the copy leaves the content box the desktop preview window carries it
-// instead. On Windows the slot still marks where the card will land as long
-// as the pointer is over the page; the Mac has always dropped it with the
-// page's copy and left the preview window alone. Dragging out of the panel
-// shows no slot on either platform.
+// overlayOrigin is the window point the page overlay's (0, 0) sits at: the
+// shell's top-left. The page body starts at toolsContentTop() below the shell's
+// top and sheetPadX in from its left, and viewport is that body's scroll box in
+// window coordinates.
+func (p *toolsPage) overlayOrigin() (float32, float32) {
+	return p.viewport.X - sheetPadX, p.viewport.Y - toolsContentTop()
+}
+
+// drawLiftedCard draws the dragged card in the panel window's top-most layer
+// (outside page-content and shell clips) while the pointer stays inside the
+// panel's drawn shape, and drives the fly-back animation of a cancelled
+// library-tile drag.
+func (p *toolsPage) drawLiftedCard(c *ui.Context) {
+	d := p.press
+	if d == nil {
+		return
+	}
+	if d.freshCancel && d.settling {
+		p.drawFreshCancel(c, d)
+		return
+	}
+	if !d.dragging || p.preview.window() != nil {
+		return
+	}
+	now := c.Now()
+	spec := p.dragSpec(d.id)
+	cardW := pinCardWidth(d.id, spec.Cols())
+	liftK := d.liftProgress(now, p.reduceMotion)
+	m := dragMorphValue(d.morphFrom, d.morphTo, d.morphAt, now, p.reduceMotion)
+	tilt := p.dragTilt(now)
+	if p.reduceMotion {
+		tilt = 0
+	}
+	v := computeDragCardVisual(spec, cardW, d.grabDX, d.grabDY, liftK, m, p.reduceMotion)
+	left := p.viewport.X + d.px - v.curGrabX
+	top := p.viewport.Y + d.py - p.scroll.Y - v.curGrabY
+	d.visReady = true
+	d.visWinX, d.visWinY, d.visW, d.visH = left, top, v.w, v.h
+	d.visScale, d.visRot = v.scale, tilt
+	ox, oy := p.overlayOrigin()
+	drawDragCard(c, p.host, spec, "tools-lift", cardW, left-ox, top-oy, v, m, tilt)
+	c.AnimationFrame()
+}
+
+func (p *toolsPage) drawFreshCancel(c *ui.Context, d *toolPress) {
+	if reduceMotion(c) || d.freshTileRect.W <= 0 || d.freshTileRect.H <= 0 {
+		p.press = nil
+		p.dragCols, p.dragRows = 0, 0
+		return
+	}
+	spec := p.dragSpec(d.id)
+	cardW := pinCardWidth(d.id, spec.Cols())
+	m := dragMorphValue(d.morphFrom, 0, d.morphAt, c.Now(), p.reduceMotion)
+	v := computeDragCardVisual(spec, cardW, d.grabDX, d.grabDY, 1, m, p.reduceMotion)
+	ox, oy := p.overlayOrigin()
+	tx := d.freshTileRect.X + (d.freshTileRect.W-v.w)/2 - ox
+	ty := d.freshTileRect.Y + (d.freshTileRect.H-v.h)/2 - oy
+	fly := ui.Box(c.Key("tools-fresh-cancel")).Absolute().IgnoreInput(true)
+	var vx, vy float32
+	if !d.settleJump {
+		fly.Jump("fx", d.visWinX-ox)
+		fly.Jump("fy", d.visWinY-oy)
+		fly.Jump("fsc", d.settleScale)
+		fly.Jump("frot", d.settleRot)
+		fly.Jump("fop", 1)
+		vx, vy = d.settleVX, d.settleVY
+		d.settleJump = true
+	}
+	fx := fly.AnimateTo("fx", tx, ui.Animation{Spring: ui.SpringOptions{Duration: durSettle, Bounce: 0.15, Velocity: vx}})
+	fy := fly.AnimateTo("fy", ty, ui.Animation{Spring: ui.SpringOptions{Duration: durSettle, Bounce: 0.15, Velocity: vy}})
+	fsc := fly.AnimateTo("fsc", 0.72, ui.Animation{Spring: ui.SpringOptions{Duration: durSettle, Bounce: 0.15}})
+	frot := fly.AnimateTo("frot", 0, ui.Animation{Spring: ui.SpringOptions{Duration: durSettle, Bounce: 0.15}})
+	fop := fly.AnimateTo("fop", 0, ui.Animation{Duration: durSettle, Ease: ui.EaseOut})
+	v.scale = fsc
+	card := drawDragCard(c, p.host, spec, "tools-lift", cardW, fx, fy, v, m, frot)
+	card.Opacity(fop)
+	if fly.Settled("fx") && fly.Settled("fy") && fly.Settled("fsc") && fly.Settled("frot") {
+		p.press = nil
+		p.dragCols, p.dragRows = 0, 0
+	}
+}
+
+// slotShows reports whether the dashed landing slot belongs in this frame:
+// visible whenever the panel itself draws the lifted copy (no desktop preview
+// window is up).
 func (p *toolsPage) slotShows() bool {
-	if p.preview.window() == nil {
-		return true
-	}
-	if !dragSlotFollowsPointer {
-		return false
-	}
-	v := p.viewport
-	if v.W <= 0 || v.H <= 0 || p.host == nil {
-		return false
-	}
-	pt := p.host.pointerSample()
-	x, y := float32(pt.X-p.host.frame.X), float32(pt.Y-p.host.frame.Y)
-	return x >= v.X && x < v.X+v.W && y >= v.Y && y < v.Y+v.H
+	return p.preview.window() == nil
 }
 
 // overLibrary reports whether the pointer is below the grid's viewport,
@@ -761,11 +907,9 @@ func (p *toolsPage) toolCell(c *ui.Context, cell toolCell, editing, live bool) {
 		card.Absolute().Width(cell.w).Height(cell.h)
 		cx, cy = d.cardX, d.cardY
 	case parked:
-		// The parked element stays the pointer's press target; its
-		// animated slot position converts card-local events to stage
-		// coordinates.
-		cx = card.AnimateTo("cx", cell.x, ui.Snappy)
-		cy = card.AnimateTo("cy", cell.y, ui.Snappy)
+		// Keep the invisible capture element directly at cell.x, cell.y so
+		// event-to-stage mapping never drifts behind a spring during slot swaps.
+		cx, cy = cell.x, cell.y
 		d.cardX, d.cardY = cx, cy
 		card.Absolute().Left(cx).Top(cy).Width(cell.w).Height(cell.h).Opacity(0)
 	default:
@@ -791,32 +935,6 @@ func surfFor(editing bool) toolCardSurface {
 		return cardEdit
 	}
 	return cardPanel
-}
-
-// toolLiftedCard draws the dragged copy above the grid at the pointer.
-// It takes no input: the parked card keeps the press so release always
-// lands on the same element the down did.
-func (p *toolsPage) toolLiftedCard(c *ui.Context, d toolPress) {
-	a := p.host
-	spec := p.dragSpec(d.id)
-	tilt := p.dragTilt(c.Now())
-	if tilt != 0 {
-		// Keep the frames coming so a stopped pointer relaxes the tilt
-		// (dragTilt decays the velocity after 60 ms).
-		c.AnimationFrame()
-	}
-	card := a.toolCard(c, spec, cardEdit, "lift")
-	// The lifted copy is the design's `.lifted`: the darker fill, the
-	// large shadow, 1.04 and a tilt following the horizontal velocity.
-	// Reduce Motion keeps only the shadow.
-	card.Background(ui.Hex("#3A3A3D"))
-	card = card.Absolute().Left(d.px-d.grabDX).Top(d.py-d.grabDY-p.scroll.Y).
-		Width(toolColW(spec.Cols())).Height(toolRowH(spec.Height())).
-		Shadow(0, 14, 28, 0, ui.RGBA(0, 0, 0, 0.42)).IgnoreInput(true)
-	if !p.reduceMotion {
-		card.Scale(1.04, 1.04).Rotate(tilt).TransformOrigin(0.5, 0.5)
-	}
-	c.AnimationFrame()
 }
 
 // toolCardInput wires the pointer: down starts a press, move past the
@@ -847,26 +965,26 @@ func (p *toolsPage) toolCardInput(c *ui.Context, card ui.Element, cell toolCell,
 				px: ox + ev.X, py: oy + ev.Y,
 				grabDX: ev.X, grabDY: ev.Y,
 				cardX: ox, cardY: oy,
+				cardW: cell.w, cardH: cell.h, cardScale: 1,
+				lastX: ox + ev.X, lastY: oy + ev.Y,
+				candIndex: -1,
 			}
 			p.press = d
 			c.AnimationFrame() // the long-press deadline needs frames
 			return true
 		case ui.InputPointerMove:
-			defer p.syncDragPreview(p.toolPointer(ev))
+			defer p.syncDragPreviewAt(p.toolPointer(ev), ev.Time)
 			d := p.press
 			if d == nil || d.id != cell.id || d.settling {
 				return d != nil && d.id == cell.id && d.settling
 			}
-			d.px, d.py = d.cardX+ev.X, d.cardY+ev.Y
+			d.px, d.py = d.cardLocalToStage(ev.X, ev.Y)
 			if d.dragging {
-				if !d.lastMove.IsZero() {
-					ms := max(ev.Time.Sub(d.lastMove).Milliseconds(), 8)
-					d.vx = d.vx*0.75 + (d.px-d.lastX)/float32(ms)*16*0.25
-				}
-				d.lastX, d.lastMove = d.px, ev.Time
+				d.recordVelocity(d.px-d.lastX, d.py-d.lastY, ev.Time)
 				if p.overLibrary() {
 					d.index = -1
-				} else if ins := toolInsertIndex(a.toolsLayout().Cards, p.dragCols, d.id, d.index, d.px, d.py); ins >= 0 {
+					d.candIndex, d.candSince = -1, time.Time{}
+				} else if ins := toolInsertIndexStable(a.toolsLayout().Cards, p.dragCols, d.id, d.index, d.px, d.py, a.inactiveWidget, &d.candIndex, &d.candSince, ev.Time); ins >= 0 {
 					d.index = ins
 				}
 				return true
@@ -880,8 +998,10 @@ func (p *toolsPage) toolCardInput(c *ui.Context, card ui.Element, cell toolCell,
 				g := p.grid()
 				p.dragCols, p.dragRows = g.cols, g.rows
 				d.dragging = true
-				d.lastX, d.lastMove = d.px, ev.Time
-				d.index = toolInsertIndex(a.toolsLayout().Cards, p.dragCols, d.id, -1, d.px, d.py)
+				d.liftAt = ev.Time
+				d.lastX, d.lastY, d.lastMove = d.px, d.py, ev.Time
+				d.candIndex, d.candSince = -1, time.Time{}
+				d.index = toolInsertIndexStable(a.toolsLayout().Cards, p.dragCols, d.id, -1, d.px, d.py, a.inactiveWidget, nil, nil, ev.Time)
 				if d.index < 0 {
 					d.index = len(a.toolsLayout().Cards) - 1
 				}
@@ -898,8 +1018,9 @@ func (p *toolsPage) toolCardInput(c *ui.Context, card ui.Element, cell toolCell,
 				return true
 			}
 			if d.dragging {
-				d.px, d.py = d.cardX+ev.X, d.cardY+ev.Y
-				p.toolCardDrop(d, p.toolPointer(ev))
+				d.px, d.py = d.cardLocalToStage(ev.X, ev.Y)
+				p.syncDragPreviewAt(p.toolPointer(ev), ev.Time)
+				p.toolCardDropAt(d, p.toolPointer(ev), ev.Time)
 				return true
 			}
 			p.skipClick = d.suppress // a moved press never becomes a tap
@@ -978,10 +1099,44 @@ func hypot(dx, dy float32) float64 {
 	return math.Hypot(float64(dx), float64(dy))
 }
 
-// toolCardDrop ends a reorder: inside the stage it commits the index,
-// outside the panel it pins the card to the desktop (design §2 把卡片拖出
-// 面板边缘 = 固定到桌面), elsewhere it flies back.
+// captureSettleOrigin reads the lifted card's current on-screen position,
+// scale, tilt, and pointer velocity right before release so the settle
+// spring continues smoothly from the rendered pixels with no snap.
+func (p *toolsPage) captureSettleOrigin(d *toolPress, now time.Time) (startX, startY, startScale, startRot, svx, svy float32) {
+	startX, startY = d.px-d.grabDX, d.py-d.grabDY
+	startScale = 1
+	if !p.reduceMotion {
+		startScale = 1 + 0.04*d.liftProgress(now, p.reduceMotion)
+	}
+	startRot = p.dragTilt(now)
+	if p.reduceMotion {
+		startRot = 0
+	}
+	if d.visReady {
+		startX = d.visWinX - p.viewport.X
+		startY = d.visWinY - p.viewport.Y + p.scroll.Y
+		startScale = d.visScale
+		startRot = d.visRot
+	}
+	if !d.lastMove.IsZero() && now.Sub(d.lastMove) <= 60*time.Millisecond {
+		svx = min(max(d.vx, -2400), 2400)
+		svy = min(max(d.vy, -2400), 2400)
+	}
+	return startX, startY, startScale, startRot, svx, svy
+}
+
+// toolCardDrop ends a reorder: inside the panel it commits the index shown
+// during the drag, outside the panel it pins the card to the desktop
+// (design §2 把卡片拖出面板边缘 = 固定到桌面), elsewhere it flies back.
 func (p *toolsPage) toolCardDrop(d *toolPress, cursor mygo.Point) {
+	p.toolCardDropAt(d, cursor, time.Now())
+}
+
+func (p *toolsPage) toolCardDropAt(d *toolPress, cursor mygo.Point, now time.Time) {
+	if now.IsZero() {
+		now = time.Now()
+	}
+	startX, startY, startScale, startRot, svx, svy := p.captureSettleOrigin(d, now)
 	defer p.closeDragPreview()
 	a := p.host
 	if p.editing && p.overLibrary() {
@@ -998,70 +1153,82 @@ func (p *toolsPage) toolCardDrop(d *toolPress, cursor mygo.Point) {
 		p.dragCols, p.dragRows = 0, 0
 		return
 	}
-	// The drop lands inside the stage only when the release is inside the
-	// viewport the scroll shows right now: a card dragged below the visible
-	// rows is on its way to the desktop, not to a slot further down the
-	// grid it cannot see.
+	panel := a.panelDropRect()
+	inPanel := insideRect(cursor, panel)
 	viewH := p.viewport.H
 	if viewH <= 0 {
 		viewH = pageContentHeight(p)
 	}
-	inside := d.px >= 0 && d.px <= p.stageW() &&
+	inViewport := d.px >= 0 && d.px <= p.stageW() &&
 		d.py >= p.scroll.Y-0.5 && d.py <= p.scroll.Y+viewH+0.5
+	// Commit the reorder if released inside the panel (or inside the viewport)
+	// and not beyond the scroll range on an overflow drag-out.
 	target := toolCell{id: d.id, x: d.cardX, y: d.cardY}
-	if inside {
+	if inViewport || inPanel {
 		if ins := d.index; ins >= 0 {
 			a.mutateToolsInteractive(func(l *layout.Layout) bool {
 				l.MoveCard(d.id, ins)
 				return true
 			})
-			// The drop ends the pinned width: the panel follows the
-			// committed packing, and the settle flight aims at its cell.
-			p.dragCols, p.dragRows = 0, 0
-			for _, cell := range toolGridFor(a.toolsLayout().Cards, a.inactiveWidget, p.bandMinCols()).cells {
-				if cell.id == d.id {
-					target = cell
-				}
+		}
+		// Keep p.dragCols locked throughout the settle flight so the target cell
+		// matches the dashed slot shown during the drag; toolSettle unlocks
+		// dragCols once the card lands.
+		cols := p.dragCols
+		var cells []toolCell
+		if cols > 0 {
+			cells = toolGridAt(a.toolsLayout().Cards, cols, a.inactiveWidget).cells
+		} else {
+			cells = toolGridFor(a.toolsLayout().Cards, a.inactiveWidget, p.bandMinCols()).cells
+		}
+		for _, cell := range cells {
+			if cell.id == d.id {
+				target = cell
+				break
 			}
 		}
 	} else {
-		// A release beyond the panel's drawn body pins the card at the
-		// cursor (grab point preserved so the window lands under it);
-		// a release on another pane of the panel still flies back.
-		panel := a.panelDropRect()
-		if !insideRect(cursor, panel) {
-			spec := p.dragSpec(d.id)
-			span, w := spec.Cols(), pinCardWidth(d.id, spec.Cols())
-			disp := displayIDAt(cursor, 0)
-			area := pinArea(disp)
-			edge := pinReleaseEdge(cursor, area)
-			frame := pinFrameUnder(cursor, d.grabDX, d.grabDY, toolColW(spec.Cols()), toolRowH(spec.Height()), w)
-			if edge != pinFree {
-				frame = pinStripFrame(edge, area, cursor.Y) // the 24 pt edge rule, same as pin drags
-			}
-			var committed bool
-			if it := p.preview.take(); it != nil {
-				it.display, it.edge, it.expanded, it.frame = disp, edge, edge == pinFree, frame
-				committed = a.commitPin(it)
-				if !committed {
-					if it.win != nil {
-						it.win.Hide()
-						it.win.Destroy()
-						it.win = nil
-					}
+		spec := p.dragSpec(d.id)
+		span, w := spec.Cols(), pinCardWidth(d.id, spec.Cols())
+		disp := displayIDAt(cursor, 0)
+		area := pinArea(disp)
+		edge := pinReleaseEdge(cursor, area)
+		frame := pinFrameUnder(cursor, d.grabDX, d.grabDY, toolColW(spec.Cols()), toolRowH(spec.Height()), w)
+		if edge != pinFree {
+			frame = pinStripFrame(edge, area, cursor.Y) // the 24 pt edge rule, same as pin drags
+		}
+		var committed bool
+		if it := p.preview.take(); it != nil {
+			it.display, it.edge, it.expanded, it.frame = disp, edge, edge == pinFree, frame
+			committed = a.commitPin(it)
+			if !committed {
+				if it.win != nil {
+					it.win.Hide()
+					it.win.Destroy()
+					it.win = nil
 				}
-			} else {
-				committed = a.addPin(d.id, span, disp, edge, false, frame) != nil
 			}
-			if committed {
-				p.press = nil // the parked cell is gone: no settle back
-				return
+		} else {
+			committed = a.addPin(d.id, span, disp, edge, false, frame) != nil
+		}
+		if committed {
+			p.press = nil // the parked cell is gone: no settle back
+			p.dragCols, p.dragRows = 0, 0
+			return
+		}
+		// The failed write kept the grid unchanged; fly back to its cell.
+		p.dragCols, p.dragRows = 0, 0
+		for _, cell := range toolGridFor(a.toolsLayout().Cards, a.inactiveWidget, p.bandMinCols()).cells {
+			if cell.id == d.id {
+				target = cell
+				break
 			}
-			// The failed write kept the grid unchanged; fly back.
 		}
 	}
-	d.settling, d.dragging = true, false
-	p.dragCols, p.dragRows = 0, 0
+	d.settling, d.dragging, d.settleJump = true, false, false
+	d.settleStartX, d.settleStartY = startX, startY
+	d.settleScale, d.settleRot = startScale, startRot
+	d.settleVX, d.settleVY = svx, svy
 	d.settleX, d.settleY = target.x, target.y
 }
 
@@ -1071,13 +1238,11 @@ func (p *toolsPage) stageW() float32 {
 	return float32(g.cols)*toolCellW + float32(g.cols-1)*toolCellGap
 }
 
-// toolSettle animates the released card from the pointer to its cell.
-// The press clears once the flight rests: Settled, not Arrived — Arrived
-// reports only the frame a moving value comes to rest, so a flight that
-// starts at its goal (an edit drag released back where it began, index
-// unchanged) never moves and never arrives, and the press would stick.
+// toolSettle animates the released card from its visual position and velocity
+// to its committed cell. The press clears once the flight rests: Settled, not
+// Arrived — Arrived reports only the frame a moving value comes to rest, so a
+// flight that starts at its goal never moves and never arrives.
 func (p *toolsPage) toolSettle(c *ui.Context, card ui.Element, d *toolPress) {
-	tilt := min(max(d.vx*0.55, -5), 5)
 	if reduceMotion(c) {
 		card.Jump("cx", d.settleX)
 		card.Jump("cy", d.settleY)
@@ -1086,24 +1251,27 @@ func (p *toolsPage) toolSettle(c *ui.Context, card ui.Element, d *toolPress) {
 		card.Left(d.settleX).Top(d.settleY)
 		d.cardX, d.cardY = d.settleX, d.settleY
 		p.press = nil
+		p.dragCols, p.dragRows = 0, 0
 		return
 	}
+	var vx, vy float32
 	if !d.settleJump {
-		card.Jump("cx", d.px-d.grabDX)
-		card.Jump("cy", d.py-d.grabDY)
-		card.Jump("sc", 1.04)
-		card.Jump("rot", tilt)
+		card.Jump("cx", d.settleStartX)
+		card.Jump("cy", d.settleStartY)
+		card.Jump("sc", d.settleScale)
+		card.Jump("rot", d.settleRot)
+		vx, vy = d.settleVX, d.settleVY
 		d.settleJump = true
 	}
-	anim := ui.Animation{Spring: ui.SpringOptions{Duration: durSettle, Bounce: 0.15}}
-	cx := card.AnimateTo("cx", d.settleX, anim)
-	cy := card.AnimateTo("cy", d.settleY, anim)
-	sc := card.AnimateTo("sc", 1, anim)
-	rot := card.AnimateTo("rot", 0, anim)
+	cx := card.AnimateTo("cx", d.settleX, ui.Animation{Spring: ui.SpringOptions{Duration: durSettle, Bounce: 0.15, Velocity: vx}})
+	cy := card.AnimateTo("cy", d.settleY, ui.Animation{Spring: ui.SpringOptions{Duration: durSettle, Bounce: 0.15, Velocity: vy}})
+	sc := card.AnimateTo("sc", 1, ui.Animation{Spring: ui.SpringOptions{Duration: durSettle, Bounce: 0.15}})
+	rot := card.AnimateTo("rot", 0, ui.Animation{Spring: ui.SpringOptions{Duration: durSettle, Bounce: 0.15}})
 	card.Left(cx).Top(cy).Scale(sc, sc).Rotate(rot).TransformOrigin(0.5, 0.5)
 	d.cardX, d.cardY = cx, cy
 	if card.Settled("cx") && card.Settled("cy") && card.Settled("sc") && card.Settled("rot") {
 		p.press = nil
+		p.dragCols, p.dragRows = 0, 0
 	}
 }
 

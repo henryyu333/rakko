@@ -27,19 +27,10 @@ const (
 	// invisible 36pt hot zone from covering a maximized window's tabs or
 	// title bar.
 	notchTopEdgeHoverOnly = true
-	// The desktop preview window carries the card past the page's content
-	// box; on Windows the dashed landing slot stays as long as the pointer
-	// is still over the page.
-	dragSlotFollowsPointer = true
 	// Keep the notch overlay accepting mouse input while a tools card drag/resize/preview
 	// is active so crossing the panel edge never toggles WS_EX_TRANSPARENT or re-layers
-	// the panel in front of the drag preview HWND.
+	// the panel in front of the drag preview HWND (which shares the single topmost band).
 	toolsDragKeepsMouse = true
-	// Skip redundant SetWindowPos and tilt-unchanged repaints during 125Hz drag preview moves.
-	dragPreviewSkipRedundantPaint = true
-	// Move NTFS FlushFileBuffers (layout.Write) off the drop frame on Windows,
-	// coalescing rapid drags on a dedicated writer and flushing before exit.
-	toolsDeferLayoutWrite = true
 	// Windows keeps painting a native menu's owner while the menu is open,
 	// so selecting the right-clicked tile painted its accent ring behind
 	// the menu; the Mac shows the ring only after the menu closes. The

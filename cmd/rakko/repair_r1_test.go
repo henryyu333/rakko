@@ -165,23 +165,6 @@ func TestPinnedWideWidgetsKeepTwoColumns(t *testing.T) {
 	}
 }
 
-// TestPreviewHeightIsTheCardHeight: the dragged copy leaves the page at the
-// card's real height, so a 2 × 2 widget's preview opens where the drawn card
-// reaches the edge, not 90pt later.
-func TestPreviewHeightIsTheCardHeight(t *testing.T) {
-	v := ui.Rect{W: 416, H: 174}
-	// At 80pt down the box a one-row card (84pt) still fits (80 + 89 ≤ 174)
-	// while a 2 × 2 widget (174pt) reaches past it — the case the review
-	// found: the preview opened 90pt late for the tall card.
-	top := float32(80)
-	if previewLeaves(v, 0, top, toolColW(2), toolRowH(1)) {
-		t.Fatal("the one-row copy left the box at 80pt")
-	}
-	if !previewLeaves(v, 0, top, toolColW(2), toolRowH(2)) {
-		t.Fatal("the two-row copy does not leave the box at 80pt")
-	}
-}
-
 // TestLegacyPinKeepsItsReturnRect: a pin written by the build before the
 // grid union stored the window's span (widened to two columns) and the
 // canvas rectangle; the rectangle is the return size, and it survives the

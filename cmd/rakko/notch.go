@@ -1244,6 +1244,66 @@ func (a *shelf) overShellShape(p mygo.Point, w, h, levelK, shakeX float32) bool 
 	return a.overShellShapeAt(p, w, h, levelK, shakeX, a.fx.openK)
 }
 
+const (
+	dragPreviewOutHysteresis float32 = 6  // pt past the drawn shell before handing off to desktop preview
+	dragPreviewWarmDist      float32 = 56 // pt inside the shell where the invisible preview follows the pointer
+)
+
+// pointerInPanelForDrag reports whether cursor is inside the drawn panel
+// shell expanded outward by pad points. Falls back to panelDropRect when
+// the headless shelf has not run a layout frame yet.
+func (a *shelf) pointerInPanelForDrag(cursor mygo.Point, pad float32) bool {
+	if a.fx.w > 0 && a.fx.h > 0 {
+		if pad <= 0 {
+			return a.overShell(cursor)
+		}
+		return a.overShellShapeAtPad(cursor, a.fx.w, a.fx.h, a.fx.levelK, a.fx.shakeX, a.fx.openK, pad)
+	}
+	r := a.panelDropRect()
+	p := int(math.Ceil(float64(pad)))
+	return cursor.X >= r.X-p && cursor.X < r.X+r.Width+p &&
+		cursor.Y >= r.Y-p && cursor.Y < r.Y+r.Height+p
+}
+
+// nearShellEdge reports whether p is inside the drawn shell but within dist
+// points of one of its edges. The invisible drag preview is kept warm only
+// here: deep inside the grid it would be an extra window with nothing to do.
+func (a *shelf) nearShellEdge(p mygo.Point, dist float32) bool {
+	w, h, levelK, shakeX, openK := a.fx.w, a.fx.h, a.fx.levelK, a.fx.shakeX, a.fx.openK
+	if w <= 0 || h <= 0 || !a.overShellShapeAt(p, w, h, levelK, shakeX, openK) {
+		return false
+	}
+	top := float64(a.frameTop() + a.sheetTop())
+	if a.shellUp() {
+		top = float64(a.frameTop()) + float64(a.shellTopLocal(h, openK))
+	}
+	cx := float64(a.shellCentreX(openK)) + float64(shakeX+a.appsDrawOff())
+	x0, x1 := cx-float64(w)/2, cx+float64(w)/2
+	d := float64(dist)
+	y := float64(p.Y)
+	return float64(p.X) < x0+d || float64(p.X) > x1-d || y < top+d || y > top+float64(h)-d
+}
+
+// overShellShapeAtPad is overShellShapeAt inflated outward by pad points.
+func (a *shelf) overShellShapeAtPad(p mygo.Point, w, h, levelK, shakeX, openK, pad float32) bool {
+	if w <= 0 || h <= 0 {
+		return false
+	}
+	top := float64(a.frameTop() + a.sheetTop())
+	if a.shellUp() {
+		top = float64(a.frameTop()) + float64(a.shellTopLocal(h, openK))
+	}
+	pd := float64(pad)
+	y := float64(p.Y) - top
+	if y < -pd || y >= float64(h)+pd {
+		return false
+	}
+	cx := float64(a.shellCentreX(openK)) + float64(shakeX+a.appsDrawOff())
+	x0, x1 := cx-float64(w)/2-pd, cx+float64(w)/2+pd
+	x := float64(p.X)
+	return x >= x0 && x < x1
+}
+
 // overShellShapeAt is overShell for an explicit shell: w×h, its bottom
 // corner rounded by the island/sheet radius at levelK, shifted by shakeX,
 // on the axis the shell has at openK. The drawn shell spreads from the

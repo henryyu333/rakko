@@ -75,32 +75,43 @@ func pinEdgeOf(e layout.Edge) pinEdge {
 // runtime state. frame is the applied screen rect (card size while free
 // or expanded, strip size while collapsed).
 type pinItem struct {
-	owner     *shelf
-	cardID    string
-	span      int
-	rows      int // row span the card had in the grid; 1 for action cards
-	cardW     int // 136 or 278 from span; height is always pinCardH
-	homeIndex int // tool-page grid slot it came from; -1 pins it back at the end
-	display   int64
-	edge      pinEdge
-	always    bool // always expanded; the hide delay never collapses it
-	expanded  bool // valid only while edge != pinFree
-	cy        int  // the collapsed strip's centre-Y while docked — the slot it returns to
-	frame     mygo.Rectangle
-	leftAt    time.Time
-	dropAt    time.Time // accent border lingers this long after a drop
-	jiggleAt  time.Time // a tap that could not act gave the card a brief shake
-	pressed   bool      // a press on the card is being held
-	pressWas  bool      // it was already expanded when that press began
-	moving    bool      // the press went far: it is a window move, not a click
-	didMove   bool      // that press did move — its release is a drop, never a tap
-	grabX     int
-	grabY     int
-	wantKill  bool // a menu asked to remove it; pinTick does the destroy
-	putBack   bool // …and whether the card returns to the tools page
-	preview   bool // the transient drag window, not a committed pin
-	tilt      float32
-	win       *mygo.Window
+	owner        *shelf
+	cardID       string
+	span         int
+	rows         int // row span the card had in the grid; 1 for action cards
+	cardW        int // 136 or 278 from span; height is always pinCardH
+	homeIndex    int // tool-page grid slot it came from; -1 pins it back at the end
+	display      int64
+	edge         pinEdge
+	always       bool // always expanded; the hide delay never collapses it
+	expanded     bool // valid only while edge != pinFree
+	cy           int  // the collapsed strip's centre-Y while docked — the slot it returns to
+	frame        mygo.Rectangle
+	leftAt       time.Time
+	dropAt       time.Time // accent border lingers this long after a drop
+	jiggleAt     time.Time // a tap that could not act gave the card a brief shake
+	pressed      bool      // a press on the card is being held
+	pressWas     bool      // it was already expanded when that press began
+	moving       bool      // the press went far: it is a window move, not a click
+	didMove      bool      // that press did move — its release is a drop, never a tap
+	grabX        int
+	grabY        int
+	wantKill     bool // a menu asked to remove it; pinTick does the destroy
+	putBack      bool // …and whether the card returns to the tools page
+	preview      bool // the transient drag window, not a committed pin
+	tilt         float32
+	rowsSpan     int // grid row span for preview morph from cardEdit
+	srcW, srcH   float32
+	grabDX       float32
+	grabDY       float32
+	morphFrom    float32
+	morphTo      float32
+	morphAt      time.Time
+	liftK        float32
+	reduceMotion bool
+	padL, padT   int
+	subX, subY   float32
+	win          *mygo.Window
 }
 
 // pinDisplays is the display list the geometry sees; tests replace it.
@@ -136,23 +147,30 @@ func pinParseDisplay(s string) int64 {
 	return id
 }
 
-// pinFrameUnder puts a cardW × pinCardH pin card under the pointer, keeping
-// the grab point the user took hold of. The grab is mapped into the card in
-// proportion to the card it came from, so the pointer always sits on the
-// card: a 2×2 widget is 195 × 174 but the pin card is 84pt tall, and an
-// unscaled grab from its lower half would leave the pointer above the card.
-func pinFrameUnder(cursor mygo.Point, grabDX, grabDY, srcW, srcH float32, cardW int) mygo.Rectangle {
+// pinGrabOffset maps a grab offset inside a srcW × srcH grid card into the
+// proportional point inside a cardW × pinCardH desktop pin.
+func pinGrabOffset(grabDX, grabDY, srcW, srcH float32, cardW int) (gx, gy float32) {
 	if srcW <= 0 {
 		srcW = 1
 	}
 	if srcH <= 0 {
 		srcH = 1
 	}
-	gx := float32(cardW) * min(max(grabDX, 0), srcW) / srcW
-	gy := float32(pinCardH) * min(max(grabDY, 0), srcH) / srcH
+	gx = float32(cardW) * min(max(grabDX, 0), srcW) / srcW
+	gy = float32(pinCardH) * min(max(grabDY, 0), srcH) / srcH
 	// A grab on the source's last point still lands on the card.
 	gx = min(gx, float32(cardW)-1)
 	gy = min(gy, float32(pinCardH)-1)
+	return gx, gy
+}
+
+// pinFrameUnder puts a cardW × pinCardH pin card under the pointer, keeping
+// the grab point the user took hold of. The grab is mapped into the card in
+// proportion to the card it came from, so the pointer always sits on the
+// card: a 2×2 widget is 195 × 174 but the pin card is 84pt tall, and an
+// unscaled grab from its lower half would leave the pointer above the card.
+func pinFrameUnder(cursor mygo.Point, grabDX, grabDY, srcW, srcH float32, cardW int) mygo.Rectangle {
+	gx, gy := pinGrabOffset(grabDX, grabDY, srcW, srcH, cardW)
 	return mygo.Rectangle{
 		X: cursor.X - int(math.Round(float64(gx))), Y: cursor.Y - int(math.Round(float64(gy))),
 		Width: cardW, Height: pinCardH,
@@ -418,13 +436,21 @@ var pinOpenWindow = func(it *pinItem) { it.openWindow(false) }
 // the same seam, for the tools page and the home canvas.
 var pinOpenPreview = func(it *pinItem) { it.openWindow(true) }
 
+// pinOpenPreviewInvisible creates the preview window visible but fully
+// transparent: it keeps compositing the dragged card while the pointer is
+// still over the panel, so the handoff only raises its opacity. Hit tests
+// skip it either way (a drag preview ignores the mouse).
+var pinOpenPreviewInvisible = func(it *pinItem) { it.openWindowState(true, true, 0) }
+
 // openWindow creates a non-activating card panel. A preview ignores mouse
 // events and sits above the source panel; a committed pin floats at level 3.
-func (it *pinItem) openWindow(preview bool) {
+func (it *pinItem) openWindow(preview bool) { it.openWindowState(preview, true, 1) }
+
+func (it *pinItem) openWindowState(preview, show bool, opacity float64) {
 	f := it.frame
 	w := mygo.NewWindow(mygo.WindowOptions{
 		Title: it.owner.appLoc().WindowPins(), Width: f.Width, Height: f.Height,
-		X: f.X, Y: f.Y,
+		X: f.X, Y: f.Y, Opacity: opacity,
 		Hidden: true, Frameless: true, Transparent: true, DisableShadow: true,
 		AlwaysOnTop: true, SkipTaskbar: true, Panel: true,
 		DisableMove: disableMoveOverlay, DisableResize: true, DisableMinimize: true, DisableMaximize: true, DisableFullScreen: true,
@@ -439,7 +465,9 @@ func (it *pinItem) openWindow(preview bool) {
 		w.OnClose(it.onClose)
 	}
 	platform.SetWindowFrame(w.NativeHandle(), f.X, f.Y, f.Width, f.Height)
-	w.ShowInactive()
+	if show {
+		w.ShowInactive()
+	}
 }
 
 // onClose handles a system-initiated close (Space switch, Exposé
@@ -557,6 +585,11 @@ func (a *shelf) pinDisplaysChanged() {
 // always-open state. p is the cursor, down the left button, fileDrag a
 // system drag the cards can receive.
 func (a *shelf) pinTick(now time.Time, p mygo.Point, down, fileDrag bool) {
+	if tp := a.toolsPage(); tp != nil {
+		if pv := tp.preview.window(); pv != nil && (pv.padL != 0 || pv.padT != 0) && pv.morphVal(now) >= 0.999 {
+			pv.dropPreviewPaddingNow()
+		}
+	}
 	returning := false
 	for _, it := range append([]*pinItem{}, a.pins...) {
 		if it.wantKill {

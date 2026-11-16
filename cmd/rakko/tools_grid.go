@@ -18,6 +18,7 @@ package main
 
 import (
 	"math"
+	"time"
 
 	"rakko/internal/layout"
 )
@@ -196,14 +197,73 @@ func toolVirtualCards(cards []layout.Card, dragID string, index int) []layout.Ca
 	return append(out, rest[index:]...)
 }
 
+const (
+	// slotSwitchMargin requires a candidate slot centre to be noticeably closer
+	// than the current slot before an immediate swap, stopping ping-pong on
+	// mixed 2×2 / 1×1 packings. slotSwitchDwell lets deliberate smaller
+	// adjustments settle after a brief pause.
+	slotSwitchMargin = 16.0
+	slotSwitchDwell  = 100 * time.Millisecond
+)
+
+// pickInsertSlot selects the best slot index among candCount layouts, applying
+// distance hysteresis and optional dwell when switching away from current.
+func pickInsertSlot(candCount int, current int, px, py float32, cellAt func(i int) (x, y float32, ok bool), candIdx *int, candSince *time.Time, now time.Time) int {
+	best, bestD := -1, float64(math.MaxFloat64)
+	curD, hasCur := float64(math.MaxFloat64), false
+	for i := 0; i < candCount; i++ {
+		cx, cy, ok := cellAt(i)
+		if !ok {
+			continue
+		}
+		dx := float64(px - cx)
+		dy := float64(py - cy)
+		d := dx*dx + dy*dy
+		if d < bestD || (d == bestD && i == current) {
+			best, bestD = i, d
+		}
+		if i == current {
+			curD, hasCur = d, true
+		}
+	}
+	if best < 0 || current < 0 || !hasCur || best == current {
+		if candIdx != nil {
+			*candIdx = -1
+		}
+		if candSince != nil {
+			*candSince = time.Time{}
+		}
+		return best
+	}
+	if math.Sqrt(curD)-math.Sqrt(bestD) >= slotSwitchMargin {
+		if candIdx != nil {
+			*candIdx = -1
+		}
+		if candSince != nil {
+			*candSince = time.Time{}
+		}
+		return best
+	}
+	if candIdx != nil && candSince != nil && !now.IsZero() {
+		if *candIdx != best {
+			*candIdx, *candSince = best, now
+		} else if now.Sub(*candSince) >= slotSwitchDwell {
+			*candIdx, *candSince = -1, time.Time{}
+			return best
+		}
+	}
+	return current
+}
+
 // toolInsertIndex is where the pointer means to drop the dragged card:
 // the index inside cards (without it) whose packed cell's centre is
 // nearest, in row-major scan order, packed at cols columns. It returns -1
 // when the drag id is unknown. px, py are stage content coordinates.
-//
-// current is the index last reported; it wins ties so the target does
-// not flicker between two cells while the pointer hovers a boundary.
 func toolInsertIndex(cards []layout.Card, cols int, dragID string, current int, px, py float32) int {
+	return toolInsertIndexStable(cards, cols, dragID, current, px, py, nil, nil, nil, time.Time{})
+}
+
+func toolInsertIndexStable(cards []layout.Card, cols int, dragID string, current int, px, py float32, skip func(string) bool, candIdx *int, candSince *time.Time, now time.Time) int {
 	drag := layout.Card{ID: dragID}
 	for _, card := range cards {
 		if card.ID == dragID {
@@ -214,49 +274,39 @@ func toolInsertIndex(cards []layout.Card, cols int, dragID string, current int, 
 		return -1
 	}
 	cols = max(toolMinCols, min(cols, toolMaxCols))
-	best, bestD := -1, float64(math.MaxFloat64)
-	for i := 0; i <= len(cards)-1; i++ {
+	return pickInsertSlot(len(cards), current, px, py, func(i int) (float32, float32, bool) {
 		virtual := toolVirtualCards(cards, dragID, i)
-		for _, cell := range packToolCards(virtual, cols, nil) {
-			if cell.id != dragID {
-				continue
-			}
-			dx := px - (cell.x + cell.w/2)
-			dy := py - (cell.y + cell.h/2)
-			d := float64(dx*dx + dy*dy)
-			if d < bestD || (d == bestD && i == current) {
-				best, bestD = i, d
+		for _, cell := range packToolCards(virtual, cols, skip) {
+			if cell.id == dragID {
+				return cell.x + cell.w/2, cell.y + cell.h/2, true
 			}
 		}
-	}
-	return best
+		return 0, 0, false
+	}, candIdx, candSince, now)
 }
 
 // toolInsertIndexFresh is toolInsertIndex for a card that is not in the
 // list yet (dragged in from the library): the candidate list is the cards
 // with id inserted at each index.
 func toolInsertIndexFresh(cards []layout.Card, cols int, spec layout.Card, current int, px, py float32) int {
+	return toolInsertIndexFreshStable(cards, cols, spec, current, px, py, nil, nil, nil, time.Time{})
+}
+
+func toolInsertIndexFreshStable(cards []layout.Card, cols int, spec layout.Card, current int, px, py float32, skip func(string) bool, candIdx *int, candSince *time.Time, now time.Time) int {
 	if spec.ID == "" {
 		return -1
 	}
 	cols = max(toolMinCols, min(cols, toolMaxCols))
-	best, bestD := -1, float64(math.MaxFloat64)
-	for i := 0; i <= len(cards); i++ {
+	return pickInsertSlot(len(cards)+1, current, px, py, func(i int) (float32, float32, bool) {
 		v := make([]layout.Card, 0, len(cards)+1)
 		v = append(v, cards[:i]...)
 		v = append(v, spec)
 		v = append(v, cards[i:]...)
-		for _, cell := range packToolCards(v, cols, nil) {
-			if cell.id != spec.ID {
-				continue
-			}
-			dx := px - (cell.x + cell.w/2)
-			dy := py - (cell.y + cell.h/2)
-			d := float64(dx*dx + dy*dy)
-			if d < bestD || (d == bestD && i == current) {
-				best, bestD = i, d
+		for _, cell := range packToolCards(v, cols, skip) {
+			if cell.id == spec.ID {
+				return cell.x + cell.w/2, cell.y + cell.h/2, true
 			}
 		}
-	}
-	return best
+		return 0, 0, false
+	}, candIdx, candSince, now)
 }

@@ -56,6 +56,10 @@ var (
 func (it *pinItem) view(c *ui.Context) {
 	c.Root().Background(ui.Transparent)
 	a := it.owner
+	if it.preview {
+		it.viewPreview(c)
+		return
+	}
 	if !it.expanded {
 		it.viewStrip(c)
 		return
@@ -203,3 +207,39 @@ func (it *pinItem) pinMenu(e ui.Element) {
 
 // pinRevealKey keys the strip-to-card slide to this pin's window.
 type pinRevealKey struct{ it *pinItem }
+
+// viewPreview draws the transient drag preview window, matching the lifted
+// panel card on the handoff frame and morphing to the desktop pin card over
+// 180 ms.
+func (it *pinItem) viewPreview(c *ui.Context) {
+	a := it.owner
+	now := c.Now()
+	m := it.morphVal(now)
+	if it.morphActive(now) || it.tilt != 0 {
+		c.AnimationFrame()
+	}
+	if m >= 0.999 && (it.padL != 0 || it.padT != 0) {
+		mygo.RunOnMain(func() {
+			if it.preview && it.win != nil {
+				it.dropPreviewPaddingNow()
+			}
+		})
+	}
+	rows := max(it.rowsSpan, 1)
+	spec := layout.Card{ID: it.cardID, Span: it.span, Rows: rows}
+	if it.srcW <= 0 {
+		// Standalone preview item (e.g. unit test without drag morph): render
+		// directly as the desktop pin card.
+		zone := ui.Column(c.Key("pin")).Fill().Radius(18).Clip()
+		zone.Background(surface).Border(0.5, pinEdgeColor)
+		zone.Children(func() {
+			card := a.toolCard(c, layout.Card{ID: it.cardID, Span: it.span, Rows: it.rows}, cardDesktop).Fill()
+			if it.tilt != 0 {
+				card.Rotate(it.tilt).TransformOrigin(0.5, 0.5)
+			}
+		})
+		return
+	}
+	v := computeDragCardVisual(spec, it.cardW, it.grabDX, it.grabDY, it.liftK, m, it.reduceMotion)
+	drawDragCard(c, a, spec, "pin-preview", it.cardW, float32(it.padL)+it.subX, float32(it.padT)+it.subY, v, m, it.tilt)
+}
