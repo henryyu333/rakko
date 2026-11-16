@@ -245,26 +245,6 @@ func (msgs Messages) General() string {
 	return Catalog.Format(msgs.locale, "general", nil)
 }
 
-// ShellStyleRow says "刘海样式"
-// in the language the app shows.
-func ShellStyleRow() string { return In(i18n.Locale()).ShellStyleRow() }
-
-// ShellStyleRow says "刘海样式"
-// in the language of msgs.
-func (msgs Messages) ShellStyleRow() string {
-	return Catalog.Format(msgs.locale, "shellStyleRow", nil)
-}
-
-// ShellStyleCaption says "没有刘海的屏幕总是显示为灵动岛"
-// in the language the app shows.
-func ShellStyleCaption() string { return In(i18n.Locale()).ShellStyleCaption() }
-
-// ShellStyleCaption says "没有刘海的屏幕总是显示为灵动岛"
-// in the language of msgs.
-func (msgs Messages) ShellStyleCaption() string {
-	return Catalog.Format(msgs.locale, "shellStyleCaption", nil)
-}
-
 // ShellStyleNotch says "刘海"
 // in the language the app shows.
 func ShellStyleNotch() string { return In(i18n.Locale()).ShellStyleNotch() }
@@ -335,16 +315,6 @@ func (msgs Messages) SettingsIslandPosRow() string {
 	return Catalog.Format(msgs.locale, "settingsIslandPosRow", nil)
 }
 
-// SettingsIslandPosCaption says "按住小岛拖到任意位置，松手后留在那里"
-// in the language the app shows.
-func SettingsIslandPosCaption() string { return In(i18n.Locale()).SettingsIslandPosCaption() }
-
-// SettingsIslandPosCaption says "按住小岛拖到任意位置，松手后留在那里"
-// in the language of msgs.
-func (msgs Messages) SettingsIslandPosCaption() string {
-	return Catalog.Format(msgs.locale, "settingsIslandPosCaption", nil)
-}
-
 // SettingsIslandReset says "恢复默认位置"
 // in the language the app shows.
 func SettingsIslandReset() string { return In(i18n.Locale()).SettingsIslandReset() }
@@ -363,16 +333,6 @@ func SettingsSnapRow() string { return In(i18n.Locale()).SettingsSnapRow() }
 // in the language of msgs.
 func (msgs Messages) SettingsSnapRow() string {
 	return Catalog.Format(msgs.locale, "settingsSnapRow", nil)
-}
-
-// SettingsSnapCaption says "把窗口拖到刘海，松手就排好"
-// in the language the app shows.
-func SettingsSnapCaption() string { return In(i18n.Locale()).SettingsSnapCaption() }
-
-// SettingsSnapCaption says "把窗口拖到刘海，松手就排好"
-// in the language of msgs.
-func (msgs Messages) SettingsSnapCaption() string {
-	return Catalog.Format(msgs.locale, "settingsSnapCaption", nil)
 }
 
 // SettingsLiveSection says "实时活动"
@@ -435,26 +395,14 @@ func (msgs Messages) SettingsClipboardLimitRow() string {
 	return Catalog.Format(msgs.locale, "settingsClipboardLimitRow", nil)
 }
 
-// SettingsClipboardExcludedRow says "排除的应用"
+// SettingsClipboardExcludedRow says "不记录这些应用"
 // in the language the app shows.
 func SettingsClipboardExcludedRow() string { return In(i18n.Locale()).SettingsClipboardExcludedRow() }
 
-// SettingsClipboardExcludedRow says "排除的应用"
+// SettingsClipboardExcludedRow says "不记录这些应用"
 // in the language of msgs.
 func (msgs Messages) SettingsClipboardExcludedRow() string {
 	return Catalog.Format(msgs.locale, "settingsClipboardExcludedRow", nil)
-}
-
-// SettingsClipboardExcludedCaption says "在剪贴板条目上右键可添加"
-// in the language the app shows.
-func SettingsClipboardExcludedCaption() string {
-	return In(i18n.Locale()).SettingsClipboardExcludedCaption()
-}
-
-// SettingsClipboardExcludedCaption says "在剪贴板条目上右键可添加"
-// in the language of msgs.
-func (msgs Messages) SettingsClipboardExcludedCaption() string {
-	return Catalog.Format(msgs.locale, "settingsClipboardExcludedCaption", nil)
 }
 
 // SettingsClipboardExcludedNone says "无"
@@ -609,11 +557,11 @@ func (msgs Messages) SettingsAIQuotaUnavailable() string {
 	return Catalog.Format(msgs.locale, "settingsAIQuotaUnavailable", nil)
 }
 
-// SettingsAILocalFoot says "本机用量自动统计本机所有 AI 工具的 token，只读本机日志，不联网、不上传。"
+// SettingsAILocalFoot says "本机用量只读本机日志，不联网、不上传。"
 // in the language the app shows.
 func SettingsAILocalFoot() string { return In(i18n.Locale()).SettingsAILocalFoot() }
 
-// SettingsAILocalFoot says "本机用量自动统计本机所有 AI 工具的 token，只读本机日志，不联网、不上传。"
+// SettingsAILocalFoot says "本机用量只读本机日志，不联网、不上传。"
 // in the language of msgs.
 func (msgs Messages) SettingsAILocalFoot() string {
 	return Catalog.Format(msgs.locale, "settingsAILocalFoot", nil)
@@ -637,16 +585,6 @@ func SettingsAgentRow() string { return In(i18n.Locale()).SettingsAgentRow() }
 // in the language of msgs.
 func (msgs Messages) SettingsAgentRow() string {
 	return Catalog.Format(msgs.locale, "settingsAgentRow", nil)
-}
-
-// SettingsAgentCaption says "打开会在下列工具的配置文件里加入 hook，关闭时移除"
-// in the language the app shows.
-func SettingsAgentCaption() string { return In(i18n.Locale()).SettingsAgentCaption() }
-
-// SettingsAgentCaption says "打开会在下列工具的配置文件里加入 hook，关闭时移除"
-// in the language of msgs.
-func (msgs Messages) SettingsAgentCaption() string {
-	return Catalog.Format(msgs.locale, "settingsAgentCaption", nil)
 }
 
 // SettingsAgentInjected says "已注入"
@@ -779,11 +717,11 @@ func (msgs Messages) SettingsDragOutRow() string {
 	return Catalog.Format(msgs.locale, "settingsDragOutRow", nil)
 }
 
-// SettingsDragOutCaption says "置顶的项目会保留"
+// SettingsDragOutCaption says "置顶的保留"
 // in the language the app shows.
 func SettingsDragOutCaption() string { return In(i18n.Locale()).SettingsDragOutCaption() }
 
-// SettingsDragOutCaption says "置顶的项目会保留"
+// SettingsDragOutCaption says "置顶的保留"
 // in the language of msgs.
 func (msgs Messages) SettingsDragOutCaption() string {
 	return Catalog.Format(msgs.locale, "settingsDragOutCaption", nil)
@@ -7449,6 +7387,16 @@ func (msgs Messages) SettingsUpdateCheckRow() string {
 	return Catalog.Format(msgs.locale, "settingsUpdateCheckRow", nil)
 }
 
+// SettingsUpdateLastRow says "上次检查"
+// in the language the app shows.
+func SettingsUpdateLastRow() string { return In(i18n.Locale()).SettingsUpdateLastRow() }
+
+// SettingsUpdateLastRow says "上次检查"
+// in the language of msgs.
+func (msgs Messages) SettingsUpdateLastRow() string {
+	return Catalog.Format(msgs.locale, "settingsUpdateLastRow", nil)
+}
+
 // SettingsUpdateNever says "尚未检查"
 // in the language the app shows.
 func SettingsUpdateNever() string { return In(i18n.Locale()).SettingsUpdateNever() }
@@ -7459,13 +7407,13 @@ func (msgs Messages) SettingsUpdateNever() string {
 	return Catalog.Format(msgs.locale, "settingsUpdateNever", nil)
 }
 
-// SettingsUpdateLast says "上次检查：{when} · {result}"
+// SettingsUpdateLast says "{when} · {result}"
 // in the language the app shows.
 func SettingsUpdateLast(when string, result string) string {
 	return In(i18n.Locale()).SettingsUpdateLast(when, result)
 }
 
-// SettingsUpdateLast says "上次检查：{when} · {result}"
+// SettingsUpdateLast says "{when} · {result}"
 // in the language of msgs.
 func (msgs Messages) SettingsUpdateLast(when string, result string) string {
 	return Catalog.Format(msgs.locale, "settingsUpdateLast", map[string]any{"when": when, "result": result})
@@ -7545,16 +7493,6 @@ func (msgs Messages) SettingsUpdateResultDisabled() string {
 	return Catalog.Format(msgs.locale, "settingsUpdateResultDisabled", nil)
 }
 
-// SettingsNotchPage says "外形与提示"
-// in the language the app shows.
-func SettingsNotchPage() string { return In(i18n.Locale()).SettingsNotchPage() }
-
-// SettingsNotchPage says "外形与提示"
-// in the language of msgs.
-func (msgs Messages) SettingsNotchPage() string {
-	return Catalog.Format(msgs.locale, "settingsNotchPage", nil)
-}
-
 // SettingsShapeGroup says "外形"
 // in the language the app shows.
 func SettingsShapeGroup() string { return In(i18n.Locale()).SettingsShapeGroup() }
@@ -7563,26 +7501,6 @@ func SettingsShapeGroup() string { return In(i18n.Locale()).SettingsShapeGroup()
 // in the language of msgs.
 func (msgs Messages) SettingsShapeGroup() string {
 	return Catalog.Format(msgs.locale, "settingsShapeGroup", nil)
-}
-
-// SettingsNotchFoot says "减少透明度时面板画成纯黑。"
-// in the language the app shows.
-func SettingsNotchFoot() string { return In(i18n.Locale()).SettingsNotchFoot() }
-
-// SettingsNotchFoot says "减少透明度时面板画成纯黑。"
-// in the language of msgs.
-func (msgs Messages) SettingsNotchFoot() string {
-	return Catalog.Format(msgs.locale, "settingsNotchFoot", nil)
-}
-
-// SettingsNotchFootWin says "关闭透明效果时面板画成纯黑。"
-// in the language the app shows.
-func SettingsNotchFootWin() string { return In(i18n.Locale()).SettingsNotchFootWin() }
-
-// SettingsNotchFootWin says "关闭透明效果时面板画成纯黑。"
-// in the language of msgs.
-func (msgs Messages) SettingsNotchFootWin() string {
-	return Catalog.Format(msgs.locale, "settingsNotchFootWin", nil)
 }
 
 // SettingsWindowGroup says "窗口"
@@ -7625,11 +7543,11 @@ func (msgs Messages) SettingsAIEnableGroup() string {
 	return Catalog.Format(msgs.locale, "settingsAIEnableGroup", nil)
 }
 
-// SettingsKeysGlobalGroup says "全局快捷键"
+// SettingsKeysGlobalGroup says "全局"
 // in the language the app shows.
 func SettingsKeysGlobalGroup() string { return In(i18n.Locale()).SettingsKeysGlobalGroup() }
 
-// SettingsKeysGlobalGroup says "全局快捷键"
+// SettingsKeysGlobalGroup says "全局"
 // in the language of msgs.
 func (msgs Messages) SettingsKeysGlobalGroup() string {
 	return Catalog.Format(msgs.locale, "settingsKeysGlobalGroup", nil)
@@ -8057,16 +7975,6 @@ func (msgs Messages) SettingsShortcutEscRow() string {
 	return Catalog.Format(msgs.locale, "settingsShortcutEscRow", nil)
 }
 
-// SettingsShortcutEscCaption says "页面 → 搜索条 → 收起"
-// in the language the app shows.
-func SettingsShortcutEscCaption() string { return In(i18n.Locale()).SettingsShortcutEscCaption() }
-
-// SettingsShortcutEscCaption says "页面 → 搜索条 → 收起"
-// in the language of msgs.
-func (msgs Messages) SettingsShortcutEscCaption() string {
-	return Catalog.Format(msgs.locale, "settingsShortcutEscCaption", nil)
-}
-
 // SettingsShortcutSelectRow says "剪贴板里选择并复制"
 // in the language the app shows.
 func SettingsShortcutSelectRow() string { return In(i18n.Locale()).SettingsShortcutSelectRow() }
@@ -8199,41 +8107,11 @@ func (msgs Messages) SettingsAboutSourceOpen() string {
 	return Catalog.Format(msgs.locale, "settingsAboutSourceOpen", nil)
 }
 
-// SettingsGroupNotch says "刘海"
-// in the language the app shows.
-func SettingsGroupNotch() string { return In(i18n.Locale()).SettingsGroupNotch() }
-
-// SettingsGroupNotch says "刘海"
-// in the language of msgs.
-func (msgs Messages) SettingsGroupNotch() string {
-	return Catalog.Format(msgs.locale, "settingsGroupNotch", nil)
-}
-
-// SettingsGroupContent says "内容"
-// in the language the app shows.
-func SettingsGroupContent() string { return In(i18n.Locale()).SettingsGroupContent() }
-
-// SettingsGroupContent says "内容"
-// in the language of msgs.
-func (msgs Messages) SettingsGroupContent() string {
-	return Catalog.Format(msgs.locale, "settingsGroupContent", nil)
-}
-
-// SettingsGroupSystem says "系统"
-// in the language the app shows.
-func SettingsGroupSystem() string { return In(i18n.Locale()).SettingsGroupSystem() }
-
-// SettingsGroupSystem says "系统"
-// in the language of msgs.
-func (msgs Messages) SettingsGroupSystem() string {
-	return Catalog.Format(msgs.locale, "settingsGroupSystem", nil)
-}
-
-// SettingsRetentionCaption says "置顶的项目不会清理"
+// SettingsRetentionCaption says "置顶的不清理"
 // in the language the app shows.
 func SettingsRetentionCaption() string { return In(i18n.Locale()).SettingsRetentionCaption() }
 
-// SettingsRetentionCaption says "置顶的项目不会清理"
+// SettingsRetentionCaption says "置顶的不清理"
 // in the language of msgs.
 func (msgs Messages) SettingsRetentionCaption() string {
 	return Catalog.Format(msgs.locale, "settingsRetentionCaption", nil)
@@ -8247,28 +8125,6 @@ func SettingsNotchNav() string { return In(i18n.Locale()).SettingsNotchNav() }
 // in the language of msgs.
 func (msgs Messages) SettingsNotchNav() string {
 	return Catalog.Format(msgs.locale, "settingsNotchNav", nil)
-}
-
-// SettingsPermStatusOn says "系统权限已全部开启"
-// in the language the app shows.
-func SettingsPermStatusOn() string { return In(i18n.Locale()).SettingsPermStatusOn() }
-
-// SettingsPermStatusOn says "系统权限已全部开启"
-// in the language of msgs.
-func (msgs Messages) SettingsPermStatusOn() string {
-	return Catalog.Format(msgs.locale, "settingsPermStatusOn", nil)
-}
-
-// SettingsPermStatusMissing says "还差 {count, number, ::group-off} 项权限"
-// in the language the app shows.
-func SettingsPermStatusMissing(count int) string {
-	return In(i18n.Locale()).SettingsPermStatusMissing(count)
-}
-
-// SettingsPermStatusMissing says "还差 {count, number, ::group-off} 项权限"
-// in the language of msgs.
-func (msgs Messages) SettingsPermStatusMissing(count int) string {
-	return Catalog.Format(msgs.locale, "settingsPermStatusMissing", map[string]any{"count": count})
 }
 
 // ShotSaveButton says "保存"
@@ -8309,16 +8165,6 @@ func SettingsApprovalRow() string { return In(i18n.Locale()).SettingsApprovalRow
 // in the language of msgs.
 func (msgs Messages) SettingsApprovalRow() string {
 	return Catalog.Format(msgs.locale, "settingsApprovalRow", nil)
-}
-
-// SettingsApprovalCaption says "打开会在下列工具里加入审批 hook，关闭时移除"
-// in the language the app shows.
-func SettingsApprovalCaption() string { return In(i18n.Locale()).SettingsApprovalCaption() }
-
-// SettingsApprovalCaption says "打开会在下列工具里加入审批 hook，关闭时移除"
-// in the language of msgs.
-func (msgs Messages) SettingsApprovalCaption() string {
-	return Catalog.Format(msgs.locale, "settingsApprovalCaption", nil)
 }
 
 // SettingsApprovalNone says "没有可审批的 Agent"
@@ -8893,26 +8739,6 @@ func (msgs Messages) PetStowWin() string {
 	return Catalog.Format(msgs.locale, "petStowWin", nil)
 }
 
-// ShellStyleRowWin says "顶部样式"
-// in the language the app shows.
-func ShellStyleRowWin() string { return In(i18n.Locale()).ShellStyleRowWin() }
-
-// ShellStyleRowWin says "顶部样式"
-// in the language of msgs.
-func (msgs Messages) ShellStyleRowWin() string {
-	return Catalog.Format(msgs.locale, "shellStyleRowWin", nil)
-}
-
-// ShellStyleCaptionWin says "没有刘海的屏幕可以显示为灵动岛，或模拟小刘海"
-// in the language the app shows.
-func ShellStyleCaptionWin() string { return In(i18n.Locale()).ShellStyleCaptionWin() }
-
-// ShellStyleCaptionWin says "没有刘海的屏幕可以显示为灵动岛，或模拟小刘海"
-// in the language of msgs.
-func (msgs Messages) ShellStyleCaptionWin() string {
-	return Catalog.Format(msgs.locale, "shellStyleCaptionWin", nil)
-}
-
 // ShellStyleNotchWin says "模拟小刘海"
 // in the language the app shows.
 func ShellStyleNotchWin() string { return In(i18n.Locale()).ShellStyleNotchWin() }
@@ -8933,16 +8759,6 @@ func (msgs Messages) SettingsSnapRowWin() string {
 	return Catalog.Format(msgs.locale, "settingsSnapRowWin", nil)
 }
 
-// SettingsSnapCaptionWin says "把窗口拖到顶部胶囊，松手就排好"
-// in the language the app shows.
-func SettingsSnapCaptionWin() string { return In(i18n.Locale()).SettingsSnapCaptionWin() }
-
-// SettingsSnapCaptionWin says "把窗口拖到顶部胶囊，松手就排好"
-// in the language of msgs.
-func (msgs Messages) SettingsSnapCaptionWin() string {
-	return Catalog.Format(msgs.locale, "settingsSnapCaptionWin", nil)
-}
-
 // SettingsAIEnableRowWin says "在顶部胶囊里显示 AI 用量"
 // in the language the app shows.
 func SettingsAIEnableRowWin() string { return In(i18n.Locale()).SettingsAIEnableRowWin() }
@@ -8951,16 +8767,6 @@ func SettingsAIEnableRowWin() string { return In(i18n.Locale()).SettingsAIEnable
 // in the language of msgs.
 func (msgs Messages) SettingsAIEnableRowWin() string {
 	return Catalog.Format(msgs.locale, "settingsAIEnableRowWin", nil)
-}
-
-// SettingsAILocalFootWin says "本机用量自动统计本机所有 AI 工具的 token，只读本机日志，不联网、不上传。"
-// in the language the app shows.
-func SettingsAILocalFootWin() string { return In(i18n.Locale()).SettingsAILocalFootWin() }
-
-// SettingsAILocalFootWin says "本机用量自动统计本机所有 AI 工具的 token，只读本机日志，不联网、不上传。"
-// in the language of msgs.
-func (msgs Messages) SettingsAILocalFootWin() string {
-	return Catalog.Format(msgs.locale, "settingsAILocalFootWin", nil)
 }
 
 // SettingsAgentRowWin says "完成时在顶部胶囊提醒"
@@ -9227,16 +9033,6 @@ func SettingsKeysNotchGroupWin() string { return In(i18n.Locale()).SettingsKeysN
 // in the language of msgs.
 func (msgs Messages) SettingsKeysNotchGroupWin() string {
 	return Catalog.Format(msgs.locale, "settingsKeysNotchGroupWin", nil)
-}
-
-// SettingsGroupNotchWin says "顶部胶囊"
-// in the language the app shows.
-func SettingsGroupNotchWin() string { return In(i18n.Locale()).SettingsGroupNotchWin() }
-
-// SettingsGroupNotchWin says "顶部胶囊"
-// in the language of msgs.
-func (msgs Messages) SettingsGroupNotchWin() string {
-	return Catalog.Format(msgs.locale, "settingsGroupNotchWin", nil)
 }
 
 // SettingsApprovalRowWin says "在顶部胶囊审批 Agent 请求"

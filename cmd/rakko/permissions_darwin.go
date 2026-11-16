@@ -487,11 +487,15 @@ func (a *shelf) settingsPermissionSwitch(c *ui.Context, permissions, missing []s
 	l := loc(c)
 	title := l.PermTitle()
 	caption := ""
-	if a.perm.stage != permissionIdle {
+	switch {
+	case a.perm.stage != permissionIdle:
 		caption = a.permissionCaption(l, permissions, missing)
+	case len(missing) > 0:
+		caption = l.PermMissing(len(missing), permissionShortNames(missing))
 	}
 	if a.perm.stage == permissionRelaunch {
-		ui.Row(c.Key("perm-row")).AlignItems(ui.Center).Gap(10).MinHeight(48).Padding(settingsRowPadY, 12).FillWidth().Children(func() {
+		ui.Row(c.Key("perm-row")).AlignItems(ui.Center).Gap(14).MinHeight(settingsRowMinHeight).
+			Padding(settingsRowPadY, settingsRowPadX).FillWidth().Children(func() {
 			permissionRowLabel(c, title, caption)
 			settingsAccentButton(c, "relaunch", l.PermRelaunchButton(), func() { a.relaunchShelf() })
 		})
@@ -499,7 +503,10 @@ func (a *shelf) settingsPermissionSwitch(c *ui.Context, permissions, missing []s
 	}
 	on := len(missing) == 0 || a.perm.stage == permissionWaiting
 	row := ui.ToggleBase(c.Key("toggle-permissions"), &on).FillWidth().AlignItems(ui.Center).
-		Gap(10).MinHeight(48).Padding(settingsRowPadY, 12).Label(title)
+		Gap(14).MinHeight(settingsRowMinHeight).Padding(settingsRowPadY, settingsRowPadX).Label(title)
+	if row.Hovered() {
+		row.Background(settingsRowHoverBg)
+	}
 	var sw ui.Element
 	row.Children(func() {
 		permissionRowLabel(c, title, caption)
@@ -510,7 +517,7 @@ func (a *shelf) settingsPermissionSwitch(c *ui.Context, permissions, missing []s
 					a.repaintSettings()
 				})
 			}
-			sw = ui.Switch(c, &on).Label(title)
+			sw = settingsSwitch(c, &on, title)
 		})
 	})
 	if row.Changed() || sw.Changed() {
@@ -520,10 +527,10 @@ func (a *shelf) settingsPermissionSwitch(c *ui.Context, permissions, missing []s
 
 // permissionRowLabel is the switch row's left column.
 func permissionRowLabel(c *ui.Context, title, caption string) {
-	ui.Column(c.Key("perm-k")).Gap(2).Grow(1).MinWidth(0).Children(func() {
-		settingsLabel(c, title, 13, 0).TextColor(ink)
+	ui.Column(c.Key("perm-k")).Gap(1).Grow(1).MinWidth(0).Children(func() {
+		settingsLabel(c, title, 13, 400).TextColor(ink)
 		if caption != "" {
-			ui.Text(c, caption).FontSize(11).TextColor(ink3)
+			settingsText(c, caption, 11.5).TextColor(settingsInk3)
 		}
 	})
 }
@@ -545,10 +552,9 @@ func (a *shelf) applyPermissionSwitch(on bool) {
 	}
 }
 
-// settingsAccentButton is the mock's compact accent pill used by the
-// permission header.
+// settingsAccentButton is the compact accent button used by the relaunch step.
 func settingsAccentButton(c *ui.Context, key, label string, fn func()) {
-	b := ui.ButtonBase(c.Key("perm-"+key)).Height(24).Radius(12).Padding(0, 10, 0, 10).
+	b := ui.ButtonBase(c.Key("perm-"+key)).Height(26).Radius(7).Padding(0, 12, 0, 12).
 		Background(settingsTheme.Accent).Center().Label(label)
 	if b.Pressed() {
 		b.Background(settingsTheme.AccentPressed)
@@ -556,22 +562,22 @@ func settingsAccentButton(c *ui.Context, key, label string, fn func()) {
 		b.Background(settingsTheme.AccentHover)
 	}
 	b.Children(func() {
-		ui.Text(c, label).SingleLine().FontSize(12).FontWeight(600).TextColor(ui.RGB(255, 255, 255))
+		settingsText(c, label, 12).SingleLine().FontWeight(700).TextColor(ui.RGB(255, 255, 255))
 	})
 	if b.Clicked() {
 		fn()
 	}
 }
 
-// settingsQuietButton is the same pill without the accent fill, for 停止.
+// settingsQuietButton is the secondary button used by 停止.
 func settingsQuietButton(c *ui.Context, key, label string, fn func()) {
-	b := ui.ButtonBase(c.Key("perm-"+key)).Height(24).Radius(12).Padding(0, 10, 0, 10).
-		Background(ui.RGBA(255, 255, 255, 0.10)).Center().Label(label)
+	b := ui.ButtonBase(c.Key("perm-"+key)).Height(26).Radius(7).Padding(0, 12, 0, 12).
+		Background(settingsCtlBg).Center().Label(label)
 	if b.Hovered() {
-		b.Background(ui.RGBA(255, 255, 255, 0.16))
+		b.Background(settingsCtlHoverBg)
 	}
 	b.Children(func() {
-		ui.Text(c, label).SingleLine().FontSize(12).FontWeight(600).TextColor(ink)
+		settingsText(c, label, 12).SingleLine().TextColor(ink)
 	})
 	if b.Clicked() {
 		fn()

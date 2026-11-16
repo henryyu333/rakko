@@ -1,9 +1,9 @@
 package main
 
-// The eight pages of the Settings window, each the design's hero card over
-// its grouped cards. Every preference that settings.json or the tray menus
-// held before lives on one of them; the split follows where a user looks
-// for it (Coucou's Hub), not the old file's order.
+// The pages of the Settings window, matching design/explore/settings-v6.html
+// ("小岛"): one centered single-column flow per page without page titles or
+// hero banners, sharing identical geometry and typography across macOS and
+// Windows.
 
 import (
 	"fmt"
@@ -19,48 +19,12 @@ import (
 	"rakko/locales"
 )
 
-// Hero gradients: one deep tone per page, with a glow of the page's accent.
-var (
-	heroGeneralFrom = ui.Hex("#1C2233")
-	heroGeneralTo   = ui.Hex("#0C0F18")
-	heroGeneralGlow = ui.RGBA(140, 160, 255, 1)
-
-	heroNotchFrom = ui.Hex("#191A1F")
-	heroNotchTo   = ui.Hex("#07080A")
-	heroNotchGlow = ui.RGBA(255, 255, 255, 1)
-
-	heroTrayFrom = ui.Hex("#102641")
-	heroTrayTo   = ui.Hex("#08111E")
-	heroTrayGlow = ui.RGBA(10, 132, 255, 1)
-
-	heroClipFrom = ui.Hex("#33230C")
-	heroClipTo   = ui.Hex("#140E06")
-	heroClipGlow = ui.RGBA(255, 159, 10, 1)
-
-	heroUsageFrom = ui.Hex("#0F2A1A")
-	heroUsageTo   = ui.Hex("#07120B")
-	heroUsageGlow = ui.RGBA(48, 209, 88, 1)
-
-	heroKeysFrom = ui.Hex("#232327")
-	heroKeysTo   = ui.Hex("#0C0C0E")
-	heroKeysGlow = ui.RGBA(255, 255, 255, 1)
-
-	heroPermFrom = ui.Hex("#1D1736")
-	heroPermTo   = ui.Hex("#0B0916")
-	heroPermGlow = ui.RGBA(94, 92, 230, 1)
-)
-
 // settingsGeneralPage: 启动 (open at login, language) and 搜索 (default
-// search mode). Only the login item survives a broken settings.json; every
-// other row is locked with the file. Updates live on 关于, beside the
-// version they apply to.
+// search mode). Only the login item survives a broken settings.json.
 func (a *shelf) settingsGeneralPage(c *ui.Context) {
 	l := loc(c)
-	settingsHero(c, "general", l.General(), "neutral",
-		heroGeneralFrom, heroGeneralTo, heroGeneralGlow)
-
-	settingsGroup(c, "startup", l.SettingsStartupGroup(), "", func() {
-		loginCap, capColor := "", ink3
+	settingsFirstGroup(c, "startup", l.SettingsStartupGroup(), "", func() {
+		loginCap, capColor := "", settingsInk3
 		if a.loginErr != "" {
 			loginCap, capColor = a.loginErr, danger
 		}
@@ -77,106 +41,123 @@ func (a *shelf) settingsGeneralPage(c *ui.Context) {
 		})
 	})
 
-	settingsGroup(c, "search", l.SettingsSearchGroup(), "", func() {
-		ui.Column(c.Key("search-rows")).FillWidth().Disabled(a.settingsBroken).Children(func() {
-			settingsRow(c, "searchmode", l.SettingsDefaultSearchMode(), "", func() {
-				idx := searchModeIndex(a.settings.SearchMode)
-				if sg := settingsSegmented(c, "searchmode", l.SettingsDefaultSearchMode(), &idx,
-					l.SearchModeAll(), l.SearchModeApps(), l.SearchModeFiles()); sg.Changed() {
-					a.setSearchMode(searchModeAt(idx))
-				}
-			})
+	settingsGroupRows(c, "search", l.SettingsSearchGroup(), "", a.settingsBroken, func() {
+		settingsRow(c, "searchmode", l.SettingsDefaultSearchMode(), "", func() {
+			idx := searchModeIndex(a.settings.SearchMode)
+			if sg := settingsSegmented(c, "searchmode", l.SettingsDefaultSearchMode(), &idx,
+				l.SearchModeAll(), l.SearchModeApps(), l.SearchModeFiles()); sg.Changed() {
+				a.setSearchMode(searchModeAt(idx))
+			}
 		})
 	})
 }
 
-// settingsNotchPage: the shelf's mantle (shape, island position), the
-// desktop otter, the three live activities, and window snapping.
+// settingsNotchPage: 外形 (two preview tiles + optional island position row),
+// 桌宠, 实时活动, and 窗口 snapping.
 func (a *shelf) settingsNotchPage(c *ui.Context) {
 	l := loc(c)
-	settingsHero(c, "notch", l.SettingsNotchPage(), "curious",
-		heroNotchFrom, heroNotchTo, heroNotchGlow)
-
-	settingsGroup(c, "shape", l.SettingsShapeGroup(), "", func() {
-		ui.Column(c.Key("shape-rows")).FillWidth().Disabled(a.settingsBroken).Children(func() {
-			settingsRow(c, "shellstyle", osText(l.ShellStyleRow(), l.ShellStyleRowWin()), osText(l.ShellStyleCaption(), l.ShellStyleCaptionWin()), func() {
-				style := 0
-				if a.settings.ShellStyle.Normalized() == settings.ShellStyleIsland {
-					style = 1
-				}
-				if sg := settingsSegmented(c, "shellstyle", osText(l.ShellStyleRow(), l.ShellStyleRowWin()), &style,
-					osText(l.ShellStyleNotch(), l.ShellStyleNotchWin()), l.ShellStyleIsland()); sg.Changed() {
-					next := settings.ShellStyleNotch
-					if style == 1 {
-						next = settings.ShellStyleIsland
-					}
-					a.setShellStyle(next)
-				}
+	settingsFirstGroupRows(c, "shape", l.SettingsShapeGroup(), "", a.settingsBroken, func() {
+		islandSelected := a.settings.ShellStyle.Normalized() == settings.ShellStyleIsland
+		ui.Row(c.Key("shape-tiles")).FillWidth().Padding(12).Gap(10).Children(func() {
+			settingsShapeTile(c, "notch", osText(l.ShellStyleNotch(), l.ShellStyleNotchWin()), false, !islandSelected, func() {
+				a.setShellStyle(settings.ShellStyleNotch)
 			})
-			if a.island {
-				settingsSep(c, "islandpos")
-				settingsRow(c, "islandpos", l.SettingsIslandPosRow(), l.SettingsIslandPosCaption(), func() {
-					settingsButton(c, "island-reset", l.SettingsIslandReset(), false, a.resetIslandPosition)
-				})
-			}
+			settingsShapeTile(c, "island", l.ShellStyleIsland(), true, islandSelected, func() {
+				a.setShellStyle(settings.ShellStyleIsland)
+			})
 		})
+		if a.island {
+			settingsSep(c, "islandpos")
+			settingsRow(c, "islandpos", l.SettingsIslandPosRow(), "", func() {
+				settingsButton(c, "island-reset", l.SettingsIslandReset(), false, a.resetIslandPosition)
+			})
+		}
 	})
-	settingsFootnote(c, "shape-foot", osText(l.SettingsNotchFoot(), l.SettingsNotchFootWin()))
 
-	// 桌宠: the desktop otter's own two switches. A build without the
-	// artwork draws no otter, so the group is not there either — an empty
-	// promise is worse than no row.
 	if petArt() != nil {
-		settingsGroup(c, "pet", l.SettingsPetGroup(), "", func() {
-			ui.Column(c.Key("pet-rows")).FillWidth().Disabled(a.settingsBroken).Children(func() {
-				settingsToggleRow(c, "pet-show", l.SettingsPetShowRow(), "", a.settings.Pet.Shown, a.setPetShown)
-				settingsSep(c, "pet-show")
-				settingsRow(c, "pet-size", l.PetSizeRow(), "", func() {
-					index := petSizeIndex(a.settings.Pet.Size)
-					if sg := settingsSegmented(c, "pet-size", l.PetSizeRow(), &index,
-						l.PetSizeSmall(), l.PetSizeMedium(), l.PetSizeLarge()); sg.Changed() {
-						a.setPetSize(petSizeAt(index))
-					}
-				})
+		settingsGroupRows(c, "pet", l.SettingsPetGroup(), "", a.settingsBroken, func() {
+			settingsToggleRow(c, "pet-show", l.SettingsPetShowRow(), "", a.settings.Pet.Shown, a.setPetShown)
+			settingsSep(c, "pet-show")
+			settingsRow(c, "pet-size", l.PetSizeRow(), "", func() {
+				index := petSizeIndex(a.settings.Pet.Size)
+				if sg := settingsSegmented(c, "pet-size", l.PetSizeRow(), &index,
+					l.PetSizeSmall(), l.PetSizeMedium(), l.PetSizeLarge()); sg.Changed() {
+					a.setPetSize(petSizeAt(index))
+				}
 			})
 		})
 	}
 
-	settingsGroup(c, "live", l.SettingsLiveSection(), "", func() {
-		ui.Column(c.Key("live-rows")).FillWidth().Disabled(a.settingsBroken).Children(func() {
-			settingsToggleRow(c, "live-charging", l.SettingsLiveCharging(), "", a.settings.LiveActivities.Charging,
-				func(on bool) { a.setLiveActivity(func(s *settings.Settings) { s.LiveActivities.Charging = on }) })
-			settingsSep(c, "live-charging")
-			settingsToggleRow(c, "live-headphones", l.SettingsLiveHeadphones(), "", a.settings.LiveActivities.Headphones,
-				func(on bool) { a.setLiveActivity(func(s *settings.Settings) { s.LiveActivities.Headphones = on }) })
-			settingsSep(c, "live-headphones")
-			settingsToggleRow(c, "live-downloads", l.SettingsLiveDownloads(), "", a.settings.LiveActivities.Downloads,
-				func(on bool) { a.setLiveActivity(func(s *settings.Settings) { s.LiveActivities.Downloads = on }) })
-		})
+	settingsGroupRows(c, "live", l.SettingsLiveSection(), "", a.settingsBroken, func() {
+		settingsToggleRow(c, "live-charging", l.SettingsLiveCharging(), "", a.settings.LiveActivities.Charging,
+			func(on bool) { a.setLiveActivity(func(s *settings.Settings) { s.LiveActivities.Charging = on }) })
+		settingsSep(c, "live-charging")
+		settingsToggleRow(c, "live-headphones", l.SettingsLiveHeadphones(), "", a.settings.LiveActivities.Headphones,
+			func(on bool) { a.setLiveActivity(func(s *settings.Settings) { s.LiveActivities.Headphones = on }) })
+		settingsSep(c, "live-headphones")
+		settingsToggleRow(c, "live-downloads", l.SettingsLiveDownloads(), "", a.settings.LiveActivities.Downloads,
+			func(on bool) { a.setLiveActivity(func(s *settings.Settings) { s.LiveActivities.Downloads = on }) })
 	})
 
-	settingsGroup(c, "window", l.SettingsWindowGroup(), "", func() {
-		ui.Column(c.Key("window-rows")).FillWidth().Disabled(a.settingsBroken).Children(func() {
-			settingsToggleRow(c, "snap", osText(l.SettingsSnapRow(), l.SettingsSnapRowWin()), osText(l.SettingsSnapCaption(), l.SettingsSnapCaptionWin()),
-				a.settings.SnapWindows, a.setSnapWindows)
-		})
+	settingsGroupRows(c, "window", l.SettingsWindowGroup(), "", a.settingsBroken, func() {
+		settingsToggleRow(c, "snap", osText(l.SettingsSnapRow(), l.SettingsSnapRowWin()), "",
+			a.settings.SnapWindows, a.setSnapWindows)
 	})
 }
 
-// setLiveActivity saves one 实时活动 switch and repaints.
+func settingsShapeTile(c *ui.Context, key, label string, island, selected bool, onSelect func()) {
+	b := ui.ButtonBase(c.Key("shape-"+key)).Grow(1).MinWidth(0).Radius(10).
+		Background(settingsTileBg).Padding(10, 10, 8, 10).Label(label)
+	if selected {
+		b.InsetShadow(0, 0, 0, 2, accent)
+	} else {
+		b.InsetShadow(0, 0, 0, 1, settingsTileRim)
+	}
+	labelColor := ink2
+	if selected {
+		labelColor = ink
+	}
+	b.Children(func() {
+		ui.Column(c.Key("tile")).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
+			scr := ui.Box(c.Key("scr")).FillWidth().Height(58).Radius(7).Clip().
+				LinearGradient(ui.LinearGradient{
+					Angle: 165,
+					Stops: []ui.GradientStop{
+						{Color: ui.Hex("#36456a"), At: 0},
+						{Color: ui.Hex("#1d2740"), At: 1},
+					},
+				})
+			scr.Children(func() {
+				ui.Box(c.Key("bar")).Absolute().Top(0).Left(0).Right(0).Height(8).
+					Background(ui.RGBA(0, 0, 0, 0.22))
+				if island {
+					ui.Row(c.Key("i-wrap")).Absolute().Top(6).Left(0).Right(0).Justify(ui.Center).Children(func() {
+						ui.Box(c.Key("i")).Size(46, 15).Background(ui.RGB(0, 0, 0)).Radius(8)
+					})
+				} else {
+					ui.Row(c.Key("n-wrap")).Absolute().Top(0).Left(0).Right(0).Justify(ui.Center).Children(func() {
+						ui.Box(c.Key("n")).Size(52, 14).Background(ui.RGB(0, 0, 0)).Radius(0, 0, 7, 7)
+					})
+				}
+			})
+			settingsText(c, label, 12).SingleLine().TextColor(labelColor)
+		})
+	})
+	if b.Clicked() {
+		onSelect()
+	}
+}
+
 func (a *shelf) setLiveActivity(mutate func(*settings.Settings)) {
 	next := a.settings
 	mutate(&next)
 	a.applySettings(next)
 }
 
-// settingsTrayPage: the tray's own two rules.
+// settingsTrayPage: 整理 (auto-clean retention and remove-after-drag).
 func (a *shelf) settingsTrayPage(c *ui.Context) {
 	l := loc(c)
-	settingsHero(c, "tray", l.SettingsTraySection(), "happy",
-		heroTrayFrom, heroTrayTo, heroTrayGlow)
-
-	settingsGroupRows(c, "tidy", l.SettingsTidyGroup(), "", a.settingsBroken, func() {
+	settingsFirstGroupRows(c, "tidy", l.SettingsTidyGroup(), "", a.settingsBroken, func() {
 		days := max(0, a.settings.RetentionDays)
 		labels, values, selected := choiceSegments(days, retentionChoices, func(n int) string {
 			if n <= 0 {
@@ -195,14 +176,10 @@ func (a *shelf) settingsTrayPage(c *ui.Context) {
 	})
 }
 
-// settingsClipboardPage: the retained count and the excluded apps, with the
-// same removal the old list offered.
+// settingsClipboardPage: 记录 (retention limit) and 不记录这些应用.
 func (a *shelf) settingsClipboardPage(c *ui.Context) {
 	l := loc(c)
-	settingsHero(c, "clip", l.SettingsClipboardSection(), "surprised",
-		heroClipFrom, heroClipTo, heroClipGlow)
-
-	settingsGroupRows(c, "record", l.SettingsClipGroup(), "", a.settingsBroken, func() {
+	settingsFirstGroupRows(c, "record", l.SettingsClipGroup(), "", a.settingsBroken, func() {
 		limit := a.settings.ClipboardLimit
 		if limit < 1 {
 			limit = settings.Default().ClipboardLimit
@@ -225,15 +202,16 @@ func (a *shelf) settingsClipboardPage(c *ui.Context) {
 			if i > 0 {
 				settingsSep(c, "excl-"+bundleID)
 			}
-			ui.Row(c.Key("app-"+bundleID)).AlignItems(ui.Center).Gap(14).
-				MinHeight(settingsRowMinHeight).Padding(settingsRowPadY, settingsRowPadX).FillWidth().Children(func() {
+			settingsRowLine(c, "app-"+bundleID).Children(func() {
 				if icon := settingsAppIcon(bundleID); icon != nil {
 					ui.Image(c.Key("ic"), icon).Size(20, 20).Radius(5)
 				} else {
-					ui.Icon(c.Key("ic"), appGlyph).Size(20, 20).TextColor(ink3)
+					ui.Box(c.Key("ic-slot")).Size(20, 20).Center().Children(func() {
+						ui.Icon(c.Key("ic"), appGlyph).Size(20, 20).TextColor(settingsInk3)
+					})
 				}
 				ui.Column(c.Key("id")).Gap(1).Grow(1).MinWidth(0).Children(func() {
-					settingsLabel(c, a.appName(bundleID), 13.5, 600).TextColor(ink)
+					settingsLabel(c, a.appName(bundleID), 13, 400).TextColor(ink)
 				})
 				settingsButton(c, "rm-"+bundleID, l.SettingsClipboardRemove(), false, func() {
 					a.removeExcludedApp(bundleID)
@@ -244,15 +222,10 @@ func (a *shelf) settingsClipboardPage(c *ui.Context) {
 	settingsGroupRows(c, "excluded", l.SettingsClipboardExcludedRow(), "", a.settingsBroken, rows)
 }
 
-// settingsAIUsagePage: the display switches and the two quota switches.
-// Local usage is auto-detected and summed into one total, so there is no
-// per-agent list and no source checkbox table.
+// settingsAIUsagePage: 显示, 套餐额度, Agent 完成提醒, Agent 审批, and footnote.
 func (a *shelf) settingsAIUsagePage(c *ui.Context) {
 	l := loc(c)
-	settingsHero(c, "usage", l.SettingsAISection(), "curious",
-		heroUsageFrom, heroUsageTo, heroUsageGlow)
-
-	settingsGroupRows(c, "ai", l.SettingsAIEnableGroup(), "", a.settingsBroken, func() {
+	settingsFirstGroupRows(c, "ai", l.SettingsAIEnableGroup(), "", a.settingsBroken, func() {
 		settingsToggleRow(c, "aiusage", osText(l.SettingsAIEnableRow(), l.SettingsAIEnableRowWin()), "", a.settings.AIUsage.Enabled,
 			func(on bool) { a.setAIUsage(func(s *settings.Settings) { s.AIUsage.Enabled = on }) })
 		settingsSep(c, "aiusage")
@@ -272,8 +245,6 @@ func (a *shelf) settingsAIUsagePage(c *ui.Context) {
 		})
 	})
 
-	// The quota cards are only visible while the page is on; keep their
-	// switches locked with the same rule the old source table used.
 	quotaLocked := a.settingsBroken || !a.settings.AIUsage.Enabled
 	settingsGroupRows(c, "quota", l.SettingsAIQuotaGroup(), "", quotaLocked, func() {
 		rows := []struct {
@@ -303,19 +274,15 @@ func (a *shelf) settingsAIUsagePage(c *ui.Context) {
 	a.settingsAgentGroup(c)
 	a.settingsApprovalGroup(c)
 
-	settingsFootnote(c, "ai-foot", osText(l.SettingsAILocalFoot(), l.SettingsAILocalFootWin()))
+	settingsFootnote(c, "ai-foot", l.SettingsAILocalFoot())
 }
 
-// settingsAgentGroup is the Agent 完成提醒 card: one switch for every
-// tool, then one row per detected tool with its configuration path, the
-// state of Rakko's entry and the tool's own switch. A tool's switch is
-// locked while the group switch is off: nothing may be written then.
 func (a *shelf) settingsAgentGroup(c *ui.Context) {
 	l := loc(c)
 	f := a.agentFeature()
 	f.refreshIfStale()
 	settingsGroupRows(c, "agentnotify", l.SettingsAgentGroup(), "", a.settingsBroken, func() {
-		settingsToggleRow(c, "agentnotify", osText(l.SettingsAgentRow(), l.SettingsAgentRowWin()), l.SettingsAgentCaption(),
+		settingsToggleRow(c, "agentnotify", osText(l.SettingsAgentRow(), l.SettingsAgentRowWin()), "",
 			a.settings.AgentNotify.Enabled, a.setAgentNotify)
 		tools := f.detected()
 		if len(tools) == 0 {
@@ -329,12 +296,11 @@ func (a *shelf) settingsAgentGroup(c *ui.Context) {
 			settingsSep(c, "agent-"+string(tool))
 			state, note, _ := f.settingRow(tool)
 			toolOn := !a.settings.AgentNotify.ToolOff(string(tool))
-			status, color := l.SettingsAgentNotInjected(), ink3
+			status, color := l.SettingsAgentNotInjected(), settingsInk3
 			switch state {
 			case agentnotify.StateInjected:
 				status = l.SettingsAgentInjected()
 				if tool == agentnotify.ToolCodex {
-					// Codex runs a hook only after the user trusted it once.
 					status = l.SettingsAgentCodexTrust()
 				}
 			case agentnotify.StateUnsupported:
@@ -343,34 +309,29 @@ func (a *shelf) settingsAgentGroup(c *ui.Context) {
 				status, color = l.SettingsAgentError(), danger
 			}
 			if state == agentnotify.StateNotInjected && a.settings.AgentNotify.Enabled && toolOn {
-				// The switches say the entry should be there: the tool
-				// rewrote its configuration and dropped it (Gemini's
-				// settings.json). Flipping the row writes it again.
 				status, color = l.SettingsAgentRewritten(), warning
 			}
 			caption := agentnotify.DisplayPath(f.home, tool)
+			capColor := settingsInk3
 			if state == agentnotify.StateError && note != "" {
-				// The reason is more useful than the path the user can't use.
 				caption = note
+				capColor = danger
 				if note == agentNeedsAppNote {
 					caption = l.SettingsAgentNeedsApp()
 				}
 			}
-			a.settingsAgentToolRow(c, "agent", tool, caption, status, color,
+			a.settingsAgentToolRow(c, "agent", tool, caption, capColor, status, color,
 				toolOn, !a.settings.AgentNotify.Enabled, a.setAgentNotifyTool)
 		}
 	})
 }
 
-// settingsApprovalGroup is the Agent 审批 card: one switch for every tool,
-// then one row per installed approvable tool. It is independent of the
-// completion group above it.
 func (a *shelf) settingsApprovalGroup(c *ui.Context) {
 	l := loc(c)
 	f := a.approvalFeature()
 	f.refreshIfStale()
 	settingsGroupRows(c, "approval", l.SettingsApprovalGroup(), "", a.settingsBroken, func() {
-		settingsToggleRow(c, "approval", osText(l.SettingsApprovalRow(), l.SettingsApprovalRowWin()), l.SettingsApprovalCaption(),
+		settingsToggleRow(c, "approval", osText(l.SettingsApprovalRow(), l.SettingsApprovalRowWin()), "",
 			a.settings.Approval.Enabled, a.setApproval)
 		tools := f.detected()
 		if len(tools) == 0 {
@@ -384,7 +345,7 @@ func (a *shelf) settingsApprovalGroup(c *ui.Context) {
 			settingsSep(c, "approval-"+string(tool))
 			state, note := f.settingRow(tool)
 			toolOn := !a.settings.Approval.ToolOff(string(tool))
-			status, color := l.SettingsAgentNotInjected(), ink3
+			status, color := l.SettingsAgentNotInjected(), settingsInk3
 			switch state {
 			case agentnotify.StateInjected:
 				status = l.SettingsAgentInjected()
@@ -400,37 +361,51 @@ func (a *shelf) settingsApprovalGroup(c *ui.Context) {
 				status, color = l.SettingsAgentRewritten(), warning
 			}
 			caption := agentnotify.ApproveDisplayPath(f.home, tool)
+			capColor := settingsInk3
 			if state == agentnotify.StateError && note != "" {
 				caption = note
+				capColor = danger
 				if note == agentNeedsAppNote {
 					caption = l.SettingsAgentNeedsApp()
 				}
 			}
-			a.settingsAgentToolRow(c, "approval", tool, caption, status, color,
+			a.settingsAgentToolRow(c, "approval", tool, caption, capColor, status, color,
 				toolOn, !a.settings.Approval.Enabled, a.setApprovalTool)
 		}
 	})
 }
 
-// settingsAgentToolRow is one detected tool: its mark, name and
-// configuration path on the left, the state of Rakko's entry, then the
-// tool's own switch. The switch mirrors the settings value and is locked
-// while the group switch is off.
-func (a *shelf) settingsAgentToolRow(c *ui.Context, prefix string, tool agentnotify.Tool, caption, status string, color ui.Color, on, locked bool, apply func(agentnotify.Tool, bool)) {
+func (a *shelf) settingsAgentToolRow(c *ui.Context, prefix string, tool agentnotify.Tool, caption string, capColor ui.Color, status string, color ui.Color, on, locked bool, apply func(agentnotify.Tool, bool)) {
 	key := prefix + "-" + string(tool)
 	row := ui.ToggleBase(c.Key("toggle-"+key), &on).FillWidth().AlignItems(ui.Center).
 		Gap(14).MinHeight(settingsRowMinHeight).Padding(settingsRowPadY, settingsRowPadX).
 		Label(tool.Name()).Disabled(locked)
+	if !locked && row.Hovered() {
+		row.Background(settingsRowHoverBg)
+	}
 	var sw ui.Element
 	row.Children(func() {
 		logo, tint, mark := agentLogo(tool)
-		settingsMark(c, logo, tint, mark)
-		settingsRowText(c, tool.Name(), caption)
-		ui.Text(c, status).SingleLine().FontSize(11.5).FontWeight(settingsWeight(500)).TextColor(color)
+		markBox := ui.Box(c.Key("lg-box")).Size(settingsMarkSlot, settingsMarkSlot)
+		if locked {
+			markBox.Opacity(0.4)
+		}
+		markBox.Children(func() {
+			settingsMark(c, logo, tint, mark)
+		})
+		textCol := ui.Column(c.Key("text")).Gap(1).Grow(1).MinWidth(0)
+		if locked {
+			textCol.Opacity(0.4)
+		}
+		textCol.Children(func() {
+			settingsLabel(c, tool.Name(), 13, 400).TextColor(ink)
+			if caption != "" {
+				settingsText(c, caption, 11.5).TextColor(capColor)
+			}
+		})
+		settingsText(c, status, 11.5).SingleLine().TextColor(color)
 		if !locked {
-			// With the group switch off nothing may be written, so the row
-			// carries no control that would do nothing.
-			sw = ui.Switch(c, &on).Label(tool.Name())
+			sw = settingsSwitch(c, &on, tool.Name())
 		}
 	})
 	if !locked && (row.Changed() || sw.Changed()) {
@@ -438,9 +413,6 @@ func (a *shelf) settingsAgentToolRow(c *ui.Context, prefix string, tool agentnot
 	}
 }
 
-// aiQuotaCaption is the quota row's secondary line: the plan name when the
-// last answer carried one, otherwise the account state. Empty before any
-// answer, so a fresh install shows no invented text.
 func (a *shelf) aiQuotaCaption(t aiusage.Tool, l locales.Messages) string {
 	if a.usage == nil {
 		return ""
@@ -468,14 +440,10 @@ func (a *shelf) aiQuotaCaption(t aiusage.Tool, l locales.Messages) string {
 	}
 }
 
-// settingsShortcutsPage: the editable global shortcuts, grouped by what
-// they act on, and the two the panel answers, read-only.
+// settingsShortcutsPage: 全局, 播放, 工具, and read-only panel shortcuts.
 func (a *shelf) settingsShortcutsPage(c *ui.Context) {
 	l := loc(c)
-	settingsHero(c, "keys", l.SettingsShortcutsSection(), "neutral",
-		heroKeysFrom, heroKeysTo, heroKeysGlow)
-
-	settingsGroupRows(c, "keys-panel", l.SettingsKeysGlobalGroup(), "", a.settingsBroken, func() {
+	settingsFirstGroupRows(c, "keys-panel", l.SettingsKeysGlobalGroup(), "", a.settingsBroken, func() {
 		a.settingsShortcutRow(c, shortcutToggle, l.SettingsShortcutTray(), "")
 		settingsSep(c, "sc-toggle")
 		a.settingsShortcutRow(c, shortcutClipboard, l.SettingsShortcutClipboard(), "")
@@ -510,7 +478,7 @@ func (a *shelf) settingsShortcutsPage(c *ui.Context) {
 	})
 
 	settingsGroup(c, "keys-notch", osText(l.SettingsKeysNotchGroup(), l.SettingsKeysNotchGroupWin()), "", func() {
-		settingsReadonlyShortcutRow(c, "sc-esc", l.SettingsShortcutEscRow(), l.SettingsShortcutEscCaption(),
+		settingsReadonlyShortcutRow(c, "sc-esc", l.SettingsShortcutEscRow(), "",
 			[]string{"Esc"})
 		settingsSep(c, "sc-esc")
 		settingsReadonlyShortcutRow(c, "sc-select", l.SettingsShortcutSelectRow(), "",
@@ -518,25 +486,20 @@ func (a *shelf) settingsShortcutsPage(c *ui.Context) {
 	})
 }
 
-// settingsShortcutRow is one editable shortcut: the label and caption on the
-// left, the keycaps on the right. The row itself starts the recording, as a
-// switch row toggles. A row that could not claim its combination says so in
-// place of its caption. A key that types text waits here as a question with
-// its two answers.
 func (a *shelf) settingsShortcutRow(c *ui.Context, kind shortcutKind, label, caption string) {
 	l := loc(c)
 	if p := a.shortcutConfirm; p != nil && p.kind == kind {
 		ui.Row(c.Key(fmt.Sprintf("sc-confirm-%d", kind))).FillWidth().Radius(0).
 			MinHeight(settingsRowMinHeight).AlignItems(ui.Center).Gap(8).
 			Padding(settingsRowPadY, settingsRowPadX).Children(func() {
-			ui.Text(c, l.SettingsShortcutConfirm(shortcutLabel(p.acc))).FontSize(12).
+			settingsText(c, l.SettingsShortcutConfirm(shortcutLabel(p.acc)), 12).
 				TextColor(ink2).Grow(1).MinWidth(0)
 			settingsConfirmButton(c, fmt.Sprintf("sc-use-%d", kind), l.SettingsShortcutUseAnyway(), true, a.confirmShortcut)
 			settingsConfirmButton(c, fmt.Sprintf("sc-drop-%d", kind), l.SettingsShortcutCancel(), false, a.cancelShortcutConfirm)
 		})
 		return
 	}
-	rowCaption, captionColor := caption, ink3
+	rowCaption, captionColor := caption, settingsInk3
 	if a.shortcutBusy[kind] {
 		rowCaption, captionColor = l.SettingsShortcutBusy(), danger
 	}
@@ -544,22 +507,19 @@ func (a *shelf) settingsShortcutRow(c *ui.Context, kind shortcutKind, label, cap
 	row := ui.ButtonBase(c.Key(fmt.Sprintf("sc-%d", kind))).FillWidth().Radius(0).
 		MinHeight(settingsRowMinHeight).AlignItems(ui.Center).Justify(ui.Start).
 		Gap(14).Padding(settingsRowPadY, settingsRowPadX).Label(label)
+	if row.Hovered() {
+		row.Background(settingsRowHoverBg)
+	}
 	if acc := a.shortcutAcc(kind); acc != "" {
-		// VoiceOver says the combination the row shows.
 		row.Description(shortcutLabel(acc))
 	}
 	row.Children(func() {
-		ui.Column(c.Key("text")).Gap(2).Grow(1).MinWidth(0).Children(func() {
-			settingsLabel(c, label, 13.5, 600).TextColor(ink)
-			if rowCaption != "" {
-				ui.Text(c, rowCaption).FontSize(11.5).TextColor(captionColor)
-			}
-		})
+		settingsRowTextColor(c, label, rowCaption, captionColor)
 		ui.Row(c.Key("keys")).AlignItems(ui.Center).Gap(4).Children(func() {
 			if recording {
-				ui.Box(c.Key("rec")).Height(26).Radius(7).Padding(0, 8, 0, 8).
+				ui.Box(c.Key("rec")).Height(24).Radius(6).Padding(0, 10, 0, 10).
 					Border(1.5, accent).Center().Children(func() {
-					ui.Text(c, l.SettingsShortcutRecording()).SingleLine().FontSize(11.5).TextColor(accent)
+					settingsText(c, l.SettingsShortcutRecording(), 11.5).SingleLine().TextColor(accent)
 				})
 				return
 			}
@@ -569,9 +529,9 @@ func (a *shelf) settingsShortcutRow(c *ui.Context, kind shortcutKind, label, cap
 				}
 				return
 			}
-			ui.Box(c.Key("none")).Height(26).Radius(7).Padding(0, 8, 0, 8).
-				Border(1, ui.RGBA(255, 255, 255, 0.12)).Center().Children(func() {
-				ui.Text(c, l.SettingsShortcutNoShortcut()).SingleLine().FontSize(11.5).TextColor(ink3)
+			ui.Box(c.Key("none")).Height(24).Radius(6).Padding(0, 9, 0, 9).
+				Border(1, settingsUnsetRim).BorderStyle(ui.BorderDashed).Center().Children(func() {
+				settingsText(c, l.SettingsShortcutNoShortcut(), 11.5).SingleLine().TextColor(settingsInk3)
 			})
 		})
 	})
@@ -580,21 +540,17 @@ func (a *shelf) settingsShortcutRow(c *ui.Context, kind shortcutKind, label, cap
 	}
 }
 
-// settingsConfirmButton is the answer button of the shortcut question. It
-// takes the pointer itself (HandleInput) rather than as a ButtonBase: the
-// window's click-anywhere-else cancel listens on an ancestor, and only an
-// element that handles its own input stands in front of it.
 func settingsConfirmButton(c *ui.Context, key, label string, primary bool, fn func()) ui.Element {
-	b := ui.Row(c.Key("btn-"+key)).Height(28).Radius(8).Padding(0, 12, 0, 12).
+	b := ui.Row(c.Key("btn-"+key)).Height(26).Radius(7).Padding(0, 12, 0, 12).
 		AlignItems(ui.Center).Label(label)
 	fg := ink
 	if primary {
 		b.Background(ink)
 		fg = ui.RGB(0, 0, 0)
 	} else {
-		b.Background(setCtl)
+		b.Background(settingsCtlBg)
 		if b.Hovered() {
-			b.Background(setCtlHover)
+			b.Background(settingsCtlHoverBg)
 		}
 	}
 	b.HandleInput(func(ev ui.InputEvent) bool {
@@ -608,15 +564,14 @@ func settingsConfirmButton(c *ui.Context, key, label string, primary bool, fn fu
 		return false
 	})
 	b.Children(func() {
-		t := ui.Text(c, label).SingleLine().FontSize(12.5).TextColor(fg)
+		t := settingsText(c, label, 12).SingleLine().TextColor(fg)
 		if primary {
-			t.FontWeight(settingsWeight(600))
+			t.FontWeight(700)
 		}
 	})
 	return b
 }
 
-// settingsReadonlyShortcutRow shows a shortcut the panel answers itself.
 func settingsReadonlyShortcutRow(c *ui.Context, key, label, caption string, tokens []string) {
 	settingsRowLine(c, key).Children(func() {
 		settingsRowText(c, label, caption)
@@ -628,32 +583,29 @@ func settingsReadonlyShortcutRow(c *ui.Context, key, label, caption string, toke
 	})
 }
 
-// settingsKeycap is one 26pt key: #1F2024, 7pt corners, a hairline of light
-// along the bottom, 12.5pt semibold label.
+// settingsKeycap is a 24pt v6 keycap: #24252A, 6pt corners, bottom hairline,
+// 12pt regular label.
 func settingsKeycap(c *ui.Context, key, label string, on bool) {
-	box := ui.Box(c.Key("cap-"+key)).Height(26).MinWidth(26).Radius(7).
-		Padding(0, 7, 0, 7).Center().Background(setCtl)
+	box := ui.Box(c.Key("cap-"+key)).Height(24).MinWidth(24).Radius(6).
+		Padding(0, 7, 0, 7).Center().Background(settingsCtlBg)
 	if on {
 		box.Border(1.5, accent)
 	} else {
 		box.InsetShadow(0, -1, 0, 0, ui.RGBA(255, 255, 255, 0.06))
 	}
 	box.Children(func() {
-		ui.Text(c, label).SingleLine().FontSize(12.5).FontWeight(settingsWeight(600)).TextColor(ink)
+		settingsText(c, label, 12).SingleLine().TextColor(ink)
 	})
 }
 
-// settingsPermissionsPage: every permission with its live state, and the
-// one switch that walks the user through whatever is missing — the same
-// flow the tray menu's item starts.
+// settingsPermissionsPage: two untitled cards (live permission statuses and
+// the guided-walk switch row).
 func (a *shelf) settingsPermissionsPage(c *ui.Context) {
 	l := loc(c)
 	permissions := systemPermissionSet(l)
 	missing := missingPermissions(permissions)
-	settingsHero(c, "perm", l.PermTitle(), "neutral",
-		heroPermFrom, heroPermTo, heroPermGlow)
 
-	settingsGroup(c, "perm", l.SettingsPermNeeded(), "", func() {
+	settingsFirstGroup(c, "perm-list", "", "", func() {
 		for i, p := range permissions {
 			if i > 0 {
 				settingsSep(c, "perm-"+p.id)
@@ -662,58 +614,52 @@ func (a *shelf) settingsPermissionsPage(c *ui.Context) {
 			row := settingsRowLine(c, "perm-"+p.id).Tooltip(p.detail)
 			row.Children(func() {
 				settingsRowText(c, p.short, "")
-				ui.Row(c.Key("state")).AlignItems(ui.Center).Gap(6).Children(func() {
+				ui.Row(c.Key("state")).AlignItems(ui.Center).Gap(14).Children(func() {
 					dot := success
 					text := l.SettingsPermOn()
 					if !granted {
 						dot, text = warning, l.SettingsPermOff()
 					}
 					ui.Box(c.Key("dot")).Size(7, 7).Radius(4).Background(dot)
-					ui.Text(c, text).SingleLine().FontSize(12).TextColor(ink2)
+					settingsText(c, text, 11.5).SingleLine().TextColor(settingsInk3)
 				})
 			})
 		}
-		settingsSep(c, "perm-switch")
+	})
+
+	settingsGroup(c, "perm-ctl", "", "", func() {
 		a.settingsPermissionSwitch(c, permissions, missing)
 	})
 }
 
-// settingsAboutPage: the big otter, the version, its actions, the 更新
-// group the version belongs to, and the privacy and source notes.
+// settingsAboutPage: centered 112pt happy otter hero, 更新 card, and 隐私与源代码 card.
 func (a *shelf) settingsAboutPage(c *ui.Context) {
 	l := loc(c)
 
-	ui.Row(c.Key("about")).FillWidth().AlignItems(ui.Center).Gap(18).Padding(4, 4, 4, 4).Children(func() {
+	ui.Column(c.Key("about-hero")).FillWidth().Padding(14, 0, 6, 0).AlignItems(ui.Center).Children(func() {
 		if b := otterImage("happy"); b != nil {
-			w, h := b.Size()
-			width := float32(150)
-			height := width * float32(h) / float32(w)
-			ui.Image(c.Key("otter"), b).Size(width, height).Fit(ui.Contain)
+			ui.Image(c.Key("otter"), b).Size(112, 112).Fit(ui.Contain)
 		}
-		ui.Column(c.Key("about-text")).Gap(2).Grow(1).MinWidth(0).Children(func() {
-			ui.Text(c, appName).SingleLine().FontSize(24).FontWeight(700).TextColor(ink)
-			ui.Text(c, l.SettingsAboutVersion(appVersion(), runtime.GOARCH)).SingleLine().
-				FontSize(12).TextColor(ink3).Padding(2, 0, 0, 0)
-			if days, ok := a.companionDay(c.Now()); ok {
-				text := l.CompanionAboutDays(days)
-				if a.companionClicked() {
-					text = l.CompanionAboutThanks(days)
-				}
-				ui.Text(c, text).SingleLine().FontSize(13).TextColor(ink2).Padding(6, 0, 0, 0)
+		settingsText(c, appName, 22).SingleLine().FontWeight(700).TextColor(ink).Margin(4, 0, 0, 0)
+		settingsText(c, l.SettingsAboutVersion(appVersion(), runtime.GOARCH), 12).SingleLine().
+			TextColor(settingsInk3).Margin(1, 0, 0, 0)
+		if days, ok := a.companionDay(c.Now()); ok {
+			text := l.CompanionAboutDays(days)
+			if a.companionClicked() {
+				text = l.CompanionAboutThanks(days)
 			}
-			ui.Row(c.Key("about-actions")).AlignItems(ui.Center).Gap(8).Wrap().Padding(14, 0, 0, 0).Children(func() {
-				// The one check action on this page: the 更新 group below
-				// only reports what the last one found.
-				busy := a.updateChecking || a.updateInstalling || a.updateUnavailableReason() != ""
-				settingsButton(c, "update", l.SettingsUpdateCheckRow(), false, func() { a.checkUpdates(true) }).
-					Disabled(busy)
-				settingsButton(c, "data", l.SettingsOpenDataFolder(), false, func() {
-					if err := openPath(a.dataDir); err != nil {
-						a.report(err)
-					}
-				})
-				settingsButton(c, "coffee", l.CompanionAboutCoffee(), false, func() { a.openSupport() })
+			settingsText(c, text, 12).SingleLine().TextColor(ink2).Margin(4, 0, 0, 0)
+		}
+		ui.Row(c.Key("about-actions")).AlignItems(ui.Center).Justify(ui.Center).Gap(8).Margin(14, 0, 0, 0).Children(func() {
+			busy := a.updateChecking || a.updateInstalling || a.updateUnavailableReason() != ""
+			settingsButton(c, "update", l.SettingsUpdateCheckRow(), false, func() { a.checkUpdates(true) }).
+				Disabled(busy)
+			settingsButton(c, "data", l.SettingsOpenDataFolder(), false, func() {
+				if err := openPath(a.dataDir); err != nil {
+					a.report(err)
+				}
 			})
+			settingsButton(c, "coffee", l.CompanionAboutCoffee(), false, func() { a.openSupport() })
 		})
 	})
 
@@ -725,10 +671,8 @@ func (a *shelf) settingsAboutPage(c *ui.Context) {
 			settingsToggleRow(c, "autoinstall", l.UpdateAutoInstallSettingsRow(), "",
 				a.settings.UpdateAutoInstall, a.setUpdateAutoInstall)
 			settingsSep(c, "autoinstall")
-			settingsRow(c, "check", l.SettingsUpdateCheckRow(), a.updateCaption(l), func() {})
+			settingsRow(c, "check", l.SettingsUpdateLastRow(), a.updateCaption(l), func() {})
 			if a.updateInstalled && a.update != nil {
-				// The ready update lives here, not under the search bar:
-				// the restart is one click from where updates are managed.
 				settingsSep(c, "ready")
 				settingsRow(c, "ready", l.UpdateReady(), "", func() {
 					settingsButton(c, "restart", l.PanelRestart(), true, relaunchApp).Label(l.PanelRestartLabel())
@@ -751,12 +695,8 @@ func (a *shelf) settingsAboutPage(c *ui.Context) {
 	})
 }
 
-// sourceURL is the project's public repository, the one the 关于 page links
-// to.
 const sourceURL = "https://github.com/henryyu333/rakko"
 
-// updateCaption is the 检查更新 row's second line: the last check's time and
-// outcome, or what is happening now.
 func (a *shelf) updateCaption(l locales.Messages) string {
 	if reason := a.updateUnavailableReason(); reason != "" {
 		return reason
@@ -788,8 +728,6 @@ func (a *shelf) updateCaption(l locales.Messages) string {
 	return l.SettingsUpdateLast(when, result)
 }
 
-// updateWhen says a check's time as 今天 09:12, 昨天 21:05 or a date, in the
-// window's language. Pure; unit-tested.
 func (a *shelf) updateWhen(l locales.Messages, at, now time.Time) string {
 	y1, m1, d1 := at.Date()
 	y2, m2, d2 := now.Date()
@@ -799,6 +737,7 @@ func (a *shelf) updateWhen(l locales.Messages, at, now time.Time) string {
 		return l.SettingsUpdateToday(clock)
 	case y1 == y2 && m1 == m2 && d1 == d2-1:
 		return l.SettingsUpdateYesterday(clock)
+	default:
+		return l.SettingsUpdateOn(at.Format("2006-01-02 15:04"))
 	}
-	return l.SettingsUpdateOn(at.Format("2006-01-02 15:04"))
 }

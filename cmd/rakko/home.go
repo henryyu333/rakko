@@ -573,27 +573,50 @@ func glassPaneDraw(radius float32) func(*ui.Painter, ui.Rect) {
 	}
 }
 
+// navCapsuleRow builds the floating pill container shared by the panel's
+// bottom page capsule (navView) and the Settings window's top island
+// (settingsIsland).
+func navCapsuleRow(c *ui.Context, key string, h, pad, gap float32) ui.Element {
+	return ui.Row(c.Key(key)).Height(h).Radius(h/2).Padding(0, pad, 0, pad).
+		Gap(gap).AlignItems(ui.Center).Border(0.5, paneRim)
+}
+
+// navCapsuleButton builds one pill button inside a navigation island. Callers
+// populate its children so both fixed-width and expanding-label tabs share
+// the same pill construction.
+func navCapsuleButton(c *ui.Context, key, label string, w, h float32, activeBg, hoverBg ui.Color, active, tooltip bool) ui.Element {
+	b := ui.ButtonBase(c.Key(key)).Height(h).Radius(h / 2).Center().Label(label)
+	if w > 0 {
+		b.Width(w)
+	}
+	if tooltip {
+		b.Tooltip(label)
+	}
+	switch {
+	case active:
+		b.Background(activeBg)
+	case b.Hovered():
+		b.Background(hoverBg)
+	}
+	return b
+}
+
 // navView draws the page capsule's buttons inside its box r (window-local):
 // the pages, a divider, settings and collapse. A page button opens its
 // page; on the page already shown it goes back to the search bar.
 func (a *shelf) navView(c *ui.Context, r ui.Rect, opacity float32) {
 	l := loc(c)
 	glassBase(c, "nav-base", r, navH/2, opacity)
-	row := ui.Row(c.Key("nav")).Absolute().Left(r.X).Top(r.Y).Width(r.W).Height(r.H).
-		Padding(0, navPadX, 0, navPadX).Gap(navBtnGap).AlignItems(ui.Center).Opacity(opacity).
-		Radius(navH/2).Draw(glassPaneDraw(navH/2)).Border(0.5, paneRim)
+	row := navCapsuleRow(c, "nav", r.H, navPadX, navBtnGap).
+		Absolute().Left(r.X).Top(r.Y).Width(r.W).
+		Opacity(opacity).Draw(glassPaneDraw(navH / 2))
 	if opacity < 0.5 {
 		row.IgnoreInput(true)
 	}
 	button := func(key string, label string, on bool, icon func()) ui.Element {
-		b := ui.ButtonBase(c.Key("nav-"+key)).Size(navBtnW, navBtnH).Radius(navBtnH / 2).Center().
-			Label(label).Tooltip(label)
-		switch {
-		case on:
-			b.Background(ui.RGBA(255, 255, 255, 0.16))
-		case b.Hovered():
-			b.Background(ui.RGBA(255, 255, 255, 0.08))
-		}
+		b := navCapsuleButton(c, "nav-"+key, label, navBtnW, navBtnH,
+			ui.RGBA(255, 255, 255, 0.16), ui.RGBA(255, 255, 255, 0.08),
+			on, true)
 		b.Children(icon)
 		return b
 	}

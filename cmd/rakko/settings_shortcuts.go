@@ -393,7 +393,7 @@ func (a *shelf) finishShortcut(acc string) {
 // reaches the window's own Esc/⌘W or the controls underneath.
 func (a *shelf) settingsCaptureLayer(c *ui.Context) {
 	ui.Box(c.Key("rec-capture")).Absolute().Top(0).Left(0).FillWidth().FillHeight().
-		Focusable().AutoFocus().HandleInput(a.shortcutCaptureInput)
+		ZIndex(10).Focusable().AutoFocus().HandleInput(a.shortcutCaptureInput)
 }
 
 // shortcutCaptureInput is the recorder: Esc cancels, Delete clears, and a

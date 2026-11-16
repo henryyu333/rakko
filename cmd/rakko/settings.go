@@ -1,21 +1,21 @@
 package main
 
-// The Settings window: Coucou Hub's two-column layout — a pure black
-// sidebar of grouped destinations and one rounded, darker panel on the
-// right that shows a single page. Every page opens with a hero card (the
-// page's name, a line about it, the otter in that page's mood) over
-// grouped cards of rows. The window is always dark, like the notch.
+// The Settings window ("小岛"): a compact 640pt dark window with one
+// centered floating pill island at the top (sharing its pill chrome with
+// the panel's bottom capsule) and a single centered column of grouped cards
+// below. Window height tracks the active page's content between 300 and
+// 600 DIPs with a 320ms top-anchored transition; overflow scrolls inside the
+// page without scrollbars.
 //
-// Controls call the same setters the tray menus call — applySettings is the
-// single save-and-apply path — so window and menu can never diverge; a
-// change made in one place repaints the other while it is open. Every
-// preference lives in settings.json except the login item and the system
-// permissions, which are read back from macOS.
+// Controls call applySettings — the same save-and-apply path the tray menus
+// call — so window and menu never diverge.
 
 import (
 	"fmt"
+	"math"
 	"runtime/debug"
 	"slices"
+	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -36,13 +36,31 @@ var (
 	setAppLocale         = mygo.App.SetLocale
 )
 
-// settingsTheme is the one dark theme the window repaints with: ShelfU's UI
-// lives on the pure black notch shell, so Settings is always dark no matter
-// the system appearance. Spacing sizes the stock widgets to the design:
-// 42×23 switches, 9pt segment tracks and 12.5pt labels.
+// Settings v6 design tokens. Kept separate from theme.go's rename/update
+// window surfaces so those windows stay unchanged.
+var (
+	settingsBg         = ui.Hex("#0B0B0D")
+	settingsIslandBg   = ui.Hex("#1B1C1F")
+	settingsCardBg     = ui.Hex("#17181B")
+	settingsInk3       = ui.RGBA(255, 255, 255, 0.45)
+	settingsSepColor   = ui.RGBA(255, 255, 255, 0.07)
+	settingsCtlBg      = ui.Hex("#24252A")
+	settingsCtlHoverBg = ui.Hex("#2E2F35")
+	settingsSegOnBg    = ui.Hex("#3B3C42")
+	settingsRowHoverBg = ui.RGBA(255, 255, 255, 0.03)
+	settingsTileBg     = ui.Hex("#0F1012")
+	settingsTileRim    = ui.RGBA(255, 255, 255, 0.06)
+	settingsSwitchOff  = ui.RGBA(255, 255, 255, 0.17)
+	settingsUnsetRim   = ui.RGBA(255, 255, 255, 0.16)
+	settingsIslandOn   = ui.RGBA(255, 255, 255, 0.12)
+)
+
+// settingsTheme is the dark theme used by the Settings and Rename windows.
+// Windows sets Segoe UI + Microsoft YaHei UI so CJK/ASCII typography aligns
+// cleanly; macOS keeps the system UI font.
 var settingsTheme = func() *ui.Theme {
 	t := ui.DarkTheme()
-	t.Background = surface
+	t.Background = settingsBg
 	t.Accent = accent
 	t.AccentHover = t.Accent.Mix(ui.RGB(255, 255, 255), 0.18)
 	t.AccentPressed = t.Accent.Mix(ui.RGB(0, 0, 0), 0.16)
@@ -58,54 +76,26 @@ var settingsTheme = func() *ui.Theme {
 	t.Scrollbar = ui.RGBA(255, 255, 255, 0.18)
 	t.ScrollbarWidth = 3
 	t.Radius = 9
-	// 42/9 makes the theme's 9-space switch 42pt wide and 23pt tall, the
-	// mock's 42×24; segments and buttons set their own metrics.
 	t.Spacing = 42.0 / 9
 	t.FontSize = 12.5
+	if forWindows {
+		t.Font = "Segoe UI, Microsoft YaHei UI"
+	}
 	return t
 }()
 
-var settingsThemeWindows = func() *ui.Theme {
+func settingsThemeFor(windows bool) *ui.Theme {
+	if !windows {
+		t := *settingsTheme
+		t.Font = ""
+		return &t
+	}
 	t := *settingsTheme
 	t.Font = "Segoe UI, Microsoft YaHei UI"
 	return &t
-}()
-
-func settingsThemeFor(windows bool) *ui.Theme {
-	if windows {
-		return settingsThemeWindows
-	}
-	return settingsTheme
 }
 
-// settingsWeight maps medium/semibold weights to 400 on Windows so DirectWrite
-// does not jump 500/600 to Microsoft YaHei UI's heavy 700 bold face.
-func settingsWeight(weight int) int {
-	if !forWindows {
-		return weight
-	}
-	if weight == 500 || weight == 600 {
-		return 400
-	}
-	return weight
-}
-
-// winPanelLayout chooses the Windows Settings card's outer margin and corner
-// radius from the window's corner radius: Windows 11 adds 8 DIP rounded corners
-// so the card uses matching generous framing; Windows 10's square window uses
-// a tighter 8 DIP frame and restrained 12 DIP corners.
-func winPanelLayout(winRadius float32) (margin, radius float32) {
-	if winRadius > 0 {
-		return 10, 16
-	}
-	return 8, 12
-}
-
-// The window's colours are theme.go's tokens: the inks and the state
-// colours are the panel's, and the settings-only surfaces sit in its
-// Settings window group.
-
-// settingsPageID is one destination of the sidebar.
+// settingsPageID is one destination of the top island.
 type settingsPageID int
 
 const (
@@ -119,33 +109,51 @@ const (
 	settingsPageAbout
 )
 
-// settingsSidebarWidth and the metrics below are the design spec's numbers.
+// Metrics and timings from design/explore/settings-v6.html.
 const (
-	settingsSidebarWidth = 212
-	settingsHeroHeight   = 96
-	settingsRowMinHeight = 50
-	settingsRowPadX      = 16
-	settingsRowPadY      = 10
-	settingsRowMark      = 18 // a switch row's lead mark reads this big; the quota rows' tool logos are the only ones
+	settingsPagePadX     = 60
+	settingsPagePadTop   = 4
+	settingsPagePadBot   = 30
+	settingsRowMinHeight = 44
+	settingsRowPadX      = 14
+	settingsRowPadY      = 7
+	settingsRowMark      = 18 // base artwork scale shared with home_page.go and agent_logos.go
+	settingsMarkSlot     = 20 // v6 .r .lg slot (16pt artwork inside 20×20)
+	settingsMarkArt      = 16
+	settingsIslandH      = 38
+	settingsIslandPad    = 3
+	settingsIslandGap    = 2
+	settingsIslandBtnH   = 32
+	settingsScrollFadeH  = 16
+)
+
+var (
+	settingsIslandTabSpring  = ui.Animation{Spring: ui.SpringOptions{Duration: 300 * time.Millisecond, Bounce: 0.15}}
+	settingsSwitchSpring     = ui.Animation{Spring: ui.SpringOptions{Duration: 220 * time.Millisecond, Bounce: 0.15}}
+	settingsWindowHeightAnim = ui.Animation{Duration: 320 * time.Millisecond, Ease: ui.CubicBezier(0.3, 1.08, 0.5, 1)}
 )
 
 // appGlyph fills an excluded-app row when the app has no icon on disk.
 var appGlyph = symbol(`<rect x="5" y="5" width="14" height="14" rx="3.5"/>`)
 
-// The sidebar's icons, the design's 24pt line glyphs.
+func symbol16(paths string) *ui.SVG {
+	return ui.MustParseSVG([]byte(`<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">` + paths + `</svg>`))
+}
+
+// The island's icons, matching the 16pt line glyphs in settings-v6.html.
 var (
-	navGear  = symbol(`<circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M4.2 7.5l2.2 1.3M17.6 15.2l2.2 1.3M4.2 16.5l2.2-1.3M17.6 8.8l2.2-1.3"/>`)
-	navNotch = symbol(`<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M8.5 5v2.5a1.5 1.5 0 0 0 1.5 1.5h4a1.5 1.5 0 0 0 1.5-1.5V5"/>`)
-	navTray  = symbol(`<path d="M4 9v6a5 5 0 0 0 5 5h6a5 5 0 0 0 5-5V9"/><path d="M12 3v9m-3.5-3.5L12 12l3.5-3.5"/>`)
-	navClip  = symbol(`<rect x="5" y="5" width="14" height="16" rx="3"/><path d="M9 3.5h6v3H9z"/><path d="M9 11h6M9 15h4"/>`)
-	navUsage = symbol(`<path d="M4.5 16a8 8 0 1 1 15 0"/><path d="M12 16l3.5-5"/>`)
-	navKey   = symbol(`<rect x="3" y="6" width="18" height="12" rx="3"/><path d="M7 10h.1M11 10h.1M15 10h.1M8 14h8"/>`)
-	navHand  = symbol(`<path d="M12 3l7 3v5c0 5-3 8.5-7 10-4-1.5-7-5-7-10V6z"/>`)
-	navInfo  = symbol(`<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.8v.1"/>`)
+	navGear  = symbol16(`<circle cx="8" cy="8" r="2.3"/><path d="M8 1.6v1.6M8 12.8v1.6M1.6 8h1.6M12.8 8h1.6M3.5 3.5l1.1 1.1M11.4 11.4l1.1 1.1M3.5 12.5l1.1-1.1M11.4 4.6l1.1-1.1"/>`)
+	navNotch = symbol16(`<rect x="1.8" y="3" width="12.4" height="10" rx="2.2"/><path d="M6 3v1.2c0 .6.4 1 1 1h2c.6 0 1-.4 1-1V3"/>`)
+	navTray  = symbol16(`<path d="M2.5 9.5v2.2c0 .7.6 1.3 1.3 1.3h8.4c.7 0 1.3-.6 1.3-1.3V9.5"/><path d="M8 2.5v7M5.2 6.8 8 9.6l2.8-2.8"/>`)
+	navClip  = symbol16(`<rect x="3.2" y="2.6" width="9.6" height="11" rx="1.8"/><path d="M6 2.6h4v1.6H6zM5.6 7.4h4.8M5.6 10h3.2"/>`)
+	navUsage = symbol16(`<path d="M2.6 11.4a5.4 5.4 0 1 1 10.8 0"/><path d="M8 11.4 10.4 7"/>`)
+	navKey   = symbol16(`<rect x="1.6" y="4" width="12.8" height="8.4" rx="1.8"/><path d="M4.4 6.8h.1M6.8 6.8h.1M9.2 6.8h.1M11.6 6.8h.1M5.2 9.6h5.6"/>`)
+	navHand  = symbol16(`<path d="M8 1.8 13 3.6v4.1c0 3-2.1 5.3-5 6.5-2.9-1.2-5-3.5-5-6.5V3.6z"/>`)
+	navInfo  = symbol16(`<circle cx="8" cy="8" r="6.2"/><path d="M8 7.2v3.8M8 4.9v.1"/>`)
 )
 
-// settingsIcons caches decoded app icons for the 排除的应用 rows; nil values
-// are cached too, so a bundle id that resolves to nothing is asked once.
+// settingsIcons caches decoded app icons for the 不记录这些应用 rows; nil
+// values are cached too, so a bundle id that resolves to nothing is asked once.
 var settingsIcons = map[string]*ui.Bitmap{}
 
 // settingsAppIcon returns the bundle's icon as a bitmap, or nil.
@@ -162,27 +170,18 @@ func settingsAppIcon(bundleID string) *ui.Bitmap {
 }
 
 // settingsOpen shows the Settings window; a seam, so the AI 用量
-// shortcut's fallback is testable without a window server. It is assigned
-// in init because the shortcut path reaches setSettingsPage, which reaches
-// the shortcut actions again: a package-level initializer would close that
-// loop as an initialization cycle.
+// shortcut's fallback is testable without a window server.
 var settingsOpen func(*shelf)
 
 func init() { settingsOpen = (*shelf).openSettings }
 
 // openSettings shows the Settings window, creating it the first time, or
-// re-focuses the one already open (single instance). The window is a normal
-// titled window — not the notch panel — centered on the cursor's display.
-// Opening takes the app active and the keyboard, exactly like the
-// clipboard-search open: the shelf gives its global Esc/Space back while
-// the window is key, and closing hands the keyboard to wherever it belongs
-// (settingsReleaseKeyboard) without ever hiding this app — NSApp hide would
-// take the notch window away too. The open-at-login state is read back from
-// the system every time the window opens or is re-focused, so the switch
-// reflects changes the user made in System Settings too.
+// re-focuses the one already open (single instance). The window opens centered
+// on the cursor's display at the active page's content height [300, 600].
 func (a *shelf) openSettings() {
 	if a.settingsWin != nil {
 		a.loginOn, a.loginErr = openAtLogin(), ""
+		a.settingsTargetH = a.measureSettingsHeight(a.settingsPage)
 		a.repaintSettings()
 		platform.ActivateSelf()
 		a.settingsWin.Show()
@@ -192,35 +191,31 @@ func (a *shelf) openSettings() {
 	a.settingsTakeKeyboard()
 	a.loginOn, a.loginErr = openAtLogin(), ""
 	a.settingsRecording = shortcutNone
-	frame := settingsFrame(mygo.Screen.DisplayNearestPoint(mygo.Screen.CursorScreenPoint()).WorkArea)
+	if !permissionsSupported && a.settingsPage == settingsPagePermissions {
+		a.settingsPage = settingsPageGeneral
+	}
+	h := a.measureSettingsHeight(a.settingsPage)
+	work := mygo.Screen.DisplayNearestPoint(mygo.Screen.CursorScreenPoint()).WorkArea
+	frame := settingsFrame(work, h)
+	a.settingsTargetH = frame.Height
+	a.settingsAppliedH = frame.Height
 	w := mygo.NewWindow(mygo.WindowOptions{
-		Title: a.appLoc().WindowSettings(), Width: settingsWidth, Height: settingsWindowHeight(),
-		MinWidth: settingsMinWidth, MinHeight: settingsWindowMinHeight(),
+		Title: a.appLoc().WindowSettings(), Width: settingsWidth, Height: frame.Height,
+		MinWidth: settingsWidth, MaxWidth: settingsWidth,
+		MinHeight: settingsMinHeight, MaxHeight: settingsMaxHeight,
 		X: frame.X, Y: frame.Y,
-		Hidden: true, BackgroundColor: "#000000",
-		UseContentSize: forWindows,
-		// The mock hides AppKit's title bar and puts the traffic lights in
-		// the sidebar: TrafficLightPosition sets their insets, and the
-		// window's own name still names it to the system.
+		Hidden: true, BackgroundColor: "#0B0B0D",
+		UseContentSize:       true,
+		DisableResize:        true,
 		TitleBarStyle:        mygo.TitleBarHidden,
-		TrafficLightPosition: &mygo.Point{X: 18, Y: 14},
+		TrafficLightPosition: &mygo.Point{X: 18, Y: 25},
 		DisableMaximize:      true, DisableFullScreen: true,
 		Content: ui.View(a.settingsView),
 	})
-	// The title bar follows the window's own dark chrome whatever the system
-	// appearance is, matching the mock's dark "ShelfU 设置" window.
-	// SetWindowAppearance pins it on macOS (AppKit) and on Windows (DWM's
-	// dark caption); ConfigureFramedWindow adds Windows' corners and shadow.
 	platform.SetWindowAppearance(w.NativeHandle(), true)
 	platform.ConfigureFramedWindow(w.NativeHandle(), true)
 	w.SetWindowButtonsTheme(mygo.ThemeDark)
-	if forWindows {
-		w.SetContentBounds(frame)
-		a.settingsWinRadius = float32(w.CornerRadius())
-	} else {
-		w.SetBounds(frame)
-		a.settingsWinRadius = 0
-	}
+	w.SetContentBounds(frame)
 	w.OnClosed(a.settingsClosed)
 	w.OnBlur(a.settingsBlur)
 	a.settingsWin = w
@@ -229,10 +224,7 @@ func (a *shelf) openSettings() {
 	w.Focus()
 }
 
-// settingsTakeKeyboard prepares the handover when the Settings window opens:
-// the shelf releases Esc and Space (the window's own Esc/⌘W and its controls
-// handle them), and the app the user came from is remembered so closing can
-// give the keyboard back.
+// settingsTakeKeyboard prepares the handover when the Settings window opens.
 func (a *shelf) settingsTakeKeyboard() {
 	if pid := frontmostPID(); pid > 0 && pid != platform.OwnPID() {
 		a.settingsPrevPID = pid
@@ -240,25 +232,20 @@ func (a *shelf) settingsTakeKeyboard() {
 	a.releaseKeys()
 }
 
-// settingsClosed runs when the Settings window has closed: the pointer goes
-// first (a repaint must never touch a destroyed window), then the keyboard
-// goes back to whoever had it before the window opened. A quit closes the
-// window too; nothing may be re-registered or re-activated then.
+// settingsClosed runs when the Settings window has closed.
 func (a *shelf) settingsClosed() {
 	a.stopPermissionFlow()
 	a.endShortcutRecording()
 	a.settingsWin = nil
-	a.settingsWinRadius = 0
+	a.settingsTargetH = 0
+	a.settingsAppliedH = 0
+	a.settingsResizeQueued = false
 	if a.quitting {
 		return
 	}
 	a.settingsReleaseKeyboard()
 }
 
-// settingsKeyboardExit is who gets the keyboard when the Settings window
-// closes: the panel when it holds it for clipboard search, the shelf itself
-// (Esc/Space again) when the panel is merely open, else the app the user
-// came from. Pure; unit-tested.
 type settingsKeyboardExit int
 
 const (
@@ -278,16 +265,11 @@ func (a *shelf) settingsKeyboardExit() settingsKeyboardExit {
 	}
 }
 
-// settingsReleaseKeyboard gives the keyboard back when the Settings window
-// closes, and never hides this app: an NSApp hide would take the notch
-// window with it.
 func (a *shelf) settingsReleaseKeyboard() {
 	prev := a.settingsPrevPID
 	a.settingsPrevPID = 0
 	switch a.settingsKeyboardExit() {
 	case settingsToPanel:
-		// Clipboard search: the panel's search field must keep the
-		// keyboard, so the app we came from must not take it back.
 		if a.win != nil {
 			a.win.Focus()
 		}
@@ -298,40 +280,24 @@ func (a *shelf) settingsReleaseKeyboard() {
 	a.handBackApp(prev)
 }
 
-// repaintSettings redraws the Settings window when it is open, used after a
-// change that did not go through applySettings (login item, accessibility,
-// a finished update check).
 func (a *shelf) repaintSettings() {
 	if a.settingsWin != nil {
 		a.settingsWin.Invalidate()
 	}
 }
 
-// settingsWinHeightExtra is added to the Windows settings window height so
-// the initial viewport exposes the same rows as macOS despite the 32 DIP
-// caption strip, 6 DIP pageTop offset, and Windows font metrics.
-const settingsWinHeightExtra = 60
-
-// settingsWindowHeight adds settingsWinHeightExtra on Windows so the
-// scrollable page viewport matches macOS's first-screen density.
-func settingsWindowHeight() int {
-	if forWindows {
-		return settingsHeight + settingsWinHeightExtra
-	}
-	return settingsHeight
+// clampSettingsHeight bounds a page's total window height to [300, 600].
+func clampSettingsHeight(h int) int {
+	return min(settingsMaxHeight, max(settingsMinHeight, h))
 }
 
-func settingsWindowMinHeight() int {
-	if forWindows {
-		return settingsMinHeight + settingsWinHeightExtra
+// settingsFrame centers the 640 × h Settings window inside the display's work
+// area, clamping height to the work area if the display is unusually short.
+func settingsFrame(work mygo.Rectangle, h int) mygo.Rectangle {
+	h = clampSettingsHeight(h)
+	if work.Height > 0 && h > work.Height {
+		h = work.Height
 	}
-	return settingsMinHeight
-}
-
-// settingsFrame centers the settings window inside the cursor display's
-// work area (menu bar and Dock stay clear). Pure; unit-tested.
-func settingsFrame(work mygo.Rectangle) mygo.Rectangle {
-	h := settingsWindowHeight()
 	x := work.X + (work.Width-settingsWidth)/2
 	y := work.Y + (work.Height-h)/2
 	x = min(max(x, work.X), max(work.X, work.X+work.Width-settingsWidth))
@@ -339,46 +305,137 @@ func settingsFrame(work mygo.Rectangle) mygo.Rectangle {
 	return mygo.Rectangle{X: x, Y: y, Width: settingsWidth, Height: h}
 }
 
-// setSettingsPage shows one page and starts it at the top, as a sidebar
-// click does.
+// settingsResizedFrame anchors the Settings window at its top edge while
+// transitioning to height h, clamping so the bottom edge never leaves work.
+func settingsResizedFrame(cur, work mygo.Rectangle, h int) mygo.Rectangle {
+	h = clampSettingsHeight(h)
+	x, y := cur.X, cur.Y
+	if work.Width > 0 {
+		x = min(max(x, work.X), max(work.X, work.X+work.Width-settingsWidth))
+	}
+	if work.Height > 0 {
+		if h > work.Height {
+			h = work.Height
+		}
+		avail := work.Y + work.Height - y
+		minH := min(settingsMinHeight, work.Height)
+		if avail >= minH {
+			if h > avail {
+				h = avail
+			}
+		} else {
+			y = max(work.Y, work.Y+work.Height-h)
+		}
+		if y < work.Y {
+			y = work.Y
+		}
+	}
+	return mygo.Rectangle{X: x, Y: y, Width: settingsWidth, Height: h}
+}
+
+// measureSettingsHeight lays out page offscreen at settingsWidth to obtain
+// its exact clamped height [300, 600] before opening or switching pages.
+func (a *shelf) measureSettingsHeight(page settingsPageID) int {
+	var pageH float32
+	v := ui.NewTester(func(c *ui.Context) {
+		c.SetTheme(settingsThemeFor(forWindows))
+		col := ui.Column(c.Key(fmt.Sprintf("measure-%d", page))).Width(settingsWidth).
+			Padding(settingsPagePadTop, settingsPagePadX, settingsPagePadBot, settingsPagePadX)
+		col.Draw(func(_ *ui.Painter, r ui.Rect) {
+			pageH = r.H
+		})
+		col.Children(func() {
+			if a.settingsBroken {
+				settingsBrokenBanner(c)
+			}
+			a.settingsPageBodyFor(c, page)
+		})
+	}, settingsWidth, settingsMaxHeight)
+	if a.locale != "" {
+		v.SetLocale(a.locale)
+	}
+	v.Frame()
+	if pageH <= 0 {
+		return settingsMinHeight
+	}
+	return clampSettingsHeight(int(math.Ceil(float64(settingsTopH + pageH))))
+}
+
+func (a *shelf) applySettingsWindowHeight(h int) {
+	if a.settingsWin == nil {
+		return
+	}
+	cur := a.settingsWin.ContentBounds()
+	cx, cy := cur.X+cur.Width/2, cur.Y+cur.Height/2
+	work := mygo.Screen.DisplayNearestPoint(mygo.Point{X: cx, Y: cy}).WorkArea
+	next := settingsResizedFrame(cur, work, h)
+	a.settingsAppliedH = next.Height
+	if cur != next {
+		a.settingsWin.SetContentBounds(next)
+	}
+}
+
+// setSettingsPage switches to page, resets scroll, and measures the new target
+// height so the 320ms window height transition starts on the very first frame.
 func (a *shelf) setSettingsPage(page settingsPageID) {
+	if !permissionsSupported && page == settingsPagePermissions {
+		return
+	}
 	if a.settingsPage == page {
 		return
 	}
 	a.settingsPage = page
 	a.settingsScroll.Y = 0
 	a.endShortcutRecording()
+	if a.settingsWin != nil {
+		a.settingsTargetH = a.measureSettingsHeight(page)
+	}
 	a.repaintSettings()
 }
 
-// settingsView draws the whole Settings window each frame: the sidebar, the
-// page panel, and — while a shortcut records — the key-capture layer over
-// everything. While settings.json is broken a banner on every page explains
-// it and every preference control is disabled so the file is never
-// rewritten.
+// settingsView draws the Settings window: scrollable page content below the
+// 64pt top drag zone, the 16pt top scroll fade, the centered top island
+// navigation, and (while recording a shortcut) the key-capture overlay.
 func (a *shelf) settingsView(c *ui.Context) {
 	c.SetTheme(settingsThemeFor(forWindows))
-	c.Root().Background(surface)
+	c.Root().Background(settingsBg)
+
+	if a.settingsWin != nil && a.settingsTargetH > 0 {
+		targetH := a.settingsTargetH
+		cur := a.settingsWin.ContentBounds()
+		work := mygo.Screen.DisplayNearestPoint(mygo.Point{X: cur.X + cur.Width/2, Y: cur.Y + cur.Height/2}).WorkArea
+		clamped := settingsResizedFrame(cur, work, targetH)
+		anim := settingsWindowHeightAnim
+		if reduceMotion(c) {
+			anim = ui.Animation{}
+		}
+		curH := c.Root().AnimateTo("win-h", float32(clamped.Height), anim)
+		wantH := settingsResizedFrame(cur, work, int(math.Round(float64(curH)))).Height
+		if wantH != a.settingsAppliedH && !a.settingsResizeQueued {
+			a.settingsResizeQueued = true
+			mygo.RunOnMain(func() {
+				a.settingsResizeQueued = false
+				if a.settingsWin == nil {
+					return
+				}
+				a.applySettingsWindowHeight(wantH)
+			})
+		}
+	}
+
 	recording := a.settingsRecording != shortcutNone
 	pending := a.shortcutConfirm != nil
 	switch {
 	case pending:
-		// The row asks about a key that types text: Esc drops the
-		// question, as the cancel button does.
 		c.OnShortcut(0, ui.KeyEscape, a.cancelShortcutConfirm)
 	case a.settingsWin != nil && recording:
-		// While a shortcut records, every key belongs to the recorder;
-		// closing on Esc would swallow the cancel.
 	case a.settingsWin != nil:
 		c.OnShortcut(0, ui.KeyEscape, a.settingsWin.Close)
 		c.OnShortcut(ui.Cmd, ui.KeyW, a.settingsWin.Close)
 	}
-	// Both platforms fill the whole window with the sidebar and page row. On
-	// Windows an absolute transparent DragWindow overlay covers the top caption
-	// band up to the window buttons while the page top padding clears them.
-	win := ui.Row(c.Key("win")).Fill()
+
+	win := ui.Box(c.Key("win")).Fill().Background(settingsBg)
 	if pending {
-		// A click anywhere the buttons do not take drops the question.
 		win = win.HandleInput(func(ev ui.InputEvent) bool {
 			if ev.Kind == ui.InputPointerDown {
 				a.cancelShortcutConfirm()
@@ -387,205 +444,164 @@ func (a *shelf) settingsView(c *ui.Context) {
 		})
 	}
 	win.Children(func() {
-		a.settingsSidebar(c)
-		panel := ui.Column(c.Key("panel")).Grow(1)
-		pageTop := float32(14)
-		var capH float32
-		var pm float32
-		if forWindows {
-			var pr float32
-			pm, pr = winPanelLayout(a.settingsWinRadius)
-			capH = settingsCaptionHeight(c)
-			panel.AlignSelf(ui.Stretch).Margin(pm, pm, pm, 0).Radius(pr)
-		} else {
-			panel.FillHeight().Margin(10, 10, 10, 0).Radius(20)
+		// Top 64pt drag region (clearing any Windows caption buttons on the right)
+		// with the floating island navigation centered inside it. Placed first in
+		// tree/focus order with ZIndex(5) so navigation stays above scrolled content.
+		bar := c.TitleBar()
+		dragRight := float32(bar.Right)
+		ui.Box(c.Key("top-drag")).Absolute().Top(0).Left(0).Right(dragRight).Height(settingsTopH).
+			ZIndex(4).DragWindow()
+		if dragRight > 0 && float32(bar.Height) < settingsTopH {
+			ui.Box(c.Key("top-drag-r")).Absolute().Top(float32(bar.Height)).Right(0).Width(dragRight).
+				Height(settingsTopH - float32(bar.Height)).ZIndex(4).DragWindow()
 		}
-		panel.Background(setPanel).Clip().Children(func() {
-			buildPage := func() {
-				ui.Column(c.Key("page")).FillWidth().Padding(pageTop, 18, 22, 18).Gap(18).Children(func() {
-					if a.settingsBroken {
-						settingsBrokenBanner(c)
-					}
-					a.settingsPageBody(c)
-				})
-			}
-			if forWindows {
-				// Keep the caption strip non-scrolling inside the rounded card so
-				// scrolled content clips below the top DragWindow overlay.
-				capPad := max(capH-pm, 0)
-				if capPad > 0 {
-					ui.Box(c.Key("caption-band")).Height(capPad).FillWidth()
-				}
-				pageTop = max(float32(14)-capPad, 6)
-				ui.Scroll(c.Key("page-scroll")).Grow(1).MinHeight(0).FillWidth().
-					TrackScroll(&a.settingsScroll).Children(buildPage)
-			} else {
-				ui.Scroll(c.Key("page-scroll")).Fill().
-					TrackScroll(&a.settingsScroll).Children(buildPage)
-			}
+		ui.Row(c.Key("top-bar")).Absolute().Top(0).Left(0).Right(0).Height(settingsTopH).
+			ZIndex(5).Center().PassThrough().Children(func() {
+			a.settingsIsland(c)
 		})
-		if forWindows {
-			bar := c.TitleBar()
-			ui.Box(c.Key("caption")).Absolute().Top(0).Left(0).Right(bar.Right).
-				Height(capH).DragWindow()
+
+		// Content area below the 64pt top bar; no visible scrollbar.
+		ui.Scroll(c.Key("page-scroll")).Absolute().Top(settingsTopH).Bottom(0).Left(0).Right(0).
+			Scrollbars(false).TrackScroll(&a.settingsScroll).Children(func() {
+			enterAnim := ui.ElementTransition{
+				Duration: 260 * time.Millisecond,
+				Ease:     ui.EaseOut,
+				Enter:    &ui.Motion{Y: 6, Opacity: 0},
+			}
+			if reduceMotion(c) {
+				enterAnim = ui.ElementTransition{Duration: -1}
+			}
+			pg := ui.Column(c.Key(fmt.Sprintf("page-%d", a.settingsPage))).FillWidth().
+				Padding(settingsPagePadTop, settingsPagePadX, settingsPagePadBot, settingsPagePadX).
+				Transition(enterAnim)
+			pg.Draw(func(_ *ui.Painter, r ui.Rect) {
+				if a.settingsWin == nil || r.H <= 0 {
+					return
+				}
+				liveH := clampSettingsHeight(int(math.Ceil(float64(settingsTopH + r.H))))
+				if liveH != a.settingsTargetH {
+					a.settingsTargetH = liveH
+					mygo.RunOnMain(a.repaintSettings)
+				}
+			})
+			pg.Children(func() {
+				if a.settingsBroken {
+					settingsBrokenBanner(c)
+				}
+				a.settingsPageBody(c)
+			})
+		})
+
+		// Top 16pt scroll fade directly under the 64pt top zone while scrolled.
+		if fadeAlpha := min(max(a.settingsScroll.Y/12, 0), 1); fadeAlpha > 0 {
+			ui.Box(c.Key("scroll-fade")).Absolute().Top(settingsTopH).Left(0).Right(0).
+				Height(settingsScrollFadeH).ZIndex(3).IgnoreInput(true).Opacity(fadeAlpha).
+				LinearGradient(ui.LinearGradient{
+					Angle: 180,
+					Stops: []ui.GradientStop{
+						{Color: settingsBg, At: 0},
+						{Color: settingsBg.Alpha(0), At: 1},
+					},
+				})
 		}
+
 		if recording && !pending {
 			a.settingsCaptureLayer(c)
 		}
 	})
 }
 
-// settingsCaptionFallback is the height of Windows' caption when the window
-// has not answered with it yet: MyGo's controls are 32 DIPs tall.
-const settingsCaptionFallback = 32
-
-// settingsCaptionHeight is the height of the caption strip: the title
-// bar's, or MyGo's 32 DIPs before the window answers.
-func settingsCaptionHeight(c *ui.Context) float32 {
-	h := c.TitleBar().Height
-	if h <= 0 {
-		h = settingsCaptionFallback
-	}
-	return h
-}
-
-// settingsSidebarTop is the height of the sidebar's first row: 40pt above
-// the brand on both macOS (traffic lights) and Windows (floating top drag
-// strip).
-func settingsSidebarTop() float32 {
-	return 40
-}
-
-// settingsSidebar draws the pure black sidebar: the traffic lights' row, the
-// brand (a way to 关于), the grouped destinations, and the permission status
-// at the bottom.
-func (a *shelf) settingsSidebar(c *ui.Context) {
+// settingsIsland builds the floating pill navigation centered in the 64pt
+// top bar, sharing navCapsuleRow / navCapsuleButton with the panel's bottom
+// capsule.
+func (a *shelf) settingsIsland(c *ui.Context) {
 	l := loc(c)
-	side := ui.Column(c.Key("side")).Width(settingsSidebarWidth).FillHeight().Background(surface).
-		Padding(0, 12, 12, 12)
-	if forWindows {
-		// Windows has no traffic lights to make room for in the sidebar: the
-		// strip above holds its caption controls. The empty black around the
-		// destinations drags the window, as macOS's traffic-light row does.
-		side.DragWindow()
+	type islandTab struct {
+		id    settingsPageID
+		icon  *ui.SVG
+		label string
 	}
-	side.Children(func() {
-		// The traffic lights are AppKit's, over this row; the row drags
-		// the window, as a title bar would.
-		ui.Box(c.Key("lights")).Height(settingsSidebarTop()).FillWidth().DragWindow()
+	tabs := []islandTab{
+		{settingsPageGeneral, navGear, l.General()},
+		{settingsPageNotch, navNotch, l.SettingsNotchNav()},
+		{settingsPageTray, navTray, l.SettingsTraySection()},
+		{settingsPageClipboard, navClip, l.SettingsClipboardSection()},
+		{settingsPageAIUsage, navUsage, l.SettingsAISection()},
+		{settingsPageShortcuts, navKey, l.SettingsShortcutsSection()},
+	}
+	if permissionsSupported {
+		tabs = append(tabs, islandTab{settingsPagePermissions, navHand, l.PermTitle()})
+	}
+	tabs = append(tabs, islandTab{settingsPageAbout, navInfo, l.SettingsAboutPage()})
 
-		brand := ui.ButtonBase(c.Key("brand")).Height(44).FillWidth().Radius(9).
-			Padding(0, 8, 0, 8).AlignItems(ui.Center).Justify(ui.Start).Gap(8).Label(appName)
-		if brand.Hovered() {
-			brand.Background(fill1)
-		}
-		brand.Children(func() {
-			if b := otterImage("neutral"); b != nil {
-				ui.Image(c.Key("otter"), b).Size(30, 30).Fit(ui.Contain)
+	missingPerm := permissionsSupported && len(missingSystemPermissions()) > 0
+	island := navCapsuleRow(c, "settings-island", settingsIslandH, settingsIslandPad, settingsIslandGap).
+		Background(settingsIslandBg).
+		Shadow(0, 8, 22, 0, ui.RGBA(0, 0, 0, 0.40))
+	island.Children(func() {
+		for _, tab := range tabs {
+			tab := tab
+			on := a.settingsPage == tab.id
+			b := navCapsuleButton(c, fmt.Sprintf("tab-%d", tab.id), tab.label, 0, settingsIslandBtnH,
+				settingsIslandOn, ui.Color{}, on, !on)
+			target := float32(0)
+			if on {
+				target = 1
 			}
-			ui.Text(c, appName).SingleLine().FontSize(17).FontWeight(700).TextColor(ink)
-		})
-		if brand.Clicked() {
-			a.setSettingsPage(settingsPageAbout)
+			k := b.AnimateTo("expand", target, fadeOr(c, settingsIslandTabSpring))
+			pos := max(k, 0)
+			b.Padding(0, 9+4*min(pos, 1.15), 0, 9+1*min(pos, 1.15))
+
+			color := settingsInk3
+			if on {
+				color = ink
+			} else if b.Hovered() {
+				color = ink2
+			}
+			labelW, _ := c.MeasureText(0, ui.Span{Text: tab.label, Size: 12.5, Weight: 700})
+			slotW := (7 + labelW) * pos
+			b.Children(func() {
+				iconBox := ui.Box(c.Key("ic-box")).Size(16, 16)
+				iconBox.Children(func() {
+					ui.Icon(c.Key("ic"), tab.icon).Size(16, 16).TextColor(color)
+					if tab.id == settingsPagePermissions && missingPerm {
+						ui.Box(c.Key("perm-dot")).Absolute().Right(-1).Top(-1).Size(6, 6).Radius(3).
+							Background(warning).Border(1, settingsIslandBg)
+					}
+				})
+				if slotW > 0.5 {
+					ui.Row(c.Key("lb-slot")).Width(slotW).AlignItems(ui.Center).Clip().
+						Opacity(min(pos, 1)).Children(func() {
+						ui.Box(c.Key("lb-gap")).Width(7).Shrink(0)
+						settingsText(c, tab.label, 12.5).SingleLine().FontWeight(700).TextColor(color)
+					})
+				}
+			})
+			if b.Clicked() {
+				a.setSettingsPage(tab.id)
+			}
 		}
-		ui.Box(c.Key("brand-gap")).Height(6)
-
-		a.settingsNavItem(c, settingsPageGeneral, navGear, l.General())
-		settingsNavGroup(c, osText(l.SettingsGroupNotch(), l.SettingsGroupNotchWin()))
-		a.settingsNavItem(c, settingsPageNotch, navNotch, l.SettingsNotchNav())
-		settingsNavGroup(c, l.SettingsGroupContent())
-		a.settingsNavItem(c, settingsPageTray, navTray, l.SettingsTraySection())
-		a.settingsNavItem(c, settingsPageClipboard, navClip, l.SettingsClipboardSection())
-		a.settingsNavItem(c, settingsPageAIUsage, navUsage, l.SettingsAISection())
-		settingsNavGroup(c, l.SettingsGroupSystem())
-		a.settingsNavItem(c, settingsPageShortcuts, navKey, l.SettingsShortcutsSection())
-		if permissionsSupported {
-			a.settingsNavItem(c, settingsPagePermissions, navHand, l.PermTitle())
-		}
-		a.settingsNavItem(c, settingsPageAbout, navInfo, l.SettingsAboutPage())
-
-		ui.Box(c.Key("side-grow")).Grow(1)
-		a.settingsPermissionStatus(c)
 	})
 }
 
-// settingsNavGroup is a sidebar group label: 10.5pt, bold, letterspaced,
-// white 40%.
-func settingsNavGroup(c *ui.Context, title string) {
-	ui.Text(c, title).SingleLine().FontSize(10.5).FontWeight(700).LetterSpacing(1.2).
-		TextColor(setLabel).Padding(10, 10, 4, 10)
-}
-
-// settingsNavItem is one destination: 32pt tall, 9pt corners, the selected
-// one on #1D1F23 in white, the others white 62%.
-func (a *shelf) settingsNavItem(c *ui.Context, page settingsPageID, icon *ui.SVG, label string) {
-	on := a.settingsPage == page
-	color := ink2
-	if on {
-		color = ink
-	}
-	item := ui.ButtonBase(c.Key(fmt.Sprintf("nav-%d", page))).Height(32).FillWidth().Radius(9).
-		Padding(0, 10, 0, 10).AlignItems(ui.Center).Justify(ui.Start).Gap(10).Label(label)
-	if on {
-		item.Background(setSelect)
-	} else if item.Hovered() {
-		item.Background(fill1)
-	}
-	item.Children(func() {
-		ui.Icon(c.Key("i"), icon).Size(16, 16).TextColor(color)
-		ui.Text(c, label).SingleLine().FontSize(13.5).TextColor(color)
-	})
-	if item.Clicked() {
-		a.setSettingsPage(page)
-	}
-}
-
-// settingsPermissionStatus is the sidebar's footer: a green dot when every
-// permission is on, an orange one and a count when not; it opens the 系统权限
-// page.
-func (a *shelf) settingsPermissionStatus(c *ui.Context) {
-	if !permissionsSupported {
-		return
-	}
-	l := loc(c)
-	missing := len(missingSystemPermissions())
-	dot := success
-	if missing > 0 {
-		dot = warning
-	}
-	text := l.SettingsPermStatusOn()
-	if missing > 0 {
-		text = l.SettingsPermStatusMissing(missing)
-	}
-	row := ui.ButtonBase(c.Key("perm-status")).Height(30).FillWidth().Radius(9).
-		Padding(0, 10, 0, 10).Background(setStatus).AlignItems(ui.Center).Gap(7).Label(text)
-	if row.Hovered() {
-		row.Background(fill1)
-	}
-	row.Children(func() {
-		ui.Box(c.Key("dot")).Size(7, 7).Radius(4).Background(dot)
-		ui.Text(c, text).SingleLine().FontSize(12).TextColor(ink2).Grow(1).MinWidth(0)
-	})
-	if row.Clicked() {
-		a.setSettingsPage(settingsPagePermissions)
-	}
-}
-
-// settingsBrokenBanner explains an unreadable settings.json above every
-// page's content: the controls below it are locked.
+// settingsBrokenBanner explains an unreadable settings.json above the page's
+// content: preference groups below it are locked.
 func settingsBrokenBanner(c *ui.Context) {
 	l := loc(c)
-	ui.Column(c.Key("broken")).Padding(10, 12).Gap(4).Radius(12).
+	ui.Column(c.Key("broken")).Margin(8, 0, 12, 0).Padding(10, 12).Gap(4).Radius(12).
 		Background(danger.Alpha(0.12)).
 		Border(0.5, danger.Alpha(0.35)).Children(func() {
-		ui.Text(c, l.SettingsBrokenTitle()).FontSize(12).FontWeight(settingsWeight(600)).TextColor(danger)
-		ui.Text(c, l.SettingsBrokenBody()).FontSize(11).TextColor(ink3)
+		settingsText(c, l.SettingsBrokenTitle(), 12).FontWeight(700).TextColor(danger)
+		settingsText(c, l.SettingsBrokenBody(), 11.5).TextColor(settingsInk3)
 	})
 }
 
-// settingsPageBody dispatches to the page the sidebar selected.
 func (a *shelf) settingsPageBody(c *ui.Context) {
-	switch a.settingsPage {
+	a.settingsPageBodyFor(c, a.settingsPage)
+}
+
+func (a *shelf) settingsPageBodyFor(c *ui.Context, page settingsPageID) {
+	switch page {
 	case settingsPageGeneral:
 		a.settingsGeneralPage(c)
 	case settingsPageNotch:
@@ -605,105 +621,103 @@ func (a *shelf) settingsPageBody(c *ui.Context) {
 	}
 }
 
-// settingsHero paints a compact page title and its otter illustration.
-func settingsHero(c *ui.Context, key, title, mood string, from, to, glow ui.Color) {
-	box := ui.Box(c.Key("hero-" + key)).Height(settingsHeroHeight).FillWidth().Radius(16).Clip().
-		LinearGradient(ui.LinearGradient{From: from, To: to, Angle: 135})
-	box.Draw(func(p *ui.Painter, r ui.Rect) {
-		p.Clip(r, 16, func() {
-			// The glow: a radial falloff (bottom right, past the corner),
-			// built from concentric fills that accumulate to a soft light.
-			cx, cy := r.X+r.W*0.8, r.Y+r.H*1.2
-			for i := range 14 {
-				rad := float32(16 + i*11)
-				p.Fill(ui.Rect{X: cx - rad, Y: cy - rad, W: rad * 2, H: rad * 2}, glow.Alpha(0.026), rad)
-			}
-			// The sparse stars of the design, at its own places.
-			stars := [][3]float32{
-				{0.12, 0.30, 0.55}, {0.28, 0.72, 0.35}, {0.46, 0.22, 0.45},
-				{0.63, 0.64, 0.30}, {0.78, 0.28, 0.50}, {0.88, 0.80, 0.35},
-			}
-			for _, s := range stars {
-				d := float32(1.1)
-				if s[2] > 0.45 {
-					d = 1.6
-				}
-				p.Fill(ui.Rect{X: r.X + r.W*s[0], Y: r.Y + r.H*s[1], W: d, H: d}, ui.RGBA(255, 255, 255, s[2]), d/2)
-			}
-		})
-	})
-	box.Children(func() {
-		ui.Text(c, title).SingleLine().Absolute().Left(22).Top(30).
-			FontSize(26).FontWeight(700).TextColor(ink)
-		if b := otterImage(mood); b != nil {
-			w, h := b.Size()
-			height := float32(84)
-			width := height * float32(w) / float32(h)
-			ui.Image(c.Key("otter"), b).Absolute().Right(22).Bottom(0).
-				Size(width, height).Fit(ui.Contain)
-		}
-	})
-}
-
-// settingsGroup is a section of a page: the letterspaced label, the card,
-// and an optional note under it. mt is the space above the label.
+// settingsGroup builds a v6 section: 12pt/700/ink3 header (margin-top 8 for the
+// first section, 20 for subsequent ones; 7pt below, 4pt left inset), #17181B
+// 12pt-rounded card without border, and optional muted footnote.
 func settingsGroup(c *ui.Context, key, title, foot string, fn func()) {
-	ui.Column(c.Key("grp-" + key)).FillWidth().Gap(8).Children(func() {
-		ui.Text(c, title).SingleLine().FontSize(10.5).FontWeight(700).LetterSpacing(1.2).
-			TextColor(setLabel).Padding(0, 4, 0, 4)
-		ui.Column(c.Key("card-"+key)).Radius(14).Background(setCard).
-			Border(1, setCardEdge).FillWidth().Children(fn)
+	settingsGroupAt(c, key, title, foot, false, fn)
+}
+
+func settingsFirstGroup(c *ui.Context, key, title, foot string, fn func()) {
+	settingsGroupAt(c, key, title, foot, true, fn)
+}
+
+func settingsGroupAt(c *ui.Context, key, title, foot string, first bool, fn func()) {
+	topGap := float32(20)
+	if first {
+		topGap = 8
+	}
+	ui.Column(c.Key("grp-" + key)).FillWidth().Children(func() {
+		if title != "" {
+			settingsText(c, title, 12).SingleLine().FontWeight(700).
+				TextColor(settingsInk3).Padding(topGap, 0, 7, 4)
+		} else {
+			ui.Box(c.Key("grp-gap-" + key)).Height(topGap)
+		}
+		ui.Column(c.Key("card-" + key)).Radius(12).Background(settingsCardBg).
+			FillWidth().Clip().Children(fn)
 		if foot != "" {
-			ui.Text(c, foot).FontSize(11.5).TextColor(ink3).Padding(0, 6, 0, 6).MaxWidth(520)
+			settingsText(c, foot, 11.5).TextColor(settingsInk3).
+				Padding(10, 4, 0, 4).MaxWidth(460)
 		}
 	})
 }
 
-// settingsSep is the 1pt hairline between two rows, inset like the row's
-// text (16pt on both sides).
-func settingsSep(c *ui.Context, key string) {
-	ui.Row(c.Key("sep-"+key)).FillWidth().Padding(0, settingsRowPadX).Children(func() {
-		ui.Box(c.Key("line")).Height(1).FillWidth().Background(setSep)
+func settingsGroupRows(c *ui.Context, key, title, foot string, disabled bool, fn func()) {
+	settingsGroup(c, key, title, foot, func() {
+		ui.Column(c.Key("rows-" + key)).FillWidth().Disabled(disabled).Children(fn)
 	})
 }
 
-// settingsRowLine is one row's frame: the design's 50pt minimum, 10pt
-// vertical and 16pt horizontal padding, 14pt between text and control.
+func settingsFirstGroupRows(c *ui.Context, key, title, foot string, disabled bool, fn func()) {
+	settingsFirstGroup(c, key, title, foot, func() {
+		ui.Column(c.Key("rows-" + key)).FillWidth().Disabled(disabled).Children(fn)
+	})
+}
+
+// settingsSep is the 1pt hairline between two rows: white 7%, inset 14pt on
+// the left and flush on the right.
+func settingsSep(c *ui.Context, key string) {
+	ui.Row(c.Key("sep-"+key)).FillWidth().Padding(0, 0, 0, settingsRowPadX).Children(func() {
+		ui.Box(c.Key("line")).Height(1).FillWidth().Background(settingsSepColor)
+	})
+}
+
+// settingsRowLine is one row's frame: 44pt minimum height, 7pt vertical and
+// 14pt horizontal padding, 14pt gap.
 func settingsRowLine(c *ui.Context, key string) ui.Element {
 	return ui.Row(c.Key("row-"+key)).FillWidth().MinHeight(settingsRowMinHeight).
 		AlignItems(ui.Center).Gap(14).Padding(settingsRowPadY, settingsRowPadX)
 }
 
-// settingsRowText is a row's left column: the title at 13.5pt semibold and
-// the optional caption at 11.5pt white 48%.
 func settingsRowText(c *ui.Context, label, caption string) {
-	ui.Column(c.Key("text")).Gap(2).Grow(1).MinWidth(0).Children(func() {
-		settingsLabel(c, label, 13.5, 600).TextColor(ink)
+	settingsRowTextColor(c, label, caption, settingsInk3)
+}
+
+func settingsRowTextColor(c *ui.Context, label, caption string, captionColor ui.Color) {
+	ui.Column(c.Key("text")).Gap(1).Grow(1).MinWidth(0).Children(func() {
+		settingsLabel(c, label, 13, 400).TextColor(ink)
 		if caption != "" {
-			ui.Text(c, caption).FontSize(11.5).TextColor(ink3)
+			settingsText(c, caption, 11.5).TextColor(captionColor)
 		}
 	})
 }
 
-// settingsFit, when a test installs it, is called with each single-line
-// label whose words need more width than the box the layout gave it — the
-// settings window's counterpart of the panel's fitIssue. Production leaves
-// it nil and pays one nil check.
+// settingsFit, when a test installs it, reports single-line labels wider than
+// their layout box.
 var settingsFit func(string)
 
-// settingsLabel is a single-line label of the Settings window. While a test
-// measures (settingsFit is set), it reports a label that cannot fit its box,
-// the way panelLabel does for the panel; a caption is not measured here
-// because it wraps on purpose and the row grows with it.
+// settingsLine is the design's line height for a Settings font size: the
+// mock's 1.35 line-height in points. The macOS system font and Segoe UI +
+// Microsoft YaHei UI have different ascent and descent at the same size
+// (about two points at 12pt), which would move every row and the window's
+// own content height apart; pinning the line box makes both platforms lay
+// out to the same heights.
+func settingsLine(size float32) float32 { return size * 1.35 }
+
+// settingsText is a Settings text at size with that pinned line box.
+func settingsText(c *ui.Context, text string, size float32) ui.Element {
+	return ui.Text(c, text).FontSize(size).FixedLineHeight(settingsLine(size))
+}
+
 func settingsLabel(c *ui.Context, text string, size float32, weight int) ui.Element {
-	w := settingsWeight(weight)
-	t := ui.Text(c, text).SingleLine().FontSize(size)
-	if w != 0 {
-		t.FontWeight(w)
+	t := settingsText(c, text, size).SingleLine()
+	if weight != 0 {
+		t.FontWeight(weight)
 	}
 	if settingsFit != nil {
 		if b := t.Bounds(); b.W > 0 {
-			mw, _ := c.MeasureText(0, ui.Span{Text: text, Size: size, Weight: w})
+			mw, _ := c.MeasureText(0, ui.Span{Text: text, Size: size, Weight: weight})
 			if mw > b.W+0.5 {
 				settingsFit(fmt.Sprintf("%q needs %.1fpt, box is %.1fpt (size %g): the label is cut", text, mw, b.W, size))
 			}
@@ -712,71 +726,76 @@ func settingsLabel(c *ui.Context, text string, size float32, weight int) ui.Elem
 	return t
 }
 
-// settingsToggleRow is one switch row: the label (and optional caption) on
-// the left, a macOS-style switch on the right. The row itself is the
-// toggle — a click anywhere on it flips the switch — and the inner switch
-// mirrors the same value, so the two bindings can never fight. apply
-// receives the new state only when the user actually changed it.
 func settingsToggleRow(c *ui.Context, key, label, caption string, on bool, apply func(bool)) {
-	settingsToggleRowCap(c, key, label, caption, ink3, on, apply)
+	settingsToggleRowCap(c, key, label, caption, settingsInk3, on, apply)
 }
 
-// settingsToggleRowCap is settingsToggleRow with a caption color of its own:
-// the login item shows a failure in red there.
 func settingsToggleRowCap(c *ui.Context, key, label, caption string, captionColor ui.Color, on bool, apply func(bool)) {
 	settingsSwitchRow(c, key, label, caption, captionColor, nil, on, apply)
 }
 
-// settingsToggleRowMark is settingsToggleRow with the row's own mark before
-// the title and caption: the quota list, whose tools are recognised by their
-// logos.
 func settingsToggleRowMark(c *ui.Context, key, label, caption string, logo *ui.SVG, color ui.Color, mark float32, on bool, apply func(bool)) {
-	settingsSwitchRow(c, key, label, caption, ink3, func() {
+	settingsSwitchRow(c, key, label, caption, settingsInk3, func() {
 		settingsMark(c, logo, color, mark)
 	}, on, apply)
 }
 
-// settingsMark draws a row's lead logo. mark is the icon box in points that
-// shows the artwork at settingsRowMark; the box is centred in a
-// settingsRowMark slot, so marks whose official SVGs pad their viewBox
-// differently still read at one size and leave every row's text on one
-// left edge.
+// settingsMark draws a row's lead logo inside a 20×20 slot scaled to 16pt.
 func settingsMark(c *ui.Context, logo *ui.SVG, color ui.Color, mark float32) {
-	slot := ui.Box(c.Key("mark")).Size(settingsRowMark, settingsRowMark)
+	slot := ui.Box(c.Key("mark")).Size(settingsMarkSlot, settingsMarkSlot)
 	slot.Children(func() {
 		if logo == nil {
 			return
 		}
-		off := (settingsRowMark - mark) / 2
-		ui.Icon(c, logo).Size(mark, mark).TextColor(color).Absolute().Left(off).Top(off)
+		scaled := mark * settingsMarkArt / settingsRowMark
+		off := (settingsMarkSlot - scaled) / 2
+		ui.Icon(c, logo).Size(scaled, scaled).TextColor(color).Absolute().Left(off).Top(off)
 	})
 }
 
-// settingsSwitchRow is the switch row itself: lead draws the row's mark, when
-// it has one, then the label and optional caption on the left and a
-// macOS-style switch on the right.
+// settingsSwitch is the 38×22 v6 switch with a 220ms spring knob.
+func settingsSwitch(c *ui.Context, on *bool, label string) ui.Element {
+	sw := ui.SwitchBase(c, on).Size(38, 22).Radius(11).Label(label)
+	anim := fadeOr(c, settingsSwitchSpring)
+	target := float32(0)
+	if *on {
+		target = 1
+	}
+	pos := sw.AnimateTo("knob", target, anim)
+	k := min(max(pos, 0), 1)
+	sw.Background(settingsSwitchOff.Mix(accent, k))
+	rtl := c.Direction() == ui.RightToLeft
+	sw.Draw(func(p *ui.Painter, r ui.Rect) {
+		at := k
+		if rtl {
+			at = 1 - k
+		}
+		knob := ui.Rect{X: r.X + 2 + at*16, Y: r.Y + 2, W: 18, H: 18}
+		p.Shadow(knob, 9, 0, 1, 2, 0, ui.RGBA(0, 0, 0, 0.35))
+		p.Fill(knob, ui.RGB(255, 255, 255), 9)
+	})
+	return sw
+}
+
 func settingsSwitchRow(c *ui.Context, key, label, caption string, captionColor ui.Color, lead func(), on bool, apply func(bool)) {
 	row := ui.ToggleBase(c.Key("toggle-"+key), &on).FillWidth().AlignItems(ui.Center).
 		Gap(14).MinHeight(settingsRowMinHeight).Padding(settingsRowPadY, settingsRowPadX).Label(label)
+	if row.Hovered() {
+		row.Background(settingsRowHoverBg)
+	}
 	var sw ui.Element
 	row.Children(func() {
 		if lead != nil {
 			lead()
 		}
-		ui.Column(c.Key("text")).Gap(2).Grow(1).MinWidth(0).Children(func() {
-			settingsLabel(c, label, 13.5, 600).TextColor(ink)
-			if caption != "" {
-				ui.Text(c, caption).FontSize(11.5).TextColor(captionColor)
-			}
-		})
-		sw = ui.Switch(c, &on).Label(label)
+		settingsRowTextColor(c, label, caption, captionColor)
+		sw = settingsSwitch(c, &on, label)
 	})
 	if row.Changed() || sw.Changed() {
 		apply(on)
 	}
 }
 
-// settingsRow adds a row whose control fn builds on the right.
 func settingsRow(c *ui.Context, key, label, caption string, fn func()) {
 	settingsRowLine(c, key).Children(func() {
 		settingsRowText(c, label, caption)
@@ -784,41 +803,24 @@ func settingsRow(c *ui.Context, key, label, caption string, fn func()) {
 	})
 }
 
-// settingsSection is the older name the 重新命名 window builds its form
-// with: a titled card whose rows can be locked as a whole.
-func settingsSection(c *ui.Context, title, foot string, disabled bool, fn func()) {
-	settingsGroup(c, title, title, foot, func() {
-		ui.Column(c.Key("rows-" + title)).FillWidth().Disabled(disabled).Children(fn)
-	})
-}
-
-// settingsGroupRows wraps a group of rows that settings.json backs: it is
-// locked (and dimmed) while the file is broken, so it is never overwritten.
-func settingsGroupRows(c *ui.Context, key, title, foot string, disabled bool, fn func()) {
-	settingsGroup(c, key, title, foot, func() {
-		ui.Column(c.Key("rows-" + key)).FillWidth().Disabled(disabled).Children(fn)
-	})
-}
-
-// settingsButton is the design's 28pt control: #1F2024 with white text, or
-// white with black text for the primary action.
+// settingsButton is the 26pt v6 pill-rect button (#24252A, hover #2E2F35).
 func settingsButton(c *ui.Context, key, label string, primary bool, fn func()) ui.Element {
-	b := ui.ButtonBase(c.Key("btn-"+key)).Height(28).Radius(8).Padding(0, 12, 0, 12).
+	b := ui.ButtonBase(c.Key("btn-"+key)).Height(26).Radius(7).Padding(0, 12, 0, 12).
 		AlignItems(ui.Center).Label(label)
 	fg := ink
 	if primary {
 		b.Background(ink)
 		fg = ui.RGB(0, 0, 0)
 	} else {
-		b.Background(setCtl)
+		b.Background(settingsCtlBg)
 		if b.Hovered() {
-			b.Background(setCtlHover)
+			b.Background(settingsCtlHoverBg)
 		}
 	}
 	b.Children(func() {
-		t := ui.Text(c, label).SingleLine().FontSize(12.5).TextColor(fg)
+		t := settingsText(c, label, 12).SingleLine().TextColor(fg)
 		if primary {
-			t.FontWeight(settingsWeight(600))
+			t.FontWeight(700)
 		}
 	})
 	if b.Clicked() {
@@ -827,70 +829,69 @@ func settingsButton(c *ui.Context, key, label string, primary bool, fn func()) u
 	return b
 }
 
-// settingsSegmented is a segmented control named after its row. On Windows,
-// mixed CJK/ASCII controls compensate for Segoe UI sitting ~1.5 DIP lower than
-// Microsoft YaHei UI so all segments share one visual baseline.
+// settingsSegmented builds the 28pt v6 segmented control using one shared path
+// across platforms. Each segment's text baseline is measured via ShapeText so
+// mixed CJK/ASCII controls (e.g. 跟随系统 / 简体中文 / English) share one visual
+// baseline inside their 24pt segments.
 func settingsSegmented(c *ui.Context, key, label string, selected *int, labels ...string) ui.Element {
-	if !forWindows {
-		return ui.Segmented(c.Key("seg-"+key), selected, labels...).Label(label)
-	}
-	return settingsSegmentedWin(c, key, label, selected, labels...)
+	return settingsSegmentedWidth(c, key, label, selected, false, labels...)
 }
 
-func settingsHasNonASCII(s string) bool {
-	for i := 0; i < len(s); i++ {
-		if s[i] >= 0x80 {
-			return true
+// settingsSegmentedWidth is settingsSegmented, optionally stretching each
+// segment to an equal share of a full-width track (the rename window's mode
+// picker); Settings' rows keep the control at its intrinsic width.
+func settingsSegmentedWidth(c *ui.Context, key, label string, selected *int, fill bool, labels ...string) ui.Element {
+	const segH = float32(24)
+	font := ui.Font{Family: c.Theme().Font, Size: 12}
+	baselines := make([]float32, len(labels))
+	var maxBaseline float32
+	for i, segLabel := range labels {
+		tl := ui.ShapeText(segLabel, font, 0)
+		_, th := tl.Size()
+		if lines := tl.Lines(); len(lines) > 0 {
+			b := (segH-th)/2 + lines[0].Baseline
+			baselines[i] = b
+			if b > maxBaseline {
+				maxBaseline = b
+			}
 		}
 	}
-	return false
-}
 
-func settingsSegmentedWin(c *ui.Context, key, label string, selected *int, labels ...string) ui.Element {
-	mixed := false
-	for _, s := range labels {
-		if settingsHasNonASCII(s) {
-			mixed = true
-			break
-		}
-	}
-	t := c.Theme()
 	parts := ui.SegmentedBase(c.Key("seg-"+key), selected, len(labels))
-	g := parts.Track.AlignItems(ui.Stretch).
-		Padding(t.Space(0.5)).Gap(t.Space(0.5)).
-		Radius(t.Radius).Background(t.Surface).Border(1, t.Border).Label(label)
-	padY, padX := t.Space(1), t.Space(3)
-	rad := max(t.Radius-t.Space(0.5), 0)
+	g := parts.Track.Height(28).AlignItems(ui.Stretch).
+		Padding(2).Gap(2).Radius(8).Background(settingsCtlBg).Label(label)
+	if fill {
+		g.FillWidth()
+	}
 	g.Children(func() {
 		for i, segLabel := range labels {
 			s := parts.Segment(i)
-			top, bot := padY, padY
-			if mixed && !settingsHasNonASCII(segLabel) {
-				// Shift ASCII-only labels ("English", "500") up by 1.5 DIPs so their
-				// cap/baseline aligns optically with YaHei CJK siblings.
-				const lift = float32(1.5)
-				top -= lift
-				bot += lift
+			top, bot := float32(0), float32(0)
+			if dy := maxBaseline - baselines[i]; dy > 0.05 {
+				// Centering a child shifts its y by (padTop - padBot)/2; doubling dy
+				// moves the text down by dy so all segments share maxBaseline.
+				top = dy * 2
 			}
-			s.Padding(top, padX, bot, padX).Gap(t.Space(1.5)).Radius(rad).TextColor(t.Text)
+			s.Height(segH).Padding(top, 12, bot, 12).Radius(6)
+			if fill {
+				s.Grow(1)
+			}
+			fg := ink2
 			switch {
 			case i == *selected:
-				s.Background(t.SurfacePressed).Shadow(0, 1, 2, 0, ui.RGBA(0, 0, 0, 0.12))
-			case s.Pressed():
-				s.Background(t.SurfacePressed)
+				s.Background(settingsSegOnBg).Shadow(0, 1, 2, 0, ui.RGBA(0, 0, 0, 0.25))
+				fg = ink
 			case s.Hovered():
-				s.Background(t.SurfaceHover)
+				s.Background(ui.RGBA(255, 255, 255, 0.05))
 			}
-			s.Children(func() { ui.Text(c, segLabel).SingleLine() })
+			s.Children(func() {
+				ui.Text(c, segLabel).SingleLine().FontSize(12).TextColor(fg)
+			})
 		}
 	})
 	return g
 }
 
-// choiceSegments turns an integer preference and its usual choices into a
-// segmented control's data: labels, the values they stand for (sorted, with
-// the current value inserted if the user set something the presets do not
-// offer), and the selected index. Pure; unit-tested.
 func choiceSegments(current int, choices []int, format func(int) string) (labels []string, values []int, selected int) {
 	values = slices.Clone(choices)
 	if !slices.Contains(values, current) {
@@ -904,8 +905,6 @@ func choiceSegments(current int, choices []int, format func(int) string) (labels
 	return labels, values, selected
 }
 
-// languageIndex maps a saved language to the segmented control's segment:
-// 0 follows the system, 1 is zh-Hans, 2 is English.
 func languageIndex(tag string) int {
 	switch tag {
 	case "zh-Hans":
@@ -916,7 +915,6 @@ func languageIndex(tag string) int {
 	return 0
 }
 
-// languageAt maps the segmented control's segment to a saved language.
 func languageAt(idx int) string {
 	switch idx {
 	case 1:
@@ -927,8 +925,6 @@ func languageAt(idx int) string {
 	return ""
 }
 
-// searchModeIndex maps a saved mode to the segmented control's segment: 0 is
-// 全部, 1 is 应用, 2 is 文件.
 func searchModeIndex(mode settings.SearchMode) int {
 	switch mode.Normalized() {
 	case settings.SearchModeApps:
@@ -939,7 +935,6 @@ func searchModeIndex(mode settings.SearchMode) int {
 	return 0
 }
 
-// searchModeAt maps the segmented control's segment to a saved mode.
 func searchModeAt(idx int) settings.SearchMode {
 	switch idx {
 	case 1:
@@ -950,12 +945,6 @@ func searchModeAt(idx int) settings.SearchMode {
 	return settings.SearchModeAll
 }
 
-// setLanguage saves the chosen language and shows it at once: settings.json
-// is the source of truth, and mygo.App.SetLocale redraws every window in it
-// without a restart. Follow System runs the same rule a launch does, so
-// choosing it shows the language the system asks for — a Chinese system
-// Chinese, every other English — rather than the source language mygo would
-// fall back to.
 func (a *shelf) setLanguage(tag string) {
 	tag = languageTag(tag)
 	if tag == a.settings.Language {
@@ -969,13 +958,6 @@ func (a *shelf) setLanguage(tag string) {
 	a.showLanguage()
 }
 
-// applyOpenAtLogin switches the login item through SMAppService (macOS 13+)
-// and keeps the shown state and any failure visible inline — running from
-// outside a signed app bundle, for example, reports the error here instead
-// of silently reverting the switch. Whatever the call returned, the switch
-// then shows what the system actually reports (an SMAppService registration
-// may still need the user's approval in System Settings), so it can never
-// claim a state that is not real.
 func (a *shelf) applyOpenAtLogin(on bool) {
 	err := setOpenAtLogin(on)
 	a.loginOn = openAtLogin()
@@ -987,14 +969,10 @@ func (a *shelf) applyOpenAtLogin(on bool) {
 	a.repaintSettings()
 }
 
-// settingsFootnote is the muted note under a page's last card.
 func settingsFootnote(c *ui.Context, key, text string) {
-	ui.Text(c, text).FontSize(11.5).TextColor(ink3).Padding(0, 6, 0, 6).MaxWidth(520)
+	settingsText(c, text, 11.5).TextColor(settingsInk3).Padding(10, 4, 0, 4).MaxWidth(460)
 }
 
-// appVersion is the bundle version (mygo.json's version → Info.plist) when
-// packaged, else the module version of a source build, else "dev". Pure
-// apart from the package-level probe; unit-tested.
 func appVersion() string {
 	if v := appVersionProbe(); v != "" {
 		return v
