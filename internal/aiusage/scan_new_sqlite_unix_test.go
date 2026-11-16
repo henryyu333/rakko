@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -51,10 +52,79 @@ func TestScanHermesAndDevinSQLite(t *testing.T) {
 		t.Fatal(err)
 	}
 	sum := s.Summary(RangeAll, time.Unix(1794800030, 0))
-	if h := sum.ByTool[ToolHermes]; h.Requests != 1 || h.Input != 1000 || h.Output != 200 || h.CacheRead != 5000 {
+	if h := sum.ByTool[ToolHermes]; h.Requests != 2 || h.Input != 1000 || h.Output != 200 || h.CacheRead != 5000 {
 		t.Fatalf("hermes totals wrong: %+v", h)
 	}
 	if d := sum.ByTool[ToolDevin]; d.Requests != 1 || d.Input != 800 || d.Output != 150 || d.CacheRead != 400 || d.CacheWrite != 50 {
 		t.Fatalf("devin totals wrong: %+v", d)
+	}
+}
+
+func TestScanHermesDeltaAcrossDays(t *testing.T) {
+	if _, err := os.Stat(sqlite3Path); err != nil {
+		t.Skip("sqlite3 not installed")
+	}
+	home := t.TempDir()
+	cacheDir := t.TempDir()
+	hermesDB := filepath.Join(home, ".hermes", "state.db")
+	if err := os.MkdirAll(filepath.Dir(hermesDB), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	day1 := time.Date(2026, 11, 16, 10, 0, 0, 0, time.Local)
+	day2 := time.Date(2026, 11, 17, 10, 0, 0, 0, time.Local)
+
+	runSQLite(t, hermesDB, `
+		CREATE TABLE sessions (id TEXT PRIMARY KEY, started_at REAL, ended_at REAL, last_activity_at REAL);
+		CREATE TABLE session_model_usage (
+			session_id TEXT, model TEXT, billing_provider TEXT, billing_base_url TEXT,
+			billing_mode TEXT, task TEXT, api_call_count INTEGER,
+			input_tokens INTEGER, output_tokens INTEGER, cache_read_tokens INTEGER,
+			cache_write_tokens INTEGER, estimated_cost_usd REAL, actual_cost_usd REAL,
+			first_seen REAL, last_seen REAL
+		);
+		INSERT INTO sessions VALUES ('s1', `+strconv.FormatInt(day1.Unix(), 10)+`, NULL, `+strconv.FormatInt(day1.Unix(), 10)+`);
+		INSERT INTO session_model_usage VALUES ('s1', 'deepseek-v4.1-flash', 'p', 'u', '', '', 2, 100, 20, 0, 0, 0.10, 0, `+strconv.FormatInt(day1.Unix(), 10)+`, `+strconv.FormatInt(day1.Unix(), 10)+`);
+	`)
+
+	s1 := NewScanner(home, cacheDir)
+	if err := s1.Scan(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+
+	// Same row grows on day 2 from 100 -> 150 input tokens and 2 -> 3 calls.
+	// Ensure mtime/size changes so dbSignature triggers a reread.
+	runSQLite(t, hermesDB, `
+		UPDATE sessions SET last_activity_at = `+strconv.FormatInt(day2.Unix(), 10)+` WHERE id = 's1';
+		UPDATE session_model_usage
+		SET api_call_count = 3, input_tokens = 150, output_tokens = 35, estimated_cost_usd = 0.16, last_seen = `+strconv.FormatInt(day2.Unix(), 10)+`
+		WHERE session_id = 's1';
+	`)
+
+	// New Scanner loading from cacheDir must preserve day 1's 100 tokens and
+	// attribute only the +50 delta (+1 call) to day 2.
+	s2 := NewScanner(home, cacheDir)
+	if err := s2.Scan(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+
+	sumToday := s2.Summary(RangeToday, day2)
+	hToday := sumToday.ByTool[ToolHermes]
+	if hToday.Input != 50 || hToday.Output != 15 || hToday.Requests != 1 {
+		t.Fatalf("hermes today delta = %+v, want in=50 out=15 reqs=1", hToday)
+	}
+
+	sum7d := s2.Summary(Range7d, day2)
+	h7d := sum7d.ByTool[ToolHermes]
+	if h7d.Input != 150 || h7d.Output != 35 || h7d.Requests != 3 {
+		t.Fatalf("hermes 7d totals = %+v, want in=150 out=35 reqs=3", h7d)
+	}
+	if len(sum7d.Buckets) < 2 {
+		t.Fatalf("expected 7d buckets, got %d", len(sum7d.Buckets))
+	}
+	// Last two buckets are day1 and day2.
+	bDay1 := sum7d.Buckets[len(sum7d.Buckets)-2].Tokens[ToolHermes]
+	bDay2 := sum7d.Buckets[len(sum7d.Buckets)-1].Tokens[ToolHermes]
+	if bDay1 != 120 || bDay2 != 65 {
+		t.Fatalf("day1=%d day2=%d, want 120 and 65", bDay1, bDay2)
 	}
 }

@@ -35,6 +35,7 @@ type rec struct {
 	cost            float64
 	priced          bool
 	key             string
+	reqs            int64 // 0 means 1
 }
 
 func (r rec) tokens() int64 { return r.in + r.out + r.cr + r.cw }
@@ -54,14 +55,15 @@ type codexTail struct {
 // so a later scan can tell "file grew by appending" apart from "file was
 // replaced with a bigger one".
 type fileState struct {
-	tool      Tool
-	size      int64 // file size observed right after the read that produced offset
-	offset    int64
-	modNano   int64 // ModTime of that observation
-	tailStart int64 // offset of the last complete line; -1 when none
-	tailSum   uint64
-	recs      []rec
-	tail      codexTail
+	tool       Tool
+	size       int64 // file size observed right after the read that produced offset
+	offset     int64
+	modNano    int64 // ModTime of that observation
+	tailStart  int64 // offset of the last complete line; -1 when none
+	tailSum    uint64
+	recs       []rec
+	tail       codexTail
+	hermesPrev map[string]hermesSnapshot
 }
 
 // Scanner reads local AI-tool session logs and summarizes their token
@@ -215,6 +217,7 @@ func (s *Scanner) Scan(ctx context.Context, progress func(done, total int64)) er
 	var jobs []job
 	var total int64
 	var scanErr error
+	hasDataFile := map[Tool]bool{}
 	for path, spec := range want {
 		if err := ctx.Err(); err != nil { // stop the stat walk on cancel
 			scanErr = err
@@ -224,6 +227,7 @@ func (s *Scanner) Scan(ctx context.Context, progress func(done, total int64)) er
 		if err != nil {
 			continue // vanished between walk and stat: drop
 		}
+		hasDataFile[spec.tool] = true
 		old := prev[path]
 		if spec.whole {
 			if old != nil && fi.Size() == old.size && fi.ModTime().UnixNano() == old.modNano {
@@ -321,13 +325,31 @@ loop:
 	}
 
 	// SQLite-backed readers: replace the whole record set when the database
-	// (or its WAL) changed. A read failure marks the reader failed; its
-	// records are dropped below so the total only covers readers that answered.
+	// (or its WAL) changed, or compute deltas for cumulative databases. A read
+	// failure marks the reader failed; its records are dropped below so the
+	// total only covers readers that answered.
 	for _, db := range dbJobs {
 		if size, mod, ok := dbSignature(db.spec.path); ok {
+			hasDataFile[db.tool] = true
 			old := prev[db.spec.path]
 			if old != nil && old.size == size && old.modNano == mod {
 				files[db.spec.path] = old
+			} else if db.spec.readDelta != nil {
+				recs, snap, err := db.spec.readDelta(ctx, db.spec.path, s.cacheDir, pool, old)
+				if err != nil {
+					if ctx.Err() != nil {
+						scanErr = ctx.Err()
+					}
+					failed[db.tool] = true
+				} else {
+					files[db.spec.path] = &fileState{
+						tool:       db.tool,
+						size:       size,
+						modNano:    mod,
+						recs:       recs,
+						hermesPrev: snap,
+					}
+				}
 			} else if recs, err := db.spec.read(ctx, db.spec.path, s.cacheDir, pool); err != nil {
 				if ctx.Err() != nil {
 					scanErr = ctx.Err()
@@ -336,6 +358,16 @@ loop:
 			} else {
 				files[db.spec.path] = &fileState{tool: db.tool, size: size, modNano: mod, recs: recs}
 			}
+		}
+	}
+
+	// Any installed tool with no supported local data files at all is also
+	// reported as unreadable (e.g. Copilot CLI without OTEL telemetry).
+	// Tools that do have data files — even if unused in the selected range —
+	// are not listed here.
+	for _, entry := range registry {
+		if !entry.unreadable && !hasDataFile[entry.tool] && entry.isInstalled(s.home) {
+			unreadable[entry.tool] = true
 		}
 	}
 
@@ -576,14 +608,15 @@ type cacheTailJSON struct {
 }
 
 type cacheFileJSON struct {
-	T  string              `json:"t"`
-	S  int64               `json:"s"`
-	O  int64               `json:"o"`
-	M  int64               `json:"m"`
-	TS int64               `json:"ls"`
-	TH uint64              `json:"lh"`
-	R  [][]json.RawMessage `json:"r"`
-	C  *cacheTailJSON      `json:"c,omitempty"`
+	T  string                    `json:"t"`
+	S  int64                     `json:"s"`
+	O  int64                     `json:"o"`
+	M  int64                     `json:"m"`
+	TS int64                     `json:"ls"`
+	TH uint64                    `json:"lh"`
+	R  [][]json.RawMessage       `json:"r"`
+	C  *cacheTailJSON            `json:"c,omitempty"`
+	H  map[string]hermesSnapshot `json:"h,omitempty"`
 }
 
 type cacheJSON struct {
@@ -591,10 +624,9 @@ type cacheJSON struct {
 	Files map[string]*cacheFileJSON `json:"files"`
 }
 
-// cacheVersion identifies the cache file's format and semantics; version 1
-// caches dropped duplicate copies at parse time, so bumping to 2 forces one
-// full rescan that repopulates them.
-const cacheVersion = 2
+// cacheVersion identifies the cache file's format and semantics; version 3
+// adds per-record request counts and cumulative snapshots for Hermes.
+const cacheVersion = 3
 
 func (s *Scanner) cachePath() string { return filepath.Join(s.cacheDir, cacheName) }
 
@@ -624,12 +656,13 @@ func (s *Scanner) loadCache(ctx context.Context) {
 			continue
 		}
 		st := &fileState{
-			tool:      Tool(cf.T),
-			size:      cf.S,
-			offset:    cf.O,
-			modNano:   cf.M,
-			tailStart: cf.TS,
-			tailSum:   cf.TH,
+			tool:       Tool(cf.T),
+			size:       cf.S,
+			offset:     cf.O,
+			modNano:    cf.M,
+			tailStart:  cf.TS,
+			tailSum:    cf.TH,
+			hermesPrev: cf.H,
 		}
 		if cf.C != nil {
 			st.tail.model = cf.C.M
@@ -674,6 +707,11 @@ func decodeRec(tup []json.RawMessage, pool map[string]*string) (rec, bool) {
 	r.at, r.model = at, intern(pool, model)
 	r.in, r.out, r.cr, r.cw = in, out, cr, cw
 	r.cost, r.priced, r.key = cost, priced != 0, key
+	if len(tup) >= 10 {
+		if reqs, err := rawI64(tup[9]); err == nil && reqs > 0 {
+			r.reqs = reqs
+		}
+	}
 	return r, true
 }
 
@@ -754,6 +792,12 @@ func (s *Scanner) saveCache(ctx context.Context, files map[string]*fileState) {
 			}
 			buf.WriteString(strconv.Itoa(h) + `}`)
 		}
+		if len(st.hermesPrev) > 0 {
+			if hb, err := json.Marshal(st.hermesPrev); err == nil {
+				buf.WriteString(`,"h":`)
+				buf.Write(hb)
+			}
+		}
 		buf.WriteString(`,"r":[`)
 		for i, r := range st.recs {
 			if i > 0 {
@@ -789,6 +833,10 @@ func (s *Scanner) saveCache(ctx context.Context, files map[string]*fileState) {
 			buf.WriteString(strconv.Itoa(p))
 			buf.WriteByte(',')
 			buf.WriteString(strconv.Quote(r.key))
+			if r.reqs > 1 {
+				buf.WriteByte(',')
+				buf.WriteString(strconv.FormatInt(r.reqs, 10))
+			}
 			buf.WriteByte(']')
 		}
 		buf.WriteString(`]}`)

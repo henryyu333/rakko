@@ -18,14 +18,17 @@ type rootSpec struct {
 	filter func(path string) bool
 }
 
-// dbSpec is one SQLite database file and its reader.
+// dbSpec is one SQLite database file and its reader. Stateless DBs set read;
+// cumulative-counter DBs (Hermes) set readDelta so successive scans only
+// attribute newly added tokens to the new timestamp.
 type dbSpec struct {
-	path string
-	read func(ctx context.Context, dbPath, cacheDir string, pool map[string]*string) ([]rec, error)
+	path      string
+	read      func(ctx context.Context, dbPath, cacheDir string, pool map[string]*string) ([]rec, error)
+	readDelta func(ctx context.Context, dbPath, cacheDir string, pool map[string]*string, old *fileState) ([]rec, map[string]hermesSnapshot, error)
 }
 
 // toolEntry is one entry in the AI tool registry: display name, installation
-// probe (for unreadable tools), local data locations, and parser.
+// probe, local data locations, and parser.
 type toolEntry struct {
 	tool       Tool
 	name       string
@@ -129,6 +132,13 @@ var registry = []toolEntry{
 	{
 		tool: ToolOmp,
 		name: "omp",
+		detect: func(home string) []string {
+			return []string{
+				joinHome(home, ".omp", "agent", "agent.db"),
+				joinHome(home, ".omp", "agent", "config.yml"),
+				joinHome(home, ".omp", "agent", "sessions"),
+			}
+		},
 		roots: func(home string) []rootSpec {
 			return []rootSpec{{dir: joinHome(home, ".omp", "agent", "sessions"), match: "*.jsonl"}}
 		},
@@ -139,6 +149,13 @@ var registry = []toolEntry{
 	{
 		tool: ToolClaude,
 		name: "Claude Code",
+		detect: func(home string) []string {
+			return []string{
+				joinHome(home, ".claude", "projects"),
+				joinHome(home, ".claude", "history.jsonl"),
+				joinHome(home, ".claude.json"),
+			}
+		},
 		roots: func(home string) []rootSpec {
 			return []rootSpec{
 				{dir: joinHome(home, ".claude", "projects"), match: "*.jsonl"},
@@ -152,6 +169,15 @@ var registry = []toolEntry{
 	{
 		tool: ToolCodex,
 		name: "Codex",
+		detect: func(home string) []string {
+			base := envOrHome("CODEX_HOME", home, ".codex")
+			return []string{
+				filepath.Join(base, "sessions"),
+				filepath.Join(base, "auth.json"),
+				filepath.Join(base, "config.toml"),
+				filepath.Join(base, ".codex-global-state.json"),
+			}
+		},
 		roots: func(home string) []rootSpec {
 			base := envOrHome("CODEX_HOME", home, ".codex")
 			return []rootSpec{
@@ -167,6 +193,13 @@ var registry = []toolEntry{
 	{
 		tool: ToolPi,
 		name: "Pi",
+		detect: func(home string) []string {
+			return []string{
+				joinHome(home, ".pi", "agent", "auth.json"),
+				joinHome(home, ".pi", "agent", "sessions"),
+				joinHome(home, ".pi", "agent", "settings.json"),
+			}
+		},
 		roots: func(home string) []rootSpec {
 			return []rootSpec{{dir: joinHome(home, ".pi", "agent", "sessions"), match: "*.jsonl"}}
 		},
@@ -177,6 +210,14 @@ var registry = []toolEntry{
 	{
 		tool: ToolOpencode,
 		name: "opencode",
+		detect: func(home string) []string {
+			return []string{
+				filepath.Join(xdgDataHome(home), "opencode"),
+				filepath.Join(xdgConfigHome(home), "opencode", "opencode.json"),
+				filepath.Join(xdgConfigHome(home), "opencode", "opencode.jsonc"),
+				opencodeDBPath(home),
+			}
+		},
 		dbs: func(home string) []dbSpec {
 			return []dbSpec{{path: opencodeDBPath(home), read: readOpencode}}
 		},
@@ -184,6 +225,15 @@ var registry = []toolEntry{
 	{
 		tool: ToolGrok,
 		name: "Grok",
+		detect: func(home string) []string {
+			base := envOrHome("GROK_HOME", home, ".grok")
+			return []string{
+				filepath.Join(base, "auth.json"),
+				filepath.Join(base, "bin"),
+				filepath.Join(base, "active_sessions.json"),
+				filepath.Join(base, "sessions"),
+			}
+		},
 		roots: func(home string) []rootSpec {
 			base := envOrHome("GROK_HOME", home, ".grok")
 			return []rootSpec{
@@ -201,6 +251,10 @@ var registry = []toolEntry{
 	{
 		tool: ToolAntigravity,
 		name: "Antigravity",
+		detect: func(home string) []string {
+			base := envOrHome("GEMINI_CLI_HOME", home, ".gemini")
+			return []string{filepath.Join(base, "antigravity-cli")}
+		},
 		roots: func(home string) []rootSpec {
 			base := envOrHome("GEMINI_CLI_HOME", home, ".gemini")
 			return []rootSpec{
@@ -221,11 +275,19 @@ var registry = []toolEntry{
 	{
 		tool: ToolHermes,
 		name: "Hermes",
+		detect: func(home string) []string {
+			base := envOrHome("HERMES_HOME", home, ".hermes")
+			return []string{
+				filepath.Join(base, "config.yaml"),
+				filepath.Join(base, "hermes-agent"),
+				filepath.Join(base, "state.db"),
+			}
+		},
 		dbs: func(home string) []dbSpec {
 			base := envOrHome("HERMES_HOME", home, ".hermes")
-			out := []dbSpec{{path: filepath.Join(base, "state.db"), read: readHermesDB}}
+			out := []dbSpec{{path: filepath.Join(base, "state.db"), readDelta: readHermesDB}}
 			for _, p := range allGlobs(filepath.Join(base, "profiles", "*", "state.db")) {
-				out = append(out, dbSpec{path: p, read: readHermesDB})
+				out = append(out, dbSpec{path: p, readDelta: readHermesDB})
 			}
 			return out
 		},
@@ -233,6 +295,17 @@ var registry = []toolEntry{
 	{
 		tool: ToolDevin,
 		name: "Devin",
+		detect: func(home string) []string {
+			out := []string{
+				filepath.Join(xdgConfigHome(home), "devin", "config.json"),
+				filepath.Join(xdgConfigHome(home), "devin", "cli"),
+				filepath.Join(xdgDataHome(home), "devin"),
+			}
+			if runtime.GOOS == "windows" {
+				out = append(out, filepath.Join(winLocalAppData(home), "devin"))
+			}
+			return out
+		},
 		dbs: func(home string) []dbSpec {
 			out := []dbSpec{{path: filepath.Join(xdgDataHome(home), "devin", "cli", "sessions.db"), read: readDevinDB}}
 			if runtime.GOOS == "windows" {
@@ -244,6 +317,14 @@ var registry = []toolEntry{
 	{
 		tool: ToolDsh,
 		name: "DeepSeek Harness",
+		detect: func(home string) []string {
+			base := envOrHome("DSH_HOME", home, ".dsh")
+			return []string{
+				filepath.Join(base, "profiles"),
+				filepath.Join(base, "sessions"),
+				filepath.Join(base, ".credentials.yaml"),
+			}
+		},
 		roots: func(home string) []rootSpec {
 			dir := filepath.Join(envOrHome("DSH_HOME", home, ".dsh"), "sessions")
 			return []rootSpec{
@@ -261,6 +342,15 @@ var registry = []toolEntry{
 	{
 		tool: ToolGemini,
 		name: "Gemini CLI",
+		detect: func(home string) []string {
+			base := envOrHome("GEMINI_CLI_HOME", home, ".gemini")
+			return []string{
+				filepath.Join(base, "installation_id"),
+				filepath.Join(base, "google_accounts.json"),
+				filepath.Join(base, "oauth_creds.json"),
+				filepath.Join(base, "tmp"),
+			}
+		},
 		roots: func(home string) []rootSpec {
 			base := envOrHome("GEMINI_CLI_HOME", home, ".gemini")
 			return []rootSpec{{
@@ -277,6 +367,15 @@ var registry = []toolEntry{
 	{
 		tool: ToolQwen,
 		name: "Qwen Code",
+		detect: func(home string) []string {
+			return []string{
+				joinHome(home, ".qwen", "settings.json"),
+				joinHome(home, ".qwen", "oauth_creds.json"),
+				joinHome(home, ".qwen", "installation_id"),
+				joinHome(home, ".qwen", "tmp"),
+				joinHome(home, ".qwen", "projects"),
+			}
+		},
 		roots: func(home string) []rootSpec {
 			return []rootSpec{
 				{dir: joinHome(home, ".qwen", "projects"), match: "*.jsonl"},
@@ -298,6 +397,13 @@ var registry = []toolEntry{
 	{
 		tool: ToolDroid,
 		name: "Droid",
+		detect: func(home string) []string {
+			return []string{
+				joinHome(home, ".factory", "projects"),
+				joinHome(home, ".factory", "sessions"),
+				joinHome(home, ".local", "bin", "droid"),
+			}
+		},
 		roots: func(home string) []rootSpec {
 			return []rootSpec{
 				{dir: joinHome(home, ".factory", "sessions"), match: "*.jsonl"},
@@ -311,6 +417,13 @@ var registry = []toolEntry{
 	{
 		tool: ToolAugment,
 		name: "Auggie",
+		detect: func(home string) []string {
+			return []string{
+				joinHome(home, ".augment", "settings.json"),
+				joinHome(home, ".augment", "sessions"),
+				joinHome(home, ".augment", "session.json"),
+			}
+		},
 		roots: func(home string) []rootSpec {
 			return []rootSpec{{dir: joinHome(home, ".augment", "sessions"), match: "*.json", whole: true}}
 		},
@@ -319,6 +432,14 @@ var registry = []toolEntry{
 	{
 		tool: ToolCopilot,
 		name: "Copilot CLI",
+		detect: func(home string) []string {
+			return []string{
+				joinHome(home, ".copilot", "config.json"),
+				joinHome(home, ".copilot", "session-state"),
+				joinHome(home, ".copilot", "logs"),
+				joinHome(home, ".copilot", "otel"),
+			}
+		},
 		roots: func(home string) []rootSpec {
 			out := []rootSpec{{dir: joinHome(home, ".copilot", "otel"), match: "*.jsonl"}}
 			if p := strings.TrimSpace(os.Getenv("COPILOT_OTEL_FILE_EXPORTER_PATH")); p != "" {
@@ -333,6 +454,18 @@ var registry = []toolEntry{
 	{
 		tool: ToolKiro,
 		name: "Kiro",
+		detect: func(home string) []string {
+			out := []string{
+				joinHome(home, ".kiro", "settings"),
+				joinHome(home, ".kiro", "agents"),
+				joinHome(home, ".kiro", "sessions"),
+				filepath.Join(appSupportDir(home), "Kiro"),
+			}
+			if runtime.GOOS == "windows" {
+				out = append(out, filepath.Join(winLocalAppData(home), "Kiro"))
+			}
+			return out
+		},
 		roots: func(home string) []rootSpec {
 			return []rootSpec{{dir: joinHome(home, ".kiro", "sessions", "cli"), match: "*.jsonl"}}
 		},
@@ -343,6 +476,13 @@ var registry = []toolEntry{
 	{
 		tool: ToolCline,
 		name: "Cline",
+		detect: func(home string) []string {
+			out := []string{joinHome(home, ".cline")}
+			for _, d := range vscodeGlobalStorageDirs(home, "saoudrizwan.claude-dev") {
+				out = append(out, filepath.Dir(d))
+			}
+			return out
+		},
 		roots: func(home string) []rootSpec {
 			var out []rootSpec
 			for _, d := range vscodeGlobalStorageDirs(home, "saoudrizwan.claude-dev") {
@@ -361,6 +501,13 @@ var registry = []toolEntry{
 	{
 		tool: ToolRoo,
 		name: "Roo Code",
+		detect: func(home string) []string {
+			var out []string
+			for _, d := range vscodeGlobalStorageDirs(home, "rooveterinaryinc.roo-cline") {
+				out = append(out, filepath.Dir(d))
+			}
+			return out
+		},
 		roots: func(home string) []rootSpec {
 			var out []rootSpec
 			for _, d := range vscodeGlobalStorageDirs(home, "rooveterinaryinc.roo-cline") {
@@ -375,6 +522,13 @@ var registry = []toolEntry{
 	{
 		tool: ToolKilo,
 		name: "Kilo",
+		detect: func(home string) []string {
+			var out []string
+			for _, d := range vscodeGlobalStorageDirs(home, "kilocode.kilo-code") {
+				out = append(out, filepath.Dir(d))
+			}
+			return out
+		},
 		roots: func(home string) []rootSpec {
 			var out []rootSpec
 			for _, d := range vscodeGlobalStorageDirs(home, "kilocode.kilo-code") {
@@ -389,6 +543,9 @@ var registry = []toolEntry{
 	{
 		tool: ToolOpenClaw,
 		name: "OpenClaw",
+		detect: func(home string) []string {
+			return []string{joinHome(home, ".openclaw")}
+		},
 		roots: func(home string) []rootSpec {
 			return []rootSpec{{
 				dir:   joinHome(home, ".openclaw", "agents"),
@@ -405,6 +562,12 @@ var registry = []toolEntry{
 	{
 		tool: ToolKimi,
 		name: "Kimi",
+		detect: func(home string) []string {
+			return []string{
+				joinHome(home, ".kimi"),
+				joinHome(home, ".kimi-code"),
+			}
+		},
 		roots: func(home string) []rootSpec {
 			return []rootSpec{
 				{dir: joinHome(home, ".kimi", "sessions"), match: "*.jsonl"},
@@ -418,6 +581,9 @@ var registry = []toolEntry{
 	{
 		tool: ToolJunie,
 		name: "Junie",
+		detect: func(home string) []string {
+			return []string{joinHome(home, ".junie")}
+		},
 		roots: func(home string) []rootSpec {
 			return []rootSpec{{dir: joinHome(home, ".junie", "sessions"), match: "events.jsonl"}}
 		},
@@ -428,6 +594,9 @@ var registry = []toolEntry{
 	{
 		tool: ToolCherryStudio,
 		name: "Cherry Studio",
+		detect: func(home string) []string {
+			return []string{filepath.Join(appSupportDir(home), "CherryStudio")}
+		},
 		roots: func(home string) []rootSpec {
 			base := appSupportDir(home)
 			return []rootSpec{
@@ -442,6 +611,9 @@ var registry = []toolEntry{
 	{
 		tool: ToolLMStudio,
 		name: "LM Studio",
+		detect: func(home string) []string {
+			return []string{envOrHome("LM_STUDIO_HOME", home, ".lmstudio")}
+		},
 		roots: func(home string) []rootSpec {
 			base := envOrHome("LM_STUDIO_HOME", home, ".lmstudio")
 			return []rootSpec{{dir: filepath.Join(base, "server-logs"), match: "*.log"}}

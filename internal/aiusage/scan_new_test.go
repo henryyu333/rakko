@@ -165,3 +165,41 @@ func TestScanGeminiQwenAndEditors(t *testing.T) {
 		t.Fatalf("UnreadableTools() = %v, want %v", unreadable, ToolCursor)
 	}
 }
+
+func TestInstalledWithoutDataFilesAreUnreadable(t *testing.T) {
+	for _, entry := range registry {
+		if entry.detect == nil {
+			t.Errorf("registry entry %q (%s) missing detect probe", entry.tool, entry.name)
+		}
+	}
+
+	home := t.TempDir()
+	// Copilot CLI installed via config.json, no .copilot/otel/*.jsonl.
+	writeTestFile(t, filepath.Join(home, ".copilot", "config.json"), []byte(`{}`))
+	// Claude Code installed via .claude.json, no .claude/projects/*.jsonl.
+	writeTestFile(t, filepath.Join(home, ".claude.json"), []byte(`{}`))
+	// Hermes installed via config.yaml, no state.db.
+	writeTestFile(t, filepath.Join(home, ".hermes", "config.yaml"), []byte("model: test\n"))
+	// Codex installed AND has a valid data file from last month (unused today).
+	writeTestFile(t, filepath.Join(home, ".codex", "auth.json"), []byte(`{}`))
+	writeTestFile(t, filepath.Join(home, ".codex", "sessions", "rollout-old.jsonl"), []byte(
+		`{"timestamp":"2026-10-01T10:00:00Z","type":"turn_context","payload":{"model":"gpt-5.3-codex"}}`+"\n"+
+			`{"timestamp":"2026-10-01T10:00:01Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":100,"cached_input_tokens":0,"output_tokens":20,"reasoning_output_tokens":0,"total_tokens":120}}}}`+"\n",
+	))
+
+	s := NewScanner(home, t.TempDir())
+	if err := s.Scan(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	unreadable := s.UnreadableTools()
+	for _, want := range []Tool{ToolCopilot, ToolClaude, ToolHermes} {
+		if !slices.Contains(unreadable, want) {
+			t.Errorf("UnreadableTools() = %v, want %s included", unreadable, want)
+		}
+	}
+	for _, unwanted := range []Tool{ToolCodex, ToolOmp} {
+		if slices.Contains(unreadable, unwanted) {
+			t.Errorf("UnreadableTools() = %v, should not include %s", unreadable, unwanted)
+		}
+	}
+}

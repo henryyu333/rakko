@@ -28,8 +28,6 @@ const (
 	ToolCline          Tool = "cline"
 	ToolRoo            Tool = "roo"
 	ToolKilo           Tool = "kilo"
-	ToolGoose          Tool = "goose"
-	ToolZed            Tool = "zed"
 	ToolOpenClaw       Tool = "openclaw"
 	ToolKimi           Tool = "kimi"
 	ToolJunie          Tool = "junie"

@@ -195,7 +195,11 @@ func addRecord(t *Totals, rc rec) {
 	t.Output += rc.out
 	t.CacheRead += rc.cr
 	t.CacheWrite += rc.cw
-	t.Requests++
+	reqs := rc.reqs
+	if reqs <= 0 {
+		reqs = 1
+	}
+	t.Requests += reqs
 	if rc.priced {
 		t.Cost += rc.cost
 	} else if rc.model != nil {
