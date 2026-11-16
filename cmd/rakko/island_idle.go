@@ -83,7 +83,7 @@ func (a *shelf) openMainIdleCapsule(f mygo.Rectangle) *mainIdleCapsule {
 	}
 	w.SetVisibleOnAllWorkspaces(true)
 	h := w.NativeHandle()
-	platform.ConfigureOverlayWindow(h)
+	platform.ConfigureIdleCapsuleWindow(h)
 	// One level below the panel's resting level, so the opening shell and
 	// the folding shell draw over it; it shows through only while their
 	// canvas is blank or exactly capsule-sized.
@@ -255,7 +255,7 @@ func (a *shelf) openIdleIsland(pl idlePlacement) *idleIslandWindow {
 	}
 	w.SetVisibleOnAllWorkspaces(true)
 	h := w.NativeHandle()
-	platform.ConfigureOverlayWindow(h)
+	platform.ConfigureIdleCapsuleWindow(h)
 	// The capsule is a picture: the resident window handles the pointer
 	// and the global mouse-down observer moves it here on a press.
 	platform.SetOverlayAcceptsMouse(h, false)

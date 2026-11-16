@@ -733,6 +733,13 @@ func ConfigureOverlayWindow(window uintptr) {
 	})
 }
 
+// ConfigureIdleCapsuleWindow is ConfigureOverlayWindow on macOS: AppKit sizes
+// a borderless panel to the frame it is given, so the 120 × 30 resting capsule
+// needs nothing beyond the shared overlay policy.
+func ConfigureIdleCapsuleWindow(window uintptr) {
+	ConfigureOverlayWindow(window)
+}
+
 // ConfigureCaptureWindow turns a window into the screenshot overlay: a
 // borderless nonactivating panel at NSScreenSaverWindowLevel, above the
 // menu bar and the Dock, on every Space, with no opening animation. Unlike

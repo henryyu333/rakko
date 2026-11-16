@@ -171,6 +171,7 @@ const (
 	gwlpID     = -12
 
 	wsCaption = 0x00C00000
+	wsPopup   = 0x80000000
 
 	wsExTopmost     = 0x00000008
 	wsExTransparent = 0x00000020
@@ -431,13 +432,15 @@ func setExBits(h uintptr, bits uintptr, on bool) {
 		swpNoMove|swpNoSize|swpNoZOrder|swpNoActivate|swpFrameChanged)
 }
 
-// clearStyleBits clears standard GWL_STYLE bits and notifies Windows of the
-// frame change. Notably, removing WS_CAPTION lets a frameless panel shrink
-// below the 20px minimum width Win32 enforces on captioned windows (such as an
-// 8x56 docked pin strip).
-func clearStyleBits(h uintptr, bits uintptr) {
+// updateStyleBits sets and clears standard GWL_STYLE bits and notifies
+// Windows of the frame change. Removing WS_CAPTION lets a frameless panel
+// shrink below the minimum Win32 enforces on captioned windows: 20px wide for
+// an 8x56 docked pin strip, and SM_CXMINTRACK × SM_CYMINTRACK (136 × 39) for
+// the 120 × 30 idle capsule. Setting WS_POPUP keeps DefWindowProc's overlapped
+// minimum-size path out of the capsule's frame calculation.
+func updateStyleBits(h, setBits, clearBits uintptr) {
 	st := getWindowLong(h, gwlStyle)
-	next := st &^ bits
+	next := (st | setBits) &^ clearBits
 	if next == st {
 		return
 	}

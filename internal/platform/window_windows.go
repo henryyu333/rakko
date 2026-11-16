@@ -56,6 +56,21 @@ func ConfigureOverlayWindow(window uintptr) {
 	reorderFront(window, true)
 }
 
+// ConfigureIdleCapsuleWindow applies the overlay policy to the picture-only
+// resting capsule. The capsule is 120 × 30; Windows enforces
+// SM_CXMINTRACK × SM_CYMINTRACK (136 × 39) on a captioned window, which made
+// the capsule draw 39pt tall and overlap the top of a note that had been
+// placed just below the 30pt shell. A captionless popup keeps the requested
+// box; the capsule takes no clicks, so the caption's snapping and window menu
+// it gives up are no loss.
+func ConfigureIdleCapsuleWindow(window uintptr) {
+	if window == 0 {
+		return
+	}
+	ConfigureOverlayWindow(window)
+	updateStyleBits(window, wsPopup, wsCaption)
+}
+
 // ConfigureCaptureWindow makes the screenshot overlay take the topmost
 // band with the keyboard available (Esc, Ctrl+C, text entry).
 func ConfigureCaptureWindow(window uintptr) {
@@ -80,7 +95,7 @@ func ConfigurePinWindow(window uintptr) {
 		return
 	}
 	ensureToolWindow(window)
-	clearStyleBits(window, wsCaption)
+	updateStyleBits(window, 0, wsCaption)
 	setExBits(window, wsExNoActivate, true)
 	// The card may be the window a drag opened as a preview, which ignores
 	// the mouse so the gesture stays with the card that started it. A
