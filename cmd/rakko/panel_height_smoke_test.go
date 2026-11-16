@@ -29,6 +29,8 @@ type smokeUsageScanner struct{ now time.Time }
 
 func (s *smokeUsageScanner) Scan(context.Context, func(done, total int64)) error { return nil }
 
+func (s *smokeUsageScanner) UnreadableTools() []aiusage.Tool { return nil }
+
 func (s *smokeUsageScanner) Summary(r aiusage.Range, now time.Time) aiusage.Summary {
 	buckets := make([]aiusage.Bucket, 0, 7)
 	for i := 6; i >= 0; i-- {

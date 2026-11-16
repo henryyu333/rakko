@@ -52,11 +52,12 @@ func (f *fakeQuotaFetch) fetch(ctx context.Context) aiusage.Quota {
 
 // fakeUsageScanner records Scan calls and every range Summary is asked for.
 type fakeUsageScanner struct {
-	scans     int
-	ranges    []aiusage.Range
-	summaries map[aiusage.Range]aiusage.Summary
-	err       error
-	cancelled bool // a Scan saw its ctx already cancelled
+	scans      int
+	ranges     []aiusage.Range
+	summaries  map[aiusage.Range]aiusage.Summary
+	unreadable []aiusage.Tool
+	err        error
+	cancelled  bool // a Scan saw its ctx already cancelled
 }
 
 func (s *fakeUsageScanner) Scan(ctx context.Context, progress func(done, total int64)) error {
@@ -75,6 +76,10 @@ func (s *fakeUsageScanner) Summary(r aiusage.Range, now time.Time) aiusage.Summa
 		}
 	}
 	return aiusage.Summary{Range: r}
+}
+
+func (s *fakeUsageScanner) UnreadableTools() []aiusage.Tool {
+	return append([]aiusage.Tool(nil), s.unreadable...)
 }
 
 // stubUsageSeams replaces goWork and dispatchMain: work runs inline so a
@@ -1538,10 +1543,29 @@ func TestUsageKpiCellsExplainTheirNumbersOnHover(t *testing.T) {
 	t.Run("all priced", func(t *testing.T) {
 		_, view := draw(t, 0)
 		hover(t, view, "费用")
-		if !view.HasText("只算自带价格") {
+		if !view.HasText("按工具记录与模型价目估算") {
 			t.Fatalf("the 费用 cell lost its priced-only tip; texts %v", view.Texts())
 		}
 	})
+}
+
+func TestUsageShowsUnreadableTools(t *testing.T) {
+	now := time.Date(2026, 11, 16, 12, 0, 0, 0, time.Local)
+	fx := newUsageFixture(t, true)
+	fx.scan.unreadable = []aiusage.Tool{aiusage.ToolCursor}
+	fx.scan.summaries = map[aiusage.Range]aiusage.Summary{
+		aiusage.RangeToday: {
+			Range:  aiusage.RangeToday,
+			Total:  aiusage.Totals{Input: 1000, Output: 200, Requests: 1, Cost: 0.01},
+			ByTool: map[aiusage.Tool]aiusage.Totals{aiusage.ToolClaude: {Input: 1000, Output: 200, Requests: 1, Cost: 0.01}},
+		},
+	}
+	fx.a.level, fx.a.visible, fx.a.tab = 2, true, pageUsage
+	fx.f.tick(now)
+	fx.view.Frame()
+	if !fx.view.HasText("读不到：Cursor") {
+		t.Fatalf("expected unreadable tools hint on usage page; texts %v", fx.view.Texts())
+	}
 }
 
 // The "was Claude Code used since the last read" answer costs a walk of

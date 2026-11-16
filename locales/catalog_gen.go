@@ -2973,14 +2973,24 @@ func (msgs Messages) UsageCostUnpriced(n int) string {
 	return Catalog.Format(msgs.locale, "usageCostUnpriced", map[string]any{"n": n})
 }
 
-// UsageCostBuiltIn says "只算自带价格"
+// UsageCostBuiltIn says "按工具记录与模型价目估算"
 // in the language the app shows.
 func UsageCostBuiltIn() string { return In(i18n.Locale()).UsageCostBuiltIn() }
 
-// UsageCostBuiltIn says "只算自带价格"
+// UsageCostBuiltIn says "按工具记录与模型价目估算"
 // in the language of msgs.
 func (msgs Messages) UsageCostBuiltIn() string {
 	return Catalog.Format(msgs.locale, "usageCostBuiltIn", nil)
+}
+
+// UsageUnreadableTools says "读不到：{tools}"
+// in the language the app shows.
+func UsageUnreadableTools(tools string) string { return In(i18n.Locale()).UsageUnreadableTools(tools) }
+
+// UsageUnreadableTools says "读不到：{tools}"
+// in the language of msgs.
+func (msgs Messages) UsageUnreadableTools(tools string) string {
+	return Catalog.Format(msgs.locale, "usageUnreadableTools", map[string]any{"tools": tools})
 }
 
 // UsageShownUsed says "{pct} 已用"
@@ -5951,6 +5961,18 @@ func WeeklyAiUnpriced(n string) string { return In(i18n.Locale()).WeeklyAiUnpric
 // in the language of msgs.
 func (msgs Messages) WeeklyAiUnpriced(n string) string {
 	return Catalog.Format(msgs.locale, "weeklyAiUnpriced", map[string]any{"n": n})
+}
+
+// WeeklyAiUnreadableTools says "读不到：{tools}"
+// in the language the app shows.
+func WeeklyAiUnreadableTools(tools string) string {
+	return In(i18n.Locale()).WeeklyAiUnreadableTools(tools)
+}
+
+// WeeklyAiUnreadableTools says "读不到：{tools}"
+// in the language of msgs.
+func (msgs Messages) WeeklyAiUnreadableTools(tools string) string {
+	return Catalog.Format(msgs.locale, "weeklyAiUnreadableTools", map[string]any{"tools": tools})
 }
 
 // WeeklyRakkoSection says "用 Rakko 完成"

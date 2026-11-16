@@ -5,8 +5,11 @@ import (
 	"testing"
 	"time"
 
+	"rakko/internal/aiusage"
 	"rakko/internal/settings"
 	"rakko/internal/weekly"
+
+	"github.com/egoist/mygo/ui"
 )
 
 // weeklyNavShelf registers the built-in pages plus the AI usage page and
@@ -127,5 +130,35 @@ func TestWeeklyReportEscapeReturnsHome(t *testing.T) {
 	}
 	if lvl := a.currentLevel(); lvl != 2 {
 		t.Fatalf("Esc should keep the page level, got %d", lvl)
+	}
+}
+
+func TestWeeklyReportShowsUnreadableToolsAndRegistryNames(t *testing.T) {
+	if got := weeklyToolName(aiusage.ToolAntigravity); got != "Antigravity" {
+		t.Fatalf("weeklyToolName(ToolAntigravity) = %q, want Antigravity", got)
+	}
+	now := time.Date(2026, 11, 16, 12, 0, 0, 0, time.Local)
+	a := weeklyNavShelf(t, true)
+	wf := a.page(pageWeekly).(*weeklyFeature)
+	start := wf.weekFor(now)
+	wf.aiHave = true
+	wf.aiWeek = start
+	wf.aiSummary = aiusage.Summary{
+		Range: aiusage.RangeSpan,
+		Total: aiusage.Totals{Input: 1000, Output: 200, Requests: 2, Cost: 0.05},
+		ByTool: map[aiusage.Tool]aiusage.Totals{
+			aiusage.ToolAntigravity: {Input: 1000, Output: 200, Requests: 2, Cost: 0.05},
+		},
+	}
+	wf.aiUnreadable = []aiusage.Tool{aiusage.ToolCursor}
+	view := ui.NewTester(func(c *ui.Context) {
+		wf.body(c, true, false)
+	}, weeklyPageW, weeklyPageH)
+	view.Frame()
+	if !view.HasText("Antigravity") {
+		t.Fatalf("expected Antigravity in weekly report; texts %v", view.Texts())
+	}
+	if !view.HasText("读不到：Cursor") {
+		t.Fatalf("expected unreadable tools hint in weekly report; texts %v", view.Texts())
 	}
 }

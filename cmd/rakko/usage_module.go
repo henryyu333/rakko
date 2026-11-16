@@ -81,6 +81,7 @@ type usageDeps struct {
 type usageScanner interface {
 	Scan(ctx context.Context, progress func(done, total int64)) error
 	Summary(r aiusage.Range, now time.Time) aiusage.Summary
+	UnreadableTools() []aiusage.Tool
 }
 
 // usageQuotaState keeps the latest answer and the last usable windows.
@@ -130,6 +131,7 @@ type usageFeature struct {
 	lastLocal  time.Time // last local refresh attempt (schedules the next)
 	summary    aiusage.Summary
 	hasSummary bool
+	unreadable []aiusage.Tool
 	rangeSel   aiusage.Range
 	wasVisible bool
 	hoverTool  aiusage.Tool // the quota card under the pointer this frame
@@ -476,11 +478,13 @@ func (f *usageFeature) startLocal(now time.Time) {
 			f.scanTotal.Store(total)
 		})
 		var sum aiusage.Summary
+		var unreadable []aiusage.Tool
 		if ctx.Err() == nil {
 			sum = sc.Summary(r, f.deps.now())
+			unreadable = sc.UnreadableTools()
 		}
 		cancel()
-		dispatchMain(func() { f.gotLocal(sum, r, scanErr, gen) })
+		dispatchMain(func() { f.gotLocal(sum, unreadable, r, scanErr, gen) })
 	})
 }
 
@@ -488,7 +492,7 @@ func (f *usageFeature) startLocal(now time.Time) {
 // summary the user has since switched away from is dropped and a fresh
 // pass for the new range is started instead; a result retired by stopWork
 // while the worker ran is dropped outright.
-func (f *usageFeature) gotLocal(sum aiusage.Summary, r aiusage.Range, err error, gen int) {
+func (f *usageFeature) gotLocal(sum aiusage.Summary, unreadable []aiusage.Tool, r aiusage.Range, err error, gen int) {
 	if gen != f.workGen || !f.enabled() || !f.usageVisible() {
 		return // retired by stopWork or a page/settings change while in flight
 	}
@@ -498,6 +502,7 @@ func (f *usageFeature) gotLocal(sum aiusage.Summary, r aiusage.Range, err error,
 	if err == nil {
 		sum.Range = r
 		f.summary, f.hasSummary = sum, true
+		f.unreadable = unreadable
 		f.localAt = f.deps.now()
 	}
 	f.invalidate()

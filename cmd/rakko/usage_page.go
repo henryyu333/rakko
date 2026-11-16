@@ -828,6 +828,10 @@ func (f *usageFeature) localPanel(c *ui.Context) {
 		s := f.summary
 		f.kpiGrid(c, s)
 		f.usageChart(c, s)
+		if len(f.unreadable) > 0 {
+			line := tloc(c).UsageUnreadableTools(joinUsageToolNames(f.unreadable))
+			panelLabel(c, nil, line, 9, 0).TextColor(ink3).Tooltip(line)
+		}
 	})
 }
 
@@ -1034,6 +1038,14 @@ func (f *usageFeature) xLabels(l locales.Messages, buckets []aiusage.Bucket) []s
 // cache kinds), matching Bucket.Tokens' definition.
 func totalTokens(t aiusage.Totals) int64 {
 	return t.Input + t.Output + t.CacheRead + t.CacheWrite
+}
+
+func joinUsageToolNames(tools []aiusage.Tool) string {
+	names := make([]string, len(tools))
+	for i, t := range tools {
+		names[i] = t.Name()
+	}
+	return strings.Join(names, ", ")
 }
 
 // usageTokens compacts a token count with at most 3 significant digits:

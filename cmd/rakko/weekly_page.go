@@ -457,14 +457,25 @@ func (f *weeklyFeature) aiSection(c *ui.Context, w float32, now time.Time) {
 			f.aiNote(c, w, l.WeeklyAiScanning())
 		case f.aiSummary.Total.Requests == 0 && len(f.aiFailed) > 0:
 			f.aiNote(c, w, l.WeeklyAiSourcesUnreadable(len(f.aiFailed)))
+			if len(f.aiUnreadable) > 0 {
+				ui.Text(c, l.WeeklyAiUnreadableTools(joinUsageToolNames(f.aiUnreadable))).FontSize(10).
+					TextColor(warning).MaxWidth(w).Margin(6, 0, 0, 0)
+			}
 			f.aiNote(c, w, l.WeeklyAiNote())
 		case f.aiSummary.Total.Requests == 0:
 			f.aiNote(c, w, l.WeeklyAiNoData())
+			if len(f.aiUnreadable) > 0 {
+				ui.Text(c, l.WeeklyAiUnreadableTools(joinUsageToolNames(f.aiUnreadable))).FontSize(10).
+					TextColor(warning).MaxWidth(w).Margin(6, 0, 0, 0)
+			}
 			f.aiNote(c, w, l.WeeklyAiNote())
 		default:
 			f.aiMetrics(c, w, f.aiSummary)
 			f.aiTrack(c, w, f.aiSummary)
-			if len(f.aiFailed) > 0 {
+			if len(f.aiUnreadable) > 0 {
+				ui.Text(c, l.WeeklyAiUnreadableTools(joinUsageToolNames(f.aiUnreadable))).FontSize(10).
+					TextColor(warning).MaxWidth(w).Margin(6, 0, 0, 0)
+			} else if len(f.aiFailed) > 0 {
 				ui.Text(c, l.WeeklyAiSourcesPartial(len(f.aiFailed))).FontSize(10).
 					TextColor(warning).MaxWidth(w).Margin(6, 0, 0, 0)
 			}
@@ -813,25 +824,9 @@ func weeklyTokens(t aiusage.Totals) string { return weeklyTokensValue(totalToken
 // weeklyToolTokens is one tool's tokens, the same sum as the chart.
 func weeklyToolTokens(t aiusage.Totals) int64 { return totalTokens(t) }
 
-// weeklyToolName names every reader the scanner supports, not just the
-// two quota cards.
+// weeklyToolName names every reader the scanner supports from the registry.
 func weeklyToolName(t aiusage.Tool) string {
-	switch t {
-	case aiusage.ToolClaude:
-		return "Claude Code"
-	case aiusage.ToolCodex:
-		return "Codex"
-	case aiusage.ToolPi:
-		return "Pi"
-	case aiusage.ToolOpencode:
-		return "opencode"
-	case aiusage.ToolGrok:
-		return "Grok"
-	case aiusage.ToolOmp:
-		return "omp"
-	default:
-		return string(t)
-	}
+	return t.Name()
 }
 
 // weeklyAppName is the stored display name, or the bundle id when the app

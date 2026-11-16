@@ -43,6 +43,7 @@ type weeklyScanner interface {
 	// FailedTools names the readers the pass could not read: with a zero
 	// total it separates "no usage" from "usage Rakko could not see".
 	FailedTools() []aiusage.Tool
+	UnreadableTools() []aiusage.Tool
 }
 
 // weeklyDeps injects every system call and background seam the feature
@@ -87,8 +88,9 @@ type weeklyFeature struct {
 	scanAt     time.Time
 	aiWeek     time.Time
 	aiHave     bool
-	aiSummary  aiusage.Summary
-	aiFailed   []aiusage.Tool
+	aiSummary    aiusage.Summary
+	aiFailed     []aiusage.Tool
+	aiUnreadable []aiusage.Tool
 	aiErr      error
 	gen        int
 
@@ -306,19 +308,20 @@ func (f *weeklyFeature) startScan(start, now time.Time) {
 		defer cancel()
 		err := scanner.Scan(ctx, nil)
 		var sum aiusage.Summary
-		var failed []aiusage.Tool
+		var failed, unreadable []aiusage.Tool
 		if err == nil {
 			sum = scanner.SummarySpan(start, end)
 			failed = scanner.FailedTools()
+			unreadable = scanner.UnreadableTools()
 		}
-		onMain(func() { f.gotScan(start, sum, failed, err, gen) })
+		onMain(func() { f.gotScan(start, sum, failed, unreadable, err, gen) })
 	})
 }
 
 // gotScan publishes one scan's outcome. A result for a week the user has
 // since left is dropped; the visible week is scanned again by the next
 // tick.
-func (f *weeklyFeature) gotScan(start time.Time, sum aiusage.Summary, failed []aiusage.Tool, err error, gen int) {
+func (f *weeklyFeature) gotScan(start time.Time, sum aiusage.Summary, failed, unreadable []aiusage.Tool, err error, gen int) {
 	if gen != f.gen {
 		return
 	}
@@ -331,6 +334,7 @@ func (f *weeklyFeature) gotScan(start time.Time, sum aiusage.Summary, failed []a
 		// wrong week; the next tick starts the right one.
 		f.aiErr, f.aiHave, f.aiWeek = nil, false, time.Time{}
 		f.aiFailed = nil
+		f.aiUnreadable = nil
 		f.scanWeek = time.Time{}
 		f.invalidate()
 		return
@@ -340,6 +344,7 @@ func (f *weeklyFeature) gotScan(start time.Time, sum aiusage.Summary, failed []a
 		f.aiHave = false
 		f.aiWeek = time.Time{}
 		f.aiFailed = nil
+		f.aiUnreadable = nil
 		f.invalidate()
 		return
 	}
@@ -348,6 +353,7 @@ func (f *weeklyFeature) gotScan(start time.Time, sum aiusage.Summary, failed []a
 	f.aiWeek = start
 	f.aiSummary = sum
 	f.aiFailed = failed
+	f.aiUnreadable = unreadable
 	f.invalidate()
 }
 
