@@ -21,7 +21,7 @@ type fakeMachine struct {
 func (m *fakeMachine) probe() Probe {
 	return Probe{
 		Front:         func() (string, string) { return m.bundle, m.name },
-		IdleSeconds:  func() (float64, error) { return m.idle, m.idleErr },
+		IdleSeconds:   func() (float64, error) { return m.idle, m.idleErr },
 		SessionActive: func() bool { return m.session },
 		DisplayAsleep: func() bool { return m.asleep },
 	}

@@ -61,11 +61,11 @@ func NewSampler(store *Store, probe Probe) *Sampler {
 		store: store,
 		probe: probe,
 		excluded: map[string]bool{
-			"local.y3.rakko":                true,
-			"com.apple.loginwindow":         true,
-			"com.apple.ScreenSaver.Engine":  true,
-			"com.apple.SecurityAgent":       true,
-			"com.apple.screensaver":         true,
+			"local.y3.rakko":               true,
+			"com.apple.loginwindow":        true,
+			"com.apple.ScreenSaver.Engine": true,
+			"com.apple.SecurityAgent":      true,
+			"com.apple.screensaver":        true,
 		},
 	}
 }

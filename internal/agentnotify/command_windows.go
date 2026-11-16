@@ -32,7 +32,6 @@ type windowsShell int
 const (
 	shellCmd windowsShell = iota
 	shellPowerShell
-	
 )
 
 // toolShell is the interpreter that runs one tool's hook command on

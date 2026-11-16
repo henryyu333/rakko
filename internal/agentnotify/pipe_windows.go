@@ -58,7 +58,7 @@ type pipeListener struct {
 
 	mu      sync.Mutex
 	cond    *sync.Cond
-	pending windows.Handle // instance waiting for a client
+	pending windows.Handle              // instance waiting for a client
 	waiting map[windows.Handle]struct{} // instances Accept is blocked on
 	active  int                         // Accept calls in progress
 	closed  bool
