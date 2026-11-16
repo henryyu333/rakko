@@ -463,14 +463,13 @@ func (a *shelf) freshNoteFrame() mygo.Rectangle {
 		return centeredFrame(noteW, noteH, area)
 	}
 	frame := noteFrameUnder(anchor, area)
-	if forWindows {
-		frame = a.noteClearShell(frame, area)
-	}
-	return frame
+	return a.noteClearShell(frame, area)
 }
 
-// noteClearShell keeps a note window opened at the top of a Windows work area
-// from landing underneath the topmost simulated notch or island capsule.
+// noteClearShell keeps a note window opened inside the work area from landing
+// underneath an always-on-top simulated notch or island capsule. A hardware
+// notch sitting entirely above area.Y (inside the macOS menu bar) does not
+// enter the work area and leaves frame unchanged.
 func (a *shelf) noteClearShell(frame, area mygo.Rectangle) mygo.Rectangle {
 	const shellGap = 6
 	var shell mygo.Rectangle
@@ -483,6 +482,9 @@ func (a *shelf) noteClearShell(frame, area mygo.Rectangle) mygo.Rectangle {
 		return frame
 	}
 	if shell.Width <= 0 || shell.Height <= 0 {
+		return frame
+	}
+	if shell.Y+shell.Height <= area.Y || shell.Y >= area.Y+area.Height {
 		return frame
 	}
 	if frame.X >= shell.X+shell.Width || frame.X+frame.Width <= shell.X {
