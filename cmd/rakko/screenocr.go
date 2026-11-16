@@ -75,9 +75,13 @@ func (a *shelf) startScreenOCR() {
 		a.ocrScan = true
 		a.ocrBusyAt = time.Now()
 		a.ocrRunID++
-		// The panel must not cover what the user wants to capture.
-		if a.visible {
+		keepPanel := a.panelFullyOpenForCapture()
+		a.ocrRestoreKeys = false
+		if !keepPanel && (a.visible || a.peeking || !a.closeAt.IsZero()) {
 			a.hide(hideExplicit)
+		} else if keepPanel {
+			a.ocrRestoreKeys = a.win != nil || a.escHeld || a.spaceHeld || a.cmdCHeld
+			a.releaseKeys()
 		}
 		timer := ocrAfterFunc(ocrProgressDelay, func() {
 			ocrInvalidate(a) // wakes the live progress capsule
@@ -111,6 +115,18 @@ func (a *shelf) screenOCRRound(timer *time.Timer) {
 func (a *shelf) finishScreenOCR(timer *time.Timer, text string, produced bool, err error) {
 	timer.Stop()
 	a.ocrScan = false
+	restoreKeys := a.ocrRestoreKeys
+	a.ocrRestoreKeys = false
+	if restoreKeys && a.visible {
+		if a.focusMode {
+			if a.win != nil {
+				platform.ActivateSelf()
+				a.win.Focus()
+			}
+		} else {
+			a.holdKeys()
+		}
+	}
 	switch {
 	case err != nil:
 		a.report(err)

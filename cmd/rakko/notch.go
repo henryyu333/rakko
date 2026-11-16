@@ -966,6 +966,9 @@ func (a *shelf) windowLevel() platform.Layer {
 // tick's eased progress: the moment the shell has folded back to the peek
 // shape the window lets clicks through again.
 func (a *shelf) syncMousePassThrough() {
+	if a.shot != nil {
+		return
+	}
 	a.syncWindowFrame()
 	setGatePolling(anyOverlayWanted())
 	accept := a.overlayAcceptsMouse()
@@ -1223,6 +1226,9 @@ func setGatePolling(on bool) {
 // shell's shape or position goes through (window frame, show, level, page,
 // fold, capsule, drag end), so no press waits for a move event.
 func (a *shelf) syncPointerGate() {
+	if a.shot != nil {
+		return
+	}
 	if a.win != nil && a.win.IsDestroyed() {
 		return
 	}

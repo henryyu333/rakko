@@ -53,10 +53,14 @@ var (
 	shotReadSaveDir    = platform.ScreenshotFolder
 	shotWriteFile      = os.WriteFile
 	shotAfter          = time.AfterFunc
-	shotOpenWindow     = func(s *shotSession, di int) { s.openWindow(di) }
+	shotOpenWindow     func(s *shotSession, di int)
 	shotCleanTemp      = cleanShotTempDir
 	shotPanelSettle    = durClose + 80*time.Millisecond
 )
+
+func init() {
+	shotOpenWindow = func(s *shotSession, di int) { s.openWindow(di) }
+}
 
 // shotDim is the veil outside the selection: black at 45%, which reads as
 // a shadow on any wallpaper without hiding what is being chosen.
@@ -132,6 +136,7 @@ type shotTextRect struct {
 // shotSession is one screenshot from the hotkey to the output.
 type shotSession struct {
 	a            *shelf
+	releasedKeys bool
 	displays     []*shotDisplay
 	owner        int // display that owns the selection, -1 for none
 	hasSel       bool
@@ -216,12 +221,17 @@ func (a *shelf) startScreenshotOnMain() {
 	}
 	s.cursor = shotCursorPoint()
 	a.shot = s
+	keepPanel := a.panelFullyOpenForCapture()
 	wasVisible := a.visible || a.peeking || !a.closeAt.IsZero()
-	if wasVisible {
+	hideFirst := wasVisible && !keepPanel
+	if hideFirst {
 		a.hide(hideExplicit)
+	} else if keepPanel {
+		s.releasedKeys = a.win != nil || a.escHeld || a.spaceHeld || a.cmdCHeld
+		a.releaseKeys()
 	}
 	shotWork(func() {
-		if wasVisible {
+		if hideFirst {
 			// Let the panel's 220 ms fold finish before the freeze: the
 			// closing shell is still drawn in the window and must not be
 			// part of the picture. A press while this waits cancels the
@@ -230,6 +240,10 @@ func (a *shelf) startScreenshotOnMain() {
 		}
 		s.freeze(targets)
 	})
+}
+
+func (a *shelf) panelFullyOpenForCapture() bool {
+	return a.visible && !a.peeking && a.closeAt.IsZero() && a.fx.openK >= 1
 }
 
 // freeze captures every display in parallel off the UI thread, decodes the
@@ -528,6 +542,21 @@ func (s *shotSession) close(restore bool) {
 	}
 	if s.a.shot == s {
 		s.a.shot = nil
+	}
+	s.a.layerKnown = false
+	if s.a.win != nil {
+		s.a.win.Invalidate()
+	}
+	if s.a.visible {
+		if s.a.focusMode {
+			if s.a.win != nil {
+				platform.ActivateSelf()
+				s.a.win.Focus()
+			}
+		} else if s.releasedKeys || s.a.win != nil {
+			s.a.holdKeys()
+		}
+		return
 	}
 	if restore && s.prevPID > 0 {
 		s.a.handBackApp(s.prevPID)
