@@ -111,6 +111,8 @@ type pinItem struct {
 	reduceMotion bool
 	padL, padT   int
 	subX, subY   float32
+	cursor       mygo.Point
+	hasCursor    bool
 	win          *mygo.Window
 }
 

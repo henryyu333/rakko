@@ -241,5 +241,24 @@ func (it *pinItem) viewPreview(c *ui.Context) {
 		return
 	}
 	v := computeDragCardVisual(spec, it.cardW, it.grabDX, it.grabDY, it.liftK, m, it.reduceMotion)
-	drawDragCard(c, a, spec, "pin-preview", it.cardW, float32(it.padL)+it.subX, float32(it.padT)+it.subY, v, m, it.tilt)
+	drawX := float32(it.padL) + it.subX
+	drawY := float32(it.padT) + it.subY
+	if it.hasCursor {
+		targetFrame, padL, padT, subX, subY := previewFrameForVisual(it.cursor, pinArea(it.display), v, it.srcW, it.srcH, it.cardW, m, it.grabDX, it.grabDY)
+		drawX = float32(targetFrame.X+padL-it.frame.X) + subX
+		drawY = float32(targetFrame.Y+padT-it.frame.Y) + subY
+		if m < 0.999 && (targetFrame != it.frame || padL != it.padL || padT != it.padT || subX != it.subX || subY != it.subY) {
+			mygo.RunOnMain(func() {
+				if !it.preview || it.win == nil || it.morphVal(time.Now()) >= 0.999 {
+					return
+				}
+				moved := it.frame != targetFrame
+				it.frame, it.padL, it.padT, it.subX, it.subY = targetFrame, padL, padT, subX, subY
+				if moved {
+					it.applyFrame()
+				}
+			})
+		}
+	}
+	drawDragCard(c, a, spec, "pin-preview", it.cardW, drawX, drawY, v, m, it.tilt)
 }

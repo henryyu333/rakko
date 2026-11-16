@@ -757,3 +757,71 @@ func TestToolsLiftTransitionAndVelocitySettle(t *testing.T) {
 		t.Fatalf("settle dropped pointer velocity: (%v,%v)", p.press.settleVX, p.press.settleVY)
 	}
 }
+
+func TestPreviewMorphKeepsGrabPointSteadyWhenPointerIdle(t *testing.T) {
+	spec := layout.Card{ID: "playing", Span: 2, Rows: 2}
+	srcW, srcH := toolColW(spec.Cols()), toolRowH(spec.Height())
+	cardW := pinCardWidth(spec.ID, spec.Cols())
+	grabDX, grabDY := float32(40), srcH-20
+	cursor := mygo.Point{X: 400, Y: 500}
+	area := mygo.Rectangle{X: 0, Y: 0, Width: 1920, Height: 1040}
+
+	for _, m := range []float32{0, 0.25, 0.5, 0.75, 1} {
+		v := computeDragCardVisual(spec, cardW, grabDX, grabDY, 1, m, false)
+		frame, padL, padT, subX, subY := previewFrameForVisual(cursor, area, v, srcW, srcH, cardW, m, grabDX, grabDY)
+		cardScreenX := float32(frame.X+padL) + subX
+		cardScreenY := float32(frame.Y+padT) + subY
+		gotGrabX := float32(cursor.X) - cardScreenX
+		gotGrabY := float32(cursor.Y) - cardScreenY
+		if math.Abs(float64(gotGrabX-v.curGrabX)) > 0.6 || math.Abs(float64(gotGrabY-v.curGrabY)) > 0.6 {
+			t.Fatalf("morph=%v: screen grab=(%.2f,%.2f), want curGrab=(%.2f,%.2f)",
+				m, gotGrabX, gotGrabY, v.curGrabX, v.curGrabY)
+		}
+	}
+}
+
+func TestPartialReverseMorphSettlesSmoothly(t *testing.T) {
+	cards := []layout.Card{{ID: "ocr", Span: 2, Rows: 2}, {ID: "zip"}}
+	_, p, view := setupToolsDragTester(t, cards)
+	ocr, _ := view.Find("框选文字")
+	sx, sy := ocr.X+ocr.W/2, ocr.Y+ocr.H/2
+
+	view.Press(sx, sy)
+	view.Move(sx+12, sy+12)
+	view.Frame()
+	if p.press == nil {
+		t.Fatal("press not started")
+	}
+	// Simulate partial reverse morph: visW/visH between desktop pin (278x136) and 2x2 grid card.
+	p.press.visReady = true
+	p.press.visW = 240
+	p.press.visH = 160
+	view.Release(sx+12, sy+12)
+	if p.press == nil || !p.press.settling {
+		t.Fatal("expected settle after release")
+	}
+	if p.press.settleStartW != 240 || p.press.settleStartH != 160 {
+		t.Fatalf("settle start size = %vx%v, want 240x160", p.press.settleStartW, p.press.settleStartH)
+	}
+}
+
+func TestFreshDragZeroVelocityWhenPausedBeforeRelease(t *testing.T) {
+	cards := []layout.Card{{ID: "ocr"}}
+	_, p, view := setupToolsDragTester(t, cards)
+	lib, ok := view.Find("截图")
+	if !ok {
+		t.Fatal("missing 截图 in library")
+	}
+	sx, sy := lib.X+lib.W/2, lib.Y+lib.H/2
+	view.Press(sx, sy)
+	view.Move(sx+40, sy-80)
+	view.Advance(16 * time.Millisecond)
+	view.Move(sx+80, sy-140)
+	view.Frame()
+	// Pause for >60ms before releasing at the same point.
+	view.Advance(80 * time.Millisecond)
+	view.Release(sx+80, sy-140)
+	if p.press != nil && (p.press.settleVX != 0 || p.press.settleVY != 0) {
+		t.Fatalf("paused fresh drag retained velocity on release: (%v,%v)", p.press.settleVX, p.press.settleVY)
+	}
+}

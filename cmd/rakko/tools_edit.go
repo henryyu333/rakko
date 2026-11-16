@@ -152,7 +152,6 @@ func (p *toolsPage) libTile(c *ui.Context, def toolCardDef, live bool) {
 			}
 			p.lp = nil
 			if lp.started {
-				p.moveFreshDrag(wx, wy, ev.Time)
 				p.endFreshDragAt(wx, wy, ev.Time)
 			} else {
 				p.addFromLibrary(def)

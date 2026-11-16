@@ -260,16 +260,53 @@ func (it *pinItem) dropPreviewPaddingNow() {
 		return
 	}
 	area := pinArea(it.display)
-	cardRect := mygo.Rectangle{
-		X:      it.frame.X + it.padL,
-		Y:      it.frame.Y + it.padT,
-		Width:  it.cardW,
-		Height: pinCardH,
+	var cardRect mygo.Rectangle
+	if it.hasCursor && it.srcW > 0 {
+		cardRect = pinFrameUnder(it.cursor, it.grabDX, it.grabDY, it.srcW, it.srcH, it.cardW)
+	} else {
+		cardRect = mygo.Rectangle{
+			X:      it.frame.X + it.padL,
+			Y:      it.frame.Y + it.padT,
+			Width:  it.cardW,
+			Height: pinCardH,
+		}
 	}
 	it.padL, it.padT, it.subX, it.subY = 0, 0, 0, 0
 	it.frame = pinClamp(cardRect, area)
 	it.applyFrame()
 	it.invalidate()
+}
+
+func previewFrameForVisual(cursor mygo.Point, area mygo.Rectangle, v dragCardVisual, srcW, srcH float32, cardW int, morph, grabDX, grabDY float32) (frame mygo.Rectangle, padL, padT int, subX, subY float32) {
+	if morph >= 0.999 {
+		return pinClamp(pinFrameUnder(cursor, grabDX, grabDY, srcW, srcH, cardW), area), 0, 0, 0, 0
+	}
+	cardLeft := float32(cursor.X) - v.curGrabX
+	cardTop := float32(cursor.Y) - v.curGrabY
+	clamped := pinClamp(mygo.Rectangle{
+		X:      int(math.Round(float64(cardLeft))),
+		Y:      int(math.Round(float64(cardTop))),
+		Width:  int(math.Ceil(float64(v.w))),
+		Height: int(math.Ceil(float64(v.h))),
+	}, area)
+	subX = cardLeft - float32(int(math.Round(float64(cardLeft))))
+	subY = cardTop - float32(int(math.Round(float64(cardTop))))
+	if clamped.X != int(math.Round(float64(cardLeft))) {
+		subX = 0
+	}
+	if clamped.Y != int(math.Round(float64(cardTop))) {
+		subY = 0
+	}
+	padL, padT = dragPreviewPadL, dragPreviewPadT
+	winW := int(math.Ceil(float64(max(srcW, float32(cardW))))) + dragPreviewPadL + dragPreviewPadR
+	winH := int(math.Ceil(float64(max(srcH, float32(pinCardH))))) + dragPreviewPadT + dragPreviewPadB
+	frame = mygo.Rectangle{
+		X:      clamped.X - padL,
+		Y:      clamped.Y - padT,
+		Width:  winW,
+		Height: winH,
+	}
+	return frame, padL, padT, subX, subY
 }
 
 // syncDragPreview shows, moves, or closes the preview window for a card of
@@ -293,39 +330,7 @@ func (a *shelf) syncDragPreviewMorph(pv *dragPreview, spec layout.Card, cardW in
 	v := computeDragCardVisual(spec, cardW, grabDX, grabDY, liftK, m, reduceMotion)
 	display := displayIDAt(cursor, 0)
 	area := pinArea(display)
-	cardLeft := float32(cursor.X) - v.curGrabX
-	cardTop := float32(cursor.Y) - v.curGrabY
-	clamped := pinClamp(mygo.Rectangle{
-		X:      int(math.Round(float64(cardLeft))),
-		Y:      int(math.Round(float64(cardTop))),
-		Width:  int(math.Ceil(float64(v.w))),
-		Height: int(math.Ceil(float64(v.h))),
-	}, area)
-	subX := cardLeft - float32(int(math.Round(float64(cardLeft))))
-	subY := cardTop - float32(int(math.Round(float64(cardTop))))
-	if clamped.X != int(math.Round(float64(cardLeft))) {
-		subX = 0
-	}
-	if clamped.Y != int(math.Round(float64(cardTop))) {
-		subY = 0
-	}
-
-	var frame mygo.Rectangle
-	var padL, padT int
-	if m < 0.999 {
-		padL, padT = dragPreviewPadL, dragPreviewPadT
-		winW := int(math.Ceil(float64(max(srcW, float32(cardW))))) + dragPreviewPadL + dragPreviewPadR
-		winH := int(math.Ceil(float64(max(srcH, float32(pinCardH))))) + dragPreviewPadT + dragPreviewPadB
-		frame = mygo.Rectangle{
-			X:      clamped.X - padL,
-			Y:      clamped.Y - padT,
-			Width:  winW,
-			Height: winH,
-		}
-	} else {
-		frame = pinClamp(pinFrameUnder(cursor, grabDX, grabDY, srcW, srcH, cardW), area)
-		subX, subY = 0, 0
-	}
+	frame, padL, padT, subX, subY := previewFrameForVisual(cursor, area, v, srcW, srcH, cardW, m, grabDX, grabDY)
 
 	if pv.it == nil {
 		pv.it = &pinItem{
@@ -335,6 +340,7 @@ func (a *shelf) syncDragPreviewMorph(pv *dragPreview, spec layout.Card, cardW in
 			morphFrom: morphFrom, morphTo: morphTo, morphAt: morphAt,
 			liftK: liftK, reduceMotion: reduceMotion,
 			padL: padL, padT: padT, subX: subX, subY: subY,
+			cursor: cursor, hasCursor: true,
 		}
 		pinOpenPreview(pv.it)
 		return
@@ -349,6 +355,7 @@ func (a *shelf) syncDragPreviewMorph(pv *dragPreview, spec layout.Card, cardW in
 	pv.it.morphFrom, pv.it.morphTo, pv.it.morphAt = morphFrom, morphTo, morphAt
 	pv.it.liftK, pv.it.reduceMotion = liftK, reduceMotion
 	pv.it.padL, pv.it.padT, pv.it.subX, pv.it.subY = padL, padT, subX, subY
+	pv.it.cursor, pv.it.hasCursor = cursor, true
 	if pv.it.frame != prevFrame {
 		pv.it.applyFrame()
 	}

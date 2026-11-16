@@ -96,6 +96,8 @@ type toolPress struct {
 	visRot       float32
 	settleStartX float32
 	settleStartY float32
+	settleStartW float32
+	settleStartH float32
 	settleScale  float32
 	settleRot    float32
 	settleVX     float32
@@ -138,6 +140,9 @@ func (d *toolPress) cardLocalToStage(lx, ly float32) (float32, float32) {
 }
 
 func (d *toolPress) recordVelocity(dx, dy float32, evTime time.Time) {
+	if dx == 0 && dy == 0 {
+		return
+	}
 	if !d.lastMove.IsZero() {
 		dt := evTime.Sub(d.lastMove).Seconds()
 		if dt < 0.004 {
@@ -903,8 +908,8 @@ func (p *toolsPage) toolCell(c *ui.Context, cell toolCell, editing, live bool) {
 	cx, cy := cell.x, cell.y
 	switch {
 	case parked && d.settling:
-		p.toolSettle(c, card, d)
-		card.Absolute().Width(cell.w).Height(cell.h)
+		sw, sh := p.toolSettle(c, card, d, cell)
+		card.Absolute().Width(sw).Height(sh)
 		cx, cy = d.cardX, d.cardY
 	case parked:
 		// Keep the invisible capture element directly at cell.x, cell.y so
@@ -1112,11 +1117,15 @@ func (p *toolsPage) captureSettleOrigin(d *toolPress, now time.Time) (startX, st
 	if p.reduceMotion {
 		startRot = 0
 	}
+	d.settleStartW, d.settleStartH = 0, 0
 	if d.visReady {
 		startX = d.visWinX - p.viewport.X
 		startY = d.visWinY - p.viewport.Y + p.scroll.Y
 		startScale = d.visScale
 		startRot = d.visRot
+		if d.visW > 0 && d.visH > 0 {
+			d.settleStartW, d.settleStartH = d.visW, d.visH
+		}
 	}
 	if !d.lastMove.IsZero() && now.Sub(d.lastMove) <= 60*time.Millisecond {
 		svx = min(max(d.vx, -2400), 2400)
@@ -1242,22 +1251,33 @@ func (p *toolsPage) stageW() float32 {
 // to its committed cell. The press clears once the flight rests: Settled, not
 // Arrived — Arrived reports only the frame a moving value comes to rest, so a
 // flight that starts at its goal never moves and never arrives.
-func (p *toolsPage) toolSettle(c *ui.Context, card ui.Element, d *toolPress) {
+func (p *toolsPage) toolSettle(c *ui.Context, card ui.Element, d *toolPress, cell toolCell) (float32, float32) {
 	if reduceMotion(c) {
 		card.Jump("cx", d.settleX)
 		card.Jump("cy", d.settleY)
+		card.Jump("cw", cell.w)
+		card.Jump("ch", cell.h)
 		card.Jump("sc", 1)
 		card.Jump("rot", 0)
 		card.Left(d.settleX).Top(d.settleY)
 		d.cardX, d.cardY = d.settleX, d.settleY
 		p.press = nil
 		p.dragCols, p.dragRows = 0, 0
-		return
+		return cell.w, cell.h
 	}
 	var vx, vy float32
 	if !d.settleJump {
+		sw0, sh0 := d.settleStartW, d.settleStartH
+		if sw0 <= 0 {
+			sw0 = cell.w
+		}
+		if sh0 <= 0 {
+			sh0 = cell.h
+		}
 		card.Jump("cx", d.settleStartX)
 		card.Jump("cy", d.settleStartY)
+		card.Jump("cw", sw0)
+		card.Jump("ch", sh0)
 		card.Jump("sc", d.settleScale)
 		card.Jump("rot", d.settleRot)
 		vx, vy = d.settleVX, d.settleVY
@@ -1265,14 +1285,17 @@ func (p *toolsPage) toolSettle(c *ui.Context, card ui.Element, d *toolPress) {
 	}
 	cx := card.AnimateTo("cx", d.settleX, ui.Animation{Spring: ui.SpringOptions{Duration: durSettle, Bounce: 0.15, Velocity: vx}})
 	cy := card.AnimateTo("cy", d.settleY, ui.Animation{Spring: ui.SpringOptions{Duration: durSettle, Bounce: 0.15, Velocity: vy}})
+	cw := card.AnimateTo("cw", cell.w, ui.Animation{Spring: ui.SpringOptions{Duration: durSettle, Bounce: 0.15}})
+	ch := card.AnimateTo("ch", cell.h, ui.Animation{Spring: ui.SpringOptions{Duration: durSettle, Bounce: 0.15}})
 	sc := card.AnimateTo("sc", 1, ui.Animation{Spring: ui.SpringOptions{Duration: durSettle, Bounce: 0.15}})
 	rot := card.AnimateTo("rot", 0, ui.Animation{Spring: ui.SpringOptions{Duration: durSettle, Bounce: 0.15}})
 	card.Left(cx).Top(cy).Scale(sc, sc).Rotate(rot).TransformOrigin(0.5, 0.5)
 	d.cardX, d.cardY = cx, cy
-	if card.Settled("cx") && card.Settled("cy") && card.Settled("sc") && card.Settled("rot") {
+	if card.Settled("cx") && card.Settled("cy") && card.Settled("cw") && card.Settled("ch") && card.Settled("sc") && card.Settled("rot") {
 		p.press = nil
 		p.dragCols, p.dragRows = 0, 0
 	}
+	return cw, ch
 }
 
 // toolChrome draws the editing chrome over the whole shell: the ⊖ badge
