@@ -452,7 +452,9 @@ func TestRecognizeTextReadsScreenText(t *testing.T) {
 		}
 	}
 	// Chinese characters arrive as single-character words; the line is
-	// compacted into the run the user typed.
+	// compacted into the run the user typed. That needs a Chinese OCR
+	// language, which hosted CI runners lack.
+	requireChineseOCR(t)
 	if !strings.Contains(joined, "框选文字") {
 		t.Errorf("recognized text %q does not read 框选文字", strings.Join(lines, "\n"))
 	}

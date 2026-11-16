@@ -328,6 +328,7 @@ func TestResolveAppLocation(t *testing.T) {
 }
 
 func TestSearchIndexAnswers(t *testing.T) {
+	requireSearchIndex(t)
 	// "Microsoft" is in many indexed names and contents; the point is
 	// that the provider answers, not what it ranks.
 	w := newSearchSink(&SearchRun{}, func([]SearchHit) {}, searchLimit)

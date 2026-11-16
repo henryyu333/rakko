@@ -15,6 +15,7 @@ import (
 )
 
 func TestOutputDevicesList(t *testing.T) {
+	requireSoundDevice(t)
 	devs := OutputDevices()
 	if len(devs) == 0 {
 		t.Fatal("OutputDevices listed nothing on a machine with audio endpoints")
