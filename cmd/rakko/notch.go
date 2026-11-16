@@ -117,6 +117,9 @@ func (a *shelf) shellVisibleOnNotch(now time.Time) bool {
 // triggers only at the screen's top edge (notchEdgeHoverH); once anything is
 // drawn on the shell, the full overAnchor zone keeps holding it.
 func (a *shelf) overHoverAnchor(p mygo.Point, now time.Time) bool {
+	if a.winH != 0 && !a.shellVisibleOnNotch(now) && foregroundFullscreen() {
+		return false
+	}
 	if a.island || !notchTopEdgeHoverOnly || a.shellVisibleOnNotch(now) {
 		return a.overAnchor(p)
 	}
@@ -549,6 +552,7 @@ var setNativeWindowFrame = platform.SetWindowFrame
 var (
 	setOverlayAcceptsMouse = platform.SetOverlayAcceptsMouse
 	setWindowLayer         = platform.SetWindowLayer
+	foregroundFullscreen   = platform.ForegroundFullscreen
 )
 
 // resizeStretches reports whether applying r would present the canvas that
@@ -1042,7 +1046,11 @@ func (a *shelf) overlayAcceptsMouse() bool {
 	if !wanted {
 		// A notched shelf at rest draws nothing: every press belongs to
 		// whatever is under the strip. The island's resting capsule is a
-		// real, visible target and takes presses on its own shape.
+		// real, visible target and takes presses on its own shape, except
+		// while a foreign fullscreen app owns the display.
+		if foregroundFullscreen() {
+			return false
+		}
 		return a.island && a.overShell(p)
 	}
 	if a.overShell(p) || a.overBelow(p) || a.overAppsPop(p) {

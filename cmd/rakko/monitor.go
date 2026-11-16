@@ -404,15 +404,16 @@ func (a *shelf) monitorTick(now time.Time) {
 // for hover: the notch or island hot zone, the drop corridor, the peek
 // pill, the open-page shapes, a desktop card, the otter or the basket.
 func (a *shelf) pointerNearZone(p mygo.Point) bool {
+	now := time.Now()
+	suppressedFS := a.winH != 0 && !a.shellVisibleOnNotch(now) && foregroundFullscreen()
 	if !notchTopEdgeHoverOnly {
-		if a.overAnchor(p) || a.dropBandX(p) || a.overPeekPill(p) || a.overAppsPop(p) {
+		if !suppressedFS && (a.overAnchor(p) || a.dropBandX(p) || a.overPeekPill(p) || a.overAppsPop(p)) {
 			return true
 		}
-		if a.win != nil && (a.overShell(p) || a.overBelow(p)) {
+		if a.win != nil && !suppressedFS && (a.overShell(p) || a.overBelow(p)) {
 			return true
 		}
 	} else {
-		now := time.Now()
 		if a.overHoverAnchor(p, now) || a.overAppsPop(p) {
 			return true
 		}
@@ -422,7 +423,7 @@ func (a *shelf) pointerNearZone(p mygo.Point) bool {
 		if (a.island || a.shellVisibleOnNotch(now)) && a.overPeekPill(p) {
 			return true
 		}
-		if a.win != nil && (a.island || a.overlayWanted()) && (a.overShell(p) || a.overBelow(p)) {
+		if a.win != nil && (a.overlayWanted() || (a.island && !suppressedFS)) && (a.overShell(p) || a.overBelow(p)) {
 			return true
 		}
 	}

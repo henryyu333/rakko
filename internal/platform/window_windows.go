@@ -186,32 +186,27 @@ func OrderOverlayFront(window uintptr) {
 // accept is true only while the pointer is over the drawn shell or a drag
 // is in flight; otherwise the whole window passes clicks through with
 // WS_EX_TRANSPARENT, which lets every click beside the shell reach the app
-// or the taskbar underneath.
+// or the taskbar underneath. The overlay is already topmost, so accept does
+// not re-order it.
 func SetOverlayAcceptsMouse(window uintptr, accept bool) {
 	if window == 0 || OverlayIgnoresMouse(window) == !accept {
 		return
 	}
-	if accept {
-		SetWindowIgnoresMouseEvents(window, false)
-		reorderFront(window, true)
-		return
-	}
-	SetWindowIgnoresMouseEvents(window, true)
+	SetWindowIgnoresMouseEvents(window, !accept)
 }
 
-// SetWindowIgnoresMouseEvents toggles the window's click-through bit. The
-// window becomes layered while it ignores the mouse so the transparency is
-// honoured without changing what it draws (the alpha stays opaque); the
-// frame change makes the window manager route the next click with the new
-// style.
+// SetWindowIgnoresMouseEvents toggles the window's click-through bit. A
+// non-layered window is made layered once so WS_EX_TRANSPARENT is honoured;
+// subsequent toggles only flip WS_EX_TRANSPARENT without re-applying alpha or
+// sending SWP_FRAMECHANGED.
 func SetWindowIgnoresMouseEvents(window uintptr, ignore bool) {
 	if window == 0 {
 		return
 	}
-	if ignore {
+	if ignore && windowExStyle(window)&wsExLayered == 0 {
 		setLayeredAlpha(window)
 	}
-	setExBits(window, wsExTransparent, ignore)
+	setExBitsNoFrame(window, wsExTransparent, ignore)
 }
 
 // OverlayIgnoresMouse reads the click-through bit SetOverlayAcceptsMouse

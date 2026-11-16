@@ -432,6 +432,21 @@ func setExBits(h uintptr, bits uintptr, on bool) {
 		swpNoMove|swpNoSize|swpNoZOrder|swpNoActivate|swpFrameChanged)
 }
 
+// setExBitsNoFrame updates GWL_EXSTYLE without SWP_FRAMECHANGED so toggling
+// WS_EX_TRANSPARENT during hover gating does not send a frame-change
+// notification that can disrupt fullscreen windows.
+func setExBitsNoFrame(h uintptr, bits uintptr, on bool) {
+	ex := windowExStyle(h)
+	next := ex | bits
+	if !on {
+		next = ex &^ bits
+	}
+	if next == ex {
+		return
+	}
+	setWindowLong(h, gwlExStyle, next)
+}
+
 // updateStyleBits sets and clears standard GWL_STYLE bits and notifies
 // Windows of the frame change. Removing WS_CAPTION lets a frameless panel
 // shrink below the minimum Win32 enforces on captioned windows: 20px wide for
