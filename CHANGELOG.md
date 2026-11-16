@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.16.0
+
+- **Windows 版**：同一个 Rakko 现在也能在 Windows 10 22H2 / Windows 11（64 位）上用。屏幕顶部中间平时看不见，鼠标推到顶边才探出；也可以在设置里换成常驻的浮动胶囊。托盘、剪贴板、工具页、搜索、截图、框选文字、音乐、AI 用量和 Agent 提醒都有，资源管理器右键多了「添加到 Rakko」。全屏玩游戏或看视频时，碰到顶边不会再打扰前台程序。
+- **设置窗口重做**：左侧换成一列「小岛」导航，所有页面同一个尺寸，可以拖边缘放大缩小，也能最大化。
+- **截图**：面板开着时按截图，面板会一起截进画面；收起时和以前一样。框选文字也一样。
+- **AI 用量更全**：除了原来的工具，现在也读 Antigravity CLI、Gemini CLI、Copilot CLI、Qwen Code、Kimi、Droid、Hermes 等十几个工具的本机记录，Codex 的压缩会话也能读了。没有费用记录的模型按公开价目表估算。装了但读不到用量的工具会在用量页和每周简报里写明「读不到」，不再悄悄算成 0。
+- 工具页拖卡片更顺：拖出面板时卡片在面板里抬起，离开面板后才变成桌面卡片；松手落位不再跳。
+- 「最近文件」「转 Word」「便利贴」换了更好认的图标。
+
+### English
+
+- **Rakko for Windows**: the same Rakko now runs on Windows 10 22H2 and Windows 11 (64-bit). The top centre of the screen stays out of sight until you push the pointer against the edge; Settings can switch it to an always-visible floating capsule. Tray, Clipboard, Tools, search, screenshots, Capture Text, music, AI Usage and agent notices are all there, and Explorer's right-click menu gains Add to Rakko. While a game or video runs full screen, touching the top edge leaves it alone.
+- **Settings, rebuilt**: an island navigation column on the left, every page the same size, and a window you can resize or maximize.
+- **Screenshots**: with the panel open, a screenshot now keeps the panel in the picture; with it closed nothing changes. Capture Text does the same.
+- **Fuller AI usage**: besides the tools it already read, Rakko now reads the local records of Antigravity CLI, Gemini CLI, Copilot CLI, Qwen Code, Kimi, Droid, Hermes and more, and Codex's compressed sessions. Models without a recorded cost are estimated from a public price list. A tool that is installed but unreadable is named on the usage page and in the weekly report instead of counting as zero.
+- Dragging Tools cards feels smoother: a card lifts inside the panel and becomes a desktop card only once it leaves; dropping it no longer jumps.
+- Recent Files, To Word and Sticky Note have clearer icons.
+
 ## 1.15.1
 
 - 设置 →「关于」里多了「请我喝杯咖啡」。
