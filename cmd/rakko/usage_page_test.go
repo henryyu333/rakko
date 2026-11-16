@@ -1494,7 +1494,7 @@ func TestUsagePageScreenshot(t *testing.T) {
 
 // The Token and 费用 cells hold one number each because the 2 × 2 grid has
 // no room for the parts; resting on them explains the number. Regression:
-// usageCostSub had no call site, so 「N 条没有价格」 never reached a screen.
+// usageCostSub had no call site, so 「N 次请求没有价格」 never reached a screen.
 func TestUsageKpiCellsExplainTheirNumbersOnHover(t *testing.T) {
 	now := time.Date(2026, 10, 19, 12, 0, 0, 0, time.Local)
 	draw := func(t *testing.T, unpriced int64) (*usageFixture, *ui.Tester) {
@@ -1536,7 +1536,7 @@ func TestUsageKpiCellsExplainTheirNumbersOnHover(t *testing.T) {
 	t.Run("unpriced records", func(t *testing.T) {
 		_, view := draw(t, 7)
 		hover(t, view, "费用")
-		if !view.HasText("7 条没有价格") {
+		if !view.HasText("7 次请求没有价格") {
 			t.Fatalf("the 费用 cell lost its unpriced tip; texts %v", view.Texts())
 		}
 	})

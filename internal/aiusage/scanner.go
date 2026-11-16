@@ -55,15 +55,15 @@ type codexTail struct {
 // so a later scan can tell "file grew by appending" apart from "file was
 // replaced with a bigger one".
 type fileState struct {
-	tool       Tool
-	size       int64 // file size observed right after the read that produced offset
-	offset     int64
-	modNano    int64 // ModTime of that observation
-	tailStart  int64 // offset of the last complete line; -1 when none
-	tailSum    uint64
+	tool              Tool
+	size              int64 // file size observed right after the read that produced offset
+	offset            int64
+	modNano           int64 // ModTime of that observation
+	tailStart         int64 // offset of the last complete line; -1 when none
+	tailSum           uint64
 	recs              []rec
 	tail              codexTail
-	hermesPrev        map[string]hermesSnapshot
+	ledgerPrev        map[string]cumSnapshot // cumulative-table ledgers (Hermes, Copilot sessions)
 	unsupportedSchema bool
 }
 
@@ -358,7 +358,7 @@ loop:
 						size:       size,
 						modNano:    mod,
 						recs:       recs,
-						hermesPrev: snap,
+						ledgerPrev: snap,
 					}
 				}
 			} else {
@@ -630,16 +630,16 @@ type cacheTailJSON struct {
 }
 
 type cacheFileJSON struct {
-	T  string                    `json:"t"`
-	S  int64                     `json:"s"`
-	O  int64                     `json:"o"`
-	M  int64                     `json:"m"`
-	TS int64                     `json:"ls"`
-	TH uint64                    `json:"lh"`
-	R  [][]json.RawMessage       `json:"r"`
-	C  *cacheTailJSON            `json:"c,omitempty"`
-	H  map[string]hermesSnapshot `json:"h,omitempty"`
-	U  bool                      `json:"u,omitempty"`
+	T  string                 `json:"t"`
+	S  int64                  `json:"s"`
+	O  int64                  `json:"o"`
+	M  int64                  `json:"m"`
+	TS int64                  `json:"ls"`
+	TH uint64                 `json:"lh"`
+	R  [][]json.RawMessage    `json:"r"`
+	C  *cacheTailJSON         `json:"c,omitempty"`
+	H  map[string]cumSnapshot `json:"h,omitempty"`
+	U  bool                   `json:"u,omitempty"`
 }
 
 type cacheJSON struct {
@@ -648,8 +648,8 @@ type cacheJSON struct {
 }
 
 // cacheVersion identifies the cache file's format and semantics; version 5
-// stores Hermes per-epoch ownership in rec.key (without duplicating records in
-// hermesSnapshot) and encodes 0-request cost-reconciliation records.
+// stores cumulative-ledger ownership in rec.key (without duplicating records
+// in the snapshot) and encodes 0-request cost-reconciliation records.
 const cacheVersion = 5
 
 func (s *Scanner) cachePath() string { return filepath.Join(s.cacheDir, cacheName) }
@@ -686,7 +686,7 @@ func (s *Scanner) loadCache(ctx context.Context) {
 			modNano:           cf.M,
 			tailStart:         cf.TS,
 			tailSum:           cf.TH,
-			hermesPrev:        cf.H,
+			ledgerPrev:        cf.H,
 			unsupportedSchema: cf.U,
 		}
 		if cf.C != nil {
@@ -832,8 +832,8 @@ func (s *Scanner) saveCache(ctx context.Context, files map[string]*fileState) {
 			}
 			buf.WriteString(strconv.Itoa(h) + `}`)
 		}
-		if len(st.hermesPrev) > 0 {
-			if hb, err := json.Marshal(st.hermesPrev); err == nil {
+		if len(st.ledgerPrev) > 0 {
+			if hb, err := json.Marshal(st.ledgerPrev); err == nil {
 				buf.WriteString(`,"h":`)
 				buf.Write(hb)
 			}

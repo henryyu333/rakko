@@ -162,3 +162,29 @@ func TestWeeklyReportShowsUnreadableToolsAndRegistryNames(t *testing.T) {
 		t.Fatalf("expected unreadable tools hint in weekly report; texts %v", view.Texts())
 	}
 }
+
+// A week whose only usage is a cumulative ledger's growth (tokens and cost,
+// no new request) is still usage: the report shows it instead of "no data".
+func TestWeeklyReportShowsUsageWithoutRequests(t *testing.T) {
+	now := time.Date(2026, 11, 16, 12, 0, 0, 0, time.Local)
+	a := weeklyNavShelf(t, true)
+	wf := a.page(pageWeekly).(*weeklyFeature)
+	wf.aiHave = true
+	wf.aiWeek = wf.weekFor(now)
+	wf.aiSummary = aiusage.Summary{
+		Range:  aiusage.RangeSpan,
+		Total:  aiusage.Totals{Input: 1000, Cost: 0.10},
+		ByTool: map[aiusage.Tool]aiusage.Totals{aiusage.ToolHermes: {Input: 1000, Cost: 0.10}},
+	}
+	view := ui.NewTester(func(c *ui.Context) {
+		wf.body(c, true, false)
+	}, weeklyPageW, weeklyPageH)
+	view.Frame()
+	noData := loc(nil).WeeklyAiNoData()
+	if view.HasText(noData) {
+		t.Fatalf("weekly report says %q for a week with 1000 tokens; texts %v", noData, view.Texts())
+	}
+	if !view.HasText("Hermes") {
+		t.Fatalf("expected the Hermes share in weekly report; texts %v", view.Texts())
+	}
+}

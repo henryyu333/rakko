@@ -131,6 +131,52 @@ func TestScanHermesDeltaAcrossDays(t *testing.T) {
 	}
 }
 
+// TestScanCopilotDataSessionsDeltaAcrossDays: data.db builds without
+// assistant_usage_events keep per-session running totals. Resuming a session
+// on a later day must add only the growth to that day; the earlier day keeps
+// what it had.
+func TestScanCopilotDataSessionsDeltaAcrossDays(t *testing.T) {
+	if _, err := os.Stat(sqlite3Path); err != nil {
+		t.Skip("sqlite3 not installed")
+	}
+	home := t.TempDir()
+	cacheDir := t.TempDir()
+	dataDB := filepath.Join(home, ".copilot", "data.db")
+	if err := os.MkdirAll(filepath.Dir(dataDB), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sunday := time.Date(2026, 11, 15, 10, 0, 0, 0, time.Local)
+	monday := time.Date(2026, 11, 16, 10, 0, 0, 0, time.Local)
+	ts := func(t time.Time) string { return strconv.FormatInt(t.Unix(), 10) }
+
+	runSQLite(t, dataDB, `
+		CREATE TABLE sessions (
+			id TEXT PRIMARY KEY, created_at INTEGER, updated_at INTEGER, model TEXT,
+			total_input_tokens INTEGER, total_output_tokens INTEGER, total_requests INTEGER
+		);
+		INSERT INTO sessions VALUES ('s1', `+ts(sunday)+`, `+ts(sunday)+`, 'gpt-5.3-codex', 1000, 0, 1);
+	`)
+	if err := NewScanner(home, cacheDir).Scan(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+
+	runSQLite(t, dataDB, `UPDATE sessions SET total_input_tokens = 2000, total_requests = 2, updated_at = `+ts(monday)+` WHERE id = 's1';`)
+	s := NewScanner(home, cacheDir)
+	if err := s.Scan(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := s.Summary(RangeToday, sunday).ByTool[ToolCopilot]; got.Input != 1000 || got.Requests != 1 {
+		t.Fatalf("sunday = %+v, want in=1000 reqs=1", got)
+	}
+	if got := s.Summary(RangeToday, monday).ByTool[ToolCopilot]; got.Input != 1000 || got.Requests != 1 {
+		t.Fatalf("monday = %+v, want in=1000 reqs=1 (only the growth)", got)
+	}
+	if got := s.Summary(RangeAll, monday).ByTool[ToolCopilot]; got.Input != 2000 || got.Requests != 2 {
+		t.Fatalf("all = %+v, want in=2000 reqs=2", got)
+	}
+}
+
 func TestScanCopilotSQLite(t *testing.T) {
 	if _, err := os.Stat(sqlite3Path); err != nil {
 		t.Skip("sqlite3 not installed")

@@ -148,11 +148,18 @@ const (
 	RangeSpan
 )
 
-// Totals sums records over a range; Unpriced counts records without a
+// Totals sums records over a range; Unpriced counts requests without a
 // price, Cost only sums the ones that had one.
 type Totals struct {
 	Input, Output, CacheRead, CacheWrite, Requests, Unpriced int64
 	Cost                                                     float64
+}
+
+// Empty reports a range with no usage at all. Requests alone cannot say so:
+// cumulative-table ledgers (Hermes, Copilot sessions) add tokens or cost
+// without a request when only the counters grew.
+func (t Totals) Empty() bool {
+	return t.Requests == 0 && t.Input == 0 && t.Output == 0 && t.CacheRead == 0 && t.CacheWrite == 0 && t.Cost == 0
 }
 
 // Bucket is one bar of the stacked chart: records grouped by tool.

@@ -2963,11 +2963,11 @@ func (msgs Messages) UsageTokenBreakdown(input string, output string, cache stri
 	return Catalog.Format(msgs.locale, "usageTokenBreakdown", map[string]any{"input": input, "output": output, "cache": cache})
 }
 
-// UsageCostUnpriced says "{n, number, ::group-off} 条没有价格"
+// UsageCostUnpriced says "{n, number, ::group-off} 次请求没有价格"
 // in the language the app shows.
 func UsageCostUnpriced(n int) string { return In(i18n.Locale()).UsageCostUnpriced(n) }
 
-// UsageCostUnpriced says "{n, number, ::group-off} 条没有价格"
+// UsageCostUnpriced says "{n, number, ::group-off} 次请求没有价格"
 // in the language of msgs.
 func (msgs Messages) UsageCostUnpriced(n int) string {
 	return Catalog.Format(msgs.locale, "usageCostUnpriced", map[string]any{"n": n})
@@ -5953,11 +5953,11 @@ func (msgs Messages) WeeklyAiCost() string {
 	return Catalog.Format(msgs.locale, "weeklyAiCost", nil)
 }
 
-// WeeklyAiUnpriced says "{n} 条记录没有价格，未计入费用。"
+// WeeklyAiUnpriced says "{n} 次请求没有价格，未计入费用。"
 // in the language the app shows.
 func WeeklyAiUnpriced(n string) string { return In(i18n.Locale()).WeeklyAiUnpriced(n) }
 
-// WeeklyAiUnpriced says "{n} 条记录没有价格，未计入费用。"
+// WeeklyAiUnpriced says "{n} 次请求没有价格，未计入费用。"
 // in the language of msgs.
 func (msgs Messages) WeeklyAiUnpriced(n string) string {
 	return Catalog.Format(msgs.locale, "weeklyAiUnpriced", map[string]any{"n": n})

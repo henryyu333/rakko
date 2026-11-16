@@ -24,7 +24,7 @@ type rootSpec struct {
 type dbSpec struct {
 	path      string
 	read      func(ctx context.Context, dbPath, cacheDir string, pool map[string]*string) ([]rec, error)
-	readDelta func(ctx context.Context, dbPath, cacheDir string, pool map[string]*string, old *fileState) ([]rec, map[string]hermesSnapshot, error)
+	readDelta func(ctx context.Context, dbPath, cacheDir string, pool map[string]*string, old *fileState) ([]rec, map[string]cumSnapshot, error)
 }
 
 // toolEntry is one entry in the AI tool registry: display name, installation
@@ -451,7 +451,7 @@ var registry = []toolEntry{
 		dbs: func(home string) []dbSpec {
 			return []dbSpec{
 				{path: joinHome(home, ".copilot", "session-store.db"), read: readCopilotDB},
-				{path: joinHome(home, ".copilot", "data.db"), read: readCopilotDB},
+				{path: joinHome(home, ".copilot", "data.db"), readDelta: readCopilotDataDB},
 			}
 		},
 		roots: func(home string) []rootSpec {

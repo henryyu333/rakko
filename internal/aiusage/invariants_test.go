@@ -56,7 +56,7 @@ func (o *hermesOracle) step(rows []hermesRow) {
 		}
 		orow, ok := o.rows[key]
 		if !ok {
-			if !hermesRowPositive(r, curPriced) {
+			if cur.in == 0 && cur.out == 0 && cur.cr == 0 && cur.cw == 0 && cur.calls == 0 && !curPriced {
 				o.rows[key] = &hermesOracleRow{model: r.Model, epochs: []hermesOracleEpoch{{}}}
 				continue
 			}
@@ -84,9 +84,14 @@ func (o *hermesOracle) step(rows []hermesRow) {
 			prev.out = cur.out
 			prev.cr = cur.cr
 			prev.cw = cur.cw
+			// Invariant 3: once a cycle has a source cost, the source owns it;
+			// a later zero/absent source cost is a correction to $0, not a
+			// fallback to the price table.
 			if cur.priced {
 				prev.priced = true
 				prev.cost = cur.cost
+			} else if prev.priced {
+				prev.cost = 0
 			}
 		}
 	}
@@ -222,9 +227,21 @@ func TestHermesInvariantsTableDriven(t *testing.T) {
 				if final.Requests != 2 || math.Abs(final.Cost-0.25) > 1e-9 {
 					t.Fatalf("got %+v, want reqs=2 cost=0.25", final)
 				}
-				// Verify single-copy cache invariant: hermesSnapshot in "h" has no "recs" field.
+				// Verify single-copy cache invariant: the ledger snapshot in "h" has no "recs" field.
 				if strings.Contains(string(cacheBytes), `"recs"`) {
-					t.Fatalf("cache JSON still duplicates recs inside hermesSnapshot: %s", string(cacheBytes))
+					t.Fatalf("cache JSON still duplicates recs inside the ledger snapshot: %s", string(cacheBytes))
+				}
+			},
+		},
+		{
+			name: "source_cost_cleared_to_zero_reconciles_cycle_to_zero",
+			steps: [][]hermesRow{
+				{{SessionID: "s1", Model: pricedModel, APICallCount: 2, InputTokens: 1000, ActualCost: new(0.20), EstimatedCost: new(0.0), FirstTS: day1, LastTS: day1}},
+				{{SessionID: "s1", Model: pricedModel, APICallCount: 2, InputTokens: 1000, ActualCost: new(0.0), EstimatedCost: new(0.0), FirstTS: day1, LastTS: day2}},
+			},
+			check: func(t *testing.T, final Totals, _ Summary, _ []byte) {
+				if final.Input != 1000 || final.Requests != 2 || final.Unpriced != 0 || math.Abs(final.Cost) > 1e-9 {
+					t.Fatalf("got %+v, want in=1000 reqs=2 unpriced=0 cost=0", final)
 				}
 			},
 		},
@@ -262,7 +279,7 @@ func TestHermesInvariantsTableDriven(t *testing.T) {
 					size:       int64(stepIdx + 1),
 					modNano:    int64(stepIdx + 1),
 					recs:       recs,
-					hermesPrev: snap,
+					ledgerPrev: snap,
 				}
 				// Round-trip through on-disk cache at every step to prove persistence!
 				sc := NewScanner("/virtual", cacheDir)
@@ -320,7 +337,7 @@ func TestHermesOldAndCorruptCacheUpgrade(t *testing.T) {
 		}
 		pool := map[string]*string{}
 		recs, snap := applyHermesRows(rows, pool, sc.files["/virtual/.hermes/state.db"], now.UnixMilli())
-		st := &fileState{tool: ToolHermes, recs: recs, hermesPrev: snap}
+		st := &fileState{tool: ToolHermes, recs: recs, ledgerPrev: snap}
 		got := summarizeHermesState(st, now).ByTool[ToolHermes]
 		if got.Input != 250 || got.Output != 50 || got.Requests != 3 || math.Abs(got.Cost-0.15) > 1e-9 {
 			t.Fatalf("rebuilt from v4 = %+v, want in=250 out=50 reqs=3 cost=0.15", got)
@@ -331,13 +348,13 @@ func TestHermesOldAndCorruptCacheUpgrade(t *testing.T) {
 		corruptOld := &fileState{
 			tool: ToolHermes,
 			recs: []rec{{at: int64(day1 * 1000), in: 999, reqs: 9, key: ""}},
-			hermesPrev: map[string]hermesSnapshot{
+			ledgerPrev: map[string]cumSnapshot{
 				"s1\x1fclaude-sonnet-4-5-20250929\x1f\x1f\x1f\x1f": {Epoch: 0, Calls: 9, In: 999},
 			},
 		}
 		pool := map[string]*string{}
 		recs, snap := applyHermesRows(rows, pool, corruptOld, now.UnixMilli())
-		st := &fileState{tool: ToolHermes, recs: recs, hermesPrev: snap}
+		st := &fileState{tool: ToolHermes, recs: recs, ledgerPrev: snap}
 		got := summarizeHermesState(st, now).ByTool[ToolHermes]
 		if got.Input != 250 || got.Output != 50 || got.Requests != 3 || math.Abs(got.Cost-0.15) > 1e-9 {
 			t.Fatalf("rebuilt from corrupt state = %+v, want in=250 out=50 reqs=3 cost=0.15", got)
@@ -417,8 +434,13 @@ func TestHermesRandomizedSequenceInvariants(t *testing.T) {
 				cur.LastTS = ts
 				live[rk] = cur
 			default:
-				// Cost-only up or down adjustment (when priced or newly priced).
-				cur.ActualCost = new(float64(rng.IntN(100)+1) / 100.0)
+				// Cost-only adjustment: up, down, or cleared to zero while the
+				// token counters stay put.
+				if rng.IntN(4) == 0 {
+					cur.ActualCost = new(0.0)
+				} else {
+					cur.ActualCost = new(float64(rng.IntN(100)+1) / 100.0)
+				}
 				cur.LastTS = ts
 				live[rk] = cur
 			}
@@ -436,7 +458,7 @@ func TestHermesRandomizedSequenceInvariants(t *testing.T) {
 				size:       int64(step + 1),
 				modNano:    int64(step + 1),
 				recs:       recs,
-				hermesPrev: snap,
+				ledgerPrev: snap,
 			}
 			// Exercise cache save/load every 3rd step.
 			if step%3 == 0 {

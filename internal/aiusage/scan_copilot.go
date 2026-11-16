@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // Copilot CLI / Desktop multi-source usage:
@@ -70,66 +71,109 @@ func copilotContentSig(sessionID string, rc rec) string {
 	return fmt.Sprintf("%s|%d|%s|%d|%d|%d|%d", sessionID, rc.at, m, rc.in, rc.out, rc.cr, rc.cw)
 }
 
+// readCopilotDB reads a Copilot database that holds per-request
+// `assistant_usage_events`. data.db builds that only keep per-session
+// totals go through readCopilotDataDB instead.
 func readCopilotDB(ctx context.Context, dbPath, cacheDir string, pool map[string]*string) ([]rec, error) {
-	hasEvents, err := sqliteTableExists(ctx, "copilot", dbPath, cacheDir, "assistant_usage_events")
+	recs, ok, err := readCopilotEvents(ctx, dbPath, cacheDir, pool)
 	if err != nil {
 		return nil, err
 	}
-	if hasEvents {
-		var rows []map[string]any
-		if err := readSQLiteJSON(ctx, "copilot", dbPath, cacheDir, `SELECT * FROM assistant_usage_events`, &rows); err != nil {
-			return nil, err
-		}
-		out := make([]rec, 0, len(rows))
-		for _, row := range rows {
-			at := copilotRowMillis(row["created_at"])
-			if at == 0 {
-				at = copilotRowMillis(row["timestamp"])
-			}
-			if at == 0 {
-				continue
-			}
-			model, _ := row["model"].(string)
-			in, outTok, cr, cw := copilotRowTokens(row)
-			if in+outTok+cr+cw <= 0 {
-				continue
-			}
-			sessionID := copilotFirstString(row, "session_id", "sessionId", "conversation_id")
-			evID := copilotEventID(row)
-			out = append(out, rec{
-				at:    at,
-				model: intern(pool, model),
-				in:    in,
-				out:   outTok,
-				cr:    cr,
-				cw:    cw,
-				key:   makeCopilotRecKey(sessionID, evID),
-			})
-		}
-		return out, nil
+	if !ok {
+		return nil, errUnsupportedDBSchema
 	}
-
-	// Fallback for `~/.copilot/data.db` builds that store per-session totals in
-	// `sessions` without `assistant_usage_events`.
-	if copilotSourceRank(dbPath) == 2 {
-		hasSessions, err := sqliteTableExists(ctx, "copilot", dbPath, cacheDir, "sessions")
-		if err != nil {
-			return nil, err
-		}
-		if hasSessions {
-			recs, supported, err := readCopilotDataSessions(ctx, dbPath, cacheDir, pool)
-			if err != nil {
-				return nil, err
-			}
-			if supported {
-				return recs, nil
-			}
-		}
-	}
-	return nil, errUnsupportedDBSchema
+	return recs, nil
 }
 
-func readCopilotDataSessions(ctx context.Context, dbPath, cacheDir string, pool map[string]*string) ([]rec, bool, error) {
+// readCopilotDataDB reads ~/.copilot/data.db: per-request events when the
+// build has them, otherwise the cumulative `sessions` totals, which go through
+// the same cumulative ledger as Hermes so a session's earlier days keep their
+// usage when it is resumed.
+func readCopilotDataDB(ctx context.Context, dbPath, cacheDir string, pool map[string]*string, old *fileState) ([]rec, map[string]cumSnapshot, error) {
+	recs, ok, err := readCopilotEvents(ctx, dbPath, cacheDir, pool)
+	if err != nil {
+		return nil, nil, err
+	}
+	if ok {
+		return recs, nil, nil
+	}
+	hasSessions, err := sqliteTableExists(ctx, "copilot", dbPath, cacheDir, "sessions")
+	if err != nil {
+		return nil, nil, err
+	}
+	if !hasSessions {
+		return nil, nil, errUnsupportedDBSchema
+	}
+	rows, supported, err := readCopilotDataSessions(ctx, dbPath, cacheDir, pool)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !supported {
+		return nil, nil, errUnsupportedDBSchema
+	}
+	var ledger map[string]cumSnapshot
+	var oldRecs []rec
+	if old != nil {
+		ledger, oldRecs = old.ledgerPrev, old.recs
+	}
+	out, snap := applyCumulativeRows(rows, ledger, oldRecs, copilotKeyPrefix, time.Now().UnixMilli())
+	return out, snap, nil
+}
+
+// readCopilotEvents reads `assistant_usage_events`; ok is false when the
+// database has no such table.
+func readCopilotEvents(ctx context.Context, dbPath, cacheDir string, pool map[string]*string) (_ []rec, ok bool, _ error) {
+	hasEvents, err := sqliteTableExists(ctx, "copilot", dbPath, cacheDir, "assistant_usage_events")
+	if err != nil {
+		return nil, false, err
+	}
+	if !hasEvents {
+		return nil, false, nil
+	}
+	var rows []map[string]any
+	if err := readSQLiteJSON(ctx, "copilot", dbPath, cacheDir, `SELECT * FROM assistant_usage_events`, &rows); err != nil {
+		return nil, false, err
+	}
+	out := make([]rec, 0, len(rows))
+	for _, row := range rows {
+		at := copilotRowMillis(row["created_at"])
+		if at == 0 {
+			at = copilotRowMillis(row["timestamp"])
+		}
+		if at == 0 {
+			continue
+		}
+		model, _ := row["model"].(string)
+		in, outTok, cr, cw := copilotRowTokens(row)
+		if in+outTok+cr+cw <= 0 {
+			continue
+		}
+		sessionID := copilotFirstString(row, "session_id", "sessionId", "conversation_id")
+		evID := copilotEventID(row)
+		out = append(out, rec{
+			at:    at,
+			model: intern(pool, model),
+			in:    in,
+			out:   outTok,
+			cr:    cr,
+			cw:    cw,
+			key:   makeCopilotRecKey(sessionID, evID),
+		})
+	}
+	return out, true, nil
+}
+
+// copilotSessionLedgerKey names a data.db `sessions` row in the cumulative
+// ledger. The record key becomes copilot\x00<sid>\x00sessions:<sid>\x00<epoch>\x00<seq>,
+// so summarizeCopilot still sees the session ID (for source ownership) and an
+// event ID that is unique across sessions.
+func copilotSessionLedgerKey(sessionID string) string {
+	return sessionID + "\x00sessions:" + sessionID
+}
+
+// readCopilotDataSessions returns the `sessions` totals as cumulative rows;
+// supported is false when the table has no token columns.
+func readCopilotDataSessions(ctx context.Context, dbPath, cacheDir string, pool map[string]*string) ([]cumRow, bool, error) {
 	var cols []struct {
 		Name string `json:"name"`
 	}
@@ -150,17 +194,16 @@ func readCopilotDataSessions(ctx context.Context, dbPath, cacheDir string, pool 
 	if err := readSQLiteJSON(ctx, "copilot", dbPath, cacheDir, `SELECT * FROM sessions`, &rows); err != nil {
 		return nil, false, err
 	}
-	out := make([]rec, 0, len(rows))
+	out := make([]cumRow, 0, len(rows))
 	for _, row := range rows {
-		at := copilotRowMillis(row["updated_at"])
-		if at == 0 {
-			at = copilotRowMillis(row["created_at"])
-		}
-		if at == 0 {
-			at = copilotRowMillis(row["timestamp"])
-		}
-		if at == 0 {
+		sessionID := copilotFirstString(row, "id", "session_id")
+		if sessionID == "" {
 			continue
+		}
+		first := copilotRowMillis(row["created_at"])
+		last := copilotRowMillis(row["updated_at"])
+		if last == 0 {
+			last = copilotRowMillis(row["timestamp"])
 		}
 		cr := firstInt64(row, "total_cached_tokens", "cache_read_tokens", "cached_input_tokens")
 		cw := firstInt64(row, "total_cache_write_tokens", "cache_write_tokens")
@@ -169,22 +212,16 @@ func readCopilotDataSessions(ctx context.Context, dbPath, cacheDir string, pool 
 		if _, hasTotal := row["total_input_tokens"]; hasTotal && rawIn >= cr+cw {
 			in = rawIn - cr - cw
 		}
-		outTok := firstInt64(row, "total_output_tokens", "output_tokens")
-		if in+outTok+cr+cw <= 0 {
-			continue
-		}
-		model := copilotFirstString(row, "model")
-		sessionID := copilotFirstString(row, "id", "session_id")
-		reqs := firstInt64(row, "total_requests", "request_count", "turn_count")
-		out = append(out, rec{
-			at:    at,
-			model: intern(pool, model),
-			in:    in,
-			out:   outTok,
-			cr:    cr,
-			cw:    cw,
-			key:   makeCopilotRecKey(sessionID, ""),
-			reqs:  reqs,
+		out = append(out, cumRow{
+			Key:     copilotSessionLedgerKey(sessionID),
+			Model:   intern(pool, copilotFirstString(row, "model")),
+			FirstAt: first,
+			LastAt:  last,
+			Calls:   firstInt64(row, "total_requests", "request_count", "turn_count"),
+			In:      in,
+			Out:     firstInt64(row, "total_output_tokens", "output_tokens"),
+			CR:      cr,
+			CW:      cw,
 		})
 	}
 	return out, true, nil

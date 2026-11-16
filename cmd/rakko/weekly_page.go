@@ -455,14 +455,14 @@ func (f *weeklyFeature) aiSection(c *ui.Context, w float32, now time.Time) {
 			// No summary for this week yet: the picker just moved and
 			// the scan has not started.
 			f.aiNote(c, w, l.WeeklyAiScanning())
-		case f.aiSummary.Total.Requests == 0 && len(f.aiFailed) > 0:
+		case f.aiSummary.Total.Empty() && len(f.aiFailed) > 0:
 			f.aiNote(c, w, l.WeeklyAiSourcesUnreadable(len(f.aiFailed)))
 			if len(f.aiUnreadable) > 0 {
 				ui.Text(c, l.WeeklyAiUnreadableTools(joinUsageToolNames(f.aiUnreadable))).FontSize(10).
 					TextColor(warning).MaxWidth(w).Margin(6, 0, 0, 0)
 			}
 			f.aiNote(c, w, l.WeeklyAiNote())
-		case f.aiSummary.Total.Requests == 0:
+		case f.aiSummary.Total.Empty():
 			f.aiNote(c, w, l.WeeklyAiNoData())
 			if len(f.aiUnreadable) > 0 {
 				ui.Text(c, l.WeeklyAiUnreadableTools(joinUsageToolNames(f.aiUnreadable))).FontSize(10).
