@@ -375,7 +375,7 @@ func (a *shelf) openRename(items []store.Item) {
 	w := mygo.NewWindow(mygo.WindowOptions{
 		Title: a.renameTitle(len(items)), Width: renameWidth, Height: renameHeight,
 		X: frame.X, Y: frame.Y,
-		Hidden: true, BackgroundColor: "#1E1E1F",
+		Hidden: true, BackgroundColor: "#0B0B0D",
 		TitleBarStyle:        mygo.TitleBarHidden,
 		TrafficLightPosition: &mygo.Point{X: 9, Y: 12},
 		DisableResize:        true, DisableMaximize: true, DisableFullScreen: true,
@@ -500,8 +500,8 @@ func (a *shelf) renameUndoPill(c *ui.Context) {
 // live preview, and 取消/改名. The done state replaces the form with the
 // result and 撤销/完成.
 func (a *shelf) renameView(c *ui.Context) {
-	c.SetTheme(settingsTheme)
-	c.Root().Background(ui.Hex("#1E1E1F"))
+	c.SetTheme(settingsThemeFor(forWindows))
+	c.Root().Background(settingsBg)
 	r := a.rn
 	if r == nil || r.win == nil {
 		return
@@ -522,16 +522,15 @@ func (a *shelf) renameView(c *ui.Context) {
 		ui.Row(c.Key("titlebar")).Height(float32(max(bar.Height, 38))).FillWidth().
 			AlignItems(ui.Center).Justify(ui.Center).Padding(0, bar.Right, 0, bar.Left).
 			DragWindow().Children(func() {
-			ui.Text(c, renameTitleIn(l, len(r.items))).SingleLine().FontSize(13).FontWeight(600).TextColor(ink2)
+			settingsText(c, renameTitleIn(l, len(r.items)), 13).SingleLine().FontWeight(700).TextColor(ink2)
 		})
 		if r.done != nil {
 			r.doneView(c)
 			return
 		}
 		ui.Column(c.Key("body")).Padding(0, 16, 12, 16).Gap(10).Fill().Children(func() {
-			if sg := ui.Segmented(c.Key("mode"), &r.mode,
-				l.RenameModeReplace(), l.RenameModeAdd(), l.RenameModeFormat()).
-				FillWidth().Label(l.RenameModeLabel()); sg.Changed() {
+			if sg := settingsSegmentedWidth(c, "mode", l.RenameModeLabel(), &r.mode, true,
+				l.RenameModeReplace(), l.RenameModeAdd(), l.RenameModeFormat()); sg.Changed() {
 				r.booted = false
 			}
 			r.inputSection(c)
@@ -545,44 +544,55 @@ func (a *shelf) renameView(c *ui.Context) {
 	r.booted = true
 }
 
-// inputSection renders the active mode's card: the settings-window row
-// look (label left, control right) on a grouped card.
+// renameFieldRow is one form row in the new Settings row frame: 44pt minimum
+// height, 7/14 padding, 13pt regular title, 14pt gap to the control.
+func renameFieldRow(c *ui.Context, key, label string, fn func()) {
+	settingsRowLine(c, key).Children(func() {
+		settingsRowText(c, label, "")
+		fn()
+	})
+}
+
+// inputSection renders the active mode's card with the new Settings group
+// card (12pt corners, #17181B) and 1pt hairlines between its rows.
 func (r *renameUI) inputSection(c *ui.Context) {
 	l := loc(c)
-	ui.Column(c.Key("rename-input-card")).Radius(14).Background(setCard).
-		Border(1, setCardEdge).FillWidth().Children(func() {
+	ui.Column(c.Key("rename-input-card")).Radius(12).Background(settingsCardBg).
+		FillWidth().Clip().Children(func() {
 		switch renameMode(r.mode) {
 		case modeReplace:
-			settingsRow(c, "rn-find", l.RenameFindRow(), "", func() {
+			renameFieldRow(c, "rn-find", l.RenameFindRow(), func() {
 				r.field(c, "rn-find-in", &r.find, l.RenameFindPlaceholder())
 			})
 			settingsSep(c, "rn-find")
-			settingsRow(c, "rn-with", l.RenameWithRow(), "", func() {
+			renameFieldRow(c, "rn-with", l.RenameWithRow(), func() {
 				r.field(c, "rn-with-in", &r.replace, l.RenameWithPlaceholder())
 			})
 		case modeAdd:
-			settingsRow(c, "rn-add", l.RenameAddRow(), "", func() {
+			renameFieldRow(c, "rn-add", l.RenameAddRow(), func() {
 				r.field(c, "rn-add-in", &r.addText, l.RenameAddPlaceholder())
 			})
 			settingsSep(c, "rn-add")
-			settingsRow(c, "rn-addpos", l.RenamePositionRow(), "", func() {
-				ui.Segmented(c, &r.addSeg, l.RenameBefore(), l.RenameAfter()).Label(l.RenameAddPosLabel())
+			renameFieldRow(c, "rn-addpos", l.RenamePositionRow(), func() {
+				settingsSegmented(c, "rn-addpos", l.RenameAddPosLabel(), &r.addSeg,
+					l.RenameBefore(), l.RenameAfter())
 			})
 		default: // modeFormat
-			settingsRow(c, "rn-name", l.RenameNameRow(), "", func() {
+			renameFieldRow(c, "rn-name", l.RenameNameRow(), func() {
 				r.field(c, "rn-name-in", &r.fmtName, l.RenameNamePlaceholder())
 			})
 			settingsSep(c, "rn-name")
-			settingsRow(c, "rn-start", l.RenameStartRow(), "", func() {
+			renameFieldRow(c, "rn-start", l.RenameStartRow(), func() {
 				r.field(c, "rn-start-in", &r.fmtStartText, "1")
 			})
 			settingsSep(c, "rn-start")
-			settingsRow(c, "rn-digits", l.RenameDigitsRow(), "", func() {
-				ui.Segmented(c, &r.digitsSeg, "1", "2", "3", "4").Label(l.RenameDigitsLabel())
+			renameFieldRow(c, "rn-digits", l.RenameDigitsRow(), func() {
+				settingsSegmented(c, "rn-digits", l.RenameDigitsLabel(), &r.digitsSeg, "1", "2", "3", "4")
 			})
 			settingsSep(c, "rn-digits")
-			settingsRow(c, "rn-pos", l.RenamePosRow(), "", func() {
-				ui.Segmented(c, &r.posSeg, l.RenameBefore(), l.RenameAfter()).Label(l.RenamePosLabel())
+			renameFieldRow(c, "rn-pos", l.RenamePosRow(), func() {
+				settingsSegmented(c, "rn-pos", l.RenamePosLabel(), &r.posSeg,
+					l.RenameBefore(), l.RenameAfter())
 			})
 		}
 	})
@@ -624,9 +634,9 @@ func (r *renameUI) previewSection(c *ui.Context) {
 	// format mode's four rows never push 改名 below the window: the list
 	// scrolls inside its card instead.
 	ui.Column(c.Key("sec-preview")).FillWidth().Grow(1).MinHeight(0).Children(func() {
-		ui.Text(c, l.RenamePreview()).SingleLine().FontSize(11).FontWeight(600).TextColor(ink3).Padding(0, 0, 6, 4)
-		ui.Column(c.Key("card-preview")).Radius(10).Background(setCard).Border(0.5, setCardEdge).
-			FillWidth().Grow(1).MinHeight(0).Children(func() {
+		settingsText(c, l.RenamePreview(), 12).SingleLine().FontWeight(700).TextColor(settingsInk3).Padding(0, 4, 7, 4)
+		ui.Column(c.Key("card-preview")).Radius(12).Background(settingsCardBg).
+			FillWidth().Grow(1).MinHeight(0).Clip().Children(func() {
 			ui.Scroll(c.Key("rn-preview")).FillWidth().Height(90).TrackScroll(&r.scroll).Children(func() {
 				ui.Column(c.Key("rn-rows")).FillWidth().Children(func() {
 					for i, row := range pl.rows {
@@ -634,20 +644,20 @@ func (r *renameUI) previewSection(c *ui.Context) {
 							settingsSep(c, "rn-"+row.item.ID)
 						}
 						rowEl := ui.Row(c.Key("rn-row-"+row.item.ID)).AlignItems(ui.Center).Gap(8).
-							MinHeight(30).Padding(0, 12).FillWidth()
+							MinHeight(30).Padding(0, 14).FillWidth()
 						rowEl.Children(func() {
-							ui.Text(c, row.oldName).SingleLine().FontSize(12).TextColor(ink2)
-							ui.Text(c, "→").SingleLine().FontSize(12).TextColor(ink3)
+							settingsText(c, row.oldName, 12).SingleLine().TextColor(ink2)
+							settingsText(c, "→", 12).SingleLine().TextColor(settingsInk3)
 							newColor := ink
 							if row.warn != "" {
 								newColor = danger
 							} else if row.newName == row.oldName {
-								newColor = ink3
+								newColor = settingsInk3
 							}
-							ui.Text(c, row.newName).SingleLine().FontSize(12).FontWeight(600).TextColor(newColor)
+							settingsText(c, row.newName, 12).SingleLine().TextColor(newColor)
 							ui.Box(c).Grow(1)
 							if row.warn != "" {
-								ui.Text(c, row.warn).SingleLine().FontSize(11).TextColor(danger)
+								settingsText(c, row.warn, 11).SingleLine().TextColor(danger)
 							}
 						})
 					}
@@ -666,11 +676,11 @@ func (r *renameUI) previewSection(c *ui.Context) {
 			foot = l.RenameNoChange()
 		}
 		if foot != "" {
-			color := ink3
+			color := settingsInk3
 			if pl.conflicts > 0 {
 				color = danger
 			}
-			ui.Text(c, foot).FontSize(11).TextColor(color).Padding(4, 12, 0, 12)
+			settingsText(c, foot, 11.5).TextColor(color).Padding(4, 14, 0, 14)
 		}
 	})
 }
@@ -682,12 +692,10 @@ func (r *renameUI) buttons(c *ui.Context, apply func()) {
 	l := loc(c)
 	blocked := r.blocked(r.plan())
 	ui.Row(c.Key("rn-buttons")).FillWidth().Justify(ui.End).Gap(8).Padding(4, 0, 0, 0).Children(func() {
-		if ui.Button(c, l.RenameCancel()).Label(l.RenameCancelLabel()).Clicked() {
-			r.win.Close()
-		}
-		if ui.Button(c, l.RenameApply()).Label(l.RenameApplyLabel()).Disabled(blocked).Clicked() {
-			apply()
-		}
+		settingsButton(c, "cancel", l.RenameCancel(), false, func() { r.win.Close() }).
+			Label(l.RenameCancelLabel())
+		settingsButton(c, "apply", l.RenameApply(), true, apply).
+			Disabled(blocked).Label(l.RenameApplyLabel())
 	})
 }
 
@@ -697,18 +705,16 @@ func (r *renameUI) buttons(c *ui.Context, apply func()) {
 func (r *renameUI) doneView(c *ui.Context) {
 	l := loc(c)
 	ui.Column(c.Key("done")).Fill().Center().Gap(14).Children(func() {
-		ui.Text(c, l.RenameDoneCount(len(r.done.ops))).FontSize(15).FontWeight(600).TextColor(ink)
-		ui.Text(c, l.RenameDoneSynced()).FontSize(11).TextColor(ink3)
+		settingsText(c, l.RenameDoneCount(len(r.done.ops)), 15).FontWeight(700).TextColor(ink)
+		settingsText(c, l.RenameDoneSynced(), 11.5).TextColor(settingsInk3)
 		if r.err != "" {
-			ui.Text(c, r.err).FontSize(11).TextColor(danger).Padding(0, 24, 0, 24)
+			settingsText(c, r.err, 11.5).TextColor(danger).Padding(0, 24, 0, 24)
 		}
 		ui.Row(c.Key("done-buttons")).Gap(8).Children(func() {
-			if ui.Button(c, l.RenameUndo()).Label(l.RenameUndoThisLabel()).Clicked() {
-				r.undo()
-			}
-			if ui.Button(c, l.RenameDoneClose()).Label(l.RenameDoneCloseLabel()).Clicked() {
-				r.win.Close()
-			}
+			settingsButton(c, "undo", l.RenameUndo(), false, r.undo).
+				Label(l.RenameUndoThisLabel())
+			settingsButton(c, "done", l.RenameDoneClose(), true, func() { r.win.Close() }).
+				Label(l.RenameDoneCloseLabel())
 		})
 	})
 }
