@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/settings"
@@ -337,5 +338,31 @@ func TestSettingsResizeLayoutsAndBounds(t *testing.T) {
 				})
 			}
 		})
+	}
+}
+
+func TestSettingsWindowMinSizeAddsBorderOnWindows(t *testing.T) {
+	outer := mygo.Rectangle{X: 100, Y: 100, Width: 656, Height: 608}
+	inner := mygo.Rectangle{X: 108, Y: 100, Width: 640, Height: 600}
+
+	macW, macH := settingsWindowMinSize(false, outer, inner)
+	if macW != settingsMinWidth || macH != settingsMinHeight {
+		t.Fatalf("macOS min size = %dx%d, want %dx%d", macW, macH, settingsMinWidth, settingsMinHeight)
+	}
+
+	winW, winH := settingsWindowMinSize(true, outer, inner)
+	if winW != settingsMinWidth+16 || winH != settingsMinHeight+8 {
+		t.Fatalf("Windows min size = %dx%d, want %dx%d", winW, winH, settingsMinWidth+16, settingsMinHeight+8)
+	}
+
+	// Subtracting the window's non-client border leaves exact 600x420 content.
+	if gotW, gotH := winW-(outer.Width-inner.Width), winH-(outer.Height-inner.Height); gotW != settingsMinWidth || gotH != settingsMinHeight {
+		t.Fatalf("Windows min content = %dx%d, want %dx%d", gotW, gotH, settingsMinWidth, settingsMinHeight)
+	}
+
+	// Zero or negative frame delta never shrinks below settingsMinWidth x settingsMinHeight.
+	clampedW, clampedH := settingsWindowMinSize(true, inner, outer)
+	if clampedW != settingsMinWidth || clampedH != settingsMinHeight {
+		t.Fatalf("clamped min size = %dx%d, want %dx%d", clampedW, clampedH, settingsMinWidth, settingsMinHeight)
 	}
 }

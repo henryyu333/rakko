@@ -213,7 +213,11 @@ func (a *shelf) openSettings() {
 	platform.ConfigureFramedWindow(w.NativeHandle(), true)
 	w.SetWindowButtonsTheme(mygo.ThemeDark)
 	w.SetContentBounds(frame)
-	w.OnResize(func() { a.rememberSettingsSize(w) })
+	a.syncSettingsMinSize(w)
+	w.OnResize(func() {
+		a.syncSettingsMinSize(w)
+		a.rememberSettingsSize(w)
+	})
 	w.OnClose(func(_ *mygo.CloseEvent) { a.rememberSettingsSize(w) })
 	w.OnClosed(a.settingsClosed)
 	w.OnBlur(a.settingsBlur)
@@ -221,6 +225,28 @@ func (a *shelf) openSettings() {
 	w.Show()
 	platform.ActivateSelf()
 	w.Focus()
+}
+
+func (a *shelf) syncSettingsMinSize(w *mygo.Window) {
+	if w == nil || !forWindows || w.IsMinimized() {
+		return
+	}
+	minW, minH := settingsWindowMinSize(forWindows, w.Bounds(), w.ContentBounds())
+	w.SetMinimumSize(minW, minH)
+}
+
+// settingsWindowMinSize returns the Window.SetMinimumSize arguments that keep
+// the Settings window's content area at least settingsMinWidth × settingsMinHeight.
+// On macOS, NSWindow.SetMinimumSize already constrains the content size; on
+// Windows, WM_GETMINMAXINFO constrains the outer window rectangle, so the
+// non-client border difference (outer - inner) is added.
+func settingsWindowMinSize(windows bool, outer, inner mygo.Rectangle) (int, int) {
+	if !windows {
+		return settingsMinWidth, settingsMinHeight
+	}
+	padW := max(0, outer.Width-inner.Width)
+	padH := max(0, outer.Height-inner.Height)
+	return settingsMinWidth + padW, settingsMinHeight + padH
 }
 
 func (a *shelf) rememberSettingsSize(w *mygo.Window) {
