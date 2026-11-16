@@ -55,6 +55,8 @@ func loadPrices() map[string]modelPrice {
 
 // effortSuffixes are reasoning/tier tags appended by tools (e.g. agy's
 // "-high"/"-medium", codex's "-xhigh") that do not change per-token rates.
+// Variants like "-fast" and "-slow" are distinct priced models in LiteLLM and
+// must not be stripped as effort tiers.
 var effortSuffixes = []string{
 	"-thinking",
 	"-xhigh",
@@ -62,8 +64,6 @@ var effortSuffixes = []string{
 	"-medium",
 	"-low",
 	"-minimal",
-	"-fast",
-	"-slow",
 }
 
 // lookupPrice finds the per-token rate for model in the embedded LiteLLM
@@ -101,38 +101,45 @@ func lookupPrice(model string) (modelPrice, bool) {
 		candidates = append(candidates, cur)
 	}
 
+	// Try exact matches across all prefix candidates first, then date-stripped
+	// matches, and only fall back to stripping effort suffixes if none match.
+	// This prevents "vertex_ai/claude-opus-5-5-fast" from stripping "-fast"
+	// before matching bare "claude-opus-5-5-fast".
 	for _, c := range candidates {
-		if p, ok := matchWithSuffixes(m, c); ok {
+		if p, ok := m[c]; ok {
+			return p, true
+		}
+	}
+	for _, c := range candidates {
+		if noDate := stripDateSuffix(c); noDate != c {
+			if p, ok := m[noDate]; ok {
+				return p, true
+			}
+		}
+	}
+	for _, c := range candidates {
+		if p, ok := matchWithEffortSuffix(m, c); ok {
 			return p, true
 		}
 	}
 	return modelPrice{}, false
 }
 
-func matchWithSuffixes(m map[string]modelPrice, s string) (modelPrice, bool) {
-	if p, ok := m[s]; ok {
-		return p, true
-	}
-	// Strip effort suffix first, then try both as-is and without date suffix.
+func matchWithEffortSuffix(m map[string]modelPrice, s string) (modelPrice, bool) {
 	noEffort := stripEffortSuffix(s)
 	if noEffort != s {
 		if p, ok := m[noEffort]; ok {
 			return p, true
 		}
-	}
-	if noDate := stripDateSuffix(s); noDate != s {
-		if p, ok := m[noDate]; ok {
-			return p, true
-		}
-		if ne := stripEffortSuffix(noDate); ne != noDate {
-			if p, ok := m[ne]; ok {
+		if noDate := stripDateSuffix(noEffort); noDate != noEffort {
+			if p, ok := m[noDate]; ok {
 				return p, true
 			}
 		}
 	}
-	if noEffort != s {
-		if noDate := stripDateSuffix(noEffort); noDate != noEffort {
-			if p, ok := m[noDate]; ok {
+	if noDate := stripDateSuffix(s); noDate != s {
+		if ne := stripEffortSuffix(noDate); ne != noDate {
+			if p, ok := m[ne]; ok {
 				return p, true
 			}
 		}
