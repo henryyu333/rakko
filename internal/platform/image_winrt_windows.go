@@ -104,6 +104,8 @@ func wiSlot(obj uintptr, index int) uintptr {
 
 // wiInvoke calls obj's method index with args. Every vtable method takes
 // the interface pointer first, so the arguments follow it.
+//
+//go:uintptrescapes
 func wiInvoke(obj uintptr, index int, args ...uintptr) uintptr {
 	all := make([]uintptr, 0, len(args)+1)
 	all = append(all, obj)
@@ -179,7 +181,7 @@ func wiLoad() {
 }
 
 // RO_INIT_MULTITHREADED: the apartment the workers call WinRT from.
-const wiROInitMultithreaded = 0
+const wiROInitMultithreaded = 1
 
 // wiApartment runs fn with COM initialized on a locked thread. Objects
 // created inside and the calls on them therefore share one apartment.

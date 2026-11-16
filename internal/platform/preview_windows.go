@@ -648,16 +648,21 @@ func previewPerceivedType(ext string) string {
 }
 
 func previewStringValue(root registry.Key, key, name string) string {
+	v, _ := previewStringValueOk(root, key, name)
+	return v
+}
+
+func previewStringValueOk(root registry.Key, key, name string) (string, bool) {
 	k, err := registry.OpenKey(root, key, registry.QUERY_VALUE)
 	if err != nil {
-		return ""
+		return "", false
 	}
 	defer k.Close()
 	value, _, err := k.GetStringValue(name)
 	if err != nil {
-		return ""
+		return "", false
 	}
-	return value
+	return value, true
 }
 
 // previewExtensions lists the registry key names to try for path. The
@@ -682,14 +687,16 @@ func previewParseCLSID(value string) (windows.GUID, error) {
 }
 
 // previewActivationContext answers the context the handler's registration asks
-// for. A preview handler whose class names an AppID with DllSurrogate is meant
-// to run in that surrogate (prevhost.exe), as Explorer runs it; loading its
-// DLL into Rakko instead makes handlers such as Adobe's PDF preview fail at
-// DoPreview.
+// for. A preview handler whose class names an AppID with DllSurrogate (even an
+// empty string, which selects the default system surrogate prevhost/dllhost) is
+// meant to run in that surrogate, as Explorer runs it; loading its DLL into
+// Rakko instead makes handlers such as Adobe's PDF preview fail at DoPreview.
 func previewActivationContext(clsid windows.GUID) uintptr {
 	appID := previewFirstString(`CLSID\`+clsid.String(), "AppID")
-	if appID != "" && previewFirstString(`AppID\`+appID, "DllSurrogate") != "" {
-		return pvClsctxSurrogate
+	if appID != "" {
+		if _, ok := previewFirstStringValue(`AppID\`+appID, "DllSurrogate"); ok {
+			return pvClsctxSurrogate
+		}
 	}
 	return pvClsctx
 }
@@ -708,6 +715,20 @@ func previewFirstString(key, name string) string {
 		}
 	}
 	return ""
+}
+
+// previewFirstStringValue is like previewFirstString but distinguishes a
+// present empty string value from a missing value.
+func previewFirstStringValue(key, name string) (string, bool) {
+	for _, probe := range [...]previewRegistryProbe{
+		{registry.CURRENT_USER, `Software\Classes\` + key},
+		{registry.CLASSES_ROOT, key},
+	} {
+		if v, ok := previewStringValueOk(probe.root, probe.key, name); ok {
+			return v, true
+		}
+	}
+	return "", false
 }
 
 // previewOpenHandler creates the handler, initializes it with the item and

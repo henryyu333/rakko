@@ -409,8 +409,9 @@ func (p *npPoller) smtcSnapshot(now time.Time) (NowPlayingState, bool) {
 	return st, true
 }
 
-// currentSession returns the current session, opening it when the
-// manager's answer changed.
+// currentSession returns the current session from the manager, adopting the
+// newly returned COM pointer on every poll so switching tabs in the same
+// browser follows the new tab's session instead of keeping a stale one.
 func (p *npPoller) currentSession() unsafe.Pointer {
 	var session unsafe.Pointer
 	hr := winCOMCall(p.mgr, 6, uintptr(unsafe.Pointer(&session)))
@@ -421,18 +422,14 @@ func (p *npPoller) currentSession() unsafe.Pointer {
 		}
 		return nil
 	}
-	// The same session is a different interface pointer each call; compare
-	// the app identity, which is stable for the session's life.
 	app := npCallString(session, 6)
-	if p.session != nil && app == p.app {
-		winCOMRelease(session)
-		return p.session
-	}
-	if p.session != nil {
+	if p.session != nil && p.session != session {
 		winCOMRelease(p.session)
 	}
+	if app != p.app {
+		p.art, p.artKey, p.missing = nil, "", false
+	}
 	p.session, p.app = session, app
-	p.art, p.artKey, p.missing = nil, "", false
 	return p.session
 }
 

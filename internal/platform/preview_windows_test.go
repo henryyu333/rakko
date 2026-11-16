@@ -206,6 +206,20 @@ func TestPreviewActivationContext(t *testing.T) {
 	if got := previewActivationContext(clsid); got != pvClsctxSurrogate {
 		t.Fatalf("a surrogate handler activated with %#x, want CLSCTX_LOCAL_SERVER", got)
 	}
+	// An empty DllSurrogate selects the default system surrogate and must
+	// still activate out-of-process.
+	a, err = registry.OpenKey(registry.CURRENT_USER, appIDKey, registry.WRITE)
+	if err != nil {
+		t.Fatalf("reopening the AppID: %v", err)
+	}
+	if err := a.SetStringValue("DllSurrogate", ""); err != nil {
+		a.Close()
+		t.Fatalf("writing empty DllSurrogate: %v", err)
+	}
+	a.Close()
+	if got := previewActivationContext(clsid); got != pvClsctxSurrogate {
+		t.Fatalf("an empty DllSurrogate handler activated with %#x, want CLSCTX_LOCAL_SERVER", got)
+	}
 	if got := previewActivationContext(plain); got != pvClsctx {
 		t.Fatalf("a plain handler activated with %#x, want the combined context", got)
 	}
