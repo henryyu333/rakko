@@ -44,6 +44,9 @@ func parseFlexJSONLLine(prefix, path string, line []byte, pool map[string]*strin
 	var e struct {
 		ID        string          `json:"id"`
 		UUID      string          `json:"uuid"`
+		MessageID string          `json:"message_id"`
+		RequestID string          `json:"request_id"`
+		EventID   string          `json:"event_id"`
 		Type      string          `json:"type"`
 		Model     string          `json:"model"`
 		Timestamp json.RawMessage `json:"timestamp"`
@@ -70,6 +73,15 @@ func parseFlexJSONLLine(prefix, path string, line []byte, pool map[string]*strin
 	msgID := e.ID
 	if msgID == "" {
 		msgID = e.UUID
+	}
+	if msgID == "" {
+		msgID = e.MessageID
+	}
+	if msgID == "" {
+		msgID = e.RequestID
+	}
+	if msgID == "" {
+		msgID = e.EventID
 	}
 	if e.Message != nil {
 		if u == nil {

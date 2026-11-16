@@ -22,14 +22,27 @@ import (
 // while first-seen historical totals are attributed to the session's
 // `started_at` (falling back to `first_seen` / `last_seen`).
 
-type hermesSnapshot struct {
-	Calls  int64   `json:"c"`
-	In     int64   `json:"i"`
-	Out    int64   `json:"o"`
-	CR     int64   `json:"r"`
-	CW     int64   `json:"w"`
+type hermesRec struct {
+	At     int64   `json:"a"`
+	Model  string  `json:"m,omitempty"`
+	In     int64   `json:"i,omitempty"`
+	Out    int64   `json:"o,omitempty"`
+	CR     int64   `json:"r,omitempty"`
+	CW     int64   `json:"w,omitempty"`
 	Cost   float64 `json:"u,omitempty"`
 	Priced bool    `json:"p,omitempty"`
+	Reqs   int64   `json:"n,omitempty"`
+}
+
+type hermesSnapshot struct {
+	Calls  int64       `json:"c"`
+	In     int64       `json:"i"`
+	Out    int64       `json:"o"`
+	CR     int64       `json:"r"`
+	CW     int64       `json:"w"`
+	Cost   float64     `json:"u,omitempty"`
+	Priced bool        `json:"p,omitempty"`
+	Recs   []hermesRec `json:"recs,omitempty"`
 }
 
 const hermesQuery = `
@@ -71,16 +84,18 @@ type hermesRow struct {
 }
 
 func readHermesDB(ctx context.Context, dbPath, cacheDir string, pool map[string]*string, old *fileState) ([]rec, map[string]hermesSnapshot, error) {
+	if err := requireSQLiteTable(ctx, "hermes", dbPath, cacheDir, "session_model_usage"); err != nil {
+		return nil, nil, err
+	}
 	var rows []hermesRow
 	if err := readSQLiteJSON(ctx, "hermes", dbPath, cacheDir, hermesQuery, &rows); err != nil {
 		return nil, nil, err
 	}
-	var out []rec
 	var prevSnap map[string]hermesSnapshot
 	if old != nil {
-		out = slices.Clone(old.recs)
 		prevSnap = old.hermesPrev
 	}
+	var out []rec
 	nextSnap := make(map[string]hermesSnapshot, len(rows))
 	for _, row := range rows {
 		rowKey := fmt.Sprintf("%s|%s|%s|%s|%s|%s", row.SessionID, row.Model, row.BillingProvider, row.BillingBaseURL, row.BillingMode, row.Task)
@@ -93,7 +108,8 @@ func readHermesDB(ctx context.Context, dbPath, cacheDir string, pool map[string]
 		}
 
 		prev, seen := prevSnap[rowKey]
-		if !seen {
+		var recs []hermesRec
+		if !seen || len(prev.Recs) == 0 {
 			at := int64(math.Round(row.FirstTS * 1000))
 			if at == 0 {
 				continue
@@ -102,45 +118,92 @@ func readHermesDB(ctx context.Context, dbPath, cacheDir string, pool map[string]
 			if reqs <= 0 {
 				reqs = 1
 			}
-			out = append(out, rec{
-				at:     at,
-				model:  intern(pool, row.Model),
-				in:     row.InputTokens,
-				out:    row.OutputTokens,
-				cr:     row.CacheRead,
-				cw:     row.CacheWrite,
-				cost:   curCost,
-				priced: curPriced,
-				reqs:   reqs,
-			})
+			recs = []hermesRec{{
+				At:     at,
+				Model:  row.Model,
+				In:     row.InputTokens,
+				Out:    row.OutputTokens,
+				CR:     row.CacheRead,
+				CW:     row.CacheWrite,
+				Cost:   curCost,
+				Priced: curPriced,
+				Reqs:   reqs,
+			}}
 		} else {
-			dIn := max(0, row.InputTokens-prev.In)
-			dOut := max(0, row.OutputTokens-prev.Out)
-			dCR := max(0, row.CacheRead-prev.CR)
-			dCW := max(0, row.CacheWrite-prev.CW)
-			dCalls := max(0, row.APICallCount-prev.Calls)
-			dCost := max(0.0, curCost-prev.Cost)
-			if dIn > 0 || dOut > 0 || dCR > 0 || dCW > 0 || dCalls > 0 {
-				at := int64(math.Round(row.LastTS * 1000))
-				if at == 0 {
-					at = time.Now().UnixMilli()
-				}
-				reqs := dCalls
+			recs = slices.Clone(prev.Recs)
+			reset := row.InputTokens < prev.In ||
+				row.OutputTokens < prev.Out ||
+				row.CacheRead < prev.CR ||
+				row.CacheWrite < prev.CW ||
+				row.APICallCount < prev.Calls
+			lastAt := int64(math.Round(row.LastTS * 1000))
+			if lastAt == 0 {
+				lastAt = time.Now().UnixMilli()
+			}
+			if reset {
+				// Counter reset / rollback: preserve previously recorded usage and
+				// count the new cumulative total from 0.
+				reqs := row.APICallCount
 				if reqs <= 0 {
 					reqs = 1
 				}
-				out = append(out, rec{
-					at:     at,
-					model:  intern(pool, row.Model),
-					in:     dIn,
-					out:    dOut,
-					cr:     dCR,
-					cw:     dCW,
-					cost:   dCost,
-					priced: curPriced,
-					reqs:   reqs,
+				recs = append(recs, hermesRec{
+					At:     lastAt,
+					Model:  row.Model,
+					In:     row.InputTokens,
+					Out:    row.OutputTokens,
+					CR:     row.CacheRead,
+					CW:     row.CacheWrite,
+					Cost:   curCost,
+					Priced: curPriced,
+					Reqs:   reqs,
 				})
+			} else {
+				dIn := row.InputTokens - prev.In
+				dOut := row.OutputTokens - prev.Out
+				dCR := row.CacheRead - prev.CR
+				dCW := row.CacheWrite - prev.CW
+				dCalls := row.APICallCount - prev.Calls
+				dCost := curCost - prev.Cost
+				if dIn > 0 || dOut > 0 || dCR > 0 || dCW > 0 || dCalls > 0 {
+					reqs := dCalls
+					if reqs <= 0 {
+						reqs = 1
+					}
+					recs = append(recs, hermesRec{
+						At:     lastAt,
+						Model:  row.Model,
+						In:     dIn,
+						Out:    dOut,
+						CR:     dCR,
+						CW:     dCW,
+						Cost:   dCost,
+						Priced: curPriced || prev.Priced,
+						Reqs:   reqs,
+					})
+				} else if dCost != 0 || curPriced != prev.Priced {
+					// Cost-only adjustment: reconcile on the latest record without
+					// adding a new request.
+					last := &recs[len(recs)-1]
+					last.Cost += dCost
+					if curPriced || prev.Priced {
+						last.Priced = true
+					}
+				}
 			}
+		}
+		for _, hr := range recs {
+			out = append(out, rec{
+				at:     hr.At,
+				model:  intern(pool, hr.Model),
+				in:     hr.In,
+				out:    hr.Out,
+				cr:     hr.CR,
+				cw:     hr.CW,
+				cost:   hr.Cost,
+				priced: hr.Priced,
+				reqs:   hr.Reqs,
+			})
 		}
 		nextSnap[rowKey] = hermesSnapshot{
 			Calls:  row.APICallCount,
@@ -150,6 +213,7 @@ func readHermesDB(ctx context.Context, dbPath, cacheDir string, pool map[string]
 			CW:     row.CacheWrite,
 			Cost:   curCost,
 			Priced: curPriced,
+			Recs:   recs,
 		}
 	}
 	return out, nextSnap, nil

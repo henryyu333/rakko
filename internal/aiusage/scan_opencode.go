@@ -17,6 +17,7 @@ package aiusage
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -84,7 +85,7 @@ func readOpencode(ctx context.Context, dbPath, cacheDir string, pool map[string]
 	var err error
 	for range 3 {
 		var out []rec
-		if out, err = readOpencodeOnce(ctx, dbPath, cacheDir, pool); err == nil || ctx.Err() != nil {
+		if out, err = readOpencodeOnce(ctx, dbPath, cacheDir, pool); err == nil || ctx.Err() != nil || errors.Is(err, errUnsupportedDBSchema) {
 			return out, err
 		}
 		select {
@@ -105,6 +106,21 @@ func readOpencodeOnce(ctx context.Context, dbPath, cacheDir string, pool map[str
 		return nil, err
 	}
 	defer cleanup()
+	rawTables, err := querySQLiteJSON(ctx, "opencode", copyPath, "SELECT name FROM sqlite_master WHERE type='table' AND name='message'")
+	if err != nil {
+		return nil, err
+	}
+	var tables []struct {
+		Name string `json:"name"`
+	}
+	if len(rawTables) > 0 {
+		if err := json.Unmarshal(rawTables, &tables); err != nil {
+			return nil, fmt.Errorf("opencode: decoding table check: %w", err)
+		}
+	}
+	if len(tables) == 0 {
+		return nil, errUnsupportedDBSchema
+	}
 	rows, err := queryOpencode(ctx, copyPath)
 	if err != nil {
 		return nil, err

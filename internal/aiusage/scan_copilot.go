@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"strings"
 )
 
@@ -17,26 +16,19 @@ import (
 // `token_details_json` or top-level `input_tokens` / `output_tokens` /
 // `cache_read_tokens` / `cache_write_tokens` columns). Databases without
 // `assistant_usage_events` (e.g. session-store before telemetry was added)
-// are treated as empty rather than failing.
+// report errUnsupportedDBSchema so they are not counted as readable data.
 
 func readCopilotDB(ctx context.Context, dbPath, cacheDir string, pool map[string]*string) ([]rec, error) {
-	var tables []struct {
-		Name string `json:"name"`
-	}
-	const tableCheck = `SELECT name FROM sqlite_master WHERE type='table' AND name='assistant_usage_events'`
-	if err := readSQLiteJSON(ctx, "copilot", dbPath, cacheDir, tableCheck, &tables); err != nil {
+	if err := requireSQLiteTable(ctx, "copilot", dbPath, cacheDir, "assistant_usage_events"); err != nil {
 		return nil, err
-	}
-	if len(tables) == 0 {
-		return nil, nil
 	}
 
 	var rows []map[string]any
-	if err := readSQLiteJSON(ctx, "copilot", dbPath, cacheDir, `SELECT rowid AS _rowid, * FROM assistant_usage_events`, &rows); err != nil {
+	if err := readSQLiteJSON(ctx, "copilot", dbPath, cacheDir, `SELECT * FROM assistant_usage_events`, &rows); err != nil {
 		return nil, err
 	}
-	dbBase := filepath.Base(dbPath)
 	out := make([]rec, 0, len(rows))
+	sigCount := make(map[string]int, len(rows))
 	for _, row := range rows {
 		at := copilotRowMillis(row["created_at"])
 		if at == 0 {
@@ -50,8 +42,16 @@ func readCopilotDB(ctx context.Context, dbPath, cacheDir string, pool map[string
 		if in+outTok+cr+cw <= 0 {
 			continue
 		}
-		sessionID, _ := row["session_id"].(string)
-		rowID := copilotInt64(row["_rowid"])
+		var key string
+		if evID := copilotEventID(row); evID != "" {
+			key = "copilot:" + evID
+		} else {
+			sessionID, _ := row["session_id"].(string)
+			sig := fmt.Sprintf("%s|%d|%s|%d|%d|%d|%d", sessionID, at, model, in, outTok, cr, cw)
+			occ := sigCount[sig]
+			sigCount[sig] = occ + 1
+			key = fmt.Sprintf("copilot:ev|%s|%d", sig, occ)
+		}
 		out = append(out, rec{
 			at:    at,
 			model: intern(pool, model),
@@ -59,10 +59,36 @@ func readCopilotDB(ctx context.Context, dbPath, cacheDir string, pool map[string
 			out:   outTok,
 			cr:    cr,
 			cw:    cw,
-			key:   fmt.Sprintf("copilot:%s|%s|%d|%d|%s", dbBase, sessionID, rowID, at, model),
+			key:   key,
 		})
 	}
 	return out, nil
+}
+
+func copilotEventID(row map[string]any) string {
+	for _, k := range []string{"message_id", "request_id", "event_id", "uuid"} {
+		if s, ok := row[k].(string); ok {
+			if s = strings.TrimSpace(s); s != "" {
+				return s
+			}
+		}
+	}
+	if s, ok := row["id"].(string); ok {
+		s = strings.TrimSpace(s)
+		if s != "" && !isAllDigits(s) {
+			return s
+		}
+	}
+	return ""
+}
+
+func isAllDigits(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return len(s) > 0
 }
 
 func copilotRowMillis(v any) int64 {

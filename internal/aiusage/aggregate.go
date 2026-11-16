@@ -3,6 +3,7 @@ package aiusage
 import (
 	"math"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -158,9 +159,31 @@ func (s *Scanner) summarize(r Range, loc *time.Location, bounds []time.Time, fro
 	// Cross-file and intra-file dedupe lives here (not at parse time) so a
 	// duplicate record survives in every file that holds it: whichever copy
 	// shows up first wins, and deleting the "winner" can't erase the usage.
+	//
+	// For Copilot, SQLite DBs take precedence over OTEL JSONL when a shared
+	// request/message ID is unavailable.
+	hasCopilotDB := false
+	copilotDBHasFallback := false
+	for path, st := range s.files {
+		if st == nil || st.tool != ToolCopilot || st.unsupportedSchema || !strings.HasSuffix(path, ".db") {
+			continue
+		}
+		hasCopilotDB = true
+		for _, rc := range st.recs {
+			if strings.HasPrefix(rc.key, "copilot:ev|") {
+				copilotDBHasFallback = true
+				break
+			}
+		}
+	}
+
 	seen := map[Tool]map[string]bool{}
-	for _, st := range s.files {
+	for path, st := range s.files {
 		if st == nil {
+			continue
+		}
+		isCopilotOTEL := st.tool == ToolCopilot && hasCopilotDB && !strings.HasSuffix(path, ".db")
+		if isCopilotOTEL && copilotDBHasFallback {
 			continue
 		}
 		keys := seen[st.tool]
@@ -169,6 +192,9 @@ func (s *Scanner) summarize(r Range, loc *time.Location, bounds []time.Time, fro
 			seen[st.tool] = keys
 		}
 		for _, rc := range st.recs {
+			if isCopilotOTEL && rc.key == "" {
+				continue
+			}
 			if rc.key != "" {
 				if keys[rc.key] {
 					continue

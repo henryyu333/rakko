@@ -234,3 +234,60 @@ func TestSkillsOnlyDirsNotReportedAsInstalled(t *testing.T) {
 		}
 	}
 }
+
+func TestDetectIgnoresBareRootDirs(t *testing.T) {
+	home := t.TempDir()
+	bareRoots := map[Tool][]string{
+		ToolCherryStudio: {filepath.Join(appSupportDir(home), "CherryStudio")},
+		ToolKiro:         {joinHome(home, ".kiro"), filepath.Join(appSupportDir(home), "Kiro"), filepath.Join(winLocalAppData(home), "Kiro")},
+		ToolTrae:         {joinHome(home, ".trae"), filepath.Join(appSupportDir(home), "Trae")},
+		ToolCursor:       {joinHome(home, ".cursor"), filepath.Join(winAppData(home), "Cursor")},
+		ToolWarp:         {joinHome(home, ".warp"), filepath.Join(winLocalAppData(home), "warp")},
+	}
+	for tl, forbidden := range bareRoots {
+		entry := registryByTool[tl]
+		for _, p := range entry.detect(home) {
+			if slices.Contains(forbidden, p) {
+				t.Fatalf("%s detect() includes bare root directory %q", tl, p)
+			}
+		}
+	}
+
+	// Creating only the bare app-support dirs must not mark CherryStudio or Kiro installed.
+	for _, dir := range []string{
+		filepath.Join(appSupportDir(home), "CherryStudio", "Cache"),
+		filepath.Join(appSupportDir(home), "Kiro", "logs"),
+	} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s := NewScanner(home, t.TempDir())
+	if err := s.Scan(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, tl := range []Tool{ToolCherryStudio, ToolKiro} {
+		// Only assert when host /Applications doesn't have the desktop app.
+		if tl == ToolCherryStudio {
+			if _, err := os.Stat("/Applications/Cherry Studio.app"); err == nil {
+				continue
+			}
+		} else if tl == ToolKiro {
+			if _, err := os.Stat("/Applications/Kiro.app"); err == nil {
+				continue
+			}
+		}
+		if slices.Contains(s.UnreadableTools(), tl) {
+			t.Fatalf("UnreadableTools() = %v, bare root dir triggered %s", s.UnreadableTools(), tl)
+		}
+	}
+
+	// Writing CherryStudio's own config file marks it installed (and unreadable if no logs yet).
+	writeTestFile(t, filepath.Join(appSupportDir(home), "CherryStudio", "config.json"), []byte("{}"))
+	if err := s.Scan(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(s.UnreadableTools(), ToolCherryStudio) {
+		t.Fatalf("UnreadableTools() = %v, expected %s once config.json exists", s.UnreadableTools(), ToolCherryStudio)
+	}
+}

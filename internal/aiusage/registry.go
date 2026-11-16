@@ -473,10 +473,16 @@ var registry = []toolEntry{
 				joinHome(home, ".kiro", "settings"),
 				joinHome(home, ".kiro", "agents"),
 				joinHome(home, ".kiro", "sessions"),
-				filepath.Join(appSupportDir(home), "Kiro"),
+				filepath.Join(appSupportDir(home), "Kiro", "User"),
 			}
-			if runtime.GOOS == "windows" {
-				out = append(out, filepath.Join(winLocalAppData(home), "Kiro"))
+			switch runtime.GOOS {
+			case "darwin":
+				out = append(out, "/Applications/Kiro.app", joinHome(home, "Applications", "Kiro.app"))
+			case "windows":
+				out = append(out,
+					filepath.Join(winLocalAppData(home), "Programs", "Kiro", "Kiro.exe"),
+					filepath.Join(winAppData(home), "Kiro", "User"),
+				)
 			}
 			return out
 		},
@@ -623,7 +629,19 @@ var registry = []toolEntry{
 		tool: ToolCherryStudio,
 		name: "Cherry Studio",
 		detect: func(home string) []string {
-			return []string{filepath.Join(appSupportDir(home), "CherryStudio")}
+			base := filepath.Join(appSupportDir(home), "CherryStudio")
+			out := []string{
+				filepath.Join(base, "Data"),
+				filepath.Join(base, "config.json"),
+				filepath.Join(base, "Preferences"),
+			}
+			switch runtime.GOOS {
+			case "darwin":
+				out = append(out, "/Applications/Cherry Studio.app", joinHome(home, "Applications", "Cherry Studio.app"))
+			case "windows":
+				out = append(out, filepath.Join(winLocalAppData(home), "Programs", "Cherry Studio", "Cherry Studio.exe"))
+			}
+			return out
 		},
 		roots: func(home string) []rootSpec {
 			base := appSupportDir(home)
@@ -673,7 +691,7 @@ var registry = []toolEntry{
 			case "windows":
 				out = append(out,
 					filepath.Join(winLocalAppData(home), "Programs", "cursor", "Cursor.exe"),
-					filepath.Join(winAppData(home), "Cursor"),
+					filepath.Join(winAppData(home), "Cursor", "User"),
 				)
 			}
 			return out
@@ -686,10 +704,13 @@ var registry = []toolEntry{
 		detect: func(home string) []string {
 			out := []string{
 				joinHome(home, ".trae", "User"),
-				filepath.Join(appSupportDir(home), "Trae"),
+				filepath.Join(appSupportDir(home), "Trae", "User"),
 			}
-			if runtime.GOOS == "darwin" {
+			switch runtime.GOOS {
+			case "darwin":
 				out = append(out, "/Applications/Trae.app", joinHome(home, "Applications", "Trae.app"))
+			case "windows":
+				out = append(out, filepath.Join(winLocalAppData(home), "Programs", "Trae", "Trae.exe"))
 			}
 			return out
 		},
@@ -707,7 +728,10 @@ var registry = []toolEntry{
 			case "darwin":
 				out = append(out, joinHome(home, "Library", "Group Containers", "2BBY89MBSN.dev.warp"))
 			case "windows":
-				out = append(out, filepath.Join(winLocalAppData(home), "warp"))
+				out = append(out,
+					filepath.Join(winLocalAppData(home), "warp", "Warp", "data"),
+					filepath.Join(winLocalAppData(home), "Programs", "Warp", "warp.exe"),
+				)
 			}
 			return out
 		},

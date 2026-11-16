@@ -4,6 +4,7 @@ package aiusage
 
 import (
 	"context"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -181,5 +182,269 @@ func TestScanCopilotSQLite(t *testing.T) {
 	}
 	if slices.Contains(s.UnreadableTools(), ToolCopilot) {
 		t.Fatalf("UnreadableTools() = %v, should not include copilot when SQLite data exists", s.UnreadableTools())
+	}
+}
+
+func bumpFileMtime(t *testing.T, path string, step int) {
+	t.Helper()
+	ts := time.Now().Add(time.Duration(step) * 2 * time.Second)
+	if err := os.Chtimes(path, ts, ts); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestScanHermesRowDeleteRebuildAndRollback(t *testing.T) {
+	if _, err := os.Stat(sqlite3Path); err != nil {
+		t.Skip("sqlite3 not installed")
+	}
+	home := t.TempDir()
+	cacheDir := t.TempDir()
+	hermesDB := filepath.Join(home, ".hermes", "state.db")
+	if err := os.MkdirAll(filepath.Dir(hermesDB), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	day1 := time.Date(2026, 11, 16, 10, 0, 0, 0, time.Local)
+	day2 := time.Date(2026, 11, 17, 10, 0, 0, 0, time.Local)
+	d1 := strconv.FormatInt(day1.Unix(), 10)
+	d2 := strconv.FormatInt(day2.Unix(), 10)
+
+	runSQLite(t, hermesDB, `
+		CREATE TABLE sessions (id TEXT PRIMARY KEY, started_at REAL, ended_at REAL, last_activity_at REAL);
+		CREATE TABLE session_model_usage (
+			session_id TEXT, model TEXT, billing_provider TEXT, billing_base_url TEXT,
+			billing_mode TEXT, task TEXT, api_call_count INTEGER,
+			input_tokens INTEGER, output_tokens INTEGER, cache_read_tokens INTEGER,
+			cache_write_tokens INTEGER, estimated_cost_usd REAL, actual_cost_usd REAL,
+			first_seen REAL, last_seen REAL
+		);
+		INSERT INTO sessions VALUES ('s1', `+d1+`, NULL, `+d1+`);
+		INSERT INTO sessions VALUES ('s2', `+d1+`, NULL, `+d1+`);
+		INSERT INTO session_model_usage VALUES ('s1', 'deepseek-v4.1-flash', 'p', 'u', '', '', 2, 100, 0, 0, 0, 0.10, 0, `+d1+`, `+d1+`);
+		INSERT INTO session_model_usage VALUES ('s2', 'deepseek-v4.1-flash', 'p', 'u', '', '', 2, 100, 0, 0, 0, 0.10, 0, `+d1+`, `+d1+`);
+	`)
+
+	scan := func() Summary {
+		s := NewScanner(home, cacheDir)
+		if err := s.Scan(context.Background(), nil); err != nil {
+			t.Fatal(err)
+		}
+		return s.Summary(RangeAll, day2)
+	}
+
+	if h := scan().ByTool[ToolHermes]; h.Input != 200 || h.Requests != 4 {
+		t.Fatalf("initial = %+v, want in=200 reqs=4", h)
+	}
+
+	// Delete s1; its 100 tokens must be removed, leaving only s2 (100).
+	// Roll s2 back from 100 -> 40 (counter reset: 100 preserved + 40 new = 140).
+	runSQLite(t, hermesDB, `
+		DELETE FROM session_model_usage WHERE session_id = 's1';
+		UPDATE session_model_usage SET api_call_count = 1, input_tokens = 40, estimated_cost_usd = 0.04, last_seen = `+d2+` WHERE session_id = 's2';
+	`)
+	bumpFileMtime(t, hermesDB, 1)
+	if h := scan().ByTool[ToolHermes]; h.Input != 140 || h.Requests != 3 {
+		t.Fatalf("after delete+rollback = %+v, want in=140 reqs=3", h)
+	}
+
+	// Rebuild s1 with 50 tokens (only 50 counted, not 100+50).
+	// Grow s2 from 40 -> 60 (+20 -> 100+40+20 = 160).
+	runSQLite(t, hermesDB, `
+		INSERT INTO session_model_usage VALUES ('s1', 'deepseek-v4.1-flash', 'p', 'u', '', '', 1, 50, 0, 0, 0, 0.05, 0, `+d2+`, `+d2+`);
+		UPDATE session_model_usage SET api_call_count = 2, input_tokens = 60, estimated_cost_usd = 0.06, last_seen = `+d2+` WHERE session_id = 's2';
+	`)
+	bumpFileMtime(t, hermesDB, 2)
+	if h := scan().ByTool[ToolHermes]; h.Input != 210 || h.Requests != 5 {
+		t.Fatalf("after rebuild+grow = %+v, want in=210 (50+160) reqs=5", h)
+	}
+}
+
+func TestScanHermesCostOnlyReconcile(t *testing.T) {
+	if _, err := os.Stat(sqlite3Path); err != nil {
+		t.Skip("sqlite3 not installed")
+	}
+	home := t.TempDir()
+	cacheDir := t.TempDir()
+	hermesDB := filepath.Join(home, ".hermes", "state.db")
+	if err := os.MkdirAll(filepath.Dir(hermesDB), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	day1 := time.Date(2026, 11, 16, 10, 0, 0, 0, time.Local)
+	d1 := strconv.FormatInt(day1.Unix(), 10)
+
+	runSQLite(t, hermesDB, `
+		CREATE TABLE sessions (id TEXT PRIMARY KEY, started_at REAL, ended_at REAL, last_activity_at REAL);
+		CREATE TABLE session_model_usage (
+			session_id TEXT, model TEXT, billing_provider TEXT, billing_base_url TEXT,
+			billing_mode TEXT, task TEXT, api_call_count INTEGER,
+			input_tokens INTEGER, output_tokens INTEGER, cache_read_tokens INTEGER,
+			cache_write_tokens INTEGER, estimated_cost_usd REAL, actual_cost_usd REAL,
+			first_seen REAL, last_seen REAL
+		);
+		INSERT INTO sessions VALUES ('s1', `+d1+`, NULL, `+d1+`);
+		INSERT INTO session_model_usage VALUES ('s1', 'deepseek-v4.1-flash', 'p', 'u', '', '', 2, 100, 20, 0, 0, 0.08, 0.10, `+d1+`, `+d1+`);
+	`)
+
+	scan := func() Totals {
+		s := NewScanner(home, cacheDir)
+		if err := s.Scan(context.Background(), nil); err != nil {
+			t.Fatal(err)
+		}
+		return s.Summary(RangeAll, day1).ByTool[ToolHermes]
+	}
+
+	if h := scan(); h.Requests != 2 || math.Abs(h.Cost-0.10) > 1e-9 {
+		t.Fatalf("initial = %+v, want reqs=2 cost=0.10", h)
+	}
+
+	// Upward cost-only update (0.10 -> 0.20) must not add a request.
+	runSQLite(t, hermesDB, `UPDATE session_model_usage SET actual_cost_usd = 0.20 WHERE session_id = 's1';`)
+	bumpFileMtime(t, hermesDB, 1)
+	if h := scan(); h.Requests != 2 || math.Abs(h.Cost-0.20) > 1e-9 {
+		t.Fatalf("after cost increase = %+v, want reqs=2 cost=0.20", h)
+	}
+
+	// Downward cost-only update (0.20 -> 0.05) must reconcile down without adding a request.
+	runSQLite(t, hermesDB, `UPDATE session_model_usage SET actual_cost_usd = 0.05 WHERE session_id = 's1';`)
+	bumpFileMtime(t, hermesDB, 2)
+	if h := scan(); h.Requests != 2 || math.Abs(h.Cost-0.05) > 1e-9 {
+		t.Fatalf("after cost decrease = %+v, want reqs=2 cost=0.05", h)
+	}
+}
+
+func TestScanCopilotDedupeDBAndOTEL(t *testing.T) {
+	if _, err := os.Stat(sqlite3Path); err != nil {
+		t.Skip("sqlite3 not installed")
+	}
+
+	t.Run("shared_request_id", func(t *testing.T) {
+		home := t.TempDir()
+		sessionStore := filepath.Join(home, ".copilot", "session-store.db")
+		dataDB := filepath.Join(home, ".copilot", "data.db")
+		if err := os.MkdirAll(filepath.Dir(sessionStore), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		runSQLite(t, sessionStore, `
+			CREATE TABLE assistant_usage_events (
+				id INTEGER PRIMARY KEY, session_id TEXT, request_id TEXT,
+				created_at TEXT, model TEXT, input_tokens INTEGER, output_tokens INTEGER
+			);
+			INSERT INTO assistant_usage_events VALUES (1, 's1', 'req-1', '2026-11-16T10:00:00Z', 'gpt-5.3-codex', 300, 80);
+		`)
+		runSQLite(t, dataDB, `
+			CREATE TABLE assistant_usage_events (
+				id INTEGER PRIMARY KEY, session_id TEXT, request_id TEXT,
+				created_at TEXT, model TEXT, input_tokens INTEGER, output_tokens INTEGER
+			);
+			INSERT INTO assistant_usage_events VALUES (99, 's1', 'req-1', '2026-11-16T10:00:00Z', 'gpt-5.3-codex', 300, 80);
+		`)
+		writeTestFile(t, filepath.Join(home, ".copilot", "otel", "events.jsonl"), []byte(
+			`{"id":"req-1","timestamp":"2026-11-16T10:00:00Z","model":"gpt-5.3-codex","usage":{"input_tokens":300,"output_tokens":80}}`+"\n"+
+				`{"id":"req-2","timestamp":"2026-11-16T10:05:00Z","model":"gpt-5.3-codex","usage":{"input_tokens":100,"output_tokens":20}}`+"\n",
+		))
+		s := NewScanner(home, t.TempDir())
+		if err := s.Scan(context.Background(), nil); err != nil {
+			t.Fatal(err)
+		}
+		got := s.Summary(RangeAll, time.Date(2026, 11, 17, 0, 0, 0, 0, time.UTC)).ByTool[ToolCopilot]
+		if got.Requests != 2 || got.Input != 400 || got.Output != 100 {
+			t.Fatalf("copilot dedupe = %+v, want reqs=2 in=400 out=100", got)
+		}
+	})
+
+	t.Run("no_shared_id_prefers_db_over_otel", func(t *testing.T) {
+		home := t.TempDir()
+		sessionStore := filepath.Join(home, ".copilot", "session-store.db")
+		if err := os.MkdirAll(filepath.Dir(sessionStore), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		runSQLite(t, sessionStore, `
+			CREATE TABLE assistant_usage_events (
+				id INTEGER PRIMARY KEY, session_id TEXT,
+				created_at TEXT, model TEXT, input_tokens INTEGER, output_tokens INTEGER
+			);
+			INSERT INTO assistant_usage_events VALUES (1, 's1', '2026-11-16T10:00:00Z', 'gpt-5.3-codex', 300, 80);
+		`)
+		writeTestFile(t, filepath.Join(home, ".copilot", "otel", "events.jsonl"), []byte(
+			`{"id":"otel-1","timestamp":"2026-11-16T10:00:00Z","model":"gpt-5.3-codex","usage":{"input_tokens":300,"output_tokens":80}}`+"\n",
+		))
+		s := NewScanner(home, t.TempDir())
+		if err := s.Scan(context.Background(), nil); err != nil {
+			t.Fatal(err)
+		}
+		got := s.Summary(RangeAll, time.Date(2026, 11, 17, 0, 0, 0, 0, time.UTC)).ByTool[ToolCopilot]
+		if got.Requests != 1 || got.Input != 300 || got.Output != 80 {
+			t.Fatalf("copilot db-priority = %+v, want reqs=1 in=300 out=80", got)
+		}
+	})
+}
+
+func TestScanSQLiteUnsupportedSchemaVsEmptyTable(t *testing.T) {
+	if _, err := os.Stat(sqlite3Path); err != nil {
+		t.Skip("sqlite3 not installed")
+	}
+	home := t.TempDir()
+	cacheDir := t.TempDir()
+
+	// Mark all 4 SQLite-backed tools installed.
+	writeTestFile(t, filepath.Join(home, ".copilot", "config.json"), []byte("{}"))
+	writeTestFile(t, filepath.Join(home, ".hermes", "config.yaml"), []byte("model: test\n"))
+	writeTestFile(t, filepath.Join(xdgConfigHome(home), "devin", "config.json"), []byte("{}"))
+	writeTestFile(t, filepath.Join(xdgConfigHome(home), "opencode", "opencode.json"), []byte("{}"))
+
+	copilotDB := filepath.Join(home, ".copilot", "session-store.db")
+	hermesDB := filepath.Join(home, ".hermes", "state.db")
+	devinDB := filepath.Join(xdgDataHome(home), "devin", "cli", "sessions.db")
+	opencodeDB := opencodeDBPath(home)
+	for _, p := range []string{copilotDB, hermesDB, devinDB, opencodeDB} {
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		runSQLite(t, p, `CREATE TABLE unrelated_meta (k TEXT PRIMARY KEY);`)
+	}
+
+	s1 := NewScanner(home, cacheDir)
+	if err := s1.Scan(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(s1.FailedTools()) != 0 {
+		t.Fatalf("FailedTools() = %v, want empty for unsupported schema", s1.FailedTools())
+	}
+	for _, tl := range []Tool{ToolCopilot, ToolHermes, ToolDevin, ToolOpencode} {
+		if !slices.Contains(s1.UnreadableTools(), tl) {
+			t.Fatalf("UnreadableTools() = %v, want %s when DB lacks supported tables", s1.UnreadableTools(), tl)
+		}
+	}
+
+	// Incremental rescan from cache must preserve the unsupported-schema status.
+	s2 := NewScanner(home, cacheDir)
+	if err := s2.Scan(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, tl := range []Tool{ToolCopilot, ToolHermes, ToolDevin, ToolOpencode} {
+		if !slices.Contains(s2.UnreadableTools(), tl) {
+			t.Fatalf("cached UnreadableTools() = %v, want %s", s2.UnreadableTools(), tl)
+		}
+	}
+
+	// Now create the expected tables (still 0 rows): tools must count as having data.
+	runSQLite(t, copilotDB, `CREATE TABLE assistant_usage_events (id INTEGER PRIMARY KEY, session_id TEXT, created_at TEXT, model TEXT, input_tokens INTEGER, output_tokens INTEGER);`)
+	runSQLite(t, hermesDB, `CREATE TABLE sessions (id TEXT PRIMARY KEY, started_at REAL, ended_at REAL, last_activity_at REAL); CREATE TABLE session_model_usage (session_id TEXT, model TEXT, billing_provider TEXT, billing_base_url TEXT, billing_mode TEXT, task TEXT, api_call_count INTEGER, input_tokens INTEGER, output_tokens INTEGER, cache_read_tokens INTEGER, cache_write_tokens INTEGER, estimated_cost_usd REAL, actual_cost_usd REAL, first_seen REAL, last_seen REAL);`)
+	runSQLite(t, devinDB, `CREATE TABLE sessions (id TEXT PRIMARY KEY, model TEXT); CREATE TABLE message_nodes (row_id INTEGER PRIMARY KEY, session_id TEXT, node_id INTEGER, chat_message TEXT, created_at INTEGER);`)
+	runSQLite(t, opencodeDB, `CREATE TABLE message (id TEXT PRIMARY KEY, time_created INTEGER, data TEXT);`)
+	for _, p := range []string{copilotDB, hermesDB, devinDB, opencodeDB} {
+		bumpFileMtime(t, p, 3)
+	}
+
+	s3 := NewScanner(home, cacheDir)
+	if err := s3.Scan(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(s3.FailedTools()) != 0 {
+		t.Fatalf("FailedTools() = %v, want empty for empty tables", s3.FailedTools())
+	}
+	for _, tl := range []Tool{ToolCopilot, ToolHermes, ToolDevin, ToolOpencode} {
+		if slices.Contains(s3.UnreadableTools(), tl) {
+			t.Fatalf("UnreadableTools() = %v, should not include %s when supported table exists (0 rows)", s3.UnreadableTools(), tl)
+		}
 	}
 }

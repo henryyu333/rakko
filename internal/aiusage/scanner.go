@@ -61,9 +61,10 @@ type fileState struct {
 	modNano    int64 // ModTime of that observation
 	tailStart  int64 // offset of the last complete line; -1 when none
 	tailSum    uint64
-	recs       []rec
-	tail       codexTail
-	hermesPrev map[string]hermesSnapshot
+	recs              []rec
+	tail              codexTail
+	hermesPrev        map[string]hermesSnapshot
+	unsupportedSchema bool
 }
 
 // Scanner reads local AI-tool session logs and summarizes their token
@@ -330,18 +331,28 @@ loop:
 	// total only covers readers that answered.
 	for _, db := range dbJobs {
 		if size, mod, ok := dbSignature(db.spec.path); ok {
-			hasDataFile[db.tool] = true
 			old := prev[db.spec.path]
 			if old != nil && old.size == size && old.modNano == mod {
+				if !old.unsupportedSchema {
+					hasDataFile[db.tool] = true
+				}
 				files[db.spec.path] = old
 			} else if db.spec.readDelta != nil {
 				recs, snap, err := db.spec.readDelta(ctx, db.spec.path, s.cacheDir, pool, old)
-				if err != nil {
+				if errors.Is(err, errUnsupportedDBSchema) {
+					files[db.spec.path] = &fileState{
+						tool:              db.tool,
+						size:              size,
+						modNano:           mod,
+						unsupportedSchema: true,
+					}
+				} else if err != nil {
 					if ctx.Err() != nil {
 						scanErr = ctx.Err()
 					}
 					failed[db.tool] = true
 				} else {
+					hasDataFile[db.tool] = true
 					files[db.spec.path] = &fileState{
 						tool:       db.tool,
 						size:       size,
@@ -350,13 +361,24 @@ loop:
 						hermesPrev: snap,
 					}
 				}
-			} else if recs, err := db.spec.read(ctx, db.spec.path, s.cacheDir, pool); err != nil {
-				if ctx.Err() != nil {
-					scanErr = ctx.Err()
-				}
-				failed[db.tool] = true
 			} else {
-				files[db.spec.path] = &fileState{tool: db.tool, size: size, modNano: mod, recs: recs}
+				recs, err := db.spec.read(ctx, db.spec.path, s.cacheDir, pool)
+				if errors.Is(err, errUnsupportedDBSchema) {
+					files[db.spec.path] = &fileState{
+						tool:              db.tool,
+						size:              size,
+						modNano:           mod,
+						unsupportedSchema: true,
+					}
+				} else if err != nil {
+					if ctx.Err() != nil {
+						scanErr = ctx.Err()
+					}
+					failed[db.tool] = true
+				} else {
+					hasDataFile[db.tool] = true
+					files[db.spec.path] = &fileState{tool: db.tool, size: size, modNano: mod, recs: recs}
+				}
 			}
 		}
 	}
@@ -617,6 +639,7 @@ type cacheFileJSON struct {
 	R  [][]json.RawMessage       `json:"r"`
 	C  *cacheTailJSON            `json:"c,omitempty"`
 	H  map[string]hermesSnapshot `json:"h,omitempty"`
+	U  bool                      `json:"u,omitempty"`
 }
 
 type cacheJSON struct {
@@ -624,9 +647,9 @@ type cacheJSON struct {
 	Files map[string]*cacheFileJSON `json:"files"`
 }
 
-// cacheVersion identifies the cache file's format and semantics; version 3
-// adds per-record request counts and cumulative snapshots for Hermes.
-const cacheVersion = 3
+// cacheVersion identifies the cache file's format and semantics; version 4
+// adds unsupported-schema markers and per-row Hermes record ownership.
+const cacheVersion = 4
 
 func (s *Scanner) cachePath() string { return filepath.Join(s.cacheDir, cacheName) }
 
@@ -656,13 +679,14 @@ func (s *Scanner) loadCache(ctx context.Context) {
 			continue
 		}
 		st := &fileState{
-			tool:       Tool(cf.T),
-			size:       cf.S,
-			offset:     cf.O,
-			modNano:    cf.M,
-			tailStart:  cf.TS,
-			tailSum:    cf.TH,
-			hermesPrev: cf.H,
+			tool:              Tool(cf.T),
+			size:              cf.S,
+			offset:            cf.O,
+			modNano:           cf.M,
+			tailStart:         cf.TS,
+			tailSum:           cf.TH,
+			hermesPrev:        cf.H,
+			unsupportedSchema: cf.U,
 		}
 		if cf.C != nil {
 			st.tail.model = cf.C.M
@@ -797,6 +821,9 @@ func (s *Scanner) saveCache(ctx context.Context, files map[string]*fileState) {
 				buf.WriteString(`,"h":`)
 				buf.Write(hb)
 			}
+		}
+		if st.unsupportedSchema {
+			buf.WriteString(`,"u":true`)
 		}
 		buf.WriteString(`,"r":[`)
 		for i, r := range st.recs {

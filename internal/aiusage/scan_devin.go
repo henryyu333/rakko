@@ -46,6 +46,9 @@ type devinChatMsg struct {
 }
 
 func readDevinDB(ctx context.Context, dbPath, cacheDir string, pool map[string]*string) ([]rec, error) {
+	if err := requireSQLiteTable(ctx, "devin", dbPath, cacheDir, "message_nodes"); err != nil {
+		return nil, err
+	}
 	var rows []devinRow
 	if err := readSQLiteJSON(ctx, "devin", dbPath, cacheDir, devinQuery, &rows); err != nil {
 		return nil, err

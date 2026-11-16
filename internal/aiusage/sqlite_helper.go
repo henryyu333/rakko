@@ -11,6 +11,32 @@ import (
 	"time"
 )
 
+// errUnsupportedDBSchema indicates a SQLite database file exists and is readable,
+// but lacks the expected table(s) for that tool (e.g. a pre-telemetry DB).
+var errUnsupportedDBSchema = errors.New("unsupported database schema")
+
+func sqliteTableExists(ctx context.Context, tag, dbPath, cacheDir, table string) (bool, error) {
+	var tables []struct {
+		Name string `json:"name"`
+	}
+	q := fmt.Sprintf("SELECT name FROM sqlite_master WHERE type='table' AND name='%s'", table)
+	if err := readSQLiteJSON(ctx, tag, dbPath, cacheDir, q, &tables); err != nil {
+		return false, err
+	}
+	return len(tables) > 0, nil
+}
+
+func requireSQLiteTable(ctx context.Context, tag, dbPath, cacheDir, table string) error {
+	ok, err := sqliteTableExists(ctx, tag, dbPath, cacheDir, table)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return errUnsupportedDBSchema
+	}
+	return nil
+}
+
 // readSQLiteJSON copies a SQLite database (plus any -wal) into cacheDir and
 // runs query, unmarshaling the resulting JSON rows into dst. Retries up to 3
 // times to ride out mid-checkpoint WAL races.
