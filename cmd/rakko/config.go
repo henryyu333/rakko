@@ -39,12 +39,13 @@ const (
 	dropPillExtraW = 60 // 拖拽中：比刘海宽出的部分
 	// 面板尺寸见 panel.go 的 islandW/islandH/sheetW/sheetH；原生窗口初始
 	// 尺寸用 sheetW × sheetH，两种状态都画在同一个窗口里。
-	// 设置窗口：宽 640、高随内容在 [300, 600] 之间伸缩（页内无滚动条滚动）。
-	settingsWidth     = 640
-	settingsHeight    = 600
-	settingsMinHeight = 300
-	settingsMaxHeight = 600
-	settingsTopH      = 64
+	// 设置窗口：默认 640×600、可拉伸（最小 600×420，页内无滚动条滚动）。
+	settingsWidth       = 640
+	settingsHeight      = 600
+	settingsMinWidth    = 600
+	settingsMinHeight   = 420
+	settingsMaxContentW = 720
+	settingsTopH        = 64
 )
 
 // clipboardLimitChoices are the clipboard text limits offered in the

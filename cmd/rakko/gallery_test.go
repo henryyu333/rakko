@@ -2071,8 +2071,7 @@ func galleryGroupK() []galleryItem {
 			if tweak != nil {
 				tweak(t, a)
 			}
-			h := a.measureSettingsHeight(p)
-			view := ui.NewTester(a.settingsView, settingsWidth, h)
+			view := ui.NewTester(a.settingsView, settingsWidth, settingsHeight)
 			view.SetLocale(lang)
 			view.SetScale(galleryScale)
 			view.Frame()
@@ -2109,16 +2108,15 @@ func galleryGroupK() []galleryItem {
 			attachGalleryUsage(a, now)
 			a.settingsPage = settingsPageAIUsage
 			a.locale = lang
-			h := a.measureSettingsHeight(settingsPageAIUsage)
-			view := ui.NewTester(a.settingsView, settingsWidth, h)
+			view := ui.NewTester(a.settingsView, settingsWidth, settingsHeight)
 			view.SetLocale(lang)
 			view.SetScale(galleryScale)
 			view.Frame()
 			for range 20 {
-				if r, ok := view.Find("Gemini CLI"); ok && r.W > 0 && r.H > 0 && r.Y >= 0 && r.Y+r.H <= float32(h) {
+				if r, ok := view.Find("Gemini CLI"); ok && r.W > 0 && r.H > 0 && r.Y >= 0 && r.Y+r.H <= float32(settingsHeight) {
 					break
 				}
-				view.Scroll(settingsWidth/2, float32(h)/2, 0, 140)
+				view.Scroll(settingsWidth/2, float32(settingsHeight)/2, 0, 140)
 				view.Frame()
 			}
 			view.Frame()
@@ -2163,8 +2161,7 @@ func galleryGroupK() []galleryItem {
 				thumbnails:   map[string]*ui.Bitmap{}, thumbPending: map[string]bool{},
 				appNames: map[string]string{},
 			}
-			h := a.measureSettingsHeight(settingsPagePermissions)
-			view := ui.NewTester(a.settingsView, settingsWidth, h)
+			view := ui.NewTester(a.settingsView, settingsWidth, settingsHeight)
 			view.SetLocale(lang)
 			view.SetScale(galleryScale)
 			view.Frame()
@@ -2181,8 +2178,7 @@ func galleryGroupK() []galleryItem {
 				thumbnails:   map[string]*ui.Bitmap{}, thumbPending: map[string]bool{},
 				appNames: map[string]string{},
 			}
-			h := a.measureSettingsHeight(settingsPagePermissions)
-			view := ui.NewTester(a.settingsView, settingsWidth, h)
+			view := ui.NewTester(a.settingsView, settingsWidth, settingsHeight)
 			view.SetLocale(lang)
 			view.SetScale(galleryScale)
 			view.Frame()
@@ -2203,8 +2199,7 @@ func galleryGroupK() []galleryItem {
 				appNames: map[string]string{},
 			}
 			a.showPermissions()
-			h := a.measureSettingsHeight(settingsPagePermissions)
-			view := ui.NewTester(a.settingsView, settingsWidth, h)
+			view := ui.NewTester(a.settingsView, settingsWidth, settingsHeight)
 			view.SetLocale(lang)
 			view.SetScale(galleryScale)
 			view.Frame()

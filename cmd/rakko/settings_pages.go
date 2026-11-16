@@ -515,7 +515,7 @@ func (a *shelf) settingsShortcutRow(c *ui.Context, kind shortcutKind, label, cap
 	}
 	row.Children(func() {
 		settingsRowTextColor(c, label, rowCaption, captionColor)
-		ui.Row(c.Key("keys")).AlignItems(ui.Center).Gap(4).Children(func() {
+		ui.Row(c.Key("keys")).AlignItems(ui.Center).Gap(4).Shrink(0).Children(func() {
 			if recording {
 				ui.Box(c.Key("rec")).Height(24).Radius(6).Padding(0, 10, 0, 10).
 					Border(1.5, accent).Center().Children(func() {
@@ -541,7 +541,7 @@ func (a *shelf) settingsShortcutRow(c *ui.Context, kind shortcutKind, label, cap
 }
 
 func settingsConfirmButton(c *ui.Context, key, label string, primary bool, fn func()) ui.Element {
-	b := ui.Row(c.Key("btn-"+key)).Height(26).Radius(7).Padding(0, 12, 0, 12).
+	b := ui.Row(c.Key("btn-"+key)).Height(26).Shrink(0).Radius(7).Padding(0, 12, 0, 12).
 		AlignItems(ui.Center).Label(label)
 	fg := ink
 	if primary {
@@ -575,7 +575,7 @@ func settingsConfirmButton(c *ui.Context, key, label string, primary bool, fn fu
 func settingsReadonlyShortcutRow(c *ui.Context, key, label, caption string, tokens []string) {
 	settingsRowLine(c, key).Children(func() {
 		settingsRowText(c, label, caption)
-		ui.Row(c.Key("keys")).AlignItems(ui.Center).Gap(4).Children(func() {
+		ui.Row(c.Key("keys")).AlignItems(ui.Center).Gap(4).Shrink(0).Children(func() {
 			for i, token := range tokens {
 				settingsKeycap(c, fmt.Sprintf("%s-%d", key, i), token, false)
 			}
@@ -614,7 +614,7 @@ func (a *shelf) settingsPermissionsPage(c *ui.Context) {
 			row := settingsRowLine(c, "perm-"+p.id).Tooltip(p.detail)
 			row.Children(func() {
 				settingsRowText(c, p.short, "")
-				ui.Row(c.Key("state")).AlignItems(ui.Center).Gap(14).Children(func() {
+				ui.Row(c.Key("state")).AlignItems(ui.Center).Gap(14).Shrink(0).Children(func() {
 					dot := success
 					text := l.SettingsPermOn()
 					if !granted {

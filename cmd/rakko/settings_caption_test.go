@@ -59,8 +59,7 @@ func TestUnifiedSettingsIslandAndLayout(t *testing.T) {
 						thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{},
 						appNames: map[string]string{},
 					}
-					h := a.measureSettingsHeight(settingsPageGeneral)
-					v := ui.NewTester(a.settingsView, settingsWidth, h)
+					v := ui.NewTester(a.settingsView, settingsWidth, settingsHeight)
 					if tc.win {
 						v.SetTitleBar(ui.TitleBar{Height: 32, Right: 138})
 					}
@@ -76,7 +75,6 @@ func TestUnifiedSettingsIslandAndLayout(t *testing.T) {
 						if err := v.Click(tab.label); err != nil {
 							t.Fatalf("click tab %q: %v", tab.label, err)
 						}
-						v.SetSize(settingsWidth, a.measureSettingsHeight(tab.id))
 						v.Frame()
 						v.Frame()
 						if a.settingsPage != tab.id {
@@ -152,14 +150,13 @@ func TestWindowsSettingsScrolledShortcutsTopRowStartsRecording(t *testing.T) {
 		thumbnails:   map[string]*ui.Bitmap{}, thumbPending: map[string]bool{},
 		appNames: map[string]string{},
 	}
-	h := a.measureSettingsHeight(settingsPageShortcuts)
-	v := ui.NewTester(a.settingsView, settingsWidth, h)
+	v := ui.NewTester(a.settingsView, settingsWidth, settingsHeight)
 	v.SetTitleBar(ui.TitleBar{Height: caption, Right: 138})
 	v.SetLocale("zh-Hans")
 	v.Frame()
 
 	for range 30 {
-		v.Scroll(settingsWidth/2, float32(h)/2, 0, 400)
+		v.Scroll(settingsWidth/2, float32(settingsHeight)/2, 0, 400)
 		v.Frame()
 	}
 
@@ -215,5 +212,130 @@ func TestWindowsSettingsScrolledShortcutsTopRowStartsRecording(t *testing.T) {
 	if a.settingsRecording != topKind {
 		t.Fatalf("clicking top visible scrolled row %q (rect=%+v) recorded %v, want %v",
 			topLabel, topRect, a.settingsRecording, topKind)
+	}
+}
+
+func TestSettingsResizeLayoutsAndBounds(t *testing.T) {
+	origWin := forWindows
+	origFit := settingsFit
+	t.Cleanup(func() {
+		forWindows = origWin
+		settingsFit = origFit
+	})
+
+	sizes := []struct {
+		name string
+		w, h int
+	}{
+		{"min", settingsMinWidth, settingsMinHeight},
+		{"default", settingsWidth, settingsHeight},
+		{"wide", 1000, 800},
+	}
+
+	for _, tc := range []struct {
+		name string
+		win  bool
+	}{
+		{"macOS", false},
+		{"Windows", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			forWindows = tc.win
+			for _, lang := range []string{"zh-Hans", "en"} {
+				t.Run(lang, func(t *testing.T) {
+					l := locales.In(lang)
+					tabs := []struct {
+						id    settingsPageID
+						label string
+					}{
+						{settingsPageGeneral, l.General()},
+						{settingsPageNotch, l.SettingsNotchNav()},
+						{settingsPageTray, l.SettingsTraySection()},
+						{settingsPageClipboard, l.SettingsClipboardSection()},
+						{settingsPageAIUsage, l.SettingsAISection()},
+						{settingsPageShortcuts, l.SettingsShortcutsSection()},
+					}
+					if permissionsSupported {
+						tabs = append(tabs, struct {
+							id    settingsPageID
+							label string
+						}{settingsPagePermissions, l.PermTitle()})
+					}
+					tabs = append(tabs, struct {
+						id    settingsPageID
+						label string
+					}{settingsPageAbout, l.SettingsAboutPage()})
+
+					for _, sz := range sizes {
+						t.Run(sz.name, func(t *testing.T) {
+							var fitIssues []string
+							settingsFit = func(msg string) {
+								fitIssues = append(fitIssues, msg)
+							}
+							a := &shelf{
+								dataDir: t.TempDir(), settings: settings.Default(), locale: lang,
+								thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{},
+								appNames: map[string]string{},
+							}
+							v := ui.NewTester(a.settingsView, sz.w, sz.h)
+							if tc.win {
+								v.SetTitleBar(ui.TitleBar{Height: 32, Right: 138})
+							}
+							v.SetLocale(lang)
+							v.Frame()
+
+							for _, tab := range tabs {
+								fitIssues = nil
+								a.setSettingsPage(tab.id)
+								v.Frame()
+								v.Frame()
+								if len(fitIssues) > 0 {
+									t.Errorf("page %v at %dx%d clipped labels: %v", tab.id, sz.w, sz.h, fitIssues)
+								}
+
+								first, ok1 := v.Find(tabs[0].label)
+								last, ok2 := v.Find(tabs[len(tabs)-1].label)
+								if !ok1 || !ok2 {
+									t.Fatalf("island tabs missing on page %v", tab.id)
+								}
+								islandLeft := first.X - settingsIslandPad
+								islandRight := last.X + last.W + settingsIslandPad
+								center := (islandLeft + islandRight) / 2
+								if diff := math.Abs(float64(center - float32(sz.w)/2)); diff > 1.5 {
+									t.Errorf("page %v at %dx%d: island center=%.1f, want %.1f",
+										tab.id, sz.w, sz.h, center, float32(sz.w)/2)
+								}
+								if !tc.win && islandLeft < 78 {
+									t.Errorf("page %v at %dx%d: island left=%.1f overlaps macOS traffic lights (<78)",
+										tab.id, sz.w, sz.h, islandLeft)
+								}
+								if tc.win && !permissionsSupported && islandRight > float32(sz.w-138) {
+									t.Errorf("page %v at %dx%d: island right=%.1f overlaps Windows caption buttons (>%.1f)",
+										tab.id, sz.w, sz.h, islandRight, float32(sz.w-138))
+								}
+							}
+
+							// At 1000px wide, content column must cap at 720pt centered (left edge at 140pt).
+							if sz.w == 1000 {
+								a.setSettingsPage(settingsPageGeneral)
+								v.Frame()
+								v.Frame()
+								row, ok := v.Find(l.LanguageRow())
+								if !ok {
+									t.Fatal("LanguageRow missing")
+								}
+								// row is inside card with 14pt horizontal padding -> card left = row.X - 14.
+								cardLeft := row.X - settingsRowPadX
+								wantLeft := float32(sz.w-settingsMaxContentW) / 2
+								if math.Abs(float64(cardLeft-wantLeft)) > 2.0 {
+									t.Errorf("at width %d, card left=%.1f, want %.1f (content capped at %d)",
+										sz.w, cardLeft, wantLeft, settingsMaxContentW)
+								}
+							}
+						})
+					}
+				})
+			}
+		})
 	}
 }

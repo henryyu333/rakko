@@ -103,8 +103,8 @@ func newSettingsShelf(t *testing.T) (*shelf, *ui.Tester) {
 
 func TestSettingsFrameCentersAndClamps(t *testing.T) {
 	work := rectHelper(0, 25, 1512, 955)
-	f := settingsFrame(work, 420)
-	if f.Width != settingsWidth || f.Height != 420 {
+	f := settingsFrame(work, settingsWidth, settingsHeight)
+	if f.Width != settingsWidth || f.Height != settingsHeight {
 		t.Fatalf("frame size changed: %+v", f)
 	}
 	cx, cy := f.X+f.Width/2, f.Y+f.Height/2
@@ -112,76 +112,30 @@ func TestSettingsFrameCentersAndClamps(t *testing.T) {
 	if cx != wx || cy != wy {
 		t.Fatalf("window not centered: center=(%d,%d) want (%d,%d)", cx, cy, wx, wy)
 	}
-	// Heights clamp to [300, 600].
-	if small := settingsFrame(work, 120); small.Height != settingsMinHeight {
-		t.Fatalf("clamped min height = %d, want %d", small.Height, settingsMinHeight)
+	// Sizes below the minimum clamp up to [settingsMinWidth, settingsMinHeight];
+	// larger sizes are kept as long as they fit inside the work area.
+	if small := settingsFrame(work, 300, 120); small.Width != settingsMinWidth || small.Height != settingsMinHeight {
+		t.Fatalf("clamped min size = %dx%d, want %dx%d", small.Width, small.Height, settingsMinWidth, settingsMinHeight)
 	}
-	if tall := settingsFrame(work, 900); tall.Height != settingsMaxHeight {
-		t.Fatalf("clamped max height = %d, want %d", tall.Height, settingsMaxHeight)
+	if large := settingsFrame(work, 1000, 800); large.Width != 1000 || large.Height != 800 {
+		t.Fatalf("large size = %dx%d, want 1000x800", large.Width, large.Height)
 	}
 	// A work area smaller than the window must clamp, not go negative.
 	tiny := rectHelper(100, 50, 200, 150)
-	f2 := settingsFrame(tiny, 420)
-	if f2.X < tiny.X || f2.Y < tiny.Y || f2.Height != tiny.Height {
+	f2 := settingsFrame(tiny, settingsWidth, settingsHeight)
+	if f2.X < tiny.X || f2.Y < tiny.Y || f2.Width != tiny.Width || f2.Height != tiny.Height {
 		t.Fatalf("frame left the work area: %+v vs %+v", f2, tiny)
 	}
 }
 
-func TestSettingsResizedFrameAnchorsTopAndClampsWorkArea(t *testing.T) {
-	work := rectHelper(0, 25, 1440, 815)
-	cur := rectHelper(400, 200, settingsWidth, 320)
-	// Normal growth keeps top edge fixed at 200.
-	grown := settingsResizedFrame(cur, work, 580)
-	if grown.X != 400 || grown.Y != 200 || grown.Height != 580 {
-		t.Fatalf("normal resize = %+v, want X=400 Y=200 Height=580", grown)
-	}
-	// Near the bottom of the work area (25+815 = 840), top stays anchored while
-	// height clamps so bottom never passes 840.
-	low := rectHelper(400, 420, settingsWidth, 320)
-	clamped := settingsResizedFrame(low, work, 600)
-	if clamped.Y != 420 || clamped.Y+clamped.Height != 840 {
-		t.Fatalf("clamped resize = %+v, want Y=420 bottom=840", clamped)
-	}
-}
-
-func TestSettingsDynamicPageHeightsAndOrangeDot(t *testing.T) {
+func TestSettingsOrangeDot(t *testing.T) {
 	stubSettingsSeams(t, false, nil, nil)
 	st, _ := stubPermissions(t)
 	a, _ := newSettingsShelf(t)
 
-	// General and Tray are compact; Shortcuts and AI hit the 600pt cap.
-	genH := a.measureSettingsHeight(settingsPageGeneral)
-	if genH < settingsMinHeight || genH >= settingsMaxHeight {
-		t.Fatalf("General height = %d, want in [%d, %d)", genH, settingsMinHeight, settingsMaxHeight)
-	}
-	keyH := a.measureSettingsHeight(settingsPageShortcuts)
-	if keyH != settingsMaxHeight {
-		t.Fatalf("Shortcuts height = %d, want %d", keyH, settingsMaxHeight)
-	}
-
-	// Selecting Dynamic Island adds the Island Position row on Appearance.
-	// The window height alone cannot tell: a page whose rows already pass the
-	// 600pt cap (the pet group, when the build ships the otter artwork) shows
-	// the same clamped window with and without the row. The row's own effect
-	// is the grown natural content height.
-	a.settings.ShellStyle = settings.ShellStyleNotch
-	a.island = false
-	notchH := a.settingsContentHeight(settingsPageNotch)
-	notchWin := a.measureSettingsHeight(settingsPageNotch)
-	a.settings.ShellStyle = settings.ShellStyleIsland
-	a.island = true
-	islandH := a.settingsContentHeight(settingsPageNotch)
-	islandWin := a.measureSettingsHeight(settingsPageNotch)
-	if islandH <= notchH {
-		t.Fatalf("Dynamic Island content height %d did not grow over Notch %d", islandH, notchH)
-	}
-	if islandWin < notchWin {
-		t.Fatalf("Dynamic Island window height %d shrank below Notch %d", islandWin, notchWin)
-	}
-
 	// Missing permissions show an orange dot on the Permissions tab icon.
 	st.fda, st.ax, st.screen = true, true, false
-	v := ui.NewTester(a.settingsView, settingsWidth, genH)
+	v := ui.NewTester(a.settingsView, settingsWidth, settingsHeight)
 	v.SetScale(2)
 	v.Frame()
 	v.Frame()
@@ -728,7 +682,7 @@ func TestSettingsWindowSmoke(t *testing.T) {
 	}
 	// WindowServer must show it at the centered frame computed from the
 	// cursor display's work area.
-	want := settingsFrame(mygo.Screen.DisplayNearestPoint(mygo.Screen.CursorScreenPoint()).WorkArea, a.measureSettingsHeight(a.settingsPage))
+	want := settingsFrame(mygo.Screen.DisplayNearestPoint(mygo.Screen.CursorScreenPoint()).WorkArea, settingsWidth, settingsHeight)
 	var got platform.Rect
 	settled := false
 	for range 60 {
@@ -897,4 +851,168 @@ func TestNowPlayingHasNoVisibilitySetting(t *testing.T) {
 			t.Fatal("the tray menu still offers the removed now-playing item")
 		}
 	}
+}
+
+func TestSettingsRememberSizeAndPageSwitchKeepsSize(t *testing.T) {
+	stubSettingsSeams(t, false, nil, nil)
+	a, view := newSettingsShelf(t)
+
+	// Switching pages must not change any remembered size or write settings.json.
+	a.settingsLastW, a.settingsLastH = 740, 520
+	openSettingsPage(t, view, "快捷键")
+	openSettingsPage(t, view, "关于")
+	if a.settingsLastW != 740 || a.settingsLastH != 520 {
+		t.Fatalf("remembered size changed across page switch: %dx%d", a.settingsLastW, a.settingsLastH)
+	}
+	raw, err := os.ReadFile(filepath.Join(a.dataDir, "settings.json"))
+	if err == nil && (strings.Contains(string(raw), "settingsLast") || strings.Contains(string(raw), "WindowWidth")) {
+		t.Fatalf("settings.json unexpectedly persisted window size: %s", raw)
+	}
+
+	// Reopening uses the remembered size centered inside the cursor display's work area.
+	work := rectHelper(0, 25, 1512, 955)
+	f := settingsFrame(work, a.settingsLastW, a.settingsLastH)
+	if f.Width != 740 || f.Height != 520 {
+		t.Fatalf("reopened frame = %+v, want 740x520", f)
+	}
+}
+
+func TestSettingsResizeAndRememberSmoke(t *testing.T) {
+	if os.Getenv("RAKKO_BASKET_SMOKE") != "1" {
+		t.Skip("set RAKKO_BASKET_SMOKE=1 to run the native settings resize smoke test")
+	}
+	a := smokeShelf
+	a.dataDir = t.TempDir()
+	flushToolsLayoutOnCleanup(t, a)
+	a.settings, _ = settings.Load(a.dataDir)
+	a.settingsPage = settingsPageGeneral
+	a.settingsScroll = ui.ScrollState{}
+	a.settingsLastW, a.settingsLastH = 0, 0
+	t.Cleanup(func() {
+		a.settingsLastW, a.settingsLastH = 0, 0
+	})
+
+	evDir := os.Getenv("RAKKO_SETTINGSIZE_EVIDENCE")
+	captureWin := func(w *mygo.Window, name string) {
+		if evDir == "" {
+			return
+		}
+		if err := os.MkdirAll(evDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		num := platform.WindowNumber(w.NativeHandle())
+		out, err := exec.Command("screencapture", "-x", "-o", fmt.Sprintf("-l%d", num), filepath.Join(evDir, name)).CombinedOutput()
+		if err != nil {
+			t.Fatalf("screencapture %s failed (%v): %s", name, err, out)
+		}
+	}
+
+	var first *mygo.Window
+	onMain(func() {
+		a.openSettings()
+		first = a.settingsWin
+	})
+	if first == nil {
+		t.Fatal("settings window was not created")
+	}
+	defer onMain(func() {
+		if a.settingsWin != nil {
+			a.settingsWin.Destroy()
+		}
+	})
+
+	waitBounds := func(w *mygo.Window, wantW, wantH int) mygo.Rectangle {
+		var got mygo.Rectangle
+		for range 40 {
+			onMain(func() { got = w.ContentBounds() })
+			if got.Width == wantW && got.Height == wantH {
+				return got
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		t.Fatalf("content bounds = %+v, want %dx%d", got, wantW, wantH)
+		return got
+	}
+
+	// 1. Default 640x600 and page switching keeps exact size.
+	bDef := waitBounds(first, settingsWidth, settingsHeight)
+	time.Sleep(350 * time.Millisecond)
+	captureWin(first, "mac-default.png")
+	onMain(func() { a.setSettingsPage(settingsPageShortcuts) })
+	time.Sleep(400 * time.Millisecond)
+	bAfterSwitch := waitBounds(first, settingsWidth, settingsHeight)
+	t.Logf("mac page switch content size: General=%dx%d Shortcuts=%dx%d", bDef.Width, bDef.Height, bAfterSwitch.Width, bAfterSwitch.Height)
+
+	// 2. Minimum size 600x420.
+	onMain(func() {
+		a.setSettingsPage(settingsPageGeneral)
+		b := first.ContentBounds()
+		first.SetContentBounds(mygo.Rectangle{X: b.X, Y: b.Y, Width: settingsMinWidth, Height: settingsMinHeight})
+	})
+	waitBounds(first, settingsMinWidth, settingsMinHeight)
+	time.Sleep(350 * time.Millisecond)
+	captureWin(first, "mac-min.png")
+
+	// 3. Wide size 1000x800 (clamped to work area if smaller).
+	work := mygo.Screen.DisplayNearestPoint(mygo.Screen.CursorScreenPoint()).WorkArea
+	wideW := min(1000, work.Width)
+	wideH := min(800, work.Height)
+	onMain(func() {
+		b := first.ContentBounds()
+		first.SetContentBounds(settingsFrame(work, wideW, wideH))
+		_ = b
+	})
+	waitBounds(first, wideW, wideH)
+	time.Sleep(350 * time.Millisecond)
+	captureWin(first, "mac-wide.png")
+
+	// 4. Green zoom / maximize button is enabled and expands/restores.
+	onMain(func() { first.Maximize() })
+	var zoomed bool
+	for range 40 {
+		onMain(func() { zoomed = first.IsMaximized() })
+		if zoomed {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if !zoomed {
+		t.Fatal("settings window did not zoom/maximize")
+	}
+	time.Sleep(350 * time.Millisecond)
+	captureWin(first, "mac-maximized.png")
+	onMain(func() { first.Unmaximize() })
+	time.Sleep(350 * time.Millisecond)
+
+	// 5. Resize to 760x520, close, reopen -> size is remembered.
+	remW, remH := min(760, work.Width), min(520, work.Height)
+	onMain(func() {
+		first.SetContentBounds(settingsFrame(work, remW, remH))
+	})
+	waitBounds(first, remW, remH)
+	time.Sleep(200 * time.Millisecond)
+	onMain(func() { first.Close() })
+	for range 40 {
+		var closed bool
+		onMain(func() { closed = a.settingsWin == nil })
+		if closed {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if a.settingsWin != nil {
+		t.Fatal("settings window did not close")
+	}
+
+	var second *mygo.Window
+	onMain(func() {
+		a.openSettings()
+		second = a.settingsWin
+	})
+	if second == nil {
+		t.Fatal("reopened settings window was nil")
+	}
+	bReopen := waitBounds(second, remW, remH)
+	t.Logf("mac close+reopen remembered content size: %dx%d (want %dx%d)", bReopen.Width, bReopen.Height, remW, remH)
+	onMain(func() { second.Destroy() })
 }

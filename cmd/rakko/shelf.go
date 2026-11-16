@@ -107,9 +107,7 @@ type shelf struct {
 	dataDir                                                     string                  // where state.json and settings.json live
 	settingsBroken                                              bool                    // settings.json unreadable: never overwrite it
 	settingsWin                                                 *mygo.Window            // the 设置 window; nil while closed
-	settingsTargetH                                             int                     // target content height [settingsMinHeight, settingsMaxHeight]
-	settingsAppliedH                                            int                     // last content height applied to settingsWin
-	settingsResizeQueued                                        bool                    // a main-thread resize is already scheduled
+	settingsLastW, settingsLastH                                int                     // last Settings content size in this run; 0 = default
 	settingsPrevPID                                             int                     // app to hand the keyboard back to when it closes
 	perm                                                        permissionFlow          // 系统权限 unified entry's guided walk; zero = idle
 	loginOn                                                     bool                    // 开机时自动启动，read back each time the window opens

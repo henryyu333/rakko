@@ -1,18 +1,16 @@
 package main
 
-// The Settings window ("小岛"): a compact 640pt dark window with one
-// centered floating pill island at the top (sharing its pill chrome with
-// the panel's bottom capsule) and a single centered column of grouped cards
-// below. Window height tracks the active page's content between 300 and
-// 600 DIPs with a 320ms top-anchored transition; overflow scrolls inside the
-// page without scrollbars.
+// The Settings window ("小岛"): a resizable dark window (640×600 default,
+// minimum 600×420) with one centered floating pill island at the top (sharing
+// its pill chrome with the panel's bottom capsule) and a single centered
+// column of grouped cards below (capped at 720pt wide); overflow scrolls inside
+// the page without scrollbars.
 //
 // Controls call applySettings — the same save-and-apply path the tray menus
 // call — so window and menu never diverge.
 
 import (
 	"fmt"
-	"math"
 	"runtime/debug"
 	"slices"
 	"time"
@@ -128,9 +126,8 @@ const (
 )
 
 var (
-	settingsIslandTabSpring  = ui.Animation{Spring: ui.SpringOptions{Duration: 300 * time.Millisecond, Bounce: 0.15}}
-	settingsSwitchSpring     = ui.Animation{Spring: ui.SpringOptions{Duration: 220 * time.Millisecond, Bounce: 0.15}}
-	settingsWindowHeightAnim = ui.Animation{Duration: 320 * time.Millisecond, Ease: ui.CubicBezier(0.3, 1.08, 0.5, 1)}
+	settingsIslandTabSpring = ui.Animation{Spring: ui.SpringOptions{Duration: 300 * time.Millisecond, Bounce: 0.15}}
+	settingsSwitchSpring    = ui.Animation{Spring: ui.SpringOptions{Duration: 220 * time.Millisecond, Bounce: 0.15}}
 )
 
 // appGlyph fills an excluded-app row when the app has no icon on disk.
@@ -177,11 +174,11 @@ func init() { settingsOpen = (*shelf).openSettings }
 
 // openSettings shows the Settings window, creating it the first time, or
 // re-focuses the one already open (single instance). The window opens centered
-// on the cursor's display at the active page's content height [300, 600].
+// on the cursor's display at the last content size used in this run (640×600
+// initially).
 func (a *shelf) openSettings() {
 	if a.settingsWin != nil {
 		a.loginOn, a.loginErr = openAtLogin(), ""
-		a.settingsTargetH = a.measureSettingsHeight(a.settingsPage)
 		a.repaintSettings()
 		platform.ActivateSelf()
 		a.settingsWin.Show()
@@ -194,34 +191,46 @@ func (a *shelf) openSettings() {
 	if !permissionsSupported && a.settingsPage == settingsPagePermissions {
 		a.settingsPage = settingsPageGeneral
 	}
-	h := a.measureSettingsHeight(a.settingsPage)
+	winW, winH := a.settingsLastW, a.settingsLastH
+	if winW <= 0 || winH <= 0 {
+		winW, winH = settingsWidth, settingsHeight
+	}
 	work := mygo.Screen.DisplayNearestPoint(mygo.Screen.CursorScreenPoint()).WorkArea
-	frame := settingsFrame(work, h)
-	a.settingsTargetH = frame.Height
-	a.settingsAppliedH = frame.Height
+	frame := settingsFrame(work, winW, winH)
 	w := mygo.NewWindow(mygo.WindowOptions{
-		Title: a.appLoc().WindowSettings(), Width: settingsWidth, Height: frame.Height,
-		MinWidth: settingsWidth, MaxWidth: settingsWidth,
-		MinHeight: settingsMinHeight, MaxHeight: settingsMaxHeight,
-		X: frame.X, Y: frame.Y,
+		Title: a.appLoc().WindowSettings(), Width: frame.Width, Height: frame.Height,
+		MinWidth:  settingsMinWidth,
+		MinHeight: settingsMinHeight,
+		X:         frame.X, Y: frame.Y,
 		Hidden: true, BackgroundColor: "#0B0B0D",
 		UseContentSize:       true,
-		DisableResize:        true,
 		TitleBarStyle:        mygo.TitleBarHidden,
 		TrafficLightPosition: &mygo.Point{X: 18, Y: 25},
-		DisableMaximize:      true, DisableFullScreen: true,
-		Content: ui.View(a.settingsView),
+		DisableFullScreen:    true,
+		Content:              ui.View(a.settingsView),
 	})
 	platform.SetWindowAppearance(w.NativeHandle(), true)
 	platform.ConfigureFramedWindow(w.NativeHandle(), true)
 	w.SetWindowButtonsTheme(mygo.ThemeDark)
 	w.SetContentBounds(frame)
+	w.OnResize(func() { a.rememberSettingsSize(w) })
+	w.OnClose(func(_ *mygo.CloseEvent) { a.rememberSettingsSize(w) })
 	w.OnClosed(a.settingsClosed)
 	w.OnBlur(a.settingsBlur)
 	a.settingsWin = w
 	w.Show()
 	platform.ActivateSelf()
 	w.Focus()
+}
+
+func (a *shelf) rememberSettingsSize(w *mygo.Window) {
+	if w == nil || w.IsMinimized() {
+		return
+	}
+	b := w.ContentBounds()
+	if b.Width >= settingsMinWidth && b.Height >= settingsMinHeight {
+		a.settingsLastW, a.settingsLastH = b.Width, b.Height
+	}
 }
 
 // settingsTakeKeyboard prepares the handover when the Settings window opens.
@@ -237,9 +246,6 @@ func (a *shelf) settingsClosed() {
 	a.stopPermissionFlow()
 	a.endShortcutRecording()
 	a.settingsWin = nil
-	a.settingsTargetH = 0
-	a.settingsAppliedH = 0
-	a.settingsResizeQueued = false
 	if a.quitting {
 		return
 	}
@@ -286,113 +292,27 @@ func (a *shelf) repaintSettings() {
 	}
 }
 
-// clampSettingsHeight bounds a page's total window height to [300, 600].
-func clampSettingsHeight(h int) int {
-	return min(settingsMaxHeight, max(settingsMinHeight, h))
-}
-
-// settingsFrame centers the 640 × h Settings window inside the display's work
-// area, clamping height to the work area if the display is unusually short.
-func settingsFrame(work mygo.Rectangle, h int) mygo.Rectangle {
-	h = clampSettingsHeight(h)
+// settingsFrame centers the w × h Settings window inside the display's work
+// area, enforcing the minimum size while clamping to the work area on unusually
+// small displays.
+func settingsFrame(work mygo.Rectangle, w, h int) mygo.Rectangle {
+	w = max(w, settingsMinWidth)
+	h = max(h, settingsMinHeight)
+	if work.Width > 0 && w > work.Width {
+		w = work.Width
+	}
 	if work.Height > 0 && h > work.Height {
 		h = work.Height
 	}
-	x := work.X + (work.Width-settingsWidth)/2
+	x := work.X + (work.Width-w)/2
 	y := work.Y + (work.Height-h)/2
-	x = min(max(x, work.X), max(work.X, work.X+work.Width-settingsWidth))
+	x = min(max(x, work.X), max(work.X, work.X+work.Width-w))
 	y = min(max(y, work.Y), max(work.Y, work.Y+work.Height-h))
-	return mygo.Rectangle{X: x, Y: y, Width: settingsWidth, Height: h}
+	return mygo.Rectangle{X: x, Y: y, Width: w, Height: h}
 }
 
-// settingsResizedFrame anchors the Settings window at its top edge while
-// transitioning to height h, clamping so the bottom edge never leaves work.
-func settingsResizedFrame(cur, work mygo.Rectangle, h int) mygo.Rectangle {
-	h = clampSettingsHeight(h)
-	x, y := cur.X, cur.Y
-	if work.Width > 0 {
-		x = min(max(x, work.X), max(work.X, work.X+work.Width-settingsWidth))
-	}
-	if work.Height > 0 {
-		if h > work.Height {
-			h = work.Height
-		}
-		avail := work.Y + work.Height - y
-		minH := min(settingsMinHeight, work.Height)
-		if avail >= minH {
-			if h > avail {
-				h = avail
-			}
-		} else {
-			y = max(work.Y, work.Y+work.Height-h)
-		}
-		if y < work.Y {
-			y = work.Y
-		}
-	}
-	return mygo.Rectangle{X: x, Y: y, Width: settingsWidth, Height: h}
-}
-
-// measureSettingsHeight lays out page offscreen at settingsWidth to obtain
-// its exact clamped height [300, 600] before opening or switching pages.
-func (a *shelf) measureSettingsHeight(page settingsPageID) int {
-	return clampSettingsHeight(a.settingsContentHeight(page))
-}
-
-// settingsMeasureHeight is the offscreen surface a page is measured in: tall
-// enough that no page hits it, so a column reports the height its rows want
-// instead of the surface's. A page measured in a settingsMaxHeight surface
-// would report the cap once its content passes it, which is why the window
-// height of two long pages cannot be compared.
-const settingsMeasureHeight = 4000
-
-// settingsContentHeight lays out page offscreen at settingsWidth and returns
-// the height its rows want, before the window cap: a page whose natural
-// height passes 600 shows the same clamped window as another one, so only
-// this answers what a row adds (the island position row, a group the build
-// draws). settingsMinHeight when the page draws nothing.
-func (a *shelf) settingsContentHeight(page settingsPageID) int {
-	var pageH float32
-	v := ui.NewTester(func(c *ui.Context) {
-		c.SetTheme(settingsThemeFor(forWindows))
-		col := ui.Column(c.Key(fmt.Sprintf("measure-%d", page))).Width(settingsWidth).
-			Padding(settingsPagePadTop, settingsPagePadX, settingsPagePadBot, settingsPagePadX)
-		col.Draw(func(_ *ui.Painter, r ui.Rect) {
-			pageH = r.H
-		})
-		col.Children(func() {
-			if a.settingsBroken {
-				settingsBrokenBanner(c)
-			}
-			a.settingsPageBodyFor(c, page)
-		})
-	}, settingsWidth, settingsMeasureHeight)
-	if a.locale != "" {
-		v.SetLocale(a.locale)
-	}
-	v.Frame()
-	if pageH <= 0 {
-		return settingsMinHeight
-	}
-	return int(math.Ceil(float64(settingsTopH + pageH)))
-}
-
-func (a *shelf) applySettingsWindowHeight(h int) {
-	if a.settingsWin == nil {
-		return
-	}
-	cur := a.settingsWin.ContentBounds()
-	cx, cy := cur.X+cur.Width/2, cur.Y+cur.Height/2
-	work := mygo.Screen.DisplayNearestPoint(mygo.Point{X: cx, Y: cy}).WorkArea
-	next := settingsResizedFrame(cur, work, h)
-	a.settingsAppliedH = next.Height
-	if cur != next {
-		a.settingsWin.SetContentBounds(next)
-	}
-}
-
-// setSettingsPage switches to page, resets scroll, and measures the new target
-// height so the 320ms window height transition starts on the very first frame.
+// setSettingsPage switches to page and resets scroll without changing the
+// window's size.
 func (a *shelf) setSettingsPage(page settingsPageID) {
 	if !permissionsSupported && page == settingsPagePermissions {
 		return
@@ -403,9 +323,6 @@ func (a *shelf) setSettingsPage(page settingsPageID) {
 	a.settingsPage = page
 	a.settingsScroll.Y = 0
 	a.endShortcutRecording()
-	if a.settingsWin != nil {
-		a.settingsTargetH = a.measureSettingsHeight(page)
-	}
 	a.repaintSettings()
 }
 
@@ -415,29 +332,6 @@ func (a *shelf) setSettingsPage(page settingsPageID) {
 func (a *shelf) settingsView(c *ui.Context) {
 	c.SetTheme(settingsThemeFor(forWindows))
 	c.Root().Background(settingsBg)
-
-	if a.settingsWin != nil && a.settingsTargetH > 0 {
-		targetH := a.settingsTargetH
-		cur := a.settingsWin.ContentBounds()
-		work := mygo.Screen.DisplayNearestPoint(mygo.Point{X: cur.X + cur.Width/2, Y: cur.Y + cur.Height/2}).WorkArea
-		clamped := settingsResizedFrame(cur, work, targetH)
-		anim := settingsWindowHeightAnim
-		if reduceMotion(c) {
-			anim = ui.Animation{}
-		}
-		curH := c.Root().AnimateTo("win-h", float32(clamped.Height), anim)
-		wantH := settingsResizedFrame(cur, work, int(math.Round(float64(curH)))).Height
-		if wantH != a.settingsAppliedH && !a.settingsResizeQueued {
-			a.settingsResizeQueued = true
-			mygo.RunOnMain(func() {
-				a.settingsResizeQueued = false
-				if a.settingsWin == nil {
-					return
-				}
-				a.applySettingsWindowHeight(wantH)
-			})
-		}
-	}
 
 	recording := a.settingsRecording != shortcutNone
 	pending := a.shortcutConfirm != nil
@@ -487,24 +381,17 @@ func (a *shelf) settingsView(c *ui.Context) {
 			if reduceMotion(c) {
 				enterAnim = ui.ElementTransition{Duration: -1}
 			}
-			pg := ui.Column(c.Key(fmt.Sprintf("page-%d", a.settingsPage))).FillWidth().
-				Padding(settingsPagePadTop, settingsPagePadX, settingsPagePadBot, settingsPagePadX).
-				Transition(enterAnim)
-			pg.Draw(func(_ *ui.Painter, r ui.Rect) {
-				if a.settingsWin == nil || r.H <= 0 {
-					return
-				}
-				liveH := clampSettingsHeight(int(math.Ceil(float64(settingsTopH + r.H))))
-				if liveH != a.settingsTargetH {
-					a.settingsTargetH = liveH
-					mygo.RunOnMain(a.repaintSettings)
-				}
-			})
-			pg.Children(func() {
-				if a.settingsBroken {
-					settingsBrokenBanner(c)
-				}
-				a.settingsPageBody(c)
+			ui.Column(c.Key("page-wrap")).FillWidth().AlignItems(ui.Center).Children(func() {
+				pg := ui.Column(c.Key(fmt.Sprintf("page-%d", a.settingsPage))).
+					FillWidth().MaxWidth(settingsMaxContentW+2*settingsPagePadX).
+					Padding(settingsPagePadTop, settingsPagePadX, settingsPagePadBot, settingsPagePadX).
+					Transition(enterAnim)
+				pg.Children(func() {
+					if a.settingsBroken {
+						settingsBrokenBanner(c)
+					}
+					a.settingsPageBody(c)
+				})
 			})
 		})
 
@@ -771,7 +658,7 @@ func settingsMark(c *ui.Context, logo *ui.SVG, color ui.Color, mark float32) {
 
 // settingsSwitch is the 38×22 v6 switch with a 220ms spring knob.
 func settingsSwitch(c *ui.Context, on *bool, label string) ui.Element {
-	sw := ui.SwitchBase(c, on).Size(38, 22).Radius(11).Label(label)
+	sw := ui.SwitchBase(c, on).Size(38, 22).Shrink(0).Radius(11).Label(label)
 	anim := fadeOr(c, settingsSwitchSpring)
 	target := float32(0)
 	if *on {
@@ -821,7 +708,7 @@ func settingsRow(c *ui.Context, key, label, caption string, fn func()) {
 
 // settingsButton is the 26pt v6 pill-rect button (#24252A, hover #2E2F35).
 func settingsButton(c *ui.Context, key, label string, primary bool, fn func()) ui.Element {
-	b := ui.ButtonBase(c.Key("btn-"+key)).Height(26).Radius(7).Padding(0, 12, 0, 12).
+	b := ui.ButtonBase(c.Key("btn-"+key)).Height(26).Shrink(0).Radius(7).Padding(0, 12, 0, 12).
 		AlignItems(ui.Center).Label(label)
 	fg := ink
 	if primary {
@@ -878,6 +765,8 @@ func settingsSegmentedWidth(c *ui.Context, key, label string, selected *int, fil
 		Padding(2).Gap(2).Radius(8).Background(settingsCtlBg).Label(label)
 	if fill {
 		g.FillWidth()
+	} else {
+		g.Shrink(0)
 	}
 	g.Children(func() {
 		for i, segLabel := range labels {
