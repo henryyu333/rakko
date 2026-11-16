@@ -68,10 +68,14 @@ func evalForegroundFullscreen(fg, mon uintptr) bool {
 	}
 	var cls string
 	var fgRect, monRect winRect
-	var hasRects bool
+	var hasRects, zoomed, hasCaption bool
 	if fg != 0 && mon != 0 {
 		if vis, _, _ := procIsWindowVisible.Call(fg); vis != 0 {
 			if iconic, _, _ := procIsIconic.Call(fg); iconic == 0 {
+				if z, _, _ := procIsZoomed.Call(fg); z != 0 {
+					zoomed = true
+				}
+				hasCaption = getWindowLong(fg, gwlStyle)&wsCaption == wsCaption
 				cls = windowClass(fg)
 				var ok1, ok2 bool
 				fgRect, ok1 = windowRect(fg)
@@ -80,14 +84,14 @@ func evalForegroundFullscreen(fg, mon uintptr) bool {
 			}
 		}
 	}
-	return isFullscreenState(quns, fgOwn, cls, fgRect, monRect, hasRects)
+	return isFullscreenState(quns, fgOwn, zoomed, hasCaption, cls, fgRect, monRect, hasRects)
 }
 
 // isFullscreenState is the pure decision rule for ForegroundFullscreen:
 // true when Windows reports a busy/D3D-fullscreen/presentation notification
-// state, or when a visible non-shell foreign foreground window covers the
-// pointer's monitor.
-func isFullscreenState(quns uint32, fgOwn bool, fgClass string, fgRect, monRect winRect, hasRects bool) bool {
+// state, or when a visible non-shell, non-maximized, borderless foreign
+// foreground window covers the pointer's monitor.
+func isFullscreenState(quns uint32, fgOwn, zoomed, hasCaption bool, fgClass string, fgRect, monRect winRect, hasRects bool) bool {
 	if fgOwn {
 		return false
 	}
@@ -95,7 +99,7 @@ func isFullscreenState(quns uint32, fgOwn bool, fgClass string, fgRect, monRect 
 	case qunsBusy, qunsRunningD3DFullScreen, qunsPresentationMode:
 		return true
 	}
-	if !hasRects || isShellDesktopClass(fgClass) {
+	if zoomed || hasCaption || !hasRects || isShellDesktopClass(fgClass) {
 		return false
 	}
 	return monRect.Right > monRect.Left && monRect.Bottom > monRect.Top &&

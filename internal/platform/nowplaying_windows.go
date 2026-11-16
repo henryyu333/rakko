@@ -423,13 +423,18 @@ func (p *npPoller) currentSession() unsafe.Pointer {
 		return nil
 	}
 	app := npCallString(session, 6)
-	if p.session != nil && p.session != session {
-		winCOMRelease(p.session)
+	if p.session == session {
+		winCOMRelease(session)
+	} else {
+		if p.session != nil {
+			winCOMRelease(p.session)
+		}
+		p.session = session
 	}
 	if app != p.app {
 		p.art, p.artKey, p.missing = nil, "", false
 	}
-	p.session, p.app = session, app
+	p.app = app
 	return p.session
 }
 
