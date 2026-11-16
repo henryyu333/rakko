@@ -160,14 +160,23 @@ func TestSettingsDynamicPageHeightsAndOrangeDot(t *testing.T) {
 	}
 
 	// Selecting Dynamic Island adds the Island Position row on Appearance.
+	// The window height alone cannot tell: a page whose rows already pass the
+	// 600pt cap (the pet group, when the build ships the otter artwork) shows
+	// the same clamped window with and without the row. The row's own effect
+	// is the grown natural content height.
 	a.settings.ShellStyle = settings.ShellStyleNotch
 	a.island = false
-	notchH := a.measureSettingsHeight(settingsPageNotch)
+	notchH := a.settingsContentHeight(settingsPageNotch)
+	notchWin := a.measureSettingsHeight(settingsPageNotch)
 	a.settings.ShellStyle = settings.ShellStyleIsland
 	a.island = true
-	islandH := a.measureSettingsHeight(settingsPageNotch)
+	islandH := a.settingsContentHeight(settingsPageNotch)
+	islandWin := a.measureSettingsHeight(settingsPageNotch)
 	if islandH <= notchH {
-		t.Fatalf("Dynamic Island height %d did not grow over Notch %d", islandH, notchH)
+		t.Fatalf("Dynamic Island content height %d did not grow over Notch %d", islandH, notchH)
+	}
+	if islandWin < notchWin {
+		t.Fatalf("Dynamic Island window height %d shrank below Notch %d", islandWin, notchWin)
 	}
 
 	// Missing permissions show an orange dot on the Permissions tab icon.

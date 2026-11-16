@@ -336,6 +336,22 @@ func settingsResizedFrame(cur, work mygo.Rectangle, h int) mygo.Rectangle {
 // measureSettingsHeight lays out page offscreen at settingsWidth to obtain
 // its exact clamped height [300, 600] before opening or switching pages.
 func (a *shelf) measureSettingsHeight(page settingsPageID) int {
+	return clampSettingsHeight(a.settingsContentHeight(page))
+}
+
+// settingsMeasureHeight is the offscreen surface a page is measured in: tall
+// enough that no page hits it, so a column reports the height its rows want
+// instead of the surface's. A page measured in a settingsMaxHeight surface
+// would report the cap once its content passes it, which is why the window
+// height of two long pages cannot be compared.
+const settingsMeasureHeight = 4000
+
+// settingsContentHeight lays out page offscreen at settingsWidth and returns
+// the height its rows want, before the window cap: a page whose natural
+// height passes 600 shows the same clamped window as another one, so only
+// this answers what a row adds (the island position row, a group the build
+// draws). settingsMinHeight when the page draws nothing.
+func (a *shelf) settingsContentHeight(page settingsPageID) int {
 	var pageH float32
 	v := ui.NewTester(func(c *ui.Context) {
 		c.SetTheme(settingsThemeFor(forWindows))
@@ -350,7 +366,7 @@ func (a *shelf) measureSettingsHeight(page settingsPageID) int {
 			}
 			a.settingsPageBodyFor(c, page)
 		})
-	}, settingsWidth, settingsMaxHeight)
+	}, settingsWidth, settingsMeasureHeight)
 	if a.locale != "" {
 		v.SetLocale(a.locale)
 	}
@@ -358,7 +374,7 @@ func (a *shelf) measureSettingsHeight(page settingsPageID) int {
 	if pageH <= 0 {
 		return settingsMinHeight
 	}
-	return clampSettingsHeight(int(math.Ceil(float64(settingsTopH + pageH))))
+	return int(math.Ceil(float64(settingsTopH + pageH)))
 }
 
 func (a *shelf) applySettingsWindowHeight(h int) {
