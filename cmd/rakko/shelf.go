@@ -328,6 +328,10 @@ func (a *shelf) toast(msg string, until time.Time, kind statusKind, capsule bool
 	a.statusCapsuleLimit = limit
 	if !a.visible && capsule {
 		a.showStatusFeedback(time.Now())
+		// The capsule grows the strip out of the resting capsule: take the
+		// blank frame for that resize before the first morph frame (see
+		// beginClosedPeekBlank).
+		a.beginClosedPeekBlank()
 	}
 	if a.win != nil {
 		a.win.Invalidate()

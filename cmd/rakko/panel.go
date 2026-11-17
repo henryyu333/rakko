@@ -729,7 +729,7 @@ func (a *shelf) view(c *ui.Context) {
 			baseW, _ := a.anchorSize()
 			frameW := float32(a.frame.Width)
 			if frameW < baseW+appEntryW {
-				frameW = baseW + 40
+				frameW = baseW + peekExtraW
 			}
 			e := a.appsEntryButton(c, "apps-island-entry", appEntryW, a.idleEntryHover)
 			e.Absolute().Right((frameW-baseW)/2 + 4).Top(float32(a.islandTop + (islandIdleH-appEntryW)/2))
@@ -868,6 +868,16 @@ func (a *shelf) view(c *ui.Context) {
 				// peekK, which is a jump in this mode).
 				peekW = zone.Jump("peek-w", peekW)
 				peekH = zone.Jump("peek-h", peekH)
+			case a.fx.peekK <= 0.002 && !a.fx.peek:
+				// Nothing of the peek shape is on screen yet (the shell is
+				// still the capsule): take the shape whole and let peekK
+				// carry the morph out of the capsule on one spring. Springing
+				// the shape and the reveal together made the shell's height
+				// dip while its width grew — the old chevron's body relaxing
+				// to the wings' on the way out — and the width grew a point
+				// at a time under the envelope's feet.
+				peekW = zone.Jump("peek-w", peekW)
+				peekH = zone.Jump("peek-h", peekH)
 			default:
 				peekW = zone.AnimateTo("peek-w", peekW, sizeAnim)
 				peekH = zone.AnimateTo("peek-h", peekH, sizeAnim)
@@ -946,6 +956,11 @@ func (a *shelf) view(c *ui.Context) {
 	// pointer through: the gate accepts presses only on the drawn shell
 	// (overlayAcceptsMouse), so the exact box is not needed there.
 	a.fx.peek = !expanded && peeked && !closing
+	// A closed peek morph draws inside one window: take its envelope on the
+	// frame the morph starts and keep it until the shell is back on the
+	// capsule. desiredFrame never follows the drawn shell for it, so the
+	// springs below no longer resize the surface frame by frame.
+	a.holdClosedPeek()
 	// A panel drag released on the other side of the island slides there on
 	// the panel's own spring; the box, its frame and its hit shape all read
 	// the same value in this frame.

@@ -166,7 +166,11 @@ func (a *shelf) syncMainIdleCapsuleVisibility(blank bool) {
 		}
 	case a.peeking || a.apps.on || a.fx.peekK > 0.01 || a.fb.drawn || a.fb.retracting ||
 		a.liveUp() || a.clockAlarmFree() || a.dragging || a.pointerDrag || a.islandDrag:
-		a.hideMainIdleCapsuleSoon()
+		// A transparent frame is what covers a resize (issue #5, a closed
+		// peek's growth); the capsule's picture stays over it.
+		if !blank {
+			a.hideMainIdleCapsuleSoon()
+		}
 	case a.fx.w <= float32(islandIdleW+4) && a.fx.h <= float32(islandIdleH+4):
 		// The closing shell has folded back onto the capsule: the picture
 		// takes over before the panel blanks for its strip resize.
@@ -186,6 +190,13 @@ func (a *shelf) hideMainIdleCapsuleSoon() {
 	a.win.Update(func() {
 		a.mainIdleHideQueued = false
 		if a.win == nil || a.win.IsDestroyed() {
+			return
+		}
+		// A transparent frame is on its way (a native resize waits for it):
+		// the capsule's picture is what keeps the capsule on screen under
+		// it, so it stays until the resize has landed and a drawn frame
+		// covers it.
+		if a.blankQueued || a.blankFrame {
 			return
 		}
 		// An idle or capsule-sized closing frame may have taken over while

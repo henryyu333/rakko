@@ -35,6 +35,7 @@ const (
 	tabAnimation   = 240 * time.Millisecond // 页面切换：胶囊滑动、旧页淡出后新页淡入
 	// 探头里的图形必须整体落在硬件刘海下方：刘海区域没有像素。
 	peekBody       = 18 // 空手悬停：刘海下方露出的高度（放下拉箭头）
+	peekExtraW     = 40 // 空手悬停：胶囊比锚点宽出的总宽度（两侧各半）
 	dropPillBody   = 32 // 拖拽中：刘海下方「松开放入」那一行的高度
 	dropPillExtraW = 60 // 拖拽中：比刘海宽出的部分
 	// 面板尺寸见 panel.go 的 islandW/islandH/sheetW/sheetH；原生窗口初始

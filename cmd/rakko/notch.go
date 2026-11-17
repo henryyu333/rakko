@@ -114,6 +114,26 @@ func (a *shelf) shellVisibleOnNotch(now time.Time) bool {
 		a.pinReturning || a.petReturning || (a.dragging && !a.ownDrag)
 }
 
+// closedPeekOut reports whether the closed shell is headed into (or rests
+// on) a peek shape rather than folding out of one. Only this direction
+// needs the springs' overshoot room: the fold never overshoots.
+func (a *shelf) closedPeekOut(now time.Time) bool {
+	return a.peeking || a.appsModeOn() || a.capsuleUp(now) || a.liveUp() ||
+		a.clockAlarmFree() || (a.clock != nil && a.clock.timerWingsUp()) ||
+		a.pinReturning || a.petReturning
+}
+
+// closedPeekUp reports whether the closed shell draws, or is folding back
+// from, a peek shape: the hover pill and its wings, a live activity, the
+// completion capsule, the app switcher or the countdown's wings. While true
+// the strip keeps the morph's fixed envelope (desiredFrame) instead of
+// shrinking to the capsule mid-flight; once it is false the resting
+// capsule's exact box returns.
+func (a *shelf) closedPeekUp(now time.Time) bool {
+	return a.fx.sizeMoving || a.fx.peek || a.fx.peekK > 0.002 ||
+		a.fb.drawn || a.fb.retracting || a.closedPeekOut(now)
+}
+
 // fullscreenSuppressed reports whether a foreign fullscreen app owns the
 // display while the user has not explicitly opened the shelf panel.
 func (a *shelf) fullscreenSuppressed() bool {
@@ -230,6 +250,7 @@ func (a *shelf) desiredFrame() mygo.Rectangle {
 	// The resident strip holds the largest peek shape for the current
 	// state, so hovering only redraws; it resizes when a track comes or
 	// goes, while nothing is drawn.
+	now := time.Now()
 	pw, ph := a.peekSize()
 	if a.np != nil && a.np.hasTrack() {
 		// The capsule and the wings can alternate on the same strip: keep
@@ -237,19 +258,39 @@ func (a *shelf) desiredFrame() mygo.Rectangle {
 		mw, mh := a.wingsSize()
 		pw, ph = max(pw, mw), max(ph, mh)
 	}
+	// The resting strip's hover pill: hovering must not resize the surface,
+	// and every closed morph with no track loaded folds back into this box.
+	bw, bh := a.anchorSize()
+	restW, restH := bw+peekExtraW, bh+peekBody
+	if (a.closedPeekOut(now) || a.fx.sizeMoving) && (pw > restW || ph > restH) {
+		// A morph out of the capsule overshoots its target by a couple of
+		// points (Bounce 0.28 peaks near 4%); the strip keeps headroom so
+		// no frame is clipped. Only a shape that grows past the resting
+		// pill needs it: the pill's own reveal ends on the box the strip
+		// already has, so hovering still never resizes the window. The room
+		// goes on the shape the morph heads for, before the drawn shell is
+		// folded in below: folding it in afterwards multiplied the spring's
+		// own overshoot by the room again and grew the frame mid-morph.
+		pw, ph = max(pw*(1+openOvershoot), restW), max(ph*(1+openOvershoot), restH)
+	}
+	// With no track loaded the hover pill is what a closed morph returns
+	// to, so the window must never have shrunk below it (the fold would
+	// then grow it — a resize under the running spring). With a track the
+	// resting peek is the wings, and the hover itself takes the session
+	// envelope (beginSurfaceHold), so the wings' own box is the target.
+	if a.np == nil || !a.np.hasTrack() {
+		pw, ph = max(pw, restW), max(ph, restH)
+	}
 	if a.fx.peek {
 		// The shell can still be the larger shape it is folding back from,
-		// e.g. the capsule just expired or a track stopped playing.
+		// e.g. the capsule just expired or a track stopped playing. The
+		// frameHold taken by holdClosedPeek keeps this room after the shell
+		// has shrunk; here it only has to cover what is drawn now.
 		pw, ph = max(pw, a.fx.w), max(ph, a.fx.h)
-	}
-	if a.fx.sizeMoving {
-		// A morph in flight overshoots its target by a couple of points
-		// (Bounce 0.15); the strip keeps headroom so no frame is clipped.
-		pw, ph = pw*(1+openOvershoot), ph*(1+openOvershoot)
 	}
 	w := int(math.Ceil(float64(pw))) + 2*ears
 	h := top + int(math.Ceil(float64(ph)))
-	if a.capsuleUp(time.Now()) || a.fb.drawn {
+	if a.capsuleUp(now) || a.fb.drawn {
 		// The completion capsule is another peek shape: while it shows, the
 		// strip holds room for it at the widest the text can make it, plus
 		// its corners, shake and grow-out overshoot. The shape grows out in
@@ -419,6 +460,43 @@ func (a *shelf) beginSurfaceHold() {
 	a.holdSurface(a.sessionFrame())
 }
 
+// beginClosedPeekBlank puts the transparent frame a closed peek's growth
+// resize waits for ahead of the morph's first frame. The resize then lands
+// between the blank and the first drawn peek frame instead of under the
+// running spring (a resize the motion metric counts as mid-flight), and the
+// resting capsule's picture covers the blank (issue #5). Only the resting
+// capsule's canvas can be blanked: a drawn peek has no picture over it, so
+// it resizes directly.
+func (a *shelf) beginClosedPeekBlank() {
+	if a.win == nil || a.winH == 0 || a.visible || a.fx.openK > 0.002 ||
+		a.dragging || a.pointerDrag || a.islandDrag {
+		return
+	}
+	if !a.island || !a.idleIslandDrawn || a.blankReady || a.blankQueued || a.blankFrame {
+		return
+	}
+	a.showMainIdleCapsule()
+	a.blankQueued, a.blankFrame = true, true
+	a.win.Invalidate()
+}
+
+// holdClosedPeek takes the envelope a closed peek morph draws in and keeps
+// it until the shell is back on the resting capsule: the shape the morph
+// heads for plus the springs' overshoot room (desiredFrame), not the shape
+// it passes through. Following the drawn shell resized the native surface
+// on every frame of a morph. The hold ends with the fold (targetFrame's
+// holdFaded), which then returns the strip's exact box in one resize.
+func (a *shelf) holdClosedPeek() {
+	if a.win == nil || a.visible || a.fx.openK > 0.002 ||
+		a.dragging || a.pointerDrag || a.islandDrag {
+		return
+	}
+	if !a.closedPeekUp(time.Now()) {
+		return
+	}
+	a.holdSurface(a.desiredFrame())
+}
+
 // holdSurface grows the held envelope (or starts one) to cover t. It does
 // nothing while the shelf is settled closed, or while a drag owns the
 // frame.
@@ -427,8 +505,10 @@ func (a *shelf) holdSurface(t mygo.Rectangle) {
 		return
 	}
 	// Nothing is up to hold a surface for: a closed, unpeeked shelf's
-	// frame is the strip's own.
-	if !a.visible && a.fx.openK <= 0.002 && !a.peeking && !a.fb.drawn && !a.fb.retracting {
+	// frame is the strip's own. A closed peek morph holds the envelope it
+	// draws in (holdClosedPeek).
+	if !a.visible && a.fx.openK <= 0.002 && !a.peeking && !a.fb.drawn && !a.fb.retracting &&
+		!a.closedPeekUp(time.Now()) {
 		return
 	}
 	// A fold only shrinks: it runs inside the frame the panel has, and the
@@ -617,11 +697,19 @@ func (a *shelf) syncWindowFrame() {
 		a.win.Invalidate()
 		return
 	}
-	if a.island && a.idleIslandDrawn && !a.blankReady && a.resizeStretches(r) {
+	// The resting capsule is the one canvas mygo presents stretched into a
+	// bigger frame (issue #5). A closed peek morph grows out of that same
+	// capsule, so its one growth resize takes the same path: a transparent
+	// frame covered by the capsule's picture, then the envelope. Every
+	// later resize of the morph is held off by holdClosedPeek.
+	closedGrowth := !a.visible && a.fx.openK <= 0.002 &&
+		!a.dragging && !a.pointerDrag && !a.islandDrag && a.closedPeekUp(time.Now())
+	if a.island && !a.blankReady && a.resizeStretches(r) && (a.idleIslandDrawn || closedGrowth) {
 		// Ask for one transparent frame over the resting capsule. Its defer
 		// queues this call again through Update, after the frame's pass has
 		// committed, so the native resize lands on a blank canvas rather
 		// than on the capsule picture.
+		a.showMainIdleCapsule()
 		if !a.blankQueued {
 			a.blankQueued = true
 			a.blankFrame = true
@@ -712,7 +800,7 @@ func (a *shelf) peekSize() (w, h float32) {
 	if a.np != nil && a.np.showsPlayer() {
 		return a.wingsSize()
 	}
-	return baseW + 40, baseH + peekBody
+	return baseW + peekExtraW, baseH + peekBody
 }
 
 // liveWingW is how far each side grows for charging and downloads: the

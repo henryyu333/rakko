@@ -207,6 +207,12 @@ func (a *shelf) pushLive(ev liveEvent, hold time.Duration, now time.Time) {
 	baseW, _ := a.anchorSize()
 	ev.width = liveCapsuleWidth(a.appLoc(), ev, baseW)
 	a.live.queued = append(a.live.queued, ev)
+	if a.liveAllow() {
+		// The notice grows the strip out of the resting capsule: take the
+		// blank frame for that resize before the first morph frame (see
+		// beginClosedPeekBlank).
+		a.beginClosedPeekBlank()
+	}
 	if a.win != nil {
 		a.win.Invalidate()
 	}
