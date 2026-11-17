@@ -124,7 +124,7 @@ func requireOwnMouseTarget(t *testing.T, x, y float64) {
 	if !insideOwnFrame {
 		t.Fatalf("refusing mouse event at %+v: point is outside every test window", p)
 	}
-	warpPointerTo(t, x, y)
+	hidMoveTo(t, x, y)
 	time.Sleep(60 * time.Millisecond)
 	onMain(func() {
 		primary := mygo.Screen.PrimaryDisplay()

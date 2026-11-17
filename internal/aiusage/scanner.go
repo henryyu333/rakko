@@ -64,6 +64,7 @@ type fileState struct {
 	recs              []rec
 	tail              codexTail
 	ledgerPrev        map[string]cumSnapshot // cumulative-table ledgers (Hermes, Copilot sessions)
+	dbRev             uint64                 // header/sidecar signature for SQLite databases
 	unsupportedSchema bool
 }
 
@@ -330,9 +331,9 @@ loop:
 	// failure marks the reader failed; its records are dropped below so the
 	// total only covers readers that answered.
 	for _, db := range dbJobs {
-		if size, mod, ok := dbSignature(db.spec.path); ok {
+		if sig, ok := dbSignature(db.spec.path); ok {
 			old := prev[db.spec.path]
-			if old != nil && old.size == size && old.modNano == mod {
+			if old != nil && old.size == sig.size && old.modNano == sig.mod && old.dbRev == sig.rev {
 				if !old.unsupportedSchema {
 					hasDataFile[db.tool] = true
 				}
@@ -342,8 +343,9 @@ loop:
 				if errors.Is(err, errUnsupportedDBSchema) {
 					files[db.spec.path] = &fileState{
 						tool:              db.tool,
-						size:              size,
-						modNano:           mod,
+						size:              sig.size,
+						modNano:           sig.mod,
+						dbRev:             sig.rev,
 						unsupportedSchema: true,
 					}
 				} else if err != nil {
@@ -355,8 +357,9 @@ loop:
 					hasDataFile[db.tool] = true
 					files[db.spec.path] = &fileState{
 						tool:       db.tool,
-						size:       size,
-						modNano:    mod,
+						size:       sig.size,
+						modNano:    sig.mod,
+						dbRev:      sig.rev,
 						recs:       recs,
 						ledgerPrev: snap,
 					}
@@ -366,8 +369,9 @@ loop:
 				if errors.Is(err, errUnsupportedDBSchema) {
 					files[db.spec.path] = &fileState{
 						tool:              db.tool,
-						size:              size,
-						modNano:           mod,
+						size:              sig.size,
+						modNano:           sig.mod,
+						dbRev:             sig.rev,
 						unsupportedSchema: true,
 					}
 				} else if err != nil {
@@ -377,7 +381,7 @@ loop:
 					failed[db.tool] = true
 				} else {
 					hasDataFile[db.tool] = true
-					files[db.spec.path] = &fileState{tool: db.tool, size: size, modNano: mod, recs: recs}
+					files[db.spec.path] = &fileState{tool: db.tool, size: sig.size, modNano: sig.mod, dbRev: sig.rev, recs: recs}
 				}
 			}
 		}
@@ -443,22 +447,65 @@ func (s *Scanner) UnreadableTools() []Tool {
 	return append([]Tool(nil), s.lastUnreadable...)
 }
 
-// dbSignature reports the opencode database's size and newest modification
-// time, including the WAL: SQLite may append there without touching the main
-// file until a checkpoint.
-func dbSignature(path string) (size, mod int64, ok bool) {
-	for _, p := range []string{path, path + "-wal"} {
+type dbSig struct {
+	size int64
+	mod  int64
+	rev  uint64
+}
+
+// dbSignature reports a SQLite database's combined size, newest modification
+// time, and a header/sidecar revision hash across the main file, -wal, and
+// -journal. Hashing the SQLite header (which includes the file change counter
+// at bytes 24..27) and sidecar headers catches writes whose size and coarse
+// filesystem mtime did not change (e.g. rapid in-place INSERTs on Windows).
+func dbSignature(path string) (sig dbSig, ok bool) {
+	h := fnv.New64a()
+	var hdr [100]byte
+	for i, suffix := range []string{"", "-wal", "-journal"} {
+		p := path + suffix
 		fi, err := os.Stat(p)
 		if err != nil {
+			h.Write([]byte{byte(i), 0})
 			continue
 		}
 		ok = true
-		size += fi.Size()
-		if m := fi.ModTime().UnixNano(); m > mod {
-			mod = m
+		sz := fi.Size()
+		mt := fi.ModTime().UnixNano()
+		sig.size += sz
+		if mt > sig.mod {
+			sig.mod = mt
 		}
+		var meta [18]byte
+		meta[0] = byte(i)
+		meta[1] = 1
+		for b := range 8 {
+			meta[2+b] = byte(uint64(sz) >> (b * 8))
+			meta[10+b] = byte(uint64(mt) >> (b * 8))
+		}
+		h.Write(meta[:])
+		want := 32
+		if i == 0 {
+			want = len(hdr)
+		}
+		n := readFilePrefix(p, hdr[:want])
+		h.Write([]byte{byte(n)})
+		h.Write(hdr[:n])
 	}
-	return size, mod, ok
+	sig.rev = h.Sum64()
+	if sig.rev == 0 {
+		sig.rev = 1
+	}
+	return sig, ok
+}
+
+func readFilePrefix(path string, buf []byte) int {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0
+	}
+	defer f.Close()
+	n, _ := io.ReadFull(f, buf)
+	return n
 }
 
 // collectLogs returns every file under root matching the glob basename. A
@@ -639,6 +686,7 @@ type cacheFileJSON struct {
 	R  [][]json.RawMessage    `json:"r"`
 	C  *cacheTailJSON         `json:"c,omitempty"`
 	H  map[string]cumSnapshot `json:"h,omitempty"`
+	DR uint64                 `json:"dr,omitempty"`
 	U  bool                   `json:"u,omitempty"`
 }
 
@@ -687,6 +735,7 @@ func (s *Scanner) loadCache(ctx context.Context) {
 			tailStart:         cf.TS,
 			tailSum:           cf.TH,
 			ledgerPrev:        cf.H,
+			dbRev:             cf.DR,
 			unsupportedSchema: cf.U,
 		}
 		if cf.C != nil {
@@ -831,6 +880,9 @@ func (s *Scanner) saveCache(ctx context.Context, files map[string]*fileState) {
 				h = 1
 			}
 			buf.WriteString(strconv.Itoa(h) + `}`)
+		}
+		if st.dbRev != 0 {
+			buf.WriteString(`,"dr":` + strconv.FormatUint(st.dbRev, 10))
 		}
 		if len(st.ledgerPrev) > 0 {
 			if hb, err := json.Marshal(st.ledgerPrev); err == nil {

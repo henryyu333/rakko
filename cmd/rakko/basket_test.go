@@ -25,9 +25,12 @@ import (
 // (CGWindowListCopyWindowInfo) and screenshotted. The test instance uses a
 // temporary data dir and never touches ~/Library/Application Support/Rakko.
 func TestMain(m *testing.M) {
-	// The approval smoke runs this same test binary as the hook client, so
-	// the server and the client are one file and the peer check passes for
-	// the same reason it does in the installed app.
+	// The agent-notify and approval smokes run this same test binary as the
+	// hook client, so the server and the client are one file and the peer
+	// check passes for the same reason it does in the installed app.
+	if agentnotify.RunHookCLI(os.Args[1:], os.Stdin) {
+		os.Exit(0)
+	}
 	if agentnotify.RunApproveCLI(os.Args[1:], os.Stdin, os.Stdout) {
 		os.Exit(0)
 	}

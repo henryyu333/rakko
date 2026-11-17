@@ -123,3 +123,38 @@ func TestOpencodeDoesNotWriteToTheUserDirectory(t *testing.T) {
 		}
 	}
 }
+
+func TestOpencodeDetectsSameSizeSameMtime(t *testing.T) {
+	home := t.TempDir()
+	db := opencodeTestDB(t, home)
+	s := NewScanner(home, t.TempDir())
+	if err := s.Scan(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	fiBefore, err := os.Stat(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	runSQLite(t, db, `INSERT INTO message VALUES ('msg_5','ses_1',1792412400000,1792412401000,
+		'{"role":"assistant","modelID":"deepseek-v4-flash","tokens":{"input":7,"output":3,"cache":{"read":0,"write":0}},"cost":0.001}')`)
+	if err := os.Chtimes(db, fiBefore.ModTime(), fiBefore.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	fiAfter, err := os.Stat(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fiAfter.Size() != fiBefore.Size() || !fiAfter.ModTime().Equal(fiBefore.ModTime()) {
+		t.Fatalf("expected identical size/mtime for test setup: before=(%d,%v) after=(%d,%v)",
+			fiBefore.Size(), fiBefore.ModTime(), fiAfter.Size(), fiAfter.ModTime())
+	}
+
+	if err := s.Scan(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	o := s.Summary(RangeToday, fixtureNow()).ByTool[ToolOpencode]
+	if o.Requests != 3 || o.Input != 307 || o.Output != 33 {
+		t.Fatalf("opencode missed same-size same-mtime insert: %+v", o)
+	}
+}

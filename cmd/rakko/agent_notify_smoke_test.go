@@ -23,27 +23,6 @@ import (
 
 const agentShotDir = "/tmp/rakko-agent"
 
-// buildHookBinary builds the app's own binary inside a throwaway .app so
-// the installed command (which only runs from a bundle) can be executed for
-// real. The forwarder mode exits before any window or data work.
-func buildHookBinary(t *testing.T) string {
-	t.Helper()
-	exe := filepath.Join(agentShotDir, "Rakko.app", "Contents", "MacOS", "Rakko")
-	if err := os.MkdirAll(filepath.Dir(exe), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	root, err := filepath.Abs("../..")
-	if err != nil {
-		t.Fatal(err)
-	}
-	cmd := exec.Command("go", "build", "-o", exe, "./cmd/rakko")
-	cmd.Dir = root
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("building the hook binary: %v\n%s", err, out)
-	}
-	return exe
-}
-
 // claudeHookCommand reads Rakko's Stop command back from the settings file
 // the switch wrote.
 func claudeHookCommand(t *testing.T, path string) string {
@@ -134,12 +113,10 @@ func TestAgentNotifySmoke(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(home, ".claude", "projects"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	exe := buildHookBinary(t)
-	origHome, origExe := agentNotifyHome, agentNotifyExe
+	origHome := agentNotifyHome
 	agentNotifyHome = func() (string, error) { return home, nil }
-	agentNotifyExe = func() (string, error) { return exe, nil }
 	t.Cleanup(func() {
-		agentNotifyHome, agentNotifyExe = origHome, origExe
+		agentNotifyHome = origHome
 		onMain(func() { a.agentFeature().stop() })
 	})
 
@@ -147,6 +124,9 @@ func TestAgentNotifySmoke(t *testing.T) {
 		a.settings.AgentNotify.Enabled = true
 		a.agentApply(true)
 	})
+	if err := agentnotify.Connect(home, a.dataDir, os.Args[0], agentnotify.ToolClaude); err != nil {
+		t.Fatal(err)
+	}
 	path := agentnotify.ConfigPath(home, agentnotify.ToolClaude)
 	command := claudeHookCommand(t, path)
 	t.Logf("installed command: %s", command)
