@@ -40,9 +40,37 @@ var (
 // wiCLSCTXInProcServer: WIC's codecs live in-process.
 const wiCLSCTXInProcServer = 1
 
-// wicErrCodecMissing is WINCODEC_ERR_COMPONENTNOTFOUND, which WIC answers
-// when no codec claims the file (a HEIC file without the HEIF extension).
-const wicErrCodecMissing = 0x88982F50
+// HEIC needs two Microsoft Store codecs: the HEIF Image Extensions register
+// the container decoder and encoder, and the HEVC Video Extensions supply the
+// bitstream codec inside it. The HRESULTs below tell the two apart; none is
+// unique to HEIC, so a classification also checks the file's extension.
+const (
+	// wicErrCodecMissing is WINCODEC_ERR_COMPONENTNOTFOUND, which WIC answers
+	// when no codec claims the file (a HEIC file without the HEIF extension).
+	wicErrCodecMissing = 0x88982F50
+	// wicErrUnsupportedPixelFormat is WINCODEC_ERR_UNSUPPORTEDPIXELFORMAT;
+	// some Windows builds report it when the HEVC decoder cannot provide the
+	// frame's pixels.
+	wicErrUnsupportedPixelFormat = 0x88982F07
+	// wicErrInvalidArg is E_INVALIDARG, which the HEIF decoder in this build
+	// returns from CopyPixels when the HEVC decoder is missing.
+	wicErrInvalidArg = 0x80070057
+	// regDBClassNotRegistered is REGDB_E_CLASSNOTREG: the codec's class is not
+	// registered at all.
+	regDBClassNotRegistered = 0x80040154
+	// mfErrTopoCodecNotFound is MF_E_TOPO_CODEC_NOT_FOUND, the Media
+	// Foundation codec-not-found code a HEIC commit returns without HEVC.
+	mfErrTopoCodecNotFound = 0xC00D5212
+)
+
+// isHEICPath reports whether path names a HEIF container.
+func isHEICPath(path string) bool {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".heic", ".heif":
+		return true
+	}
+	return false
+}
 
 // IWICImagingFactory vtable slots after IUnknown's three.
 const (
@@ -127,17 +155,30 @@ func wicFrame(factory uintptr, path string) (decoder, frame uintptr, err error) 
 		uintptr(unsafe.Pointer(p)), 0, genericRead, wicDecodeMetadataOnDemand,
 		uintptr(unsafe.Pointer(&decoder)))
 	if wiFailed(hr) {
-		if uint32(hr) == wicErrCodecMissing {
-			return 0, 0, fmt.Errorf("windows: no codec for %s (HEIC needs the HEIF Image Extensions)", path)
-		}
-		return 0, 0, wiErr("WIC decoder for "+path, hr)
+		return 0, 0, wicDecodeOpenError(path, hr)
 	}
 	hr = wiInvoke(decoder, wicDecoderGetFrame, 0, uintptr(unsafe.Pointer(&frame)))
 	if wiFailed(hr) {
 		wiRelease(decoder)
+		if isHEICPath(path) {
+			return 0, 0, wicDecodeError(path, hr)
+		}
 		return 0, 0, wiErr("WIC first frame of "+path, hr)
 	}
 	return decoder, frame, nil
+}
+
+// wicDecodeOpenError words a failed decoder creation. Only a HEIC file with
+// no codec registered for its container means the HEIF Image Extensions are
+// missing; any other failure is reported as the call's HRESULT.
+func wicDecodeOpenError(path string, hr uintptr) error {
+	if isHEICPath(path) {
+		switch uint32(hr) {
+		case wicErrCodecMissing, regDBClassNotRegistered:
+			return fmt.Errorf("%w: no decoder for %s", ErrHEIFExtensionMissing, filepath.Base(path))
+		}
+	}
+	return wiErr("WIC decoder for "+path, hr)
 }
 
 // wicInfo is a file's stored pixel size and EXIF orientation.
@@ -289,15 +330,16 @@ func scaledDims(w, h, maxPx int) (int, int) {
 	return max(1, w*maxPx/long), max(1, h*maxPx/long)
 }
 
-// wicDecodeError words a failed decode. A HEIC file whose HEVC decoder is
-// missing parses its header but cannot produce pixels (WINCODEC_ERR_...),
-// which the user needs to hear as a missing codec, not as a number.
+// wicDecodeError words a failed pixel read. The HEIF decoder opens a HEIC
+// file and reports its size without the HEVC Video Extensions, but the pixels
+// cannot be produced: this build returns E_INVALIDARG, others an unsupported
+// pixel format or a missing component. Other formats' failures and other
+// codes stay technical errors.
 func wicDecodeError(path string, hr uintptr) error {
-	switch ext := strings.ToLower(filepath.Ext(path)); uint32(hr) {
-	case wicErrCodecMissing, 0x88982F07: // WINCODEC_ERR_UNSUPPORTEDPIXELFORMAT
-		if ext == ".heic" || ext == ".heif" {
-			return errors.New("windows: cannot decode " + filepath.Base(path) +
-				": the HEVC codec is missing (install HEVC Video Extensions from the Microsoft Store)")
+	if isHEICPath(path) {
+		switch uint32(hr) {
+		case wicErrCodecMissing, wicErrUnsupportedPixelFormat, wicErrInvalidArg:
+			return fmt.Errorf("%w: cannot decode %s", ErrHEVCExtensionMissing, filepath.Base(path))
 		}
 	}
 	return wiErr("WIC decode of "+path, hr)
@@ -394,7 +436,7 @@ func wicEncodeHEIC(img *image.RGBA, path string, quality float64) error {
 	hr := wiInvoke(factory, wicFactoryCreateEncoder, uintptr(unsafe.Pointer(&wiGUIDContainerHeif)), 0,
 		uintptr(unsafe.Pointer(&encoder)))
 	if wiFailed(hr) {
-		return fmt.Errorf("windows: HEIC encoder unavailable (install the HEIF Image Extensions): 0x%08X", uint32(hr))
+		return wicEncodeOpenError(hr)
 	}
 	defer wiRelease(encoder)
 	var stream uintptr
@@ -467,16 +509,26 @@ func wicEncodeHEIC(img *image.RGBA, path string, quality float64) error {
 	return nil
 }
 
+// wicEncodeOpenError words a failed HEIC encoder creation. The HEIF
+// container encoder is registered by the HEIF Image Extensions: a missing
+// class is that extension, while any other failure keeps its HRESULT.
+func wicEncodeOpenError(hr uintptr) error {
+	switch uint32(hr) {
+	case wicErrCodecMissing, regDBClassNotRegistered:
+		return fmt.Errorf("%w: no HEIC encoder", ErrHEIFExtensionMissing)
+	}
+	return wiErr("WIC HEIC encoder", hr)
+}
+
 // wicEncodeError words a HEIC write failure. The HEIF container encoder is
-// part of the HEIF Image Extensions, but the HEVC bitstream encoder is a
-// separate download: without it the commit fails with a codec-not-found
-// code, which must not surface as a bare HRESULT.
+// part of the HEIF Image Extensions and was already created, so a codec
+// missing here is the HEVC bitstream encoder: without it the commit fails
+// with MF_E_TOPO_CODEC_NOT_FOUND (or a missing component), which must not
+// surface as a bare HRESULT.
 func wicEncodeError(hr uintptr) error {
 	switch uint32(hr) {
-	case 0xC00D5212: // MF_E_TOPO_CODEC_NOT_FOUND
-		return errors.New("windows: HEIC encoding needs the HEVC Video Extensions (install it from the Microsoft Store)")
-	case wicErrCodecMissing:
-		return errors.New("windows: HEIC encoding needs the HEIF Image Extensions")
+	case mfErrTopoCodecNotFound, wicErrCodecMissing:
+		return fmt.Errorf("%w: cannot write HEIC", ErrHEVCExtensionMissing)
 	}
 	return wiErr("WIC HEIC encode", hr)
 }

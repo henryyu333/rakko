@@ -405,6 +405,8 @@
   "convFailed": "Conversion failed: {err}",
   "convFailedZip": "Compression failed: {err}",
   "convFailedExtract": "Extraction failed: {err}",
+  "imageNeedsHEIF": "Install the HEIF Image Extensions from the Microsoft Store",
+  "imageNeedsHEVC": "Install the HEVC Video Extensions",
   "convPartial": "{ok, number, ::group-off} succeeded, {failed, number, ::group-off} failed",
   "convCanceledDone": "Canceled · {n, plural, one {{n, number, ::group-off} item done} other {{n, number, ::group-off} items done}}",
   "convNoTextPDF": "No text found; the Word file is blank",

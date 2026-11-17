@@ -427,7 +427,8 @@ func (a *shelf) changed(err error) {
 	}
 }
 func (a *shelf) report(err error) {
-	msg := a.appLoc().StatusFailed(err.Error())
+	l := a.appLoc()
+	msg := l.StatusFailed(imageCodecError(l, err))
 	a.toastStatus(msg, time.Time{}, statusErr)
 	log.Print(msg)
 	if a.win != nil {
