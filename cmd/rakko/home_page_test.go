@@ -211,6 +211,40 @@ func TestHomeLyricsRetriesAfterPause(t *testing.T) {
 	}
 }
 
+func TestHomeLyricsFirstRetryIsFasterThanLaterRetries(t *testing.T) {
+	st := homeTrack()
+	oldFetch, oldGo, oldMain := homeFetch, homeGo, homeOnMain
+	var calls int
+	homeFetch = func(context.Context, lyrics.Track) (lyrics.Result, error) {
+		calls++
+		return lyrics.Result{}, context.DeadlineExceeded
+	}
+	homeGo = func(fn func()) { fn() }
+	homeOnMain = func(fn func()) { fn() }
+	t.Cleanup(func() { homeFetch, homeGo, homeOnMain = oldFetch, oldGo, oldMain })
+
+	_, view, p := homeShelfWith(t, &st, homeLyricsW+2*earR, func(a *shelf, _ *homePage) {
+		a.settings.SetLyrics(true)
+	})
+	view.Frame()
+	view.Frame()
+	if !p.failed || calls != 1 {
+		t.Fatalf("first lookup: failed %v, calls %d", p.failed, calls)
+	}
+	// First retry should happen within a few seconds (6s), not 30s.
+	p.failedAt = time.Now().Add(-6 * time.Second)
+	view.Frame()
+	if calls != 2 {
+		t.Fatalf("after 6s on first failure calls = %d, want 2", calls)
+	}
+	// Second failure backs off longer, so 6s is not enough.
+	p.failedAt = time.Now().Add(-6 * time.Second)
+	view.Frame()
+	if calls != 2 {
+		t.Fatalf("after 6s on second failure calls = %d, want 2 (backed off)", calls)
+	}
+}
+
 func TestHomeCachedLyricsLoadWithoutNetwork(t *testing.T) {
 	st := homeTrack()
 	oldFetch := homeFetch

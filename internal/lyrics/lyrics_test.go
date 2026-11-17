@@ -485,11 +485,106 @@ func TestBaseTitle(t *testing.T) {
 		"夜曲[Remix]":               "夜曲",
 		"夜曲【电影版】":                 "夜曲",
 		"分手总要在雨天 - 电影《分手总要在雨天》插曲": "分手总要在雨天",
+		"Bohemian Rhapsody - Remastered 2011": "Bohemian Rhapsody",
+		"Hotel California - Live":             "Hotel California",
+		"Blinding Lights - Radio Edit":        "Blinding Lights",
+		"Someone Like You - Acoustic Version": "Someone Like You",
+		"晴天 - 现场版":                            "晴天",
+		"Chapter 1 - The Beginning":           "Chapter 1 - The Beginning",
+		"Blue - Da Ba Dee":                    "Blue - Da Ba Dee",
+		"序曲 - 命运":                             "序曲 - 命运",
 		"夜曲":     "夜曲",
 		"(Live)": "(Live)",
 	} {
 		if got := baseTitle(in); got != want {
 			t.Errorf("baseTitle(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestFetchRetriesTransientNeteaseFailure(t *testing.T) {
+	lr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.NotFound(w, r)
+	}))
+	defer lr.Close()
+
+	var searchCalls int
+	ne := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/search/get/web":
+			searchCalls++
+			if searchCalls == 1 {
+				http.Error(w, "busy", http.StatusServiceUnavailable)
+				return
+			}
+			var ans neteaseSearchAnswer
+			ans.Result.Songs = []neteaseSong{{
+				ID: 42, Name: "夜曲", Duration: 227000,
+				Artists: []neteaseArtist{{Name: "周杰伦"}},
+			}}
+			json.NewEncoder(w).Encode(ans)
+		case "/api/song/lyric":
+			var ans neteaseLyricAnswer
+			ans.LRC.Lyric = "[00:01.00]retried"
+			json.NewEncoder(w).Encode(ans)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer ne.Close()
+
+	got, err := Fetcher{BaseURL: lr.URL, NeteaseBaseURL: ne.URL}.Fetch(
+		context.Background(), Track{Title: "夜曲", Artist: "周杰伦", Duration: 227})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Synced != "[00:01.00]retried" {
+		t.Fatalf("result = %+v, want retried lyrics", got)
+	}
+	if searchCalls != 2 {
+		t.Fatalf("netease search calls = %d, want 2", searchCalls)
+	}
+}
+
+func TestFetchFallsBackToNeteaseWhenLRCLIBTimesOut(t *testing.T) {
+	lr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+		case <-time.After(2 * time.Second):
+		}
+	}))
+	defer lr.Close()
+
+	ne := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/search/get/web":
+			var ans neteaseSearchAnswer
+			ans.Result.Songs = []neteaseSong{{
+				ID: 7, Name: "T", Duration: 100000,
+				Artists: []neteaseArtist{{Name: "A"}},
+			}}
+			json.NewEncoder(w).Encode(ans)
+		case "/api/song/lyric":
+			var ans neteaseLyricAnswer
+			ans.LRC.Lyric = "[00:01.00]fallback"
+			json.NewEncoder(w).Encode(ans)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer ne.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 400*time.Millisecond)
+	defer cancel()
+	got, err := Fetcher{
+		BaseURL:        lr.URL,
+		NeteaseBaseURL: ne.URL,
+		Client:         &http.Client{Timeout: 2 * time.Second},
+	}.Fetch(ctx, Track{Title: "T", Artist: "A", Duration: 100})
+	if err != nil {
+		t.Fatalf("expected netease fallback when lrclib times out, got err: %v", err)
+	}
+	if got.Synced != "[00:01.00]fallback" {
+		t.Fatalf("result = %+v, want fallback lyrics", got)
 	}
 }

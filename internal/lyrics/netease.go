@@ -58,31 +58,43 @@ func (f Fetcher) fetchNetease(ctx context.Context, t Track) (Result, error) {
 	if base == "" {
 		base = DefaultNeteaseBaseURL
 	}
-	query := strings.TrimSpace(strings.TrimSpace(t.Title) + " " + strings.TrimSpace(t.Artist))
-	vals := url.Values{}
-	vals.Set("s", query)
-	vals.Set("type", "1")
-	vals.Set("limit", "10")
-	body, status, err := f.readUA(ctx, base+"/api/search/get/web?"+vals.Encode(), neteaseUserAgent)
-	if err != nil {
-		return Result{}, fmt.Errorf("lyrics: netease search: %w", err)
+	title := strings.TrimSpace(t.Title)
+	artist := strings.TrimSpace(t.Artist)
+	names := []string{title}
+	if bare := baseTitle(title); bare != "" && bare != title {
+		names = append(names, bare)
 	}
-	if status != 200 {
-		return Result{}, fmt.Errorf("lyrics: netease search answered %d", status)
+	var song *neteaseSong
+	for _, name := range names {
+		query := strings.TrimSpace(name + " " + artist)
+		vals := url.Values{}
+		vals.Set("s", query)
+		vals.Set("type", "1")
+		vals.Set("limit", "10")
+		body, status, err := f.readRetryUA(ctx, base+"/api/search/get/web?"+vals.Encode(), neteaseUserAgent)
+		if err != nil {
+			return Result{}, fmt.Errorf("lyrics: netease search: %w", err)
+		}
+		if status != 200 {
+			return Result{}, fmt.Errorf("lyrics: netease search answered %d", status)
+		}
+		var answer neteaseSearchAnswer
+		if err := json.Unmarshal(body, &answer); err != nil {
+			return Result{}, fmt.Errorf("lyrics: reading netease search: %w", err)
+		}
+		song = neteaseClosest(answer.Result.Songs, t)
+		if song != nil {
+			break
+		}
 	}
-	var answer neteaseSearchAnswer
-	if err := json.Unmarshal(body, &answer); err != nil {
-		return Result{}, fmt.Errorf("lyrics: reading netease search: %w", err)
-	}
-	song := neteaseClosest(answer.Result.Songs, t)
 	if song == nil {
 		return Result{None: true}, nil
 	}
-	vals = url.Values{}
+	vals := url.Values{}
 	vals.Set("id", strconv.FormatInt(song.ID, 10))
 	vals.Set("lv", "1")
 	vals.Set("tv", "-1")
-	body, status, err = f.readUA(ctx, base+"/api/song/lyric?"+vals.Encode(), neteaseUserAgent)
+	body, status, err := f.readRetryUA(ctx, base+"/api/song/lyric?"+vals.Encode(), neteaseUserAgent)
 	if err != nil {
 		return Result{}, fmt.Errorf("lyrics: netease lyric: %w", err)
 	}

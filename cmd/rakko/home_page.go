@@ -30,8 +30,10 @@ const (
 	homeLineH       = 28               // one lyric line
 	homeLyricsBtn   = 30               // the player's lyrics button
 	homeOtterW      = 112              // the idle page's otter
-	homeLyricsWait  = 10 * time.Second // lrclib, its retries and netease
-	homeLyricsRetry = 30 * time.Second // before a failed track is asked again
+	homeLyricsWait       = 10 * time.Second // lrclib, its retries and netease
+	homeLyricsFirstRetry = 5 * time.Second  // quick retry after an initial failure
+	homeLyricsRetry      = 30 * time.Second // backoff for repeated failures
+	homeLyricsMaxRetries = 3                // automatic retries per track
 )
 
 var (
@@ -63,10 +65,11 @@ type homePage struct {
 	lines    []lyrics.Line
 	synced   string
 	none     bool // a completed lookup with nothing to show
-	loading  bool
-	failed   bool      // this track's lookup failed: stay on the player
-	failedAt time.Time // when it failed; a retry waits homeLyricsRetry
-	fetched  bool      // the fetch for key was started
+	loading   bool
+	failed    bool      // this track's lookup failed: stay on the player
+	failedAt  time.Time // when it failed; a retry waits retryDelay()
+	failCount int       // consecutive failures for this track
+	fetched   bool      // the fetch for key was started
 	shown    int       // lyric line the scroll was last moved to
 	scrollTo int       // line to centre once the scroll has a measured range
 
@@ -125,20 +128,22 @@ func (p *homePage) body(c *ui.Context, _ bool, live bool) ui.Element {
 func (p *homePage) prepare(live bool) {
 	st, ok := p.track()
 	if !ok {
-		p.key, p.lines, p.none, p.loading, p.failed, p.failedAt, p.fetched, p.shown, p.scrollTo = "", nil, false, false, false, time.Time{}, false, -1, -1
+		p.key, p.lines, p.none, p.loading, p.failed, p.failedAt, p.failCount, p.fetched, p.shown, p.scrollTo = "", nil, false, false, false, time.Time{}, 0, false, -1, -1
 		return
 	}
 	key := homeTrackKey(st)
 	if key != p.key {
-		p.key, p.lines, p.none, p.loading, p.failed, p.failedAt, p.fetched, p.shown, p.scrollTo = key, nil, false, false, false, time.Time{}, false, -1, -1
+		p.key, p.lines, p.none, p.loading, p.failed, p.failedAt, p.failCount, p.fetched, p.shown, p.scrollTo = key, nil, false, false, false, time.Time{}, 0, false, -1, -1
 		if r, ok := p.host.lyricsCache().Get(key); ok {
 			p.adopt(r)
 		}
 	}
-	if p.failed && !p.failedAt.IsZero() && time.Since(p.failedAt) >= homeLyricsRetry {
-		// The service was busy or down; ask once more after a pause
-		// instead of blacklisting the track for as long as it plays.
-		p.failed, p.fetched = false, false
+	if p.failed && !p.failedAt.IsZero() {
+		if delay, ok := p.retryDelay(); ok && time.Since(p.failedAt) >= delay {
+			// The service was busy or down; ask again with bounded backoff
+			// instead of blacklisting the track for as long as it plays.
+			p.failed, p.fetched = false, false
+		}
 	}
 	if !live || !p.host.settings.LyricsOn() || p.loading || p.fetched || p.failed || len(p.lines) > 0 || p.none {
 		return
@@ -176,11 +181,27 @@ func (p *homePage) apply(key string, r lyrics.Result, err error) {
 	p.loading = false
 	if err != nil {
 		p.failed, p.failedAt = true, time.Now()
+		p.failCount++
 		return
 	}
+	p.failCount = 0
 	p.adopt(r)
 	p.host.lyricsCache().Put(key, r)
 	p.host.homeChanged()
+}
+
+func (p *homePage) retryDelay() (time.Duration, bool) {
+	if p.failCount > homeLyricsMaxRetries {
+		return 0, false
+	}
+	switch p.failCount {
+	case 0, 1:
+		return homeLyricsFirstRetry, true
+	case 2:
+		return 15 * time.Second, true
+	default:
+		return homeLyricsRetry, true
+	}
 }
 
 // homeTrackKey is the cache key for a track: title, artist and the
@@ -368,8 +389,10 @@ func (p *homePage) lyricsNote(c *ui.Context, w float32) {
 		text = l.HomeLyricsFailed()
 		// Nothing else animates on this page, so ask for the frame that
 		// lets prepare ask again at the end of the pause.
-		if wait := time.Until(p.failedAt.Add(homeLyricsRetry)); wait > 0 {
-			c.After(wait)
+		if delay, ok := p.retryDelay(); ok {
+			if wait := time.Until(p.failedAt.Add(delay)); wait > 0 {
+				c.After(wait)
+			}
 		}
 	}
 	ui.Column(c.Key("home-lyrics-note")).Width(w).Height(pageBodyH).Center().Children(func() {

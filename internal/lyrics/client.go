@@ -68,7 +68,17 @@ func (f Fetcher) Fetch(ctx context.Context, t Track) (Result, error) {
 	if strings.TrimSpace(t.Title) == "" {
 		return Result{None: true}, nil
 	}
-	lr, lerr := f.fetchLRCLIB(ctx, t)
+	lctx := ctx
+	if deadline, ok := ctx.Deadline(); ok {
+		if rem := time.Until(deadline); rem > 0 {
+			var cancel context.CancelFunc
+			// Reserve 40% of a bounded lookup for NetEase so a stalled
+			// LRCLIB cannot starve the fallback source.
+			lctx, cancel = context.WithTimeout(ctx, rem*6/10)
+			defer cancel()
+		}
+	}
+	lr, lerr := f.fetchLRCLIB(lctx, t)
 	if lerr == nil && !lr.None {
 		return lr, nil
 	}
@@ -180,12 +190,16 @@ func (f Fetcher) search(ctx context.Context, u string) ([]apiTrack, error) {
 // service twice with a short backoff. A 404 and the other definite answers
 // come back at once; the caller's deadline bounds the whole retry.
 func (f Fetcher) readRetry(ctx context.Context, u string) ([]byte, int, error) {
+	return f.readRetryUA(ctx, u, f.UserAgent)
+}
+
+func (f Fetcher) readRetryUA(ctx context.Context, u, userAgent string) ([]byte, int, error) {
 	const attempts = 3
 	var body []byte
 	var status int
 	var err error
 	for i := range attempts {
-		body, status, err = f.read(ctx, u)
+		body, status, err = f.readUA(ctx, u, userAgent)
 		if ctx.Err() != nil {
 			return nil, 0, ctx.Err()
 		}
@@ -291,20 +305,55 @@ func resultOf(t apiTrack) Result {
 // "【电影版】". Several may follow one another.
 var titleTail = regexp.MustCompile(`\s*[(（\[【][^)）\]】]*[)）\]】]\s*$`)
 
-// baseTitle drops the version tags a player reports and the title's
-// trailing explanation (" - 电影《…》插曲"): the bare name LRCLIB's search
-// knows, while the full title stays for the exact match.
+// dashTitleTag matches explicit trailing edition/version suffixes after " - ",
+// leaving real hyphenated song titles intact.
+var dashTitleTag = regexp.MustCompile(`(?i)^(?:\d{4}\s+)?(?:remaster(?:ed)?|live(?:\s+(?:at|in|from|version)\b.*)?|remix|acoustic(?:\s+version)?|unplugged|instrumental|karaoke|demo|(?:\w+\s+)?edit|(?:\w+\s+)?version|ver\.?(?:\s+.*)?|explicit|clean|deluxe(?:\s+edition)?|mono|stereo)(?:\s+\d{4})?$`)
+var dashFeatTag = regexp.MustCompile(`(?i)^(?:feat\.?|ft\.?|with)\s+`)
+
+func isTitleTag(suffix string) bool {
+	s := strings.TrimSpace(suffix)
+	if s == "" {
+		return false
+	}
+	if dashTitleTag.MatchString(s) || dashFeatTag.MatchString(s) {
+		return true
+	}
+	for _, kw := range []string{
+		"插曲", "主题曲", "片尾曲", "片头曲", "推广曲", "宣传曲",
+		"伴奏", "纯音乐", "现场版", "演唱会版", "电影版", "完整版",
+		"加长版", "合唱版", "独唱版", "吉他版", "钢琴版", "重制版",
+	} {
+		if strings.Contains(s, kw) {
+			return true
+		}
+	}
+	for _, prefix := range []string{"电影《", "电视剧《", "动画《", "网剧《"} {
+		if strings.HasPrefix(s, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// baseTitle drops explicit version/edition tags a player reports while
+// keeping real hyphenated song titles intact.
 func baseTitle(title string) string {
 	s := strings.TrimSpace(title)
-	if i := strings.Index(s, " - "); i > 0 {
-		s = s[:i]
-	}
 	for {
-		next := strings.TrimSpace(titleTail.ReplaceAllString(s, ""))
-		if next == s || next == "" {
+		before := s
+		for {
+			next := strings.TrimSpace(titleTail.ReplaceAllString(s, ""))
+			if next == s || next == "" {
+				break
+			}
+			s = next
+		}
+		if i := strings.LastIndex(s, " - "); i > 0 && isTitleTag(s[i+3:]) {
+			s = strings.TrimSpace(s[:i])
+		}
+		if s == before {
 			break
 		}
-		s = next
 	}
 	if s == "" {
 		return strings.TrimSpace(title)
