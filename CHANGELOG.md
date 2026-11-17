@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.16.1
+
+- 设置文件或布局文件被编辑器存成带 BOM 的格式时，Rakko 现在能正常读取，不会再退回默认设置。
+
+### English
+
+- Rakko now reads a settings or layout file that an editor saved with a byte-order mark, instead of falling back to the defaults.
+
 ## 1.16.0
 
 - **Windows 版**：同一个 Rakko 现在也能在 Windows 10 22H2 / Windows 11（64 位）上用。屏幕顶部中间平时看不见，鼠标推到顶边才探出；也可以在设置里换成常驻的浮动胶囊。托盘、剪贴板、工具页、搜索、截图、框选文字、音乐、AI 用量和 Agent 提醒都有，资源管理器右键多了「添加到 Rakko」。全屏玩游戏或看视频时，碰到顶边不会再打扰前台程序。
