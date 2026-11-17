@@ -638,4 +638,120 @@ func TestToolsLibraryHitRectFollowsTheIslandTop(t *testing.T) {
 			t.Fatalf("the drawer-bottom drop pinned zip instead of removing it: %d pins", len(a.pins))
 		}
 	})
+
+	newScrolledPage := func(t *testing.T) (*shelf, *toolsPage, *ui.Tester) {
+		a := islandShelf(true, settings.ShellStyleIsland)
+		a.dataDir = t.TempDir()
+		a.tab, a.level, a.visible = pageTools, 2, true
+		a.ensurePages()
+		l := toolsOverflowLayout()
+		a.toolsLay = &l
+		p := a.toolsPage()
+		p.editing = true
+		view := ui.NewTester(a.view, int(a.pageShellW())+2*earR, 520)
+		view.Frame()
+		view.Frame()
+		view.Advance(300 * time.Millisecond)
+		view.Frame()
+		if p.scroll.MaxY <= 0 {
+			t.Fatalf("expected scrollable grid, got MaxY=%v", p.scroll.MaxY)
+		}
+		p.scroll.Y = p.scroll.MaxY / 2
+		view.Frame()
+		return a, p, view
+	}
+
+	t.Run("nonzero scroll sorts", func(t *testing.T) {
+		a, p, view := newScrolledPage(t)
+		var targetCard string
+		var targetX, targetY float32
+		for _, c := range []struct{ id, label string }{
+			{"airdrop", "隔空投送"},
+			{"note", "便签"},
+			{"ocr", "屏幕识字"},
+			{"zip", "打成 zip"},
+		} {
+			if el, ok := view.Find(c.label); ok && el.Y >= p.viewport.Y && el.Y+el.H <= p.libraryRect.Y {
+				targetCard = c.id
+				targetX, targetY = el.X+el.W/2, el.Y+el.H/2
+				break
+			}
+		}
+		if targetCard == "" {
+			t.Fatalf("no visible card found above drawer under nonzero scroll: %v", view.Texts())
+		}
+		// Drop onto the visible grid area (just above the drawer): must sort, not remove.
+		dropSortY := p.viewport.Y + p.viewport.H - 12
+		drag(t, view, targetX, targetY, targetX, dropSortY)
+		found := false
+		for _, c := range a.toolsLayout().Cards {
+			if c.ID == targetCard {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("nonzero scroll grid drop removed %s instead of sorting: %v", targetCard, idsOf(a.toolsLayout().Cards))
+		}
+	})
+
+	t.Run("nonzero scroll removes", func(t *testing.T) {
+		a, p, view := newScrolledPage(t)
+		var rmID string
+		var rmX, rmY float32
+		for _, c := range []struct{ id, label string }{
+			{"airdrop", "隔空投送"},
+			{"note", "便签"},
+			{"ocr", "屏幕识字"},
+			{"zip", "打成 zip"},
+		} {
+			if el, ok := view.Find(c.label); ok && el.Y >= p.viewport.Y && el.Y+el.H <= p.viewport.Y+p.viewport.H {
+				rmID = c.id
+				rmX, rmY = el.X+el.W/2, el.Y+el.H/2
+				break
+			}
+		}
+		if rmID == "" {
+			t.Fatalf("no visible card found for drawer-bottom removal: %v", view.Texts())
+		}
+		drawerBottomWinY := p.libraryRect.Y + p.libraryRect.H - 10
+		drag(t, view, rmX, rmY, p.libraryRect.X+toolColW(2)/2, drawerBottomWinY)
+		for _, c := range a.toolsLayout().Cards {
+			if c.ID == rmID {
+				t.Fatalf("nonzero scroll drawer-bottom drop did not remove %s: %v", rmID, idsOf(a.toolsLayout().Cards))
+			}
+		}
+	})
+
+	t.Run("mid spring", func(t *testing.T) {
+		a := islandShelf(true, settings.ShellStyleIsland)
+		a.dataDir = t.TempDir()
+		a.tab, a.level, a.visible = pageTools, 2, true
+		a.ensurePages()
+		a.toolsLay = &layout.Layout{Version: layout.Version, Cards: []layout.Card{{ID: "ocr"}, {ID: "zip"}}}
+		p := a.toolsPage()
+		view := toolsTester(a)
+		view.Frame()
+		view.Advance(300 * time.Millisecond)
+		view.Frame()
+
+		// Enter edit mode and stop mid-spring before the shell settles.
+		p.editing = true
+		view.Frame()
+		view.Advance(60 * time.Millisecond)
+		view.Frame()
+
+		zip, ok := view.Find("打成 zip")
+		if !ok {
+			t.Fatalf("zip missing mid-spring: %v", view.Texts())
+		}
+		// Drop onto the drawer while the shell spring is still in flight.
+		shellTop := float32(a.sheetTop())
+		drawerBottomWinY := shellTop + a.fx.h - 10
+		drag(t, view, zip.X+zip.W/2, zip.Y+zip.H/2, p.viewport.X+toolColW(2)/2, drawerBottomWinY)
+		for _, c := range a.toolsLayout().Cards {
+			if c.ID == "zip" {
+				t.Fatalf("mid-spring drawer drop did not remove zip: %v", idsOf(a.toolsLayout().Cards))
+			}
+		}
+	})
 }

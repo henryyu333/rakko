@@ -555,6 +555,66 @@ func TestPageIconsDiffer(t *testing.T) {
 	}
 }
 
+// TestCardRingLeadCentersGlyph checks with an offscreen render that the status
+// ring's inner glyph is centered inside the ring box rather than pinned to the
+// top-left corner.
+func TestCardRingLeadCentersGlyph(t *testing.T) {
+	a := &shelf{}
+	const size = 26
+	glyph := symbol(`<rect x="6" y="6" width="12" height="12"/>`)
+	view := ui.NewTester(func(c *ui.Context) {
+		card := ui.Box(c.Key("card")).Size(size, size)
+		a.cardRingLead(c, card, "ring", size, 0, cardIdle, glyph)
+	}, size, size)
+	view.Frame()
+	view.Advance(300 * time.Millisecond)
+	view.Frame()
+	img := view.Image()
+	b := img.Bounds()
+	w, h := b.Dx(), b.Dy()
+	cx, cy := float64(w)/2, float64(h)/2
+	// The ring stroke sits at radius ~11.8/26 = 0.454*w; the 12x12 glyph sits
+	// well inside 0.32*w from the center.
+	maxR := 0.32 * float64(w)
+	minX, minY, maxX, maxY := w, h, -1, -1
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			px := float64(x-b.Min.X) + 0.5
+			py := float64(y-b.Min.Y) + 0.5
+			dx, dy := px-cx, py-cy
+			if dx*dx+dy*dy > maxR*maxR {
+				continue
+			}
+			_, _, _, alpha := img.At(x, y).RGBA()
+			if alpha > 0 {
+				lx, ly := x-b.Min.X, y-b.Min.Y
+				if lx < minX {
+					minX = lx
+				}
+				if ly < minY {
+					minY = ly
+				}
+				if lx > maxX {
+					maxX = lx
+				}
+				if ly > maxY {
+					maxY = ly
+				}
+			}
+		}
+	}
+	if maxX < 0 {
+		t.Fatal("no glyph pixels rendered inside the status ring center")
+	}
+	gx := float64(minX+maxX+1) / 2
+	gy := float64(minY+maxY+1) / 2
+	tol := float64(w) * 0.08
+	if math.Abs(gx-cx) > tol || math.Abs(gy-cy) > tol {
+		t.Fatalf("glyph center (%.1f, %.1f) is off ring center (%.1f, %.1f) (bbox %d..%d, %d..%d)",
+			gx, gy, cx, cy, minX, maxX, minY, maxY)
+	}
+}
+
 // TestToolCardDragPaintSurfaces: only the panel's tools page answers a file
 // drag. A pin floating on the desktop redraws whenever it is invalidated,
 // and the drag must leave it exactly as it is.
