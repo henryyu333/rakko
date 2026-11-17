@@ -14,7 +14,7 @@ package main
 //	pin-music-card.png    the same card pinned to the desktop
 //
 // The instance works in the smoke data dir and never touches
-// ~/Library/Application Support/ShelfU.
+// ~/Library/Application Support/Rakko.
 
 import (
 	"fmt"

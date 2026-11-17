@@ -473,7 +473,7 @@ func TestToolCardDragOnlyWhileDragging(t *testing.T) {
 	}
 	a.dragging, a.ownDrag = true, true
 	if _, _, live := a.toolCardDrag(); live {
-		t.Fatal("ShelfU's own drag-out paints the tools page as an incoming drag")
+		t.Fatal("Rakko's own drag-out paints the tools page as an incoming drag")
 	}
 }
 

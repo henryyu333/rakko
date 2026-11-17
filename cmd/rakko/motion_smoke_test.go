@@ -7,7 +7,7 @@ package main
 // capsule in its three states, its yield to hover, and the bottom fade of a
 // scrolled clipboard list. Run with RAKKO_BASKET_SMOKE=1; PNGs
 // land in /tmp/shelf-fix/motion/. The instance reads the smoke data dir, never
-// ~/Library/Application Support/ShelfU.
+// ~/Library/Application Support/Rakko.
 
 import (
 	"fmt"
@@ -183,7 +183,7 @@ func TestSmokeCapsuleSuccess(t *testing.T) {
 	// The capsule is a real click target even though the window lets the
 	// press through: the global monitor expands the shelf for it.
 	// A press there reaches the shelf only through the global monitor, which
-	// AppKit installs once ShelfU has Accessibility access (the same grant the
+	// AppKit installs once Rakko has Accessibility access (the same grant the
 	// hover pill's click needs). Without it the press is not observable here.
 	// The smoke harness never runs ready(), so the app's mouse monitor is
 	// installed here: the capsule's press must arrive the way production's

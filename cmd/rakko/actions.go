@@ -88,7 +88,7 @@ func (a *shelf) itemMenu(m *ui.Menu, item store.Item) {
 	}
 	a.convertMenu(m, items)
 	// 批量改名：全部目标都还存在于磁盘上的真实文件/文件夹时可用
-	//（ShelfU 自己管的截图、剪贴板图片、文字项和转换产物不可改名）。
+	//（Rakko 自己管的截图、剪贴板图片、文字项和转换产物不可改名）。
 	allRenameable := len(items) > 0
 	for _, it := range items {
 		if !a.renameable(it) {
@@ -140,7 +140,7 @@ func (a *shelf) itemMenu(m *ui.Menu, item store.Item) {
 	if m.Item(pinLabel).Chosen() {
 		a.setPinned(items, !pinned)
 	}
-	// 剪贴板来源：一键把这个应用加入不再记录列表。ShelfU 自己识别出的
+	// 剪贴板来源：一键把这个应用加入不再记录列表。Rakko 自己识别出的
 	// 文字没有可排除的应用（clipSourceOCR 不是 bundle id）。
 	if item.Source == store.SourceClipboard && item.SourceApp != "" && item.SourceApp != clipSourceOCR && item.SourceApp != clipSourceShot {
 		if m.Item(l.ItemExcludeApp(a.appName(item.SourceApp))).Disabled(a.settingsBroken).Chosen() {
@@ -157,7 +157,7 @@ func (a *shelf) itemMenu(m *ui.Menu, item store.Item) {
 	}
 }
 
-// clipWriter is where ShelfU's own copies go. Production uses the system
+// clipWriter is where Rakko's own copies go. Production uses the system
 // clipboard; tests substitute a recorder so copying can be exercised
 // without a running app (mygo's clipboard needs App.Run).
 type clipWriter interface {
@@ -183,7 +183,7 @@ func (a *shelf) writer() clipWriter {
 	return systemClipboard{}
 }
 
-// clipSourceOCR is the SourceApp marker of clipboard rows ShelfU produced
+// clipSourceOCR is the SourceApp marker of clipboard rows Rakko produced
 // itself by recognizing text (screen OCR): recognized text is new content,
 // so it belongs in the clipboard page, unlike text re-copied from a row.
 // It is not a bundle id; appName and the row icon special-case it instead
@@ -216,11 +216,11 @@ type ocrCopy struct {
 	recordErr error // why the clipboard page has no row; nil when recorded
 }
 
-// copyOCRText is copyText for text ShelfU just recognized: after the write it
+// copyOCRText is copyText for text Rakko just recognized: after the write it
 // also records the text as a clipboard item, so the recognized words appear
 // at the front of the clipboard page with 「框选文字」 as their source. The
 // watcher is skipped first (copyText), so the capture is this one record,
-// not a second copy of ShelfU's own pasteboard write. Re-copying an existing
+// not a second copy of Rakko's own pasteboard write. Re-copying an existing
 // row still goes through copyText and records nothing. A failed record is
 // returned, not reported: the caller knows the copy itself succeeded and
 // says so (toastOCRCopy).

@@ -74,7 +74,7 @@ func TestShellHitIsTheDrawnShape(t *testing.T) {
 // sheet settled, a press 5pt right of the shell's edge at y = 20 sits
 // inside the window (the frame keeps the ear margin) and above the menu
 // bar, and must go through to the menu-bar icon there; a press on the
-// shell must reach ShelfU.
+// shell must reach Rakko.
 func TestSettledSheetTakesMouseOnlyOnItsShell(t *testing.T) {
 	// A settled sheet, headless: the shell's geometry is the drawn one and
 	// winH marks the live surface the gate would apply to.
@@ -103,7 +103,7 @@ func TestSettledSheetTakesMouseOnlyOnItsShell(t *testing.T) {
 		t.Fatal("a press on the shell itself is ignored")
 	}
 	// The back row's icons are inside the shell: a press on them reaches
-	// ShelfU too, whatever the pointer did a moment before.
+	// Rakko too, whatever the pointer did a moment before.
 	cursorPoint = func() mygo.Point { return mygo.Point{X: a.stripCenter(), Y: a.y + 40} }
 	a.syncPointerGate()
 	if a.ignoringMouse {

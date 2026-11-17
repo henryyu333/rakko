@@ -104,7 +104,7 @@ func newIslandBackdrop(t *testing.T, b mygo.Rectangle) *mygo.Window {
 	t.Helper()
 	var w *mygo.Window
 	onMain(func() {
-		w = mygo.NewWindow(mygo.WindowOptions{Title: "ShelfU island test backdrop", Hidden: true,
+		w = mygo.NewWindow(mygo.WindowOptions{Title: "Rakko island test backdrop", Hidden: true,
 			Width: b.Width, Height: b.Height, X: b.X, Y: b.Y, Frameless: true, Panel: true,
 			SkipTaskbar: true, DisableShadow: true, Content: ui.View(func(c *ui.Context) {
 				ui.Box(c).Fill().Background(ui.Hex("#253445"))
@@ -123,7 +123,7 @@ func newIslandBackdrop(t *testing.T, b mygo.Rectangle) *mygo.Window {
 // requireIslandOwnWindow refuses to post an event WindowServer would hand to
 // another process. Both the shelf overlay and the test backdrop belong to
 // this process, so either is a safe target; the menu bar or a sibling build
-// of ShelfU is not this test's to hit. Returns the window number.
+// of Rakko is not this test's to hit. Returns the window number.
 func requireIslandOwnWindow(t *testing.T, x, y float64) int {
 	t.Helper()
 	p := mygo.Point{X: int(x), Y: int(y)}

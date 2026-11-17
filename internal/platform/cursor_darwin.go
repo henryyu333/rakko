@@ -12,7 +12,7 @@ import (
 	"github.com/ebitengine/purego/objc"
 )
 
-// Panel pointer policy: the panel is a non-activating NSPanel, so ShelfU is
+// Panel pointer policy: the panel is a non-activating NSPanel, so Rakko is
 // never the active app while it is open. mygo's own tracking area is
 // NSTrackingActiveInActiveApp (0x40) and therefore never fires here, and no
 // other cursor owner is left to reset the pointer the app underneath set —

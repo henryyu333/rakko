@@ -30,7 +30,7 @@ const (
 )
 
 // basketState is the floating drop card. The window is created lazily on
-// the first shake and destroyed on close, so ShelfU without a shake costs
+// the first shake and destroyed on close, so Rakko without a shake costs
 // no extra overlay.
 //
 // Closing goes through closing + a render, never straight to Destroy from

@@ -378,7 +378,7 @@ func (a *shelf) dropZoneShow() (on bool, need int) {
 // board, refetched only when its changeCount moved; classification rides
 // the same cache. Once the flag falls the cached files keep answering for
 // dropHoldGrace — or until the drop is consumed — so the release frame
-// still builds the cells it needs. ShelfU's own drag-out, a drag carrying
+// still builds the cells it needs. Rakko's own drag-out, a drag carrying
 // no files, and a release outside the panel all answer nil. The debug pin
 // RAKKO_DEBUG_DROP_FILES skips the monitor: it makes the shelf build the
 // drop zone for a fixed file list, for screenshots and smoke tests.
@@ -392,7 +392,7 @@ func (a *shelf) dropZoneSnap(over bool) []string {
 		return nil
 	}
 	if a.ownDrag {
-		// ShelfU's own drag-out writes the pasteboard too. It is not an
+		// Rakko's own drag-out writes the pasteboard too. It is not an
 		// incoming drag, and a set an earlier drop left must not linger.
 		*d = dropZoneState{serial: d.serial}
 		return nil

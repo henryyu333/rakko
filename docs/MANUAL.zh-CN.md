@@ -62,19 +62,6 @@ Rakko 是免费软件，没有经过 Apple 公证，所以 macOS 会让你确认
 2. 把“应用程序”里的 Rakko 移到废纸篓。
 3. 如果连保存的内容也要删除，删掉 `~/Library/Application Support/Rakko/` 文件夹。
 
-## 从 ShelfU 升级
-
-Rakko 是 ShelfU 的新名字。Rakko 第一次打开时会把数据文件夹整个复制过来：`~/Library/Application Support/ShelfU/` 变成 `~/Library/Application Support/Rakko/`，托盘内容、Rakko 自己保存的图片、转换结果、布局和设置都在，里面指向旧文件夹的绝对路径也会一并改写。它是复制而不是搬移，并且一步到位：失败时两个文件夹都保持原样。旧文件夹完整保留，确认内容都在以后可以删掉。
-
-新文件夹已经存在时不会复制（以新的为准）。ShelfU 还在运行时 Rakko 不会迁移，会提示你先退出它，然后重新打开 Rakko。
-
-macOS 会把 Rakko 当成一个新应用（应用标识变了），所以升级后系统权限和「开机时自动启动」要重新打开一次。
-
-- **在 ShelfU 里应用内更新**：更新装好后，在“应用程序”里打开 ShelfU。它会把应用包改名为 `Rakko.app` 并从那里打开；数据文件夹在那一次启动时复制过来。
-- **用 Rakko.dmg 安装**：先退出 ShelfU，把 `ShelfU.app` 移到废纸篓，只让 Rakko 使用你的内容。
-
-从更早的 Shelf 升上来：没有 ShelfU 文件夹时，Rakko 同样从 `Application Support/Shelf/` 复制，也会把 `Shelf.app` 改名。
-
 ## 日常使用
 
 | 想做什么 | 操作 |

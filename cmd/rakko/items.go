@@ -237,7 +237,7 @@ func (a *shelf) clipRowIcon(c *ui.Context, item store.Item) {
 		}
 	}
 	if item.SourceApp == clipSourceOCR {
-		// ShelfU's own recognition has no app: the 框选文字 glyph says where
+		// Rakko's own recognition has no app: the 框选文字 glyph says where
 		// the words came from, like the tools card that produced them.
 		ui.Box(c).Size(16, 16).Radius(4).Center().Background(fill2).Children(func() {
 			ui.Icon(c, ocrSymbol).Size(10, 10).TextColor(ink3)

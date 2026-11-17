@@ -12,10 +12,10 @@ import (
 
 // awakeModule keeps the Mac from idle-sleeping for a chosen span, meant
 // for letting a long task finish. One named IOKit power assertion
-// (「ShelfU Stay Awake」) holds while the feature is on: PreventUserIdleSystemSleep
+// (「Rakko Stay Awake」) holds while the feature is on: PreventUserIdleSystemSleep
 // by default — the screen may still dim and turn off — or
 // PreventUserIdleDisplaySleep while 「屏幕也保持亮着」 is chosen. Timed
-// holds release on their deadline, on 关闭, and when ShelfU quits;
+// holds release on their deadline, on 关闭, and when Rakko quits;
 // 一直 never expires. Nothing is persisted: a relaunch starts off.
 //
 // The module runs off the shared monitoring tick and throttles itself to

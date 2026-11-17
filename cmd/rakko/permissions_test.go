@@ -229,7 +229,7 @@ func TestSettingsPermissionsPageListsEveryPermission(t *testing.T) {
 	_, _ = stubPermissions(t)
 	_, view := newSettingsShelf(t)
 	openSettingsPage(t, view, "系统权限")
-	for _, gone := range []string{"文件访问 · 完整磁盘访问", "全部开启…", "ShelfU 需要"} {
+	for _, gone := range []string{"文件访问 · 完整磁盘访问", "全部开启…", "Rakko 需要"} {
 		if view.HasText(gone) {
 			t.Fatalf("the removed per-permission UI still shows %q; texts=%v", gone, view.Texts())
 		}
@@ -557,7 +557,7 @@ func TestSystemPermissionsList(t *testing.T) {
 }
 
 func TestRelaunchPlanUsesLaunchServicesInsideBundle(t *testing.T) {
-	plan := relaunchPlanFor("/Applications/ShelfU App.app/Contents/MacOS/ShelfU",
+	plan := relaunchPlanFor("/Applications/Rakko App.app/Contents/MacOS/Rakko",
 		[]string{"--data-dir", "/tmp/a b", "--show"}, 4321)
 	if plan.Exec != "/bin/sh" || len(plan.Args) != 2 || plan.Args[0] != "-c" {
 		t.Fatalf("relaunch plan is not a shell waiter: %+v", plan)
@@ -565,7 +565,7 @@ func TestRelaunchPlanUsesLaunchServicesInsideBundle(t *testing.T) {
 	script := plan.Args[1]
 	for _, want := range []string{
 		"kill -0 4321", "sleep 0.1", "sleep 0.3",
-		"exec /usr/bin/open -n '/Applications/ShelfU App.app'",
+		"exec /usr/bin/open -n '/Applications/Rakko App.app'",
 		"--args '--data-dir' '/tmp/a b' '--show'",
 	} {
 		if !strings.Contains(script, want) {
@@ -583,11 +583,11 @@ func TestRelaunchPlanUsesLaunchServicesInsideBundle(t *testing.T) {
 }
 
 func TestRelaunchPlanFallsBackOutsideBundle(t *testing.T) {
-	plan := relaunchPlanFor("/tmp/ShelfU", []string{"--data-dir", "/tmp/a b"}, 4321)
+	plan := relaunchPlanFor("/tmp/Rakko", []string{"--data-dir", "/tmp/a b"}, 4321)
 	script := plan.Args[1]
 	for _, want := range []string{
 		"kill -0 4321",
-		"exec '/tmp/ShelfU' '--data-dir' '/tmp/a b'",
+		"exec '/tmp/Rakko' '--data-dir' '/tmp/a b'",
 	} {
 		if !strings.Contains(script, want) {
 			t.Fatalf("fallback script lacks %q:\n%s", want, script)
@@ -614,11 +614,11 @@ func TestAppBundleForExecutable(t *testing.T) {
 		want string
 		ok   bool
 	}{
-		{"/Applications/ShelfU.app/Contents/MacOS/ShelfU", "/Applications/ShelfU.app", true},
+		{"/Applications/Rakko.app/Contents/MacOS/Rakko", "/Applications/Rakko.app", true},
 		{"/tmp/a b/My App.app/Contents/MacOS/My App", "/tmp/a b/My App.app", true},
-		{"/tmp/ShelfU", "", false},
+		{"/tmp/Rakko", "", false},
 		{"/tmp/Not.app/tool", "", false},
-		{"/Contents/MacOS/ShelfU", "", false},
+		{"/Contents/MacOS/Rakko", "", false},
 		{"", "", false},
 	} {
 		got, ok := appBundleForExecutable(tt.exe)
@@ -628,14 +628,14 @@ func TestAppBundleForExecutable(t *testing.T) {
 	}
 }
 
-func TestRelaunchShelfUsesSameArgsAndQuits(t *testing.T) {
+func TestRelaunchRakkosesSameArgsAndQuits(t *testing.T) {
 	st, _ := stubPermissions(t)
 	st.fda, st.ax, st.screen = true, true, true
 	oldArgs := os.Args
-	os.Args = []string{"/tmp/ShelfU", "--data-dir", "/tmp/data dir"}
+	os.Args = []string{"/tmp/Rakko", "--data-dir", "/tmp/data dir"}
 	defer func() { os.Args = oldArgs }()
 	origExe, origStart, origQuit := relaunchExecutable, relaunchStart, relaunchQuit
-	relaunchExecutable = func() (string, error) { return "/tmp/ShelfU", nil }
+	relaunchExecutable = func() (string, error) { return "/tmp/Rakko", nil }
 	var got relaunchPlan
 	relaunchStart = func(p relaunchPlan) error { got = p; return nil }
 	quit := false

@@ -2,7 +2,7 @@
 
 package main
 
-// The one list of system permissions ShelfU needs and the one entry point
+// The one list of system permissions Rakko needs and the one entry point
 // that walks the user through granting them. The tray menu, the Settings
 // window's 系统权限 group and the guided flow all read systemPermissions;
 // none of them duplicates a title, an order or a probe.
@@ -230,7 +230,7 @@ const (
 	permissionWaiting
 	// permissionRelaunch: a grant that a running process may keep answering
 	// stale for — Full Disk Access or screen recording — was made during the
-	// walk, so ShelfU must be relaunched before it takes effect.
+	// walk, so Rakko must be relaunched before it takes effect.
 	permissionRelaunch
 )
 
@@ -386,7 +386,7 @@ type relaunchPlan struct {
 
 // relaunchPlanFor builds a detached /bin/sh wait-then-launch: the new
 // process starts only after pid exits, so the single-instance flock is free
-// and the user never sees the 「ShelfU 已在运行」 dialog. Inside an app
+// and the user never sees the 「Rakko 已在运行」 dialog. Inside an app
 // bundle the launch goes through LaunchServices (`open -n`), which is what
 // gives the restarted process the app's registered identity and TCC
 // responsibility — the screen-recording grant this relaunch exists for
@@ -438,7 +438,7 @@ var (
 	relaunchQuit = mygo.App.Quit
 )
 
-// relaunchShelf restarts ShelfU with the same arguments so the cached
+// relaunchShelf restarts Rakko with the same arguments so the cached
 // screen-recording preflight and the process's Full Disk Access answer are
 // re-read. It starts the waiter first and quits only once that succeeded; a
 // failure stays visible in the window.

@@ -60,7 +60,7 @@ func TestRequestScreenCaptureResetsStaleRecordOnce(t *testing.T) {
 // titles proves the grant is live, so the stale-record reset would delete
 // the very grant it was meant to repair: no reset runs, and the caller is
 // told the grant is not usable yet (the cached answer is stale) so it
-// shows 「重新打开 ShelfU 后生效」.
+// shows 「重新打开 Rakko 后生效」.
 func TestScreenCaptureResetSparesLiveGrant(t *testing.T) {
 	var resets, opens, requests int
 	oldReset, oldOpen, oldID := tccutilReset, openURL, requestBundleID

@@ -2,8 +2,8 @@
 
 package main
 
-// Tests for the one-time move of the data directory from the pre-rename
-// Support/Shelf to Support/ShelfU. Every root is a temporary directory, so
+// Tests for the one-time move of the data directory from an earlier
+// name's root to the current one. Every root is a temporary directory, so
 // no test touches the user's real data.
 
 import (
@@ -309,7 +309,7 @@ func sameTree(a, b map[string]string) bool {
 }
 
 // mygo runs the app binary in client-generation mode during every build.
-// That run must not migrate, create or rename anything: an empty ShelfU
+// That run must not migrate, create or rename anything: an empty target
 // root made by a build would block the migration when the user launches
 // the app for real.
 func TestGeneratingClientMode(t *testing.T) {

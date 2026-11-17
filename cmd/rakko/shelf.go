@@ -639,7 +639,7 @@ var (
 // activatePreviousApp hands the keyboard back to the app the user came
 // from when the shelf was opened for clipboard search. It runs only while
 // this app is still the active one — a user who switched away already
-// must not be pulled back — and if the remembered app is gone, ShelfU's
+// must not be pulled back — and if the remembered app is gone, Rakko's
 // own activation is resigned rather than leaving a hidden app in front.
 func (a *shelf) activatePreviousApp(pid int) { a.handBack(pid, true) }
 

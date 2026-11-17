@@ -25,13 +25,13 @@ import (
 // System Now Playing through MediaRemote.
 //
 // Since macOS 15.4 MediaRemote answers only clients whose code is
-// Apple-signed, so ShelfU itself cannot read the system's now-playing
+// Apple-signed, so Rakko itself cannot read the system's now-playing
 // state in-process. The workaround here is the well-known Apple-signed
 // host trick: the app loads a small C bundle (built from
 // internal/platform/nowplaying/helper.c, shipped in the app's resources) into
 // /usr/bin/perl, which is Apple-signed, and the bundle does all
 // MediaRemote work inside that process, streaming JSON lines on stdout.
-// Every line of the bundle and of this client is ShelfU's own code.
+// Every line of the bundle and of this client is Rakko's own code.
 //
 // Everything here is read-only except SendNowPlayingCommand, which the
 // UI calls on an explicit button press.

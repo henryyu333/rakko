@@ -8,7 +8,7 @@ package main
 // notched screen with 刘海样式 = 灵动岛, plus one notch-style shot proving
 // the default did not change. Shots land in /tmp/shelf-island/; the smoke
 // harness reads a temporary data dir and never touches
-// ~/Library/Application Support/ShelfU. Run with RAKKO_BASKET_SMOKE=1.
+// ~/Library/Application Support/Rakko. Run with RAKKO_BASKET_SMOKE=1.
 
 import (
 	"fmt"
@@ -46,12 +46,12 @@ func newIslandArena(t *testing.T, r mygo.Rectangle) {
 	t.Helper()
 	onMain(func() {
 		w := mygo.NewWindow(mygo.WindowOptions{
-			Title: "ShelfU island backdrop", Hidden: true,
+			Title: "Rakko island backdrop", Hidden: true,
 			Width: r.Width, Height: r.Height, X: r.X, Y: r.Y,
 			Frameless: true, Panel: true, SkipTaskbar: true, DisableShadow: true,
 			Content: ui.View(func(c *ui.Context) {
 				ui.Box(c).Fill().Background(ui.Hex("#ECEDEF"))
-				ui.Text(c, "ShelfU 灵动岛 · 测试背景").FontSize(11).TextColor(ui.RGBA(0, 0, 0, 0.28)).
+				ui.Text(c, "Rakko 灵动岛 · 测试背景").FontSize(11).TextColor(ui.RGBA(0, 0, 0, 0.28)).
 					Padding(8, 12, 0, 12)
 			}),
 		})

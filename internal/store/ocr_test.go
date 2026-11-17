@@ -20,10 +20,10 @@ func TestSetOCRPersistsAndReloads(t *testing.T) {
 	if s.Items[0].OCRDone || s.Items[0].OCRText != "" {
 		t.Fatalf("new image must not start recognized: %+v", s.Items[0])
 	}
-	if err := s.SetOCR(id, "货架 ShelfU"); err != nil {
+	if err := s.SetOCR(id, "货架 Rakko"); err != nil {
 		t.Fatalf("SetOCR: %v", err)
 	}
-	if s.Items[0].OCRText != "货架 ShelfU" || !s.Items[0].OCRDone {
+	if s.Items[0].OCRText != "货架 Rakko" || !s.Items[0].OCRDone {
 		t.Fatalf("SetOCR did not mark the item: %+v", s.Items[0])
 	}
 	if err := s.Close(); err != nil {
@@ -34,7 +34,7 @@ func TestSetOCRPersistsAndReloads(t *testing.T) {
 		t.Fatalf("reopen: %v", err)
 	}
 	defer s2.Close()
-	if s2.Items[0].OCRText != "货架 ShelfU" || !s2.Items[0].OCRDone {
+	if s2.Items[0].OCRText != "货架 Rakko" || !s2.Items[0].OCRDone {
 		t.Fatalf("reloaded item lost OCR: %+v", s2.Items[0])
 	}
 }

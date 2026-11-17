@@ -71,7 +71,7 @@ func selectAllTray(t *testing.T, a *shelf) {
 }
 
 // The menu carries 重新命名 … before the copy group, enabled only when
-// every target is a real file still on disk; ShelfU's own items grey it.
+// every target is a real file still on disk; Rakko's own items grey it.
 func TestRenameMenuItem(t *testing.T) {
 	a, _, _ := renameShelf(t, "a.txt", "b.txt")
 	view := ui.NewTester(a.view, sheetW, panelTestH)
@@ -120,7 +120,7 @@ func TestRenameMenuItem(t *testing.T) {
 }
 
 // Only plain on-disk files qualify: screenshots, clipboard images,
-// text and converted outputs are ShelfU-managed.
+// text and converted outputs are Rakko-managed.
 func TestRenameableExcludesManagedItems(t *testing.T) {
 	a, _, _ := renameShelf(t, "keep.txt")
 	if !a.renameable(a.visibleItems()[0]) {

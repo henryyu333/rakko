@@ -335,7 +335,7 @@ func SetOverlayAcceptsMouse(window uintptr, accept bool) {
 // local monitor), and a move over the ignoring window reaches whatever is
 // below it (the global monitor). Mouse-only monitors require no
 // Accessibility permission. The watch lives as long as the process:
-// ShelfU has one overlay window.
+// Rakko has one overlay window.
 var pointerMonitor struct{ global, local id }
 
 func ObserveMouseMoved(moved func()) {

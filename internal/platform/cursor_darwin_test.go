@@ -46,7 +46,7 @@ func cursorAreas(view id) (int, id) {
 	return n, area
 }
 
-// The panel declares its own arrow cursor: ShelfU is a non-activating
+// The panel declares its own arrow cursor: Rakko is a non-activating
 // overlay, so mygo's ActiveInActiveApp tracking area never fires and the
 // window underneath leaves its I-beam (or zoom) cursor on the panel. The
 // area must be CursorUpdate + ActiveAlways + InVisibleRect, live on the

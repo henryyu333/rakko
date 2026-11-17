@@ -24,7 +24,7 @@ import (
 // The redesign shots render the real windows of DESIGN.md so a human can
 // compare them with design/mock.png. Run with RAKKO_BASKET_SMOKE=1; each
 // PNG lands in /tmp/shelf-redesign/<name>.png. The test instance uses the
-// smoke data dir and never touches ~/Library/Application Support/ShelfU.
+// smoke data dir and never touches ~/Library/Application Support/Rakko.
 const redesignShotDir = "/tmp/shelf-redesign"
 
 // shotWindow screenshots the native window w to name.png and returns its
@@ -258,7 +258,7 @@ func TestRedesignTrayMusic(t *testing.T) {
 	onMain(func() {
 		fakeTrack(a, true)
 		a.modules = []module{a.np} // the activity strip asks modules for live activities
-		_ = a.store.AddText("周五发布 ShelfU v1.0 · 记得更新截图")
+		_ = a.store.AddText("周五发布 Rakko v1.0 · 记得更新截图")
 		_ = a.store.AddImage(pngb)
 		_ = a.store.AddFiles([]string{doc})
 		// 置顶图片项：展示右上角图钉角标。

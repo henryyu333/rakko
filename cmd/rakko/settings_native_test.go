@@ -24,7 +24,7 @@ import (
 // pointer; this test proves a real Settings window still answers clicks
 // everywhere and scrolls its content next to the notch overlay. Run with
 // RAKKO_BASKET_SMOKE=1 (the shared real-app harness); uses a temporary
-// data dir and never the user's ShelfU data.
+// data dir and never the user's Rakko data.
 func TestSettingsWindowAnswersClicksAndScroll(t *testing.T) {
 	if os.Getenv("RAKKO_BASKET_SMOKE") != "1" {
 		t.Skip("set RAKKO_BASKET_SMOKE=1 to run the native window smoke test")

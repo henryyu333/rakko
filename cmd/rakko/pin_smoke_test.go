@@ -264,7 +264,7 @@ func TestPinSmokeReturnBulge(t *testing.T) {
 		}
 		a.place(mygo.Screen.CursorScreenPoint())
 		// Exercise the return zone below the real menu bar, over our
-		// own backdrop rather than the user's installed ShelfU.
+		// own backdrop rather than the user's installed Rakko.
 		a.y, a.notchY = d.WorkArea.Y+120, d.WorkArea.Y+120
 		a.syncMousePassThrough()
 		a.win.ShowInactive()
@@ -328,7 +328,7 @@ func TestPinSmokeReturnBulge(t *testing.T) {
 	}
 	r := mygo.Rectangle{}
 	onMain(func() {
-		// Another running ShelfU may own a same-level hover pill. Order
+		// Another running Rakko may own a same-level hover pill. Order
 		// only this test window forward, without changing its level or
 		// touching the installed app.
 		a.win.ShowInactive()

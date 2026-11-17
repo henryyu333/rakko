@@ -351,7 +351,7 @@ func TestUpwardFrameReachesOverTheDrawnShell(t *testing.T) {
 
 // TestOpeningPanelTakesTheMouseAtItsSettledAxis: while the panel opens near
 // a side edge, the shape it settles at is clamped away from the island's
-// axis. A press inside that settled box must reach ShelfU even though the
+// axis. A press inside that settled box must reach Rakko even though the
 // shell drawn so far is still on the island's axis.
 func TestOpeningPanelTakesTheMouseAtItsSettledAxis(t *testing.T) {
 	syntheticDisplays(t, false, false)

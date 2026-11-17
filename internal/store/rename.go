@@ -4,7 +4,7 @@ import "path/filepath"
 
 // UpdatePaths records that files on disk were renamed: each id → path
 // pair replaces the item's Path. Only plain file items are updated —
-// managed images and ShelfU-converted files live in the data directory and
+// managed images and Rakko-converted files live in the data directory and
 // are never renamed by this path — and paths are normalized to absolute
 // the same way AddFiles does. Unknown ids and non-file items are ignored;
 // an id already carrying the path is a no-op. The change is persisted

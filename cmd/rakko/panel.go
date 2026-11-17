@@ -677,7 +677,7 @@ func (a *shelf) view(c *ui.Context) {
 	// 灵动岛空闲时一直画那颗 120 × 30 的胶囊，让用户知道往哪儿移鼠标。
 	// 阈值与上面的静止吸附一致（亚点级），收起最后一段平滑落位、看不出跳变。
 	idle := a.win != nil && !a.visible && a.progress <= 0.01 && openK <= 0.002 && !a.peeking && !a.apps.on && peekK <= 0.002
-	// ShelfU's own drag-out never lands back on the shelf: the drop would
+	// Rakko's own drag-out never lands back on the shelf: the drop would
 	// add a second item pointing at the same file. Without a target the
 	// drag ends as if cancelled — nothing is added, the panel stays open
 	// and 拖出后从托盘移除 does not fire.

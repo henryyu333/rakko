@@ -1,6 +1,6 @@
 // Package docx writes minimal Office Open XML word-processing
 // documents — a sequence of text paragraphs plus one optional inline
-// picture — which ShelfU produces when exporting an image together with
+// picture — which Rakko produces when exporting an image together with
 // the text recognized in it. It is a small writer, not a docx toolkit,
 // and uses only the standard library (plus the app's atomic replace).
 package docx
@@ -255,7 +255,7 @@ func documentRelsXML(pic *Picture) string {
 const settingsXML = `<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">` +
 	`<w:defaultTabStop w:val="720"/></w:settings>`
 
-// corePropsXML stamps the file as produced by ShelfU.
+// corePropsXML stamps the file as produced by Rakko.
 func corePropsXML(now time.Time) string {
 	ts := now.Format("2006-01-02T15:04:05Z")
 	return `<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">` +

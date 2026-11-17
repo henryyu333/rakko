@@ -2,7 +2,7 @@
 
 package main
 
-// Tests for the drop hint during ShelfU's own drag-out: the panel toast and
+// Tests for the drop hint during Rakko's own drag-out: the panel toast and
 // the notch's 「松开放入」 pill must only answer incoming system drags.
 
 import (
@@ -22,7 +22,7 @@ func TestDropHintHiddenDuringOwnDrag(t *testing.T) {
 	}
 	view := ui.NewTester(a.view, sheetW, panelTestH)
 	if _, ok := view.Find("松开放入"); ok {
-		t.Fatal("the panel showed the drop hint during ShelfU's own drag-out")
+		t.Fatal("the panel showed the drop hint during Rakko's own drag-out")
 	}
 	a.ownDrag = false
 	view = ui.NewTester(a.view, sheetW, panelTestH)
@@ -42,7 +42,7 @@ func TestPeekDropHintHiddenDuringOwnDrag(t *testing.T) {
 	}
 	view := ui.NewTester(a.view, sheetW, panelTestH)
 	if _, ok := view.Find("松开放入"); ok {
-		t.Fatal("the notch showed 松开放入 during ShelfU's own drag-out")
+		t.Fatal("the notch showed 松开放入 during Rakko's own drag-out")
 	}
 	a.ownDrag = false
 	// An incoming drag outside the notch band only widens the shell at the

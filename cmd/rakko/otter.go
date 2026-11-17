@@ -88,9 +88,8 @@ var otterFallbacks = map[string]string{
 	petCaught:   petIdle,
 }
 
-// otterPrefixes are the names the artwork may have been installed under:
-// the current build writes shelfu-*, and the otter's pictures kept from
-// the earlier build are named rakko-*. Both are local files, never in git.
+// otterPrefixes are the names the artwork may have been installed under.
+// Both are local files, never in git.
 var otterPrefixes = []string{"shelfu-", "rakko-"}
 
 var (

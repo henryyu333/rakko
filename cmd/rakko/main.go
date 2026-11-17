@@ -62,7 +62,7 @@ func main() {
 	// its raw arguments — and before flag.Parse, which would reject the
 	// verb. Other platforms return the command line untouched.
 	os.Args = append(os.Args[:1], platform.ConsumeServiceArgs(os.Args[1:])...)
-	// A bundle an in-app update left at ShelfU.app or Shelf.app moves to
+	// A bundle an in-app update left at an old bundle name moves to
 	// Rakko.app and reopens from there before anything reads the data
 	// directory.
 	selfRenameBundle()
@@ -75,7 +75,7 @@ func main() {
 			log.Fatal(err)
 		}
 		// The default directory is this app's; the previous ones are copied
-		// over once, newest name first (ShelfU, then Shelf). A --data-dir the
+		// over once, newest name first. A --data-dir the
 		// user gave is never migrated into.
 		if oldRoots, lerr := store.LegacyRoots(); lerr == nil {
 			for _, oldRoot := range oldRoots {

@@ -447,7 +447,7 @@ func toolCardDimmed(def *toolCardDef, class dropClass) bool {
 // drag is in flight right now. live reads a.dragging — the 30 ms monitor's
 // own flag — not the snapshot alone: the snapshot outlives the release by
 // dropHoldGrace so the drop still finds its cells, and a held set must not
-// keep painting the page. A drag of ShelfU's own items never paints it.
+// keep painting the page. A drag of Rakko's own items never paints it.
 func (a *shelf) toolCardDrag() (dropClass, int, bool) {
 	n := len(a.drop.files)
 	return a.drop.class, n, a.dragging && !a.ownDrag && n > 0

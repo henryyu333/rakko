@@ -19,13 +19,13 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-// Claude Code answers /usage itself: ShelfU runs
+// Claude Code answers /usage itself: Rakko runs
 //
 //	claude -p /usage --output-format json --tools "" --strict-mcp-config
 //	       --setting-sources "" --no-session-persistence
 //
 // in a throwaway directory and reads the text it printed. This is how
-// Magpie reads the same allowance, and the reason ShelfU no longer asks
+// Magpie reads the same allowance, and the reason Rakko no longer asks
 // Anthropic's usage endpoint with Claude Code's OAuth token: the numbers,
 // the windows (including per-model weekly ones) and the reset times must
 // be the ones the subscription itself reports.
@@ -304,7 +304,7 @@ func claudeReadingEnv(ctx context.Context, env Env) Env {
 
 // FetchClaude reads the subscription allowance of the account Claude Code
 // is signed in to, by running Claude Code's own /usage. Nothing is sent to
-// Anthropic by ShelfU; Claude Code does that itself, with its own token,
+// Anthropic by Rakko; Claude Code does that itself, with its own token,
 // and refreshes the token when it must. An answer that says the sign-in is
 // gone reports it; no local expiry check ever replaces it, so a refreshed
 // token can never leave the card on 登录已过期.

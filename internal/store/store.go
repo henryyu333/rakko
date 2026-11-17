@@ -1,4 +1,4 @@
-// Package store implements ShelfU's persistent storage: a versioned
+// Package store implements Rakko's persistent storage: a versioned
 // state.json plus managed images/ and converted/ directories under a
 // single root. It is purely synchronous and owns no goroutines; the
 // caller (UI/main thread) drives every operation. One live process at a
@@ -69,7 +69,7 @@ var ErrLocked = errors.New("store: data directory is in use by another instance"
 // the item stays on the tray, and a capture off both pages is deleted by
 // the next removal. Both flags are cleared by pinning and by re-adding
 // the same content.
-// Converted marks a KindFile item whose file ShelfU itself created
+// Converted marks a KindFile item whose file Rakko itself created
 // inside <root>/converted: removal paths delete that file like a
 // managed image, while a plain KindFile item's path is never deleted.
 // Missing is runtime-only and never persisted.
@@ -139,7 +139,7 @@ func DefaultRoot() (string, error) {
 }
 
 // LegacyRoots returns the support directories earlier names of the app used,
-// newest first: the ShelfU releases, then the original Shelf app. Startup
+// newest first. Startup
 // migrates the first one that exists to DefaultRoot once, and then leaves it
 // as a backup.
 func LegacyRoots() ([]string, error) {
@@ -530,10 +530,10 @@ func (s *Store) AddFiles(paths []string) error {
 }
 
 // ConvertedDir returns the managed directory (<root>/converted) where
-// ShelfU writes files it creates by conversion. Open creates it.
+// Rakko writes files it creates by conversion. Open creates it.
 func (s *Store) ConvertedDir() string { return filepath.Join(s.Root, convertedDirName) }
 
-// AddConverted registers files ShelfU produced inside <root>/converted.
+// AddConverted registers files Rakko produced inside <root>/converted.
 // Every path must resolve to an existing regular file inside that
 // directory (spellings through symlinks are resolved first, so a file
 // merely pointing outside is rejected); otherwise nothing is added and

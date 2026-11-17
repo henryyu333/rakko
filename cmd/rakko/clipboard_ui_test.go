@@ -547,10 +547,10 @@ type failClip struct{}
 func (failClip) writeText(string) error  { return errors.New("pasteboard full") }
 func (failClip) writeImage([]byte) error { return errors.New("pasteboard full") }
 
-// ShelfU 自己在前台（键盘搜索开着）时，复制不记来源。
+// Rakko 自己在前台（键盘搜索开着）时，复制不记来源。
 func TestCaptureSourceSkipsShelfItself(t *testing.T) {
 	if got := captureSource(42, 42, "local.y3u.shelf"); got != "" {
-		t.Fatalf("ShelfU frontmost recorded a source: %q", got)
+		t.Fatalf("Rakko frontmost recorded a source: %q", got)
 	}
 	if got := captureSource(10, 42, "com.example.App"); got != "com.example.App" {
 		t.Fatalf("real source dropped: %q", got)
@@ -737,32 +737,32 @@ func TestClipboardNewerChangeSupersedesPending(t *testing.T) {
 }
 
 // 审查复现：后台轮询已记下更旧的 changeCount（bgPending）而主线程还没取走时，
-// ShelfU 自己写剪贴板并 skipCurrent；下一次 tick 不能拿那个旧计数把 m.count
+// Rakko 自己写剪贴板并 skipCurrent；下一次 tick 不能拿那个旧计数把 m.count
 // 退回，再把自己刚写的内容收进历史。
 func TestClipboardSkipCurrentDropsStaleBackgroundCount(t *testing.T) {
 	a, m, board := clipModuleShelf(t)
 	now := time.Unix(1_700_000_000, 0)
 	m.background = true
-	// The poller saw a change just before ShelfU's own write.
+	// The poller saw a change just before Rakko's own write.
 	board.serial++
 	m.bgMu.Lock()
 	m.bgCount, m.bgAt, m.bgPending = board.serial, now, true
 	m.bgMu.Unlock()
 
-	// ShelfU writes the pasteboard itself, then marks it handled.
+	// Rakko writes the pasteboard itself, then marks it handled.
 	board.serial++
-	board.formats, board.value = []string{"public.utf8-plain-text"}, "written by ShelfU"
+	board.formats, board.value = []string{"public.utf8-plain-text"}, "written by Rakko"
 	m.skipCurrent()
 	m.tick(now.Add(30 * time.Millisecond))
 	if len(a.store.Items) != 0 {
-		t.Fatalf("ShelfU's own write was recorded: %+v", a.store.Items)
+		t.Fatalf("Rakko's own write was recorded: %+v", a.store.Items)
 	}
 	if m.bgPending {
 		t.Fatal("skipCurrent left the poller's stale observation pending")
 	}
 }
 
-// skipCurrent 连等待中的变化一起清掉：ShelfU 自己写剪贴板后不再回头收它。
+// skipCurrent 连等待中的变化一起清掉：Rakko 自己写剪贴板后不再回头收它。
 func TestClipboardSkipCurrentClearsPending(t *testing.T) {
 	a, m, board := clipModuleShelf(t)
 	now := time.Unix(1_700_000_000, 0)

@@ -47,7 +47,7 @@ func FrontmostPID() int {
 }
 
 // OwnPID returns this process's process identifier, for telling the
-// frontmost application apart from ShelfU itself. Main thread only.
+// frontmost application apart from Rakko itself. Main thread only.
 func OwnPID() int { return os.Getpid() }
 
 // AppActive reports whether this application is the active one
@@ -112,7 +112,7 @@ func DeactivateSelf() {
 
 // SetWindowAppearance pins a window to the dark or light appearance
 // (NSWindow.appearance = NSAppearanceNameDarkAqua / Aqua), so its title bar
-// and chrome draw accordingly regardless of the system setting. ShelfU's UI
+// and chrome draw accordingly regardless of the system setting. Rakko's UI
 // is always dark; the Settings window calls this with dark=true. Main
 // thread only.
 func SetWindowAppearance(window uintptr, dark bool) {
@@ -234,12 +234,12 @@ const nsWorkspaceLaunchDefault = 1 << 16
 
 // nsApplicationActivationPolicyRegular selects the ordinary foreground
 // applications: LaunchServices agents and accessories (menu-bar helpers
-// like ShelfU itself) do not belong in an app switcher.
+// like Rakko itself) do not belong in an app switcher.
 const nsApplicationActivationPolicyRegular = 0
 
 // RunningApps lists the regular GUI applications running now, through
 // NSWorkspace.runningApplications. Agents and accessory processes are
-// left out, and so is ShelfU itself. Apps without a bundle identifier
+// left out, and so is Rakko itself. Apps without a bundle identifier
 // cannot be pinned or relaunched, so they are skipped too. Read-only, no
 // permission needed. Main thread only.
 func RunningApps() []RunningApp {

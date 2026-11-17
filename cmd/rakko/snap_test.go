@@ -673,22 +673,22 @@ func TestSnapOwnWindowAndNoPermission(t *testing.T) {
 	s := &snapSeams{fake: f, pid: 999, trusted: true, down: true, own: true,
 		work: mygo.Rectangle{X: 0, Y: 25, Width: 1470, Height: 750}}
 	installSnapSeams(t, s)
-	// ShelfU's own window: pid matches, the session must not arm.
+	// Rakko's own window: pid matches, the session must not arm.
 	a.snapPress(false, 0, mygo.Point{X: 700, Y: 300})
 	if a.snap.armed || a.snap.win != nil {
-		t.Fatal("a press on ShelfU's own window armed a session")
+		t.Fatal("a press on Rakko's own window armed a session")
 	}
 	if !f.released {
 		t.Fatal("the rejected own window leaked")
 	}
-	// A normal window of the same process that is not one of ShelfU's own
+	// A normal window of the same process that is not one of Rakko's own
 	// interface windows is allowed (the smoke drag's case).
 	s.own = false
 	f = &fakeSnapWindow{rect: platform.Rect{X: 700, Y: 300, Width: 500, Height: 400}, move: true, resize: true}
 	s.fake = f
 	a.snapPress(false, 0, mygo.Point{X: 700, Y: 300})
 	if !a.snap.armed || a.snap.win == nil {
-		t.Fatal("a normal same-process window was rejected as ShelfU's own")
+		t.Fatal("a normal same-process window was rejected as Rakko's own")
 	}
 	a.endSnapSession(false)
 	// A press that is not on a window at all is rejected too.

@@ -2,8 +2,8 @@
 
 package main
 
-// An in-app update of an earlier name replaced whatever bundle it found at
-// Shelf.app or ShelfU.app with the new app. This app ships as Rakko.app, so a
+// An in-app update of an earlier version replaced whatever bundle it found at
+// the old bundle names with the new app. This app ships as Rakko.app, so a
 // bundle that still lives at one of the old names is moved to .../Rakko.app
 // on its first launch and reopened from there. Renaming a running bundle is
 // safe: the process keeps running from the moved files, and the reopened
@@ -38,7 +38,7 @@ func isOldBundleName(name string) bool {
 
 // selfRenameTarget reports the rename an executable needs: the bundle it
 // runs from and the bundle it should run from. ok is false unless exe is
-// inside a bundle called ShelfU.app or Shelf.app, which are the only shapes
+// inside one of oldBundleNames, which are the only shapes
 // an old installed copy has.
 func selfRenameTarget(exe string) (oldBundle, newBundle string, ok bool) {
 	exe = filepath.Clean(exe)
@@ -51,7 +51,7 @@ func selfRenameTarget(exe string) (oldBundle, newBundle string, ok bool) {
 	return bundle, filepath.Join(filepath.Dir(bundle), newBundleName), true
 }
 
-// selfRenameBundle moves a .../ShelfU.app or .../Shelf.app bundle to
+// selfRenameBundle moves a bundle matching oldBundleNames to
 // .../Rakko.app and reopens the app from there. It does nothing when the app
 // does not run from such a bundle (go run, go test), when the renamed bundle
 // already exists, or when the rename fails (a read-only directory, App

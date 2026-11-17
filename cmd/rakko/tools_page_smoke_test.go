@@ -6,7 +6,7 @@ package main
 // only under RAKKO_BASKET_SMOKE=1 (the shared TestMain hosts the app
 // loop). Shots land in /tmp/shelf-A/<name>.png; the instance works in
 // the smoke data dir and never touches ~/Library/Application
-// Support/ShelfU.
+// Support/Rakko.
 
 import (
 	"fmt"

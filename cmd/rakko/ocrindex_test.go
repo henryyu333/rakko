@@ -208,9 +208,9 @@ func TestClipboardSearchHitsOCRText(t *testing.T) {
 // TestOCRSnippet covers hit position, ~12-rune context and ellipsis on
 // both ends, including a CJK query.
 func TestOCRSnippet(t *testing.T) {
-	text := strings.Repeat("甲", 20) + "货架 ShelfU" + strings.Repeat("乙", 20)
-	before, hit, after, ok := ocrSnippet(text, "ShelfU")
-	if !ok || hit != "ShelfU" {
+	text := strings.Repeat("甲", 20) + "货架 Rakko" + strings.Repeat("乙", 20)
+	before, hit, after, ok := ocrSnippet(text, "Rakko")
+	if !ok || hit != "Rakko" {
 		t.Fatalf("hit missed: %q %q %q", before, hit, after)
 	}
 	if !strings.HasPrefix(before, "…") || !strings.HasSuffix(after, "…") {

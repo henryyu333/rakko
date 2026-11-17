@@ -56,7 +56,7 @@ func ocrTextImage(t *testing.T) []byte {
 	img := image.NewRGBA(image.Rect(0, 0, 760, 210))
 	draw.Draw(img, img.Bounds(), image.NewUniform(color.White), image.Point{}, draw.Src)
 	d := &font.Drawer{Dst: img, Src: image.NewUniform(color.Black), Face: face}
-	lines := []string{"货架搜索验收 ShelfU OCR", "退货地址：上海市浦东新区 100 号", "Return Policy OK 2026"}
+	lines := []string{"货架搜索验收 Rakko OCR", "退货地址：上海市浦东新区 100 号", "Return Policy OK 2026"}
 	for i, s := range lines {
 		d.Dot = fixed.P(30, 60+i*60)
 		d.DrawString(s)
@@ -111,7 +111,7 @@ func TestSmokeOCRSearchAndCopy(t *testing.T) {
 	var text string
 	onMain(func() { text = a.store.Items[0].OCRText })
 	t.Logf("recognized: %q", text)
-	if !strings.Contains(text, "退货地址") || !strings.Contains(text, "ShelfU OCR") {
+	if !strings.Contains(text, "退货地址") || !strings.Contains(text, "Rakko OCR") {
 		t.Fatalf("recognized text missing expected lines: %q", text)
 	}
 

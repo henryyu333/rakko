@@ -38,7 +38,7 @@ func TestIdleOverlayLetsClicksThrough(t *testing.T) {
 		var foreign smokeWindow
 		var hasForeign bool
 		onMain(func() {
-			// Another copy of ShelfU's panel at the notch takes these
+			// Another copy of Rakko's panel at the notch takes these
 			// points; the hit test could only report it, not ours.
 			if w, ok := foreignIn(windows, mygo.Point{X: a.stripCenter(), Y: a.dispBounds.Y + a.notchH/2}, platform.LayerStatus); ok {
 				foreign, hasForeign = w, true
@@ -68,7 +68,7 @@ func TestIdleOverlayLetsClicksThrough(t *testing.T) {
 			}
 		})
 		if hasForeign {
-			t.Skipf("%s: window %d (pid %d) sits at the notch: another copy of ShelfU",
+			t.Skipf("%s: window %d (pid %d) sits at the notch: another copy of Rakko",
 				state, foreign.ID, foreign.Owner)
 		}
 	}
@@ -82,7 +82,7 @@ func TestIdleOverlayLetsClicksThrough(t *testing.T) {
 }
 
 // While the completion capsule is up, WindowServer must hand presses on
-// the drawn capsule to ShelfU and let everything beside it — the frame's
+// the drawn capsule to Rakko and let everything beside it — the frame's
 // transparent shake/growth margin — fall to whatever is underneath.
 // Acceptance is pointer-gated per frame, so the cursor is parked where
 // the press lands first. Run with RAKKO_BASKET_SMOKE=1.
@@ -122,7 +122,7 @@ func TestCapsuleTakesClicksOnlyOnItsBody(t *testing.T) {
 		} {
 			hit := platform.WindowAtPoint(p[0], float64(a.dispBounds.Y)+p[1]-float64(a.y), screenH)
 			if hit != shelf {
-				t.Errorf("click inside the capsule body missed ShelfU at %v (hit %d)", p, hit)
+				t.Errorf("click inside the capsule body missed Rakko at %v (hit %d)", p, hit)
 			}
 		}
 	})
@@ -149,7 +149,7 @@ func TestCapsuleTakesClicksOnlyOnItsBody(t *testing.T) {
 			hit = platform.WindowAtPoint(float64(px), float64(a.dispBounds.Y)+float64(py)-float64(a.y), screenH)
 		})
 		if hit == shelf {
-			t.Errorf("click on the capsule's margin hit ShelfU at %v", p)
+			t.Errorf("click on the capsule's margin hit Rakko at %v", p)
 		}
 	}
 	onMain(func() {
@@ -160,7 +160,7 @@ func TestCapsuleTakesClicksOnlyOnItsBody(t *testing.T) {
 }
 
 // While the failure capsule is shaking, the hit box must follow the drawn
-// offset: a press where the capsule currently is reaches ShelfU; a press
+// offset: a press where the capsule currently is reaches Rakko; a press
 // where it was (the unshifted box) falls through. Run with
 // RAKKO_BASKET_SMOKE=1.
 func TestShakingCapsuleHitBoxFollowsTheOffset(t *testing.T) {
@@ -198,7 +198,7 @@ func TestShakingCapsuleHitBoxFollowsTheOffset(t *testing.T) {
 		r := a.peekPillRect() // re-read: the shake may have moved the box
 		hit := platform.WindowAtPoint(float64(r.X+r.Width/2), float64(a.dispBounds.Y)+float64(r.Y+r.Height/2)-float64(a.y), screenH)
 		if hit != shelf {
-			t.Errorf("a press on the shaking capsule missed ShelfU (hit %d, shake=%.1f)", hit, a.fx.shakeX)
+			t.Errorf("a press on the shaking capsule missed Rakko (hit %d, shake=%.1f)", hit, a.fx.shakeX)
 		}
 	})
 	onMain(func() {
@@ -211,7 +211,7 @@ func TestShakingCapsuleHitBoxFollowsTheOffset(t *testing.T) {
 // Task D: during an incoming system drag the resident window must shrink
 // to the notch's menu-bar band — WindowServer must see points below the
 // menu bar at the notch's own X hit whatever is underneath (or nothing),
-// never ShelfU. Only inside the band may the drop surface exist.
+// never Rakko. Only inside the band may the drop surface exist.
 // Run with RAKKO_BASKET_SMOKE=1.
 func TestDragBandKeepsShelfInTheMenuBar(t *testing.T) {
 	a := redesignShelf(t)
@@ -259,24 +259,24 @@ func TestDragBandKeepsShelfInTheMenuBar(t *testing.T) {
 
 	screenH := float64(a.dispBounds.Y + a.dispBounds.Height)
 	// Below the menu bar at the notch's own centre X — before the drag
-	// ever enters the band, WindowServer must find anything-but-ShelfU
+	// ever enters the band, WindowServer must find anything-but-Rakko
 	// there, at 8pt and 20pt below the bar alike.
 	belowX := float64(a.stripCenter())
 	for _, dy := range []float64{8, 20} {
 		py := float64(a.dispBounds.Y) + float64(a.y) + float64(barH) + dy
 		if hit := platform.WindowAtPoint(belowX, py, screenH); hit == shelf {
-			t.Errorf("WindowAtPoint %.0f,%.0f hit ShelfU %.0fpt below the bar before band entry", belowX, py, dy)
+			t.Errorf("WindowAtPoint %.0f,%.0f hit Rakko %.0fpt below the bar before band entry", belowX, py, dy)
 		}
 	}
-	// Inside the band at the strip's centre, ShelfU's surface is present
+	// Inside the band at the strip's centre, Rakko's surface is present
 	// (Spaces-edge protection requires the drop to land on a window).
 	bandHit := platform.WindowAtPoint(belowX, float64(a.dispBounds.Y)+float64(a.y)+float64(barH)/2, screenH)
 	if bandHit != shelf {
-		t.Errorf("WindowAtPoint inside the band hit %d, want ShelfU %d", bandHit, shelf)
+		t.Errorf("WindowAtPoint inside the band hit %d, want Rakko %d", bandHit, shelf)
 	}
 	// Entering the band grows the frame past the menu bar so the guard's
 	// landing row stays inside the window: the pill and the landing row
-	// both hit ShelfU, not the apps underneath.
+	// both hit Rakko, not the apps underneath.
 	onMain(func() {
 		point = mygo.Point{X: a.stripCenter(), Y: a.notchY + a.notchH - 1}
 		a.inBand, a.dropHot = true, true
@@ -291,7 +291,7 @@ func TestDragBandKeepsShelfInTheMenuBar(t *testing.T) {
 	}
 	landHit := platform.WindowAtPoint(belowX, landingY, screenH)
 	if landHit != shelf {
-		t.Errorf("WindowAtPoint on the guard landing row hit %d, want ShelfU %d", landHit, shelf)
+		t.Errorf("WindowAtPoint on the guard landing row hit %d, want Rakko %d", landHit, shelf)
 	}
 	// Leaving the band again folds the window back to the menu-bar strip.
 	onMain(func() {

@@ -446,7 +446,7 @@ func TestSmokeSettledPanelBottomMarginPassesThrough(t *testing.T) {
 				// so an icon under it must still take the press.
 				topPoint = mygo.Point{X: frame.X + 12, Y: 20}
 				below = mygo.NewWindow(mygo.WindowOptions{
-					Title: "ShelfU bottom-edge click receiver", Width: 40, Height: 40,
+					Title: "Rakko bottom-edge click receiver", Width: 40, Height: 40,
 					Hidden: true, Frameless: true, DisableShadow: true, Panel: true, SkipTaskbar: true,
 					Content: ui.View(func(c *ui.Context) { ui.Text(c, "Receiver") }),
 				})
@@ -455,7 +455,7 @@ func TestSmokeSettledPanelBottomMarginPassesThrough(t *testing.T) {
 				platform.SetWindowLayer(below.NativeHandle(), platform.LayerBelowStatus)
 				belowNum = platform.WindowNumber(below.NativeHandle())
 				side = mygo.NewWindow(mygo.WindowOptions{
-					Title: "ShelfU side-margin click receiver", Width: frame.Width - 16, Height: 30,
+					Title: "Rakko side-margin click receiver", Width: frame.Width - 16, Height: 30,
 					Hidden: true, Frameless: true, DisableShadow: true, Panel: true, SkipTaskbar: true,
 					Content: ui.View(func(c *ui.Context) { ui.Text(c, "Receiver") }),
 				})
@@ -490,7 +490,7 @@ func TestSmokeSettledPanelBottomMarginPassesThrough(t *testing.T) {
 					hit = platform.WindowAtPoint(float64(p.X), float64(p.Y), screenH)
 				})
 				if hit != want {
-					t.Errorf("%s at (%d,%d): target=%d want %d (ShelfU=%d below=%d side=%d frame=%+v)",
+					t.Errorf("%s at (%d,%d): target=%d want %d (Rakko=%d below=%d side=%d frame=%+v)",
 						name, p.X, p.Y, hit, want, shelfNum, belowNum, sideNum, frame)
 				}
 			}

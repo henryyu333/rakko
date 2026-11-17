@@ -63,7 +63,7 @@ func TestCollapsedMarginsReachUnderlyingWindow(t *testing.T) {
 		})
 		time.Sleep(650 * time.Millisecond)
 		// The pointer may sit at the notch from an earlier test; another
-		// copy of ShelfU (the installed one) opens its panel on hover and
+		// copy of Rakko (the installed one) opens its panel on hover and
 		// would be the window at the point. Park the pointer away, let any
 		// hover panel retract, then place the receiver.
 		d := mygo.Screen.PrimaryDisplay()
@@ -78,7 +78,7 @@ func TestCollapsedMarginsReachUnderlyingWindow(t *testing.T) {
 			frame := a.win.Bounds()
 			point = mygo.Point{X: frame.X + 2, Y: a.y + a.notchH + 12}
 			cursorPoint = func() mygo.Point { return point }
-			receiver = mygo.NewWindow(mygo.WindowOptions{Title: "ShelfU click receiver", Width: 40, Height: 40, Hidden: true, Frameless: true, DisableShadow: true, Panel: true, SkipTaskbar: true, Content: ui.View(func(c *ui.Context) { ui.Text(c, "Receiver") })})
+			receiver = mygo.NewWindow(mygo.WindowOptions{Title: "Rakko click receiver", Width: 40, Height: 40, Hidden: true, Frameless: true, DisableShadow: true, Panel: true, SkipTaskbar: true, Content: ui.View(func(c *ui.Context) { ui.Text(c, "Receiver") })})
 			h := receiver.NativeHandle()
 			platform.SetWindowFrame(h, point.X-10, point.Y-10, 40, 40)
 			receiver.ShowInactive()
@@ -102,13 +102,13 @@ func TestCollapsedMarginsReachUnderlyingWindow(t *testing.T) {
 			t.Fatalf("%s: margin ignores=%v native target=%d want receiver=%d", state, ignoring, hit, receiverNum)
 		}
 		if platform.CanSendInput() {
-			// Another copy of ShelfU (the installed one) opens its own
+			// Another copy of Rakko (the installed one) opens its own
 			// notch panel on hover and can sit above the receiver between
 			// the check above and the click: this pass-through test can
 			// only mean something when the point belongs to our receiver.
 			// Park the pointer on the point first and let it settle: the
 			// window at a point is only meaningful once nothing is about
-			// to move there, and another copy of ShelfU (the installed
+			// to move there, and another copy of Rakko (the installed
 			// one) may open its own panel at the notch. Only a window owned
 			// by another process may take the point; this process taking it
 			// means our own margin stopped letting clicks through, which is

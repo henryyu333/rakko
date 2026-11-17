@@ -95,7 +95,7 @@ type snapGhost struct {
 // snapConfirm is an arrangement applied at release that the shelf keeps
 // checking for a moment. The window server may finish its own drag-time
 // tiling after the AX frame is set; a second look and one re-apply makes
-// ShelfU's target stick.
+// Rakko's target stick.
 type snapConfirm struct {
 	win      snapWindow
 	target   platform.Rect
@@ -298,11 +298,11 @@ func (a *shelf) snapPress(inside bool, button int, p mygo.Point) {
 	s.start, s.frame = f, f
 }
 
-// snapOwnWindowFrame reports whether f is one of ShelfU's own interface
+// snapOwnWindowFrame reports whether f is one of Rakko's own interface
 // windows: the notch overlay, a desktop pin, the basket, the preview, the
 // Settings or 重新命名 window. AXWindowNumber is unsupported on macOS 27,
 // so the frame is what identifies them. A normal window of the same
-// process (the smoke test's, for one) is not ShelfU's interface and may be
+// process (the smoke test's, for one) is not Rakko's interface and may be
 // arranged.
 func (a *shelf) snapOwnWindowFrame(f platform.Rect) bool {
 	if f.Width <= 0 || f.Height <= 0 {

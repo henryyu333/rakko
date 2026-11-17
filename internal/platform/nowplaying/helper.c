@@ -4,7 +4,7 @@
 //
 // It is NOT run on its own: since macOS 15.4 MediaRemote only answers
 // clients whose code is Apple-signed, so this bundle is loaded into an
-// Apple-signed host (/usr/bin/perl) by the ShelfU app; the host installs
+// Apple-signed host (/usr/bin/perl) by the Rakko app; the host installs
 // shelf_np_run as an xsub and calls it. Everything runs in the host
 // process; the bundle never spawns one.
 //

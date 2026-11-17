@@ -8,7 +8,7 @@ package main
 // stubbed to write a fixture shot, the real Vision recognizer reads it,
 // and the verdict lands on the real system clipboard. The clipboard is
 // snapshotted and restored by snapshotClipboard; nothing touches tcc,
-// screencapture's own picker or ~/Library/Application Support/ShelfU.
+// screencapture's own picker or ~/Library/Application Support/Rakko.
 // Screenshots land in /tmp/shelf-C/.
 
 import (

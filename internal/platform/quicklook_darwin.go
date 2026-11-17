@@ -201,7 +201,7 @@ func Preview(paths []string) error {
 	return lookErr
 }
 
-// PreviewVisible reports whether ShelfU's Quick Look panel is open.
+// PreviewVisible reports whether Rakko's Quick Look panel is open.
 // Main thread only. Off the main thread (headless tests) it reports false
 // without instantiating the panel, which AppKit allows only on the main
 // thread.

@@ -21,7 +21,7 @@ import (
 // home directory (auth files live under it), the HTTP client, macOS Keychain
 // access, the Codex endpoint, Claude Code's command line and the clock. A
 // token read through Env is only sent to its own vendor — never logged or
-// persisted. Claude Code's /usage is the one Claude reader: ShelfU never
+// persisted. Claude Code's /usage is the one Claude reader: Rakko never
 // asks Anthropic itself, and reads Claude's token only to name the plan.
 type Env struct {
 	Home         string

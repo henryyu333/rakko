@@ -21,7 +21,7 @@ import (
 )
 
 // ocrRow asserts the newest store item is the recognized text, captured
-// from ShelfU's own recognition.
+// from Rakko's own recognition.
 func ocrRow(t *testing.T, a *shelf, want string) store.Item {
 	t.Helper()
 	if len(a.store.Items) == 0 {

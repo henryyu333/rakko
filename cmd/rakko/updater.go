@@ -220,7 +220,7 @@ func (a *shelf) checkedUpdate(user bool, up *mygo.Update, err error) {
 	if os.Getenv("RAKKO_UPDATE_SELFTEST") == "1" {
 		// End-to-end test hook: the gated update smoke test uses it to take
 		// the same install path the menu item takes. Once installed, it
-		// also takes the 重新启动 ShelfU 完成更新 path: mygo stages the new
+		// also takes the 重新启动 Rakko 完成更新 path: mygo stages the new
 		// bundle and installs it when the app exits, so the test lets that
 		// exit happen instead of replacing a running bundle. The window
 		// never joins it.
@@ -412,7 +412,7 @@ func (a *shelf) installedUpdate(up *mygo.Update, err error) {
 	log.Printf("Rakko: 更新 v%s 已安装，重启后生效", up.Version)
 	a.toastStatus(a.appLoc().UpdateInstalled(up.Version), time.Now().Add(8*time.Second), statusOK)
 	if os.Getenv("RAKKO_UPDATE_SELFTEST") == "1" {
-		// End-to-end test hook: click 重新启动 ShelfU 完成更新 for the
+		// End-to-end test hook: click 重新启动 Rakko 完成更新 for the
 		// test. mygo installs the staged bundle as this instance exits
 		// and starts it again; nothing is replaced while it runs.
 		relaunchApp()

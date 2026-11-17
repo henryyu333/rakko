@@ -4,7 +4,7 @@ package main
 
 // Real-window proof for the shell-shaped mouse gate: with the sheet settled
 // and the window at its level, WindowServer itself must hand a press on the
-// drawn shell to ShelfU and a press 5pt beside it — still inside the window's
+// drawn shell to Rakko and a press 5pt beside it — still inside the window's
 // transparent ear margin, still above the menu bar — to whatever is
 // underneath. Run with RAKKO_BASKET_SMOKE=1; the probe log lands in
 // /tmp/shelf-stagefix/shell-hit.txt.

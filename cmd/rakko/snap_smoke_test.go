@@ -118,11 +118,11 @@ func TestSnapSmokeDragToNotch(t *testing.T) {
 	work := d.WorkArea
 	x, y := work.X+300, work.Y+300
 	w := mygo.NewWindow(mygo.WindowOptions{
-		Title: "ShelfU snap smoke", Width: 520, Height: 330, X: x, Y: y,
+		Title: "Rakko snap smoke", Width: 520, Height: 330, X: x, Y: y,
 		AlwaysOnTop: true, SkipTaskbar: true,
 		Content: ui.View(func(c *ui.Context) {
 			c.Root().Background(ui.RGB(246, 246, 247))
-			ui.Text(c, "ShelfU 拖窗口分屏 · 冒烟窗口").FontSize(20)
+			ui.Text(c, "Rakko 拖窗口分屏 · 冒烟窗口").FontSize(20)
 		}),
 	})
 	t.Cleanup(func() {
@@ -251,12 +251,12 @@ func TestSnapSmokeIslandPanel(t *testing.T) {
 	d := mygo.Screen.PrimaryDisplay()
 	work := d.WorkArea
 	w := mygo.NewWindow(mygo.WindowOptions{
-		Title: "ShelfU snap island smoke", Width: 520, Height: 330,
+		Title: "Rakko snap island smoke", Width: 520, Height: 330,
 		X: work.X + 300, Y: work.Y + 300,
 		AlwaysOnTop: true, SkipTaskbar: true,
 		Content: ui.View(func(c *ui.Context) {
 			c.Root().Background(ui.RGB(246, 246, 247))
-			ui.Text(c, "ShelfU 拖窗口分屏 · 灵动岛冒烟").FontSize(20)
+			ui.Text(c, "Rakko 拖窗口分屏 · 灵动岛冒烟").FontSize(20)
 		}),
 	})
 	onMain(func() { w.Show(); platform.ActivateSelf() })

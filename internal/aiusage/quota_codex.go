@@ -45,7 +45,7 @@ const (
 
 // FetchCodex reads Codex's local login ($CODEX_HOME or ~/.codex/auth.json) and
 // asks ChatGPT's backend for the subscription's rate-limit windows. An
-// expired access token returns QuotaExpired without any request — ShelfU never
+// expired access token returns QuotaExpired without any request — Rakko never
 // refreshes tokens, because refreshing would rotate Codex's own session.
 // FetchedAt is stamped when the response arrives, so a Retry-After delay
 // counts from receipt; ctx cancellation short-circuits before any read.

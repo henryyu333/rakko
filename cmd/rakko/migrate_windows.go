@@ -2,7 +2,7 @@
 
 package main
 
-// Data-directory migration. The old shelf names (ShelfU, Shelf) only ever
+// Data-directory migration. The app's earlier names only ever
 // shipped on macOS, so a Windows install has nothing to copy from; the
 // signature stays so startup's single migration path keeps working.
 

@@ -33,7 +33,7 @@ func TestSearchOpenFocusesWindow(t *testing.T) {
 	onMain(func() { prev = platform.FrontmostPID() })
 	t.Logf("frontmost before open: pid=%d", prev)
 	if prev == platform.OwnPID() {
-		t.Skip("ShelfU is already frontmost; run the test from another app's session")
+		t.Skip("Rakko is already frontmost; run the test from another app's session")
 	}
 	// Seed a couple of captures so the clipboard tab renders rows.
 	onMain(func() {

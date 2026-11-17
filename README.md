@@ -75,8 +75,6 @@ curl -fsSL https://github.com/henryyu333/rakko/releases/latest/download/install.
 
 **Optional permissions** (Settings → System Permissions walks you through them): Full Disk Access, so files dragged from Downloads, Desktop or Documents need no extra prompt and finished downloads show on the notch; Accessibility, for the notch's drop area and arranging windows; Screen Recording, for Screenshot and Capture Text.
 
-**Coming from ShelfU or Shelf**: Rakko is the new name. On first launch it copies `~/Library/Application Support/ShelfU/` (or `Shelf/`) to `Rakko/` and leaves the old folder as a backup. Turn the permissions and Open at Login on again afterwards.
-
 ## Install on Windows
 
 Requires Windows 10 22H2 or Windows 11, 64-bit.
@@ -184,8 +182,6 @@ curl -fsSL https://github.com/henryyu333/rakko/releases/latest/download/install.
 ```
 
 **可选权限**（设置 → 系统权限 会一步步带你打开）：完全磁盘访问，从「下载」「桌面」「文稿」拖文件时不再弹提示，下载完成也能在刘海上显示；辅助功能，用于刘海的投放区和排列窗口；屏幕录制，用于截图和框选文字。
-
-**从 ShelfU 或 Shelf 升级**：Rakko 是它的新名字。第一次打开时会把 `~/Library/Application Support/ShelfU/`（或 `Shelf/`）复制到 `Rakko/`，旧文件夹留作备份。升级后需要重新打开权限和「登录时打开」。
 
 ## 在 Windows 上安装
 

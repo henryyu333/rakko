@@ -3,8 +3,8 @@
 package main
 
 // Tests for the decision behind the bundle self-rename: only an executable
-// inside Shelf.app moves, and the new bundle path is always a sibling of
-// the old one. Nothing here touches a real installed app.
+// inside one of oldBundleNames moves, and the new bundle path is always a
+// sibling of the old one. Nothing here touches a real installed app.
 
 import (
 	"os"
@@ -19,9 +19,9 @@ func TestSelfRenameTarget(t *testing.T) {
 		next    string
 		wantHit bool
 	}{
-		// An in-app update of an earlier name leaves the new bundle at ShelfU.app.
+		// An in-app update of an earlier name leaves the new bundle at an old name.
 		{"/Applications/ShelfU.app/Contents/MacOS/ShelfU", "/Applications/ShelfU.app", "/Applications/Rakko.app", true},
-		// An update that ran while the app was still called Shelf.
+		// An update that ran under the earliest name.
 		{"/Applications/Shelf.app/Contents/MacOS/Shelf", "/Applications/Shelf.app", "/Applications/Rakko.app", true},
 		{"/Applications/Shelf.app/Contents/MacOS/ShelfU", "/Applications/Shelf.app", "/Applications/Rakko.app", true},
 		{"/Users/me/Applications/ShelfU.app/Contents/MacOS/ShelfU", "/Users/me/Applications/ShelfU.app", "/Users/me/Applications/Rakko.app", true},
@@ -49,7 +49,7 @@ func TestSelfRenameTarget(t *testing.T) {
 func TestSelfRenameTargetIsSiblingOfTheOldBundle(t *testing.T) {
 	old, next, ok := selfRenameTarget("/Applications/ShelfU.app/Contents/MacOS/ShelfU")
 	if !ok {
-		t.Fatal("an exe inside ShelfU.app was not recognised")
+		t.Fatal("an exe inside an old bundle was not recognised")
 	}
 	if filepath.Dir(old) != filepath.Dir(next) {
 		t.Errorf("the new bundle %q is not next to %q", next, old)

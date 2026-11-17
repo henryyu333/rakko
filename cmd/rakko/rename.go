@@ -30,7 +30,7 @@ const (
 )
 
 // renameable reports whether an item can take part in a rename: only real
-// files and folders still on disk. ShelfU's own captures (screenshots,
+// files and folders still on disk. Rakko's own captures (screenshots,
 // clipboard images, text) and its converted outputs in the data directory
 // are never renamed — their paths are managed, not the user's.
 func (a *shelf) renameable(it store.Item) bool {

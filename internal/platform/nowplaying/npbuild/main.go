@@ -8,7 +8,7 @@
 //
 //	go generate ./...
 //
-// The helper is a plain C bundle, not a program: the ShelfU app loads it
+// The helper is a plain C bundle, not a program: the Rakko app loads it
 // into /usr/bin/perl, because since macOS 15.4 MediaRemote only answers
 // Apple-signed callers.
 package main

@@ -21,7 +21,7 @@ func stubFullDisk(t *testing.T, paths ...string) (opens *[]string, reveals *[]st
 	oldReveal, oldOpen := revealBundleInFinder, openURL
 	var o, r []string
 	fullDiskAccessPaths = func() []string { return paths }
-	fullDiskAccessExe = func() (string, error) { return "/tmp/ShelfU", nil }
+	fullDiskAccessExe = func() (string, error) { return "/tmp/Rakko", nil }
 	revealBundleInFinder = func(bundle string) { r = append(r, bundle) }
 	openURL = func(url string) { o = append(o, url) }
 	t.Cleanup(func() {
@@ -105,11 +105,11 @@ func TestRequestFullDiskAccessOpensPaneAndRevealsBundle(t *testing.T) {
 
 func TestRequestFullDiskAccessRevealsTheRunningBundle(t *testing.T) {
 	opens, reveals := stubFullDisk(t, "/nonexistent/TCC.db")
-	fullDiskAccessExe = func() (string, error) { return "/Applications/ShelfU.app/Contents/MacOS/ShelfU", nil }
+	fullDiskAccessExe = func() (string, error) { return "/Applications/Rakko.app/Contents/MacOS/Rakko", nil }
 	if RequestFullDiskAccess() {
 		t.Fatal("an ungranted request must not report success")
 	}
-	if len(*reveals) != 1 || (*reveals)[0] != "/Applications/ShelfU.app" {
+	if len(*reveals) != 1 || (*reveals)[0] != "/Applications/Rakko.app" {
 		t.Fatalf("the running bundle was not revealed: %v", *reveals)
 	}
 	if len(*opens) != 1 {
@@ -149,9 +149,9 @@ func TestAppBundleForExecutableInMac(t *testing.T) {
 		want string
 		ok   bool
 	}{
-		{"/Applications/ShelfU.app/Contents/MacOS/ShelfU", "/Applications/ShelfU.app", true},
+		{"/Applications/Rakko.app/Contents/MacOS/Rakko", "/Applications/Rakko.app", true},
 		{"/tmp/a b/My App.app/Contents/MacOS/My App", "/tmp/a b/My App.app", true},
-		{"/tmp/ShelfU", "", false},
+		{"/tmp/Rakko", "", false},
 		{"/tmp/Not.app/tool", "", false},
 		{"", "", false},
 	} {

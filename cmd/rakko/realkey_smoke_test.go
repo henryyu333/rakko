@@ -78,7 +78,7 @@ func objcData(b []byte) objc.ID {
 // Snapshot every pasteboard item with all of its UTI -> data pairs, not
 // just the formats mygo.Clipboard understands: mygo rewrites unknown types
 // like org.nspasteboard.ConcealedType, and restoring without that marker
-// could let a running ShelfU record what was on the board. Restore writes
+// could let a running Rakko record what was on the board. Restore writes
 // the same raw NSPasteboardItems back.
 func snapshotClipboard(t *testing.T) {
 	t.Helper()
@@ -148,7 +148,7 @@ func objcGoStr(s objc.ID) string {
 }
 
 // The smoke writer adds a concealed marker atomically with the real PNG
-// data so an installed ShelfU's history does not collect test fixtures.
+// data so an installed Rakko's history does not collect test fixtures.
 // The real key dispatch, copy logic, and general pasteboard remain in use.
 type fix2PrivateClipboard struct{}
 
@@ -457,7 +457,7 @@ func TestSmokeUsageRefreshAnswers(t *testing.T) {
 	onMain(func() { a.status = "click-probe" })
 	// The refresh button ends the page's action row: 12pt margin + 22pt,
 	// measured inside the shell (the window adds its ear margins).
-	// The panel must be the window at that point: another copy of ShelfU
+	// The panel must be the window at that point: another copy of Rakko
 	// (the installed one) opens its own notch panel on hover and can sit
 	// above ours, and the guard rightly refuses a click meant for it. A
 	// raise of our own window is enough: it is the same status level and

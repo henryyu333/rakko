@@ -166,7 +166,7 @@ func newSmokePointerBackdrop(t *testing.T, r mygo.Rectangle) *mygo.Window {
 	t.Helper()
 	var w *mygo.Window
 	onMain(func() {
-		w = mygo.NewWindow(mygo.WindowOptions{Title: "ShelfU pointer test arena", Hidden: true,
+		w = mygo.NewWindow(mygo.WindowOptions{Title: "Rakko pointer test arena", Hidden: true,
 			Width: r.Width, Height: r.Height, X: r.X, Y: r.Y, Frameless: true, Panel: true,
 			SkipTaskbar: true, DisableShadow: true, Content: ui.View(func(c *ui.Context) {
 				ui.Box(c).Fill().Background(ui.Hex("#253445"))
@@ -259,7 +259,7 @@ func TestToolsNativeDragOutStaysVisible(t *testing.T) {
 	// A hand moves and then presses; a machine posting both 30 ms apart
 	// presses inside the window where the pointer has not been observed
 	// yet, which is not a case a user can produce.
-	// Same status level as any other copy of ShelfU at the notch: raise
+	// Same status level as any other copy of Rakko at the notch: raise
 	// ours so the press lands on the panel under test.
 	onMain(func() {
 		a.win.ShowInactive()

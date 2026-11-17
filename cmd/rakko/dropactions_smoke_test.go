@@ -24,7 +24,7 @@ import (
 // Real-window drop-zone checks, run only under RAKKO_BASKET_SMOKE=1 so the
 // shared TestMain already hosts the app loop. Shots land in
 // /tmp/shelf-fix/drop-zone/<name>.png; the instance works in the smoke data
-// dir and never touches ~/Library/Application Support/ShelfU.
+// dir and never touches ~/Library/Application Support/Rakko.
 
 const dropShotDir = "/tmp/shelf-fix/drop-zone"
 

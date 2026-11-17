@@ -31,10 +31,9 @@ func TestOtterImageDecodesOnce(t *testing.T) {
 	}
 }
 
-// TestOtterFindsBothInstalledPrefixes: the panel's busts are installed as
-// shelfu-* and the otter's pictures kept from the earlier build as
-// rakko-*; one loader answers both, so a local install never needs a
-// rename to show either family.
+// TestOtterFindsBothInstalledPrefixes: both installed prefixes are handled
+// by one loader, so a local install never needs a rename to show either
+// family.
 func TestOtterFindsBothInstalledPrefixes(t *testing.T) {
 	oldDir := otterDir
 	t.Cleanup(func() { otterDir = oldDir; resetOtters() })
@@ -47,7 +46,7 @@ func TestOtterFindsBothInstalledPrefixes(t *testing.T) {
 	}
 	resetOtters()
 	if otterImage(otterNeutral) == nil {
-		t.Fatal("the shelfu- bust did not decode")
+		t.Fatal("the legacy-prefix bust did not decode")
 	}
 	if petArt() == nil {
 		t.Fatal("the rakko- pet pose did not decode")

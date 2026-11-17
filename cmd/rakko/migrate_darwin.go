@@ -2,8 +2,8 @@
 
 package main
 
-// The app used to keep its data in Library/Application Support/Shelf, then in
-// Library/Application Support/ShelfU. The current app reads
+// The app used to keep its data under earlier names in
+// Library/Application Support. The current app reads
 // Library/Application Support/Rakko, so the first launch copies the newest
 // old directory over once and leaves the old one as a backup: the user's
 // history, managed images and converted files arrive intact.

@@ -71,7 +71,7 @@ func runClaudeCommand(ctx context.Context, env Env, args []string, configDir str
 	if err != nil {
 		return "", "", err
 	}
-	dir, err := os.MkdirTemp("", "shelfu-claude-")
+	dir, err := os.MkdirTemp("", "rakko-claude-")
 	if err != nil {
 		return "", "", err
 	}
