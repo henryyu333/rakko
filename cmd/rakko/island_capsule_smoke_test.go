@@ -140,10 +140,10 @@ func TestSmokeIslandCapsuleHandover(t *testing.T) {
 	t.Logf("capsule %+v: picture %v glyph %v; panel %v glyph %v", capsule,
 		picBox, picGlyph, panelBox, panelGlyph)
 
-	// The panel's capsule box must sit at the same place on screen.
-	panelCapsuleOffset := image.Pt(panelBox.Min.X-panelArea.Min.X, panelBox.Min.Y-panelArea.Min.Y)
-	if panelCapsuleOffset.X < -2 || panelCapsuleOffset.X > 2 || panelCapsuleOffset.Y < -2 || panelCapsuleOffset.Y > 2 {
-		t.Fatalf("panel capsule offset %v inside its crop, want the picture's origin", panelCapsuleOffset)
+	// Both boxes are read in their own capsule-relative space: the picture's
+	// window is the capsule itself, the panel's capture was cropped to it.
+	if dx, dy := panelBox.Min.X-picBox.Min.X, panelBox.Min.Y-picBox.Min.Y; dx < -2 || dx > 2 || dy < -2 || dy > 2 {
+		t.Fatalf("capsule box: picture %v, panel %v (panel relative to its crop)", picBox, panelBox)
 	}
 
 	// Hover on: the entry's fill appears in both windows, and nothing else
