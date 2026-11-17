@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.16.9
+
+- 首页歌词：歌名里带「-」的歌能找到对的歌词；一个歌词来源很慢或出错时，会换另一个来源，失败后更快重试。
+- 刘海收起时，实时活动、应用切换两翼和完成胶囊的伸缩动画更顺，灵动岛样式下不再闪一下空白。
+- Hermes 同时开着几个会话时，每张审批卡都显示自己会话的项目。
+- Windows：删除到回收站偶尔失败的问题修好了。
+
+### English
+
+- Home lyrics: songs with a "-" in the title find the right lyrics, and when one lyrics source is slow or fails, Rakko asks the other one and retries sooner.
+- With the notch closed, live activities, the app-switch wings and the completion capsule grow and shrink smoothly, without a blank flash in the Dynamic Island style.
+- With several Hermes sessions open, each permission card names its own session's project.
+- Windows: moving files to the Recycle Bin no longer fails now and then.
+
 ## 1.16.8
 
 - 灵动岛样式下把面板移到外接屏后，内建屏上也会留着空闲胶囊。
