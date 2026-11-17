@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.16.6
+
+- Windows：opencode 的 AI 用量有时会少算，现在每次都能读到新记录。
+
+### English
+
+- Windows: opencode usage could be undercounted; new records are now always read.
+
 ## 1.16.5
 
 - Windows：没有安装 HEIF / HEVC 扩展时，转换、压缩 HEIC 图片会直接说明需要安装哪个扩展，不再显示一串错误代码。
