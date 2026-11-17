@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.16.7
+
+- opencode 2.x 的 Agent 完成提醒恢复正常（它改了事件格式，之前收不到提醒）。
+- Hermes 的审批卡会显示正确的项目名，而不是启动目录。
+
+### English
+
+- Agent completion notices work again with opencode 2.x, which changed its event format.
+- Hermes permission cards now name the project instead of the launch folder.
+
 ## 1.16.6
 
 - Windows：opencode 的 AI 用量有时会少算，现在每次都能读到新记录。
