@@ -177,13 +177,18 @@ func first(values []string) string {
 }
 
 // send writes one line to the socket and closes. It never blocks on a
-// missing app: the dial's own timeout ends the attempt.
+// missing app: the dial's own timeout ends the attempt. The event carries
+// the prompt text, so nothing is written until the listener has proved to
+// be this same Rakko; a foreign one is left as if Rakko were not running.
 func send(dataDir string, req Event) {
 	conn, err := dialTransport(dataDir, forwardDial)
 	if err != nil {
 		return
 	}
 	defer conn.Close()
+	if !forwardPeerIsRakko(conn) {
+		return
+	}
 	body, err := json.Marshal(req)
 	if err != nil {
 		return
