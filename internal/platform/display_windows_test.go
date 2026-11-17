@@ -463,7 +463,8 @@ func TestFileOperations(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The operation's own progress answer must say this item went to the bin:
-	// a count of the whole bin cannot.
+	// a count of the whole bin cannot. The call pins its own OS thread, so a
+	// direct call from this test goroutine is the supported path too.
 	recycled, err := fileOperationDelete(text)
 	if err != nil || !recycled {
 		t.Fatalf("fileOperationDelete = recycled %v, %v; want true, nil", recycled, err)

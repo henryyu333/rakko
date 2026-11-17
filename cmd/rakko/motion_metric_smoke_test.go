@@ -606,7 +606,6 @@ func TestMotionMetricSmoke(t *testing.T) {
 			name := style.name + "-" + sc.name
 			saveMotionFrames(t, dir, name, rows)
 			st := metricsFrom(name, rows)
-			st.recordingOnly = preExistingMorphs[sc.name]
 			stats = append(stats, st)
 		}
 	}
@@ -618,19 +617,11 @@ func TestMotionMetricSmoke(t *testing.T) {
 		for _, line := range st.windowAuth {
 			t.Logf("  mismatch: %s", line)
 		}
-		if st.recordingOnly {
-			// Recorded, not asserted: see preExistingMorphs.
-			t.Logf("%s: pre-existing closed-peek morph (mid-resizes=%d lost=%d p95=%.2f) recorded only",
-				st.name, st.midResizes, st.lost, st.p95)
-		}
 		if collectOnly {
 			continue
 		}
 		if st.staleHits != 0 {
 			t.Errorf("%s: %d frames were built in a canvas the native frame did not have", st.name, st.staleHits)
-		}
-		if st.recordingOnly {
-			continue
 		}
 		if st.midResizes != 0 {
 			t.Errorf("%s: %d native resizes happened while a spring ran", st.name, st.midResizes)

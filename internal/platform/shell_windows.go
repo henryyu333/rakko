@@ -368,13 +368,12 @@ func volumeGUID(mount string) (string, bool) {
 // recycles on delete, and fails unless the shell put this item in the recycle
 // bin.
 func recycleItem(abs string) error {
-	// IFileOperation must be used from a single-threaded apartment, so the
-	// operation gets a thread of its own rather than borrowing whichever
-	// apartment the caller happens to be in.
+	// fileOperationDelete pins its thread and opens its own STA. The worker
+	// goroutine keeps that off the caller's apartment, which may already be an
+	// MTA (WinRT), and keeps the caller's thread unlocked while the shell
+	// works.
 	done := make(chan error, 1)
 	go func() {
-		runtime.LockOSThread()
-		defer runtime.UnlockOSThread()
 		_, err := fileOperationDelete(abs)
 		done <- err
 	}()
@@ -531,10 +530,20 @@ func comApartmentAction(hr int32) (usable, release bool, err error) {
 // fileOperationDelete recycles one item and answers the progress sink's verdict
 // for it. The shell reports a refused or aborted operation through the
 // HRESULTs here, which the caller propagates.
+//
+// IFileOperation is apartment-bound: the object, its shell item, the advised
+// sink and every call to them belong to the one thread whose STA created it,
+// so the call pins its goroutine to its OS thread for its whole length. Go may
+// otherwise move a goroutine between OS threads around a syscall or a stack
+// growth, and CI has answered RPC_E_WRONG_THREAD (0x8001010E) from DeleteItem
+// because of it. Callers — the product's recycle worker and the tests that
+// call this directly — need no thread or apartment of their own.
 func fileOperationDelete(abs string) (recycled bool, err error) {
-	// IFileOperation requires a single-threaded apartment. The worker thread
-	// is this operation's own, so it starts one and releases it before the
-	// thread goes back to the pool.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	// IFileOperation requires a single-threaded apartment. This goroutine's
+	// thread is the operation's own from here to the deferred unlock, so it
+	// starts one and releases it before the thread goes back to the pool.
 	hr, _, _ := procCoInitializeEx.Call(0, coinitApartmentThreaded)
 	usable, release, err := comApartmentAction(int32(hr))
 	if !usable {
