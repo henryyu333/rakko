@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.16.2
+
+- 时间戳异常（比当前时间还新）的下载临时文件，不会再让下载进度一直显示「0 B」。
+- 每周简报里「读不到」的提示改成和 AI 用量页一样的灰色说明文字。
+- 安装包小了约 0.8 MB（去掉重复的图片）。
+
+### English
+
+- A download's temporary file with a timestamp in the future no longer keeps the download progress stuck at "0 B".
+- The weekly report's "couldn't read" note now uses the same grey caption as the AI Usage page.
+- The installer is about 0.8 MB smaller (duplicate images removed).
+
 ## 1.16.1
 
 - 设置文件或布局文件被编辑器存成带 BOM 的格式时，Rakko 现在能正常读取，不会再退回默认设置。
