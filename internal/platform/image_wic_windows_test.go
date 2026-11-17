@@ -8,6 +8,7 @@ package platform
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"image"
 	"image/color"
 	"image/png"
@@ -256,5 +257,62 @@ func TestLargePicturesStillConvert(t *testing.T) {
 	}
 	if gotW, gotH, err := ImageSize(fromHEIC); err != nil || gotW != w || gotH != h {
 		t.Fatalf("HEIC conversion size %dx%d (err %v), want %dx%d", gotW, gotH, err, w, h)
+	}
+}
+
+// TestWICCodecErrorsNameTheMissingExtension checks the classification the UI
+// turns into "install this Microsoft Store extension": only a HEIC file
+// whose HEIF decoder is absent names the HEIF Image Extensions, only a HEIC
+// whose container opened but whose pixels cannot be decoded or written names
+// the HEVC Video Extensions, and every other failure keeps its HRESULT.
+func TestWICCodecErrorsNameTheMissingExtension(t *testing.T) {
+	const (
+		eFail      = 0x80004005
+		eAccess    = 0x80070005
+		eInvalid   = 0x80070057 // what this build's HEIF decoder returns for missing HEVC pixels
+		noClass    = 0x80040154 // REGDB_E_CLASSNOTREG
+		noPixels   = 0x88982F07 // WINCODEC_ERR_UNSUPPORTEDPIXELFORMAT
+		hevcEncode = 0xC00D5212 // MF_E_TOPO_CODEC_NOT_FOUND
+	)
+	for _, tt := range []struct {
+		name string
+		err  error
+		want error // nil: no extension may be named
+	}{
+		{"heic without the HEIF decoder", wicDecodeOpenError(`C:\p\a.heic`, wicErrCodecMissing), ErrHEIFExtensionMissing},
+		{"heif suffix spelled in capitals", wicDecodeOpenError(`C:\p\a.HEIF`, wicErrCodecMissing), ErrHEIFExtensionMissing},
+		{"heic decoder class unregistered", wicDecodeOpenError(`C:\p\a.heic`, noClass), ErrHEIFExtensionMissing},
+		{"heic file refused for another reason", wicDecodeOpenError(`C:\p\a.heic`, eAccess), nil},
+		{"other format no codec claims", wicDecodeOpenError(`C:\p\a.psd`, wicErrCodecMissing), nil},
+
+		{"heic pixels need HEVC", wicDecodeError(`C:\p\a.heic`, eInvalid), ErrHEVCExtensionMissing},
+		{"heic unsupported pixel format", wicDecodeError(`C:\p\a.heic`, noPixels), ErrHEVCExtensionMissing},
+		{"heic pixel component missing", wicDecodeError(`C:\p\a.heic`, wicErrCodecMissing), ErrHEVCExtensionMissing},
+		{"heic decode failed otherwise", wicDecodeError(`C:\p\a.heic`, eFail), nil},
+		{"png decode failed", wicDecodeError(`C:\p\a.png`, eInvalid), nil},
+
+		{"heic without the HEIF encoder", wicEncodeOpenError(wicErrCodecMissing), ErrHEIFExtensionMissing},
+		{"heic encoder class unregistered", wicEncodeOpenError(noClass), ErrHEIFExtensionMissing},
+		{"heic encoder refused for another reason", wicEncodeOpenError(eFail), nil},
+		{"heic write needs HEVC", wicEncodeError(hevcEncode), ErrHEVCExtensionMissing},
+		{"heic write component missing", wicEncodeError(wicErrCodecMissing), ErrHEVCExtensionMissing},
+		{"heic write failed otherwise", wicEncodeError(eFail), nil},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.err == nil {
+				t.Fatal("classification returned nil")
+			}
+			if tt.want == nil {
+				for _, sentinel := range []error{ErrHEIFExtensionMissing, ErrHEVCExtensionMissing} {
+					if errors.Is(tt.err, sentinel) {
+						t.Fatalf("%v was reported as %v", tt.err, sentinel)
+					}
+				}
+				return
+			}
+			if !errors.Is(tt.err, tt.want) {
+				t.Fatalf("%v does not name %v", tt.err, tt.want)
+			}
+		})
 	}
 }

@@ -4145,6 +4145,26 @@ func (msgs Messages) ConvFailedExtract(err string) string {
 	return Catalog.Format(msgs.locale, "convFailedExtract", map[string]any{"err": err})
 }
 
+// ImageNeedsHEIF says "需要安装 Microsoft Store 的「HEIF 图像扩展」"
+// in the language the app shows.
+func ImageNeedsHEIF() string { return In(i18n.Locale()).ImageNeedsHEIF() }
+
+// ImageNeedsHEIF says "需要安装 Microsoft Store 的「HEIF 图像扩展」"
+// in the language of msgs.
+func (msgs Messages) ImageNeedsHEIF() string {
+	return Catalog.Format(msgs.locale, "imageNeedsHEIF", nil)
+}
+
+// ImageNeedsHEVC says "需要安装「HEVC 视频扩展」"
+// in the language the app shows.
+func ImageNeedsHEVC() string { return In(i18n.Locale()).ImageNeedsHEVC() }
+
+// ImageNeedsHEVC says "需要安装「HEVC 视频扩展」"
+// in the language of msgs.
+func (msgs Messages) ImageNeedsHEVC() string {
+	return Catalog.Format(msgs.locale, "imageNeedsHEVC", nil)
+}
+
 // ConvPartial says "{ok, number, ::group-off} 项成功，{failed, number, ::group-off} 项失败"
 // in the language the app shows.
 func ConvPartial(ok int, failed int) string { return In(i18n.Locale()).ConvPartial(ok, failed) }

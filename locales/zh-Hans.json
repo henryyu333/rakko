@@ -405,6 +405,8 @@
   "convFailed": "转换失败：{err}",
   "convFailedZip": "压缩失败：{err}",
   "convFailedExtract": "解压失败：{err}",
+  "imageNeedsHEIF": "需要安装 Microsoft Store 的「HEIF 图像扩展」",
+  "imageNeedsHEVC": "需要安装「HEVC 视频扩展」",
   "convPartial": "{ok, number, ::group-off} 项成功，{failed, number, ::group-off} 项失败",
   "convCanceledDone": "已取消 · 已完成 {n, number, ::group-off} 项",
   "convNoTextPDF": "没有找到文字，Word 文件是空白的",

@@ -757,16 +757,31 @@ func (a *shelf) finishConvert(job *convertJob, outs []convertOut) {
 	a.syncCopyKey()
 }
 
+// imageCodecError words the Windows HEIC codec failures in the language of
+// l: opening a HEIC needs the HEIF Image Extensions, and reading or writing
+// its pixels needs the HEVC Video Extensions, both from the Microsoft Store.
+// Every other error keeps its own text.
+func imageCodecError(l locales.Messages, err error) string {
+	switch {
+	case errors.Is(err, platform.ErrHEIFExtensionMissing):
+		return l.ImageNeedsHEIF()
+	case errors.Is(err, platform.ErrHEVCExtensionMissing):
+		return l.ImageNeedsHEVC()
+	}
+	return err.Error()
+}
+
 // convertFailText words a job that produced nothing, in the language of l:
 // the operation the job was doing names the failure.
 func convertFailText(l locales.Messages, target convertTarget, err error) string {
+	reason := imageCodecError(l, err)
 	switch {
 	case target == toExtract:
-		return l.ConvFailedExtract(err.Error())
+		return l.ConvFailedExtract(reason)
 	case target == toZip, fitLimit(target) > 0:
-		return l.ConvFailedZip(err.Error())
+		return l.ConvFailedZip(reason)
 	}
-	return l.ConvFailed(err.Error())
+	return l.ConvFailed(reason)
 }
 
 // uniquePath is dir/name.ext, or 「name 2.ext」, 「name 3.ext」… when that

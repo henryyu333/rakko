@@ -1,7 +1,7 @@
 package main
 
 // 每周简报页（design/explore/notch-apps-brief-prototype.html）：从首页的
-// 「上周简报」进来，560 × 600 的阅读尺寸，前后周切换。三段：Mac 使用
+// 「上周简报」进来，560 × 600 的阅读尺寸，前后周切换。三段：应用使用
 // （活跃 / 停留两种口径，须用户同意后才有数据）、AI 使用（只读本机日志，
 // 费用是估算）、用 Rakko 完成（文件转换、框选文字、托盘取出）。
 //
@@ -127,7 +127,7 @@ func (f *weeklyFeature) navButton(c *ui.Context, key string, icon *ui.SVG, label
 	}
 }
 
-// report is the scrolling content: warning, Mac use, AI use, Rakko
+// report is the scrolling content: warning, app use, AI use, Rakko
 // completions. Every section draws its own heading and rule so the scroll
 // stays one column.
 func (f *weeklyFeature) report(c *ui.Context, w, h float32, now time.Time) {
@@ -146,8 +146,8 @@ func (f *weeklyFeature) report(c *ui.Context, w, h float32, now time.Time) {
 					ui.Text(c, note).FontSize(10.5).TextColor(warning).MaxWidth(inner - 20)
 				})
 			}
-			f.macSection(c, inner, wk, now)
-			f.rule(c, inner, "mac-ai")
+			f.usageSection(c, inner, wk, now)
+			f.rule(c, inner, "usage-ai")
 			f.aiSection(c, inner, now)
 			f.rule(c, inner, "ai-rakko")
 			f.rakkoSection(c, inner, wk)
@@ -177,15 +177,15 @@ func (f *weeklyFeature) storageNote(c *ui.Context) string {
 	return ""
 }
 
-// --- Mac use ------------------------------------------------------------
+// --- App use ------------------------------------------------------------
 
-// macSection is the two-measure app usage block.
-func (f *weeklyFeature) macSection(c *ui.Context, w float32, wk weekly.Week, now time.Time) {
+// usageSection is the two-measure app usage block.
+func (f *weeklyFeature) usageSection(c *ui.Context, w float32, wk weekly.Week, now time.Time) {
 	l := tloc(c)
-	ui.Column(c.Key("weekly-mac")).Width(w).Margin(0, 0, 0, 0).Children(func() {
-		ui.Row(c.Key("weekly-mac-head")).Width(w).Height(20).AlignItems(ui.Center).Children(func() {
-			panelLabel(c, "weekly-mac-name", osText(l.WeeklyMacSection(), l.WeeklyMacSectionWin()), 12, 600).TextColor(ink2)
-			ui.Box(c.Key("weekly-mac-gap")).Grow(1)
+	ui.Column(c.Key("weekly-usage")).Width(w).Margin(0, 0, 0, 0).Children(func() {
+		ui.Row(c.Key("weekly-usage-head")).Width(w).Height(20).AlignItems(ui.Center).Children(func() {
+			panelLabel(c, "weekly-usage-name", osText(l.WeeklyMacSection(), l.WeeklyMacSectionWin()), 12, 600).TextColor(ink2)
+			ui.Box(c.Key("weekly-usage-gap")).Grow(1)
 			if f.consent() {
 				f.modeSeg(c)
 			}
@@ -195,7 +195,7 @@ func (f *weeklyFeature) macSection(c *ui.Context, w float32, wk weekly.Week, now
 			return
 		}
 		if !wk.Sampled {
-			ui.Column(c.Key("weekly-mac-empty")).Width(w).Margin(40, 0, 0, 0).Gap(7).
+			ui.Column(c.Key("weekly-usage-empty")).Width(w).Margin(40, 0, 0, 0).Gap(7).
 				AlignItems(ui.Center).Children(func() {
 				ui.Icon(c, weeklySymbol).Size(24, 24).TextColor(ink3)
 				panelLabel(c, nil, l.WeeklyEmptyTitle(), 13, 550).TextColor(ink)
@@ -204,7 +204,7 @@ func (f *weeklyFeature) macSection(c *ui.Context, w float32, wk weekly.Week, now
 			})
 			return
 		}
-		f.macMetric(c, w, wk, now)
+		f.usageMetric(c, w, wk, now)
 		f.barChart(c, w, wk)
 		f.appRows(c, w, wk)
 		ui.Text(c, l.WeeklyCoverageNote()).FontSize(10).TextColor(ink3).
@@ -269,9 +269,9 @@ func (f *weeklyFeature) consentBlock(c *ui.Context, w float32) {
 	})
 }
 
-// macMetric is the selected measure's total and, when both weeks were
+// usageMetric is the selected measure's total and, when both weeks were
 // measured, its comparison with the week before.
-func (f *weeklyFeature) macMetric(c *ui.Context, w float32, wk weekly.Week, now time.Time) {
+func (f *weeklyFeature) usageMetric(c *ui.Context, w float32, wk weekly.Week, now time.Time) {
 	l := tloc(c)
 	total := weekly.WeekTotal(wk, f.metric)
 	value, unit := weeklyUnitValue(total, l)
@@ -660,7 +660,7 @@ func (f *weeklyFeature) footer(c *ui.Context, w float32) {
 		ui.Icon(c, weeklyShield).Size(11, 11).TextColor(ink3)
 		panelLabel(c, nil, osText(l.WeeklyLocalOnly(), l.WeeklyLocalOnlyWin()), 10, 0).TextColor(ink3)
 		if !f.consent() {
-			// The Mac section's ask owns turning tracking on; two switches
+			// The app-use section's ask owns turning tracking on; two switches
 			// for one choice would only compete.
 			return
 		}
