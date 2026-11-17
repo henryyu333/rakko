@@ -48,6 +48,13 @@ const (
 	// download that resumes writes to the file again, so its modification
 	// time moves forward and it is shown again.
 	downloadStaleAfter = 24 * time.Hour
+	// downloadClockSkew is how far a partial's modification time may sit
+	// ahead of the scan's clock and still count as a write. The browser and
+	// the scan read the same clock, so a stamp can only lead by the moment
+	// between the scan's clock read and the file's write; a larger lead
+	// means the clock moved backwards (or the file came from another
+	// machine), and that stamp proves nothing about a writer.
+	downloadClockSkew = time.Minute
 )
 
 // downloadsDir is where browsers leave their temporary files. It is a seam
@@ -333,9 +340,14 @@ func scanDownloadDir(dir string, now time.Time) ([]downloadFile, error) {
 
 // partialInFlight reports whether a partial file is still being written. A
 // zero modification time means the platform could not say how old it is, and
-// hiding a live download over a missing timestamp would be a guess.
+// hiding a live download over a missing timestamp would be a guess. A
+// timestamp far ahead of now is not a write either: see downloadClockSkew.
 func partialInFlight(mod, now time.Time) bool {
-	return mod.IsZero() || now.Sub(mod) <= downloadStaleAfter
+	if mod.IsZero() {
+		return true
+	}
+	age := now.Sub(mod)
+	return age >= -downloadClockSkew && age <= downloadStaleAfter
 }
 
 // nextTick is the next folder scan.
