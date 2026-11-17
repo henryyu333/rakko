@@ -132,7 +132,7 @@ func (a *shelf) toolTimerBody(c *ui.Context, card ui.Element, span int, surf too
 	card.Children(func() {
 		m := a.clock
 		l := loc(c)
-		now := placeholderNow()
+		now := time.Now()
 		if m != nil {
 			now = m.clock()
 		}
@@ -481,7 +481,7 @@ func (a *shelf) toolStopwatchBody(c *ui.Context, card ui.Element, span int, surf
 	card.Children(func() {
 		m := a.clock
 		l := loc(c)
-		now := placeholderNow()
+		now := time.Now()
 		if m != nil {
 			now = m.clock()
 		}
@@ -497,12 +497,21 @@ func (a *shelf) toolStopwatchBody(c *ui.Context, card ui.Element, span int, surf
 		frac := cardWatchFrac(elapsed)
 		text := clockText(elapsed)
 		w := cardW(layout.Card{ID: "stopwatch", Span: 2}, surf)
+		// The header was drawn for names as short as 42pt. A longer one,
+		// as English's "Stopwatch", takes the width it measures with the
+		// ellipsis SingleLine would keep for itself, and the reading takes
+		// the rest: the row must not squeeze the name short beside a long
+		// reading.
+		name := l.CardStopwatch()
+		nameW, _ := c.MeasureText(0, ui.Span{Text: name, Size: 12, Weight: 600})
+		markW, _ := c.MeasureText(0, ui.Span{Text: "…", Size: 12, Weight: 600})
+		nameSlot := max(float32(42), nameW+markW+0.5)
 		top := a.cardTop(c, card, "watch-top")
 		top.Children(func() {
 			a.cardRingLead(c, card, "watch-lead", 24, frac, phase, watchGlyph)
-			fitText(c, l.CardStopwatch(), 12, 600, 42).TextColor(ink2)
+			fitText(c, name, 12, 600, nameSlot).TextColor(ink2)
 			ui.Box(c).Grow(1)
-			a.cardHero(c, card, "watch-hero", text, 26, 22, w-2*cardPad-24-7-42-7,
+			a.cardHero(c, card, "watch-hero", text, 26, 22, w-2*cardPad-24-7-nameSlot-7,
 				cardHeroColor(phase), phase == cardPaused)
 		})
 		foot := a.cardFoot(c, card, "watch-foot")
@@ -770,7 +779,3 @@ func (a *shelf) timerAlarmView(c *ui.Context, shellW, shellH, k float32) {
 		})
 	})
 }
-
-// placeholderNow keeps the card builders answerable on shelves without a
-// clock (headless fixtures that never registered the feature).
-func placeholderNow() time.Time { return time.Now() }

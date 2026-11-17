@@ -778,3 +778,57 @@ func TestTimerCardTapStartsTheShownLength(t *testing.T) {
 		t.Fatalf("the card tap started %v, want the displayed 10m", got)
 	}
 }
+
+// TestEnglishStopwatchHeaderKeepsItsName: the 2 × 1 card's header used to
+// give every name the 42pt that the short ones need, so English's longer
+// "Stopwatch" was shortened to "Stop…" beside an hour-long reading. The
+// name now takes the width it measures, and the reading keeps every digit.
+func TestEnglishStopwatchHeaderKeepsItsName(t *testing.T) {
+	old := fitIssue
+	var notes []string
+	fitIssue = func(msg string) { notes = append(notes, msg) }
+	t.Cleanup(func() { fitIssue = old })
+
+	now := time.Date(2026, 11, 11, 9, 41, 0, 0, time.Local)
+	a := &shelf{
+		dataDir: t.TempDir(), settings: settings.Default(), level: 2, visible: true, tab: pageTools,
+		thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{}, appNames: map[string]string{},
+	}
+	a.ensurePages()
+	a.toolsLay = &layout.Layout{Version: layout.Version, Cards: []layout.Card{
+		{ID: "stopwatch", Span: 2, Rows: 1},
+	}}
+	a.clock = newClockModule(a)
+	m := a.clock
+	m.now = func() time.Time { return now }
+	m.playSound = func() {}
+	m.stopSound = func() {}
+	elapsed := 12*time.Hour + 34*time.Minute + 56*time.Second
+	m.watchRun, m.watchStart = true, now.Add(-elapsed)
+	reading := clockText(elapsed)
+
+	view := ui.NewTester(a.view, sheetW+2*earR, panelTestH)
+	view.SetLocale("en")
+	view.Frame()
+	view.Frame()
+
+	// The card draws the smallest reading size with every digit; anything
+	// narrower than the reading at that size has lost one.
+	var smallest float32
+	measure := ui.NewTester(func(c *ui.Context) {
+		smallest, _ = c.MeasureText(0, ui.Span{Text: reading, Size: 12, Weight: 600, Features: "tnum"})
+	}, 1, 1)
+	measure.Frame()
+	hero, ok := view.Find(reading)
+	if !ok {
+		t.Fatalf("the reading %s is not drawn", reading)
+	}
+	if hero.W+0.5 < smallest {
+		t.Fatalf("the reading %s is cut to %.1fpt, needs %.1fpt", reading, hero.W, smallest)
+	}
+	for _, note := range notes {
+		if strings.Contains(note, "Stopwatch") {
+			t.Fatalf("the English name is cut: %s", note)
+		}
+	}
+}
