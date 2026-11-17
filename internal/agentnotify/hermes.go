@@ -104,6 +104,7 @@ description: Rakko completion notices and approval cards for Hermes.
 provides_tools: []
 provides_hooks:
   - post_llm_call
+  - pre_approval_request
 `
 
 // hermesPlugin is the plugin itself. It registers both surfaces; the state
@@ -131,12 +132,16 @@ def _enabled(kind):
         return False
 
 
-# Hermes answers an approval on a worker thread, which does not carry the
-# session's cwd: the resolver then names the profile's terminal cwd or
-# nothing, and the card showed the launch directory instead of the project
-# the command runs in. The hook runs with the session, so its answer is kept
-# for the transport to use.
+# Hermes answers an approval on a worker thread that carries no session
+# context: the resolver there names the profile's terminal cwd, so a gateway
+# running several sessions put whichever finished last on every card. The
+# pre_approval_request hook fires on the session's own thread, just before
+# the transport, and carries the request id the transport receives next:
+# remember the session's cwd under that id and the card names that session's
+# project, not the most recent turn's.
 _seen_cwd = {"path": ""}
+_request_cwd = {}
+_CWD_MEMORY = 64
 
 
 def _context_cwd():
@@ -148,6 +153,19 @@ def _context_cwd():
     except Exception:
         pass
     return ""
+
+
+def _remember_request_cwd(request_id=None, **kwargs):
+    if not request_id:
+        return
+    path = _context_cwd()
+    if not path:
+        return
+    key = str(request_id)
+    _request_cwd.pop(key, None)
+    _request_cwd[key] = path
+    while len(_request_cwd) > _CWD_MEMORY:
+        _request_cwd.pop(next(iter(_request_cwd)))
 
 
 def _cwd(prefer_seen=False):
@@ -166,6 +184,17 @@ def _cwd(prefer_seen=False):
         return os.getcwd()
     except Exception:
         return ""
+
+
+def _approval_cwd(request):
+    # The request id is the session-scoped key the hook stored; without one
+    # (an older Hermes) keep the old last-turn answer.
+    request_id = str(getattr(request, "request_id", "") or "")
+    if request_id:
+        path = _request_cwd.pop(request_id, "")
+        if path:
+            return path
+    return _cwd(prefer_seen=True)
 
 
 def _args(flag):
@@ -214,7 +243,7 @@ def _present(request):
     payload = {
         "hook_event_name": "pre_approval_request",
         "session_id": str(getattr(request, "request_id", "") or "hermes"),
-        "cwd": _cwd(prefer_seen=True),
+        "cwd": _approval_cwd(request),
         "tool_name": "terminal",
         "tool_input": {
             "command": str(getattr(request, "command", "") or ""),
@@ -253,6 +282,10 @@ def _present(request):
 def register(ctx):
     try:
         ctx.register_hook("post_llm_call", _on_post_llm_call)
+    except Exception:
+        pass
+    try:
+        ctx.register_hook("pre_approval_request", _remember_request_cwd)
     except Exception:
         pass
     try:

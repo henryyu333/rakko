@@ -214,6 +214,127 @@ else:
 	}
 }
 
+func TestHermesApprovalNamesItsOwnSessionCwd(t *testing.T) {
+	python, err := exec.LookPath("python3")
+	if err != nil {
+		t.Skip("python3 is not installed")
+	}
+	home, dataDir := testHome(t), testDataDir(t)
+	dir := hermesPluginDir(home)
+	payloads := filepath.Join(dir, "approve-payloads")
+	exe := filepath.Join(dir, "fake-rakko")
+	// One JSON line per approval: the test reads every card's cwd.
+	script := "#!/bin/sh\n" +
+		"if [ \"$1\" = \"--agent-approve\" ]; then\n" +
+		"  cat >> " + shellQuote(payloads) + "\n" +
+		"  printf '\\n' >> " + shellQuote(payloads) + "\n" +
+		"  printf '%s' '{\"decision\":\"allow\"}'\n" +
+		"  exit 0\n" +
+		"fi\n"
+	writeFile(t, exe, script)
+	if err := os.Chmod(exe, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeHermesPlugin(home, dataDir, exe); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeHermesState(home, hermesState{Completion: true, Approval: true}); err != nil {
+		t.Fatal(err)
+	}
+	driver := filepath.Join(dir, "sessions.py")
+	writeFile(t, driver, `
+import contextvars, importlib.util, json, sys, threading, types
+
+# The resolver reads the session's own contextvar, like Hermes's
+# agent.runtime_cwd; a plain worker thread starts without it.
+cwd = contextvars.ContextVar("HERMES_SESSION_CWD", default="")
+rt = types.ModuleType("agent.runtime_cwd")
+rt.resolve_context_cwd = lambda: cwd.get() or None
+pkg = types.ModuleType("agent")
+pkg.runtime_cwd = rt
+sys.modules["agent"], sys.modules["agent.runtime_cwd"] = pkg, rt
+
+spec = importlib.util.spec_from_file_location("rakko_hermes", "__init__.py")
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+hooks, transports = {}, {}
+class Ctx:
+    def register_hook(self, name, fn): hooks[name] = fn
+    def register_approval_transport(self, name, fn): transports[name] = fn
+mod.register(Ctx())
+
+class Request:
+    def __init__(self, request_id):
+        self.request_id = request_id
+        self.command = "rm -rf /tmp/rakko-demo"
+        self.description = "Clean the temporary directory"
+        self.timeout_seconds = 300
+        self.allowed_choices = ("once", "deny")
+    def respond(self, choice): return {"choice": choice}
+
+def present(request_id, with_hook, project=""):
+    # The approval hook fires on the session's thread, just before Hermes
+    # hands the request to the transport; the transport itself runs on a
+    # worker thread that carries no session context.
+    if with_hook:
+        token = cwd.set(project)
+        hooks["pre_approval_request"](command="rm -rf /tmp/rakko-demo", session_key=project,
+                                      surface="transport:rakko", request_id=request_id)
+        cwd.reset(token)
+    seen = {}
+    worker = threading.Thread(target=lambda: seen.setdefault(
+        "choice", transports["rakko"](Request(request_id))["choice"]))
+    worker.start()
+    worker.join()
+    return seen["choice"]
+
+# Two sessions finish turns; B's is the later one.
+cwd.set("/tmp/rakko-session-a")
+hooks["post_llm_call"](session_id="s-a", user_message="A")
+cwd.set("/tmp/rakko-session-b")
+hooks["post_llm_call"](session_id="s-b", user_message="B")
+
+choices = [
+    present("req-a", True, "/tmp/rakko-session-a"),
+    present("req-b", True, "/tmp/rakko-session-b"),
+    # No hook (an older Hermes): the last turn's answer is the fallback.
+    present("req-legacy", False),
+]
+print(json.dumps(choices))
+`)
+	cmd := exec.Command(python, driver)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("plugin driver: %v\n%s", err, out)
+	}
+	var choices []string
+	if err := json.Unmarshal(out, &choices); err != nil {
+		t.Fatalf("driver output %q: %v", out, err)
+	}
+	for i, got := range choices {
+		if got != "once" {
+			t.Fatalf("approval %d answered %q, want once", i, got)
+		}
+	}
+	lines := strings.Split(strings.TrimSpace(readFile(t, payloads)), "\n")
+	if len(lines) != 3 {
+		t.Fatalf("%d approval payloads, want 3:\n%s", len(lines), strings.Join(lines, "\n"))
+	}
+	want := []string{"/tmp/rakko-session-a", "/tmp/rakko-session-b", "/tmp/rakko-session-b"}
+	for i, line := range lines {
+		var p struct {
+			Cwd string `json:"cwd"`
+		}
+		if err := json.Unmarshal([]byte(line), &p); err != nil {
+			t.Fatalf("payload %d: %v\n%s", i, err, line)
+		}
+		if p.Cwd != want[i] {
+			t.Fatalf("approval %d named %q, want %q", i, p.Cwd, want[i])
+		}
+	}
+}
+
 func TestHermesConnectRoundTrip(t *testing.T) {
 	home, dataDir, path := hermesHomeWithConfig(t)
 	if !Installed(home, ToolHermes) {
