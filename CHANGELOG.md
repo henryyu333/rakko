@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.16.8
+
+- 灵动岛样式下把面板移到外接屏后，内建屏上也会留着空闲胶囊。
+- 空闲胶囊上的应用切换按钮有了悬停效果，点它打开的是应用切换。
+- 没有刘海的屏幕上展开时，胶囊上沿不再被菜单栏切掉一截；打开时第一帧不再跳一下。
+
+### English
+
+- With the Dynamic Island style, moving the panel to an external display keeps the resting capsule on the built-in screen.
+- The app-switch button on the resting capsule now shows a hover state, and clicking it opens app switching.
+- On a screen without a notch, the capsule's top edge is no longer clipped by the menu bar while it opens, and the first frame no longer jumps.
+
 ## 1.16.7
 
 - opencode 2.x 的 Agent 完成提醒恢复正常（它改了事件格式，之前收不到提醒）。
