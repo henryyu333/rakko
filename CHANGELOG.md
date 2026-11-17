@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.16.4
+
+- 倒计时到点的铃声更可靠。
+- 英文界面下，工具页 2×1 秒表在读数很长时名称不再被截成「Stop…」。
+
+### English
+
+- The timer's alarm sound is more reliable.
+- In English, the 2 × 1 stopwatch card no longer cuts its name to "Stop…" when the reading gets long.
+
 ## 1.16.3
 
 - Agent 完成提醒在 Mac 上会先确认收件的是 Rakko 本身再转发，避免别的程序读到提示词内容。
