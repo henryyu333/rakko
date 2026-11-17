@@ -9,6 +9,7 @@
 package layout
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -201,6 +202,7 @@ func load(dir string, def func() Layout) (Layout, error) {
 		return def(), fmt.Errorf("layout: reading %s: %w", FileName, err)
 	}
 	var l Layout
+	data = bytes.TrimPrefix(data, []byte{0xEF, 0xBB, 0xBF})
 	if err := json.Unmarshal(data, &l); err != nil {
 		return def(), fmt.Errorf("layout: %s is not valid JSON, using defaults: %w", FileName, err)
 	}

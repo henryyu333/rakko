@@ -649,3 +649,38 @@ func TestApprovalDefaultsOff(t *testing.T) {
 		t.Fatalf("pruned off list %v", s.Approval.Off)
 	}
 }
+
+func TestLoadAndLanguageOfAcceptUTF8BOM(t *testing.T) {
+	plainDir := t.TempDir()
+	bomDir := t.TempDir()
+	raw := []byte(`{
+  "retentionDays": 30,
+  "clipboardLimit": 42,
+  "language": "ja",
+  "excludedApps": ["com.example.secret"]
+}`)
+	bom := append([]byte{0xEF, 0xBB, 0xBF}, raw...)
+	if err := os.WriteFile(filepath.Join(plainDir, FileName), raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(bomDir, FileName), bom, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	want, err := Load(plainDir)
+	if err != nil {
+		t.Fatalf("Load(plain): %v", err)
+	}
+	got, err := Load(bomDir)
+	if err != nil {
+		t.Fatalf("Load(bom): %v", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Load(bom) = %+v, want %+v", got, want)
+	}
+
+	lang, ok := LanguageOf(bomDir)
+	if !ok || lang != "ja" {
+		t.Fatalf("LanguageOf(bom) = (%q, %v), want (%q, true)", lang, ok, "ja")
+	}
+}

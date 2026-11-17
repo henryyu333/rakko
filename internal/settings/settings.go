@@ -3,6 +3,7 @@
 package settings
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +18,8 @@ import (
 
 // FileName is the preferences file inside the data directory.
 const FileName = "settings.json"
+
+var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
 
 // Settings are the user-adjustable preferences. Every field must have its
 // default in Default: a key missing from the file keeps that default.
@@ -474,6 +477,7 @@ func Load(dir string) (Settings, error) {
 	if err != nil {
 		return s, fmt.Errorf("settings: reading %s: %w", FileName, err)
 	}
+	data = bytes.TrimPrefix(data, utf8BOM)
 	if err := json.Unmarshal(data, &s); err != nil {
 		return Default(), fmt.Errorf("settings: %s is not valid JSON, using defaults: %w", FileName, err)
 	}
@@ -526,6 +530,7 @@ func LanguageOf(dir string) (language string, ok bool) {
 	if err != nil {
 		return "", false
 	}
+	data = bytes.TrimPrefix(data, utf8BOM)
 	var s struct {
 		Language string `json:"language"`
 	}

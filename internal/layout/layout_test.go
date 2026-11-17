@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -727,5 +728,31 @@ func TestInactiveIsRuntimeOnly(t *testing.T) {
 	}
 	if got.Inactive != nil {
 		t.Fatal("a loaded layout carries a seam")
+	}
+}
+
+func TestLoadAcceptsUTF8BOM(t *testing.T) {
+	plainDir := t.TempDir()
+	bomDir := t.TempDir()
+	l := Default()
+	if err := Write(plainDir, l); err != nil {
+		t.Fatal(err)
+	}
+	raw := readFile(t, plainDir)
+	bom := append([]byte{0xEF, 0xBB, 0xBF}, raw...)
+	if err := os.WriteFile(filepath.Join(bomDir, FileName), bom, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	want, err := Load(plainDir)
+	if err != nil {
+		t.Fatalf("Load(plain): %v", err)
+	}
+	got, err := Load(bomDir)
+	if err != nil {
+		t.Fatalf("Load(bom): %v", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Load(bom) = %+v, want %+v", got, want)
 	}
 }
