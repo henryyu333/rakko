@@ -71,6 +71,7 @@ type approval struct {
 
 	state       approvalState
 	verdict     string
+	decision    agentnotify.Decision
 	reason      string
 	expanded    bool
 	holdFrom    time.Time
@@ -159,12 +160,21 @@ func (f *approvalFeature) wait(ctx context.Context, ap *approval) agentnotify.De
 	case d := <-ap.done:
 		return d
 	case <-ctx.Done():
-		f.main(func() { f.finish(ap, pass, approvalWithdrawn, time.Now()) })
-		return pass
+		return f.conclude(ap, pass, approvalWithdrawn)
 	case <-timer.C:
-		f.main(func() { f.finish(ap, pass, approvalExpired, time.Now()) })
-		return pass
+		return f.conclude(ap, pass, approvalExpired)
 	}
+}
+
+// conclude tries to end a card from this side and returns the answer the
+// card ended up with. A click at the same instant may have committed
+// first: then this attempt changes nothing and the click's decision, which
+// is what the hook is told, comes back instead. The card therefore always
+// shows the answer the hook actually received.
+func (f *approvalFeature) conclude(ap *approval, d agentnotify.Decision, st approvalState) agentnotify.Decision {
+	got := d
+	f.main(func() { got = f.finish(ap, d, st, time.Now()) })
+	return got
 }
 
 // admit puts the request in the queue on the main thread. False means the
@@ -256,16 +266,19 @@ func (f *approvalFeature) decide(id, verdict, reason string) {
 
 // finish (main thread) records the answer, wakes the waiting hook and turns
 // the card into its result state. The decision channel is buffered, so a
-// hook that already left does not block it.
-func (f *approvalFeature) finish(ap *approval, d agentnotify.Decision, st approvalState, now time.Time) {
+// hook that already left does not block it. It returns the decision the card
+// holds: the one this call committed, or the one that got there first.
+func (f *approvalFeature) finish(ap *approval, d agentnotify.Decision, st approvalState, now time.Time) agentnotify.Decision {
 	f.mu.Lock()
 	if !ap.state.active() {
+		committed := ap.decision
 		f.mu.Unlock()
-		return
+		return committed
 	}
 	wasDenying := ap.state == approvalDenying
 	ap.state = st
 	ap.verdict = d.Decision
+	ap.decision = d
 	hold := approvalResultHold
 	switch st {
 	case approvalWithdrawn:
@@ -316,6 +329,7 @@ func (f *approvalFeature) finish(ap *approval, d agentnotify.Decision, st approv
 	case ap.done <- d:
 	default:
 	}
+	return d
 }
 
 // failPending (main thread) hands every waiting request back to its tool.
