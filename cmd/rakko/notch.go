@@ -959,15 +959,36 @@ func (a *shelf) mouseDown(inside bool, button int, p mygo.Point) {
 // candidate panel — drawn at 20 and anchored inside the opaque panel —
 // stays completely hidden behind it (marked text still composes inline,
 // which is why the bug reads as "IME types but no candidates").
+//
+// An island on a screen without a camera housing rests above the menu bar
+// (7pt under the top edge) and has to drop below it to keep the keyboard:
+// the keyboard band puts the menu bar over every row above its bottom, so
+// the shell's rounded top would be cut off for the first frames of every
+// opening there. The band waits until the shell's own top has reached the
+// bar's bottom — then it is below the bar anyway and the level change shows
+// nothing — which keeps the travelling shell whole and still leaves the
+// candidate panel unhindered for the whole keyboard session.
 func (a *shelf) windowLevel() platform.Layer {
 	switch {
 	case a.dragging || a.pointerDrag:
 		return platform.LayerPopUpMenu
-	case a.focusMode:
+	case a.focusMode && !a.shellTopAboveMenuBar():
 		return platform.LayerSearchKeyboard
 	default:
 		return platform.LayerStatus
 	}
+}
+
+// shellTopAboveMenuBar reports whether the drawn shell still starts above
+// the menu bar's bottom row, the band the keyboard level draws over. Only a
+// floating island can: the notch style's shell grows out of the hardware
+// housing and its top band is the menu bar's own row by design.
+func (a *shelf) shellTopAboveMenuBar() bool {
+	if !a.island {
+		return false
+	}
+	barBottom := a.dispBounds.Y + max(a.topInset, menuBarMinH)
+	return a.anchorScreenTop()+a.focusDropNow() < barBottom
 }
 
 // While idle the overlay ignores the mouse altogether, so clicks under and

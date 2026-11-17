@@ -24,19 +24,12 @@ type idleIslandWindow struct {
 
 // drawIslandCapsule paints the 120 × 30 rounded capsule that fills a tiny
 // idle window; the transparent corners are what makes it read as an island.
+// It is the resident shell's own islandPath at the capsule's radius, so the
+// picture window and the panel's idle frame draw the same shape: the two
+// hand the capsule over to each other without moving a corner pixel.
 func drawIslandCapsule(p *ui.Painter, r ui.Rect) {
-	rad := min(r.W/2, r.H/2)
 	var path ui.Path
-	path.MoveTo(r.X+rad, r.Y)
-	path.LineTo(r.X+r.W-rad, r.Y)
-	path.QuadTo(r.X+r.W, r.Y, r.X+r.W, r.Y+rad)
-	path.LineTo(r.X+r.W, r.Y+r.H-rad)
-	path.QuadTo(r.X+r.W, r.Y+r.H, r.X+r.W-rad, r.Y+r.H)
-	path.LineTo(r.X+rad, r.Y+r.H)
-	path.QuadTo(r.X, r.Y+r.H, r.X, r.Y+r.H-rad)
-	path.LineTo(r.X, r.Y+rad)
-	path.QuadTo(r.X, r.Y, r.X+rad, r.Y)
-	path.Close()
+	islandPath(&path, r.X, r.Y, r.X+r.W, r.Y+r.H, min(r.W/2, r.H/2))
 	p.FillPath(&path, surface)
 }
 
@@ -63,7 +56,15 @@ func (a *shelf) mainIdleCapsuleView(c *ui.Context) {
 	c.Root().Background(ui.Transparent)
 	ui.Column(c.Key("main-idle-island")).Fill().Label(loc(c).PanelExpand()).Draw(drawIslandCapsule)
 	entry := ui.Row(c.Key("apps-island-entry")).Absolute().Right(4).Top(0).Size(appEntryW, appEntryW).Center()
-	entry.Children(func() { ui.Icon(c, appsSymbol).Size(16, 16).TextColor(ink2) })
+	// The picture is the button's face while it covers the panel: without
+	// the hover fill here the entry reads as inert, and the panel's own
+	// fill never shows through (idleEntryHover is that same pointer).
+	if a.idleEntryHover {
+		entry.Radius(appEntryRadius(appEntryW)).Background(fill2)
+	}
+	entry.Children(func() {
+		ui.Icon(c, appsSymbol).Size(appEntryGlyph(appEntryW), appEntryGlyph(appEntryW)).TextColor(ink2)
+	})
 }
 
 // openMainIdleCapsule creates the resident display's picture-only capsule.
@@ -210,8 +211,8 @@ func (a *shelf) syncIdleIslands() {
 	displays := screenDisplays()
 	ds := make([]islandDisplay, 0, len(displays))
 	for _, d := range displays {
-		_, _, _, _, hasNotch := platform.NotchRect(d.ID)
-		ds = append(ds, islandDisplay{ID: d.ID, Bounds: d.Bounds, HasNotch: hasNotch})
+		_, _, _, notchH, hasNotch := platform.NotchRect(d.ID)
+		ds = append(ds, islandDisplay{ID: d.ID, Bounds: d.Bounds, HasNotch: hasNotch, NotchH: notchH})
 	}
 	want := idleIslandPlacements(ds, a.dispID, a.settings.ShellStyle, a.settings.IslandPos)
 	have := make(map[int64]*idleIslandWindow, len(a.idleIslands))
@@ -284,4 +285,29 @@ func (a *shelf) idleIslandAt(p mygo.Point) bool {
 		}
 	}
 	return false
+}
+
+// idleEntryHoverAt reports whether the pointer is on the resident resting
+// capsule's app entry. The entry's box is the one the panel's last drawn
+// idle frame registered (noteAppEntry); it is cleared as soon as any other
+// peek draws, so this only answers while the resting capsule is what the
+// screen shows.
+func (a *shelf) idleEntryHoverAt(p mygo.Point) bool {
+	return a.island && !a.visible && !a.peeking && !a.apps.on && a.overAppEntry(p)
+}
+
+// setIdleEntryHover records that answer and repaints the two surfaces that
+// draw the entry: the resident window's idle frame and the resting
+// capsule's picture window, which covers it.
+func (a *shelf) setIdleEntryHover(on bool) {
+	if a.idleEntryHover == on {
+		return
+	}
+	a.idleEntryHover = on
+	if a.win != nil {
+		a.win.Invalidate()
+	}
+	if a.mainIdle != nil {
+		a.mainIdle.win.Invalidate()
+	}
 }

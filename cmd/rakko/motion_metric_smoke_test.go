@@ -47,6 +47,7 @@ type motionFrame struct {
 	progress, peekProg   float32
 	visible              bool
 	blank                bool
+	cover                bool // the resting capsule's picture is up over a blank frame
 }
 
 type motionMeter struct {
@@ -76,6 +77,7 @@ func (m *motionMeter) frame(canvasW, canvasH float32, native mygo.Rectangle, bla
 		openMoving: fx.openMoving, sizeMoving: fx.sizeMoving,
 		progress: m.a.progress, peekProg: m.a.peekProgress, visible: m.a.visible,
 		blank: blank,
+		cover: m.a.mainIdle != nil && m.a.mainIdle.shown,
 	})
 }
 
@@ -258,6 +260,8 @@ type motionStats struct {
 	staleHits   int // frame pairs whose native size differs from the canvas
 	reverse     int
 	revealJump  float64
+	lost        int // frames that should have shown content and showed none
+	maxW, maxH  float32
 	windowAuth  []string
 }
 
@@ -336,6 +340,20 @@ func metricsFrom(name string, rows []motionFrame) motionStats {
 		}
 		for _, fs := range phases {
 			for _, b := range fs {
+				if b.w > st.maxW {
+					st.maxW = b.w
+				}
+				if b.h > st.maxH {
+					st.maxH = b.h
+				}
+				// A frame that should have had something on screen and drew
+				// nothing: the deliberate transparent frame before an
+				// island resize counts only when the resting capsule's
+				// picture is not covering it.
+				expected := b.visible || b.peekProg > 0.01 || b.peekK > 0.01 || b.openK > 0.002
+				if expected && ((b.blank && !b.cover) || b.w <= 0 || b.h <= 0) {
+					st.lost++
+				}
 				if b.winW != int(math.Round(float64(b.canvasW))) || b.winH != int(math.Round(float64(b.canvasH))) {
 					st.staleHits++
 					if len(st.windowAuth) < 8 {
@@ -460,6 +478,49 @@ func motionScenarios(a *shelf, m *motionMeter) []motionScenario {
 			hideNow(a)
 			settle(a, 500*time.Millisecond)
 		}},
+		{"capsule", func(rep int) {
+			m.nextRep()
+			m.mark("")
+			motionClosed(a)
+			settle(a, 220*time.Millisecond)
+			m.mark("capsule")
+			onMain(func() {
+				a.toastStatus("已复制 2 项", time.Now().Add(700*time.Millisecond), statusOK)
+			})
+			settle(a, 1100*time.Millisecond)
+			m.mark("close")
+			motionClosed(a)
+			settle(a, 320*time.Millisecond)
+		}},
+		{"live-wings", func(rep int) {
+			m.nextRep()
+			m.mark("")
+			motionClosed(a)
+			onMain(func() {
+				a.settings.LiveActivities = settings.LiveActivitySettings{Charging: true, Headphones: true, Downloads: true}
+			})
+			settle(a, 220*time.Millisecond)
+			m.mark("live")
+			onMain(func() {
+				a.pushLive(liveEvent{kind: liveCharging, label: "正在充电", pct: 80}, 500*time.Millisecond, time.Now())
+			})
+			settle(a, 900*time.Millisecond)
+			m.mark("retract")
+			onMain(a.clearLive)
+			settle(a, 420*time.Millisecond)
+		}},
+		{"apps-wings", func(rep int) {
+			m.nextRep()
+			m.mark("")
+			motionClosed(a)
+			settle(a, 220*time.Millisecond)
+			m.mark("wings")
+			onMain(a.openAppSwitch)
+			settle(a, 480*time.Millisecond)
+			m.mark("retract")
+			onMain(a.endAppSwitch)
+			settle(a, 480*time.Millisecond)
+		}},
 		{"results-grow", func(rep int) {
 			m.nextRep()
 			m.mark("")
@@ -547,8 +608,8 @@ func TestMotionMetricSmoke(t *testing.T) {
 	restoreStyle()
 
 	for _, st := range stats {
-		t.Logf("%-15s reps=%d frames=%d motion=%d gap p50=%.2f p95=%.2f max=%.2f drops=%d mid-resizes=%d edge-resizes=%d canvas-mismatch=%d reverse=%d reveal-jump=%.3f",
-			st.name, st.reps, st.frames, st.motion, st.p50, st.p95, st.maxGap, st.drops, st.midResizes, st.edgeResizes, st.staleHits, st.reverse, st.revealJump)
+		t.Logf("%-15s reps=%d frames=%d motion=%d gap p50=%.2f p95=%.2f max=%.2f drops=%d mid-resizes=%d edge-resizes=%d canvas-mismatch=%d reverse=%d reveal-jump=%.3f lost=%d max-shell=%.0fx%.0f",
+			st.name, st.reps, st.frames, st.motion, st.p50, st.p95, st.maxGap, st.drops, st.midResizes, st.edgeResizes, st.staleHits, st.reverse, st.revealJump, st.lost, st.maxW, st.maxH)
 		for _, line := range st.windowAuth {
 			t.Logf("  mismatch: %s", line)
 		}
@@ -569,6 +630,9 @@ func TestMotionMetricSmoke(t *testing.T) {
 		}
 		if st.revealJump > 0.5 {
 			t.Errorf("%s: content opacity jumped %.3f in one frame", st.name, st.revealJump)
+		}
+		if st.lost != 0 {
+			t.Errorf("%s: %d frames should have shown content and drew none", st.name, st.lost)
 		}
 	}
 }

@@ -829,24 +829,33 @@ func (a *shelf) noteAppEntry(e ui.Element) {
 	}
 }
 
+// appEntryRadius and appEntryGlyph are the entry's corner radius and icon
+// size for a drawn box of size — one rule for every entry (the music wings,
+// the idle island capsule, the chevron band) and for the resting capsule's
+// picture, so handing a capsule over from the panel to its picture cannot
+// move or resize the glyph. The 12pt floor keeps the 16pt band entry's grid
+// legible.
+func appEntryRadius(size float32) float32 { return min(7, size/2-1) }
+
+func appEntryGlyph(size float32) float32 { return max(12, size*0.53) }
+
 // appsEntryButton is the small dedicated entry drawn in the collapsed
 // state: it opens the wings directly instead of the search bar. size is
 // the drawn box (and the hit box — noteAppEntry records the button's own
 // bounds): 30 in the music wings and the idle island capsule, the compact
 // 16 in the chevron band whose 18pt body sits mostly behind the bottom
 // corner cuts. Same key kinds, hover fill and tap action at every size so
-// every drawn entry stays the one button.
-func (a *shelf) appsEntryButton(c *ui.Context, key string, size float32) ui.Element {
+// every drawn entry stays the one button. hover forces the hover fill on
+// for the caller: the idle capsule's entry is hovered while the resting
+// picture draws over the panel, which the panel's own hit test cannot see.
+func (a *shelf) appsEntryButton(c *ui.Context, key string, size float32, hover bool) ui.Element {
 	l := loc(c)
-	b := ui.ButtonBase(c.Key(key)).Size(size, size).Radius(min(7, size/2-1)).Center().
+	b := ui.ButtonBase(c.Key(key)).Size(size, size).Radius(appEntryRadius(size)).Center().
 		Label(l.AppsSwitch()).Tooltip(l.AppsSwitch())
-	if b.Hovered() {
+	if hover || b.Hovered() {
 		b.Background(fill2)
 	}
-	// 图标下限 12pt：8.5pt 的网格在菜栏带里太小辨认不清，可视与命中
-	// 同源（noteAppEntry 记录按钮自身 bounds）。
-	glyph := max(12, size*0.53)
-	b.Children(func() { ui.Icon(c, appsSymbol).Size(glyph, glyph).TextColor(ink2) })
+	b.Children(func() { ui.Icon(c, appsSymbol).Size(appEntryGlyph(size), appEntryGlyph(size)).TextColor(ink2) })
 	if b.Clicked() {
 		a.openAppSwitch()
 	}

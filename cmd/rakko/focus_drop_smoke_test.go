@@ -179,6 +179,12 @@ func checkSearchDrop(t *testing.T, a *shelf, tr *dropTrace, tag string, wantDrop
 	if len(open) < 10 {
 		t.Fatalf("%s: only %d frames drawn while opening", tag, len(open))
 	}
+	// The first frame that is drawn starts on the capsule's own row: the
+	// transparent frame the opening resize waits for must not start the
+	// drop's clock (it did, and the first visible frame landed 5pt in).
+	if first := open[0].top - capsule; first > 3 {
+		t.Errorf("%s: the first drawn frame already took %dpt of the drop", tag, first)
+	}
 	settled := open[len(open)-1].top
 	if got := settled - capsule; got != wantDrop {
 		t.Errorf("%s: the settled search panel sits %dpt below the capsule's row, want %d", tag, got, wantDrop)
