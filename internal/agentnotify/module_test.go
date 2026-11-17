@@ -205,6 +205,47 @@ if (typeof cleanup === "function") cleanup();
 	}
 }
 
+// TestOpencodeV2EventFormat verifies opencode 2.x's data-wrapped
+// session.inbox.enqueued and session.execution.succeeded events.
+func TestOpencodeV2EventFormat(t *testing.T) {
+	dir, events := moduleHarness(t, ToolOpencode, `
+import mod from "./module.mjs";
+const events = [
+  {type:"session.inbox.enqueued", location:{directory:"/tmp/proj"}, data:{sessionID:"s2", item:{type:"user", payload:{text:"reply with just OK"}}}},
+  {type:"session.execution.succeeded", location:{directory:"/tmp/proj"}, data:{sessionID:"s2"}}
+];
+const ctx = {
+  location: { directory: "/tmp/proj" },
+  event: {
+    subscribe() {
+      return (async function* () { for (const event of events) yield event; })();
+    },
+  },
+};
+const cleanup = await mod.setup(ctx);
+await new Promise((resolve) => setTimeout(resolve, 300));
+if (typeof cleanup === "function") cleanup();
+`)
+	stub := filepath.Join(dir, "node_modules", "@opencode", "plugin")
+	if err := os.MkdirAll(stub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stub, "package.json"),
+		[]byte(`{"name":"@opencode/plugin","type":"module","exports":"./index.js"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stub, "index.js"),
+		[]byte("export const Plugin = { define: (plugin) => plugin };\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runNodeDriver(t, dir)
+	lines := waitEvents(t, events, 1)
+	h := decodeHook(t, lines[0])
+	if h.Event != "session.idle" || h.Cwd != "/tmp/proj" || h.Session != "s2" || h.Prompt != "reply with just OK" {
+		t.Fatalf("event = %+v", h)
+	}
+}
+
 // approveModuleHarness writes a fake Rakko approve binary and one rendered
 // approval module. The binary denies a command containing rm -rf and allows
 // everything else, so the module's deny/allow wiring is visible from the
