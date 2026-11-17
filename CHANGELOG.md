@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.16.5
+
+- Windows：没有安装 HEIF / HEVC 扩展时，转换、压缩 HEIC 图片会直接说明需要安装哪个扩展，不再显示一串错误代码。
+
+### English
+
+- Windows: converting or compressing a HEIC image without the HEIF or HEVC extension now names the extension to install instead of showing an error code.
+
 ## 1.16.4
 
 - 倒计时到点的铃声更可靠。
