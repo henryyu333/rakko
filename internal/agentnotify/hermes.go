@@ -131,7 +131,15 @@ def _enabled(kind):
         return False
 
 
-def _cwd():
+# Hermes answers an approval on a worker thread, which does not carry the
+# session's cwd: the resolver then names the profile's terminal cwd or
+# nothing, and the card showed the launch directory instead of the project
+# the command runs in. The hook runs with the session, so its answer is kept
+# for the transport to use.
+_seen_cwd = {"path": ""}
+
+
+def _context_cwd():
     try:
         from agent.runtime_cwd import resolve_context_cwd
         path = resolve_context_cwd()
@@ -139,6 +147,21 @@ def _cwd():
             return str(path)
     except Exception:
         pass
+    return ""
+
+
+def _cwd(prefer_seen=False):
+    # An approval runs on a worker thread, where the resolver answers with
+    # the profile's cwd rather than the session's; there the remembered
+    # value is the better answer. The hook itself sees the session, so it
+    # keeps the resolver's answer first.
+    if prefer_seen:
+        order = (_seen_cwd["path"], _context_cwd())
+    else:
+        order = (_context_cwd(), _seen_cwd["path"])
+    for path in order:
+        if path:
+            return path
     try:
         return os.getcwd()
     except Exception:
@@ -153,6 +176,11 @@ def _args(flag):
 
 
 def _on_post_llm_call(session_id=None, user_message=None, **kwargs):
+    path = _context_cwd()
+    if path:
+        # Remembered even with the completion switch off: the approval card
+        # still names the project.
+        _seen_cwd["path"] = path
     if not _enabled("completion"):
         return
     if not session_id or not os.path.isfile(EXE):
@@ -186,7 +214,7 @@ def _present(request):
     payload = {
         "hook_event_name": "pre_approval_request",
         "session_id": str(getattr(request, "request_id", "") or "hermes"),
-        "cwd": _cwd(),
+        "cwd": _cwd(prefer_seen=True),
         "tool_name": "terminal",
         "tool_input": {
             "command": str(getattr(request, "command", "") or ""),
