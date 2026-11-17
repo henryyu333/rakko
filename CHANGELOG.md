@@ -1,5 +1,83 @@
 # Changelog
 
+## 1.16.8
+
+- 灵动岛样式下把面板移到外接屏后，内建屏上也会留着空闲胶囊。
+- 空闲胶囊上的应用切换按钮有了悬停效果，点它打开的是应用切换。
+- 没有刘海的屏幕上展开时，胶囊上沿不再被菜单栏切掉一截；打开时第一帧不再跳一下。
+
+### English
+
+- With the Dynamic Island style, moving the panel to an external display keeps the resting capsule on the built-in screen.
+- The app-switch button on the resting capsule now shows a hover state, and clicking it opens app switching.
+- On a screen without a notch, the capsule's top edge is no longer clipped by the menu bar while it opens, and the first frame no longer jumps.
+
+## 1.16.7
+
+- opencode 2.x 的 Agent 完成提醒恢复正常（它改了事件格式，之前收不到提醒）。
+- Hermes 的审批卡会显示正确的项目名，而不是启动目录。
+
+### English
+
+- Agent completion notices work again with opencode 2.x, which changed its event format.
+- Hermes permission cards now name the project instead of the launch folder.
+
+## 1.16.6
+
+- Windows：opencode 的 AI 用量有时会少算，现在每次都能读到新记录。
+
+### English
+
+- Windows: opencode usage could be undercounted; new records are now always read.
+
+## 1.16.5
+
+- Windows：没有安装 HEIF / HEVC 扩展时，转换、压缩 HEIC 图片会直接说明需要安装哪个扩展，不再显示一串错误代码。
+
+### English
+
+- Windows: converting or compressing a HEIC image without the HEIF or HEVC extension now names the extension to install instead of showing an error code.
+
+## 1.16.4
+
+- 倒计时到点的铃声更可靠。
+- 英文界面下，工具页 2×1 秒表在读数很长时名称不再被截成「Stop…」。
+
+### English
+
+- The timer's alarm sound is more reliable.
+- In English, the 2 × 1 stopwatch card no longer cuts its name to "Stop…" when the reading gets long.
+
+## 1.16.3
+
+- Agent 完成提醒在 Mac 上会先确认收件的是 Rakko 本身再转发，避免别的程序读到提示词内容。
+- 审批卡快到时间时点「允许」，卡片上显示的结果和 Agent 实际收到的一致了。
+
+### English
+
+- On the Mac, agent completion notices are only handed over once the receiver is confirmed to be Rakko itself, so no other program can read the prompt text.
+- Clicking Allow just as a permission card runs out of time now gives the agent the same answer the card shows.
+
+## 1.16.2
+
+- 时间戳异常（比当前时间还新）的下载临时文件，不会再让下载进度一直显示「0 B」。
+- 每周简报里「读不到」的提示改成和 AI 用量页一样的灰色说明文字。
+- 安装包小了约 0.8 MB（去掉重复的图片）。
+
+### English
+
+- A download's temporary file with a timestamp in the future no longer keeps the download progress stuck at "0 B".
+- The weekly report's "couldn't read" note now uses the same grey caption as the AI Usage page.
+- The installer is about 0.8 MB smaller (duplicate images removed).
+
+## 1.16.1
+
+- 设置文件或布局文件被编辑器存成带 BOM 的格式时，Rakko 现在能正常读取，不会再退回默认设置。
+
+### English
+
+- Rakko now reads a settings or layout file that an editor saved with a byte-order mark, instead of falling back to the defaults.
+
 ## 1.16.0
 
 - **Windows 版**：同一个 Rakko 现在也能在 Windows 10 22H2 / Windows 11（64 位）上用。屏幕顶部中间平时看不见，鼠标推到顶边才探出；也可以在设置里换成常驻的浮动胶囊。托盘、剪贴板、工具页、搜索、截图、框选文字、音乐、AI 用量和 Agent 提醒都有，资源管理器右键多了「添加到 Rakko」。全屏玩游戏或看视频时，碰到顶边不会再打扰前台程序。
