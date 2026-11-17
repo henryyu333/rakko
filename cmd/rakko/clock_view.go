@@ -132,7 +132,7 @@ func (a *shelf) toolTimerBody(c *ui.Context, card ui.Element, span int, surf too
 	card.Children(func() {
 		m := a.clock
 		l := loc(c)
-		now := placeholderNow()
+		now := time.Now()
 		if m != nil {
 			now = m.clock()
 		}
@@ -481,7 +481,7 @@ func (a *shelf) toolStopwatchBody(c *ui.Context, card ui.Element, span int, surf
 	card.Children(func() {
 		m := a.clock
 		l := loc(c)
-		now := placeholderNow()
+		now := time.Now()
 		if m != nil {
 			now = m.clock()
 		}
@@ -770,7 +770,3 @@ func (a *shelf) timerAlarmView(c *ui.Context, shellW, shellH, k float32) {
 		})
 	})
 }
-
-// placeholderNow keeps the card builders answerable on shelves without a
-// clock (headless fixtures that never registered the feature).
-func placeholderNow() time.Time { return time.Now() }
