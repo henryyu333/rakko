@@ -56,7 +56,7 @@ export default Plugin.define({
         for await (const event of ctx.event.subscribe({ signal: controller.signal })) {
           try {
             const type = event && event.type;
-            const p = (event && event.properties) || event || {};
+            const p = (event && (event.properties || event.data)) || event || {};
             const info = p.info || {};
             const part = p.part || {};
             if (type === "message.updated" && info.role === "user" && info.id) {
@@ -71,9 +71,18 @@ export default Plugin.define({
               const id = part.sessionID || p.sessionID;
               if (id && !prompts.get(id)) prompts.set(id, part.text);
             }
-            if (type === "session.idle") {
+            if (type === "session.inbox.enqueued" && p.item && p.item.type === "user" &&
+                p.item.payload && p.item.payload.text) {
               const id = p.sessionID || p.sessionId;
-              rakkoSend("session.idle", id, p.cwd || (ctx.location && ctx.location.directory), prompts.get(id) || "");
+              if (id) prompts.set(id, p.item.payload.text);
+            }
+            // 1.x ends a turn with session.idle; 2.x (2.0.26, checked against
+            // its own event stream) ends it with session.execution.succeeded,
+            // one per turn, and no longer sends session.idle.
+            if (type === "session.idle" || type === "session.execution.succeeded") {
+              const id = p.sessionID || p.sessionId;
+              const cwd = p.cwd || (event && event.location && event.location.directory) || (ctx.location && ctx.location.directory);
+              rakkoSend("session.idle", id, cwd, prompts.get(id) || "");
             }
           } catch (_) {}
         }

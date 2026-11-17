@@ -605,3 +605,87 @@ func TestHermesConnectAndDisconnectAreRepeatable(t *testing.T) {
 		t.Fatalf("repeated disconnects changed the config:\n%s", after)
 	}
 }
+
+// TestHermesApprovalKeepsTheProjectDirectory: Hermes runs the approval
+// transport on a worker thread, where its session cwd is not readable, so
+// the plugin used to fall back to the process launch directory. The card
+// then named the Hermes install tree (or the profile's terminal cwd) instead
+// of the project the command runs in. The hook sees the real one, so the
+// plugin keeps it for the transport.
+func TestHermesApprovalKeepsTheProjectDirectory(t *testing.T) {
+	python, err := exec.LookPath("python3")
+	if err != nil {
+		t.Skip("python3 is not installed")
+	}
+	home, dataDir := testHome(t), testDataDir(t)
+	dir := hermesPluginDir(home)
+	approvePayload := filepath.Join(dir, "approve-payload")
+	exe := filepath.Join(dir, "fake-rakko")
+	script := "#!/bin/sh\n" +
+		"if [ \"$1\" = \"--agent-approve\" ]; then\n" +
+		"  cat > " + shellQuote(approvePayload) + "\n" +
+		"  printf '%s' '{\"decision\":\"allow\"}'\n" +
+		"  exit 0\n" +
+		"fi\n" +
+		"cat > /dev/null\n"
+	writeFile(t, exe, script)
+	if err := os.Chmod(exe, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeHermesPlugin(home, dataDir, exe); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeHermesState(home, hermesState{Completion: true, Approval: true}); err != nil {
+		t.Fatal(err)
+	}
+	// A stub for Hermes's own cwd resolver: its answer stands for the
+	// session context, which the worker thread loses.
+	stub := filepath.Join(dir, "stub", "agent")
+	if err := os.MkdirAll(stub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(stub, "runtime_cwd.py"), `
+STATE = {"cwd": None}
+def resolve_context_cwd():
+    return STATE["cwd"]
+`)
+	driver := filepath.Join(dir, "cwd-driver.py")
+	writeFile(t, driver, `
+import importlib.util, json, sys
+sys.path.insert(0, "`+filepath.Join(dir, "stub")+`")
+import agent.runtime_cwd as rc
+spec = importlib.util.spec_from_file_location("rakko_hermes", "__init__.py")
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+hooks, transports = {}, {}
+class Ctx:
+    def register_hook(self, name, fn): hooks[name] = fn
+    def register_approval_transport(self, name, fn): transports[name] = fn
+mod.register(Ctx())
+rc.STATE["cwd"] = "/tmp/rakko-proj"
+hooks["post_llm_call"](session_id="s1", user_message="Fix the parser")
+rc.STATE["cwd"] = "/tmp/rakko-profile"  # what the worker thread sees: the profile's cwd
+class Request:
+    request_id = "r1"
+    command = "rm -rf /tmp/rakko-demo"
+    description = "Clean the temporary directory"
+    timeout_seconds = 300
+    allowed_choices = ("once", "deny")
+    def respond(self, choice): return {"choice": choice}
+transports["rakko"](Request())
+`)
+	cmd := exec.Command(python, driver)
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("plugin driver: %v\n%s", err, out)
+	}
+	var ask struct {
+		Cwd string `json:"cwd"`
+	}
+	if err := json.Unmarshal([]byte(readFile(t, approvePayload)), &ask); err != nil {
+		t.Fatal(err)
+	}
+	if ask.Cwd != "/tmp/rakko-proj" {
+		t.Fatalf("approval cwd = %q, want the session's project directory", ask.Cwd)
+	}
+}
