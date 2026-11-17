@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.16.3
+
+- Agent 完成提醒在 Mac 上会先确认收件的是 Rakko 本身再转发，避免别的程序读到提示词内容。
+- 审批卡快到时间时点「允许」，卡片上显示的结果和 Agent 实际收到的一致了。
+
+### English
+
+- On the Mac, agent completion notices are only handed over once the receiver is confirmed to be Rakko itself, so no other program can read the prompt text.
+- Clicking Allow just as a permission card runs out of time now gives the agent the same answer the card shows.
+
 ## 1.16.2
 
 - 时间戳异常（比当前时间还新）的下载临时文件，不会再让下载进度一直显示「0 B」。
