@@ -248,3 +248,117 @@ func TestDocumentShape(t *testing.T) {
 		t.Fatalf("unclicked file should not carry the flag: %s", text)
 	}
 }
+
+// TestStoreDayNeverGoesBackwards: the day count only ever grows. A trip
+// west across the date line, or a clock set back, makes the calendar
+// difference smaller; the day already shown must survive it, in memory
+// and on the next launch.
+func TestStoreDayNeverGoesBackwards(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Date(2026, 6, 1, 9, 0, 0, 0, time.Local)
+	if err := s.Seed(start); err != nil {
+		t.Fatal(err)
+	}
+
+	east := time.FixedZone("east", 14*60*60)
+	west := time.FixedZone("west", -11*60*60)
+	// The same instant is July 1 east of the line and June 30 west of it.
+	first := time.Date(2026, 7, 1, 12, 0, 0, 0, east)
+	if day, ok := s.Day(first); !ok || day != 31 {
+		t.Fatalf("day %d, ok %v; want 31", day, ok)
+	}
+	if day, ok := s.Day(first.In(west)); !ok || day != 31 {
+		t.Fatalf("crossing west went back to day %d; want 31", day)
+	}
+
+	// A clock set back a day reads the same way.
+	back := time.Date(2026, 6, 30, 9, 0, 0, 0, time.Local)
+	if day, _ := s.Day(back); day != 31 {
+		t.Fatalf("a clock set back went to day %d; want 31", day)
+	}
+
+	// The highest day is on disk, so a relaunch cannot step back either.
+	again, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if day, ok := again.Day(back); !ok || day != 31 {
+		t.Fatalf("relaunch on the old clock reads day %d; want 31", day)
+	}
+
+	// With the clock right again the count moves on as it always did.
+	if day, _ := again.Day(start.AddDate(0, 0, 40)); day != 41 {
+		t.Fatalf("the count did not resume: day %d; want 41", day)
+	}
+}
+
+// TestMilestoneWindowDoesNotReturnAfterClockRollback: the home line shows
+// in one seven-day window per milestone. Setting the clock back into a
+// window that has already passed must not show it for a second week.
+func TestMilestoneWindowDoesNotReturnAfterClockRollback(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Date(2026, 6, 1, 9, 0, 0, 0, time.Local)
+	if err := s.Seed(start); err != nil {
+		t.Fatal(err)
+	}
+	// Day 37 is the first day after the 30-day window.
+	day, ok := s.Day(start.AddDate(0, 0, 36))
+	if !ok || day != 37 {
+		t.Fatalf("day %d, ok %v; want 37", day, ok)
+	}
+	if _, show := Milestone(day); show {
+		t.Fatalf("day %d showed the 30-day window", day)
+	}
+	// A week back lands on the window's first day again.
+	back := start.AddDate(0, 0, 29)
+	day, ok = s.Day(back)
+	if !ok || day != 37 {
+		t.Fatalf("a week back reads day %d; want 37", day)
+	}
+	if _, show := Milestone(day); show {
+		t.Fatalf("day %d showed the 30-day milestone for a second week", day)
+	}
+	again, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if day, _ := again.Day(back); day != 37 {
+		t.Fatalf("relaunch on the old clock reads day %d; want 37", day)
+	}
+}
+
+// TestStoreFileWithoutDaysCountsFromTheStart: a file written by an older
+// Rakko has no highest day, so it reads exactly as before — the calendar
+// count — and starts recording one from there.
+func TestStoreFileWithoutDaysCountsFromTheStart(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, FileName)
+	if err := os.WriteFile(path, []byte(`{"version": 1, "start": "2026-06-01"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if day, ok := s.Day(time.Date(2026, 6, 7, 12, 0, 0, 0, time.UTC)); !ok || day != 7 {
+		t.Fatalf("old file reads day %d, ok %v; want 7", day, ok)
+	}
+	if day, _ := s.Day(time.Date(2026, 6, 8, 12, 0, 0, 0, time.UTC)); day != 8 {
+		t.Fatalf("the next day is %d; want 8", day)
+	}
+	again, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if day, _ := again.Day(time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)); day != 8 {
+		t.Fatalf("after the upgrade a relaunch reads day %d; want 8", day)
+	}
+}

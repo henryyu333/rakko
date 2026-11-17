@@ -33,10 +33,13 @@ const DateLayout = "2006-01-02"
 
 const formatVersion = 1
 
-// document is the on-disk file.
+// document is the on-disk file. Days is the highest day shown so far; a
+// file from an older Rakko without it simply starts from the calendar
+// count again.
 type document struct {
 	Version int    `json:"version"`
 	Start   string `json:"start"`
+	Days    int    `json:"days,omitempty"`
 	Clicked bool   `json:"clicked,omitempty"`
 }
 
@@ -46,6 +49,7 @@ type Store struct {
 	mu      sync.Mutex
 	dir     string
 	start   string // a local calendar date, DateLayout
+	days    int    // the highest day shown, so a clock cannot take it back
 	clicked bool
 	corrupt bool
 	saveErr error
@@ -83,6 +87,7 @@ func Open(dir string) (*Store, error) {
 		return s, fmt.Errorf("%w: start %q", ErrCorrupt, d.Start)
 	}
 	s.start = d.Start
+	s.days = max(d.Days, 0)
 	s.clicked = d.Clicked
 	return s, nil
 }
@@ -118,7 +123,10 @@ func (s *Store) SaveErr() error {
 }
 
 // Day is which day of companionship now is, the first day counting as 1.
-// It reports false when the start is unknown or the file is unreadable.
+// The number never goes backwards: a date crossed westwards, or a clock
+// set back, cannot make it smaller than a day already shown, so a
+// milestone's seven days do not come round again. It reports false when
+// the start is unknown or the file is unreadable.
 func (s *Store) Day(now time.Time) (int, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -129,7 +137,17 @@ func (s *Store) Day(now time.Time) (int, bool) {
 	if err != nil {
 		return 0, false
 	}
-	return Day(start, now), true
+	day := Day(start, now)
+	if day > s.days {
+		s.days = day
+		// The day is on disk before it is on screen: a relaunch must not
+		// step back either. A failed write still shows the day now and is
+		// retried when the count next grows (or on the next click).
+		_ = s.save()
+	} else {
+		day = s.days
+	}
+	return day, true
 }
 
 // Seed stores the first day, unless a day is already known (or the file is
@@ -180,6 +198,7 @@ func (s *Store) save() error {
 	data, err := json.MarshalIndent(document{
 		Version: formatVersion,
 		Start:   s.start,
+		Days:    s.days,
 		Clicked: s.clicked,
 	}, "", "  ")
 	if err != nil {
