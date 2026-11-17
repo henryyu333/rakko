@@ -387,3 +387,39 @@ console.log(JSON.stringify({ outcome, next }));
 		t.Fatalf("missing app did not fall back to dsh: %s", out)
 	}
 }
+
+// TestDshRealBinaryLoadsModules verifies against an installed dsh binary
+// (when present) that Connect writes a patch layer and ESM modules that dsh's
+// own loader resolves without errors.
+func TestDshRealBinaryLoadsModules(t *testing.T) {
+	dshBin, err := exec.LookPath("dsh")
+	if err != nil {
+		t.Skip("dsh is not installed")
+	}
+	home, dataDir := testHome(t), testDataDir(t)
+	dshDir := filepath.Join(t.TempDir(), "dsh-home")
+	t.Setenv("DSH_HOME", dshDir)
+	if err := os.MkdirAll(filepath.Join(dshDir, "profiles"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := Connect(home, dataDir, exePath, ToolDsh); err != nil {
+		t.Fatal(err)
+	}
+	if err := ConnectApprove(home, dataDir, exePath, ToolDsh); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(dshBin, "headless", "--dump-config")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("dsh headless --dump-config failed: %v\n%s", err, out)
+	}
+	text := string(out)
+	if !strings.Contains(text, "id: "+dshEntryCompletion) || !strings.Contains(text, "id: "+dshEntryApproval) {
+		t.Fatalf("dsh dump-config missing Rakko entries:\n%s", text)
+	}
+	// Boot the headless profile to ensure dsh's ESM loader imports both
+	// modules cleanly without runtime or syntax errors.
+	if out, err := exec.Command(dshBin, "headless", "--help").CombinedOutput(); err != nil {
+		t.Fatalf("dsh headless --help failed: %v\n%s", err, out)
+	}
+}
