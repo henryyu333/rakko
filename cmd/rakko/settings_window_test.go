@@ -664,7 +664,16 @@ func TestSettingsWindowSmoke(t *testing.T) {
 	if first == nil {
 		t.Fatal("settings window was not created")
 	}
-	defer onMain(func() { first.Destroy() })
+	t.Cleanup(func() {
+		onMain(func() {
+			if a.settingsWin != nil {
+				a.settingsWin.Close()
+			} else {
+				first.Destroy()
+			}
+			a.settingsWin = nil
+		})
+	})
 
 	// Single instance: a second open must not create another window.
 	var second *mygo.Window
@@ -915,10 +924,13 @@ func TestSettingsResizeAndRememberSmoke(t *testing.T) {
 	if first == nil {
 		t.Fatal("settings window was not created")
 	}
-	defer onMain(func() {
-		if a.settingsWin != nil {
-			a.settingsWin.Destroy()
-		}
+	t.Cleanup(func() {
+		onMain(func() {
+			if a.settingsWin != nil {
+				a.settingsWin.Close()
+			}
+			a.settingsWin = nil
+		})
 	})
 
 	waitBounds := func(w *mygo.Window, wantW, wantH int) mygo.Rectangle {
@@ -1014,7 +1026,10 @@ func TestSettingsResizeAndRememberSmoke(t *testing.T) {
 	}
 	bReopen := waitBounds(second, remW, remH)
 	t.Logf("mac close+reopen remembered content size: %dx%d (want %dx%d)", bReopen.Width, bReopen.Height, remW, remH)
-	onMain(func() { second.Destroy() })
+	onMain(func() {
+		second.Close()
+		a.settingsWin = nil
+	})
 }
 
 func TestSettingsFrameForChrome(t *testing.T) {

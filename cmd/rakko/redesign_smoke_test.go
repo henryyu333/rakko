@@ -163,9 +163,20 @@ func redesignShelf(t *testing.T) *shelf {
 		a.setTab(pageTray)
 		// Each shot starts from the closed panel; a previous test may have
 		// left it open, and redesignShelf is the shared reset.
+		a.endAppSwitch()
+		a.island, a.islandDX, a.islandDY = false, 0, 0
+		a.islandPress = islandPress{}
+		a.snap = snapState{}
+		a.fb = feedback{}
+		a.live = liveQueue{}
+		a.ownDrag, a.ownPress, a.dragging, a.pointerDrag = false, false, false, false
+		a.suppressed, a.inBand, a.dropHot = false, false, false
+		a.edgeOpened, a.hidePending, a.received, a.dragOpenTools = false, false, false, false
 		a.visible, a.closeAt, a.progress, a.animationFrom = false, time.Time{}, 0, 0
 		a.animationStart = time.Time{}
 		a.peeking, a.peekProgress, a.peekFrom, a.peekAnimStart = false, 0, 0, time.Time{}
+		a.syncMousePassThrough()
+		a.syncWindowFrame()
 	})
 	return a
 }

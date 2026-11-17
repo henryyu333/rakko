@@ -60,10 +60,16 @@ func liveSmokeShelf(t *testing.T) *shelf {
 		onMain(func() { a.newNotchWindow() })
 	}
 	onMain(func() {
+		a.endAppSwitch()
+		a.island, a.islandDX, a.islandDY = false, 0, 0
+		a.islandPress = islandPress{}
+		a.snap = snapState{}
 		a.modules, a.np, a.dl = nil, nil, nil
 		a.settings = settings.Default()
 		a.clearLive()
 		a.fb = feedback{}
+		a.ownDrag, a.ownPress, a.dragging, a.pointerDrag = false, false, false, false
+		a.suppressed, a.inBand, a.dropHot = false, false, false
 		a.visible, a.peeking = false, false
 		a.progress, a.animationFrom = 0, 0
 		a.animationStart = time.Time{}

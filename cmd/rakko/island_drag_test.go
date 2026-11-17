@@ -231,6 +231,7 @@ func TestIslandTapOpensOnRelease(t *testing.T) {
 func TestIslandDragOnAnOffsetDisplay(t *testing.T) {
 	syntheticDisplays(t, true, true)
 	a := islandShelf(true, settings.ShellStyleIsland)
+	t.Cleanup(a.stopDragGuard)
 	a.dataDir = t.TempDir()
 	a.place(mygo.Point{X: 2000, Y: 500})
 	if a.dispID != 2 {
@@ -343,6 +344,7 @@ func TestNotchStyleCannotBeDragged(t *testing.T) {
 func TestIslandSurfacesFollowTheMove(t *testing.T) {
 	syntheticDisplays(t, true, false)
 	a := islandShelf(true, settings.ShellStyleIsland)
+	t.Cleanup(a.stopDragGuard)
 	a.dataDir = t.TempDir()
 	a.place(mygo.Point{X: 700, Y: 100})
 	if !a.notchGuardOn() {
@@ -508,6 +510,7 @@ func TestIslandDragOntoTheNotchShellCancels(t *testing.T) {
 func TestIslandDragAcrossDisplaysSavesTheReleaseDisplay(t *testing.T) {
 	syntheticDisplays(t, true, true)
 	a := islandShelf(true, settings.ShellStyleIsland)
+	t.Cleanup(a.stopDragGuard)
 	a.dataDir = t.TempDir()
 	a.place(mygo.Point{X: 2000, Y: 300})
 	if a.dispID != 2 || !a.island {
@@ -556,6 +559,7 @@ func TestIslandGesturePausesTheDragGuard(t *testing.T) {
 	t.Cleanup(func() { parkNotchFilter = oldPark })
 	parkedNow := func() bool { return len(parks) > 0 && parks[len(parks)-1] }
 	a := islandShelf(true, settings.ShellStyleIsland)
+	t.Cleanup(a.stopDragGuard)
 	a.dataDir = t.TempDir()
 	a.place(mygo.Point{X: 700, Y: 100})
 	a.fx.w, a.fx.h = islandIdleW, islandIdleH

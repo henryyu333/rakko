@@ -175,7 +175,15 @@ func TestRenameSmoke(t *testing.T) {
 	origReg, origUnreg := registerKey, unregisterKey
 	registerKey = func(string, func()) error { return nil }
 	unregisterKey = func(string) {}
-	t.Cleanup(func() { registerKey, unregisterKey = origReg, origUnreg })
+	t.Cleanup(func() {
+		registerKey, unregisterKey = origReg, origUnreg
+		onMain(func() {
+			if a.rn != nil && a.rn.win != nil {
+				a.rn.win.Close()
+			}
+			a.rn = nil
+		})
+	})
 
 	dir := t.TempDir()
 	names := []string{"照片 1.jpg", "照片 2.jpg", "说明.txt", "资料 夹", "报告.pdf"}

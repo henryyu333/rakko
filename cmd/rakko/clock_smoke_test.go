@@ -78,6 +78,16 @@ func TestClockSmokeStates(t *testing.T) {
 		t.Run(style.name, func(t *testing.T) {
 			a := liveSmokeShelf(t)
 			setMotionStyle(a, style.island)
+			t.Cleanup(func() {
+				onMain(func() {
+					if a.clock != nil {
+						a.clock.stopTimer(time.Now())
+						a.clock = nil
+					}
+					a.modules = nil
+				})
+				setMotionStyle(a, false)
+			})
 			onMain(func() {
 				a.clock = newClockModule(a)
 				a.clock.playSound = func() {}

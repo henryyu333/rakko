@@ -58,6 +58,7 @@ func driveMonitorAt(t *testing.T, a *shelf, now time.Time, p mygo.Point, active 
 // even on the rows directly below the bar inside the band's width.
 func TestDragBelowTheBarIsNotTheBand(t *testing.T) {
 	a := dragShelf()
+	t.Cleanup(a.stopDragGuard)
 	a.dragging = false
 	cx := a.stripCenter()
 	g := a.dragGuardRegion()
@@ -84,6 +85,7 @@ func TestDragBelowTheBarIsNotTheBand(t *testing.T) {
 // and panel past edgeLeaveDelay collapses it again.
 func TestMonitorDragBandTransitions(t *testing.T) {
 	a := dragShelf()
+	t.Cleanup(a.stopDragGuard)
 	a.dragging = false // the monitor owns the flag; start idle
 	cx := a.stripCenter()
 	// Outside the band's entry edge (below the bar): hint only.
@@ -158,6 +160,7 @@ func TestDragReturningToTheBandReopensThePanel(t *testing.T) {
 	parkedNow := func() bool { return len(parks) > 0 && parks[len(parks)-1] }
 
 	a := dragShelf()
+	t.Cleanup(a.stopDragGuard)
 	a.dragging = false
 	cx := a.stripCenter()
 	enter := mygo.Point{X: cx, Y: a.notchY + a.notchH - 1}
@@ -361,6 +364,7 @@ func TestOwnWindowPressParksTheNotchCorridor(t *testing.T) {
 	oldCursor, oldState, oldTypes, oldDown := cursorPoint, dragState, dragTypes, dragLeftDown
 	t.Cleanup(func() { cursorPoint, dragState, dragTypes, dragLeftDown = oldCursor, oldState, oldTypes, oldDown })
 	a := dragShelf()
+	t.Cleanup(a.stopDragGuard)
 	a.dragging = false
 	icon := mygo.Point{X: a.notchX - 25 + 7, Y: 12}
 	held := false
@@ -423,6 +427,7 @@ func TestOwnWindowPressParksTheNotchCorridor(t *testing.T) {
 // ordinary leave delay runs and collapses it.
 func TestEdgeAutoHideWaitsForTheDropCatch(t *testing.T) {
 	a := dragShelf()
+	t.Cleanup(a.stopDragGuard)
 	a.dragging = false
 	cx := a.stripCenter()
 	enter := mygo.Point{X: cx, Y: a.notchY + a.notchH - 1}
