@@ -82,17 +82,17 @@ type weeklyFeature struct {
 
 	// AI summary for one week. scanWeek is the week of the last attempt
 	// (successful or not); a different visible week starts a new scan.
-	scanBusy   atomic.Bool
-	scanCancel context.CancelFunc
-	scanWeek   time.Time
-	scanAt     time.Time
-	aiWeek     time.Time
-	aiHave     bool
+	scanBusy     atomic.Bool
+	scanCancel   context.CancelFunc
+	scanWeek     time.Time
+	scanAt       time.Time
+	aiWeek       time.Time
+	aiHave       bool
 	aiSummary    aiusage.Summary
 	aiFailed     []aiusage.Tool
 	aiUnreadable []aiusage.Tool
-	aiErr      error
-	gen        int
+	aiErr        error
+	gen          int
 
 	scroll ui.ScrollState
 }

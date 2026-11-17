@@ -227,9 +227,9 @@ type shelf struct {
 	// 面板的舞台换成「屏幕录制」权限说明卡。三者只在 UI 线程读写。
 	ocrScan        bool
 	ocrRestoreKeys bool
-	ocrBusyAt time.Time
-	ocrRunID  int
-	ocrSheet  bool
+	ocrBusyAt      time.Time
+	ocrRunID       int
+	ocrSheet       bool
 	// ocrSheetShot remembers that the sheet is the screenshot flow's: the
 	// same permission card, with the screenshot title.
 	ocrSheetShot bool

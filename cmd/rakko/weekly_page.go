@@ -458,23 +458,20 @@ func (f *weeklyFeature) aiSection(c *ui.Context, w float32, now time.Time) {
 		case f.aiSummary.Total.Empty() && len(f.aiFailed) > 0:
 			f.aiNote(c, w, l.WeeklyAiSourcesUnreadable(len(f.aiFailed)))
 			if len(f.aiUnreadable) > 0 {
-				ui.Text(c, l.WeeklyAiUnreadableTools(joinUsageToolNames(f.aiUnreadable))).FontSize(10).
-					TextColor(warning).MaxWidth(w).Margin(6, 0, 0, 0)
+				f.aiUnreadableNote(c, w)
 			}
 			f.aiNote(c, w, l.WeeklyAiNote())
 		case f.aiSummary.Total.Empty():
 			f.aiNote(c, w, l.WeeklyAiNoData())
 			if len(f.aiUnreadable) > 0 {
-				ui.Text(c, l.WeeklyAiUnreadableTools(joinUsageToolNames(f.aiUnreadable))).FontSize(10).
-					TextColor(warning).MaxWidth(w).Margin(6, 0, 0, 0)
+				f.aiUnreadableNote(c, w)
 			}
 			f.aiNote(c, w, l.WeeklyAiNote())
 		default:
 			f.aiMetrics(c, w, f.aiSummary)
 			f.aiTrack(c, w, f.aiSummary)
 			if len(f.aiUnreadable) > 0 {
-				ui.Text(c, l.WeeklyAiUnreadableTools(joinUsageToolNames(f.aiUnreadable))).FontSize(10).
-					TextColor(warning).MaxWidth(w).Margin(6, 0, 0, 0)
+				f.aiUnreadableNote(c, w)
 			} else if len(f.aiFailed) > 0 {
 				ui.Text(c, l.WeeklyAiSourcesPartial(len(f.aiFailed))).FontSize(10).
 					TextColor(warning).MaxWidth(w).Margin(6, 0, 0, 0)
@@ -491,6 +488,13 @@ func (f *weeklyFeature) aiSection(c *ui.Context, w float32, now time.Time) {
 // aiNote is one quiet line inside the AI section.
 func (f *weeklyFeature) aiNote(c *ui.Context, w float32, text string) {
 	ui.Text(c, text).FontSize(10.5).TextColor(ink3).MaxWidth(w).Margin(8, 0, 0, 0)
+}
+
+// aiUnreadableNote names the sources this week could not read. It is one of
+// the section's quiet notes, not a warning: the numbers already say a source
+// is missing, and the local usage page says it in the same secondary grey.
+func (f *weeklyFeature) aiUnreadableNote(c *ui.Context, w float32) {
+	f.aiNote(c, w, tloc(c).WeeklyAiUnreadableTools(joinUsageToolNames(f.aiUnreadable)))
 }
 
 // aiMetrics is the token total beside the estimated cost. Both are one

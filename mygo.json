@@ -11,6 +11,7 @@
   "main": "./cmd/rakko",
   "out": "dist.noindex",
   "buildCommand": "go generate ./...",
+  "resourcesExclude": ["otter/rakko-otter_ui_*.png"],
   "macos": {
     "minimumSystemVersion": "13.0",
     "signingIdentity": "-",

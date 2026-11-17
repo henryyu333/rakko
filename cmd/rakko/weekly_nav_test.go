@@ -163,6 +163,62 @@ func TestWeeklyReportShowsUnreadableToolsAndRegistryNames(t *testing.T) {
 	}
 }
 
+// The unreadable-sources line speaks in the page's quiet secondary grey, as
+// the local usage page does: orange is the page's warning tone, and a source
+// that could not be read is an explanation under the numbers, not a warning.
+func TestWeeklyUnreadableNoteIsQuietGrey(t *testing.T) {
+	now := time.Date(2026, 11, 16, 12, 0, 0, 0, time.Local)
+	a := weeklyNavShelf(t, true)
+	wf := a.page(pageWeekly).(*weeklyFeature)
+	wf.aiHave = true
+	wf.aiWeek = wf.weekFor(now)
+	wf.aiSummary = aiusage.Summary{
+		Range: aiusage.RangeSpan,
+		Total: aiusage.Totals{Input: 1000, Output: 200, Requests: 2, Cost: 0.05},
+		ByTool: map[aiusage.Tool]aiusage.Totals{
+			aiusage.ToolAntigravity: {Input: 1000, Output: 200, Requests: 2, Cost: 0.05},
+		},
+	}
+	wf.aiUnreadable = []aiusage.Tool{aiusage.ToolCursor}
+	view := ui.NewTester(func(c *ui.Context) {
+		wf.body(c, true, false)
+	}, weeklyPageW, weeklyPageH)
+	view.Frame()
+	line := loc(nil).WeeklyAiUnreadableTools(joinUsageToolNames(wf.aiUnreadable))
+	r, ok := view.Find(line)
+	if !ok {
+		t.Fatalf("%q is not on the page; texts %v", line, view.Texts())
+	}
+	img := view.Image()
+	if img == nil {
+		t.Fatal("the tester drew no frame")
+	}
+	scale := float32(img.Bounds().Dx()) / float32(weeklyPageW)
+	// The line's box in device pixels: every glyph pixel in it must stay
+	// achromatic (the secondary grey over the card), never the warning
+	// tone's orange, which is far from grey on both axes.
+	orange, lucid := 0, 0
+	for py := int(r.Y * scale); py < int((r.Y+r.H)*scale); py++ {
+		for px := int(r.X * scale); px < int((r.X+r.W)*scale); px++ {
+			cr, cg, cb, _ := img.At(px, py).RGBA()
+			ri, gi, bi := int(cr>>8), int(cg>>8), int(cb>>8)
+			if ri-bi > 100 && gi-bi > 60 && ri > gi {
+				orange++
+			}
+			if max(ri, max(gi, bi))-min(ri, min(gi, bi)) <= 12 {
+				lucid++
+			}
+		}
+	}
+	t.Logf("%q box %.1f,%.1f %.1fx%.1f: %d orange, %d achromatic pixels", line, r.X, r.Y, r.W, r.H, orange, lucid)
+	if orange > 0 {
+		t.Fatalf("%d pixels of %q are drawn in the warning orange", orange, line)
+	}
+	if lucid == 0 {
+		t.Fatalf("%q painted no grey pixels in its box", line)
+	}
+}
+
 // A week whose only usage is a cumulative ledger's growth (tokens and cost,
 // no new request) is still usage: the report shows it instead of "no data".
 func TestWeeklyReportShowsUsageWithoutRequests(t *testing.T) {

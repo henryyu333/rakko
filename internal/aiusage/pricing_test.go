@@ -2,6 +2,7 @@ package aiusage
 
 import (
 	"math"
+	"sync"
 	"testing"
 )
 
@@ -76,4 +77,63 @@ func TestEstimateCostWithCache(t *testing.T) {
 	if c, ok := estimateCost("nonexistent-model", 1000, 100, 0, 0); ok || c != 0 {
 		t.Fatalf("expected unpriced, got (%v, %v)", c, ok)
 	}
+}
+
+// A hit and a miss both come from the cache after the first call, so the
+// cached answer must equal the table's answer name for name: the entries are
+// keyed by the raw name, which normalization may rewrite.
+func TestLookupPriceCacheAgreesWithTheTable(t *testing.T) {
+	names := []string{
+		"", " ", "claude-sonnet-4-5-20250929", "Anthropic/Claude-Sonnet-4-5-20250929",
+		"openrouter/anthropic/claude-sonnet-4-5-20250929", "vertex_ai/claude-opus-5-5-fast",
+		"claude-opus-5-5-high", "gpt-5-3-codex-2026-01-15", "gpt-5-2026-01-15",
+		"deepseek-chat", "gemini-4-hydrogen-medium", "claude-sonnet-4-5-fast",
+		"totally-unknown-model-xyz", "claude-sonnet-4-5-20250929:thinking",
+	}
+	for name := range loadPrices() {
+		names = append(names, name)
+	}
+	for _, name := range names {
+		want, wantOK := lookupPriceUncached(name)
+		for call := 1; call <= 2; call++ {
+			got, gotOK := lookupPrice(name)
+			if got != want || gotOK != wantOK {
+				t.Fatalf("lookupPrice(%q) call %d = %+v,%v, want %+v,%v",
+					name, call, got, gotOK, want, wantOK)
+			}
+		}
+	}
+}
+
+// The local usage scan and the weekly report price records on their own
+// goroutines, so the same names arrive concurrently on a cold cache. Run
+// this under -race.
+func TestLookupPriceConcurrentReaders(t *testing.T) {
+	names := []string{
+		"claude-sonnet-4-5-20250929", "openrouter/anthropic/claude-sonnet-4-5-20250929",
+		"claude-opus-5-5-high", "gemini-4-hydrogen-medium", "deepseek-chat",
+		"unknown-model-for-the-week", "another-unknown-model",
+	}
+	want := make(map[string]priceResult, len(names))
+	for _, name := range names {
+		p, ok := lookupPriceUncached(name)
+		want[name] = priceResult{price: p, found: ok}
+	}
+	var wg sync.WaitGroup
+	for g := 0; g < 8; g++ {
+		wg.Add(1)
+		go func(g int) {
+			defer wg.Done()
+			for i := 0; i < 200; i++ {
+				for _, name := range names {
+					p, ok := lookupPrice(name)
+					if got := (priceResult{price: p, found: ok}); got != want[name] {
+						t.Errorf("goroutine %d: lookupPrice(%q) = %+v, want %+v", g, name, got, want[name])
+						return
+					}
+				}
+			}
+		}(g)
+	}
+	wg.Wait()
 }
