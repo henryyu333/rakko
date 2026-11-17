@@ -281,7 +281,7 @@ func TestIslandPeekPillFollowsTheFloatingShell(t *testing.T) {
 
 func TestIdleIslandPlacements(t *testing.T) {
 	displays := []islandDisplay{
-		{ID: 1, Bounds: mygo.Rectangle{X: 0, Y: 0, Width: 1470, Height: 956}, HasNotch: true},
+		{ID: 1, Bounds: mygo.Rectangle{X: 0, Y: 0, Width: 1470, Height: 956}, HasNotch: true, NotchH: 32},
 		{ID: 2, Bounds: mygo.Rectangle{X: 1470, Y: 0, Width: 2560, Height: 1440}},
 		{ID: 3, Bounds: mygo.Rectangle{X: 0, Y: 956, Width: 1920, Height: 1080}},
 	}
@@ -299,10 +299,15 @@ func TestIdleIslandPlacements(t *testing.T) {
 		}
 	}
 	// The display the resident window lives on draws its own capsule; the
-	// others keep theirs. A notched screen never gets an extra one.
+	// others keep theirs. In the island style a notched screen draws one too,
+	// on the row below its housing — the same row the resident island takes
+	// there — so moving to another screen never leaves that display blank.
 	onOther := idleIslandPlacements(displays, 2, settings.ShellStyleIsland, nil)
-	if len(onOther) != 1 || onOther[0].DisplayID != 3 {
+	if len(onOther) != 2 || onOther[0].DisplayID != 1 || onOther[1].DisplayID != 3 {
 		t.Fatalf("with the shelf on display 2, placements = %+v", onOther)
+	}
+	if f := onOther[0].Frame; f.Y != 32+islandNotchGap {
+		t.Fatalf("notched capsule row %d, want the 38 below the housing", f.Y)
 	}
 	// A capsule the user dragged on another screen waits there, clamped like
 	// the resident island: the stored spot (display-relative) is replayed,

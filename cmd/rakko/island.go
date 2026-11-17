@@ -196,11 +196,13 @@ func (a *shelf) frameRoom(expW, expH float32) (w, h int) {
 }
 
 // islandDisplay is the geometry idleIslandPlacements needs from a display;
-// HasNotch comes from platform.NotchRect, the same source place() uses.
+// HasNotch and NotchH come from platform.NotchRect, the same source place()
+// uses.
 type islandDisplay struct {
 	ID       int64
 	Bounds   mygo.Rectangle
 	HasNotch bool
+	NotchH   int
 }
 
 // idlePlacement is one extra display's idle capsule.
@@ -209,30 +211,54 @@ type idlePlacement struct {
 	Frame     mygo.Rectangle
 }
 
-// idleIslandPlacements lists the idle capsules every screen without a
-// camera housing shows while the main shelf window lives on another
-// display: each at the place the user left it there, or centred on the
-// top edge when that screen was never dragged. style is accepted so callers
-// state the preference they are rendering — a screen without a housing is
-// always the island, even when the setting still says 刘海. saved is
+// idleTop is the row an idle capsule rests on for a display: the island's
+// 7pt gap under a bare screen's top edge, or below the camera housing when
+// the style asks for the island on a notched screen. It is the same row the
+// resident island takes there (see islandShell), so a capsule and the
+// resident shell can never sit a housing's height apart.
+func idleTop(d islandDisplay, style settings.ShellStyle) int {
+	if d.HasNotch && style.Normalized() == settings.ShellStyleIsland {
+		return d.NotchH + islandNotchGap
+	}
+	return islandTopGap
+}
+
+// idleIslandWanted reports whether a display draws a resting capsule of its
+// own while the resident window lives elsewhere: every screen the island
+// style draws on. A notched screen draws nothing in the notch style (its
+// hardware housing is the shell), so it gets no extra window then — but in
+// the island style it draws the same 120 × 30 capsule it does while it is
+// the resident display, below its housing.
+func idleIslandWanted(d islandDisplay, style settings.ShellStyle) bool {
+	if d.HasNotch && style.Normalized() != settings.ShellStyleIsland {
+		return false
+	}
+	return true
+}
+
+// idleIslandPlacements lists the idle capsules every other display shows
+// while the main shelf window lives on one of them: each at the place the
+// user left it there, or centred on the top edge when that screen was never
+// dragged. style decides which screens draw one at all (see
+// idleIslandWanted) and the row a notched one rests on. saved is
 // settings.IslandPos keyed by display id. Pure; unit-tested.
 func idleIslandPlacements(displays []islandDisplay, current int64, style settings.ShellStyle, saved map[string]settings.IslandPos) []idlePlacement {
-	_ = style
 	var out []idlePlacement
 	for _, d := range displays {
-		if d.HasNotch || d.ID == current {
+		if d.ID == current || !idleIslandWanted(d, style) {
 			continue
 		}
+		top := idleTop(d, style)
 		frame := mygo.Rectangle{
 			X:      d.Bounds.X + (d.Bounds.Width-islandIdleW)/2,
-			Y:      d.Bounds.Y + islandTopGap,
+			Y:      d.Bounds.Y + top,
 			Width:  islandIdleW,
 			Height: islandIdleH,
 		}
 		if pos, ok := saved[islandSpotKey(d.ID)]; ok {
 			// The same clamp the resident island gets, so a capsule can
 			// never be restored off the screen it belongs to.
-			spot := clampIslandSpot(islandSpot{Centre: pos.X, Top: pos.Y}, d.Bounds, islandTopGap)
+			spot := clampIslandSpot(islandSpot{Centre: pos.X, Top: pos.Y}, d.Bounds, top)
 			frame.X = d.Bounds.X + spot.Centre - islandIdleW/2
 			frame.Y = d.Bounds.Y + spot.Top
 		}

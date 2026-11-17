@@ -668,9 +668,19 @@ func (a *shelf) view(c *ui.Context) {
 	if a.focusMode && a.island {
 		focusTarget = 1
 	}
-	if a.win == nil || reduceMotion(c) {
+	switch {
+	case a.win == nil || reduceMotion(c):
 		a.fx.focusK = zone.Jump("focus-drop", focusTarget)
-	} else {
+	case blank && focusTarget > 0 && a.fx.focusK <= 0.002 && openK <= 0.002:
+		// The transparent frame an opening resize waits for holds no
+		// canvas anyone sees (the resting capsule's picture draws over it),
+		// yet an AnimateTo here starts the drop's clock: the first frame
+		// that is drawn then landed already a few points into the ease —
+		// 5pt at 60Hz — and jumped off the capsule it grew out of. Keep the
+		// shell on its own row here and let the ease start on the first
+		// frame that is actually shown.
+		a.fx.focusK = zone.Jump("focus-drop", 0)
+	default:
 		a.fx.focusK = min(max(zone.AnimateTo("focus-drop", focusTarget, focusDropAnim), 0), 1)
 	}
 	// 真实窗口的彻底空闲态：刘海样式什么都不画，常驻窗口完全不可见；
@@ -721,7 +731,7 @@ func (a *shelf) view(c *ui.Context) {
 			if frameW < baseW+appEntryW {
 				frameW = baseW + 40
 			}
-			e := a.appsEntryButton(c, "apps-island-entry", appEntryW)
+			e := a.appsEntryButton(c, "apps-island-entry", appEntryW, a.idleEntryHover)
 			e.Absolute().Right((frameW-baseW)/2 + 4).Top(float32(a.islandTop + (islandIdleH-appEntryW)/2))
 			// This canvas is the resting capsule; a resize now would flash
 			// its old canvas stretched (issue #5, see syncWindowFrame).
