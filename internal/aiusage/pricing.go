@@ -66,9 +66,35 @@ var effortSuffixes = []string{
 	"-minimal",
 }
 
+// priceResult is one model's answer, a hit or a miss: the scanners ask for
+// the same names for every request in every week, so a miss is worth as much
+// as a hit.
+type priceResult struct {
+	price modelPrice
+	found bool
+}
+
+// priceCache remembers lookupPrice's answer per name as it arrived from the
+// logs. The local usage scan and the weekly report each scan on their own
+// goroutine, so the map is concurrent.
+var priceCache sync.Map // model name -> priceResult
+
 // lookupPrice finds the per-token rate for model in the embedded LiteLLM
-// table, normalizing provider prefixes, effort tiers, and date suffixes.
+// table, normalizing provider prefixes, effort tiers, and date suffixes. The
+// normalization and candidate search run once per distinct name.
 func lookupPrice(model string) (modelPrice, bool) {
+	if v, ok := priceCache.Load(model); ok {
+		r := v.(priceResult)
+		return r.price, r.found
+	}
+	p, ok := lookupPriceUncached(model)
+	priceCache.Store(model, priceResult{price: p, found: ok})
+	return p, ok
+}
+
+// lookupPriceUncached is the normalization itself, run for a name the cache
+// has not seen.
+func lookupPriceUncached(model string) (modelPrice, bool) {
 	m := loadPrices()
 	s := strings.ToLower(strings.TrimSpace(model))
 	if s == "" {
