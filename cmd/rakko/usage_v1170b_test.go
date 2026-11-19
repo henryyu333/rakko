@@ -109,12 +109,43 @@ func TestSettingsAIUsageDragHandleReorders(t *testing.T) {
 	}
 }
 
+// usageTestSeams swaps the goroutine and main-dispatch seams for a test and
+// restores them only once the goroutines they started have finished: the
+// refresher reads both seams again when it hands off to the main thread, so
+// restoring them while one is still in flight races with that read.
+func usageTestSeams(t *testing.T, mainQ chan func()) {
+	t.Helper()
+	oldGoWork, oldDispatch := goWork, dispatchMain
+	var work atomic.Int64
+	goWork = func(fn func()) {
+		work.Add(1)
+		go func() {
+			defer work.Add(-1)
+			fn()
+		}()
+	}
+	dispatchMain = func(fn func()) { mainQ <- fn }
+	t.Cleanup(func() {
+		// Run the queued main-thread work while waiting, so a goroutine
+		// blocked handing off against a full queue still gets through.
+		deadline := time.Now().Add(10 * time.Second)
+		for time.Now().Before(deadline) {
+			if work.Load() == 0 && len(mainQ) == 0 {
+				break
+			}
+			select {
+			case fn := <-mainQ:
+				fn()
+			case <-time.After(2 * time.Millisecond):
+			}
+		}
+		goWork, dispatchMain = oldGoWork, oldDispatch
+	})
+}
+
 func TestCodexResetConfirmRecheckBusyAndInFlightDrop(t *testing.T) {
 	mainQ := make(chan func(), 32)
-	oldGoWork, oldDispatch := goWork, dispatchMain
-	goWork = func(fn func()) { go fn() }
-	dispatchMain = func(fn func()) { mainQ <- fn }
-	t.Cleanup(func() { goWork, dispatchMain = oldGoWork, oldDispatch })
+	usageTestSeams(t, mainQ)
 	drainMain := func() {
 		for {
 			select {
@@ -331,10 +362,7 @@ func TestSettingsAntigravityPanelDashAndEvidence(t *testing.T) {
 
 func TestRefreshSourcesForceQueuesWhileRunning(t *testing.T) {
 	mainQ := make(chan func(), 32)
-	oldGoWork, oldDispatch := goWork, dispatchMain
-	goWork = func(fn func()) { go fn() }
-	dispatchMain = func(fn func()) { mainQ <- fn }
-	t.Cleanup(func() { goWork, dispatchMain = oldGoWork, oldDispatch })
+	usageTestSeams(t, mainQ)
 	drainMain := func() {
 		for {
 			select {
