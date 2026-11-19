@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.18.0
+
+- **系统性能监控**：工具页新增「系统监控」卡片（支持 2×1、2×2、1×1 与桌面固定，1×1 点击切换 CPU / 内存 / 网络），平时保持单色，高负载或低电量时高亮提醒；悬停展开 60 秒实时走势、内存细分、磁盘读写、电池状态与占用前 3 的进程（可按 CPU / 内存排序）。
+- **刘海与顶部胶囊常驻两翼**：「设置 → 外形与提示」可开启收起时的左右两翼实时监控（自由组合 CPU、内存、网络、磁盘、电池），遇到通知、悬停探出或倒计时自动让位，未放置卡片且未开两翼时不后台唤醒。
+- **工具页编辑抽屉**：Windows 与单向滚轮鼠标可在底部工具库抽屉直接滚轮横向翻找工具；横向滚动条移至卡片下方独立通道不再遮挡标题；修复面板底角在编辑态下的直角虚影。
+
+### English
+
+- **System performance monitor**: add the System Monitor card to Tools (2×1, 2×2, 1×1 and desktop pins; tap 1×1 to cycle CPU / Memory / Network), staying monochrome at rest and lighting up only under load or low battery; hover for a 60-second chart, memory breakdown, disk R/W, battery state and top 3 processes sorted by CPU or memory.
+- **Closed-notch and capsule wings**: optionally show live metrics on the left and right wings while closed (CPU, memory, network, disk, battery), yielding automatically to notices, hover peeks and timers, with zero background wakeups when unused.
+- **Tools editing drawer**: scroll the bottom card library horizontally with a standard vertical mouse wheel, move the horizontal scrollbar below the tiles so it never covers titles, and fix the square corner ghosts at the bottom of the panel shell.
+
 ## 1.17.0
 
 - **Codex 重置卡**：Codex 额度卡上能看到还剩几张重置卡和到期时间，点一下（确认后）就能立刻重置额度。
