@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.17.0
+
+- **Codex 重置卡**：Codex 额度卡上能看到还剩几张重置卡和到期时间，点一下（确认后）就能立刻重置额度。
+- **更多套餐额度与余额**：除了 Claude Code 和 Codex，还能看 GLM、DeepSeek 余额、Cursor、Kimi、OpenCode Go 和 Command Code；设置页按服务开关并可拖动排序，3–4 张自动加宽为两列，5–8 张切换为紧凑行。
+- **AI 用量**：同时统计 Antigravity 应用（Gemini app）与 CLI 的本地会话用量；修复 Copilot 换表时本机用量可能多算的问题。
+- **稳定性**：修复截图子进程卡住或菜单展开期间窗口点击状态不更新的问题。
+
+### English
+
+- **Codex reset credits**: the Codex quota card shows how many reset credits are left and when the earliest one expires; clicking to use one (after confirmation) resets the quota windows right away.
+- **More subscription quotas and balances**: alongside Claude Code and Codex, track GLM, DeepSeek balance, Cursor, Kimi, OpenCode Go and Command Code; toggle and reorder them in Settings, with 3–4 cards widening to two columns and 5–8 switching to compact rows.
+- **AI usage**: count local sessions from the Antigravity app together with the CLI, and fix Copilot usage occasionally being overcounted when its backing table rotates.
+- **Stability**: fix stalled screenshot subprocesses and window click states not updating while a menu is open.
+
 ## 1.16.9
 
 - 首页歌词：歌名里带「-」的歌能找到对的歌词；一个歌词来源很慢或出错时，会换另一个来源，失败后更快重试。
