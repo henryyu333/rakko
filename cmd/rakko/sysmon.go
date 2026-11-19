@@ -183,7 +183,7 @@ func (m *sysmonModule) publish(snap sysmon.Snapshot, hist sysmon.History) {
 		return
 	}
 	if a.win != nil && !a.win.IsDestroyed() {
-		if (a.visible && a.tab == pageTools) || a.sysmonWingsUp() {
+		if (a.visible && a.tab == pageTools) || a.sysmonWingsShown() {
 			a.win.Invalidate()
 		}
 	}
@@ -247,6 +247,19 @@ func (a *shelf) hasExpandedSysMonPin() bool {
 // notch / capsule when no higher-priority event is shown.
 func (a *shelf) sysmonWingsUp() bool {
 	return a != nil && a.sysmon != nil && a.settings.SysMon.WingsEnabled && !a.visible
+}
+
+// sysmonWingsShown reports whether resting sysmon wings are the active
+// closed-shell view (not preempted by hover peek, app switcher, live notices,
+// alarms, downloads, or timer wings).
+func (a *shelf) sysmonWingsShown() bool {
+	if !a.sysmonWingsUp() || a.peeking || a.appsModeOn() || a.liveUp() || a.clockAlarmFree() || a.downloadRunning() {
+		return false
+	}
+	if a.clock != nil && a.clock.timerWingsUp() {
+		return false
+	}
+	return true
 }
 
 func (a *shelf) setSysMon(mutate func(*settings.SysMonSettings)) {

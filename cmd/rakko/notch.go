@@ -260,7 +260,7 @@ func (a *shelf) desiredFrame() mygo.Rectangle {
 		mw, mh := a.wingsSize()
 		pw, ph = max(pw, mw), max(ph, mh)
 	}
-	if a.sysmonWingsUp() {
+	if a.sysmonWingsUp() && !a.appsModeOn() {
 		sw, sh := a.sysmonWingsSize()
 		pw, ph = max(pw, sw), max(ph, sh)
 	}
@@ -1218,7 +1218,7 @@ func (a *shelf) settledShell() (w, h, levelK, openK float32) {
 	if a.level >= 2 {
 		levelK = 1
 	}
-	if a.peeking || a.peekProgress > 0.01 || a.fb.drawn || a.fb.retracting || a.appsModeOn() {
+	if a.peeking || a.peekProgress > 0.01 || a.fb.drawn || a.fb.retracting || a.appsModeOn() || a.sysmonWingsUp() {
 		peekK = 1
 	}
 	pw, ph := a.peekSize()

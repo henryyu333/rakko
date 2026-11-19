@@ -178,6 +178,7 @@ func (s *Sampler) Sample(now time.Time, wantProcs bool, batt BatteryInfo) Snapsh
 	}
 
 	// Memory
+	memReady := false
 	if total, used, app, wired, comp, ok := s.reader.ReadMem(); ok && total > 0 {
 		snap.MemTotal = total
 		snap.MemUsed = min(used, total)
@@ -185,6 +186,7 @@ func (s *Sampler) Sample(now time.Time, wantProcs bool, batt BatteryInfo) Snapsh
 		snap.MemWired = wired
 		snap.MemCompressed = comp
 		snap.MemPercent = clampFloat(float64(snap.MemUsed)*100/float64(total), 0, 100)
+		memReady = true
 	}
 
 	// Network
@@ -252,7 +254,9 @@ func (s *Sampler) Sample(now time.Time, wantProcs bool, batt BatteryInfo) Snapsh
 	if snap.CPUReady {
 		s.cpuHist = appendRingFloat32(s.cpuHist, float32(snap.CPUPercent))
 	}
-	s.memHist = appendRingFloat32(s.memHist, float32(snap.MemPercent))
+	if memReady {
+		s.memHist = appendRingFloat32(s.memHist, float32(snap.MemPercent))
+	}
 	if netReady {
 		s.downHist = appendRingUint64(s.downHist, snap.NetDownBps)
 		s.upHist = appendRingUint64(s.upHist, snap.NetUpBps)

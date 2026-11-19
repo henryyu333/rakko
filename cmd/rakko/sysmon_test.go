@@ -561,6 +561,23 @@ func TestSysMonWingsPriorityAndFit(t *testing.T) {
 		t.Fatalf("after drag end kind = %v, want peekSysmonWings", a.fx.peekKind)
 	}
 
+	// Settled shell covers resting sysmon wings even when peekProgress == 0,
+	// and sysmonWingsShown yields when App Switcher or timer is active.
+	a.peeking, a.peekProgress = false, 0
+	sw, _ := a.sysmonWingsSize()
+	if gotW, _, _, gotOpenK := a.settledShell(); gotW != sw || gotOpenK != 0 {
+		t.Fatalf("settledShell for resting sysmon wings = (w=%.1f, openK=%.1f), want (w=%.1f, openK=0)", gotW, gotOpenK, sw)
+	}
+	if !a.sysmonWingsShown() {
+		t.Fatal("sysmonWingsShown = false while resting")
+	}
+	a.apps.on = true
+	if a.sysmonWingsShown() {
+		t.Fatal("sysmonWingsShown = true while appsModeOn is active")
+	}
+	a.apps.on = false
+	a.peekProgress = 1
+
 	// Stress values fit + zero overlap with Mac center notch cutout.
 	stepFakeSysMon(reader, now, time.Second, 100, 99, 1_300_000_000, 1_046_000_000)
 	a.sysmon.tick(*now)
