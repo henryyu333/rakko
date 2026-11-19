@@ -166,12 +166,14 @@ func (s *Sampler) Sample(now time.Time, wantProcs bool, batt BatteryInfo) Snapsh
 
 	// CPU
 	if busy, total, ok := s.reader.ReadCPU(); ok {
-		if validDelta && s.hasCPU && total > s.prevCPUTotal && busy >= s.prevCPUBusy {
-			dBusy := busy - s.prevCPUBusy
-			dTotal := total - s.prevCPUTotal
-			pct := float64(dBusy) * 100 / float64(dTotal)
-			snap.CPUPercent = clampFloat(pct, 0, 100)
+		if validDelta && s.hasCPU && total > s.prevCPUTotal {
 			snap.CPUReady = true
+			if busy > s.prevCPUBusy {
+				dBusy := busy - s.prevCPUBusy
+				dTotal := total - s.prevCPUTotal
+				pct := float64(dBusy) * 100 / float64(dTotal)
+				snap.CPUPercent = clampFloat(pct, 0, 100)
+			}
 		}
 		s.prevCPUBusy, s.prevCPUTotal = busy, total
 		s.hasCPU = true

@@ -163,3 +163,19 @@ func TestFormatHelpers(t *testing.T) {
 		t.Fatalf("FormatMemPair = %q", got)
 	}
 }
+
+// A multi-core counter read can come back with busy one tick lower than the
+// last (idle and kernel time are summed across cores non-atomically). The
+// sample is still a CPU sample, reading 0 rather than being dropped.
+func TestSamplerCPUCounterJitterStillReady(t *testing.T) {
+	r := &fakeReader{cpuBusy: 1000, cpuTotal: 2000, memTotal: 1, memUsed: 1, diskTotal: 1, diskFree: 1}
+	s := NewSampler(r)
+	t0 := time.Date(2026, 11, 19, 10, 0, 0, 0, time.UTC)
+	s.Sample(t0, false, BatteryInfo{})
+	r.cpuBusy--
+	r.cpuTotal += 1000
+	s2 := s.Sample(t0.Add(time.Second), false, BatteryInfo{})
+	if !s2.CPUReady || s2.CPUPercent != 0 {
+		t.Fatalf("CPUReady=%v CPUPercent=%.2f, want ready and 0", s2.CPUReady, s2.CPUPercent)
+	}
+}

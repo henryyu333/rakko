@@ -38,3 +38,35 @@ func ObserveAccessibilityChange(changed func()) (stop func()) {
 		})
 	}
 }
+
+// ObserveSystemWake reports the machine waking from sleep and its screens
+// waking, on the main thread. Displays often change while the lid is shut, so
+// the app re-aligns its window with the screens as they are after the wake.
+func ObserveSystemWake(woke func()) (stop func()) {
+	if err := Init(); err != nil {
+		return func() {}
+	}
+	var center id
+	var tokens []id
+	withPool(func() {
+		ws := send(class("NSWorkspace"), "sharedWorkspace")
+		center = send(ws, "notificationCenter")
+		block := objc.NewBlock(func(_ objc.Block, _ id) { woke() })
+		defer block.Release()
+		for _, name := range []string{"NSWorkspaceDidWakeNotification", "NSWorkspaceScreensDidWakeNotification"} {
+			token := send(center, "addObserverForName:object:queue:usingBlock:",
+				uintptr(nsString(name)), 0, uintptr(send(class("NSOperationQueue"), "mainQueue")), uintptr(block))
+			send(token, "retain")
+			tokens = append(tokens, token)
+		}
+	})
+	return func() {
+		withPool(func() {
+			for _, token := range tokens {
+				send(center, "removeObserver:", uintptr(token))
+				send(token, "release")
+			}
+			tokens = nil
+		})
+	}
+}

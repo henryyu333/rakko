@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -93,6 +94,18 @@ func (k shortcutKind) field(s *settings.ShortcutSettings) *string {
 
 // action is what pressing the kind's shortcut runs.
 func (a *shelf) shortcutAction(k shortcutKind) func() {
+	run := a.shortcutRun(k)
+	if run == nil {
+		return nil
+	}
+	return func() {
+		a.shortcutFires++
+		a.lastShortcutKind, a.lastShortcutAt = k, time.Now()
+		run()
+	}
+}
+
+func (a *shelf) shortcutRun(k shortcutKind) func() {
 	switch k {
 	case shortcutToggle:
 		return a.toggle

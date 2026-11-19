@@ -30,6 +30,27 @@ type diagSnapshot struct {
 	ShortcutsSuspended bool
 	ShortcutReg        map[shortcutKind]string
 	ShortcutBusy       map[shortcutKind]bool
+
+	ShellStyleIsland bool
+	Level            int
+	DisplayID        int64
+	DisplayBounds    mygo.Rectangle
+	CachedFrame      mygo.Rectangle
+	TargetFrame      mygo.Rectangle
+	HasNativeBounds  bool
+	NativeBounds     mygo.Rectangle
+	HasOccluded      bool
+	WindowOccluded   bool
+	BlankFrame       bool
+	BlankQueued      bool
+	BlankReady       bool
+	IdleIslandDrawn  bool
+	MainIdleExists   bool
+	MainIdleShown    bool
+	MainIdleFrame    mygo.Rectangle
+	ShortcutFires    uint64
+	LastShortcutKind shortcutKind
+	LastShortcutAt   time.Time
 }
 
 var diagDispatch = mygo.RunOnMain
@@ -47,6 +68,20 @@ func collectDiagSnapshot(a *shelf) diagSnapshot {
 		ShotActive:         a.shot != nil,
 		ShortcutsSuspended: a.shortcutsSuspended,
 	}
+	s.ShellStyleIsland, s.Level, s.DisplayID = a.island, a.level, a.dispID
+	s.DisplayBounds, s.CachedFrame, s.TargetFrame = a.dispBounds, a.frame, a.targetFrame()
+	if a.win != nil {
+		s.HasNativeBounds, s.NativeBounds = true, a.win.Bounds()
+	}
+	if a.winH != 0 {
+		s.HasOccluded, s.WindowOccluded = true, windowOccluded(a.winH)
+	}
+	s.BlankFrame, s.BlankQueued, s.BlankReady, s.IdleIslandDrawn = a.blankFrame, a.blankQueued, a.blankReady, a.idleIslandDrawn
+	if a.mainIdle != nil {
+		s.MainIdleExists = true
+		s.MainIdleShown, s.MainIdleFrame = a.mainIdle.shown, a.mainIdle.frame
+	}
+	s.ShortcutFires, s.LastShortcutKind, s.LastShortcutAt = a.shortcutFires, a.lastShortcutKind, a.lastShortcutAt
 	if a.winH != 0 {
 		s.NativeIgnoresMouse = platform.OverlayIgnoresMouse(a.winH)
 	}
@@ -78,6 +113,25 @@ func formatDiagnostics(s diagSnapshot, stacks []byte) string {
 		fmt.Fprintf(&b, "Visible (a.visible): %v\n", s.Visible)
 		fmt.Fprintf(&b, "Peeking (a.peeking): %v\n", s.Peeking)
 		fmt.Fprintf(&b, "ShotActive (a.shot != nil): %v\n", s.ShotActive)
+		fmt.Fprintf(&b, "ShellStyleIsland (a.island): %v\n", s.ShellStyleIsland)
+		fmt.Fprintf(&b, "Level (a.level): %d\n", s.Level)
+		fmt.Fprintf(&b, "DisplayID (a.dispID): %d\n", s.DisplayID)
+		fmt.Fprintf(&b, "DisplayBounds (a.dispBounds): %+v\n", s.DisplayBounds)
+		fmt.Fprintf(&b, "CachedFrame (a.frame): %+v\n", s.CachedFrame)
+		fmt.Fprintf(&b, "TargetFrame (a.targetFrame): %+v\n", s.TargetFrame)
+		if s.HasNativeBounds {
+			fmt.Fprintf(&b, "NativeBounds (win.Bounds): %+v\n", s.NativeBounds)
+		}
+		if s.HasOccluded {
+			fmt.Fprintf(&b, "WindowOccluded: %v\n", s.WindowOccluded)
+		}
+		fmt.Fprintf(&b, "BlankState: frame=%v queued=%v ready=%v idleIslandDrawn=%v\n", s.BlankFrame, s.BlankQueued, s.BlankReady, s.IdleIslandDrawn)
+		fmt.Fprintf(&b, "MainIdleCapsule: exists=%v shown=%v frame=%+v\n", s.MainIdleExists, s.MainIdleShown, s.MainIdleFrame)
+		lastAt := "never"
+		if !s.LastShortcutAt.IsZero() {
+			lastAt = s.LastShortcutAt.Format(time.RFC3339)
+		}
+		fmt.Fprintf(&b, "ShortcutFires: count=%d lastKind=%d lastAt=%s\n", s.ShortcutFires, s.LastShortcutKind, lastAt)
 		fmt.Fprintf(&b, "ShortcutsSuspended: %v\n", s.ShortcutsSuspended)
 		fmt.Fprintf(&b, "ShortcutsRegistered:\n")
 		if len(s.ShortcutReg) == 0 {

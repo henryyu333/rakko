@@ -481,8 +481,14 @@ func (a *shelf) beginClosedPeekBlank() {
 	if !a.island || !a.idleIslandDrawn || a.blankReady || a.blankQueued || a.blankFrame {
 		return
 	}
+	// An occluded window is never drawn, and one still on a gone display is
+	// off every screen: no blank frame would come, so there is none to ask for.
+	if windowOccluded(a.winH) || !a.frameOnCurrentDisplay() {
+		return
+	}
 	a.showMainIdleCapsule()
 	a.blankQueued, a.blankFrame = true, true
+	a.blankQueuedAt = time.Now()
 	a.win.Invalidate()
 }
 
@@ -647,8 +653,55 @@ var setNativeWindowFrame = platform.SetWindowFrame
 var (
 	setOverlayAcceptsMouse = platform.SetOverlayAcceptsMouse
 	setWindowLayer         = platform.SetWindowLayer
+	windowOccluded         = platform.WindowOccluded
 	foregroundFullscreen   = platform.ForegroundFullscreen
 )
+
+// blankQueueTimeout bounds the wait for a blank frame: past it the resize
+// goes ahead rather than leave the window where it is.
+const blankQueueTimeout = 50 * time.Millisecond
+
+// frameOnCurrentDisplay reports whether the window's cached frame lies on the
+// display the shell is placed on. After a display is unplugged it does not.
+func (a *shelf) frameOnCurrentDisplay() bool {
+	d, f := a.dispBounds, a.frame
+	if d.Width <= 0 || d.Height <= 0 || f.Width <= 0 || f.Height <= 0 {
+		return false
+	}
+	return f.X < d.X+d.Width && f.X+f.Width > d.X && f.Y < d.Y+d.Height && f.Y+f.Height > d.Y
+}
+
+// canWaitBlankFrame reports whether a resize toward target may wait for the
+// blank frame. It may not when no frame can come (the window is occluded, so
+// mygo holds its frames), when the window is off the current display and must
+// be moved back now, or when the wait has already lasted too long.
+func (a *shelf) canWaitBlankFrame(target mygo.Rectangle) bool {
+	if a.win == nil || a.winH == 0 || !a.island || a.blankReady {
+		return false
+	}
+	if windowOccluded(a.winH) || !a.frameOnCurrentDisplay() {
+		return false
+	}
+	if a.blankQueued && (a.blankQueuedAt.IsZero() || time.Since(a.blankQueuedAt) >= blankQueueTimeout) {
+		return false
+	}
+	return true
+}
+
+// handleSystemWake re-aligns the window after the machine or its screens
+// woke: displays may have changed during sleep and a blank-frame wait may
+// have been stranded by the window being occluded.
+func (a *shelf) handleSystemWake() {
+	a.blankFrame, a.blankQueued, a.blankReady, a.blankQueuedAt = false, false, false, time.Time{}
+	a.frame = mygo.Rectangle{}
+	a.place(cursorPoint())
+	a.syncMousePassThrough()
+	a.wakeMonitor()
+	if a.win != nil {
+		a.win.ShowInactive()
+		a.win.Invalidate()
+	}
+}
 
 // resizeStretches reports whether applying r would present the canvas that
 // is on the window enlarged. That is the only resize mygo's one-frame old
@@ -710,7 +763,7 @@ func (a *shelf) syncWindowFrame() {
 	// later resize of the morph is held off by holdClosedPeek.
 	closedGrowth := !a.visible && a.fx.openK <= 0.002 &&
 		!a.dragging && !a.pointerDrag && !a.islandDrag && a.closedPeekUp(time.Now())
-	if a.island && !a.blankReady && a.resizeStretches(r) && (a.idleIslandDrawn || closedGrowth) {
+	if a.island && !a.blankReady && a.resizeStretches(r) && (a.idleIslandDrawn || closedGrowth) && a.canWaitBlankFrame(r) {
 		// Ask for one transparent frame over the resting capsule. Its defer
 		// queues this call again through Update, after the frame's pass has
 		// committed, so the native resize lands on a blank canvas rather
@@ -718,13 +771,13 @@ func (a *shelf) syncWindowFrame() {
 		a.showMainIdleCapsule()
 		if !a.blankQueued {
 			a.blankQueued = true
-			a.blankFrame = true
-			a.win.Invalidate()
+			a.blankQueuedAt = time.Now()
 		}
+		a.blankFrame = true
+		a.win.Invalidate()
 		return
 	}
-	a.blankQueued = false
-	a.blankReady = false
+	a.blankFrame, a.blankQueued, a.blankReady, a.blankQueuedAt = false, false, false, time.Time{}
 	a.settingFrame = true
 	defer func() { a.settingFrame = false }()
 	setNativeWindowFrame(a.winH, r.X, r.Y, r.Width, r.Height)
@@ -1719,7 +1772,14 @@ func (a *shelf) show(edge bool) {
 	idleCapsule := a.island && a.idleIslandDrawn
 	if idleCapsule && a.win != nil && a.winH != 0 && !a.blankReady {
 		if target := a.targetFrame(); target != a.frame && a.resizeStretches(target) {
-			a.blankQueued, a.blankFrame = true, true
+			if a.canWaitBlankFrame(target) {
+				if !a.blankQueued {
+					a.blankQueuedAt = time.Now()
+				}
+				a.blankQueued, a.blankFrame = true, true
+			} else {
+				a.blankFrame, a.blankQueued, a.blankQueuedAt = false, false, time.Time{}
+			}
 		}
 	}
 	if idleCapsule {

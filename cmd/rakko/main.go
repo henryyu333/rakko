@@ -178,6 +178,9 @@ func main() {
 		if a.stopDragObservation != nil {
 			a.stopDragObservation()
 		}
+		if a.stopWakeObs != nil {
+			a.stopWakeObs()
+		}
 		if a.stopAppearanceObs != nil {
 			a.stopAppearanceObs()
 		}
@@ -286,6 +289,17 @@ func (a *shelf) ready(show bool) {
 		a.mouseDown(inside, button, mygo.Screen.CursorScreenPoint())
 	})
 	a.stopDragObservation = platform.ObserveLeftMouseDragged(a.pointerDragged)
+	a.stopWakeObs = platform.ObserveSystemWake(func() {
+		a.handleSystemWake()
+		// The screens settle a moment after the wake; align once more then.
+		time.AfterFunc(500*time.Millisecond, func() {
+			mygo.RunOnMain(func() {
+				if !a.quitting {
+					a.handleSystemWake()
+				}
+			})
+		})
+	})
 	a.stopAppearanceObs = platform.ObserveAccessibilityChange(func() {
 		a.appearanceAt = time.Time{}
 		a.wakeMonitor()

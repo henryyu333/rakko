@@ -708,3 +708,7 @@ func ObserveAccessibilityChange(changed func()) (stop func()) {
 	}()
 	return func() { once.Do(func() { close(done) }) }
 }
+
+// ObserveSystemWake is a no-op on Windows: a resume already raises a display
+// change, which the app handles.
+func ObserveSystemWake(woke func()) (stop func()) { return func() {} }

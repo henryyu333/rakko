@@ -64,8 +64,13 @@ func TestWriteDiagnosticsIncludesRequiredStateAndStacks(t *testing.T) {
 		ignoringMouse: false,
 		shortcutReg:   map[shortcutKind]string{shortcutToggle: "Option+Space"},
 		shortcutBusy:  map[shortcutKind]bool{shortcutToggle: false},
-	}
 
+		blankFrame:      true,
+		blankQueued:     true,
+		idleIslandDrawn: true,
+		frame:           mygo.Rectangle{X: 3140, Y: 7, Width: 120, Height: 30},
+		shortcutFires:   3,
+	}
 	dir := t.TempDir()
 	path, err := writeDiagnostics(a, dir)
 	if err != nil {
@@ -83,6 +88,10 @@ func TestWriteDiagnosticsIncludesRequiredStateAndStacks(t *testing.T) {
 		"Visible (a.visible): true",
 		"Peeking (a.peeking): false",
 		"ShotActive (a.shot != nil): false",
+		"BlankState: frame=true queued=true ready=false idleIslandDrawn=true",
+		"CachedFrame (a.frame): {X:3140 Y:7 Width:120 Height:30}",
+		"TargetFrame (a.targetFrame):",
+		"ShortcutFires: count=3 lastKind=0",
 		`accel="Option+Space"`,
 		"--- Goroutine Stacks ---",
 		"TestWriteDiagnosticsIncludesRequiredStateAndStacks",
@@ -105,5 +114,14 @@ func TestWriteDiagnosticsIncludesRequiredStateAndStacks(t *testing.T) {
 	data2, _ := os.ReadFile(path2)
 	if !strings.Contains(string(data2), "MainThreadResponsive: false") {
 		t.Fatalf("expected MainThreadResponsive: false, got:\n%s", string(data2))
+	}
+}
+
+func TestFormatDiagnosticsReportsWindowOcclusion(t *testing.T) {
+	text := formatDiagnostics(diagSnapshot{MainThreadOK: true, HasOccluded: true, WindowOccluded: true, HasNativeBounds: true}, nil)
+	for _, want := range []string{"WindowOccluded: true", "NativeBounds (win.Bounds):", "MainIdleCapsule: exists=false"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("diagnostics missing %q:\n%s", want, text)
+		}
 	}
 }

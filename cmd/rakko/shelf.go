@@ -42,8 +42,13 @@ type shelf struct {
 	frame                                                       mygo.Rectangle // 常驻窗口当前实际映射的屏幕矩形（desiredFrame 最近一次应用值）
 	frameHold                                                   mygo.Rectangle // envelope held while something is drawn; zero = none
 	settingFrame                                                bool
-	buildingView, frameQueued                                   bool // defer native resize until the current UI frame has painted
-	blankFrame, blankQueued, blankReady                         bool // draw one blank frame before a native resize
+	buildingView, frameQueued                                   bool      // defer native resize until the current UI frame has painted
+	blankFrame, blankQueued, blankReady                         bool      // draw one blank frame before a native resize
+	blankQueuedAt                                               time.Time // when blankQueued last became true
+	shortcutFires                                               uint64
+	lastShortcutKind                                            shortcutKind
+	lastShortcutAt                                              time.Time
+	stopWakeObs                                                 func()
 	idleIslandDrawn                                             bool // the canvas on screen is the island style's resting capsule
 	idleEntryHover                                              bool // pointer on the resting capsule's app entry; the picture draws its hover
 	animationStart                                              time.Time

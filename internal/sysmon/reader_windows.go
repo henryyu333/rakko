@@ -208,18 +208,17 @@ func (*windowsReader) ReadMem() (total, used, app, wired, comp uint64, ok bool) 
 }
 
 func (*windowsReader) ReadNet() (rxBytes, txBytes uint64, ok bool) {
-	var tablePtr uintptr
+	var tablePtr unsafe.Pointer
 	r, _, _ := procGetIfTable2.Call(uintptr(unsafe.Pointer(&tablePtr)))
-	if r != 0 || tablePtr == 0 {
+	if r != 0 || tablePtr == nil {
 		return 0, 0, false
 	}
-	defer procFreeMibTable.Call(tablePtr)
+	defer procFreeMibTable.Call(uintptr(tablePtr))
 
-	numEntries := *(*uint32)(unsafe.Pointer(tablePtr))
-	rowBase := tablePtr + 8
-	rowSize := unsafe.Sizeof(mibIfRow2{})
-	for i := uint32(0); i < numEntries; i++ {
-		row := (*mibIfRow2)(unsafe.Pointer(rowBase + uintptr(i)*rowSize))
+	numEntries := *(*uint32)(tablePtr)
+	rows := unsafe.Slice((*mibIfRow2)(unsafe.Add(tablePtr, 8)), numEntries)
+	for i := range rows {
+		row := &rows[i]
 		if row.OperStatus != 1 { // IfOperStatusUp
 			continue
 		}
