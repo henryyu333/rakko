@@ -102,6 +102,7 @@ func toolCatalog() []toolCardDef {
 		toolCardDef{id: "usage", kind: cardWidget, title: "AI 用量", icon: gaugeSymbol, span: 1, accepts: never, available: usageAvailable},
 		toolCardDef{id: "timer", kind: cardWidget, title: "倒计时", icon: timerGlyph, span: 2, variableSpan: true, accepts: never, available: always},
 		toolCardDef{id: "stopwatch", kind: cardWidget, title: "秒表", icon: watchGlyph, span: 1, variableSpan: true, accepts: never, available: always},
+		toolCardDef{id: "sysmon", kind: cardWidget, title: "系统监控", icon: sysmonSymbol, span: 2, rows: 1, variableSpan: true, accepts: never, available: always},
 	)
 }
 
@@ -176,6 +177,8 @@ func (d *toolCardDef) name(l locales.Messages) string {
 		return l.CardTimer()
 	case "stopwatch":
 		return l.CardStopwatch()
+	case "sysmon":
+		return l.CardSysMon()
 	}
 	return d.title
 }
@@ -226,6 +229,9 @@ func (a *shelf) toolCard(c *ui.Context, spec layout.Card, surf toolCardSurface, 
 	}
 	if def != nil && def.id == "stopwatch" {
 		title = a.clock.watchCardTitle(loc(c))
+	}
+	if def != nil && def.id == "sysmon" {
+		title = a.sysmonCardTitle(loc(c))
 	}
 	key := "tc-" + spec.ID
 	if len(keySfx) > 0 {
@@ -392,6 +398,8 @@ func (a *shelf) toolCardBody(c *ui.Context, card ui.Element, def *toolCardDef, p
 		a.toolTimerBody(c, card, span, surf)
 	case "stopwatch":
 		a.toolStopwatchBody(c, card, span, surf)
+	case "sysmon":
+		a.toolSysMonBody(c, card, span, rows, surf)
 	default:
 		glyph := a.cardGlyphLead(c, card, "def-lead", def.icon, 20, 20, ink2)
 		glyph.Absolute().Left(cardPad).Top(cardPad)
@@ -584,6 +592,8 @@ func (a *shelf) runToolCard(id string) bool {
 		}
 		a.clock.toggleWatch(a.clock.clock())
 		return true
+	case "sysmon":
+		return a.runSysMonTap(a.sysmonSpanForTap())
 	}
 	items := a.toolCardTargets(id)
 	if len(items) == 0 {

@@ -562,7 +562,8 @@ func (a *shelf) view(c *ui.Context) {
 	// them, so the shell has to be open (peekTarget) for either to show.
 	// A download's wings already ask for it through downloadUp.
 	timerUp := a.clock != nil && a.clock.timerWingsUp()
-	if a.peeking || a.apps.on || capsule || liveUp || alarmUp || downloadUp || timerUp {
+	sysmonUp := a.sysmonWingsUp()
+	if a.peeking || a.apps.on || capsule || liveUp || alarmUp || downloadUp || timerUp || sysmonUp {
 		peekTarget = 1
 	}
 	// Keep one native drop target across all states. The transparent root does
@@ -571,7 +572,7 @@ func (a *shelf) view(c *ui.Context) {
 	// Draw springs at display cadence. Their last drawn values also drive
 	// native frame size and mouse pass-through.
 	openK, peekK, contentK := a.progress, a.peekProgress, float32(1)
-	if a.win == nil && !a.peeking {
+	if a.win == nil && !a.peeking && !(a.peekProgress > 0.01 && a.sysmonWingsUp()) {
 		openK = 1
 	}
 	sizeAnim := peekSpring
@@ -761,7 +762,7 @@ func (a *shelf) view(c *ui.Context) {
 	case a.win == nil:
 		// Headless test surfaces draw the content unless a peek is being
 		// inspected.
-		if a.visible || !a.peeking {
+		if a.visible || (!a.peeking && !(a.peekProgress > 0.01 && a.sysmonWingsUp())) {
 			closeK = 1
 		}
 	case a.visible:
@@ -1896,6 +1897,8 @@ func (a *shelf) peekView(c *ui.Context, shellW, shellH, openK, peekK, shake floa
 			// The countdown's wings outrank a loaded track: both its
 			// sides are the timer while it runs.
 			kind = peekTimerWings
+		case a.sysmonWingsUp() && !a.peeking:
+			kind = peekSysmonWings
 		case a.np != nil && a.np.showsPlayer():
 			kind = peekWings
 		default:
@@ -1948,6 +1951,15 @@ func (a *shelf) peekView(c *ui.Context, shellW, shellH, openK, peekK, shake floa
 		clip := ui.Column(c.Key("timer-clip")).Width(shellW).Height(shellH).Clip().AlignItems(ui.Center).
 			Margin(float32(a.sheetTop()), 0, 0, 0)
 		clip.Children(func() { a.timerWings(c, pw, ph, peekK) })
+		return
+	case peekSysmonWings:
+		if !a.sysmonWingsUp() {
+			return
+		}
+		pw, ph := a.sysmonWingsSize()
+		clip := ui.Column(c.Key("sysmon-clip")).Width(shellW).Height(shellH).Clip().AlignItems(ui.Center).
+			Margin(float32(a.sheetTop()), 0, 0, 0)
+		clip.Children(func() { a.sysmonWings(c, pw, ph, peekK) })
 		return
 	case peekDownload:
 		if !a.downloadRunning() {
@@ -2195,6 +2207,9 @@ func (a *shelf) setLevelPage(level int, id pageID) {
 	}
 	a.syncCopyKey()
 	a.syncOnboardingKeys()
+	if level == 2 && next == pageTools && a.sysmon != nil {
+		a.sysmon.wake(time.Now())
+	}
 }
 
 // visibleItems is the item list the expanded panel shows and acts on: the
@@ -2346,6 +2361,9 @@ func (a *shelf) setTab(id pageID) {
 	}
 	a.syncCopyKey()
 	a.syncOnboardingKeys()
+	if id == pageTools && a.sysmon != nil {
+		a.sysmon.wake(time.Now())
+	}
 }
 
 // clipShortcutKeys are the digits ⌘1..⌘9 paste by, in the order the panel

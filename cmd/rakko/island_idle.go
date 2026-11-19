@@ -165,7 +165,7 @@ func (a *shelf) syncMainIdleCapsuleVisibility(blank bool) {
 			a.hideMainIdleCapsuleSoon()
 		}
 	case a.peeking || a.apps.on || a.fx.peekK > 0.01 || a.fb.drawn || a.fb.retracting ||
-		a.liveUp() || a.clockAlarmFree() || a.dragging || a.pointerDrag || a.islandDrag:
+		a.liveUp() || a.clockAlarmFree() || a.sysmonWingsUp() || a.dragging || a.pointerDrag || a.islandDrag:
 		// A transparent frame is what covers a resize (issue #5, a closed
 		// peek's growth); the capsule's picture stays over it.
 		if !blank {
@@ -202,7 +202,7 @@ func (a *shelf) hideMainIdleCapsuleSoon() {
 		// An idle or capsule-sized closing frame may have taken over while
 		// this hide waited; the picture stays for those.
 		if !a.visible && !a.peeking && !a.apps.on && a.fx.peekK <= 0.01 &&
-			!a.fb.drawn && !a.fb.retracting && !a.liveUp() && !a.clockAlarmFree() &&
+			!a.fb.drawn && !a.fb.retracting && !a.liveUp() && !a.clockAlarmFree() && !a.sysmonWingsUp() &&
 			!a.dragging && !a.pointerDrag && !a.islandDrag &&
 			a.fx.w <= float32(islandIdleW+4) && a.fx.h <= float32(islandIdleH+4) {
 			return

@@ -443,6 +443,7 @@ func (p *toolsPage) overlay(c *ui.Context, live bool) {
 	if p.editing {
 		p.toolLibrary(c, live) // the full-width drawer over the shell's bottom
 	}
+	p.sysmonPopoverOverlay(c, live)
 	p.toolMenuView(c, live)
 }
 

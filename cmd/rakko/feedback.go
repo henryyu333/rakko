@@ -88,6 +88,8 @@ const (
 	// peekAlarm is its unanswered 时间到 card.
 	peekTimerWings
 	peekAlarm
+	// peekSysmonWings is the resting system monitor wings when enabled.
+	peekSysmonWings
 )
 
 // shellMotion is what view() drew last: the drawn shell's size, for the

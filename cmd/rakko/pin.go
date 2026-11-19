@@ -427,6 +427,9 @@ func (a *shelf) commitPin(it *pinItem) bool {
 		it.invalidate()
 	}
 	a.savePins()
+	if it.cardID == "sysmon" && a.sysmon != nil && (it.edge == pinFree || it.expanded) {
+		a.sysmon.wake(time.Now())
+	}
 	return true
 }
 
@@ -624,6 +627,9 @@ func (a *shelf) pinTick(now time.Time, p mygo.Point, down, fileDrag bool) {
 				it.frame = pinExpandFrame(it.edge, area, it.cardW, it.cy)
 				it.applyFrame()
 				it.invalidate()
+				if it.cardID == "sysmon" && a.sysmon != nil {
+					a.sysmon.wake(now)
+				}
 			}
 			continue // always expanded: the hide delay never runs
 		}
@@ -660,6 +666,9 @@ func (a *shelf) pinTick(now time.Time, p mygo.Point, down, fileDrag bool) {
 			it.frame = pinExpandFrame(it.edge, area, it.cardW, it.cy)
 			it.applyFrame()
 			it.invalidate()
+			if it.cardID == "sysmon" && a.sysmon != nil {
+				a.sysmon.wake(now)
+			}
 		}
 	}
 	// A pin held over the notch bulges 松开放回: peekView reads
@@ -841,6 +850,9 @@ func (a *shelf) pinRestore() {
 		}
 		a.pins = append(a.pins, it)
 		pinOpenWindow(it)
+		if it.cardID == "sysmon" && a.sysmon != nil && (it.edge == pinFree || it.expanded) {
+			a.sysmon.wake(time.Now())
+		}
 	}
 	// Pins saved on a display that is gone now (unplugged while the app
 	// was not running) land on the primary; the pass rewrites the stored

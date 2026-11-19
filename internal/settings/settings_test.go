@@ -165,11 +165,18 @@ func TestAIUsageDropsOldLocalSwitches(t *testing.T) {
 
 func TestSaveRoundTrips(t *testing.T) {
 	dir := t.TempDir()
-	// The pet's size is normalized on load, so the literal spells out
-	// medium rather than the empty string.
+	// The pet's size and sysMon are normalized on load, so the literal spells
+	// out their normalized defaults rather than empty/zero values.
 	want := Settings{RetentionDays: 7, ClipboardLimit: 12, ExcludedApps: []string{"com.example.one", "com.example.two"},
 		ShellStyle: ShellStyleIsland, SearchMode: SearchModeApps,
-		Pet: PetSettings{Size: PetSizeMedium}, Lyrics: Default().Lyrics}
+		Pet: PetSettings{Size: PetSizeMedium}, Lyrics: Default().Lyrics,
+		SysMon: SysMonSettings{
+			PrimaryMetric: SysMonMetricCPU,
+			WingLeft:      SysMonWingCPU,
+			WingRight:     SysMonWingNetDown,
+			IntervalSec:   1,
+		},
+	}
 	if err := Save(dir, want); err != nil {
 		t.Fatal(err)
 	}
@@ -751,5 +758,49 @@ func TestAIUsageLegacySettingsCompatibility(t *testing.T) {
 	}
 	if s4.AIUsage.SetQuotaCard("antigravity", true) {
 		t.Fatal("SetQuotaCard(antigravity, true) must return false")
+	}
+}
+
+func TestSysMonSettingsLoadAndNormalize(t *testing.T) {
+	// 1. Legacy file without sysMon keeps defaults (ShowTopProcs true, WingsEnabled false, 1s).
+	dir1 := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir1, FileName), []byte(`{}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s1, err := Load(dir1)
+	if err != nil {
+		t.Fatalf("Load(dir1): %v", err)
+	}
+	if s1.SysMon != Default().SysMon {
+		t.Fatalf("missing sysMon = %+v, want %+v", s1.SysMon, Default().SysMon)
+	}
+
+	// 2. Explicit showTopProcs: false is honoured while omitted fields keep defaults.
+	dir2 := t.TempDir()
+	raw2 := `{"sysMon":{"showTopProcs":false,"wingsEnabled":true,"intervalSec":2}}`
+	if err := os.WriteFile(filepath.Join(dir2, FileName), []byte(raw2), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s2, err := Load(dir2)
+	if err != nil {
+		t.Fatalf("Load(dir2): %v", err)
+	}
+	if s2.SysMon.ShowTopProcs || !s2.SysMon.WingsEnabled || s2.SysMon.IntervalSec != 2 || s2.SysMon.PrimaryMetric != SysMonMetricCPU {
+		t.Fatalf("partial sysMon = %+v", s2.SysMon)
+	}
+
+	// 3. Invalid enum values normalize safely.
+	dir3 := t.TempDir()
+	raw3 := `{"sysMon":{"primaryMetric":"gpu","wingLeft":"bogus","wingRight":"bogus","intervalSec":99}}`
+	if err := os.WriteFile(filepath.Join(dir3, FileName), []byte(raw3), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s3, err := Load(dir3)
+	if err != nil {
+		t.Fatalf("Load(dir3): %v", err)
+	}
+	want3 := Default().SysMon
+	if s3.SysMon != want3 {
+		t.Fatalf("invalid enums normalized to %+v, want %+v", s3.SysMon, want3)
 	}
 }

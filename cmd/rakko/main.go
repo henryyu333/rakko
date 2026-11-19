@@ -324,6 +324,7 @@ func (a *shelf) ready(show bool) {
 	a.conv = &converter{host: a}
 	a.modules = append(a.modules, a.conv)
 	a.registerClockModules()
+	a.registerSysMonModule()
 	a.dl = newDownloadsModule(a)
 	// The strip keeps the first two activities. The converter's cancel
 	// control comes first, then the countdown and the stopwatch; the

@@ -98,7 +98,13 @@ func (it *pinItem) view(c *ui.Context) {
 	if it.pressWas && !it.didMove && zone.Clicked() {
 		// A press that never went far is a tap on the card; a press that
 		// moved the window or only woke the strip is not.
-		if !a.runToolCard(it.cardID) {
+		ok := false
+		if it.cardID == "sysmon" {
+			ok = a.runSysMonTap(it.span)
+		} else {
+			ok = a.runToolCard(it.cardID)
+		}
+		if !ok {
 			it.jiggleAt = time.Now()
 			a.toolCardTapFeedback()
 		}

@@ -125,6 +125,67 @@ type Settings struct {
 	// frontmost-app time; it is off until the user turns it on in the
 	// report and nothing turns it on for them.
 	Weekly WeeklySettings `json:"weekly"`
+
+	// SysMon configures the 系统性能监控 tool card, detail popover, and
+	// optional resting notch/island wings.
+	SysMon SysMonSettings `json:"sysMon"`
+}
+
+// 1×1 tool card primary metric options and notch/island wing metrics.
+const (
+	SysMonMetricCPU = "cpu"
+	SysMonMetricMem = "mem"
+	SysMonMetricNet = "net"
+
+	SysMonWingCPU     = "cpu"
+	SysMonWingMem     = "mem"
+	SysMonWingNetDown = "netDown"
+	SysMonWingNetBoth = "netBoth"
+	SysMonWingDisk    = "disk"
+	SysMonWingBattery = "batt"
+)
+
+// SysMonSettings configures the v1.18.0 system performance monitor.
+type SysMonSettings struct {
+	PrimaryMetric string `json:"primaryMetric"`
+	ShowTopProcs  bool   `json:"showTopProcs"`
+	WingsEnabled  bool   `json:"wingsEnabled"`
+	WingLeft      string `json:"wingLeft"`
+	WingRight     string `json:"wingRight"`
+	IntervalSec   int    `json:"intervalSec"`
+}
+
+// Normalized returns a copy with valid enum choices and sampling interval.
+func (s SysMonSettings) Normalized() SysMonSettings {
+	switch s.PrimaryMetric {
+	case SysMonMetricCPU, SysMonMetricMem, SysMonMetricNet:
+	default:
+		s.PrimaryMetric = SysMonMetricCPU
+	}
+	s.WingLeft = normalizeSysMonWingLeft(s.WingLeft)
+	s.WingRight = normalizeSysMonWingRight(s.WingRight)
+	if s.IntervalSec != 2 {
+		s.IntervalSec = 1
+	}
+	return s
+}
+
+func normalizeSysMonWingLeft(v string) string {
+	switch v {
+	case SysMonWingCPU, SysMonWingMem, SysMonWingNetDown, SysMonWingDisk, SysMonWingBattery:
+		return v
+	default:
+		return SysMonWingCPU
+	}
+}
+
+func normalizeSysMonWingRight(v string) string {
+	switch v {
+	case SysMonWingNetDown, SysMonWingNetBoth, SysMonWingMem, SysMonWingCPU, SysMonWingBattery:
+		return v
+	default:
+		return SysMonWingNetDown
+	}
 }
 
 // OnboardingSettings is the onboarding object in settings.json: the
@@ -581,6 +642,14 @@ func Default() Settings {
 		Approval:    ApprovalSettings{Enabled: false},
 		Pet:         PetSettings{Shown: true, Size: PetSizeMedium},
 		Weekly:      WeeklySettings{AppStats: false},
+		SysMon: SysMonSettings{
+			PrimaryMetric: SysMonMetricCPU,
+			ShowTopProcs:  true,
+			WingsEnabled:  false,
+			WingLeft:      SysMonWingCPU,
+			WingRight:     SysMonWingNetDown,
+			IntervalSec:   1,
+		},
 		Shortcuts: ShortcutSettings{
 			Toggle:     DefaultShortcutToggle,
 			Clipboard:  DefaultShortcutClipboard,
@@ -628,6 +697,7 @@ func Load(dir string) (Settings, error) {
 	s.ShellStyle = s.ShellStyle.Normalized()
 	s.SearchMode = s.SearchMode.Normalized()
 	s.Pet.Size = s.Pet.Size.Normalized()
+	s.SysMon = s.SysMon.Normalized()
 	s.AgentNotify.pruneOff()
 	s.Approval.pruneOff()
 	s.PinnedApps = normalizePinnedApps(s.PinnedApps)

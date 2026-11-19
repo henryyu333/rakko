@@ -421,14 +421,14 @@ func TestToolsGridScrollsPastThreeRows(t *testing.T) {
 	if after.Y == first.Y {
 		t.Fatalf("scrolling moved no cards: before=%+v after=%+v scroll=%+v", first, after, p.scroll)
 	}
-	// The third row is on screen now: its card takes a press.
-	last, ok := view.Find("隔空投送")
+	// A card past the visible rows is on screen now: it takes a press.
+	last, ok := view.Find("秒表")
 	if !ok {
-		t.Fatal("third-row card missing after the scroll")
+		t.Fatal("overflow-row card missing after the scroll")
 	}
 	view.Press(last.X+10, last.Y+10)
-	if p.press == nil || p.press.id != "airdrop" {
-		t.Fatalf("a card of the third row could not be pressed: %+v", p.press)
+	if p.press == nil || p.press.id != "stopwatch" {
+		t.Fatalf("a card past the visible rows could not be pressed: %+v", p.press)
 	}
 	view.Release(last.X+10, last.Y+10)
 }

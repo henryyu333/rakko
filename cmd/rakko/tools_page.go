@@ -186,6 +186,11 @@ type toolsPage struct {
 	// reduceMotion is the window's preference, cached for the input paths
 	// that run outside a build.
 	reduceMotion bool
+
+	sysmonHoveredThisFrame bool
+	sysmonPopOpen          bool
+	sysmonPopHovered       bool
+	sysmonCellRect         ui.Rect
 }
 
 func (p *toolsPage) id() pageID    { return pageTools }
@@ -534,6 +539,9 @@ func (a *shelf) mutateToolsWrite(fn func(*layout.Layout) bool, deferWrite bool) 
 	if a.win != nil {
 		a.win.Invalidate()
 	}
+	if a.sysmon != nil && a.sysmon.needed() {
+		a.sysmon.wake(time.Now())
+	}
 	return true
 }
 
@@ -629,6 +637,12 @@ func (p *toolsPage) endEditing() {
 	p.editing = false
 	p.jiggleID = ""
 	p.chromeAt = time.Time{}
+	p.sysmonHoveredThisFrame = false
+	p.sysmonPopOpen = false
+	p.sysmonPopHovered = false
+	if p.host != nil && p.host.sysmon != nil {
+		p.host.sysmon.setPopoverOpen(false)
+	}
 }
 
 // resetToolsEdit ends editing and any gesture; called on hide and on
@@ -716,6 +730,7 @@ func (p *toolsPage) placed(id string) bool {
 // needs, the card library under it while editing, and the lifted card on
 // top of both.
 func (p *toolsPage) body(c *ui.Context, _ bool, live bool) ui.Element {
+	p.sysmonHoveredThisFrame = false
 	g := p.grid()
 	editing := p.editing
 	p.reduceMotion = c.Preferences().ReduceMotion
@@ -930,6 +945,18 @@ func (p *toolsPage) toolCell(c *ui.Context, cell toolCell, editing, live bool) {
 		card.Absolute().Left(cx).Top(cy).Width(cell.w).Height(cell.h)
 	}
 	if live {
+		if cell.id == "sysmon" && !editing && !parked {
+			_, _, over := card.PointerPosition()
+			if over {
+				p.sysmonHoveredThisFrame = true
+				p.sysmonCellRect = ui.Rect{
+					X: sheetPadX + cx,
+					Y: toolsContentTop() + cy - p.scroll.Y,
+					W: cell.w,
+					H: cell.h,
+				}
+			}
+		}
 		p.toolCardInput(c, card, cell, cx, cy, editing, live)
 	}
 }
@@ -1086,6 +1113,14 @@ func (p *toolsPage) toolCardTappedAt(id string, cell toolCell, x, y float32) {
 	if id == "timer" && p.host.clock != nil && p.host.clock.phase == timerIdle &&
 		cell.w > toolColW(1)+1 && y <= cell.y+cardPad+cardRowH+4 && x >= cell.x+cell.w*0.45 {
 		p.host.clock.beginEdit(p.host.clock.clock())
+		return
+	}
+	if id == "sysmon" && !p.editing {
+		span := 2
+		if cell.w <= toolColW(1)+1 {
+			span = 1
+		}
+		p.host.runSysMonTap(span)
 		return
 	}
 	p.toolCardTapped(id)
@@ -1476,6 +1511,8 @@ func cardSizes(id string) [][2]int {
 			return [][2]int{{2, 1}, {1, 1}}
 		case "stopwatch":
 			return [][2]int{{1, 1}, {2, 1}}
+		case "sysmon":
+			return [][2]int{{2, 1}, {2, 2}, {1, 1}}
 		}
 	}
 	return [][2]int{{1, 1}}

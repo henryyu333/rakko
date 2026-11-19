@@ -71,6 +71,7 @@ type shelf struct {
 	clip                                                        *clipboardModule     // nil until monitoring starts
 	awake                                                       *awakeModule         // nil until the app starts
 	clock                                                       *clockModule         // the countdown and stopwatch; nil in fixtures
+	sysmon                                                      *sysmonModule        // on-demand system monitor; nil in fixtures
 	vol                                                         volumeControl        // system output volume; nil = CoreAudio
 	pages                                                       []panelPage          // registered pages in ear order (built-ins first)
 	pagesReady                                                  bool                 // built-in pages have been registered

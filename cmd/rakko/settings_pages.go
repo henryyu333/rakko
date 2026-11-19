@@ -105,6 +105,75 @@ func (a *shelf) settingsNotchPage(c *ui.Context) {
 		settingsToggleRow(c, "snap", osText(l.SettingsSnapRow(), l.SettingsSnapRowWin()), "",
 			a.settings.SnapWindows, a.setSnapWindows)
 	})
+
+	a.settingsSysMonGroup(c)
+}
+
+func (a *shelf) settingsSysMonGroup(c *ui.Context) {
+	l := loc(c)
+	s := a.settings.SysMon.Normalized()
+
+	primaryOpts := []string{settings.SysMonMetricCPU, settings.SysMonMetricMem, settings.SysMonMetricNet}
+	leftOpts := []string{settings.SysMonWingCPU, settings.SysMonWingMem, settings.SysMonWingNetDown, settings.SysMonWingDisk, settings.SysMonWingBattery}
+	rightOpts := []string{settings.SysMonWingNetDown, settings.SysMonWingNetBoth, settings.SysMonWingMem, settings.SysMonWingCPU, settings.SysMonWingBattery}
+
+	settingsGroupRows(c, "sysmon", l.SettingsSysMonGroup(), "", a.settingsBroken, func() {
+		settingsRow(c, "sysmon-primary", l.SettingsSysMonPrimaryRow(), "", func() {
+			idx := max(0, slices.Index(primaryOpts, s.PrimaryMetric))
+			if sg := settingsSegmented(c, "sysmon-primary", l.SettingsSysMonPrimaryRow(), &idx,
+				l.SysMonCPU(), l.SysMonMem(), l.SysMonNet()); sg.Changed() {
+				chosen := primaryOpts[idx]
+				a.setSysMon(func(m *settings.SysMonSettings) { m.PrimaryMetric = chosen })
+			}
+		})
+		settingsSep(c, "sysmon-primary")
+		settingsToggleRow(c, "sysmon-top-procs", l.SettingsSysMonTopProcsRow(), "", s.ShowTopProcs,
+			func(on bool) { a.setSysMon(func(m *settings.SysMonSettings) { m.ShowTopProcs = on }) })
+		settingsSep(c, "sysmon-top-procs")
+		settingsToggleRow(c, "sysmon-wings", osText(l.SettingsSysMonWingsRow(), l.SettingsSysMonWingsRowWin()), "", s.WingsEnabled,
+			func(on bool) { a.setSysMon(func(m *settings.SysMonSettings) { m.WingsEnabled = on }) })
+		settingsSep(c, "sysmon-wings")
+		settingsRow(c, "sysmon-wing-left", l.SettingsSysMonWingLeftRow(), "", func() {
+			idx := max(0, slices.Index(leftOpts, s.WingLeft))
+			sg := settingsSegmented(c, "sysmon-wing-left", l.SettingsSysMonWingLeftRow(), &idx,
+				l.SysMonCPU(), l.SysMonMem(), l.SysMonDown(), l.SysMonDisk(), l.SysMonBattery())
+			if !s.WingsEnabled {
+				sg.Disabled(true)
+			}
+			if sg.Changed() {
+				chosen := leftOpts[idx]
+				a.setSysMon(func(m *settings.SysMonSettings) { m.WingLeft = chosen })
+			}
+		})
+		settingsSep(c, "sysmon-wing-left")
+		settingsRow(c, "sysmon-wing-right", l.SettingsSysMonWingRightRow(), "", func() {
+			idx := max(0, slices.Index(rightOpts, s.WingRight))
+			sg := settingsSegmented(c, "sysmon-wing-right", l.SettingsSysMonWingRightRow(), &idx,
+				l.SysMonDown(), l.SysMonUpDown(), l.SysMonMem(), l.SysMonCPU(), l.SysMonBattery())
+			if !s.WingsEnabled {
+				sg.Disabled(true)
+			}
+			if sg.Changed() {
+				chosen := rightOpts[idx]
+				a.setSysMon(func(m *settings.SysMonSettings) { m.WingRight = chosen })
+			}
+		})
+		settingsSep(c, "sysmon-wing-right")
+		settingsRow(c, "sysmon-interval", l.SettingsSysMonIntervalRow(), "", func() {
+			idx := 0
+			if s.IntervalSec == 2 {
+				idx = 1
+			}
+			if sg := settingsSegmented(c, "sysmon-interval", l.SettingsSysMonIntervalRow(), &idx,
+				l.SettingsSysMonInterval1s(), l.SettingsSysMonInterval2s()); sg.Changed() {
+				sec := 1
+				if idx == 1 {
+					sec = 2
+				}
+				a.setSysMon(func(m *settings.SysMonSettings) { m.IntervalSec = sec })
+			}
+		})
+	})
 }
 
 func settingsShapeTile(c *ui.Context, key, label string, island, selected bool, onSelect func()) {

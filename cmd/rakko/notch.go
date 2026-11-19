@@ -111,6 +111,7 @@ func (a *shelf) shellVisibleOnNotch(now time.Time) bool {
 		a.fb.drawn || a.fb.retracting || a.capsuleUp(now) ||
 		a.appsModeOn() || a.liveUp() || a.clockAlarmFree() ||
 		(a.clock != nil && a.clock.timerWingsUp()) ||
+		a.sysmonWingsUp() ||
 		a.pinReturning || a.petReturning || (a.dragging && !a.ownDrag)
 }
 
@@ -120,6 +121,7 @@ func (a *shelf) shellVisibleOnNotch(now time.Time) bool {
 func (a *shelf) closedPeekOut(now time.Time) bool {
 	return a.peeking || a.appsModeOn() || a.capsuleUp(now) || a.liveUp() ||
 		a.clockAlarmFree() || (a.clock != nil && a.clock.timerWingsUp()) ||
+		a.sysmonWingsUp() ||
 		a.pinReturning || a.petReturning
 }
 
@@ -257,6 +259,10 @@ func (a *shelf) desiredFrame() mygo.Rectangle {
 		// room for both so one hand-off never resizes the window.
 		mw, mh := a.wingsSize()
 		pw, ph = max(pw, mw), max(ph, mh)
+	}
+	if a.sysmonWingsUp() {
+		sw, sh := a.sysmonWingsSize()
+		pw, ph = max(pw, sw), max(ph, sh)
 	}
 	// The resting strip's hover pill: hovering must not resize the surface,
 	// and every closed morph with no track loaded folds back into this box.
@@ -797,6 +803,9 @@ func (a *shelf) peekSize() (w, h float32) {
 	if a.clock != nil && a.clock.timerWingsUp() && !a.visible {
 		return a.timerWingsSize()
 	}
+	if a.sysmonWingsUp() && !a.peeking {
+		return a.sysmonWingsSize()
+	}
 	if a.np != nil && a.np.showsPlayer() {
 		return a.wingsSize()
 	}
@@ -872,7 +881,7 @@ func capsuleFrameW() int {
 // so the moving capsule keeps its own hit box.
 func (a *shelf) peekPillRect() mygo.Rectangle {
 	w, h := a.peekSize()
-	if (a.peeking || a.fb.drawn || a.fb.retracting || a.peekProgress > 0.01) && a.fx.w > 0 {
+	if (a.peeking || a.fb.drawn || a.fb.retracting || a.peekProgress > 0.01 || a.sysmonWingsUp()) && a.fx.w > 0 {
 		w, h = a.fx.w, a.fx.h
 	}
 	y, cx := a.frameTop()+a.sheetTop(), a.stripCenter()
@@ -964,7 +973,7 @@ func (a *shelf) mouseDown(inside bool, button int, p mygo.Point) {
 		a.beginIslandPress(p)
 		return
 	}
-	if (a.peeking || a.fb.drawn || a.fb.retracting || a.peekProgress > 0.01 || a.appsModeOn()) && !a.visible && a.overPeekPill(p) {
+	if (a.peeking || a.fb.drawn || a.fb.retracting || a.peekProgress > 0.01 || a.appsModeOn() || a.sysmonWingsUp()) && !a.visible && a.overPeekPill(p) {
 		// The completion capsule is a button of its own: its view adds the
 		// file and opens the tray page. The shell must not swallow that
 		// press by expanding first. The switcher's buttons likewise take
@@ -1126,7 +1135,7 @@ func (a *shelf) syncMousePassThrough() {
 func (a *shelf) overlayWanted() bool {
 	return a.visible || a.fx.openK > 0.02 || a.dragging || a.pointerDrag || a.islandDrag ||
 		a.peeking || a.peekProgress > 0.01 || a.fb.drawn || a.fb.retracting ||
-		a.appsModeOn() || a.liveUp() || a.clockAlarmFree()
+		a.appsModeOn() || a.liveUp() || a.clockAlarmFree() || a.sysmonWingsUp()
 }
 
 // pointerSample is the pointer a monitoring pass reads: the caller caches
@@ -1742,6 +1751,9 @@ func (a *shelf) show(edge bool) {
 	}
 	// The guide holds its own keys while its page is the one on screen.
 	a.syncOnboardingKeys()
+	if a.level == 2 && a.tab == pageTools && a.sysmon != nil {
+		a.sysmon.wake(time.Now())
+	}
 }
 
 // Global hotkey seams: holdKeys/releaseKeys register and unregister the

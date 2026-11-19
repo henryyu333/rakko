@@ -9460,3 +9460,333 @@ func UsagePasteKeyPrompt() string { return In(i18n.Locale()).UsagePasteKeyPrompt
 func (msgs Messages) UsagePasteKeyPrompt() string {
 	return Catalog.Format(msgs.locale, "usagePasteKeyPrompt", nil)
 }
+
+// CardSysMon says "系统监控"
+// in the language the app shows.
+func CardSysMon() string { return In(i18n.Locale()).CardSysMon() }
+
+// CardSysMon says "系统监控"
+// in the language of msgs.
+func (msgs Messages) CardSysMon() string {
+	return Catalog.Format(msgs.locale, "cardSysMon", nil)
+}
+
+// SysMonCPU says "CPU"
+// in the language the app shows.
+func SysMonCPU() string { return In(i18n.Locale()).SysMonCPU() }
+
+// SysMonCPU says "CPU"
+// in the language of msgs.
+func (msgs Messages) SysMonCPU() string {
+	return Catalog.Format(msgs.locale, "sysMonCPU", nil)
+}
+
+// SysMonMem says "内存"
+// in the language the app shows.
+func SysMonMem() string { return In(i18n.Locale()).SysMonMem() }
+
+// SysMonMem says "内存"
+// in the language of msgs.
+func (msgs Messages) SysMonMem() string {
+	return Catalog.Format(msgs.locale, "sysMonMem", nil)
+}
+
+// SysMonMemShort says "内存"
+// in the language the app shows.
+func SysMonMemShort() string { return In(i18n.Locale()).SysMonMemShort() }
+
+// SysMonMemShort says "内存"
+// in the language of msgs.
+func (msgs Messages) SysMonMemShort() string {
+	return Catalog.Format(msgs.locale, "sysMonMemShort", nil)
+}
+
+// SysMonNet says "网络"
+// in the language the app shows.
+func SysMonNet() string { return In(i18n.Locale()).SysMonNet() }
+
+// SysMonNet says "网络"
+// in the language of msgs.
+func (msgs Messages) SysMonNet() string {
+	return Catalog.Format(msgs.locale, "sysMonNet", nil)
+}
+
+// SysMonNetShort says "网络"
+// in the language the app shows.
+func SysMonNetShort() string { return In(i18n.Locale()).SysMonNetShort() }
+
+// SysMonNetShort says "网络"
+// in the language of msgs.
+func (msgs Messages) SysMonNetShort() string {
+	return Catalog.Format(msgs.locale, "sysMonNetShort", nil)
+}
+
+// SysMonDisk says "磁盘"
+// in the language the app shows.
+func SysMonDisk() string { return In(i18n.Locale()).SysMonDisk() }
+
+// SysMonDisk says "磁盘"
+// in the language of msgs.
+func (msgs Messages) SysMonDisk() string {
+	return Catalog.Format(msgs.locale, "sysMonDisk", nil)
+}
+
+// SysMonDiskShort says "盘"
+// in the language the app shows.
+func SysMonDiskShort() string { return In(i18n.Locale()).SysMonDiskShort() }
+
+// SysMonDiskShort says "盘"
+// in the language of msgs.
+func (msgs Messages) SysMonDiskShort() string {
+	return Catalog.Format(msgs.locale, "sysMonDiskShort", nil)
+}
+
+// SysMonBattery says "电池"
+// in the language the app shows.
+func SysMonBattery() string { return In(i18n.Locale()).SysMonBattery() }
+
+// SysMonBattery says "电池"
+// in the language of msgs.
+func (msgs Messages) SysMonBattery() string {
+	return Catalog.Format(msgs.locale, "sysMonBattery", nil)
+}
+
+// SysMonBatteryShort says "电"
+// in the language the app shows.
+func SysMonBatteryShort() string { return In(i18n.Locale()).SysMonBatteryShort() }
+
+// SysMonBatteryShort says "电"
+// in the language of msgs.
+func (msgs Messages) SysMonBatteryShort() string {
+	return Catalog.Format(msgs.locale, "sysMonBatteryShort", nil)
+}
+
+// SysMonDown says "下行"
+// in the language the app shows.
+func SysMonDown() string { return In(i18n.Locale()).SysMonDown() }
+
+// SysMonDown says "下行"
+// in the language of msgs.
+func (msgs Messages) SysMonDown() string {
+	return Catalog.Format(msgs.locale, "sysMonDown", nil)
+}
+
+// SysMonUpDown says "上下行"
+// in the language the app shows.
+func SysMonUpDown() string { return In(i18n.Locale()).SysMonUpDown() }
+
+// SysMonUpDown says "上下行"
+// in the language of msgs.
+func (msgs Messages) SysMonUpDown() string {
+	return Catalog.Format(msgs.locale, "sysMonUpDown", nil)
+}
+
+// SysMonDiskFree says "{size} 可用"
+// in the language the app shows.
+func SysMonDiskFree(size string) string { return In(i18n.Locale()).SysMonDiskFree(size) }
+
+// SysMonDiskFree says "{size} 可用"
+// in the language of msgs.
+func (msgs Messages) SysMonDiskFree(size string) string {
+	return Catalog.Format(msgs.locale, "sysMonDiskFree", map[string]any{"size": size})
+}
+
+// SysMonWindowAgo says "60s 前"
+// in the language the app shows.
+func SysMonWindowAgo() string { return In(i18n.Locale()).SysMonWindowAgo() }
+
+// SysMonWindowAgo says "60s 前"
+// in the language of msgs.
+func (msgs Messages) SysMonWindowAgo() string {
+	return Catalog.Format(msgs.locale, "sysMonWindowAgo", nil)
+}
+
+// SysMonPeak says "峰值 {val}"
+// in the language the app shows.
+func SysMonPeak(val string) string { return In(i18n.Locale()).SysMonPeak(val) }
+
+// SysMonPeak says "峰值 {val}"
+// in the language of msgs.
+func (msgs Messages) SysMonPeak(val string) string {
+	return Catalog.Format(msgs.locale, "sysMonPeak", map[string]any{"val": val})
+}
+
+// SysMonMemUsedLabel says "{pct} 已用"
+// in the language the app shows.
+func SysMonMemUsedLabel(pct string) string { return In(i18n.Locale()).SysMonMemUsedLabel(pct) }
+
+// SysMonMemUsedLabel says "{pct} 已用"
+// in the language of msgs.
+func (msgs Messages) SysMonMemUsedLabel(pct string) string {
+	return Catalog.Format(msgs.locale, "sysMonMemUsedLabel", map[string]any{"pct": pct})
+}
+
+// SysMonMemBreakdown says "App {app} · 联动 {wired} · 压缩 {comp}"
+// in the language the app shows.
+func SysMonMemBreakdown(app string, wired string, comp string) string {
+	return In(i18n.Locale()).SysMonMemBreakdown(app, wired, comp)
+}
+
+// SysMonMemBreakdown says "App {app} · 联动 {wired} · 压缩 {comp}"
+// in the language of msgs.
+func (msgs Messages) SysMonMemBreakdown(app string, wired string, comp string) string {
+	return Catalog.Format(msgs.locale, "sysMonMemBreakdown", map[string]any{"app": app, "wired": wired, "comp": comp})
+}
+
+// SysMonMemBreakdownWin says "应用 {app} · 内核 {wired} · 缓存 {comp}"
+// in the language the app shows.
+func SysMonMemBreakdownWin(app string, wired string, comp string) string {
+	return In(i18n.Locale()).SysMonMemBreakdownWin(app, wired, comp)
+}
+
+// SysMonMemBreakdownWin says "应用 {app} · 内核 {wired} · 缓存 {comp}"
+// in the language of msgs.
+func (msgs Messages) SysMonMemBreakdownWin(app string, wired string, comp string) string {
+	return Catalog.Format(msgs.locale, "sysMonMemBreakdownWin", map[string]any{"app": app, "wired": wired, "comp": comp})
+}
+
+// SysMonDiskDetail says "磁盘 {free} 可用 · R {r} · W {w}"
+// in the language the app shows.
+func SysMonDiskDetail(free string, r string, w string) string {
+	return In(i18n.Locale()).SysMonDiskDetail(free, r, w)
+}
+
+// SysMonDiskDetail says "磁盘 {free} 可用 · R {r} · W {w}"
+// in the language of msgs.
+func (msgs Messages) SysMonDiskDetail(free string, r string, w string) string {
+	return Catalog.Format(msgs.locale, "sysMonDiskDetail", map[string]any{"free": free, "r": r, "w": w})
+}
+
+// SysMonTopProcs says "占用排行"
+// in the language the app shows.
+func SysMonTopProcs() string { return In(i18n.Locale()).SysMonTopProcs() }
+
+// SysMonTopProcs says "占用排行"
+// in the language of msgs.
+func (msgs Messages) SysMonTopProcs() string {
+	return Catalog.Format(msgs.locale, "sysMonTopProcs", nil)
+}
+
+// SettingsSysMonGroup says "系统性能监控"
+// in the language the app shows.
+func SettingsSysMonGroup() string { return In(i18n.Locale()).SettingsSysMonGroup() }
+
+// SettingsSysMonGroup says "系统性能监控"
+// in the language of msgs.
+func (msgs Messages) SettingsSysMonGroup() string {
+	return Catalog.Format(msgs.locale, "settingsSysMonGroup", nil)
+}
+
+// SettingsSysMonPrimaryRow says "1×1 卡片主显指标"
+// in the language the app shows.
+func SettingsSysMonPrimaryRow() string { return In(i18n.Locale()).SettingsSysMonPrimaryRow() }
+
+// SettingsSysMonPrimaryRow says "1×1 卡片主显指标"
+// in the language of msgs.
+func (msgs Messages) SettingsSysMonPrimaryRow() string {
+	return Catalog.Format(msgs.locale, "settingsSysMonPrimaryRow", nil)
+}
+
+// SettingsSysMonTopProcsRow says "详情浮层显示占用排行"
+// in the language the app shows.
+func SettingsSysMonTopProcsRow() string { return In(i18n.Locale()).SettingsSysMonTopProcsRow() }
+
+// SettingsSysMonTopProcsRow says "详情浮层显示占用排行"
+// in the language of msgs.
+func (msgs Messages) SettingsSysMonTopProcsRow() string {
+	return Catalog.Format(msgs.locale, "settingsSysMonTopProcsRow", nil)
+}
+
+// SettingsSysMonWingsRow says "收起时在刘海两翼常驻监控"
+// in the language the app shows.
+func SettingsSysMonWingsRow() string { return In(i18n.Locale()).SettingsSysMonWingsRow() }
+
+// SettingsSysMonWingsRow says "收起时在刘海两翼常驻监控"
+// in the language of msgs.
+func (msgs Messages) SettingsSysMonWingsRow() string {
+	return Catalog.Format(msgs.locale, "settingsSysMonWingsRow", nil)
+}
+
+// SettingsSysMonWingsRowWin says "收起时在顶部胶囊两翼常驻监控"
+// in the language the app shows.
+func SettingsSysMonWingsRowWin() string { return In(i18n.Locale()).SettingsSysMonWingsRowWin() }
+
+// SettingsSysMonWingsRowWin says "收起时在顶部胶囊两翼常驻监控"
+// in the language of msgs.
+func (msgs Messages) SettingsSysMonWingsRowWin() string {
+	return Catalog.Format(msgs.locale, "settingsSysMonWingsRowWin", nil)
+}
+
+// SettingsSysMonWingLeftRow says "左翼显示"
+// in the language the app shows.
+func SettingsSysMonWingLeftRow() string { return In(i18n.Locale()).SettingsSysMonWingLeftRow() }
+
+// SettingsSysMonWingLeftRow says "左翼显示"
+// in the language of msgs.
+func (msgs Messages) SettingsSysMonWingLeftRow() string {
+	return Catalog.Format(msgs.locale, "settingsSysMonWingLeftRow", nil)
+}
+
+// SettingsSysMonWingRightRow says "右翼显示"
+// in the language the app shows.
+func SettingsSysMonWingRightRow() string { return In(i18n.Locale()).SettingsSysMonWingRightRow() }
+
+// SettingsSysMonWingRightRow says "右翼显示"
+// in the language of msgs.
+func (msgs Messages) SettingsSysMonWingRightRow() string {
+	return Catalog.Format(msgs.locale, "settingsSysMonWingRightRow", nil)
+}
+
+// SettingsSysMonIntervalRow says "采样间隔"
+// in the language the app shows.
+func SettingsSysMonIntervalRow() string { return In(i18n.Locale()).SettingsSysMonIntervalRow() }
+
+// SettingsSysMonIntervalRow says "采样间隔"
+// in the language of msgs.
+func (msgs Messages) SettingsSysMonIntervalRow() string {
+	return Catalog.Format(msgs.locale, "settingsSysMonIntervalRow", nil)
+}
+
+// SettingsSysMonInterval1s says "1 秒"
+// in the language the app shows.
+func SettingsSysMonInterval1s() string { return In(i18n.Locale()).SettingsSysMonInterval1s() }
+
+// SettingsSysMonInterval1s says "1 秒"
+// in the language of msgs.
+func (msgs Messages) SettingsSysMonInterval1s() string {
+	return Catalog.Format(msgs.locale, "settingsSysMonInterval1s", nil)
+}
+
+// SettingsSysMonInterval2s says "2 秒"
+// in the language the app shows.
+func SettingsSysMonInterval2s() string { return In(i18n.Locale()).SettingsSysMonInterval2s() }
+
+// SettingsSysMonInterval2s says "2 秒"
+// in the language of msgs.
+func (msgs Messages) SettingsSysMonInterval2s() string {
+	return Catalog.Format(msgs.locale, "settingsSysMonInterval2s", nil)
+}
+
+// SysMonCardLabel says "系统监控 · CPU {cpu} · 内存 {mem}"
+// in the language the app shows.
+func SysMonCardLabel(cpu string, mem string) string {
+	return In(i18n.Locale()).SysMonCardLabel(cpu, mem)
+}
+
+// SysMonCardLabel says "系统监控 · CPU {cpu} · 内存 {mem}"
+// in the language of msgs.
+func (msgs Messages) SysMonCardLabel(cpu string, mem string) string {
+	return Catalog.Format(msgs.locale, "sysMonCardLabel", map[string]any{"cpu": cpu, "mem": mem})
+}
+
+// SysMonWingLabel says "系统监控 · 左 {left} · 右 {right}"
+// in the language the app shows.
+func SysMonWingLabel(left string, right string) string {
+	return In(i18n.Locale()).SysMonWingLabel(left, right)
+}
+
+// SysMonWingLabel says "系统监控 · 左 {left} · 右 {right}"
+// in the language of msgs.
+func (msgs Messages) SysMonWingLabel(left string, right string) string {
+	return Catalog.Format(msgs.locale, "sysMonWingLabel", map[string]any{"left": left, "right": right})
+}
