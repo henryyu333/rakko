@@ -176,9 +176,10 @@ type toolsPage struct {
 
 	// The resize gesture, the library's own scroll position and the card
 	// context menu (nil while closed).
-	rs          *toolResize
-	libScroll   ui.ScrollState
-	menu        *toolMenu
+	rs              *toolResize
+	libScroll       ui.ScrollState
+	libScrollTarget float32
+	menu            *toolMenu
 	lp          *toolLibPress
 	chromeAt    time.Time // first frame in editing, for the chrome's pop
 	libraryRect ui.Rect   // the drawn drawer's window rectangle

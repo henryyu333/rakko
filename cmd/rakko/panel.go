@@ -72,6 +72,8 @@ var panelTheme = func() *ui.Theme {
 	t.Inverse = ui.Hex("#2C2C2E")
 	t.InverseText = ink
 	t.FontSize = 13
+	t.Scrollbar = ui.RGBA(255, 255, 255, 0.20)
+	t.ScrollbarWidth = 3
 	return t
 }()
 
@@ -1055,8 +1057,14 @@ func (a *shelf) view(c *ui.Context) {
 		// block from the bottom edge upward. That edge is the island's
 		// while the panel has room below it, and the panel's clamped bottom
 		// when the work area lifts the panel off the island.
+		botR := min(shellH/2, corner)
 		clip := ui.Column(c.Key("panel-clip")).Width(shellW).Height(shellH).Clip().
 			AlignItems(ui.Center).Margin(top, 0, 0, 0)
+		if a.island {
+			clip.Radius(botR)
+		} else {
+			clip.Radius(0, 0, botR, botR)
+		}
 		// A panel clamped away from the island's axis moves with its shell;
 		// the transform keeps the layout, the painting and the hit test in
 		// one place.

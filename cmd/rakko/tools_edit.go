@@ -74,9 +74,20 @@ func (p *toolsPage) toolLibrary(c *ui.Context, live bool) {
 		bg = ui.RGBA(255, 69, 58, 0.14)
 	}
 	box := ui.Column(c.Key("tool-drawer")).Absolute().Left(0).Right(0).Bottom(0).
-		Height(toolLibraryH).Background(bg).Padding(12, 12, 12, 12)
+		Height(toolLibraryH).Radius(0, 0, sheetRadius, sheetRadius).
+		Background(bg).Padding(8, 12, 4, 12)
 	box.Children(func() {
-		sc := ui.ScrollBoth(c.Key("lib-scroll")).FillWidth().Height(56).TrackScroll(&p.libScroll)
+		sc := ui.ScrollHorizontal(c.Key("lib-scroll")).FillWidth().Height(68).
+			AlignItems(ui.Start).TrackScroll(&p.libScroll).
+			ScrollbarInsets(0, 10, 0, 10).
+			ScrollbarStyle(ui.ScrollbarStyle{
+				TrackWidth: 8,
+				ThumbWidth: 3,
+				MinLength:  28,
+				Thumb:      ui.RGBA(255, 255, 255, 0.22),
+				Hover:      ui.RGBA(255, 255, 255, 0.38),
+				Active:     ui.RGBA(255, 255, 255, 0.54),
+			})
 		sc.Children(func() {
 			row := ui.Row(c.Key("lib-strip")).Height(56).Gap(6).AlignItems(ui.Center)
 			row.Children(func() {
@@ -86,6 +97,32 @@ func (p *toolsPage) toolLibrary(c *ui.Context, live bool) {
 			})
 		})
 	})
+	if live {
+		box.HandleInput(func(ev ui.InputEvent) bool {
+			if ev.Kind != ui.InputScroll || ev.DX != 0 || ev.DY == 0 {
+				return false
+			}
+			if p.libScroll.MaxX <= 0 {
+				return true
+			}
+			if ev.Precise {
+				to := min(max(p.libScroll.X+ev.DY, 0), p.libScroll.MaxX)
+				p.libScroll.X = to
+				p.libScrollTarget = to
+				return true
+			}
+			base := p.libScroll.X
+			if p.libScroll.Scrolling() && (ev.DY > 0) == (p.libScrollTarget > p.libScroll.X) {
+				base = p.libScrollTarget
+			}
+			to := min(max(base+ev.DY, 0), p.libScroll.MaxX)
+			p.libScrollTarget = to
+			if to != p.libScroll.X || p.libScroll.Scrolling() {
+				p.libScroll.ScrollTo(to, 0, ui.Animation{Duration: 150 * time.Millisecond, Ease: ui.EaseOut})
+			}
+			return true
+		})
+	}
 	p.libraryRect = box.Bounds()
 }
 
