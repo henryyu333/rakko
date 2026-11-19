@@ -9186,3 +9186,277 @@ func ShotWidthThick() string { return In(i18n.Locale()).ShotWidthThick() }
 func (msgs Messages) ShotWidthThick() string {
 	return Catalog.Format(msgs.locale, "shotWidthThick", nil)
 }
+
+// UsageBalanceLabel says "余额"
+// in the language the app shows.
+func UsageBalanceLabel() string { return In(i18n.Locale()).UsageBalanceLabel() }
+
+// UsageBalanceLabel says "余额"
+// in the language of msgs.
+func (msgs Messages) UsageBalanceLabel() string {
+	return Catalog.Format(msgs.locale, "usageBalanceLabel", nil)
+}
+
+// UsageBalanceSplit says "充值 {topup} · 赠送 {granted}"
+// in the language the app shows.
+func UsageBalanceSplit(topup string, granted string) string {
+	return In(i18n.Locale()).UsageBalanceSplit(topup, granted)
+}
+
+// UsageBalanceSplit says "充值 {topup} · 赠送 {granted}"
+// in the language of msgs.
+func (msgs Messages) UsageBalanceSplit(topup string, granted string) string {
+	return Catalog.Format(msgs.locale, "usageBalanceSplit", map[string]any{"topup": topup, "granted": granted})
+}
+
+// UsageMonthLabel says "本月"
+// in the language the app shows.
+func UsageMonthLabel() string { return In(i18n.Locale()).UsageMonthLabel() }
+
+// UsageMonthLabel says "本月"
+// in the language of msgs.
+func (msgs Messages) UsageMonthLabel() string {
+	return Catalog.Format(msgs.locale, "usageMonthLabel", nil)
+}
+
+// UsageAPILabel says "API"
+// in the language the app shows.
+func UsageAPILabel() string { return In(i18n.Locale()).UsageAPILabel() }
+
+// UsageAPILabel says "API"
+// in the language of msgs.
+func (msgs Messages) UsageAPILabel() string {
+	return Catalog.Format(msgs.locale, "usageAPILabel", nil)
+}
+
+// UsageResetCreditsLine says "重置卡 {count, number, ::group-off}"
+// in the language the app shows.
+func UsageResetCreditsLine(count int) string { return In(i18n.Locale()).UsageResetCreditsLine(count) }
+
+// UsageResetCreditsLine says "重置卡 {count, number, ::group-off}"
+// in the language of msgs.
+func (msgs Messages) UsageResetCreditsLine(count int) string {
+	return Catalog.Format(msgs.locale, "usageResetCreditsLine", map[string]any{"count": count})
+}
+
+// UsageResetCreditsExpires says "{date} 到期"
+// in the language the app shows.
+func UsageResetCreditsExpires(date string) string {
+	return In(i18n.Locale()).UsageResetCreditsExpires(date)
+}
+
+// UsageResetCreditsExpires says "{date} 到期"
+// in the language of msgs.
+func (msgs Messages) UsageResetCreditsExpires(date string) string {
+	return Catalog.Format(msgs.locale, "usageResetCreditsExpires", map[string]any{"date": date})
+}
+
+// UsageResetUseButton says "使用"
+// in the language the app shows.
+func UsageResetUseButton() string { return In(i18n.Locale()).UsageResetUseButton() }
+
+// UsageResetUseButton says "使用"
+// in the language of msgs.
+func (msgs Messages) UsageResetUseButton() string {
+	return Catalog.Format(msgs.locale, "usageResetUseButton", nil)
+}
+
+// UsageResetConfirmTitle says "使用 Codex 重置卡"
+// in the language the app shows.
+func UsageResetConfirmTitle() string { return In(i18n.Locale()).UsageResetConfirmTitle() }
+
+// UsageResetConfirmTitle says "使用 Codex 重置卡"
+// in the language of msgs.
+func (msgs Messages) UsageResetConfirmTitle() string {
+	return Catalog.Format(msgs.locale, "usageResetConfirmTitle", nil)
+}
+
+// UsageResetConfirmBody says "将消耗 1 张重置卡并立刻重置当前 5 小时和每周额度窗口，此操作不可撤销。"
+// in the language the app shows.
+func UsageResetConfirmBody() string { return In(i18n.Locale()).UsageResetConfirmBody() }
+
+// UsageResetConfirmBody says "将消耗 1 张重置卡并立刻重置当前 5 小时和每周额度窗口，此操作不可撤销。"
+// in the language of msgs.
+func (msgs Messages) UsageResetConfirmBody() string {
+	return Catalog.Format(msgs.locale, "usageResetConfirmBody", nil)
+}
+
+// UsageResetConfirmOK says "确认使用"
+// in the language the app shows.
+func UsageResetConfirmOK() string { return In(i18n.Locale()).UsageResetConfirmOK() }
+
+// UsageResetConfirmOK says "确认使用"
+// in the language of msgs.
+func (msgs Messages) UsageResetConfirmOK() string {
+	return Catalog.Format(msgs.locale, "usageResetConfirmOK", nil)
+}
+
+// UsageResetConfirmCancel says "取消"
+// in the language the app shows.
+func UsageResetConfirmCancel() string { return In(i18n.Locale()).UsageResetConfirmCancel() }
+
+// UsageResetConfirmCancel says "取消"
+// in the language of msgs.
+func (msgs Messages) UsageResetConfirmCancel() string {
+	return Catalog.Format(msgs.locale, "usageResetConfirmCancel", nil)
+}
+
+// UsageResetNoCredit says "当前没有可用的重置卡。"
+// in the language the app shows.
+func UsageResetNoCredit() string { return In(i18n.Locale()).UsageResetNoCredit() }
+
+// UsageResetNoCredit says "当前没有可用的重置卡。"
+// in the language of msgs.
+func (msgs Messages) UsageResetNoCredit() string {
+	return Catalog.Format(msgs.locale, "usageResetNoCredit", nil)
+}
+
+// UsageResetNothingToReset says "当前额度窗口尚未使用，无需重置（重置卡未消耗）。"
+// in the language the app shows.
+func UsageResetNothingToReset() string { return In(i18n.Locale()).UsageResetNothingToReset() }
+
+// UsageResetNothingToReset says "当前额度窗口尚未使用，无需重置（重置卡未消耗）。"
+// in the language of msgs.
+func (msgs Messages) UsageResetNothingToReset() string {
+	return Catalog.Format(msgs.locale, "usageResetNothingToReset", nil)
+}
+
+// UsageResetDone says "已重置额度窗口。"
+// in the language the app shows.
+func UsageResetDone() string { return In(i18n.Locale()).UsageResetDone() }
+
+// UsageResetDone says "已重置额度窗口。"
+// in the language of msgs.
+func (msgs Messages) UsageResetDone() string {
+	return Catalog.Format(msgs.locale, "usageResetDone", nil)
+}
+
+// UsageResetFailed says "重置失败：{err}"
+// in the language the app shows.
+func UsageResetFailed(err string) string { return In(i18n.Locale()).UsageResetFailed(err) }
+
+// UsageResetFailed says "重置失败：{err}"
+// in the language of msgs.
+func (msgs Messages) UsageResetFailed(err string) string {
+	return Catalog.Format(msgs.locale, "usageResetFailed", map[string]any{"err": err})
+}
+
+// SettingsAISourceLocalLogin says "已找到本机登录"
+// in the language the app shows.
+func SettingsAISourceLocalLogin() string { return In(i18n.Locale()).SettingsAISourceLocalLogin() }
+
+// SettingsAISourceLocalLogin says "已找到本机登录"
+// in the language of msgs.
+func (msgs Messages) SettingsAISourceLocalLogin() string {
+	return Catalog.Format(msgs.locale, "settingsAISourceLocalLogin", nil)
+}
+
+// SettingsAISourceCodexLogin says "本机 Codex 登录"
+// in the language the app shows.
+func SettingsAISourceCodexLogin() string { return In(i18n.Locale()).SettingsAISourceCodexLogin() }
+
+// SettingsAISourceCodexLogin says "本机 Codex 登录"
+// in the language of msgs.
+func (msgs Messages) SettingsAISourceCodexLogin() string {
+	return Catalog.Format(msgs.locale, "settingsAISourceCodexLogin", nil)
+}
+
+// SettingsAISourceClaudeLogin says "本机 Claude Code 登录"
+// in the language the app shows.
+func SettingsAISourceClaudeLogin() string { return In(i18n.Locale()).SettingsAISourceClaudeLogin() }
+
+// SettingsAISourceClaudeLogin says "本机 Claude Code 登录"
+// in the language of msgs.
+func (msgs Messages) SettingsAISourceClaudeLogin() string {
+	return Catalog.Format(msgs.locale, "settingsAISourceClaudeLogin", nil)
+}
+
+// SettingsAISourceLocalKey says "已找到 Key"
+// in the language the app shows.
+func SettingsAISourceLocalKey() string { return In(i18n.Locale()).SettingsAISourceLocalKey() }
+
+// SettingsAISourceLocalKey says "已找到 Key"
+// in the language of msgs.
+func (msgs Messages) SettingsAISourceLocalKey() string {
+	return Catalog.Format(msgs.locale, "settingsAISourceLocalKey", nil)
+}
+
+// SettingsAISourceSavedKey says "已保存 Key"
+// in the language the app shows.
+func SettingsAISourceSavedKey() string { return In(i18n.Locale()).SettingsAISourceSavedKey() }
+
+// SettingsAISourceSavedKey says "已保存 Key"
+// in the language of msgs.
+func (msgs Messages) SettingsAISourceSavedKey() string {
+	return Catalog.Format(msgs.locale, "settingsAISourceSavedKey", nil)
+}
+
+// SettingsAISourcePasteKey says "粘贴 API Key"
+// in the language the app shows.
+func SettingsAISourcePasteKey() string { return In(i18n.Locale()).SettingsAISourcePasteKey() }
+
+// SettingsAISourcePasteKey says "粘贴 API Key"
+// in the language of msgs.
+func (msgs Messages) SettingsAISourcePasteKey() string {
+	return Catalog.Format(msgs.locale, "settingsAISourcePasteKey", nil)
+}
+
+// SettingsAISourceMissing says "未登录"
+// in the language the app shows.
+func SettingsAISourceMissing() string { return In(i18n.Locale()).SettingsAISourceMissing() }
+
+// SettingsAISourceMissing says "未登录"
+// in the language of msgs.
+func (msgs Messages) SettingsAISourceMissing() string {
+	return Catalog.Format(msgs.locale, "settingsAISourceMissing", nil)
+}
+
+// SettingsAIQuotaOrderFoot says "面板里卡片顺序同这里，可拖动排序。"
+// in the language the app shows.
+func SettingsAIQuotaOrderFoot() string { return In(i18n.Locale()).SettingsAIQuotaOrderFoot() }
+
+// SettingsAIQuotaOrderFoot says "面板里卡片顺序同这里，可拖动排序。"
+// in the language of msgs.
+func (msgs Messages) SettingsAIQuotaOrderFoot() string {
+	return Catalog.Format(msgs.locale, "settingsAIQuotaOrderFoot", nil)
+}
+
+// SettingsAIPasteKeyHint says "输入 API Key"
+// in the language the app shows.
+func SettingsAIPasteKeyHint() string { return In(i18n.Locale()).SettingsAIPasteKeyHint() }
+
+// SettingsAIPasteKeyHint says "输入 API Key"
+// in the language of msgs.
+func (msgs Messages) SettingsAIPasteKeyHint() string {
+	return Catalog.Format(msgs.locale, "settingsAIPasteKeyHint", nil)
+}
+
+// SettingsAISaveKey says "保存"
+// in the language the app shows.
+func SettingsAISaveKey() string { return In(i18n.Locale()).SettingsAISaveKey() }
+
+// SettingsAISaveKey says "保存"
+// in the language of msgs.
+func (msgs Messages) SettingsAISaveKey() string {
+	return Catalog.Format(msgs.locale, "settingsAISaveKey", nil)
+}
+
+// SettingsAIClearKey says "清除"
+// in the language the app shows.
+func SettingsAIClearKey() string { return In(i18n.Locale()).SettingsAIClearKey() }
+
+// SettingsAIClearKey says "清除"
+// in the language of msgs.
+func (msgs Messages) SettingsAIClearKey() string {
+	return Catalog.Format(msgs.locale, "settingsAIClearKey", nil)
+}
+
+// UsagePasteKeyPrompt says "在设置里粘贴 API Key"
+// in the language the app shows.
+func UsagePasteKeyPrompt() string { return In(i18n.Locale()).UsagePasteKeyPrompt() }
+
+// UsagePasteKeyPrompt says "在设置里粘贴 API Key"
+// in the language of msgs.
+func (msgs Messages) UsagePasteKeyPrompt() string {
+	return Catalog.Format(msgs.locale, "usagePasteKeyPrompt", nil)
+}

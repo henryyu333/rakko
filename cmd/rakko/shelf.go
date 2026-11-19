@@ -12,6 +12,7 @@ import (
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
+	"rakko/internal/aiusage"
 	"rakko/internal/companion"
 	"rakko/internal/layout"
 	"rakko/internal/lyrics"
@@ -121,6 +122,13 @@ type shelf struct {
 	shortcutBusy                                                map[shortcutKind]bool   // shortcuts the system refused
 	shortcutReg                                                 map[shortcutKind]string // what the system holds per shortcut, "" for none
 	shortcutsSuspended                                          bool                    // a recording released the shortcuts; restore them after
+	aiQuotaEditTool                                             string                  // tool currently editing a pasted API key in Settings
+	aiQuotaKeyInput                                             string                  // transient API key input buffer (never written to settings.json)
+	aiQuotaDragPending                                          bool                    // true after pressing a quota row handle, before crossing drag slop
+	aiQuotaDragActive                                           bool                    // true while dragging a quota row in Settings to reorder
+	aiQuotaDragIdx                                              int                     // index of the quota row being dragged
+	aiQuotaDragTool                                             aiusage.Tool            // tool currently being dragged in Settings
+	aiQuotaDragDownX, aiQuotaDragDownY                          float32                 // local pointer coords at press for slop check
 	update                                                      *mygo.Update            // version the feed offers, waiting for the user
 	updateChecking, updateInstalling                            bool
 	updateInstalled                                             bool    // swapped into place; runs at the next launch

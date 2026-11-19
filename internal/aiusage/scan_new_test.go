@@ -300,3 +300,66 @@ func TestDetectIgnoresBareRootDirs(t *testing.T) {
 		t.Fatalf("UnreadableTools() = %v, expected %s once config.json exists", s.UnreadableTools(), ToolCherryStudio)
 	}
 }
+
+func agyLogsDir(home, product, conv string) string {
+	return filepath.Join(home, ".gemini", product, "brain", conv, ".system_generated", "logs")
+}
+
+func scanAgy(t *testing.T, home string) (*Scanner, Summary) {
+	t.Helper()
+	s := NewScanner(home, t.TempDir())
+	if err := s.Scan(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 11, 16, 12, 0, 0, 0, time.UTC)
+	return s, s.Summary(RangeToday, now)
+}
+
+const agyAppLine = `{"step_index":1,"type":"PLANNER_RESPONSE","input_tokens":300,"cache_read_tokens":700,"output_tokens":40,"created_at":"2026-11-16T08:00:00Z"}` + "\n"
+
+func TestScanAntigravityAppWithoutModel(t *testing.T) {
+	home := t.TempDir()
+	dir := agyLogsDir(home, "antigravity", "app-conv")
+	writeTestFile(t, filepath.Join(dir, "transcript_full.jsonl"), []byte(agyAppLine))
+	writeTestFile(t, filepath.Join(dir, "transcript.jsonl"), []byte(agyAppLine))
+	writeTestFile(t, filepath.Join(dir, "chunks", "transcript_full", "0.jsonl"), []byte(agyAppLine))
+
+	s, sum := scanAgy(t, home)
+	agy := sum.ByTool[ToolAntigravity]
+	if agy.Requests != 1 || agy.Input != 300 || agy.CacheRead != 700 || agy.Output != 40 {
+		t.Fatalf("app totals wrong: %+v", agy)
+	}
+	if agy.Unpriced != agy.Requests || agy.Cost != 0 {
+		t.Fatalf("app lines without model must be unpriced: %+v", agy)
+	}
+	if slices.Contains(s.UnreadableTools(), ToolAntigravity) {
+		t.Fatalf("antigravity should be readable: %v", s.UnreadableTools())
+	}
+}
+
+func TestScanAntigravityCLIAndAppMerge(t *testing.T) {
+	home := t.TempDir()
+	cli := `{"step_index":1,"type":"PLANNER_RESPONSE","model":"gemini-4-hydrogen-high","input_tokens":1000,"cache_read_tokens":5000,"output_tokens":200,"created_at":"2026-11-16T08:00:00Z"}` + "\n"
+	writeTestFile(t, filepath.Join(agyLogsDir(home, "antigravity-cli", "cli-conv"), "transcript_full.jsonl"), []byte(cli))
+	// Same step_index in a different conversation must not be deduped away.
+	writeTestFile(t, filepath.Join(agyLogsDir(home, "antigravity", "app-conv"), "transcript_full.jsonl"), []byte(agyAppLine))
+
+	_, sum := scanAgy(t, home)
+	agy := sum.ByTool[ToolAntigravity]
+	if agy.Requests != 2 || agy.Input != 1300 || agy.CacheRead != 5700 || agy.Output != 240 {
+		t.Fatalf("merged totals wrong: %+v", agy)
+	}
+	if agy.Unpriced != 1 || agy.Cost <= 0 {
+		t.Fatalf("CLI should be priced, app unpriced: %+v", agy)
+	}
+}
+
+func TestScanAntigravityLegacyConversationsOnlyUnreadable(t *testing.T) {
+	home := t.TempDir()
+	writeTestFile(t, filepath.Join(home, ".gemini", "antigravity", "conversations", "old.pb"), []byte("x"))
+
+	s, _ := scanAgy(t, home)
+	if !slices.Contains(s.UnreadableTools(), ToolAntigravity) {
+		t.Fatalf("legacy-only antigravity should be unreadable: %v", s.UnreadableTools())
+	}
+}

@@ -39,11 +39,14 @@ var (
 
 // The quota card's metrics from the mock (.qc{height:88}, .quota{gap:6}).
 const (
-	usageCardH    = 84 // two cards + 6 gap fill the 174 content height
-	usageCardGap  = 6
-	usageLeftW    = 213 // left column: quota cards
-	usageRightW   = 197 // right column: local usage; 213+6+197 = 416
-	usageRingSize = 50
+	usageCardH           = 84 // two cards + 6 gap fill the 174 content height
+	usageCompactRowH     = 39 // four compact rows + three 6pt gaps fill 174pt
+	usageCardGap         = 6
+	usageLeftW           = 213 // left column: quota cards
+	usageRightW          = 197 // right column: local usage; 213+6+197 = 416
+	usageWideSheetW      = 679 // 2*22 + 213 + 6 + 213 + 6 + 197
+	usageRingSize        = 50
+	usageCompactRingSize = 28
 )
 
 // Symbols the page adds to panel.go's set: the refresh button and the ear
@@ -56,8 +59,11 @@ const (
 var (
 	refreshSymbol = symbol(`<path d="M20 12a8 8 0 1 1-2.34-5.66M20 3.5v4.5h-4.5"/>`)
 	gaugeSymbol   = symbol(`<path d="M4 17a8 8 0 1 1 16 0"/><path d="M12 17l4.5-5"/><circle cx="12" cy="17" r="1.6"/>`)
-	codexLogo     = ui.MustParseSVG([]byte(`<svg viewBox="0 0 716 716" xmlns="http://www.w3.org/2000/svg"><path fill="white" d="M508.749 317.399C516.777 287.314 508.991 253.884 485.389 230.282C461.788 206.681 428.36 198.895 398.273 206.923C376.231 184.928 343.39 174.956 311.148 183.596C278.906 192.234 255.45 217.292 247.36 247.361C217.291 255.451 192.233 278.91 183.595 311.149C174.957 343.391 184.927 376.232 206.924 398.274C198.896 428.359 206.683 461.789 230.284 485.391C253.885 508.992 287.313 516.779 317.401 508.75C339.442 530.745 372.286 540.717 404.525 532.079C436.767 523.441 460.223 498.384 468.313 468.315C498.383 460.224 523.44 436.766 532.078 404.526C540.716 372.285 530.747 339.443 508.749 317.402V317.399ZM470.899 244.776C486.892 260.77 493.488 282.601 490.687 303.412L415.577 260.046C412.411 258.218 408.509 258.218 405.345 260.046L317.401 310.82V277.526C317.401 275.191 318.652 273.005 320.676 271.837L387.644 233.174C414.178 218.353 448.346 222.223 470.901 244.776H470.899ZM357.837 311.144L398.275 334.491V381.185L357.837 404.532L317.398 381.185V334.491L357.837 311.144ZM264.776 269.693C265.207 239.305 285.644 211.649 316.453 203.393C338.3 197.54 360.505 202.744 377.127 215.573L302.014 258.937C298.848 260.764 296.898 264.144 296.898 267.798V369.346L268.065 352.699C266.043 351.531 264.776 349.353 264.776 347.017V269.691V269.693ZM203.391 316.454C209.244 294.608 224.854 277.978 244.276 269.999V356.73C244.276 360.384 246.226 363.763 249.392 365.591L337.337 416.365L308.503 433.013C306.481 434.181 303.961 434.188 301.939 433.02L234.971 394.357C208.868 378.789 195.138 347.261 203.391 316.454ZM244.775 470.9C228.781 454.906 222.186 433.075 224.986 412.264L300.096 455.63C303.263 457.457 307.164 457.457 310.328 455.63L398.273 404.856V438.149C398.273 440.485 397.022 442.671 394.997 443.839L328.029 482.502C301.495 497.322 267.327 493.452 244.772 470.9H244.775ZM450.897 445.982C450.466 476.371 430.029 504.027 399.22 512.283C377.373 518.136 355.168 512.932 338.547 500.102L413.659 456.738C416.826 454.911 418.775 451.532 418.775 447.877V346.329L447.609 362.977C449.631 364.145 450.897 366.323 450.897 368.659V445.985V445.982ZM512.282 399.221C506.429 421.068 490.819 437.697 471.397 445.676V358.946C471.397 355.292 469.448 351.912 466.281 350.085L378.336 299.311L407.17 282.663C409.192 281.495 411.712 281.487 413.734 282.655L480.702 321.318C506.805 336.887 520.536 368.415 512.282 399.221Z"/></svg>`))
-	claudeLogo    = ui.MustParseSVG([]byte(`<svg viewBox="0 0 94 94" xmlns="http://www.w3.org/2000/svg"><path fill="#D97757" d="M18.7657 62.4437L37.1822 52.1167L37.4857 51.2122L37.1822 50.7085H36.2715L33.1852 50.5208L22.6615 50.2391L13.5545 49.8636L4.70044 49.3942L2.47428 48.9248L0.399902 46.1553L0.602281 44.794L2.47428 43.5266L5.15579 43.7613L11.0754 44.1837L19.98 44.794L26.4055 45.1695L35.9679 46.1553H37.4857L37.6881 45.545L37.1822 45.1695L36.7774 44.794L27.5692 38.5508L17.6021 31.9791L12.3908 28.1769L9.60812 26.2524L8.19147 24.4686L7.58433 20.5256L10.1141 17.7091L13.5545 17.9438L14.4146 18.1785L17.9056 20.8542L25.343 26.6279L35.0572 33.7629L36.4739 34.9364L37.0443 34.5514L37.1316 34.2792L36.4739 33.1996L31.212 23.6706L25.596 13.9539L23.0663 9.91695L22.4086 7.52296C22.1538 6.51831 22.0038 5.68714 22.0038 4.65957L24.8877 0.716544L26.5067 0.200195L30.4025 0.716544L32.0215 2.12477L34.4501 7.66379L38.3458 16.3478L44.4172 28.1769L46.188 31.6975L47.1493 34.9364L47.5035 35.9222H48.1106V35.3589L48.6166 28.6933L49.5273 20.5256L50.438 10.0108L50.7415 7.05356L52.2088 3.48605L55.1433 1.56148L57.42 2.64112L59.292 5.31674L59.039 7.05356L57.926 14.2824L55.7504 25.5952L54.3337 33.1996H55.1433L56.1046 32.2138L59.9497 27.1442L66.3752 19.0704L69.2085 15.8784L72.5478 12.3579L74.6728 10.668H78.7203L81.6548 15.0804L80.3394 19.6337L76.1906 24.8911L72.7502 29.3504L67.8172 35.9595L64.7562 41.2734L65.0307 41.7118L65.7681 41.6489L76.8989 39.255L82.9197 38.1753L90.1041 36.9549L93.3422 38.457L93.6963 40.006L92.4315 43.151L84.7411 45.0287L75.7353 46.8594L62.3244 50.0164L62.1759 50.1358L62.3512 50.3958L68.399 50.9432L70.9794 51.084H77.3037L89.0922 51.9759L92.1785 53.9944L93.9999 56.4822L93.6963 58.4068L88.9404 60.8008L82.5655 59.2987L67.6401 55.7312L62.5301 54.4638H61.8217V54.8862L66.0717 59.064L73.9139 66.1051L83.6786 75.2116L84.1845 77.4648L82.9197 79.2485L81.6042 79.0608L73.0032 72.5829L69.6639 69.6726L62.1759 63.3356H61.67V63.9928L63.3902 66.5276L72.5478 80.2812L73.0032 84.5059L72.3454 85.8672L69.9675 86.7121L67.3871 86.2427L61.9735 78.6852L56.4587 70.2359L52.0064 62.6315L51.4687 62.971L48.8189 91.2654L47.6047 92.7206L44.7714 93.8002L42.3934 92.0164L41.1286 89.1061L42.3934 83.3324L43.9113 75.8219L45.1255 69.8604L46.2386 62.4437L46.9184 59.9661L46.8583 59.8003L46.3153 59.8916L40.7238 67.5603L32.2239 79.0608L25.4948 86.2427L23.8758 86.8999L21.0931 85.4447L21.3461 82.863L22.9145 80.5629L32.2239 68.7338L37.8399 61.3641L41.4594 57.1337L41.4242 56.5218L41.2244 56.5048L16.489 72.6299L12.0873 73.1932L10.1647 71.4094L10.4176 68.4991L11.3283 67.5603L18.7657 62.4437Z"/></svg>`))
+	codexLogo       = ui.MustParseSVG([]byte(`<svg viewBox="0 0 716 716" xmlns="http://www.w3.org/2000/svg"><path fill="white" d="M508.749 317.399C516.777 287.314 508.991 253.884 485.389 230.282C461.788 206.681 428.36 198.895 398.273 206.923C376.231 184.928 343.39 174.956 311.148 183.596C278.906 192.234 255.45 217.292 247.36 247.361C217.291 255.451 192.233 278.91 183.595 311.149C174.957 343.391 184.927 376.232 206.924 398.274C198.896 428.359 206.683 461.789 230.284 485.391C253.885 508.992 287.313 516.779 317.401 508.75C339.442 530.745 372.286 540.717 404.525 532.079C436.767 523.441 460.223 498.384 468.313 468.315C498.383 460.224 523.44 436.766 532.078 404.526C540.716 372.285 530.747 339.443 508.749 317.402V317.399ZM470.899 244.776C486.892 260.77 493.488 282.601 490.687 303.412L415.577 260.046C412.411 258.218 408.509 258.218 405.345 260.046L317.401 310.82V277.526C317.401 275.191 318.652 273.005 320.676 271.837L387.644 233.174C414.178 218.353 448.346 222.223 470.901 244.776H470.899ZM357.837 311.144L398.275 334.491V381.185L357.837 404.532L317.398 381.185V334.491L357.837 311.144ZM264.776 269.693C265.207 239.305 285.644 211.649 316.453 203.393C338.3 197.54 360.505 202.744 377.127 215.573L302.014 258.937C298.848 260.764 296.898 264.144 296.898 267.798V369.346L268.065 352.699C266.043 351.531 264.776 349.353 264.776 347.017V269.691V269.693ZM203.391 316.454C209.244 294.608 224.854 277.978 244.276 269.999V356.73C244.276 360.384 246.226 363.763 249.392 365.591L337.337 416.365L308.503 433.013C306.481 434.181 303.961 434.188 301.939 433.02L234.971 394.357C208.868 378.789 195.138 347.261 203.391 316.454ZM244.775 470.9C228.781 454.906 222.186 433.075 224.986 412.264L300.096 455.63C303.263 457.457 307.164 457.457 310.328 455.63L398.273 404.856V438.149C398.273 440.485 397.022 442.671 394.997 443.839L328.029 482.502C301.495 497.322 267.327 493.452 244.772 470.9H244.775ZM450.897 445.982C450.466 476.371 430.029 504.027 399.22 512.283C377.373 518.136 355.168 512.932 338.547 500.102L413.659 456.738C416.826 454.911 418.775 451.532 418.775 447.877V346.329L447.609 362.977C449.631 364.145 450.897 366.323 450.897 368.659V445.985V445.982ZM512.282 399.221C506.429 421.068 490.819 437.697 471.397 445.676V358.946C471.397 355.292 469.448 351.912 466.281 350.085L378.336 299.311L407.17 282.663C409.192 281.495 411.712 281.487 413.734 282.655L480.702 321.318C506.805 336.887 520.536 368.415 512.282 399.221Z"/></svg>`))
+	claudeLogo      = ui.MustParseSVG([]byte(`<svg viewBox="0 0 94 94" xmlns="http://www.w3.org/2000/svg"><path fill="#D97757" d="M18.7657 62.4437L37.1822 52.1167L37.4857 51.2122L37.1822 50.7085H36.2715L33.1852 50.5208L22.6615 50.2391L13.5545 49.8636L4.70044 49.3942L2.47428 48.9248L0.399902 46.1553L0.602281 44.794L2.47428 43.5266L5.15579 43.7613L11.0754 44.1837L19.98 44.794L26.4055 45.1695L35.9679 46.1553H37.4857L37.6881 45.545L37.1822 45.1695L36.7774 44.794L27.5692 38.5508L17.6021 31.9791L12.3908 28.1769L9.60812 26.2524L8.19147 24.4686L7.58433 20.5256L10.1141 17.7091L13.5545 17.9438L14.4146 18.1785L17.9056 20.8542L25.343 26.6279L35.0572 33.7629L36.4739 34.9364L37.0443 34.5514L37.1316 34.2792L36.4739 33.1996L31.212 23.6706L25.596 13.9539L23.0663 9.91695L22.4086 7.52296C22.1538 6.51831 22.0038 5.68714 22.0038 4.65957L24.8877 0.716544L26.5067 0.200195L30.4025 0.716544L32.0215 2.12477L34.4501 7.66379L38.3458 16.3478L44.4172 28.1769L46.188 31.6975L47.1493 34.9364L47.5035 35.9222H48.1106V35.3589L48.6166 28.6933L49.5273 20.5256L50.438 10.0108L50.7415 7.05356L52.2088 3.48605L55.1433 1.56148L57.42 2.64112L59.292 5.31674L59.039 7.05356L57.926 14.2824L55.7504 25.5952L54.3337 33.1996H55.1433L56.1046 32.2138L59.9497 27.1442L66.3752 19.0704L69.2085 15.8784L72.5478 12.3579L74.6728 10.668H78.7203L81.6548 15.0804L80.3394 19.6337L76.1906 24.8911L72.7502 29.3504L67.8172 35.9595L64.7562 41.2734L65.0307 41.7118L65.7681 41.6489L76.8989 39.255L82.9197 38.1753L90.1041 36.9549L93.3422 38.457L93.6963 40.006L92.4315 43.151L84.7411 45.0287L75.7353 46.8594L62.3244 50.0164L62.1759 50.1358L62.3512 50.3958L68.399 50.9432L70.9794 51.084H77.3037L89.0922 51.9759L92.1785 53.9944L93.9999 56.4822L93.6963 58.4068L88.9404 60.8008L82.5655 59.2987L67.6401 55.7312L62.5301 54.4638H61.8217V54.8862L66.0717 59.064L73.9139 66.1051L83.6786 75.2116L84.1845 77.4648L82.9197 79.2485L81.6042 79.0608L73.0032 72.5829L69.6639 69.6726L62.1759 63.3356H61.67V63.9928L63.3902 66.5276L72.5478 80.2812L73.0032 84.5059L72.3454 85.8672L69.9675 86.7121L67.3871 86.2427L61.9735 78.6852L56.4587 70.2359L52.0064 62.6315L51.4687 62.971L48.8189 91.2654L47.6047 92.7206L44.7714 93.8002L42.3934 92.0164L41.1286 89.1061L42.3934 83.3324L43.9113 75.8219L45.1255 69.8604L46.2386 62.4437L46.9184 59.9661L46.8583 59.8003L46.3153 59.8916L40.7238 67.5603L32.2239 79.0608L25.4948 86.2427L23.8758 86.8999L21.0931 85.4447L21.3461 82.863L22.9145 80.5629L32.2239 68.7338L37.8399 61.3641L41.4594 57.1337L41.4242 56.5218L41.2244 56.5048L16.489 72.6299L12.0873 73.1932L10.1647 71.4094L10.4176 68.4991L11.3283 67.5603L18.7657 62.4437Z"/></svg>`))
+	glmLogo         = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="white" fill-rule="evenodd" d="M11.991 23.503a.24.24 0 00-.244.248.24.24 0 00.244.249.24.24 0 00.245-.249.24.24 0 00-.22-.247l-.025-.001zM9.671 5.365a1.697 1.697 0 011.099 2.132l-.071.172-.016.04-.018.054c-.07.16-.104.32-.104.498-.035.71.47 1.279 1.186 1.314h.366c1.309.053 2.338 1.173 2.286 2.523-.052 1.332-1.152 2.38-2.478 2.327h-.174c-.715.018-1.274.64-1.239 1.368 0 .124.018.23.053.337.209.373.54.658.96.8.75.23 1.517-.125 1.9-.782l.018-.035c.402-.64 1.17-.96 1.92-.711.854.284 1.378 1.226 1.099 2.167a1.661 1.661 0 01-2.077 1.102 1.711 1.711 0 01-.907-.711l-.017-.035c-.2-.323-.463-.58-.851-.711l-.056-.018a1.646 1.646 0 00-1.954.746 1.66 1.66 0 01-1.065.764 1.677 1.677 0 01-1.989-1.279c-.209-.906.332-1.83 1.257-2.043a1.51 1.51 0 01.296-.035h.018c.68-.071 1.151-.622 1.116-1.333a1.307 1.307 0 00-.227-.693 2.515 2.515 0 01-.366-1.403 2.39 2.39 0 01.366-1.208c.14-.195.21-.444.227-.693.018-.71-.506-1.261-1.186-1.332l-.07-.018a1.43 1.43 0 01-.299-.07l-.05-.019a1.7 1.7 0 01-1.047-2.114 1.68 1.68 0 012.094-1.101zm-5.575 10.11c.26-.264.639-.367.994-.27.355.096.633.379.728.74.095.362-.007.748-.267 1.013-.402.41-1.053.41-1.455 0a1.062 1.062 0 010-1.482zm14.845-.294c.359-.09.738.024.992.297.254.274.344.665.237 1.025-.107.36-.396.634-.756.718-.551.128-1.1-.22-1.23-.781a1.05 1.05 0 01.757-1.26zm-.064-4.39c.314.32.49.753.49 1.206 0 .452-.176.886-.49 1.206-.315.32-.74.5-1.185.5-.444 0-.87-.18-1.184-.5a1.727 1.727 0 010-2.412 1.654 1.654 0 012.369 0zm-11.243.163c.364.484.447 1.128.218 1.691a1.665 1.665 0 01-2.188.923c-.855-.36-1.26-1.358-.907-2.228a1.68 1.68 0 011.33-1.038c.593-.08 1.183.169 1.547.652zm11.545-4.221c.368 0 .708.2.892.524.184.324.184.724 0 1.048a1.026 1.026 0 01-.892.524c-.568 0-1.03-.47-1.03-1.048 0-.579.462-1.048 1.03-1.048zm-14.358 0c.368 0 .707.2.891.524.184.324.184.724 0 1.048a1.026 1.026 0 01-.891.524c-.569 0-1.03-.47-1.03-1.048 0-.579.461-1.048 1.03-1.048zm10.031-1.475c.925 0 1.675.764 1.675 1.706s-.75 1.705-1.675 1.705-1.674-.763-1.674-1.705c0-.942.75-1.706 1.674-1.706zm-2.626-.684c.362-.082.653-.356.761-.718a1.062 1.062 0 00-.238-1.028 1.017 1.017 0 00-.996-.294c-.547.14-.881.7-.752 1.257.13.558.675.907 1.225.783zm0 16.876c.359-.087.644-.36.75-.72a1.062 1.062 0 00-.237-1.019 1.018 1.018 0 00-.985-.301 1.037 1.037 0 00-.762.717c-.108.361-.017.754.239 1.028.245.263.606.377.953.305l.043-.01zM17.19 3.5a.631.631 0 00.628-.64c0-.355-.279-.64-.628-.64a.631.631 0 00-.628.64c0 .355.28.64.628.64zm-10.38 0a.631.631 0 00.628-.64c0-.355-.28-.64-.628-.64a.631.631 0 00-.628.64c0 .355.279.64.628.64zm-5.182 7.852a.631.631 0 00-.628.64c0 .354.28.639.628.639a.63.63 0 00.627-.606l.001-.034a.62.62 0 00-.628-.64zm5.182 9.13a.631.631 0 00-.628.64c0 .355.279.64.628.64a.631.631 0 00.628-.64c0-.355-.28-.64-.628-.64zm10.38.018a.631.631 0 00-.628.64c0 .355.28.64.628.64a.631.631 0 00.628-.64c0-.355-.279-.64-.628-.64zm5.182-9.148a.631.631 0 00-.628.64c0 .354.279.639.628.639a.631.631 0 00.628-.64c0-.355-.28-.64-.628-.64zm-.384-4.992a.24.24 0 00.244-.249.24.24 0 00-.244-.249.24.24 0 00-.244.249c0 .142.122.249.244.249zM11.991.497a.24.24 0 00.245-.248A.24.24 0 0011.99 0a.24.24 0 00-.244.249c0 .133.108.236.223.247l.021.001zM2.011 6.36a.24.24 0 00.245-.249.24.24 0 00-.244-.249.24.24 0 00-.244.249.24.24 0 00.244.249zm0 11.263a.24.24 0 00-.243.248.24.24 0 00.244.249.24.24 0 00.244-.249.252.252 0 00-.244-.248zm19.995-.018a.24.24 0 00-.245.248.24.24 0 00.245.25.24.24 0 00.244-.25.252.252 0 00-.244-.248z"/></svg>`))
+	kimiLogo        = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="white" fill-rule="evenodd" d="M21.846 0a1.923 1.923 0 110 3.846H20.15a.226.226 0 01-.227-.226V1.923C19.923.861 20.784 0 21.846 0z"/><path fill="white" fill-rule="evenodd" d="M11.065 11.199l7.257-7.2c.137-.136.06-.41-.116-.41H14.3a.164.164 0 00-.117.051l-7.82 7.756c-.122.12-.302.013-.302-.179V3.82c0-.127-.083-.23-.185-.23H3.186c-.103 0-.186.103-.186.23V19.77c0 .128.083.23.186.23h2.69c.103 0 .186-.102.186-.23v-3.25c0-.069.025-.135.069-.178l2.424-2.406a.158.158 0 01.205-.023l6.484 4.772a7.677 7.677 0 003.453 1.283c.108.012.2-.095.2-.23v-3.06c0-.117-.07-.212-.164-.227a5.028 5.028 0 01-2.027-.807l-5.613-4.064c-.117-.078-.132-.279-.028-.381z"/></svg>`))
+	commandCodeLogo = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="white" fill-rule="evenodd" d="M19.334 0a4.67 4.67 0 0 0-4.666 4.668v2H9.334v-2A4.67 4.67 0 0 0 4.668 0 4.67 4.67 0 0 0 0 4.668a4.67 4.67 0 0 0 4.668 4.665h2v5.334h-2A4.67 4.67 0 0 0 0 19.334 4.67 4.67 0 0 0 4.668 24a4.67 4.67 0 0 0 4.666-4.666v-2h5.334v2A4.67 4.67 0 0 0 19.334 24 4.67 4.67 0 0 0 24 19.334a4.67 4.67 0 0 0-4.666-4.667h-2V9.333h2A4.67 4.67 0 0 0 24 4.668 4.673 4.673 0 0 0 19.334 0m-2 6.666v-2c0-1.107.893-2 2-2s2 .893 2 2-.893 2-2 2zm-12.668 0c-1.107 0-2-.893-2-2s.893-2 2-2 2 .893 2 2v2zm4.666 8V9.334h5.334v5.334zm10.002 6.667c-1.107 0-2-.893-2-2v-2h2c1.107 0 2 .892 2 2 0 1.107-.893 2-2 2m-14.668 0c-1.107 0-2-.893-2-2 0-1.108.893-2 2-2h2v2c0 1.107-.893 2-2 2"/></svg>`))
 )
 
 // toolName is a quota card's display name.
@@ -67,23 +73,49 @@ func toolName(t aiusage.Tool) string {
 		return "Claude Code"
 	case aiusage.ToolCodex:
 		return "Codex"
+	case aiusage.ToolGLM:
+		return "GLM"
+	case aiusage.ToolDeepSeek:
+		return "DeepSeek"
+	case aiusage.ToolAntigravity:
+		return "Antigravity"
+	case aiusage.ToolCursor:
+		return "Cursor"
+	case aiusage.ToolKimi:
+		return "Kimi"
+	case aiusage.ToolOpencode:
+		return "OpenCode Go"
+	case aiusage.ToolCommandCode:
+		return "Command Code"
 	default:
 		return "omp"
 	}
 }
 
-// toolLogo is the tool's mark inside the double ring in its own colour,
-// with the icon box size that shows the mark at ~18pt: both official
-// SVGs pad the artwork inside their viewBox — the Blossom's ink spans
-// the centre 51.1% of 716, the Spark ~99.8% of 94 (and rides slightly
-// right of the viewBox centre, which balances the spark's leftward
-// tail) — so the boxes are 35.2 and 18pt. Scaling is uniform: the
-// viewBoxes are square and Icon keeps the aspect ratio.
+// toolLogo is the tool's mark inside the double ring in its own colour.
 func toolLogo(t aiusage.Tool) (*ui.SVG, ui.Color, float32) {
-	if t == aiusage.ToolClaude {
-		return claudeLogo, usageClaude, 18
+	switch t {
+	case aiusage.ToolClaude:
+		return claudeLogo, usageClaude, settingsRowMark
+	case aiusage.ToolCodex:
+		return codexLogo, ink, 35.2
+	case aiusage.ToolGLM:
+		return glmLogo, ui.Hex("#7AA7FF"), settingsRowMark
+	case aiusage.ToolKimi:
+		return kimiLogo, ui.Hex("#5AC8FA"), settingsRowMark
+	case aiusage.ToolOpencode:
+		return opencodeLogo, ink, settingsRowMark
+	case aiusage.ToolCommandCode:
+		return commandCodeLogo, ui.Hex("#FBBF24"), settingsRowMark
+	case aiusage.ToolDeepSeek:
+		return dshLogo, deepseekColor, settingsRowMark
+	case aiusage.ToolAntigravity:
+		return antigravityLogo, ink, settingsRowMark
+	case aiusage.ToolCursor:
+		return cursorLogo, ink, settingsRowMark
+	default:
+		return codexLogo, ink, 35.2
 	}
-	return codexLogo, ink, 35.2
 }
 
 // --- panelPage ----------------------------------------------------------
@@ -91,6 +123,36 @@ func toolLogo(t aiusage.Tool) (*ui.SVG, ui.Color, float32) {
 func (f *usageFeature) id() pageID    { return pageUsage }
 func (f *usageFeature) label() string { return f.host.appLoc().UsagePageTitle() }
 func (f *usageFeature) enabled() bool { return f.host.settings.AIUsage.Enabled }
+
+func (f *usageFeature) enabledQuotaTools() []aiusage.Tool {
+	var out []aiusage.Tool
+	for _, t := range f.quotaTools() {
+		if f.quotaOn(t) {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// width implements pageWidth: 1–2 cards keep the 440pt sheet, 3–4 cards
+// widen to 679pt for the 2×2 card grid beside local usage.
+func (f *usageFeature) width() float32 {
+	if len(f.enabledQuotaTools()) > 2 {
+		return usageWideSheetW
+	}
+	return sheetW
+}
+
+func (f *usageFeature) maxSize() (float32, float32) {
+	return usageWideSheetW, sheetH
+}
+
+func (f *usageFeature) maxSizeWithin(limit float32) (float32, float32) {
+	if sheetH > limit {
+		return 0, 0
+	}
+	return usageWideSheetW, sheetH
+}
 
 // icon is the left-ear's third icon: a miniature of the quota card's
 // double ring showing the tool with the least 5-hour remaining (outer
@@ -118,7 +180,7 @@ func (f *usageFeature) icon(c *ui.Context, _ bool) ui.Element {
 // the fallback.
 func (f *usageFeature) leastWindow() (five, week *aiusage.Window, tool aiusage.Tool, ok bool) {
 	best := math.Inf(1)
-	for _, t := range quotaTools() {
+	for _, t := range f.quotaTools() {
 		if !f.quotaOn(t) {
 			continue
 		}
@@ -135,7 +197,7 @@ func (f *usageFeature) leastWindow() (five, week *aiusage.Window, tool aiusage.T
 		return five, week, tool, true
 	}
 	best = math.Inf(1)
-	for _, t := range quotaTools() {
+	for _, t := range f.quotaTools() {
 		if !f.quotaOn(t) {
 			continue
 		}
@@ -188,11 +250,24 @@ func orderedWindows(ws []aiusage.Window) []aiusage.Window {
 
 // windowLabel is a window's card name in the language of l.
 func windowLabel(l locales.Messages, w aiusage.Window) string {
+	switch w.Name {
+	case "Month":
+		return l.UsageMonthLabel()
+	case "API":
+		return l.UsageAPILabel()
+	case "5 hours":
+		return l.UsageWindowFive()
+	case "7 days":
+		return l.UsageWindowWeekly()
+	}
 	if w.Length >= 6*24*time.Hour {
 		if _, scope, ok := strings.Cut(w.Name, "·"); ok && w.Model != "" {
 			return l.UsageWindowScoped(strings.TrimSpace(scope))
 		}
 		return l.UsageWindowWeekly()
+	}
+	if w.Name != "" {
+		return w.Name
 	}
 	return l.UsageWindowFive()
 }
@@ -243,7 +318,7 @@ func (f *usageFeature) title() string { return f.host.appLoc().UsagePageTitle() 
 // just left of the refresh button; empty before the first answer.
 func (f *usageFeature) stamp(c *ui.Context) string {
 	l := tloc(c)
-	if f.quota[0].busy || f.quota[1].busy || f.localBusy {
+	if f.anyQuotaBusy() || f.localBusy {
 		return l.UsageUpdating()
 	}
 	at := f.lastUpdatedAt()
@@ -279,11 +354,18 @@ func (f *usageFeature) body(c *ui.Context, _ bool, _ bool) ui.Element {
 		l := tloc(c)
 		return f.host.emptyState(c, gaugeSymbol, l.UsageEmptyTitle(), l.UsageEmptyDetail())
 	}
+	enabled := f.enabledQuotaTools()
+	wide := len(enabled) > 2
+	quotaW := float32(usageLeftW)
+	if wide {
+		quotaW = 2*usageLeftW + usageCardGap
+	}
 	root := ui.Row(c.Key("usage")).FillWidth().FillHeight().Gap(usageCardGap).PassThrough()
 	root.Children(func() {
+		prevHover := f.hoverTool
 		f.hoverTool = "" // rebuilt each frame by the cards below
-		ui.Column(c.Key("usage-quota")).Width(usageLeftW).FillHeight().Gap(usageCardGap).Children(func() {
-			f.quotaColumn(c)
+		ui.Column(c.Key("usage-quota")).Width(quotaW).FillHeight().Gap(usageCardGap).Children(func() {
+			f.quotaGrid(c, enabled, wide)
 		})
 		if f.localOn() {
 			ui.Column(c.Key("usage-local")).Width(usageRightW).FillHeight().Children(func() {
@@ -292,16 +374,52 @@ func (f *usageFeature) body(c *ui.Context, _ bool, _ bool) ui.Element {
 		} else {
 			ui.Box(c).Width(usageRightW)
 		}
-		// The detail popover overlays the content while a card is hovered:
-		// at 250pt tall the sheet has no room beside a card for a 300pt
-		// card, and IgnoreInput hands the pointer back to the card so the
-		// hover (and the popover) cannot flicker.
-		if f.hoverTool != "" {
-			pop := ui.Column(c.Key("usage-pop")).Absolute().Left(0).Top(6).Width(300).Radius(14).
-				Background(usagePopBG).Border(0.5, usagePopEdge).
-				Shadow(0, 12, 32, 0, ui.RGBA(0, 0, 0, 0.55)).
-				Padding(12, 14, 12, 14).IgnoreInput(true)
-			pop.Children(func() { f.popoverBody(c, f.hoverTool) })
+		if f.codexResetConfirm {
+			f.lastInteractivePop = false
+			f.popHovered = false
+			f.codexResetDialog(c)
+		} else {
+			popTool := f.hoverTool
+			popCol := f.hoverCol
+			tentativePop := false
+			if f.lastInteractivePop && prevHover != "" && (f.popHovered || popTool == "" || popCol != f.lastHoverCol) && popTool != prevHover {
+				popTool = prevHover
+				popCol = f.lastHoverCol
+				tentativePop = true
+			}
+			if popTool != "" {
+				popLeft := float32(0)
+				if wide && popCol == 0 {
+					popLeft = usageLeftW
+				}
+				q, _ := f.quotaShown(popTool)
+				interactivePop := popTool == aiusage.ToolCodex && q.ResetCredits != nil && q.ResetCredits.Count > 0
+				popTop := float32(6)
+				if interactivePop {
+					popTop = 0
+				}
+				pop := ui.Column(c.Key("usage-pop")).Absolute().Left(popLeft).Top(popTop).Width(300).Radius(14).
+					Background(usagePopBG).Border(0.5, usagePopEdge).
+					Shadow(0, 12, 32, 0, ui.RGBA(0, 0, 0, 0.55)).
+					Padding(12, 14, 12, 14)
+				if interactivePop {
+					_, _, f.popHovered = pop.PointerPosition()
+				} else {
+					pop.IgnoreInput(true)
+					f.popHovered = false
+				}
+				pop.Children(func() { f.popoverBody(c, popTool) })
+				if tentativePop && !f.popHovered {
+					f.lastInteractivePop = false
+				} else {
+					f.hoverTool = popTool
+					f.lastHoverCol = popCol
+					f.lastInteractivePop = interactivePop
+				}
+			} else {
+				f.lastInteractivePop = false
+				f.popHovered = false
+			}
 		}
 	})
 	return root
@@ -309,36 +427,113 @@ func (f *usageFeature) body(c *ui.Context, _ bool, _ bool) ui.Element {
 
 // anySource reports whether at least one card or the local section shows.
 func (f *usageFeature) anySource() bool {
-	for _, t := range quotaTools() {
-		if f.quotaOn(t) {
-			return true
-		}
+	if len(f.enabledQuotaTools()) > 0 {
+		return true
 	}
 	return f.localOn()
 }
 
-// quotaColumn draws the enabled quota cards stacked, each 84 tall, and
-// remembers which one the pointer is over for the hover detail.
-func (f *usageFeature) quotaColumn(c *ui.Context) {
-	for _, t := range quotaTools() {
-		if !f.quotaOn(t) {
-			continue
+// quotaGrid draws 1–2 cards stacked in one column, 3–4 cards in a 2×2 grid,
+// or 5–8 cards in a 2×4 compact-row grid.
+func (f *usageFeature) quotaGrid(c *ui.Context, tools []aiusage.Tool, wide bool) {
+	if !wide {
+		for _, t := range tools {
+			card := f.quotaCard(c, t, 0)
+			if _, _, over := card.PointerPosition(); over {
+				f.hoverTool = t
+				f.hoverCol = 0
+			}
 		}
-		card := f.quotaCard(c, t)
-		if _, _, over := card.PointerPosition(); over {
-			f.hoverTool = t
-		}
+		return
 	}
+	if len(tools) > 4 {
+		for row := 0; row < 4; row++ {
+			start := row * 2
+			if start >= len(tools) {
+				break
+			}
+			ui.Row(c.Key(fmt.Sprintf("quota-crow-%d", row))).FillWidth().Height(usageCompactRowH).Gap(usageCardGap).Children(func() {
+				for col := 0; col < 2; col++ {
+					idx := start + col
+					if idx < len(tools) {
+						t := tools[idx]
+						card := f.quotaCompactCard(c, t, usageLeftW)
+						if _, _, over := card.PointerPosition(); over {
+							f.hoverTool = t
+							f.hoverCol = col
+						}
+					} else {
+						ui.Box(c).Width(usageLeftW).Height(usageCompactRowH)
+					}
+				}
+			})
+		}
+		return
+	}
+	for row := 0; row < 2; row++ {
+		start := row * 2
+		if start >= len(tools) {
+			break
+		}
+		ui.Row(c.Key(fmt.Sprintf("quota-row-%d", row))).FillWidth().Height(usageCardH).Gap(usageCardGap).Children(func() {
+			for col := 0; col < 2; col++ {
+				idx := start + col
+				if idx < len(tools) {
+					t := tools[idx]
+					card := f.quotaCard(c, t, usageLeftW)
+					if _, _, over := card.PointerPosition(); over {
+						f.hoverTool = t
+						f.hoverCol = col
+					}
+				} else {
+					ui.Box(c).Width(usageLeftW).Height(usageCardH)
+				}
+			}
+		})
+	}
+}
+
+func (f *usageFeature) codexResetDialog(c *ui.Context) {
+	l := tloc(c)
+	ov := ui.Column(c.Key("codex-reset-confirm")).Absolute().Left(0).Top(0).FillWidth().FillHeight().
+		Background(ui.RGBA(0, 0, 0, 0.65)).Center()
+	ov.Children(func() {
+		box := ui.Column(c.Key("codex-reset-box")).Width(320).Radius(14).
+			Background(usagePopBG).Border(0.5, usagePopEdge).
+			Shadow(0, 12, 32, 0, ui.RGBA(0, 0, 0, 0.55)).
+			Padding(14, 16, 14, 16).Gap(8)
+		box.Children(func() {
+			panelLabel(c, nil, l.UsageResetConfirmTitle(), 13, 600).TextColor(ink)
+			panelLines(c, l.UsageResetConfirmBody(), 11, 0).TextColor(ink2)
+			ui.Row(c.Key("codex-reset-actions")).FillWidth().Justify(ui.End).Gap(8).Margin(4, 0, 0, 0).Children(func() {
+				f.quotaButton(c, "codex-reset-cancel", l.UsageResetConfirmCancel(), f.cancelUseCodexReset)
+				okBtn := ui.ButtonBase(c.Key("codex-reset-ok")).Height(22).Radius(11).Padding(0, 10, 0, 10).
+					AlignItems(ui.Center).Background(accent).Label(l.UsageResetConfirmOK())
+				if okBtn.Hovered() {
+					okBtn.Background(accent.Alpha(0.85))
+				}
+				okBtn.Children(func() {
+					panelLabel(c, nil, l.UsageResetConfirmOK(), 10.5, 600).TextColor(ui.RGB(255, 255, 255))
+				})
+				if okBtn.Clicked() {
+					f.confirmUseCodexReset()
+				}
+			})
+		})
+	})
 }
 
 // quotaCard draws one tool's card: the double ring plus name/plan, two
 // window lines and a pace line — or a state message when the fetch could
 // not produce numbers.
-func (f *usageFeature) quotaCard(c *ui.Context, tool aiusage.Tool) ui.Element {
-	st := &f.quota[quotaIndex(tool)]
+func (f *usageFeature) quotaCard(c *ui.Context, tool aiusage.Tool, width float32) ui.Element {
+	st := f.quotaState(tool)
 	shown, stale := f.quotaShown(tool)
 	card := ui.Row(c.Key("quota-"+string(tool))).Height(usageCardH).MinWidth(0).
 		Radius(14).Padding(0, 10, 0, 10).AlignItems(ui.Center).Gap(9)
+	if width > 0 {
+		card.Width(width)
+	}
 	if _, _, over := card.PointerPosition(); over {
 		card.Background(fill2)
 		f.hoverTool = tool
@@ -354,10 +549,140 @@ func (f *usageFeature) quotaCard(c *ui.Context, tool aiusage.Tool) ui.Element {
 	return card
 }
 
-// quotaInfo is the card's right side. Numbers show for a good fetch (or
-// the last good one, dimmed, when the latest only failed to reach the
-// endpoint); the account's own answers — 未登录, 已过期, 额度上限 — always
-// replace numbers with their message.
+// quotaCompactCard draws one 39pt compact row for the 5–8 card layout:
+// small 28pt double ring + full tool name (shrunk if needed, never truncated) +
+// 5h/weekly percentages or balance amount.
+func (f *usageFeature) quotaCompactCard(c *ui.Context, tool aiusage.Tool, width float32) ui.Element {
+	st := f.quotaState(tool)
+	shown, stale := f.quotaShown(tool)
+	card := ui.Row(c.Key("quota-c-"+string(tool))).Width(width).Height(usageCompactRowH).MinWidth(0).
+		Radius(10).Padding(0, 8, 0, 8).AlignItems(ui.Center).Gap(7)
+	if _, _, over := card.PointerPosition(); over {
+		card.Background(fill2)
+		f.hoverTool = tool
+	} else {
+		card.Background(fill1)
+	}
+	showNumbers := false
+	switch {
+	case st.latest.FetchedAt.IsZero():
+	case st.latest.Status == aiusage.QuotaOK:
+		showNumbers = quotaUsable(shown)
+	case st.latest.Status.Transient():
+		showNumbers = stale
+	}
+	name := toolName(tool)
+	// Measure right-side metrics width so the full name scales down to fit
+	// without wrapping or ellipsis.
+	metricsW := f.compactMetricsWidth(c, tool, st, shown, showNumbers)
+	availNameW := max(float32(40), width-16-usageCompactRingSize-7-6-metricsW)
+	nameSize := fitTextSize(c, name, availNameW, 600, []float32{11.5, 11, 10.5, 10, 9.5, 9, 8.5})
+
+	card.Children(func() {
+		f.quotaRingSized(c, tool, shown, stale, usageCompactRingSize)
+		panelLabel(c, nil, name, nameSize, 600).TextColor(ink).Grow(1).MinWidth(0)
+		f.compactMetrics(c, tool, st, shown, showNumbers, stale)
+	})
+	return card
+}
+
+func fitTextSize(c *ui.Context, text string, maxW float32, weight int, sizes []float32) float32 {
+	for _, sz := range sizes {
+		mw, _ := c.MeasureText(0, ui.Span{Text: text, Size: sz, Weight: weight})
+		if mw <= maxW {
+			return sz
+		}
+	}
+	return sizes[len(sizes)-1]
+}
+
+func (f *usageFeature) compactStatusText(c *ui.Context, tool aiusage.Tool, st *usageQuotaState) string {
+	l := tloc(c)
+	if st.latest.FetchedAt.IsZero() {
+		return l.UsageQuerying()
+	}
+	switch st.latest.Status {
+	case aiusage.QuotaNotLoggedIn:
+		if tool == aiusage.ToolCodex || tool == aiusage.ToolClaude || tool == aiusage.ToolCursor {
+			return l.SettingsAISourceMissing()
+		}
+		return l.UsagePasteKeyPrompt()
+	case aiusage.QuotaExpired:
+		return l.UsageSignInExpired(toolName(tool))
+	case aiusage.QuotaLimitReached:
+		return l.UsageLimitReached()
+	case aiusage.QuotaRateLimited:
+		return l.UsageRateLimited()
+	case aiusage.QuotaNoCLI:
+		return l.UsageNoCLI()
+	default:
+		return l.UsageUnavailable()
+	}
+}
+
+func (f *usageFeature) compactMetricsWidth(c *ui.Context, tool aiusage.Tool, st *usageQuotaState, q aiusage.Quota, showNumbers bool) float32 {
+	if !showNumbers {
+		txt := f.compactStatusText(c, tool, st)
+		mw, _ := c.MeasureText(0, ui.Span{Text: txt, Size: 9.5, Weight: 0})
+		return mw + 2
+	}
+	if q.Balance != nil {
+		mw, _ := c.MeasureText(0, ui.Span{Text: q.Balance.Text, Size: 11, Weight: 600})
+		return mw + 2
+	}
+	ordered := orderedWindows(q.Windows)
+	if len(ordered) > 2 {
+		ordered = ordered[:2]
+	}
+	var total float32
+	for i, w := range ordered {
+		if i > 0 {
+			total += 6
+		}
+		pct := fmt.Sprintf("%.0f%%", f.windowShown(w))
+		mw, _ := c.MeasureText(0, ui.Span{Text: pct, Size: 10.5, Weight: 600})
+		total += 5 + 3 + mw
+	}
+	return total + 2
+}
+
+func (f *usageFeature) compactMetrics(c *ui.Context, tool aiusage.Tool, st *usageQuotaState, q aiusage.Quota, showNumbers, stale bool) {
+	if !showNumbers {
+		txt := f.compactStatusText(c, tool, st)
+		panelLabel(c, nil, txt, 9.5, 0).TextColor(ink3)
+		return
+	}
+	if q.Balance != nil {
+		col := ink
+		if stale {
+			col = ink3
+		}
+		panelLabel(c, nil, q.Balance.Text, 11, 600).TextColor(col)
+		return
+	}
+	ordered := orderedWindows(q.Windows)
+	if len(ordered) > 2 {
+		ordered = ordered[:2]
+	}
+	ui.Row(c.Key("cm")).AlignItems(ui.Center).Gap(6).Shrink(0).Children(func() {
+		for _, w := range ordered {
+			col := windowColor(w)
+			pctCol := ink
+			if col == danger {
+				pctCol = danger
+			}
+			if stale {
+				col = col.Alpha(0.45)
+				pctCol = ink3
+			}
+			ui.Row(c.Key("cw-"+windowLabel(tloc(c), w))).AlignItems(ui.Center).Gap(3).Children(func() {
+				ui.Box(c).Size(5, 5).Radius(2.5).Background(col)
+				panelLabel(c, nil, fmt.Sprintf("%.0f%%", f.windowShown(w)), 10.5, 600).TextColor(pctCol)
+			})
+		}
+	})
+}
+
 func (f *usageFeature) quotaInfo(c *ui.Context, tool aiusage.Tool, st *usageQuotaState, q aiusage.Quota, stale bool) {
 	now := f.deps.now()
 	ui.Row(c.Key("name")).AlignItems(ui.Center).Gap(5).Children(func() {
@@ -372,11 +697,15 @@ func (f *usageFeature) quotaInfo(c *ui.Context, tool aiusage.Tool, st *usageQuot
 	case st.latest.FetchedAt.IsZero():
 		// First fetch not answered yet.
 	case st.latest.Status == aiusage.QuotaOK:
-		showNumbers = len(q.Windows) > 0
+		showNumbers = quotaUsable(q)
 	case st.latest.Status.Transient():
 		showNumbers = stale // last good numbers stay, dimmed
 	}
 	if showNumbers {
+		if q.Balance != nil {
+			f.balanceInfo(c, q.Balance, stale)
+			return
+		}
 		ordered := orderedWindows(q.Windows)
 		if len(ordered) > 2 {
 			ordered = ordered[:2] // the rest are in the hover detail
@@ -384,7 +713,11 @@ func (f *usageFeature) quotaInfo(c *ui.Context, tool aiusage.Tool, st *usageQuot
 		for _, w := range ordered {
 			f.windowLine(c, w, stale, now)
 		}
-		f.paceLine(c, q, stale, now)
+		if tool == aiusage.ToolCodex && q.ResetCredits != nil && q.ResetCredits.Count > 0 {
+			f.resetCreditsLine(c, q.ResetCredits, stale, false)
+		} else {
+			f.paceLine(c, q, stale, now)
+		}
 		return
 	}
 	if st.latest.FetchedAt.IsZero() {
@@ -396,6 +729,56 @@ func (f *usageFeature) quotaInfo(c *ui.Context, tool aiusage.Tool, st *usageQuot
 		return
 	}
 	f.quotaMessage(c, tool, st.latest, now)
+}
+
+func (f *usageFeature) balanceInfo(c *ui.Context, bal *aiusage.BalanceInfo, stale bool) {
+	l := tloc(c)
+	col := ink
+	if stale {
+		col = ink3
+	}
+	panelLabel(c, nil, bal.Text, 12, 600).TextColor(col).Margin(4, 0, 0, 0)
+	if bal.TopUp != "" && bal.Granted != "" {
+		panelLabel(c, nil, l.UsageBalanceSplit(bal.TopUp, bal.Granted), 10, 0).TextColor(ink3).Margin(3, 0, 0, 0)
+	}
+}
+
+func (f *usageFeature) resetCreditsLine(c *ui.Context, rc *aiusage.ResetCredits, stale, showButton bool) {
+	l := tloc(c)
+	col := ink2
+	if stale {
+		col = ink3
+	}
+	ui.Row(c.Key("reset-credits")).AlignItems(ui.Center).Gap(3).Margin(3, 0, 0, 0).Children(func() {
+		panelLabel(c, nil, l.UsageResetCreditsLine(rc.Count), 9.5, 0).TextColor(col)
+		if !rc.SoonestAt.IsZero() {
+			exp := l.UsageResetCreditsExpires(rc.SoonestAt.Local().Format("01-02"))
+			panelLabel(c, nil, exp, 9, 0).TextColor(ink3)
+		}
+		if !showButton {
+			return
+		}
+		ui.Box(c).Grow(1)
+		b := ui.ButtonBase(c.Key("codex-use-reset")).Height(16).Radius(8).Padding(0, 6, 0, 6).
+			AlignItems(ui.Center).Label(l.UsageResetUseButton()).Background(fill2)
+		if f.codexResetBusy {
+			b.Disabled(true)
+			b.Children(func() {
+				panelLabel(c, nil, l.UsageResetUseButton(), 9, 600).TextColor(ink3)
+			})
+		} else {
+			if b.Hovered() {
+				f.popHovered = true
+				b.Background(fill3)
+			}
+			b.Children(func() {
+				panelLabel(c, nil, l.UsageResetUseButton(), 9, 600).TextColor(ink)
+			})
+			if b.Clicked() {
+				f.requestUseCodexReset()
+			}
+		}
+	})
 }
 
 // claudeSignIn is the Claude card's signed-out state: Rakko's own sign-in
@@ -461,10 +844,15 @@ func (f *usageFeature) quotaMessage(c *ui.Context, tool aiusage.Tool, q aiusage.
 	var lines string
 	switch q.Status {
 	case aiusage.QuotaNotLoggedIn:
-		if tool == aiusage.ToolClaude {
+		switch tool {
+		case aiusage.ToolClaude:
 			lines = l.UsageSignedOutClaude()
-		} else {
+		case aiusage.ToolCodex:
 			lines = l.UsageSignedOutCodex()
+		case aiusage.ToolAntigravity, aiusage.ToolCursor:
+			lines = l.SettingsAISourceMissing()
+		default:
+			lines = l.UsagePasteKeyPrompt()
 		}
 	case aiusage.QuotaExpired:
 		lines = l.UsageSignInExpired(toolName(tool))
@@ -554,7 +942,28 @@ func (f *usageFeature) paceLine(c *ui.Context, q aiusage.Quota, stale bool, now 
 // puts the child's geometric centre over the middle of the inner circle's
 // hollow. Without window data it leaves the tracks and dims the logo.
 func (f *usageFeature) quotaRing(c *ui.Context, tool aiusage.Tool, q aiusage.Quota, stale bool) {
-	const ring = float32(usageRingSize)
+	f.quotaRingSized(c, tool, q, stale, usageRingSize)
+}
+
+func (f *usageFeature) quotaRingSized(c *ui.Context, tool aiusage.Tool, q aiusage.Quota, stale bool, ring float32) {
+	if tool == aiusage.ToolDeepSeek || q.Balance != nil {
+		e := ui.Box(c.Key("ring")).Size(ring, ring).Center()
+		lw := 5 * ring / usageRingSize
+		e.Draw(func(p *ui.Painter, r ui.Rect) {
+			cx, cy := r.X+r.W/2, r.Y+r.H/2
+			strokeRingTrack(p, cx, cy, ring/2-lw/2, lw)
+		})
+		e.Children(func() {
+			if ring < 40 {
+				logo, col, size := toolLogo(tool)
+				k := ring / 64
+				ui.Icon(c, logo).Size(size*k, size*k).TextColor(col)
+				return
+			}
+			panelLabel(c, nil, tloc(c).UsageBalanceLabel(), 10, 0).TextColor(ink2)
+		})
+		return
+	}
 	k := ring / 64
 	e := ui.Box(c.Key("ring")).Size(ring, ring).Center()
 	five, week := ringWindows(q.Windows)
@@ -688,23 +1097,32 @@ func (f *usageFeature) popoverBody(c *ui.Context, tool aiusage.Tool) {
 	})
 	ordered := orderedWindows(q.Windows)
 	if len(ordered) == 0 {
+		if q.Balance != nil {
+			f.balanceInfo(c, q.Balance, false)
+			return
+		}
 		// No numbers to detail: the newest answer says why (a limit, a
 		// lapsed sign-in, a query that did not get through).
-		if st := &f.quota[quotaIndex(tool)]; !st.latest.FetchedAt.IsZero() {
+		if st := f.quotaState(tool); !st.latest.FetchedAt.IsZero() {
 			f.quotaMessage(c, tool, st.latest, now)
 		}
 		return
 	}
-	if len(ordered) > 2 {
-		// More windows than the card holds (a plan with per-model weeks):
-		// every window gets a compact meter so all of them fit the sheet.
+	hasReset := tool == aiusage.ToolCodex && q.ResetCredits != nil && q.ResetCredits.Count > 0
+	if len(ordered) > 2 || hasReset {
+		// More windows than the card holds (a plan with per-model weeks), or
+		// Codex with reset credits: compact meters keep the popover within 174pt.
 		for _, w := range ordered {
 			f.popCompact(c, w, now)
 		}
-		return
+	} else {
+		for _, w := range ordered {
+			f.popWindow(c, w, now)
+		}
 	}
-	for _, w := range ordered {
-		f.popWindow(c, w, now)
+	if hasReset {
+		ui.Box(c).Height(6)
+		f.resetCreditsLine(c, q.ResetCredits, false, true)
 	}
 }
 

@@ -3,9 +3,18 @@
 package platform
 
 import (
+	"context"
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
+)
+
+var (
+	captureDisplayTimeout = 15 * time.Second
+	captureDisplayRun     = func(ctx context.Context, index int, path string) error {
+		return exec.CommandContext(ctx, "/usr/sbin/screencapture", "-x", "-D", strconv.Itoa(index), path).Run()
+	}
 )
 
 // PickScreenRegion runs the system's own region picker: crosshair, Esc to
@@ -18,9 +27,18 @@ func PickScreenRegion(path string) error {
 
 // CaptureDisplay freezes display index as a PNG at path. index is the
 // display's one-based position in CGGetActiveDisplayList order, the same
-// order the screen APIs hand out.
+// order the screen APIs hand out. A stalled screencapture process is killed
+// after captureDisplayTimeout so the screenshot session never stays stuck.
 func CaptureDisplay(index int, path string) error {
-	return exec.Command("/usr/sbin/screencapture", "-x", "-D", strconv.Itoa(index), path).Run()
+	ctx, cancel := context.WithTimeout(context.Background(), captureDisplayTimeout)
+	defer cancel()
+	if err := captureDisplayRun(ctx, index, path); err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return err
+	}
+	return nil
 }
 
 // ScreenshotFolder is where the system saves screenshots, or "" when the

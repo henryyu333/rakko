@@ -264,9 +264,9 @@ func TestAIUsageQuotaRowsLeadWithToolMarks(t *testing.T) {
 	fx := newUsageFixtureWith(t, true, nil)
 	a := fx.a
 	// A plan name captions both rows, so each mark centres on two lines.
-	fx.f.quota[quotaIndex(aiusage.ToolClaude)] = usageQuotaState{
+	*fx.f.quotaState(aiusage.ToolClaude) = usageQuotaState{
 		latest: okQuota(aiusage.ToolClaude, "Pro", now)}
-	fx.f.quota[quotaIndex(aiusage.ToolCodex)] = usageQuotaState{
+	*fx.f.quotaState(aiusage.ToolCodex) = usageQuotaState{
 		latest: okQuota(aiusage.ToolCodex, "Plus", now)}
 	view := ui.NewTester(a.settingsView, settingsWidth, settingsHeight)
 	view.Frame()

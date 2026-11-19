@@ -684,3 +684,72 @@ func TestLoadAndLanguageOfAcceptUTF8BOM(t *testing.T) {
 		t.Fatalf("LanguageOf(bom) = (%q, %v), want (%q, true)", lang, ok, "ja")
 	}
 }
+
+func TestAIUsageLegacySettingsCompatibility(t *testing.T) {
+	// 1. Missing quotaCards falls back to legacy quotaCodex / quotaClaude.
+	dir1 := t.TempDir()
+	raw1 := `{"aiUsage":{"enabled":true,"quotaCodex":false,"quotaClaude":true}}`
+	if err := os.WriteFile(filepath.Join(dir1, FileName), []byte(raw1), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s1, err := Load(dir1)
+	if err != nil {
+		t.Fatalf("Load(dir1): %v", err)
+	}
+	got1 := s1.AIUsage.SelectedQuotaTools()
+	if len(got1) != 1 || got1[0] != "claude" {
+		t.Fatalf("legacy fallback SelectedQuotaTools = %v, want [claude]", got1)
+	}
+
+	// 2. Explicit empty quotaCards: [] means zero cards (does not fall back to quotaCodex/quotaClaude).
+	dir2 := t.TempDir()
+	raw2 := `{"aiUsage":{"enabled":true,"quotaCodex":true,"quotaClaude":true,"quotaCards":[]}}`
+	if err := os.WriteFile(filepath.Join(dir2, FileName), []byte(raw2), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s2, err := Load(dir2)
+	if err != nil {
+		t.Fatalf("Load(dir2): %v", err)
+	}
+	if got2 := s2.AIUsage.SelectedQuotaTools(); len(got2) != 0 {
+		t.Fatalf("explicit empty quotaCards SelectedQuotaTools = %v, want []", got2)
+	}
+
+	// 3. More than 4 cards are all preserved without a cap.
+	dir3 := t.TempDir()
+	raw3 := `{"aiUsage":{"enabled":true,"quotaCards":["codex","claude","glm","kimi","cursor"]}}`
+	if err := os.WriteFile(filepath.Join(dir3, FileName), []byte(raw3), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s3, err := Load(dir3)
+	if err != nil {
+		t.Fatalf("Load(dir3): %v", err)
+	}
+	if got3 := s3.AIUsage.SelectedQuotaTools(); len(got3) != 5 {
+		t.Fatalf("SelectedQuotaTools len = %d (%v), want 5", len(got3), got3)
+	}
+
+	// 4. Saved "antigravity" in quotaCards is ignored on load.
+	dir4 := t.TempDir()
+	raw4 := `{"aiUsage":{"enabled":true,"quotaCards":["codex","antigravity","claude","glm","kimi"]}}`
+	if err := os.WriteFile(filepath.Join(dir4, FileName), []byte(raw4), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s4, err := Load(dir4)
+	if err != nil {
+		t.Fatalf("Load(dir4): %v", err)
+	}
+	got4 := s4.AIUsage.SelectedQuotaTools()
+	want4 := []string{"codex", "claude", "glm", "kimi"}
+	if len(got4) != len(want4) {
+		t.Fatalf("SelectedQuotaTools with antigravity = %v, want %v", got4, want4)
+	}
+	for i, w := range want4 {
+		if string(got4[i]) != w {
+			t.Fatalf("SelectedQuotaTools[%d] = %s, want %s (all=%v)", i, got4[i], w, got4)
+		}
+	}
+	if s4.AIUsage.SetQuotaCard("antigravity", true) {
+		t.Fatal("SetQuotaCard(antigravity, true) must return false")
+	}
+}

@@ -9,37 +9,63 @@ import "time"
 type Tool string
 
 const (
-	ToolOmp            Tool = "omp"
-	ToolClaude         Tool = "claude"
-	ToolCodex          Tool = "codex"
-	ToolPi             Tool = "pi"
-	ToolOpencode       Tool = "opencode"
-	ToolGrok           Tool = "grok"
-	ToolAntigravity    Tool = "antigravity"
-	ToolHermes         Tool = "hermes"
-	ToolDevin          Tool = "devin"
-	ToolDsh            Tool = "dsh"
-	ToolGemini         Tool = "gemini"
-	ToolQwen           Tool = "qwen"
-	ToolDroid          Tool = "droid"
-	ToolAugment        Tool = "auggie"
-	ToolCopilot        Tool = "copilot"
-	ToolKiro           Tool = "kiro"
-	ToolCline          Tool = "cline"
-	ToolRoo            Tool = "roo"
-	ToolKilo           Tool = "kilo"
-	ToolOpenClaw       Tool = "openclaw"
-	ToolKimi           Tool = "kimi"
-	ToolJunie          Tool = "junie"
-	ToolCherryStudio   Tool = "cherrystudio"
-	ToolLMStudio       Tool = "lmstudio"
-	ToolCursor         Tool = "cursor"
-	ToolTrae           Tool = "trae"
-	ToolWarp           Tool = "warp"
-	ToolAmp            Tool = "amp"
-	ToolCapy           Tool = "capy"
-	ToolAntigravityIDE Tool = "antigravity-ide"
+	ToolOmp          Tool = "omp"
+	ToolClaude       Tool = "claude"
+	ToolCodex        Tool = "codex"
+	ToolPi           Tool = "pi"
+	ToolOpencode     Tool = "opencode"
+	ToolGrok         Tool = "grok"
+	ToolAntigravity  Tool = "antigravity"
+	ToolHermes       Tool = "hermes"
+	ToolDevin        Tool = "devin"
+	ToolDsh          Tool = "dsh"
+	ToolGemini       Tool = "gemini"
+	ToolQwen         Tool = "qwen"
+	ToolDroid        Tool = "droid"
+	ToolAugment      Tool = "auggie"
+	ToolCopilot      Tool = "copilot"
+	ToolKiro         Tool = "kiro"
+	ToolCline        Tool = "cline"
+	ToolRoo          Tool = "roo"
+	ToolKilo         Tool = "kilo"
+	ToolOpenClaw     Tool = "openclaw"
+	ToolKimi         Tool = "kimi"
+	ToolJunie        Tool = "junie"
+	ToolCherryStudio Tool = "cherrystudio"
+	ToolLMStudio     Tool = "lmstudio"
+	ToolCursor       Tool = "cursor"
+	ToolTrae         Tool = "trae"
+	ToolWarp         Tool = "warp"
+	ToolAmp          Tool = "amp"
+	ToolCapy         Tool = "capy"
+	ToolGLM          Tool = "glm"
+	ToolCommandCode  Tool = "commandcode"
+	ToolDeepSeek     Tool = "deepseek"
 )
+
+// QuotaPanelTools returns all quota-card tools in their default order.
+func QuotaPanelTools() []Tool {
+	return []Tool{
+		ToolCodex,
+		ToolClaude,
+		ToolGLM,
+		ToolDeepSeek,
+		ToolCursor,
+		ToolKimi,
+		ToolOpencode,
+		ToolCommandCode,
+	}
+}
+
+// IsQuotaTool reports whether t has a quota or balance card.
+func IsQuotaTool(t Tool) bool {
+	for _, x := range QuotaPanelTools() {
+		if x == t {
+			return true
+		}
+	}
+	return false
+}
 
 // Window is one rate-limit window of a subscription quota, as the vendor
 // named it: "5 hours", "7 days", or a model scope's "7 days · Opus".
@@ -84,14 +110,55 @@ func (s QuotaStatus) Transient() bool {
 	return s == QuotaRateLimited || s == QuotaFailed
 }
 
+// BalanceInfo holds a pay-as-you-go API account balance (e.g. DeepSeek).
+type BalanceInfo struct {
+	Currency string  `json:"currency,omitempty"`
+	Amount   float64 `json:"amount"`
+	Text     string  `json:"text"`
+	TopUp    string  `json:"topUp,omitempty"`
+	Granted  string  `json:"granted,omitempty"`
+}
+
+// ResetCredits holds Codex rate-limit reset credits available on the account.
+type ResetCredits struct {
+	Count     int       `json:"count"`
+	SoonestAt time.Time `json:"soonestAt,omitempty"`
+	FirstID   string    `json:"firstId,omitempty"`
+}
+
+// ResetOutcome is the server result of consuming one Codex reset credit.
+type ResetOutcome struct {
+	Code     string `json:"code"`
+	Windows  int    `json:"windows_reset"`
+	PostSent bool   `json:"-"`
+}
+
+// QuotaSourceKind describes where a quota card's credentials came from.
+type QuotaSourceKind int
+
+const (
+	SourceNone QuotaSourceKind = iota
+	SourceLocalLogin
+	SourceLocalKey
+	SourceSavedKey
+)
+
+// QuotaSource describes the detected credential source for a quota tool.
+type QuotaSource struct {
+	Kind   QuotaSourceKind
+	Detail string
+}
+
 // Quota is one tool's subscription quota at FetchedAt; Windows is empty
 // while the fetch could not produce any (see Status and Err).
 type Quota struct {
-	Tool      Tool
-	Plan      string
-	Windows   []Window
-	Status    QuotaStatus
-	FetchedAt time.Time
+	Tool         Tool
+	Plan         string
+	Windows      []Window
+	Balance      *BalanceInfo
+	ResetCredits *ResetCredits
+	Status       QuotaStatus
+	FetchedAt    time.Time
 	// LimitResetsAt is when the allowance a QuotaLimitReached answer
 	// blocked comes back, when the vendor's message named it.
 	LimitResetsAt time.Time

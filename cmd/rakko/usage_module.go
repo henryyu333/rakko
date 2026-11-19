@@ -53,7 +53,11 @@ const (
 type usageDeps struct {
 	fetchCodex  func(context.Context) aiusage.Quota
 	fetchClaude func(context.Context) aiusage.Quota
-	pace        func(aiusage.Window, time.Time) aiusage.PaceInfo
+	fetchMore   map[aiusage.Tool]func(context.Context) aiusage.Quota
+	useCodexReset func(context.Context) (aiusage.ResetOutcome, error)
+	detectSource  func(aiusage.Tool) aiusage.QuotaSource
+	saveSecret    func(aiusage.Tool, string) error
+	pace          func(aiusage.Window, time.Time) aiusage.PaceInfo
 	// claudeUsedSince reports whether Claude Code wrote a session log
 	// after t; an unused allowance is not worth an automatic /usage read.
 	// claudeWait is the random whole-minute gap before the next one.
@@ -93,7 +97,9 @@ type usageQuotaState struct {
 	nextAt       time.Time // Claude's next unasked read is due
 	retryTill    time.Time // Codex's server RetryAfter
 	busy         bool
-	generation   int // distinguishes dispatches when fake-clock times tie
+	generation   int    // distinguishes dispatches when fake-clock times tie
+	seq          uint64 // monotonic per-tool fetch counter
+	minSeq       uint64 // drops pre-consume in-flight Codex results (< minSeq)
 
 	// Claude's "was Claude Code used since attemptAt" probe: the answer
 	// costs a projects walk, so it runs in the background, one at a time,
@@ -121,7 +127,11 @@ type usageFeature struct {
 	host *shelf
 	deps usageDeps
 
-	quota      [2]usageQuotaState // indexed by aiusage.Tool, via quotaIndex
+	quota      map[aiusage.Tool]*usageQuotaState
+	sources        map[aiusage.Tool]aiusage.QuotaSource
+	sourcesAt      time.Time
+	sourcesRun     bool
+	sourcesPending bool
 	scanDone   atomic.Int64
 	scanTotal  atomic.Int64
 	localBusy  bool
@@ -134,7 +144,15 @@ type usageFeature struct {
 	unreadable []aiusage.Tool
 	rangeSel   aiusage.Range
 	wasVisible bool
-	hoverTool  aiusage.Tool // the quota card under the pointer this frame
+	hoverTool          aiusage.Tool // the quota card under the pointer this frame
+	hoverCol           int          // 0 or 1 in wide grid, so popover avoids covering it
+	lastHoverCol       int
+	lastInteractivePop bool
+	popHovered         bool
+
+	// Codex reset-credit confirmation overlay and result toast.
+	codexResetConfirm bool
+	codexResetBusy    bool
 
 	// Rakko's own Claude sign-in; loginGen retires a cancelled run's
 	// late answer.
@@ -151,7 +169,12 @@ type usageFeature struct {
 // newUsageFeature wires the feature; integration registers it as a page
 // and appends it to the modules.
 func newUsageFeature(a *shelf, deps usageDeps) *usageFeature {
-	f := &usageFeature{host: a, deps: deps}
+	f := &usageFeature{
+		host:    a,
+		deps:    deps,
+		quota:   map[aiusage.Tool]*usageQuotaState{},
+		sources: map[aiusage.Tool]aiusage.QuotaSource{},
+	}
 	a.usage = f // hide/setTab/setAIUsage retire its work synchronously
 	if f.deps.now == nil {
 		f.deps.now = time.Now
@@ -161,10 +184,10 @@ func newUsageFeature(a *shelf, deps usageDeps) *usageFeature {
 	}
 	if f.deps.loadLast != nil {
 		for _, q := range f.deps.loadLast() {
-			if q.Status != aiusage.QuotaOK || len(q.Windows) == 0 {
+			if q.Status != aiusage.QuotaOK || !quotaUsable(q) {
 				continue
 			}
-			st := &f.quota[quotaIndex(q.Tool)]
+			st := f.quotaState(q.Tool)
 			st.latest, st.good = q, q
 		}
 	}
@@ -179,24 +202,44 @@ func defaultClaudeWait() time.Duration {
 
 func (f *usageFeature) cfg() *settings.AIUsageSettings { return &f.host.settings.AIUsage }
 
-// quotaIndex maps the quota tools onto the fixed [2]state slots.
-func quotaIndex(t aiusage.Tool) int {
-	if t == aiusage.ToolClaude {
-		return 1
-	}
-	return 0
+func quotaUsable(q aiusage.Quota) bool {
+	return len(q.Windows) > 0 || q.Balance != nil
 }
 
-// quotaTools is the card order: Codex first, then Claude Code (设计稿).
-func quotaTools() []aiusage.Tool { return []aiusage.Tool{aiusage.ToolCodex, aiusage.ToolClaude} }
+func (f *usageFeature) quotaState(t aiusage.Tool) *usageQuotaState {
+	if f.quota == nil {
+		f.quota = map[aiusage.Tool]*usageQuotaState{}
+	}
+	st, ok := f.quota[t]
+	if !ok {
+		st = &usageQuotaState{}
+		f.quota[t] = st
+	}
+	return st
+}
+
+// quotaTools returns the selected quota cards in the order configured in settings.
+func (f *usageFeature) quotaTools() []aiusage.Tool {
+	return f.cfg().SelectedQuotaTools()
+}
+
+func (f *usageFeature) fetcher(t aiusage.Tool) func(context.Context) aiusage.Quota {
+	switch t {
+	case aiusage.ToolCodex:
+		return f.deps.fetchCodex
+	case aiusage.ToolClaude:
+		return f.deps.fetchClaude
+	default:
+		if f.deps.fetchMore != nil {
+			return f.deps.fetchMore[t]
+		}
+		return nil
+	}
+}
 
 // quotaOn reports whether tool's quota card is enabled.
 func (f *usageFeature) quotaOn(t aiusage.Tool) bool {
-	cfg := f.cfg()
-	if t == aiusage.ToolClaude {
-		return cfg.QuotaClaude && f.deps.fetchClaude != nil
-	}
-	return cfg.QuotaCodex && f.deps.fetchCodex != nil
+	return f.cfg().QuotaCardEnabled(t) && f.fetcher(t) != nil
 }
 
 // localOn reports whether the local usage section can draw: it needs a
@@ -231,8 +274,8 @@ func (f *usageFeature) stopWork() {
 		f.workCancel()
 		f.workCtx, f.workCancel = nil, nil
 	}
-	for i := range f.quota {
-		f.quota[i].busy = false
+	for _, st := range f.quota {
+		st.busy = false
 	}
 	f.localBusy = false
 	f.invalidate()
@@ -275,11 +318,11 @@ func (f *usageFeature) tick(now time.Time) {
 // Claude Code was used, the local summary every usageLocalInterval or once
 // the chosen range has none.
 func (f *usageFeature) ensureFresh(now time.Time) {
-	for _, t := range quotaTools() {
+	for _, t := range f.quotaTools() {
 		if !f.quotaOn(t) {
 			continue
 		}
-		st := &f.quota[quotaIndex(t)]
+		st := f.quotaState(t)
 		if st.busy || now.Before(st.retryTill) {
 			continue
 		}
@@ -311,12 +354,12 @@ func (f *usageFeature) requestRefresh() {
 	now := f.deps.now()
 	started := false
 	var wait time.Duration
-	for _, t := range quotaTools() {
+	for _, t := range f.quotaTools() {
 		if !f.quotaOn(t) {
 			continue
 		}
 		minGap := usageQuotaManual
-		st := &f.quota[quotaIndex(t)]
+		st := f.quotaState(t)
 		if t == aiusage.ToolClaude {
 			minGap = usageClaudeFloor
 			st.ask = true
@@ -362,14 +405,11 @@ func (f *usageFeature) requestRefresh() {
 // it; a result from a retired generation still reaches gotQuota, which
 // records it without touching the busy flag.
 func (f *usageFeature) startQuota(tool aiusage.Tool) {
-	st := &f.quota[quotaIndex(tool)]
+	st := f.quotaState(tool)
 	if st.busy {
 		return
 	}
-	fetch := f.deps.fetchCodex
-	if tool == aiusage.ToolClaude {
-		fetch = f.deps.fetchClaude
-	}
+	fetch := f.fetcher(tool)
 	if fetch == nil {
 		return
 	}
@@ -383,6 +423,8 @@ func (f *usageFeature) startQuota(tool aiusage.Tool) {
 	f.invalidate()
 	gen := f.workGen
 	st.generation = gen
+	st.seq++
+	seq := st.seq
 	base := f.workContext()
 	goWork(func() {
 		ctx, cancel := context.WithTimeout(base, usageQuotaTimeout)
@@ -393,7 +435,7 @@ func (f *usageFeature) startQuota(tool aiusage.Tool) {
 		aborted := errors.Is(ctx.Err(), context.Canceled)
 		cancel()
 		q.Tool = tool
-		dispatchMain(func() { f.gotQuota(q, gen, attempted, aborted) })
+		dispatchMain(func() { f.gotQuota(q, gen, seq, attempted, aborted) })
 	})
 }
 
@@ -405,8 +447,14 @@ func (f *usageFeature) startQuota(tool aiusage.Tool) {
 // fetch never replaces a previous answer (that would fake 网络不通); a first
 // look still publishes it so the card cannot sit on 正在查询…. Server
 // RetryAfter always survives.
-func (f *usageFeature) gotQuota(q aiusage.Quota, gen int, attempted time.Time, aborted bool) {
-	st := &f.quota[quotaIndex(q.Tool)]
+func (f *usageFeature) gotQuota(q aiusage.Quota, gen int, seq uint64, attempted time.Time, aborted bool) {
+	st := f.quotaState(q.Tool)
+	if q.Tool == aiusage.ToolCodex && seq > 0 && seq < st.minSeq {
+		return
+	}
+	if q.Tool == aiusage.ToolCodex && f.codexResetBusy && seq >= st.minSeq {
+		f.codexResetBusy = false
+	}
 	if q.RetryAfter > 0 {
 		at := q.FetchedAt
 		if at.IsZero() {
@@ -438,7 +486,7 @@ func (f *usageFeature) gotQuota(q aiusage.Quota, gen int, attempted time.Time, a
 		return
 	}
 	st.latest = q
-	if q.Status == aiusage.QuotaOK && len(q.Windows) > 0 {
+	if q.Status == aiusage.QuotaOK && quotaUsable(q) {
 		st.good = q
 		if f.deps.saveLast != nil {
 			f.deps.saveLast(q)
@@ -520,9 +568,9 @@ func (f *usageFeature) gotLocal(sum aiusage.Summary, unreadable []aiusage.Tool, 
 // stale is false when there is nothing to fall back to, so no fake
 // numbers render.
 func (f *usageFeature) quotaShown(t aiusage.Tool) (q aiusage.Quota, stale bool) {
-	st := &f.quota[quotaIndex(t)]
+	st := f.quotaState(t)
 	now := f.deps.now()
-	if st.latest.Status == aiusage.QuotaOK && len(st.latest.Windows) > 0 {
+	if st.latest.Status == aiusage.QuotaOK && quotaUsable(st.latest) {
 		q := st.latest
 		q.Windows = aiusage.Elapsed(q.Windows, now)
 		return q, false
@@ -603,7 +651,7 @@ func (f *usageFeature) askQuota(t aiusage.Tool) {
 	if t != aiusage.ToolClaude {
 		return
 	}
-	f.quota[quotaIndex(t)].ask = true
+	f.quotaState(t).ask = true
 }
 
 // startClaudeLogin signs Rakko's own Claude Code in on a worker: Claude
@@ -656,7 +704,7 @@ func (f *usageFeature) gotClaudeLogin(err error, gen int) {
 	case err == nil:
 		// The old "not signed in" answer is no longer true: show the
 		// check rather than offering a second sign-in.
-		st := &f.quota[quotaIndex(aiusage.ToolClaude)]
+		st := f.quotaState(aiusage.ToolClaude)
 		if st.latest.Status == aiusage.QuotaNotLoggedIn {
 			st.latest = aiusage.Quota{Tool: aiusage.ToolClaude}
 		}
@@ -676,7 +724,7 @@ func (f *usageFeature) startDueClaude(now time.Time) {
 	if !f.quotaOn(aiusage.ToolClaude) || f.deps.fetchClaude == nil {
 		return
 	}
-	st := &f.quota[quotaIndex(aiusage.ToolClaude)]
+	st := f.quotaState(aiusage.ToolClaude)
 	if st.busy {
 		return
 	}
@@ -689,8 +737,8 @@ func (f *usageFeature) startDueClaude(now time.Time) {
 // offline reports whether an enabled quota source's last fetch failed on
 // the network: the module bar appends 「· 网络不通」 while stale data shows.
 func (f *usageFeature) offline() bool {
-	for _, t := range quotaTools() {
-		if f.quotaOn(t) && f.quota[quotaIndex(t)].latest.Status == aiusage.QuotaFailed {
+	for _, t := range f.quotaTools() {
+		if f.quotaOn(t) && f.quotaState(t).latest.Status == aiusage.QuotaFailed {
 			return true
 		}
 	}
@@ -711,7 +759,7 @@ func (f *usageFeature) paceOf(w *aiusage.Window, now time.Time) (aiusage.PaceInf
 // arrived.
 func (f *usageFeature) lastUpdatedAt() time.Time {
 	var t time.Time
-	for _, tool := range quotaTools() {
+	for _, tool := range f.quotaTools() {
 		q, _ := f.quotaShown(tool)
 		if at := q.FetchedAt; at.After(t) {
 			t = at
@@ -721,6 +769,175 @@ func (f *usageFeature) lastUpdatedAt() time.Time {
 		t = f.localAt
 	}
 	return t
+}
+
+func (f *usageFeature) anyQuotaBusy() bool {
+	for _, t := range f.quotaTools() {
+		if f.quotaOn(t) && f.quotaState(t).busy {
+			return true
+		}
+	}
+	return false
+}
+
+func (f *usageFeature) canUseCodexReset() (bool, string) {
+	q, _ := f.quotaShown(aiusage.ToolCodex)
+	l := f.host.appLoc()
+	if q.ResetCredits == nil || q.ResetCredits.Count <= 0 {
+		return false, l.UsageResetNoCredit()
+	}
+	for _, w := range q.Windows {
+		if w.UsedPct > 0 {
+			return true, ""
+		}
+	}
+	return false, l.UsageResetNothingToReset()
+}
+
+func (f *usageFeature) refreshCodexAfterConsume() {
+	st := f.quotaState(aiusage.ToolCodex)
+	st.minSeq = st.seq + 1
+	st.busy = false
+	st.attemptAt = time.Time{}
+	if f.fetcher(aiusage.ToolCodex) == nil {
+		f.codexResetBusy = false
+		return
+	}
+	f.startQuota(aiusage.ToolCodex)
+}
+
+// requestUseCodexReset opens the confirmation overlay if Codex has a reset
+// credit and at least one window has been used; otherwise explains why without
+// consuming a credit.
+func (f *usageFeature) requestUseCodexReset() {
+	if f.codexResetBusy || f.deps.useCodexReset == nil {
+		return
+	}
+	if ok, reason := f.canUseCodexReset(); !ok {
+		f.host.toastStatus(reason, time.Time{}, statusInfo)
+		return
+	}
+	f.codexResetConfirm = true
+	f.invalidate()
+}
+
+func (f *usageFeature) cancelUseCodexReset() {
+	if !f.codexResetConfirm {
+		return
+	}
+	f.codexResetConfirm = false
+	f.invalidate()
+}
+
+func (f *usageFeature) confirmUseCodexReset() {
+	if f.codexResetBusy || f.deps.useCodexReset == nil {
+		return
+	}
+	f.codexResetConfirm = false
+	if ok, reason := f.canUseCodexReset(); !ok {
+		f.host.toastStatus(reason, time.Time{}, statusInfo)
+		f.invalidate()
+		return
+	}
+	f.codexResetBusy = true
+	f.invalidate()
+	use := f.deps.useCodexReset
+	goWork(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), usageQuotaTimeout)
+		out, err := use(ctx)
+		cancel()
+		dispatchMain(func() {
+			l := f.host.appLoc()
+			switch {
+			case err != nil:
+				f.host.toastStatus(l.UsageResetFailed(err.Error()), time.Time{}, statusErr)
+				if out.PostSent {
+					f.refreshCodexAfterConsume()
+				} else {
+					f.codexResetBusy = false
+				}
+			case out.Code == "reset":
+				f.host.toastStatus(l.UsageResetDone(), time.Time{}, statusInfo)
+				f.refreshCodexAfterConsume()
+			case out.Code == "nothing_to_reset":
+				f.codexResetBusy = false
+				f.host.toastStatus(l.UsageResetNothingToReset(), time.Time{}, statusInfo)
+			case out.Code == "no_credit":
+				f.codexResetBusy = false
+				f.host.toastStatus(l.UsageResetNoCredit(), time.Time{}, statusInfo)
+			default:
+				f.codexResetBusy = false
+				f.host.toastStatus(l.UsageResetFailed(out.Code), time.Time{}, statusErr)
+			}
+			f.invalidate()
+		})
+	})
+}
+
+func (f *usageFeature) sourceOf(t aiusage.Tool) aiusage.QuotaSource {
+	if f.sources == nil {
+		return aiusage.QuotaSource{}
+	}
+	return f.sources[t]
+}
+
+// refreshSources probes credential sources for all 9 quota tools off the main
+// thread and caches the results for the Settings UI.
+func (f *usageFeature) refreshSources(force bool) {
+	if f.deps.detectSource == nil {
+		return
+	}
+	if f.sourcesRun {
+		if force {
+			f.sourcesPending = true
+		}
+		return
+	}
+	if !force && !f.sourcesAt.IsZero() && f.deps.now().Sub(f.sourcesAt) < 10*time.Second {
+		return
+	}
+	f.sourcesRun = true
+	f.sourcesPending = false
+	detect := f.deps.detectSource
+	tools := aiusage.QuotaPanelTools()
+	goWork(func() {
+		res := make(map[aiusage.Tool]aiusage.QuotaSource, len(tools))
+		for _, t := range tools {
+			res[t] = detect(t)
+		}
+		dispatchMain(func() {
+			f.sourcesRun = false
+			f.sourcesAt = f.deps.now()
+			f.sources = res
+			f.invalidate()
+			if f.sourcesPending {
+				f.sourcesPending = false
+				f.refreshSources(true)
+			}
+		})
+	})
+}
+
+func (f *usageFeature) saveAPIKey(t aiusage.Tool, key string) {
+	if f.deps.saveSecret == nil {
+		return
+	}
+	save := f.deps.saveSecret
+	goWork(func() {
+		err := save(t, key)
+		dispatchMain(func() {
+			if err != nil {
+				f.host.toastStatus(err.Error(), time.Time{}, statusErr)
+				return
+			}
+			st := f.quotaState(t)
+			st.attemptAt = time.Time{}
+			f.refreshSources(true)
+			if f.quotaOn(t) && f.usageVisible() {
+				f.startQuota(t)
+			}
+		})
+	})
 }
 
 // invalidate asks the panel for a repaint after state changed.

@@ -19,12 +19,14 @@ identify the tool:
 
 - opencode (opencode.ai favicon), pi (pi.dev favicon), omp (omp.sh
   favicon), Devin (devin.ai favicon), Factory Droid (factory.com icon),
-  Augment (augmentcode.com favicon): marks of their respective owners.
-- Gemini, Grok, Cursor, GitHub Copilot, Google Antigravity, Qwen and Kiro:
-  marks of Google, xAI, Anysphere, GitHub/Microsoft, Google, Alibaba Cloud
-  and Amazon respectively; the vector shapes come from @lobehub/icons
-  (lobehub/lobe-icons, MIT License, copyright (c) 2023 LobeHub; full text
-  below).
+  Augment (augmentcode.com favicon), DeepSeek (chat.deepseek.com
+  favicon): marks of their respective owners.
+- Gemini, Grok, Cursor, GitHub Copilot, Google Antigravity, Qwen, Kiro,
+  GLM (Zhipu), Kimi and Command Code: marks of Google, xAI,
+  Anysphere, GitHub/Microsoft, Google, Alibaba Cloud, Amazon, Zhipu AI,
+  Moonshot AI and Command Code respectively; the vector shapes
+  come from @lobehub/icons (lobehub/lobe-icons, MIT License, copyright (c)
+  2023 LobeHub; full text below).
 
 Rakko is not affiliated with, sponsored, or endorsed by any of these
 companies; the marks are used only to identify the corresponding service.

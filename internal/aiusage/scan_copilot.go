@@ -123,13 +123,15 @@ func readCopilotDataDB(ctx context.Context, dbPath, cacheDir string, pool map[st
 // only the growth since then. Anything else without a snapshot (an events
 // cache, duplicate sessions) has no baseline and the ledger starts fresh.
 func copilotSessionsBaseline(old *fileState) (map[string]cumSnapshot, []rec) {
-	if old == nil {
+	if old == nil || old.dbTable == "events" {
 		return nil, nil
 	}
 	if len(old.ledgerPrev) > 0 {
 		return old.ledgerPrev, old.recs
 	}
-	if len(old.recs) == 0 {
+	// Legacy caches without dbTable ("") cannot distinguish single-event
+	// sessions from `events` rows; only baseline when dbTable is "sessions".
+	if old.dbTable != "sessions" || len(old.recs) == 0 {
 		return nil, nil
 	}
 	snap := make(map[string]cumSnapshot, len(old.recs))

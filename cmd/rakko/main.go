@@ -278,6 +278,7 @@ func (a *shelf) ready(show bool) {
 	// first window is placed, so the user's own place restores.
 	a.migrateSavedLayouts()
 	a.newNotchWindow()
+	a.startDiagnostics()
 	// Pay the index's per-process setup now, so the first search of the
 	// session is as fast as the ones after it.
 	a.warmSearch()
@@ -352,9 +353,45 @@ func (a *shelf) ready(show bool) {
 	// Rakko's own Claude Code lives in its data directory, so an app update
 	// never moves the sign-in and the Mac's own ~/.claude stays untouched.
 	usageEnv.RakkoClaudeDir = filepath.Join(a.dataDir, "claude")
+	usageEnv.Secrets = func(tool aiusage.Tool) string {
+		v, err := mygo.Secrets.Get("aiusage-" + string(tool))
+		if err != nil {
+			return ""
+		}
+		return string(v)
+	}
 	deps := usageDeps{
-		fetchCodex:  func(ctx context.Context) aiusage.Quota { return aiusage.FetchCodex(ctx, usageEnv) },
+		fetchCodex: func(ctx context.Context) aiusage.Quota {
+			q := aiusage.FetchCodex(ctx, usageEnv)
+			if q.Status == aiusage.QuotaOK {
+				if rc, err := aiusage.FetchCodexResetCredits(ctx, usageEnv); err == nil && rc != nil {
+					q.ResetCredits = rc
+				}
+			}
+			return q
+		},
 		fetchClaude: func(ctx context.Context) aiusage.Quota { return aiusage.FetchClaude(ctx, usageEnv) },
+		fetchMore: map[aiusage.Tool]func(context.Context) aiusage.Quota{
+			aiusage.ToolGLM:         func(ctx context.Context) aiusage.Quota { return aiusage.FetchGLM(ctx, usageEnv) },
+			aiusage.ToolDeepSeek:    func(ctx context.Context) aiusage.Quota { return aiusage.FetchDeepSeek(ctx, usageEnv) },
+			aiusage.ToolCursor:      func(ctx context.Context) aiusage.Quota { return aiusage.FetchCursor(ctx, usageEnv) },
+			aiusage.ToolKimi:        func(ctx context.Context) aiusage.Quota { return aiusage.FetchKimi(ctx, usageEnv) },
+			aiusage.ToolOpencode:    func(ctx context.Context) aiusage.Quota { return aiusage.FetchOpenCodeGo(ctx, usageEnv) },
+			aiusage.ToolCommandCode: func(ctx context.Context) aiusage.Quota { return aiusage.FetchCommandCode(ctx, usageEnv) },
+		},
+		useCodexReset: func(ctx context.Context) (aiusage.ResetOutcome, error) {
+			return aiusage.UseCodexReset(ctx, usageEnv)
+		},
+		detectSource: func(tool aiusage.Tool) aiusage.QuotaSource {
+			return aiusage.DetectQuotaSource(tool, usageEnv)
+		},
+		saveSecret: func(tool aiusage.Tool, key string) error {
+			k := "aiusage-" + string(tool)
+			if key == "" {
+				return mygo.Secrets.Delete(k)
+			}
+			return mygo.Secrets.Set(k, []byte(key))
+		},
 		// Rakko signs in its own Claude Code; Claude Code keeps, refreshes
 		// and revokes the credentials, this app only starts the process.
 		loginClaude: func(ctx context.Context) error {

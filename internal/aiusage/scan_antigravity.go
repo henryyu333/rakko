@@ -8,8 +8,13 @@ import (
 	"strings"
 )
 
-// Antigravity CLI (agy) session transcripts:
+// Antigravity session transcripts, from both the CLI (agy) and the app/IDE:
 // ~/.gemini/antigravity-cli/brain/<conv>/.system_generated/logs/transcript_full.jsonl
+// ~/.gemini/antigravity/brain/<conv>/.system_generated/logs/transcript_full.jsonl
+//
+// App lines may omit "model"; they still count tokens and requests but are
+// reported as Unpriced. Conversation IDs are UUIDs, so the <conv>:<step_index>
+// dedupe key is safe across both directories.
 //
 // Each assistant turn is a PLANNER_RESPONSE line:
 //   {"step_index":1,"type":"PLANNER_RESPONSE","model":"gemini-4-hydrogen-high",

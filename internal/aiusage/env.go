@@ -1,6 +1,7 @@
 package aiusage
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -50,6 +51,18 @@ type Env struct {
 	RakkoClaudeDir     string
 	RakkoClaudeAccount *ClaudeAccount
 	RunClaudeLogin     ClaudeLoginRun
+
+	// Secrets reads a user-pasted API key for tool from the OS credential
+	// store (nil when no store is wired).
+	Secrets func(tool Tool) string
+
+	// Optional vendor base URL overrides for tests.
+	GLMBaseURL             string
+	KimiBaseURL            string
+	OpenCodeGoURL          string
+	CommandCodeBaseURL string
+	DeepSeekBaseURL    string
+	CursorBaseURL      string
 }
 
 // ClaudeRun runs Claude Code with args in configDir and returns its stdout,
@@ -129,7 +142,19 @@ type httpResult struct {
 // CheckRedirect — so the credential headers can only reach the configured
 // endpoint, never a redirected-to host.
 func (e Env) get(ctx context.Context, url string, headers [][2]string) (httpResult, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	return e.do(ctx, http.MethodGet, url, headers, nil)
+}
+
+func (e Env) post(ctx context.Context, url string, headers [][2]string, body []byte) (httpResult, error) {
+	return e.do(ctx, http.MethodPost, url, headers, body)
+}
+
+func (e Env) do(ctx context.Context, method, url string, headers [][2]string, reqBody []byte) (httpResult, error) {
+	var bodyReader io.Reader
+	if reqBody != nil {
+		bodyReader = bytes.NewReader(reqBody)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)
 	if err != nil {
 		return httpResult{}, err
 	}

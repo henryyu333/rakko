@@ -42,7 +42,7 @@ func agentLogo(t agentnotify.Tool) (*ui.SVG, ui.Color, float32) {
 	case agentnotify.ToolCodex:
 		return toolLogo(aiusage.ToolCodex)
 	case agentnotify.ToolOpencode:
-		return opencodeLogo, ink, settingsRowMark
+		return toolLogo(aiusage.ToolOpencode)
 	case agentnotify.ToolOmp:
 		return ompLogo, ompColor, settingsRowMark
 	case agentnotify.ToolPi:
@@ -55,11 +55,11 @@ func agentLogo(t agentnotify.Tool) (*ui.SVG, ui.Color, float32) {
 		// The favicon's mark spans 329 of its 425 units.
 		return devinLogo, ink, settingsRowMark * 425 / 329
 	case agentnotify.ToolCursor:
-		return cursorLogo, ink, settingsRowMark
+		return toolLogo(aiusage.ToolCursor)
 	case agentnotify.ToolCopilot:
 		return copilotLogo, ink, settingsRowMark
 	case agentnotify.ToolAntigravity:
-		return antigravityLogo, ink, settingsRowMark
+		return toolLogo(aiusage.ToolAntigravity)
 	case agentnotify.ToolQwen:
 		return qwenLogo, qwenColor, settingsRowMark
 	case agentnotify.ToolKiro:
@@ -72,7 +72,7 @@ func agentLogo(t agentnotify.Tool) (*ui.SVG, ui.Color, float32) {
 	case agentnotify.ToolHermes:
 		return hermesLogo, ink, settingsRowMark
 	case agentnotify.ToolDsh:
-		return dshLogo, deepseekColor, settingsRowMark
+		return toolLogo(aiusage.ToolDeepSeek)
 	}
 	return nil, ink, settingsRowMark
 }

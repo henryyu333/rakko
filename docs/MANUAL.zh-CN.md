@@ -188,10 +188,10 @@ Rakko 是免费软件，没有经过 Apple 公证，所以 macOS 会让你确认
 
 在 设置… →「AI」→「在刘海里显示 AI 用量」打开（默认关闭），顶栏会多出一个页面图标。
 
-- 整页一屏看全，不用滚动：左栏是 Claude Code、Codex 的套餐额度卡，每张卡内外双圈（外圈每周、内圈 5 小时）；右栏是这台电脑上的 token 用量总量——今天 / 7 天 / 30 天 / 全部，四个数字（Token、请求、费用、缓存命中）和一根合计柱图。
-- 悬停额度卡：套餐名、重置时间、每个窗口的用量条和均匀消耗标记，套餐有按模型的每周额度时也在这里列出。悬停 Token 或费用数字：它的组成部分（输入、输出、缓存）。
-- 额度默认显示「已用」；设置… →「AI」→「额度显示」可以改成「剩余」。同一页的「套餐额度」组里，Claude Code 和 Codex 各有一个开关，可以单独关掉某张卡。
-- Claude Code 的额度由 Claude Code 自己给出：Rakko 运行你装好的 Claude Code 的 `/usage` 命令，所以数字和重置时间与 Claude Code 显示的一致。没装 Claude Code 时卡片会说明；Rakko 不会替你下载。本机 Claude Code 没有登录时，Claude 卡片显示「未登录」和「登录」：点了会在浏览器里打开 Claude 的登录页，等待时可以点「取消」。这份登录只存在 Rakko 自己的 `claude/` 文件夹，不影响你自己的 Claude Code。Rakko 有自己的登录就用它查额度，没有就用你 Claude Code 的登录。Codex 的额度读取 Codex 保存在本机的登录信息（`~/.codex/auth.json`），只发给 chatgpt.com。
+- 整页一屏看全，不用滚动：左边是已开启的套餐额度与余额卡（支持 Codex、Claude Code、GLM、DeepSeek 余额、Cursor、Kimi、OpenCode Go、Command Code），套餐卡带内外双圈（外圈每周、内圈 5 小时），余额卡显示账户余额和充值 / 赠送明细；右栏是这台电脑上的 token 用量总量——今天 / 7 天 / 30 天 / 全部，四个数字（Token、请求、费用、缓存命中）和一根合计柱图。开启 1–2 张卡时面板宽 440；开启 3–4 张时加宽到 679 排成两列；开启 5–8 张时保持 679 × 250 并切换为 2 列 × 4 行紧凑行。
+- 悬停额度卡：套餐名、重置时间、每个窗口的用量条和均匀消耗标记，套餐有按模型的每周额度时也在这里列出。Codex 账号有额度重置卡时，会显示剩余张数和最早到期日，点「使用」（紧凑行下在悬停明细底部）确认后可立即消耗一张并重置额度窗口。悬停 Token 或费用数字：它的组成部分（输入、输出、缓存）。
+- 额度默认显示「已用」；设置… →「AI」→「额度显示」可以改成「剩余」。同一页的「套餐额度」组里，8 个服务各有一个开关，按住左侧图标或名字可拖动调整卡片在面板上的排列顺序。
+- 登录与 Key 来源：Claude Code 的额度通过运行你装好的 Claude Code 的 `/usage` 命令读取（本机未登录时可在卡片上点「登录」存入 Rakko 自己的 `claude/` 文件夹，不影响你自己的 Claude Code）；Codex 读取 `~/.codex/auth.json`，只发给 chatgpt.com；Cursor 读取本机已登录的凭证；GLM、Kimi、OpenCode Go 等会优先查找本机工具已配置的 Key（如 `~/.claude/settings.json`、`~/.local/share/opencode/auth.json`），找不到时可以在设置行点「粘贴 API Key」，Key 保存在系统钥匙串（Windows 上是凭据管理器），不会写进 `settings.json`。
 - 打开这一页或点刷新时查询额度（Claude Code 最多 30 秒查一次）；页面一直开着时，只有你用过 Claude Code 才会每 5–15 分钟再查一次。上次的结果存在 `quotas.json`，重启后打开就能看到。
 - 本机用量自己去找：omp、Claude Code、Codex、pi、opencode、Grok 的会话记录在它们自己的位置被读取，再加成一个总数。没有按工具拆分，也没有逐个工具的开关；统计缓存存在 `usage-cache/`，删掉只是下次统计变慢。
 - 工具页的 AI 用量卡用同一份额度数据：1×1 只画一个双圈，中间是剩余额度最少的那个工具的标志，悬停看数字；2×1 的大数字是两个额度窗口里剩得最少的那个（剩余百分比），下面两条细轨分别是每周（绿）和 5 小时（橙）还剩多少。
@@ -284,7 +284,7 @@ Rakko 是免费软件，没有经过 Apple 公证，所以 macOS 会让你确认
 | 外形与提示 | 「外形」组：「刘海样式」刘海 / 灵动岛，显示灵动岛时多一行「灵动岛位置」和「恢复默认位置」。「桌宠」组：「显示海獭」和「大小」小 / 中 / 大（没有海獭图片的构建不显示）。「实时活动」组：「充电提示」「耳机连接提示」「下载进度」，默认都开。「窗口」组：「拖窗口到刘海分屏」 |
 | 托盘 | 「整理」组：「自动清理旧内容」从不 / 1 天 / 7 天 / 30 天；「拖出后从托盘移除」 |
 | 剪贴板 | 「记录」组：「保留条数」30 / 100 / 300；「不记录这些应用」列表，每行右侧「移除」 |
-| AI | 「显示」组：「在刘海里显示 AI 用量」、「额度显示」已用 / 剩余；「套餐额度」组：Claude Code、Codex 各一个开关，每行带工具标志和账号状态；「Agent 完成提醒」组：一个总开关和检测到的工具列表；「Agent 审批」组：一个总开关和检测到的、能审批的工具列表 |
+| AI | 「显示」组：「在刘海里显示 AI 用量」、「额度显示」已用 / 剩余；「套餐额度」组：Codex、Claude Code、GLM、DeepSeek 余额、Cursor、Kimi、OpenCode Go、Command Code 各一个开关（可拖动排序），每行带工具标志和凭证来源 / 粘贴 API Key；「Agent 完成提醒」组：一个总开关和检测到的工具列表；「Agent 审批」组：一个总开关和检测到的、能审批的工具列表 |
 | 快捷键 | 十四行可改的全局快捷键，分「全局快捷键 / 播放 / 工具」三组（详见后面的「修改快捷键与灵敏度」）；没设置的显示「未设置」；点一下进入录制，按键即保存（会打字的键先问一次），Delete 清空，Esc 取消；组合被占用时这一行显示「已被占用」并保留原来的组合 |
 | 系统权限 | 「权限」组：三项权限各一行，右边是「已开启」或「未开启」，用途写在悬停提示里；最后一行是一个开关，按顺序带你在系统设置里打开，最后显示「重新打开 Rakko」 |
 | 关于 | 海獭大图、版本号和架构、「检查更新」「打开数据文件夹」；「更新」组：「自动检查更新」「自动下载并安装更新」、「检查更新」一行写着上次检查的时间和结果，新版本下载好后出现「重新启动」按钮；下面是「隐私与源代码」组：「隐私」一行带说明，「源代码」一行写着 github.com/henryyu333/rakko · Apache 2.0，许可说明在悬停提示里 |
@@ -335,7 +335,7 @@ Rakko 是免费软件，没有经过 Apple 公证，所以 macOS 会让你确认
 **不上传任何内容**：没有云同步、遥测或统计。联网请求只有三类：
 
 1. 检查更新：向 GitHub 询问最新版本，请求里只带标准的 User-Agent（应用名和版本）。
-2. 可选的 AI 用量页额度查询：Codex 的额度用本机保存的登录信息发给 chatgpt.com；Claude Code 的额度通过运行你装好的 Claude Code 读取，由 Claude Code 自己照常联系 Anthropic。
+2. 可选的 AI 用量页额度查询：只在开启 AI 用量页、且对应服务的开关打开时才查询——Codex 用本机登录信息发给 chatgpt.com；Claude Code 运行你装好的 Claude Code 读取；Cursor、GLM、DeepSeek、Kimi、OpenCode Go 和 Command Code 用本机已保存的凭证或系统钥匙串 / 凭据管理器里的 API Key 查询各自的官方额度或余额接口。
 3. 首页歌词：只有你用首页播放器左下的歌词按钮打开歌词栏后，才把一首还没有结果的歌的歌名、歌手、专辑和时长发给 lrclib.net 查歌词；lrclib.net 没有或太忙时，再把歌名和歌手发给网易云音乐（music.163.com）。查到或确认没有后结果存在本机，不再重复查；收起歌词栏就不再联网。
 
 这三类请求都按同一个代理规则走：
@@ -352,7 +352,7 @@ Agent 完成提醒不增加任何流量：那些 hook 只在本机运行 Rakko �
 
 **框选文字**和**截图**需要「屏幕录制」权限，只在你使用它们时才会提示。框选文字只截取你框选的那一块，文字在本机识别，截图不保存、不上传；截图在本机定格屏幕，你复制、保存或钉到桌面之前什么都不留，不上传。授权后要退出并重新打开 Rakko 才生效。
 
-各种偏好存在 `settings.json` 里：`"clipboardLimit"`、`"retentionDays"`、`"excludedApps"`、`"autoCheckUpdates"`、`"updateAutoInstall"`、`"updateSkippedVersion"`、`"updateRemindVersion"` 与 `"updateRemindUntil"`（「稍后提醒我」的截止时间）、`"lyrics"`（`enabled`，首页歌词栏是否打开）、`"removeAfterDrag"`、`"snapWindows"`、`"language"`、`"aiUsage"`（`enabled`、`quotaCodex`、`quotaClaude`、`quotaLeft`）、`"agentNotify"`、`"approval"`（Agent 审批的总开关和逐工具关闭列表）、`"liveActivities"`、`"pet"`（`shown`、`size`）、`"pinnedApps"`（按顺序保存最多四个应用标识；空数组表示全部取消固定）、`"onboarding"`（首次启动引导是否还没走完、走到哪一步）和 `"shortcuts"`（`toggle`、`clipboard`、`capture`、`screenshot`、`tray`、`playPause`、`previous`、`next`、`tools`、`usage`、`awake`、`note`、`pet`、`appSwitch`，空字符串表示这一项没有快捷键）。改完重启 Rakko 生效；文件写错时，Rakko 会提示并按默认设置运行，不会改动你的文件。
+各种偏好存在 `settings.json` 里：`"clipboardLimit"`、`"retentionDays"`、`"excludedApps"`、`"autoCheckUpdates"`、`"updateAutoInstall"`、`"updateSkippedVersion"`、`"updateRemindVersion"` 与 `"updateRemindUntil"`（「稍后提醒我」的截止时间）、`"lyrics"`（`enabled`，首页歌词栏是否打开）、`"removeAfterDrag"`、`"snapWindows"`、`"language"`、`"aiUsage"`（`enabled`、`quotaCodex`、`quotaClaude`、`quotaCards`、`quotaOrder`、`quotaLeft`）、`"agentNotify"`、`"approval"`（Agent 审批的总开关和逐工具关闭列表）、`"liveActivities"`、`"pet"`（`shown`、`size`）、`"pinnedApps"`（按顺序保存最多四个应用标识；空数组表示全部取消固定）、`"onboarding"`（首次启动引导是否还没走完、走到哪一步）和 `"shortcuts"`（`toggle`、`clipboard`、`capture`、`screenshot`、`tray`、`playPause`、`previous`、`next`、`tools`、`usage`、`awake`、`note`、`pet`、`appSwitch`，空字符串表示这一项没有快捷键）。改完重启 Rakko 生效；文件写错时，Rakko 会提示并按默认设置运行，不会改动你的文件。
 
 ## 修改快捷键与灵敏度
 

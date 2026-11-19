@@ -184,7 +184,7 @@ func TestCopilotSessionsLegacyCacheBecomesBaseline(t *testing.T) {
 	day15 := time.Date(2026, 11, 15, 10, 0, 0, 0, time.Local)
 	day16 := time.Date(2026, 11, 16, 10, 0, 0, 0, time.Local)
 	model := "gpt-5.3-codex"
-	old := &fileState{tool: ToolCopilot, recs: []rec{{
+	old := &fileState{tool: ToolCopilot, dbTable: "sessions", recs: []rec{{
 		at: day15.UnixMilli(), model: &model, in: 1000, reqs: 1,
 		key: makeCopilotRecKey("s1", ""),
 	}}}
@@ -231,6 +231,50 @@ func TestCopilotSessionsAndAnonymousOTELCountOnce(t *testing.T) {
 	got := s.Summary(RangeAll, time.Date(2026, 11, 17, 0, 0, 0, 0, time.UTC)).ByTool[ToolCopilot]
 	if got.Input != 300 || got.Requests != 1 {
 		t.Fatalf("copilot = %+v, want in=300 reqs=1", got)
+	}
+}
+
+func TestCopilotTableSwitchDoesNotDoubleCount(t *testing.T) {
+	if _, err := os.Stat(sqlite3Path); err != nil {
+		t.Skip("sqlite3 not installed")
+	}
+	home := t.TempDir()
+	cacheDir := t.TempDir()
+	dataDB := filepath.Join(home, ".copilot", "data.db")
+	if err := os.MkdirAll(filepath.Dir(dataDB), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// First scan: data.db uses assistant_usage_events with one row per session and no event ID.
+	runSQLite(t, dataDB, `
+		CREATE TABLE assistant_usage_events (
+			session_id TEXT, created_at TEXT, model TEXT,
+			input_tokens INTEGER, output_tokens INTEGER
+		);
+		INSERT INTO assistant_usage_events VALUES ('s1', '2026-11-15T10:00:00Z', 'gpt-5.3-codex', 1000, 0);
+	`)
+	s1 := NewScanner(home, cacheDir)
+	if err := s1.Scan(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	// Second scan: data.db switches to the cumulative `sessions` table (e.g. 800 tokens).
+	// The old `events` record must not be treated as a `sessions` baseline.
+	if err := os.Remove(dataDB); err != nil {
+		t.Fatal(err)
+	}
+	runSQLite(t, dataDB, `
+		CREATE TABLE sessions (
+			id TEXT PRIMARY KEY, created_at TEXT, updated_at TEXT, model TEXT,
+			total_input_tokens INTEGER, total_output_tokens INTEGER, total_requests INTEGER
+		);
+		INSERT INTO sessions VALUES ('s1', '2026-11-15T10:00:00Z', '2026-11-16T10:00:00Z', 'gpt-5.3-codex', 800, 0, 1);
+	`)
+	s2 := NewScanner(home, cacheDir)
+	if err := s2.Scan(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	got := s2.Summary(RangeAll, time.Date(2026, 11, 17, 0, 0, 0, 0, time.UTC)).ByTool[ToolCopilot]
+	if got.Input != 800 || got.Requests != 1 {
+		t.Fatalf("after table switch copilot = %+v, want in=800 reqs=1 (must not double-count old events)", got)
 	}
 }
 

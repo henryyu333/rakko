@@ -259,18 +259,26 @@ var registry = []toolEntry{
 			return []string{
 				filepath.Join(base, "antigravity-cli", "brain"),
 				filepath.Join(base, "antigravity-cli", "conversations"),
+				joinHome(home, ".gemini", "antigravity", "brain"),
+				joinHome(home, ".gemini", "antigravity", "conversations"),
 			}
 		},
 		roots: func(home string) []rootSpec {
 			base := envOrHome("GEMINI_CLI_HOME", home, ".gemini")
+			agyLogs := func(p string) bool {
+				return filepath.Base(filepath.Dir(p)) == "logs" &&
+					filepath.Base(filepath.Dir(filepath.Dir(p))) == ".system_generated"
+			}
 			return []rootSpec{
 				{
-					dir:   filepath.Join(base, "antigravity-cli", "brain"),
-					match: "transcript_full.jsonl",
-					filter: func(p string) bool {
-						return filepath.Base(filepath.Dir(p)) == "logs" &&
-							filepath.Base(filepath.Dir(filepath.Dir(p))) == ".system_generated"
-					},
+					dir:    filepath.Join(base, "antigravity-cli", "brain"),
+					match:  "transcript_full.jsonl",
+					filter: agyLogs,
+				},
+				{
+					dir:    joinHome(home, ".gemini", "antigravity", "brain"),
+					match:  "transcript_full.jsonl",
+					filter: agyLogs,
 				},
 			}
 		},
@@ -776,14 +784,6 @@ var registry = []toolEntry{
 				joinHome(home, ".capy", "auth.json"),
 				joinHome(home, ".capy", "sessions"),
 			}
-		},
-	},
-	{
-		tool:       ToolAntigravityIDE,
-		name:       "Antigravity IDE",
-		unreadable: true,
-		detect: func(home string) []string {
-			return []string{joinHome(home, ".gemini", "antigravity", "conversations")}
 		},
 	},
 }

@@ -15,7 +15,7 @@ import (
 // page without a fetch, for drawing the card's states.
 func signedOutClaude(fx *usageFixture) {
 	fx.a.tab, fx.a.level = pageUsage, 2
-	fx.f.quota[quotaIndex(aiusage.ToolClaude)].latest = aiusage.Quota{
+	fx.f.quotaState(aiusage.ToolClaude).latest = aiusage.Quota{
 		Tool: aiusage.ToolClaude, Status: aiusage.QuotaNotLoggedIn, FetchedAt: *fx.now,
 	}
 }

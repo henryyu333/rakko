@@ -14,6 +14,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -580,7 +581,7 @@ func TestUsageSettingsSection(t *testing.T) {
 			t.Fatalf("AI 用量 page missing %q; texts=%v", want, view.Texts())
 		}
 	}
-	for _, gone := range []string{"本机用量 · 自动识别", "omp", "pi", "opencode", "Grok CLI", "Cursor", "已识别", "未发现", "不支持"} {
+	for _, gone := range []string{"本机用量 · 自动识别", "omp", "pi", "opencode", "Grok CLI", "已识别", "未发现", "不支持"} {
 		if view.HasText(gone) {
 			t.Fatalf("AI 用量 page still lists per-agent %q; texts=%v", gone, view.Texts())
 		}
@@ -593,7 +594,7 @@ func TestUsageSettingsSection(t *testing.T) {
 	if err != nil || !loaded.AIUsage.Enabled {
 		t.Fatalf("settings.json lacks the change: %v %+v", err, loaded.AIUsage)
 	}
-	clickVisible(t, view, "Claude Code")
+	clickVisible(t, view, "Claude Code 套餐额度")
 	if a.settings.AIUsage.QuotaClaude {
 		t.Fatal("the Claude quota switch did not turn off")
 	}
@@ -628,8 +629,8 @@ func TestUsageSettingsQuotaLockedWhileOff(t *testing.T) {
 	a, view := newSettingsShelf(t) // AIUsage.Enabled defaults to false
 	openSettingsPage(t, view, "AI")
 	before := a.settings.AIUsage
-	clickVisible(t, view, "Codex")
-	if a.settings.AIUsage != before {
+	clickVisible(t, view, "Codex 套餐额度")
+	if !reflect.DeepEqual(a.settings.AIUsage, before) {
 		t.Fatalf("locked quota switches answered clicks: %+v", a.settings.AIUsage)
 	}
 	if !view.HasText("本机用量只读本机日志，不联网、不上传。") {
@@ -639,7 +640,7 @@ func TestUsageSettingsQuotaLockedWhileOff(t *testing.T) {
 	if !a.settings.AIUsage.Enabled {
 		t.Fatal("master switch must work while the quota switches are locked")
 	}
-	clickVisible(t, view, "Codex")
+	clickVisible(t, view, "Codex 套餐额度")
 	if a.settings.AIUsage.QuotaCodex {
 		t.Fatal("unlocked quota switch must answer clicks")
 	}
@@ -655,7 +656,7 @@ func TestUsageSettingsQuotaCaption(t *testing.T) {
 	a, view := newSettingsShelf(t)
 	now := time.Date(2026, 10, 19, 12, 0, 0, 0, time.Local)
 	a.usage = newUsageFeature(a, usageDeps{now: func() time.Time { return now }})
-	a.usage.quota[quotaIndex(aiusage.ToolCodex)].latest = okQuota(aiusage.ToolCodex, "Plus", now)
+	a.usage.quotaState(aiusage.ToolCodex).latest = okQuota(aiusage.ToolCodex, "Plus", now)
 	openSettingsPage(t, view, "AI")
 	if !view.HasText("Plus") {
 		t.Fatalf("plan caption missing; texts=%v", view.Texts())
@@ -741,14 +742,14 @@ func TestUsageHidingCancelsWork(t *testing.T) {
 	fx.claude.q = okQuota(aiusage.ToolClaude, "Pro", *fx.now)
 	fx.view.Click("AI 用量")
 	fx.f.tick(*fx.now)
-	if !fx.f.localBusy && !fx.f.quota[0].busy && !fx.f.quota[1].busy {
+	if !fx.f.localBusy && !fx.f.quotaState(aiusage.ToolCodex).busy && !fx.f.quotaState(aiusage.ToolClaude).busy {
 		t.Fatal("expected work in flight")
 	}
 
 	// hide() itself retires everything — no tick in between: the queued
 	// workers then run with a cancelled context and are dropped.
 	fx.a.hide(hideExplicit)
-	if fx.f.localBusy || fx.f.quota[0].busy || fx.f.quota[1].busy {
+	if fx.f.localBusy || fx.f.quotaState(aiusage.ToolCodex).busy || fx.f.quotaState(aiusage.ToolClaude).busy {
 		t.Fatal("busy flags must clear synchronously on hide")
 	}
 	flush()
@@ -758,7 +759,7 @@ func TestUsageHidingCancelsWork(t *testing.T) {
 	if fx.codex.cancelledAt != 1 || fx.claude.cancelledAt != 1 || !fx.scan.cancelled {
 		t.Fatal("workers must see a cancelled context")
 	}
-	if !fx.f.quota[0].latest.FetchedAt.IsZero() || fx.f.hasSummary {
+	if !fx.f.quotaState(aiusage.ToolCodex).latest.FetchedAt.IsZero() || fx.f.hasSummary {
 		t.Fatal("retired results must not publish")
 	}
 
@@ -767,7 +768,7 @@ func TestUsageHidingCancelsWork(t *testing.T) {
 	fx.a.setTab(pageUsage)
 	fx.f.tick(*fx.now)
 	flush()
-	if !fx.f.hasSummary || fx.f.quota[0].latest.Status != aiusage.QuotaOK {
+	if !fx.f.hasSummary || fx.f.quotaState(aiusage.ToolCodex).latest.Status != aiusage.QuotaOK {
 		t.Fatal("the next visibility pass must publish normally")
 	}
 }
@@ -781,14 +782,14 @@ func TestUsageLeavingPageCancelsWork(t *testing.T) {
 	fx.f.tick(*fx.now)
 
 	fx.a.setTab(pageTray)
-	if fx.f.localBusy || fx.f.quota[0].busy || fx.f.quota[1].busy {
+	if fx.f.localBusy || fx.f.quotaState(aiusage.ToolCodex).busy || fx.f.quotaState(aiusage.ToolClaude).busy {
 		t.Fatal("busy flags must clear synchronously on page departure")
 	}
 	flush()
 	if !fx.scan.cancelled || fx.codex.cancelledAt == 0 || fx.claude.cancelledAt == 0 {
 		t.Fatal("leaving the page must cancel in-flight work")
 	}
-	if fx.f.hasSummary || !fx.f.quota[0].latest.FetchedAt.IsZero() {
+	if fx.f.hasSummary || !fx.f.quotaState(aiusage.ToolCodex).latest.FetchedAt.IsZero() {
 		t.Fatal("results landing after the switch must be dropped")
 	}
 }
@@ -806,7 +807,7 @@ func TestUsageSearchShortcutStopsWork(t *testing.T) {
 	if fx.a.tab != pageClipboard {
 		t.Fatal("switchTab must land on the clipboard page")
 	}
-	if fx.f.localBusy || fx.f.quota[0].busy || fx.f.quota[1].busy {
+	if fx.f.localBusy || fx.f.quotaState(aiusage.ToolCodex).busy || fx.f.quotaState(aiusage.ToolClaude).busy {
 		t.Fatal("busy flags must clear synchronously on the shortcut jump")
 	}
 	flush()
@@ -823,7 +824,7 @@ func TestUsageDisableCancelsWork(t *testing.T) {
 	fx.view.Click("AI 用量")
 	fx.f.tick(*fx.now)
 	fx.a.setAIUsage(func(s *settings.Settings) { s.AIUsage.Enabled = false })
-	if fx.f.localBusy || fx.f.quota[0].busy || fx.f.quota[1].busy {
+	if fx.f.localBusy || fx.f.quotaState(aiusage.ToolCodex).busy || fx.f.quotaState(aiusage.ToolClaude).busy {
 		t.Fatal("busy flags must clear synchronously on disable")
 	}
 	flush()
@@ -845,13 +846,13 @@ func TestUsageReopenRefetchesAfterCancelledAttempt(t *testing.T) {
 
 	fx.a.hide(hideExplicit)
 	flush()
-	if !fx.f.quota[0].attemptAt.IsZero() {
+	if !fx.f.quotaState(aiusage.ToolCodex).attemptAt.IsZero() {
 		t.Fatal("cancelled Codex work must allow an immediate retry")
 	}
-	if fx.f.quota[1].attemptAt.IsZero() {
+	if fx.f.quotaState(aiusage.ToolClaude).attemptAt.IsZero() {
 		t.Fatal("cancelled Claude work must keep its attempt time")
 	}
-	if fx.f.quota[1].latest.FetchedAt.IsZero() {
+	if fx.f.quotaState(aiusage.ToolClaude).latest.FetchedAt.IsZero() {
 		t.Fatal("Claude must show its result instead of remaining on 正在查询…")
 	}
 	fx.codex.q = okQuota(aiusage.ToolCodex, "Plus", *fx.now)
@@ -883,20 +884,20 @@ func TestUsageCancelledRefreshKeepsPriorAnswer(t *testing.T) {
 	fx.view.Click("AI 用量")
 	fx.f.tick(*fx.now)
 	flush()
-	good := fx.f.quota[1].latest
+	good := fx.f.quotaState(aiusage.ToolClaude).latest
 	if good.Status != aiusage.QuotaOK {
 		t.Fatal("first look must publish the good answer")
 	}
 
 	*fx.now = fx.now.Add(6 * time.Minute) // past both manual refresh floors
 	fx.f.requestRefresh()
-	if !fx.f.quota[1].busy {
+	if !fx.f.quotaState(aiusage.ToolClaude).busy {
 		t.Fatal("the manual refresh must start a Claude fetch")
 	}
 
 	fx.a.hide(hideExplicit) // cancel in flight; the fetch dies with ctx
 	flush()
-	if got := fx.f.quota[1].latest; got.FetchedAt != good.FetchedAt || len(got.Windows) != len(good.Windows) {
+	if got := fx.f.quotaState(aiusage.ToolClaude).latest; got.FetchedAt != good.FetchedAt || len(got.Windows) != len(good.Windows) {
 		t.Fatalf("cancelled refresh must keep the previous answer, got %+v", got)
 	}
 	if fx.f.offline() {
@@ -940,8 +941,8 @@ func TestUsageRetiredAnswerStillPublishes(t *testing.T) {
 		fn()
 	}
 	mainQ = nil
-	for _, tool := range quotaTools() {
-		st := &fx.f.quota[quotaIndex(tool)]
+	for _, tool := range fx.f.quotaTools() {
+		st := fx.f.quotaState(tool)
 		if st.latest.FetchedAt.IsZero() {
 			t.Fatalf("%v: an answered fetch must publish even when retired", tool)
 		}
@@ -980,7 +981,7 @@ func TestUsageLate429KeepsBackoff(t *testing.T) {
 	fx.a.hide(hideExplicit)
 	flush() // the cancelled fetch's 429 lands, late
 
-	st := &fx.f.quota[quotaIndex(aiusage.ToolClaude)]
+	st := fx.f.quotaState(aiusage.ToolClaude)
 	want := fx.now.Add(5 * time.Minute)
 	if !st.retryTill.Equal(want) {
 		t.Fatalf("retryTill = %v, want %v", st.retryTill, want)
@@ -1422,17 +1423,17 @@ func TestUsagePageScreenshot(t *testing.T) {
 		onMain(func() {
 			good := okQuota(aiusage.ToolCodex, "Plus", now)
 			good.FetchedAt = now.Add(-12 * time.Minute)
-			s.f.quota[quotaIndex(aiusage.ToolCodex)] = usageQuotaState{
+			*s.f.quotaState(aiusage.ToolCodex) = usageQuotaState{
 				latest: aiusage.Quota{Tool: aiusage.ToolCodex, Status: aiusage.QuotaFailed, FetchedAt: now},
 				good:   good,
 			}
-			s.f.quota[quotaIndex(aiusage.ToolClaude)] = usageQuotaState{
+			*s.f.quotaState(aiusage.ToolClaude) = usageQuotaState{
 				latest: aiusage.Quota{Tool: aiusage.ToolClaude, Status: aiusage.QuotaExpired, FetchedAt: now},
 			}
 			// A monitor tick may refetch in the real app: make the fakes
 			// answer the same states so the shot can't clobber them.
-			s.codex.q = s.f.quota[0].latest
-			s.claude.q = s.f.quota[1].latest
+			s.codex.q = s.f.quotaState(aiusage.ToolCodex).latest
+			s.claude.q = s.f.quotaState(aiusage.ToolClaude).latest
 			s.f.localAt = now.Add(-12 * time.Minute) // the mock's stale stamp
 			a.win.Invalidate()
 		})
@@ -1464,11 +1465,11 @@ func TestUsagePageScreenshot(t *testing.T) {
 	s2 := newUsageShot(now)
 	good := okQuota(aiusage.ToolCodex, "Plus", now)
 	good.FetchedAt = now.Add(-12 * time.Minute)
-	s2.f.quota[quotaIndex(aiusage.ToolCodex)] = usageQuotaState{
+	*s2.f.quotaState(aiusage.ToolCodex) = usageQuotaState{
 		latest: aiusage.Quota{Tool: aiusage.ToolCodex, Status: aiusage.QuotaFailed, FetchedAt: now},
 		good:   good,
 	}
-	s2.f.quota[quotaIndex(aiusage.ToolClaude)] = usageQuotaState{
+	*s2.f.quotaState(aiusage.ToolClaude) = usageQuotaState{
 		latest: aiusage.Quota{Tool: aiusage.ToolClaude, Status: aiusage.QuotaExpired, FetchedAt: now},
 	}
 	s2.f.tick(now)
@@ -1479,12 +1480,12 @@ func TestUsagePageScreenshot(t *testing.T) {
 	// other card states: 未登录 and 快用完了.
 	s3 := newUsageShot(now)
 	s3.scan.summaries = nil
-	s3.f.quota[quotaIndex(aiusage.ToolCodex)] = usageQuotaState{
+	*s3.f.quotaState(aiusage.ToolCodex) = usageQuotaState{
 		latest: aiusage.Quota{Tool: aiusage.ToolCodex, Status: aiusage.QuotaNotLoggedIn, FetchedAt: now},
 	}
 	low := okQuota(aiusage.ToolClaude, "Pro", now)
 	low = windowUsed(low, 0, 94)
-	s3.f.quota[quotaIndex(aiusage.ToolClaude)] = usageQuotaState{latest: low, good: low}
+	*s3.f.quotaState(aiusage.ToolClaude) = usageQuotaState{latest: low, good: low}
 	s3.f.localBusy = true
 	s3.f.scanned = false
 	s3.f.scanDone.Store(37)
@@ -1589,7 +1590,7 @@ func TestUsageClaudeUsedProbeThrottledAndOffThread(t *testing.T) {
 		t.Fatalf("first look calls=%d", fx.claude.calls)
 	}
 	// Due now: the random gap and the floor are behind it.
-	st := &fx.f.quota[quotaIndex(aiusage.ToolClaude)]
+	st := fx.f.quotaState(aiusage.ToolClaude)
 	st.attemptAt = fx.now.Add(-time.Hour)
 	st.nextAt = *fx.now
 	base := *fx.now

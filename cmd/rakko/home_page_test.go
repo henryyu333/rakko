@@ -395,7 +395,7 @@ func homeHelfCompact(t *testing.T) (*shelf, *ui.Tester, *homePage) {
 		fetchClaude: func(context.Context) aiusage.Quota { return aiusage.Quota{} },
 		fetchCodex:  func(context.Context) aiusage.Quota { return aiusage.Quota{} },
 	}}
-	a.usage.quota[quotaIndex(aiusage.ToolClaude)] = usageQuotaState{
+	*a.usage.quotaState(aiusage.ToolClaude) = usageQuotaState{
 		latest: aiusage.Quota{Status: aiusage.QuotaOK, FetchedAt: now,
 			Windows: []aiusage.Window{{Name: "5h", Length: 5 * time.Hour, UsedPct: 38, ResetsAt: now.Add(2 * time.Hour)}}},
 	}
@@ -570,7 +570,7 @@ func homeHelfCompactWith(t *testing.T, c homeShotContent) (*shelf, *ui.Tester, *
 		fetchClaude: func(context.Context) aiusage.Quota { return aiusage.Quota{} },
 		fetchCodex:  func(context.Context) aiusage.Quota { return aiusage.Quota{} },
 	}}
-	a.usage.quota[quotaIndex(aiusage.ToolClaude)] = usageQuotaState{
+	*a.usage.quotaState(aiusage.ToolClaude) = usageQuotaState{
 		latest: aiusage.Quota{Status: aiusage.QuotaOK, FetchedAt: now,
 			Windows: []aiusage.Window{{Name: "5h", Length: 5 * time.Hour, UsedPct: 38, ResetsAt: now.Add(2 * time.Hour)}}},
 	}

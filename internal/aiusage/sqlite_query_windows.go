@@ -7,12 +7,35 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"path/filepath"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
 
 func querySQLiteJSON(ctx context.Context, tag, dbPath, query string) ([]byte, error) {
-	db, err := sql.Open("sqlite", dbPath)
+	return runSQLiteJSON(ctx, tag, dbPath, query, false)
+}
+
+func querySQLiteJSONReadOnly(ctx context.Context, tag, dbPath, query string) ([]byte, error) {
+	return runSQLiteJSON(ctx, tag, dbPath, query, true)
+}
+
+func runSQLiteJSON(ctx context.Context, tag, dbPath, query string, readOnly bool) ([]byte, error) {
+	dsn := dbPath
+	if readOnly {
+		p := filepath.ToSlash(dbPath)
+		if !strings.HasPrefix(p, "/") {
+			p = "/" + p
+		}
+		dsn = (&url.URL{
+			Scheme:   "file",
+			Path:     p,
+			RawQuery: "mode=ro&_pragma=busy_timeout(3000)&_pragma=query_only(1)",
+		}).String()
+	}
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("%s: sqlite: %w", tag, err)
 	}

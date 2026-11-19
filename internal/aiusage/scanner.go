@@ -65,6 +65,7 @@ type fileState struct {
 	tail              codexTail
 	ledgerPrev        map[string]cumSnapshot // cumulative-table ledgers (Hermes, Copilot sessions)
 	dbRev             uint64                 // header/sidecar signature for SQLite databases
+	dbTable           string                 // source table for multi-table SQLite readers (Copilot events vs sessions)
 	unsupportedSchema bool
 }
 
@@ -355,11 +356,20 @@ loop:
 					failed[db.tool] = true
 				} else {
 					hasDataFile[db.tool] = true
+					dbTable := ""
+					if db.tool == ToolCopilot {
+						if snap == nil {
+							dbTable = "events"
+						} else {
+							dbTable = "sessions"
+						}
+					}
 					files[db.spec.path] = &fileState{
 						tool:       db.tool,
 						size:       sig.size,
 						modNano:    sig.mod,
 						dbRev:      sig.rev,
+						dbTable:    dbTable,
 						recs:       recs,
 						ledgerPrev: snap,
 					}
@@ -687,6 +697,7 @@ type cacheFileJSON struct {
 	C  *cacheTailJSON         `json:"c,omitempty"`
 	H  map[string]cumSnapshot `json:"h,omitempty"`
 	DR uint64                 `json:"dr,omitempty"`
+	DT string                 `json:"dt,omitempty"`
 	U  bool                   `json:"u,omitempty"`
 }
 
@@ -736,6 +747,7 @@ func (s *Scanner) loadCache(ctx context.Context) {
 			tailSum:           cf.TH,
 			ledgerPrev:        cf.H,
 			dbRev:             cf.DR,
+			dbTable:           cf.DT,
 			unsupportedSchema: cf.U,
 		}
 		if cf.C != nil {
@@ -883,6 +895,10 @@ func (s *Scanner) saveCache(ctx context.Context, files map[string]*fileState) {
 		}
 		if st.dbRev != 0 {
 			buf.WriteString(`,"dr":` + strconv.FormatUint(st.dbRev, 10))
+		}
+		if st.dbTable != "" {
+			buf.WriteString(`,"dt":`)
+			appendJSONString(&buf, st.dbTable)
 		}
 		if len(st.ledgerPrev) > 0 {
 			if hb, err := json.Marshal(st.ledgerPrev); err == nil {

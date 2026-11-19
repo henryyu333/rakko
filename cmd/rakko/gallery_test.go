@@ -1567,8 +1567,8 @@ func attachGalleryUsage(a *shelf, now time.Time) {
 		fetchClaude: func(context.Context) aiusage.Quota { return aiusage.Quota{} },
 		fetchCodex:  func(context.Context) aiusage.Quota { return aiusage.Quota{} },
 	}}
-	a.usage.quota[quotaIndex(aiusage.ToolCodex)] = usageQuotaState{latest: okQuota(aiusage.ToolCodex, "Plus", now)}
-	a.usage.quota[quotaIndex(aiusage.ToolClaude)] = usageQuotaState{latest: windowUsed(okQuota(aiusage.ToolClaude, "Pro", now), 0, 38)}
+	*a.usage.quotaState(aiusage.ToolCodex) = usageQuotaState{latest: okQuota(aiusage.ToolCodex, "Plus", now)}
+	*a.usage.quotaState(aiusage.ToolClaude) = usageQuotaState{latest: windowUsed(okQuota(aiusage.ToolClaude, "Pro", now), 0, 38)}
 }
 
 // --- G: the AI usage page ---

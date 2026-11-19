@@ -49,7 +49,7 @@ There is no account, no Dock or taskbar window, and nothing leaves your computer
 - **Tools** — a grid of cards you arrange yourself: music player, timer and stopwatch, keep awake, AI usage, sticky notes, recent files, the clipboard's latest item, and one-tap file actions. Drag a card out of the panel to keep it on the desktop.
 - **Screenshot and Capture Text** — `⌃⌥A` freezes every screen to pick a window or an area, mark it up and copy, save or pin it; `⌃⌥O` copies the text from any part of the screen. With the panel open, it stays in the picture.
 - **Music** — the player on Home with synced lyrics; on the closed notch, the cover and a moving equalizer.
-- **AI usage** (optional) — Claude Code and Codex quotas, and this computer's token use and estimated cost across the coding agents you use: omp, Claude Code, Codex, Antigravity CLI, Gemini CLI, Copilot CLI, opencode, Grok, pi, Qwen Code, Kimi, Droid, Hermes and more. A tool that is installed but whose usage cannot be read is named, not counted as zero.
+- **AI usage** (optional) — subscription quotas and balance cards for Codex (including reset credits), Claude Code, GLM, DeepSeek, Cursor, Kimi, OpenCode Go and Command Code, plus this computer's token use and estimated cost across the coding agents you use: omp, Claude Code, Codex, Antigravity, Gemini CLI, Copilot CLI, opencode, Grok, pi, Qwen Code, Kimi, Droid, Hermes and more. A tool that is installed but whose usage cannot be read is named, not counted as zero.
 - **Agent notices and approvals** (optional) — a card drops from the notch when an agent finishes a turn, and an agent's permission request can be approved or denied right there.
 - **Weekly report** — last week's computer use (opt-in), AI usage and what Rakko did for you.
 - **Live activities** — charging, headphones and downloads show for a moment on the closed notch.
@@ -105,7 +105,7 @@ Everything stays on your computer: no account, no telemetry, no cloud sync. Rakk
 
 - **Update check** — asks this repository's latest GitHub release whether a newer version exists, sending only the app version.
 - **Lyrics** — only while the lyrics column is open, the song's title, artist, album and length go to lrclib.net, and title and artist to NetEase Cloud Music when lrclib.net has nothing.
-- **AI quotas** — only if you turn on the AI usage page: the Codex quota is asked from chatgpt.com with the login Codex saved, and the Claude Code quota is read by running your installed Claude Code.
+- **AI quotas** — only if you turn on the AI usage page, and only for the quota cards you turn on: Codex asks chatgpt.com with the login Codex saved; Claude Code runs your installed Claude Code; Cursor, GLM, DeepSeek, Kimi, OpenCode Go and Command Code query their official quota or balance endpoints using the credentials saved by the local tool or an API key you save in the system Keychain / Windows Credential Manager.
 
 Local AI usage is read from files on your computer and priced with a list bundled in the app. Agent notices and approvals travel over a local socket (a named pipe on Windows) in Rakko's own folder. Requests follow the system proxy. Clipboard text is stored as plain text in Rakko's data folder: `~/Library/Application Support/Rakko/` on macOS, `%APPDATA%\Rakko` on Windows.
 
@@ -157,7 +157,7 @@ Rakko 把屏幕顶部变成一个随手可用的架子。在 MacBook 上它住�
 - **工具页**：自己摆放的一格格卡片：音乐、倒计时和秒表、保持唤醒、AI 用量、便利贴、最近文件、剪贴板最新一条，以及一点就能用的文件操作。把卡片拖出面板，就能固定在桌面上。
 - **截图和框选文字**：`⌃⌥A` 定格所有屏幕，选窗口或拖出区域，标注后复制、保存或钉在桌面；`⌃⌥O` 识别屏幕任意区域里的文字并复制。面板开着时截图，面板会一起截进去。
 - **音乐**：首页是播放器，带滚动歌词；刘海收起时显示封面和跳动的均衡器。
-- **AI 用量**（可选）：Claude Code 和 Codex 的额度，以及这台电脑上各个编程 Agent 的 token 用量和费用估算：omp、Claude Code、Codex、Antigravity CLI、Gemini CLI、Copilot CLI、opencode、Grok、pi、Qwen Code、Kimi、Droid、Hermes 等。装了但读不到用量的工具会写明「读不到」，不会当成 0。
+- **AI 用量**（可选）：Codex（含重置卡）、Claude Code、GLM、DeepSeek 余额、Cursor、Kimi、OpenCode Go 和 Command Code 的套餐额度与余额卡片，以及这台电脑上各个编程 Agent 的 token 用量和费用估算：omp、Claude Code、Codex、Antigravity、Gemini CLI、Copilot CLI、opencode、Grok、pi、Qwen Code、Kimi、Droid、Hermes 等。装了但读不到用量的工具会写明「读不到」，不会当成 0。
 - **Agent 提醒和审批**（可选）：Agent 跑完一轮时从刘海弹出卡片；Agent 申请权限时，可以直接在刘海里允许或拒绝。
 - **每周简报**：上周的电脑使用情况（需要你开启）、AI 用量，以及 Rakko 帮你做了什么。
 - **实时活动**：充电、耳机连接、下载进度会在收起的刘海上显示一会儿。
@@ -213,7 +213,7 @@ Rakko 每天检查一次本仓库的新版本，有新版时显示更新说明�
 
 - **检查更新**：向本仓库最新的 GitHub Release 询问是否有新版本，只带上应用版本号。
 - **歌词**：只在歌词栏打开时，把歌曲名、歌手、专辑和时长发给 lrclib.net；lrclib.net 没有时，把歌曲名和歌手发给网易云音乐。
-- **AI 额度**：只在你打开 AI 用量页后：Codex 额度用 Codex 保存的登录信息向 chatgpt.com 查询；Claude Code 额度通过运行你安装的 Claude Code 读取。
+- **AI 额度**：只在你打开 AI 用量页后，且只查询你开启了开关的服务：Codex 用 Codex 保存的登录信息向 chatgpt.com 查询；Claude Code 通过运行你安装的 Claude Code 读取；Cursor、GLM、DeepSeek、Kimi、OpenCode Go 和 Command Code 使用本机工具已保存的登录信息或你保存在系统钥匙串（Windows 上是凭据管理器）里的 API Key 向各自的官方接口查询。
 
 本机 AI 用量从你电脑上的文件读取，费用用应用内置的价目表估算。Agent 提醒和审批通过 Rakko 自己文件夹里的本地 socket（Windows 上是命名管道）传递。网络请求遵循系统代理。剪贴板文字以纯文本保存在 Rakko 的数据文件夹：macOS 是 `~/Library/Application Support/Rakko/`，Windows 是 `%APPDATA%\Rakko`。
 

@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"time"
 
 	"rakko/internal/atomicfile"
-	"time"
 )
 
 // LastQuotasFile is the file inside the data directory that keeps the last
@@ -15,14 +15,21 @@ import (
 const LastQuotasFile = "quotas.json"
 
 type lastQuotasFile struct {
-	Claude *lastQuota `json:"claude,omitempty"`
-	Codex  *lastQuota `json:"codex,omitempty"`
+	Claude *lastQuota          `json:"claude,omitempty"`
+	Codex  *lastQuota          `json:"codex,omitempty"`
+	Tools  map[Tool]*lastQuota `json:"tools,omitempty"`
 }
 
 type lastQuota struct {
-	At      time.Time `json:"at"`
-	Plan    string    `json:"plan,omitempty"`
-	Windows []Window  `json:"windows"`
+	At           time.Time     `json:"at"`
+	Plan         string        `json:"plan,omitempty"`
+	Windows      []Window      `json:"windows,omitempty"`
+	Balance      *BalanceInfo  `json:"balance,omitempty"`
+	ResetCredits *ResetCredits `json:"resetCredits,omitempty"`
+}
+
+func (l *lastQuota) usable() bool {
+	return l != nil && (len(l.Windows) > 0 || l.Balance != nil)
 }
 
 // LoadLastQuotas reads the saved readings; a missing or unreadable file
@@ -39,23 +46,28 @@ func LoadLastQuotas(dir string) []Quota {
 	if json.Unmarshal(data, &file) != nil {
 		return nil
 	}
-	var out []Quota
-	for _, entry := range []struct {
-		tool Tool
-		q    *lastQuota
-	}{
-		{ToolClaude, file.Claude},
-		{ToolCodex, file.Codex},
-	} {
-		if entry.q == nil || len(entry.q.Windows) == 0 {
-			continue
+	entries := map[Tool]*lastQuota{}
+	if file.Claude.usable() {
+		entries[ToolClaude] = file.Claude
+	}
+	if file.Codex.usable() {
+		entries[ToolCodex] = file.Codex
+	}
+	for t, q := range file.Tools {
+		if q.usable() {
+			entries[t] = q
 		}
+	}
+	var out []Quota
+	for t, q := range entries {
 		out = append(out, Quota{
-			Tool:      entry.tool,
-			Plan:      entry.q.Plan,
-			Windows:   entry.q.Windows,
-			Status:    QuotaOK,
-			FetchedAt: entry.q.At,
+			Tool:         t,
+			Plan:         q.Plan,
+			Windows:      q.Windows,
+			Balance:      q.Balance,
+			ResetCredits: q.ResetCredits,
+			Status:       QuotaOK,
+			FetchedAt:    q.At,
 		})
 	}
 	return out
@@ -65,7 +77,10 @@ func LoadLastQuotas(dir string) []Quota {
 // not disturb what the page shows: the data is a convenience across
 // restarts, not the source of truth.
 func SaveLastQuota(dir string, q Quota) error {
-	if dir == "" || q.Status != QuotaOK || len(q.Windows) == 0 {
+	if dir == "" || q.Status != QuotaOK || (len(q.Windows) == 0 && q.Balance == nil) {
+		return nil
+	}
+	if !IsQuotaTool(q.Tool) {
 		return nil
 	}
 	path := filepath.Join(dir, LastQuotasFile)
@@ -73,14 +88,23 @@ func SaveLastQuota(dir string, q Quota) error {
 	if data, err := os.ReadFile(path); err == nil {
 		_ = json.Unmarshal(data, &file)
 	}
-	entry := &lastQuota{At: q.FetchedAt, Plan: q.Plan, Windows: q.Windows}
+	entry := &lastQuota{
+		At:           q.FetchedAt,
+		Plan:         q.Plan,
+		Windows:      q.Windows,
+		Balance:      q.Balance,
+		ResetCredits: q.ResetCredits,
+	}
 	switch q.Tool {
 	case ToolClaude:
 		file.Claude = entry
 	case ToolCodex:
 		file.Codex = entry
 	default:
-		return nil
+		if file.Tools == nil {
+			file.Tools = map[Tool]*lastQuota{}
+		}
+		file.Tools[q.Tool] = entry
 	}
 	data, err := json.MarshalIndent(file, "", "  ")
 	if err != nil {

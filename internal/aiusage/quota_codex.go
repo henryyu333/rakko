@@ -2,6 +2,7 @@ package aiusage
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -125,6 +126,145 @@ func FetchCodex(ctx context.Context, env Env) Quota {
 	}
 	q.Status = QuotaOK
 	return q
+}
+
+// FetchCodexResetCredits queries Codex's available rate-limit reset credits
+// and returns the count and soonest expiration.
+func FetchCodexResetCredits(ctx context.Context, env Env) (*ResetCredits, error) {
+	auth, err := readCodexAuth(env.Home)
+	if err != nil {
+		return nil, err
+	}
+	if auth.Tokens.AccessToken == "" || auth.Tokens.AccountID == "" {
+		return nil, errNotLoggedIn
+	}
+	if jwtExpired(auth.Tokens.AccessToken, env.now()) {
+		return nil, errors.New("codex sign-in expired")
+	}
+	return fetchCodexResetCredits(ctx, env, auth.Tokens.AccessToken, auth.Tokens.AccountID)
+}
+
+type codexResetCreditsWire struct {
+	AvailableCount int                           `json:"available_count"`
+	Credits        []codexResetCreditsWireCredit `json:"credits"`
+}
+
+type codexResetCreditsWireCredit struct {
+	ID        string  `json:"id"`
+	ResetType string  `json:"reset_type"`
+	Status    string  `json:"status"`
+	GrantedAt string  `json:"granted_at"`
+	ExpiresAt *string `json:"expires_at"`
+}
+
+func (w codexResetCreditsWire) first() (id string, soonest time.Time, count int) {
+	for _, c := range w.Credits {
+		if c.Status != "available" || c.ID == "" {
+			continue
+		}
+		count++
+		var t time.Time
+		if c.ExpiresAt != nil {
+			if p, err := time.Parse(time.RFC3339, *c.ExpiresAt); err == nil {
+				t = p
+			}
+		}
+		if id == "" || (!t.IsZero() && (soonest.IsZero() || t.Before(soonest))) {
+			id, soonest = c.ID, t
+		}
+	}
+	if w.AvailableCount > count {
+		count = w.AvailableCount
+	}
+	return id, soonest, count
+}
+
+func codexHeaders(token, accountID string) [][2]string {
+	return [][2]string{
+		{"Authorization", "Bearer " + token},
+		{"chatgpt-account-id", accountID},
+		{"Accept", "application/json"},
+	}
+}
+
+func fetchCodexResetCredits(ctx context.Context, env Env, token, accountID string) (*ResetCredits, error) {
+	rctx, cancel := context.WithTimeout(ctx, 4*time.Second)
+	defer cancel()
+	res, err := env.get(rctx, env.codexBase()+"/wham/rate-limit-reset-credits", codexHeaders(token, accountID))
+	if err != nil {
+		return nil, err
+	}
+	if res.status < 200 || res.status >= 300 {
+		return nil, fmt.Errorf("HTTP %d", res.status)
+	}
+	var wire codexResetCreditsWire
+	if err := decodeJSON(res.body, &wire); err != nil {
+		return nil, err
+	}
+	id, soonest, count := wire.first()
+	if count <= 0 {
+		return nil, nil
+	}
+	return &ResetCredits{
+		Count:     count,
+		SoonestAt: soonest,
+		FirstID:   id,
+	}, nil
+}
+
+// UseCodexReset consumes one Codex rate-limit reset credit (the one expiring
+// soonest). If no available credit exists, it returns code "no_credit" without
+// sending a consume request.
+func UseCodexReset(ctx context.Context, env Env) (ResetOutcome, error) {
+	auth, err := readCodexAuth(env.Home)
+	if err != nil {
+		return ResetOutcome{}, err
+	}
+	if auth.Tokens.AccessToken == "" || auth.Tokens.AccountID == "" {
+		return ResetOutcome{}, errNotLoggedIn
+	}
+	if jwtExpired(auth.Tokens.AccessToken, env.now()) {
+		return ResetOutcome{}, errors.New("codex sign-in expired")
+	}
+	rc, err := fetchCodexResetCredits(ctx, env, auth.Tokens.AccessToken, auth.Tokens.AccountID)
+	if err != nil {
+		return ResetOutcome{}, err
+	}
+	if rc == nil || rc.Count <= 0 || rc.FirstID == "" {
+		return ResetOutcome{Code: "no_credit"}, nil
+	}
+	redeemID := newUUIDv4()
+	body, err := json.Marshal(map[string]string{
+		"credit_id":         rc.FirstID,
+		"redeem_request_id": redeemID,
+	})
+	if err != nil {
+		return ResetOutcome{}, err
+	}
+	headers := append(codexHeaders(auth.Tokens.AccessToken, auth.Tokens.AccountID),
+		[2]string{"Content-Type", "application/json"},
+	)
+	res, err := env.post(ctx, env.codexBase()+"/wham/rate-limit-reset-credits/consume", headers, body)
+	if err != nil {
+		return ResetOutcome{PostSent: true}, err
+	}
+	if res.status < 200 || res.status >= 300 {
+		return ResetOutcome{PostSent: true}, fmt.Errorf("HTTP %d", res.status)
+	}
+	var out ResetOutcome
+	if err := decodeJSON(res.body, &out); err != nil {
+		return ResetOutcome{PostSent: true}, err
+	}
+	out.PostSent = true
+	return out, nil
+}
+
+func newUUIDv4() string {
+	var b [16]byte
+	_, _ = rand.Read(b[:])
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
 // readCodexAuth loads $CODEX_HOME/auth.json, or ~/.codex/auth.json when

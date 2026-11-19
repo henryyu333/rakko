@@ -5,6 +5,7 @@ package platform
 import (
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/ebitengine/purego"
 )
@@ -124,13 +125,30 @@ func loadMainLoop() error {
 			!bind(&mlWakeUp, "CFRunLoopWakeUp") {
 			return
 		}
-		// CFSTR("kCFRunLoopCommonModes") built as an NSString is not the
-		// run loop's own constant. Add the two modes the app actually runs
-		// in: resting and tracking a mouse drag.
+		// Resolve the system's real CFStringRef/NSString* constants for
+		// kCFRunLoopDefaultMode and NSEventTrackingRunLoopMode (the tracking
+		// mode's actual value is "NSEventTrackingRunLoopMode", not
+		// "kCFRunLoopEventTracking").
 		withPool(func() {
-			for _, name := range []string{"kCFRunLoopDefaultMode", "kCFRunLoopEventTracking"} {
-				modes = append(modes, uintptr(send(nsString(name), "retain")))
+			var copySymbol func(dst *uintptr, src uintptr, size uintptr) uintptr
+			purego.RegisterLibFunc(&copySymbol, purego.RTLD_DEFAULT, "memcpy")
+			resolveMode := func(handle uintptr, sym, fallback string) uintptr {
+				if handle != 0 {
+					if addr, err := purego.Dlsym(handle, sym); err == nil && addr != 0 {
+						var ref uintptr
+						copySymbol(&ref, addr, unsafe.Sizeof(ref))
+						if ref != 0 {
+							return uintptr(send(id(ref), "retain"))
+						}
+					}
+				}
+				return uintptr(send(nsString(fallback), "retain"))
 			}
+			appkit, _ := purego.Dlopen("/System/Library/Frameworks/AppKit.framework/AppKit", purego.RTLD_LAZY)
+			modes = append(modes,
+				resolveMode(lib, "kCFRunLoopDefaultMode", "kCFRunLoopDefaultMode"),
+				resolveMode(appkit, "NSEventTrackingRunLoopMode", "NSEventTrackingRunLoopMode"),
+			)
 		})
 		mainRunLoop = mlGetMain()
 

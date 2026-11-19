@@ -550,6 +550,7 @@ func (s *shotSession) close(restore bool) {
 	}
 	s.a.layerKnown = false
 	if s.a.win != nil {
+		s.a.syncMousePassThrough()
 		s.a.win.Invalidate()
 	}
 	s.a.syncOnboardingKeys()

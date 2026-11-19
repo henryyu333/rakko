@@ -15,7 +15,7 @@ import (
 func TestUsageClaudeSignInTriggersRead(t *testing.T) {
 	fx := newUsageFixture(t, true)
 	fx.claude.q = okQuota(aiusage.ToolClaude, "Pro", *fx.now)
-	fx.f.quota[quotaIndex(aiusage.ToolClaude)].latest = aiusage.Quota{
+	fx.f.quotaState(aiusage.ToolClaude).latest = aiusage.Quota{
 		Tool: aiusage.ToolClaude, Status: aiusage.QuotaNotLoggedIn, FetchedAt: *fx.now,
 	}
 	fx.f.claudeLogin = usageClaudeLogin{busy: true, cancel: func() {}}

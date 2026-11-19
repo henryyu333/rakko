@@ -665,8 +665,8 @@ func usageCardFixture(t *testing.T, quotaLeft bool, codex, claude aiusage.Quota)
 	fx := newUsageFixture(t, true)
 	fx.a.settings.AIUsage.QuotaLeft = quotaLeft
 	fx.a.tab = pageTools
-	fx.f.quota[quotaIndex(aiusage.ToolCodex)] = usageQuotaState{latest: codex, good: codex}
-	fx.f.quota[quotaIndex(aiusage.ToolClaude)] = usageQuotaState{latest: claude, good: claude}
+	*fx.f.quotaState(aiusage.ToolCodex) = usageQuotaState{latest: codex, good: codex}
+	*fx.f.quotaState(aiusage.ToolClaude) = usageQuotaState{latest: claude, good: claude}
 	fx.view.Frame()
 	return fx
 }

@@ -10,9 +10,11 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"rakko/internal/agentnotify"
+	"rakko/internal/aiusage"
 	"rakko/internal/atomicfile"
 )
 
@@ -401,16 +403,155 @@ func (m SearchMode) Normalized() SearchMode {
 }
 
 // AIUsageSettings is the aiUsage object in settings.json. Enabled turns
-// the AI 用量 page on; QuotaCodex and QuotaClaude pick which subscription
-// cards it shows; QuotaLeft picks the quota display. Local usage is read
-// from every supported agent automatically and has no switch.
+// the AI 用量 page on; QuotaCards picks subscription/balance cards in display
+// order (nil falls back to QuotaCodex/QuotaClaude for older files);
+// QuotaOrder keeps the service order in settings; QuotaLeft picks the quota display.
 type AIUsageSettings struct {
-	Enabled     bool `json:"enabled"`
-	QuotaCodex  bool `json:"quotaCodex"`
-	QuotaClaude bool `json:"quotaClaude"`
+	Enabled     bool      `json:"enabled"`
+	QuotaCodex  bool      `json:"quotaCodex"`
+	QuotaClaude bool      `json:"quotaClaude"`
+	QuotaCards  *[]string `json:"quotaCards,omitempty"`
+	QuotaOrder  []string  `json:"quotaOrder,omitempty"`
 	// QuotaLeft shows how much of a quota window is left instead of how
 	// much is used; the used share is the default, as Magpie shows it.
 	QuotaLeft bool `json:"quotaLeft"`
+}
+
+// OrderedQuotaTools returns all quota-panel tools in the saved settings order,
+// appending any newly added tools at the end.
+func (a AIUsageSettings) OrderedQuotaTools() []aiusage.Tool {
+	defaults := aiusage.QuotaPanelTools()
+	if len(a.QuotaOrder) == 0 {
+		return defaults
+	}
+	valid := make(map[aiusage.Tool]bool, len(defaults))
+	for _, t := range defaults {
+		valid[t] = true
+	}
+	seen := make(map[aiusage.Tool]bool, len(defaults))
+	out := make([]aiusage.Tool, 0, len(defaults))
+	for _, raw := range a.QuotaOrder {
+		t := aiusage.Tool(raw)
+		if valid[t] && !seen[t] {
+			seen[t] = true
+			out = append(out, t)
+		}
+	}
+	for _, t := range defaults {
+		if !seen[t] {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// SelectedQuotaTools returns the enabled quota-card tools in the same order
+// as OrderedQuotaTools.
+func (a AIUsageSettings) SelectedQuotaTools() []aiusage.Tool {
+	if a.QuotaCards == nil {
+		var out []aiusage.Tool
+		for _, t := range a.OrderedQuotaTools() {
+			if (t == aiusage.ToolCodex && a.QuotaCodex) || (t == aiusage.ToolClaude && a.QuotaClaude) {
+				out = append(out, t)
+			}
+		}
+		return out
+	}
+	selected := make(map[aiusage.Tool]bool, len(*a.QuotaCards))
+	for _, raw := range *a.QuotaCards {
+		t := aiusage.Tool(raw)
+		if aiusage.IsQuotaTool(t) {
+			selected[t] = true
+		}
+	}
+	var out []aiusage.Tool
+	for _, t := range a.OrderedQuotaTools() {
+		if selected[t] {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// QuotaCardEnabled reports whether tool is selected for the panel.
+func (a AIUsageSettings) QuotaCardEnabled(tool aiusage.Tool) bool {
+	return slices.Contains(a.SelectedQuotaTools(), tool)
+}
+
+func (a *AIUsageSettings) materializeQuotaCards() {
+	if a.QuotaCards != nil {
+		return
+	}
+	cur := a.SelectedQuotaTools()
+	list := make([]string, len(cur))
+	for i, t := range cur {
+		list[i] = string(t)
+	}
+	a.QuotaCards = &list
+}
+
+func (a *AIUsageSettings) syncLegacyQuotaFlags() {
+	a.QuotaCodex = a.QuotaCardEnabled(aiusage.ToolCodex)
+	a.QuotaClaude = a.QuotaCardEnabled(aiusage.ToolClaude)
+}
+
+// SetQuotaCard enables or disables a quota card in the panel.
+// Returns false if tool is not a quota-panel tool.
+func (a *AIUsageSettings) SetQuotaCard(tool aiusage.Tool, on bool) bool {
+	if !aiusage.IsQuotaTool(tool) {
+		return false
+	}
+	a.materializeQuotaCards()
+	cur := a.SelectedQuotaTools()
+	if on {
+		if slices.Contains(cur, tool) {
+			return true
+		}
+		cur = append(cur, tool)
+	} else {
+		cur = slices.DeleteFunc(cur, func(t aiusage.Tool) bool { return t == tool })
+	}
+	selected := make(map[aiusage.Tool]bool, len(cur))
+	for _, t := range cur {
+		selected[t] = true
+	}
+	var ordered []string
+	for _, t := range a.OrderedQuotaTools() {
+		if selected[t] {
+			ordered = append(ordered, string(t))
+		}
+	}
+	if ordered == nil {
+		ordered = []string{}
+	}
+	a.QuotaCards = &ordered
+	a.syncLegacyQuotaFlags()
+	return true
+}
+
+// MoveQuotaTool reorders a tool in OrderedQuotaTools from index from to to,
+// and keeps QuotaCards in the same order.
+func (a *AIUsageSettings) MoveQuotaTool(from, to int) {
+	order := a.OrderedQuotaTools()
+	if from < 0 || from >= len(order) || to < 0 || to >= len(order) || from == to {
+		return
+	}
+	item := order[from]
+	order = slices.Delete(order, from, from+1)
+	order = slices.Insert(order, to, item)
+	raw := make([]string, len(order))
+	for i, t := range order {
+		raw[i] = string(t)
+	}
+	a.QuotaOrder = raw
+	if a.QuotaCards != nil {
+		cur := a.SelectedQuotaTools()
+		list := make([]string, len(cur))
+		for i, t := range cur {
+			list[i] = string(t)
+		}
+		a.QuotaCards = &list
+	}
 }
 
 // defaultClipboardLimit is the clipboard text history cap a fresh

@@ -9,13 +9,17 @@ package platform
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"image"
 	"image/png"
+	"time"
 	"unsafe"
 
 	"github.com/egoist/mygo"
 )
+
+var captureDisplayTimeout = 15 * time.Second
 
 var (
 	procGetDC         = sysProc(user32, "GetDC")
@@ -38,15 +42,37 @@ type bitmapInfo struct {
 // order the screen APIs hand out — and the picture is the display's full
 // pixel rectangle.
 func CaptureDisplay(index int, path string) error {
-	ms := enumMonitors()
-	if index < 1 || index > len(ms) {
-		return fmt.Errorf("windows: display %d not found", index)
-	}
-	img, err := grabScreen(ms[index-1].bounds)
-	if err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), captureDisplayTimeout)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		ms := enumMonitors()
+		if index < 1 || index > len(ms) {
+			done <- fmt.Errorf("windows: display %d not found", index)
+			return
+		}
+		img, err := grabScreen(ms[index-1].bounds)
+		if err != nil {
+			done <- err
+			return
+		}
+		if ctx.Err() != nil {
+			done <- ctx.Err()
+			return
+		}
+		pngBytes := encodePNG(img)
+		if ctx.Err() != nil {
+			done <- ctx.Err()
+			return
+		}
+		done <- writeAtomicFile(path, pngBytes)
+	}()
+	select {
+	case err := <-done:
 		return err
+	case <-ctx.Done():
+		return ctx.Err()
 	}
-	return writeAtomicFile(path, encodePNG(img))
 }
 
 // grabScreen copies r — in physical pixels — off the screen into RGBA.

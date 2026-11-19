@@ -8,7 +8,9 @@ package main
 import (
 	"fmt"
 	"runtime"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -245,29 +247,113 @@ func (a *shelf) settingsAIUsagePage(c *ui.Context) {
 		})
 	})
 
+	if a.usage != nil {
+		a.usage.refreshSources(false)
+	}
 	quotaLocked := a.settingsBroken || !a.settings.AIUsage.Enabled
-	settingsGroupRows(c, "quota", l.SettingsAIQuotaGroup(), "", quotaLocked, func() {
-		rows := []struct {
-			tool  aiusage.Tool
-			on    bool
-			apply func(*settings.Settings, bool)
-		}{
-			{aiusage.ToolClaude, a.settings.AIUsage.QuotaClaude,
-				func(s *settings.Settings, on bool) { s.AIUsage.QuotaClaude = on }},
-			{aiusage.ToolCodex, a.settings.AIUsage.QuotaCodex,
-				func(s *settings.Settings, on bool) { s.AIUsage.QuotaCodex = on }},
+	tools := a.settings.AIUsage.OrderedQuotaTools()
+
+	settingsGroupRows(c, "quota", l.SettingsAIQuotaGroup(), l.SettingsAIQuotaOrderFoot(), quotaLocked, func() {
+		if (a.aiQuotaDragPending || a.aiQuotaDragActive) && (quotaLocked || !dragLeftDown()) {
+			a.aiQuotaDragPending = false
+			a.aiQuotaDragActive = false
+			a.aiQuotaDragTool = ""
 		}
-		for i, row := range rows {
+		for i, tool := range tools {
 			if i > 0 {
-				settingsSep(c, "quota-"+string(row.tool))
+				settingsSep(c, "quota-"+string(tool))
 			}
-			apply := row.apply
-			logo, color, mark := toolLogo(row.tool)
-			settingsToggleRowMark(c, "quota-"+string(row.tool), toolName(row.tool),
-				a.aiQuotaCaption(row.tool, l), logo, color, mark, row.on,
-				func(on bool) {
-					a.setAIUsage(func(s *settings.Settings) { apply(s, on) })
+			idx := i
+			t := tool
+			panelOn := a.settings.AIUsage.QuotaCardEnabled(t)
+
+			row := settingsRowLine(c, "quota-"+string(t)).Label(settingsQuotaToolTitle(t, l))
+			row.Children(func() {
+				handle := ui.Row(c.Key("drag-"+string(t))).AlignItems(ui.Center).Gap(14).Grow(1).MinWidth(0)
+				handle.HandleInput(func(ev ui.InputEvent) bool {
+					if quotaLocked {
+						return false
+					}
+					switch ev.Kind {
+					case ui.InputPointerDown:
+						if ev.Button == 0 {
+							a.aiQuotaDragPending = true
+							a.aiQuotaDragActive = false
+							a.aiQuotaDragIdx = idx
+							a.aiQuotaDragTool = t
+							a.aiQuotaDragDownX = ev.X
+							a.aiQuotaDragDownY = ev.Y
+							return true
+						}
+					case ui.InputPointerMove:
+						if !a.aiQuotaDragPending && !a.aiQuotaDragActive {
+							return false
+						}
+						if !dragLeftDown() {
+							a.aiQuotaDragPending = false
+							a.aiQuotaDragActive = false
+							a.aiQuotaDragTool = ""
+							return false
+						}
+						if a.aiQuotaDragPending {
+							dx := ev.X - a.aiQuotaDragDownX
+							dy := ev.Y - a.aiQuotaDragDownY
+							const quotaDragSlop = 5
+							if dx*dx+dy*dy < quotaDragSlop*quotaDragSlop {
+								return true
+							}
+							a.aiQuotaDragActive = true
+							a.aiQuotaDragPending = false
+						}
+						if a.aiQuotaDragActive {
+							curTools := a.settings.AIUsage.OrderedQuotaTools()
+							curIdx := slices.Index(curTools, a.aiQuotaDragTool)
+							if curIdx < 0 {
+								a.aiQuotaDragActive = false
+								a.aiQuotaDragTool = ""
+								return false
+							}
+							const rowStep = float32(settingsRowMinHeight + 1)
+							target := curIdx
+							if ev.Y < -rowStep/2 && curIdx > 0 {
+								steps := max(1, int((-ev.Y+rowStep/2)/rowStep))
+								target = max(0, curIdx-steps)
+							} else if ev.Y > float32(settingsRowMinHeight)+rowStep/2 && curIdx < len(curTools)-1 {
+								steps := max(1, int((ev.Y-float32(settingsRowMinHeight)+rowStep/2)/rowStep))
+								target = min(len(curTools)-1, curIdx+steps)
+							}
+							if target != curIdx {
+								a.aiQuotaDragIdx = target
+								a.setAIUsage(func(s *settings.Settings) { s.AIUsage.MoveQuotaTool(curIdx, target) })
+							}
+						}
+						return true
+					case ui.InputPointerUp:
+						if a.aiQuotaDragPending || a.aiQuotaDragActive {
+							a.aiQuotaDragPending = false
+							a.aiQuotaDragActive = false
+							a.aiQuotaDragTool = ""
+							return true
+						}
+					}
+					return false
 				})
+				handle.Children(func() {
+					logo, color, mark := toolLogo(t)
+					settingsMark(c, logo, color, mark)
+					settingsLabel(c, settingsQuotaToolTitle(t, l), 13, 400).TextColor(ink).Grow(1).MinWidth(0)
+				})
+				a.settingsQuotaSourceControl(c, t, quotaLocked)
+				on := panelOn
+				sw := settingsSwitch(c.Key("panel-"+string(t)), &on, settingsQuotaToolTitle(t, l)+" "+l.SettingsAIQuotaGroup())
+				if !quotaLocked && sw.Changed() {
+					a.setAIUsage(func(s *settings.Settings) { s.AIUsage.SetQuotaCard(t, on) })
+				}
+			})
+
+			if a.aiQuotaEditTool == string(t) {
+				a.settingsQuotaKeyEditor(c, t)
+			}
 		}
 	})
 
@@ -413,11 +499,102 @@ func (a *shelf) settingsAgentToolRow(c *ui.Context, prefix string, tool agentnot
 	}
 }
 
+func settingsQuotaToolTitle(t aiusage.Tool, l locales.Messages) string {
+	if t == aiusage.ToolDeepSeek {
+		return "DeepSeek " + l.UsageBalanceLabel()
+	}
+	return toolName(t)
+}
+
+func (a *shelf) settingsQuotaSourceControl(c *ui.Context, t aiusage.Tool, locked bool) {
+	l := loc(c)
+	var src aiusage.QuotaSource
+	var planSuffix string
+	if a.usage != nil {
+		src = a.usage.sourceOf(t)
+		if q, _ := a.usage.quotaShown(t); q.Plan != "" {
+			planSuffix = " · " + q.Plan
+		}
+	}
+	canPaste := t != aiusage.ToolCodex && t != aiusage.ToolClaude
+	switch src.Kind {
+	case aiusage.SourceLocalLogin:
+		txt := l.SettingsAISourceLocalLogin()
+		if t == aiusage.ToolCodex {
+			txt = l.SettingsAISourceCodexLogin()
+		} else if t == aiusage.ToolClaude {
+			txt = l.SettingsAISourceClaudeLogin()
+		}
+		col := success
+		if t == aiusage.ToolCodex || t == aiusage.ToolClaude {
+			col = settingsInk3
+		}
+		settingsLabel(c, txt+planSuffix, 11, 0).TextColor(col)
+	case aiusage.SourceLocalKey:
+		settingsLabel(c, l.SettingsAISourceLocalKey()+planSuffix, 11, 0).TextColor(success)
+	case aiusage.SourceSavedKey:
+		ui.Row(c.Key("src-saved-"+string(t))).AlignItems(ui.Center).Gap(6).Children(func() {
+			settingsLabel(c, l.SettingsAISourceSavedKey()+planSuffix, 11, 0).TextColor(success)
+			if !locked && canPaste {
+				settingsButton(c, "clr-"+string(t), l.SettingsAIClearKey(), false, func() {
+					if a.usage != nil {
+						a.usage.saveAPIKey(t, "")
+					}
+					if a.aiQuotaEditTool == string(t) {
+						a.aiQuotaEditTool = ""
+						a.aiQuotaKeyInput = ""
+					}
+				})
+			}
+		})
+	default:
+		if !canPaste {
+			settingsLabel(c, l.SettingsAISourceMissing()+planSuffix, 11, 0).TextColor(settingsInk3)
+			return
+		}
+		btn := ui.ButtonBase(c.Key("paste-"+string(t))).Padding(2, 6, 2, 6).Radius(5).Label(l.SettingsAISourcePasteKey())
+		if btn.Hovered() && !locked {
+			btn.Background(fill1)
+		}
+		btn.Children(func() {
+			settingsLabel(c, l.SettingsAISourcePasteKey(), 11, 0).TextColor(settingsInk3)
+		})
+		if !locked && btn.Clicked() {
+			if a.aiQuotaEditTool == string(t) {
+				a.aiQuotaEditTool = ""
+				a.aiQuotaKeyInput = ""
+			} else {
+				a.aiQuotaEditTool = string(t)
+				a.aiQuotaKeyInput = ""
+			}
+		}
+	}
+}
+
+func (a *shelf) settingsQuotaKeyEditor(c *ui.Context, t aiusage.Tool) {
+	l := loc(c)
+	ui.Row(c.Key("key-edit-"+string(t))).FillWidth().Padding(4, 14, 8, 44).Gap(6).AlignItems(ui.Center).Children(func() {
+		inp := ui.TextInput(c.Key("key-inp-"+string(t)), &a.aiQuotaKeyInput).
+			Grow(1).Height(26).Padding(4, 8, 4, 8).Radius(6).
+			Background(fill1).Border(1, ui.RGBA(255, 255, 255, 0.14)).
+			Placeholder(l.SettingsAIPasteKeyHint()).FontSize(12).TextColor(ink)
+		_ = inp
+		settingsButton(c, "key-save-"+string(t), l.SettingsAISaveKey(), true, func() {
+			key := strings.TrimSpace(a.aiQuotaKeyInput)
+			a.aiQuotaEditTool = ""
+			a.aiQuotaKeyInput = ""
+			if key != "" && a.usage != nil {
+				a.usage.saveAPIKey(t, key)
+			}
+		})
+	})
+}
+
 func (a *shelf) aiQuotaCaption(t aiusage.Tool, l locales.Messages) string {
 	if a.usage == nil {
 		return ""
 	}
-	latest := a.usage.quota[quotaIndex(t)].latest
+	latest := a.usage.quotaState(t).latest
 	if latest.FetchedAt.IsZero() {
 		return ""
 	}
