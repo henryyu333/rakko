@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.18.1
+
+- 灵动岛样式：拔掉外接显示器再合盖、开盖后，灵动岛和全局快捷键可能完全没有反应，现在会在唤醒后重新对齐到当前屏幕。
+- 诊断：`kill -USR1 <Rakko 的 PID>` 写出的诊断文件（`~/Library/Logs/Rakko/`）增加窗口位置、所在屏幕、是否被遮挡和快捷键触发记录。
+- Windows：系统监控读取网络流量的方式更稳妥。
+
+### English
+
+- Dynamic Island style: after unplugging an external display, closing the lid and opening it again, the island and the global shortcut could stop responding entirely; Rakko now re-aligns to the current screen after waking.
+- Diagnostics: the file `kill -USR1 <Rakko's PID>` writes to `~/Library/Logs/Rakko/` now includes the window's position, its display, whether it is occluded, and global shortcut activity.
+- Windows: the system monitor reads network traffic more safely.
+
 ## 1.18.0
 
 - **系统性能监控**：工具页新增「系统监控」卡片（支持 2×1、2×2、1×1 与桌面固定，1×1 点击切换 CPU / 内存 / 网络），平时保持单色，高负载或低电量时高亮提醒；悬停展开 60 秒实时走势、内存细分、磁盘读写、电池状态与占用前 3 的进程（可按 CPU / 内存排序）。
