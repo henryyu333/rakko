@@ -325,6 +325,12 @@ func FetchClaude(ctx context.Context, env Env) Quota {
 		return q
 	}
 	if !found || cred.OAuth.AccessToken == "" {
+		if env.RunClaude == nil {
+			if _, berr := claudeBinary(env); errors.Is(berr, ErrClaudeNotInstalled) {
+				q.Status = QuotaNoCLI
+				return q
+			}
+		}
 		q.Status = QuotaNotLoggedIn
 		return q
 	}
@@ -452,5 +458,7 @@ func runClaudeCode(ctx context.Context, env Env, args []string, configDir string
 	return runClaudeCommand(ctx, env, args, configDir)
 }
 
-// errClaudeNotInstalled says no Claude Code binary was found.
-var errClaudeNotInstalled = errors.New("Claude Code is not installed")
+// ErrClaudeNotInstalled says no Claude Code binary was found on the machine.
+var ErrClaudeNotInstalled = errors.New("Claude Code is not installed")
+
+var errClaudeNotInstalled = ErrClaudeNotInstalled

@@ -49,3 +49,27 @@ func TestIdleCapsuleWindowFitsItsBox(t *testing.T) {
 		t.Fatalf("capsule %dx%d, want 120x30", r.width(), r.height())
 	}
 }
+
+func TestOverlayWindowDropsCaptionForPopup(t *testing.T) {
+	class, _ := windows.UTF16PtrFromString("STATIC")
+	title, _ := windows.UTF16PtrFromString("rakko-overlay-test")
+	const captionedFrameless = 0x16C00000
+	h, _, err := procCreateWindowEx.Call(0, uintptr(unsafe.Pointer(class)), uintptr(unsafe.Pointer(title)),
+		captionedFrameless, 0, 0, 520, 400, 0, 0, 0, 0)
+	if h == 0 {
+		t.Fatalf("CreateWindowEx: %v", err)
+	}
+	defer procDestroyWindow.Call(h)
+
+	ConfigureOverlayWindow(h)
+	st := getWindowLong(h, gwlStyle)
+	if st&wsCaption != 0 {
+		t.Fatalf("overlay kept WS_CAPTION: style %#x", st)
+	}
+	if st&wsPopup == 0 {
+		t.Fatalf("overlay is not WS_POPUP: style %#x", st)
+	}
+	if windowExStyle(h)&wsExToolWindow == 0 {
+		t.Fatal("overlay left the tool-window band")
+	}
+}

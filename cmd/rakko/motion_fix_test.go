@@ -436,3 +436,47 @@ func TestClosingFollowsCurrentPeekAfterOpeningStateChanges(t *testing.T) {
 		})
 	}
 }
+
+// TestHoldFadedReleasesSessionEnvelopeWithPersistentSysmonWings verifies that
+// closing the panel while resting sysmon wings hold peekK == 1 still releases
+// the oversized open-panel session envelope back to the compact closed frame.
+func TestHoldFadedReleasesSessionEnvelopeWithPersistentSysmonWings(t *testing.T) {
+	a := &shelf{
+		island:     true,
+		islandTop:  islandTopGap,
+		notchW:     120,
+		notchH:     30,
+		dispBounds: mygo.Rectangle{X: 0, Y: 0, Width: 1920, Height: 1080},
+		dispWork:   mygo.Rectangle{X: 0, Y: 0, Width: 1920, Height: 1040},
+		sysmon:     &sysmonModule{},
+	}
+	a.settings.SysMon.WingsEnabled = true
+
+	// Simulate an open-panel envelope held after the panel folded onto settled
+	// sysmon wings (peekK == 1, openK == 0, no springs moving).
+	a.frameHold = mygo.Rectangle{X: 600, Y: 0, Width: 720, Height: 560}
+	a.fx.peekK = 1
+	a.fx.openK = 0
+
+	if !a.holdFaded() {
+		t.Fatal("holdFaded() = false with settled sysmon wings; expected true so oversized sessionFrame releases")
+	}
+	got := a.targetFrame()
+	want := a.desiredFrame()
+	if got != want {
+		t.Fatalf("targetFrame() = %+v, want compact closed frame %+v", got, want)
+	}
+	if a.frameHold != (mygo.Rectangle{}) {
+		t.Fatalf("frameHold = %+v, want cleared", a.frameHold)
+	}
+	if got.Height >= 200 {
+		t.Fatalf("closed sysmon wings frame height = %d, still oversized", got.Height)
+	}
+
+	// Mid-flight retract (peekK between 0 and 1) must still keep the hold.
+	a.frameHold = mygo.Rectangle{X: 600, Y: 0, Width: 720, Height: 560}
+	a.fx.peekK = 0.5
+	if a.holdFaded() {
+		t.Fatal("holdFaded() = true while peekK is mid-flight")
+	}
+}

@@ -512,3 +512,16 @@ func TestFetchClaudeCancelledCredentialReadNotCached(t *testing.T) {
 		t.Fatalf("keychain reads = %d, want 2", calls)
 	}
 }
+
+func TestFetchClaudeSignedOutWithoutCLIReturnsNoCLI(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	t.Setenv("APPDATA", t.TempDir())
+	env := claudeEnv(t, t.TempDir())
+	env.Keychain = keychainMissing
+	env.RunClaude = nil
+
+	q := FetchClaude(context.Background(), env)
+	if q.Status != QuotaNoCLI {
+		t.Fatalf("status = %v, want QuotaNoCLI", q.Status)
+	}
+}

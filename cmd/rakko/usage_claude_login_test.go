@@ -122,3 +122,23 @@ func TestUsageClaudeSignInCancelledVisible(t *testing.T) {
 		t.Fatalf("missing the cancellation result or retry; texts=%v", fx.view.Texts())
 	}
 }
+
+func TestUsageClaudeSignInMissingCLISwitchesToNoCLI(t *testing.T) {
+	fx := newUsageFixture(t, true)
+	signedOutClaude(fx)
+	fx.f.claudeLogin = usageClaudeLogin{busy: true, cancel: func() {}}
+	fx.f.gotClaudeLogin(aiusage.ErrClaudeNotInstalled, fx.f.claudeLoginGen)
+	if fx.f.claudeLogin.failed {
+		t.Fatalf("missing CLI should switch card to QuotaNoCLI, not failed: %+v", fx.f.claudeLogin)
+	}
+	if got := fx.f.quotaState(aiusage.ToolClaude).latest.Status; got != aiusage.QuotaNoCLI {
+		t.Fatalf("status = %v, want QuotaNoCLI", got)
+	}
+	fx.view.Frame()
+	if !fx.view.HasText("未找到 Claude Code") {
+		t.Fatalf("missing QuotaNoCLI message; texts=%v", fx.view.Texts())
+	}
+	if fx.view.HasText("登录") {
+		t.Fatalf("login button should not show when CLI is missing; texts=%v", fx.view.Texts())
+	}
+}

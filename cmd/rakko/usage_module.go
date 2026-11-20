@@ -712,8 +712,18 @@ func (f *usageFeature) gotClaudeLogin(err error, gen int) {
 		f.startDueClaude(f.deps.now())
 	case errors.Is(err, context.Canceled):
 		f.claudeLogin.cancelled = true
+	case errors.Is(err, aiusage.ErrClaudeNotInstalled):
+		st := f.quotaState(aiusage.ToolClaude)
+		st.latest = aiusage.Quota{
+			Tool:      aiusage.ToolClaude,
+			Status:    aiusage.QuotaNoCLI,
+			FetchedAt: f.deps.now(),
+		}
 	default:
 		f.claudeLogin.failed = true
+		if f.host != nil && err != nil {
+			f.host.toastStatus(err.Error(), time.Time{}, statusErr)
+		}
 	}
 	f.invalidate()
 }

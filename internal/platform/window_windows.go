@@ -46,13 +46,15 @@ func ConfigureNotchWindow(window uintptr) {
 }
 
 // ConfigureOverlayWindow applies the shared overlay policy: a tool window
-// (out of the taskbar and Alt+Tab) in the topmost band. Windows has no
-// per-window overlay level, so every Rakko overlay band is the topmost one.
+// (out of the taskbar and Alt+Tab) in the topmost band, with Win32 caption
+// bits and DWM frame chrome stripped so a transparent native-UI surface never
+// shows Windows 11's rounded outline or drop shadow around its full HWND.
 func ConfigureOverlayWindow(window uintptr) {
 	if window == 0 {
 		return
 	}
 	ensureToolWindow(window)
+	disableTransparentFrameChrome(window)
 	reorderFront(window, true)
 }
 
@@ -60,15 +62,10 @@ func ConfigureOverlayWindow(window uintptr) {
 // resting capsule. The capsule is 120 × 30; Windows enforces
 // SM_CXMINTRACK × SM_CYMINTRACK (136 × 39) on a captioned window, which made
 // the capsule draw 39pt tall and overlap the top of a note that had been
-// placed just below the 30pt shell. A captionless popup keeps the requested
-// box; the capsule takes no clicks, so the caption's snapping and window menu
-// it gives up are no loss.
+// placed just below the 30pt shell. ConfigureOverlayWindow already drops
+// WS_CAPTION for WS_POPUP and strips DWM frame chrome.
 func ConfigureIdleCapsuleWindow(window uintptr) {
-	if window == 0 {
-		return
-	}
 	ConfigureOverlayWindow(window)
-	updateStyleBits(window, wsPopup, wsCaption)
 }
 
 // ConfigureCaptureWindow makes the screenshot overlay take the topmost
@@ -78,6 +75,7 @@ func ConfigureCaptureWindow(window uintptr) {
 		return
 	}
 	ensureToolWindow(window)
+	disableTransparentFrameChrome(window)
 	setExBits(window, wsExNoActivate, false)
 	reorderFront(window, true)
 }
@@ -95,7 +93,7 @@ func ConfigurePinWindow(window uintptr) {
 		return
 	}
 	ensureToolWindow(window)
-	updateStyleBits(window, 0, wsCaption)
+	disableTransparentFrameChrome(window)
 	setExBits(window, wsExNoActivate, true)
 	// The card may be the window a drag opened as a preview, which ignores
 	// the mouse so the gesture stays with the card that started it. A
@@ -113,6 +111,7 @@ func ConfigurePetWindow(window uintptr) {
 		return
 	}
 	ensureToolWindow(window)
+	disableTransparentFrameChrome(window)
 	setExBits(window, wsExNoActivate, true)
 	reorderFront(window, true)
 }
@@ -127,6 +126,7 @@ func ConfigureDragPreview(window uintptr, layer Layer) {
 		return
 	}
 	ensureToolWindow(window)
+	disableTransparentFrameChrome(window)
 	setExBits(window, wsExNoActivate, true)
 	SetWindowIgnoresMouseEvents(window, true)
 	reorderFront(window, true)
@@ -244,12 +244,36 @@ func SetWindowAppearance(window uintptr, dark bool) {
 	}
 }
 
-// DWMWA_WINDOW_CORNER_PREFERENCE and its rounded value: Windows 11's own
-// rounding for windows that ask for it.
+// DWM frame attributes used to strip Windows 11's rounded border and shadow
+// from transparent frameless overlays, or restore them on framed windows.
 const (
+	dwmwaNCRenderingPolicy      = 2
+	dwmncrpDisabled             = 1
 	dwmwaWindowCornerPreference = 33
+	dwmcpDoNotRound             = 1
 	dwmcpRound                  = 2
+	dwmwaBorderColor            = 34
+	dwmwaColorNone              = 0xFFFFFFFE
 )
+
+// disableTransparentFrameChrome removes Win32's caption bit (switching to
+// WS_POPUP) and turns off DWM's non-client border, rounded corners and shadow
+// on a transparent frameless overlay. mygo creates Panel windows with
+// WS_CAPTION and DWMWCP_ROUND, and skips DWMNCRP_DISABLED for native-UI
+// surfaces (opts.Surface == true), which leaves a visible rounded 1px outline
+// and shadow around the entire transparent HWND on Windows 11.
+func disableTransparentFrameChrome(window uintptr) {
+	if window == 0 {
+		return
+	}
+	updateStyleBits(window, wsPopup, wsCaption)
+	nc := int32(dwmncrpDisabled)
+	procDwmSetWindowAttr.Call(window, dwmwaNCRenderingPolicy, uintptr(unsafe.Pointer(&nc)), 4)
+	pref := int32(dwmcpDoNotRound)
+	procDwmSetWindowAttr.Call(window, dwmwaWindowCornerPreference, uintptr(unsafe.Pointer(&pref)), 4)
+	border := uint32(dwmwaColorNone)
+	procDwmSetWindowAttr.Call(window, dwmwaBorderColor, uintptr(unsafe.Pointer(&border)), 4)
+}
 
 // dwmMargins is DWM's MARGINS, in pixels, for DwmExtendFrameIntoClientArea.
 type dwmMargins struct{ Left, Right, Top, Bottom int32 }

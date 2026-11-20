@@ -68,7 +68,7 @@ func evalForegroundFullscreen(fg, mon uintptr) bool {
 	}
 	var cls string
 	var fgRect, monRect winRect
-	var hasRects, zoomed, hasCaption bool
+	var hasRects, zoomed, hasCaption, toolWindow bool
 	if fg != 0 && mon != 0 {
 		if vis, _, _ := procIsWindowVisible.Call(fg); vis != 0 {
 			if iconic, _, _ := procIsIconic.Call(fg); iconic == 0 {
@@ -76,6 +76,7 @@ func evalForegroundFullscreen(fg, mon uintptr) bool {
 					zoomed = true
 				}
 				hasCaption = getWindowLong(fg, gwlStyle)&wsCaption == wsCaption
+				toolWindow = windowExStyle(fg)&wsExToolWindow != 0
 				cls = windowClass(fg)
 				var ok1, ok2 bool
 				fgRect, ok1 = windowRect(fg)
@@ -84,27 +85,37 @@ func evalForegroundFullscreen(fg, mon uintptr) bool {
 			}
 		}
 	}
-	return isFullscreenState(quns, fgOwn, zoomed, hasCaption, cls, fgRect, monRect, hasRects)
+	return isFullscreenState(quns, fgOwn, zoomed, hasCaption, toolWindow, cls, fgRect, monRect, hasRects)
 }
 
 // isFullscreenState is the pure decision rule for ForegroundFullscreen:
-// true when Windows reports a busy/D3D-fullscreen/presentation notification
-// state, or when a visible non-shell, non-maximized, borderless foreign
-// foreground window covers the pointer's monitor.
-func isFullscreenState(quns uint32, fgOwn, zoomed, hasCaption bool, fgClass string, fgRect, monRect winRect, hasRects bool) bool {
+// true for exclusive D3D fullscreen or presentation mode, or when a visible
+// non-shell, non-tool, non-maximized foreign foreground window covers the
+// pointer's monitor (either borderless, or paired with QUNS_BUSY).
+// QUNS_BUSY alone is not trusted without a covering foreground window because
+// desktop enhancers, live wallpapers, and shell helpers can keep the system in
+// QUNS_BUSY while the user interacts with the desktop or ordinary windows.
+func isFullscreenState(quns uint32, fgOwn, zoomed, hasCaption, toolWindow bool, fgClass string, fgRect, monRect winRect, hasRects bool) bool {
 	if fgOwn {
 		return false
 	}
 	switch quns {
-	case qunsBusy, qunsRunningD3DFullScreen, qunsPresentationMode:
+	case qunsRunningD3DFullScreen, qunsPresentationMode:
 		return true
 	}
-	if zoomed || hasCaption || !hasRects || isShellDesktopClass(fgClass) {
+	if zoomed || toolWindow || !hasRects || isShellDesktopClass(fgClass) {
 		return false
 	}
-	return monRect.Right > monRect.Left && monRect.Bottom > monRect.Top &&
+	coversMonitor := monRect.Right > monRect.Left && monRect.Bottom > monRect.Top &&
 		fgRect.Left <= monRect.Left && fgRect.Top <= monRect.Top &&
 		fgRect.Right >= monRect.Right && fgRect.Bottom >= monRect.Bottom
+	if !coversMonitor {
+		return false
+	}
+	if quns == qunsBusy {
+		return true
+	}
+	return !hasCaption
 }
 
 func isShellDesktopClass(cls string) bool {

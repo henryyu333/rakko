@@ -540,11 +540,20 @@ func (a *shelf) holdSurface(t mygo.Rectangle) {
 // the closed strip's exact box. The values are read directly, not through
 // the zone's settled flags: the last fold frame snaps openK to zero and the
 // next frame is the idle one, which draws nothing and returns before the
-// spring bookkeeping ever runs.
+// spring bookkeeping ever runs. Persistent closed wings (such as system
+// monitor, countdown, or download wings) rest with peekK == 1 once settled;
+// allowing that settled closed state to release an oversized open-panel
+// envelope lets the window shrink back to the compact closed wings frame.
 func (a *shelf) holdFaded() bool {
-	return !a.visible && a.progress <= 0.01 && a.fx.openK <= 0.002 && a.fx.peekK <= 0.002 &&
-		!a.peeking && !a.fx.openMoving && !a.fx.sizeMoving &&
-		(a.closeAt.IsZero() || time.Since(a.closeAt) >= closeFade)
+	if a.visible || a.progress > 0.01 || a.fx.openK > 0.002 ||
+		a.peeking || a.fx.openMoving || a.fx.sizeMoving ||
+		(!a.closeAt.IsZero() && time.Since(a.closeAt) < closeFade) {
+		return false
+	}
+	if a.fx.peekK <= 0.002 {
+		return true
+	}
+	return a.fx.peekK >= 0.998 && !a.fb.retracting && a.closedPeekOut(time.Now())
 }
 
 // targetFrame is the frame the window maps. While a hold is up it is the
