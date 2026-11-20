@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.18.2
+
+- Windows：去除透明悬浮窗（主岛、副屏胶囊、桌宠、固定卡片、拖放篮与截图遮罩）在 Windows 11 上可能出现的 1px 系统圆角边框与阴影。
+- 灵动岛与常驻两翼：修复开启系统监控等常驻两翼时，面板收起后透明窗口未缩回紧凑尺寸的问题。
+- Windows：收窄全屏抑制判定，避免桌面美化工具、动态壁纸或系统忙态下，焦点离开 Rakko 后点不开灵动岛。
+- AI 用量：未安装 Claude Code CLI 时直接提示「未找到 Claude Code」，避免误显「登录」按钮且点击后静默失败；其他登录失败同步通过底部提示说明原因。
+
+### English
+
+- Windows: strip Win32 caption bits and disable DWM rounded corners, border and shadow on transparent overlays (main island, idle capsules, pet, pinned cards, drop basket and capture overlay) so no visible outline appears around transparent HWNDs on Windows 11.
+- Island & persistent wings: release the open-panel window envelope once folded back onto settled persistent wings (such as system monitor wings) instead of keeping the expanded window size.
+- Windows: tighten fullscreen suppression so `QUNS_BUSY` or desktop-enhancer / wallpaper overlays no longer block clicking the island when Rakko is not in the foreground.
+- AI Usage: report `QuotaNoCLI` when Claude Code CLI is not installed instead of showing a sign-in button that fails silently, and surface login failure reasons via status toast.
+
 ## 1.18.1
 
 - 灵动岛样式：拔掉外接显示器再合盖、开盖后，灵动岛和全局快捷键可能完全没有反应，现在会在唤醒后重新对齐到当前屏幕。
