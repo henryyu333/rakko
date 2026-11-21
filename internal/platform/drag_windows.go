@@ -193,12 +193,14 @@ func ParkDragGuard(bool) {}
 func SetDragPin(DragGuardRegion, bool) {}
 
 // DragMayCarryFiles reports whether a drag with these declared types may
-// wake the shake-to-summon basket and the pin strips. Windows hides a live
-// OLE drag's formats until it reaches a window of ours, and no public API
-// exposes them before that: a drag with nothing declared is therefore not
-// assumed to carry files. Text, link and window drags no longer summon the
-// basket by accident; a file drag opens it when the pointer reaches the
-// basket's own band, where the offer names the files.
+// wake the shake-to-summon basket and the pin strips. Windows hides the
+// source's formats, so a live drag is treated as possibly carrying files;
+// the summoned card accepts text too, so nothing is lost when a text drag
+// wakes it. A declared type, when a caller has one, is still exact.
 func DragMayCarryFiles(types []string) bool {
-	return DragHasFiles(types) || DragHasImages(types)
+	if DragHasFiles(types) || DragHasImages(types) {
+		return true
+	}
+	active, _ := DragState()
+	return active
 }
