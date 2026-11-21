@@ -647,6 +647,16 @@ func (msgs Messages) SettingsAgentNeedsApp() string {
 	return Catalog.Format(msgs.locale, "settingsAgentNeedsApp", nil)
 }
 
+// SettingsAgentNeedsAppWin says "需要从已安装的 Rakko 运行"
+// in the language the app shows.
+func SettingsAgentNeedsAppWin() string { return In(i18n.Locale()).SettingsAgentNeedsAppWin() }
+
+// SettingsAgentNeedsAppWin says "需要从已安装的 Rakko 运行"
+// in the language of msgs.
+func (msgs Messages) SettingsAgentNeedsAppWin() string {
+	return Catalog.Format(msgs.locale, "settingsAgentNeedsAppWin", nil)
+}
+
 // SettingsAgentCodexTrust says "已注入 · 需在 Codex /hooks 信任一次"
 // in the language the app shows.
 func SettingsAgentCodexTrust() string { return In(i18n.Locale()).SettingsAgentCodexTrust() }
@@ -2467,6 +2477,16 @@ func UpdateReadOnlyDetail() string { return In(i18n.Locale()).UpdateReadOnlyDeta
 // in the language of msgs.
 func (msgs Messages) UpdateReadOnlyDetail() string {
 	return Catalog.Format(msgs.locale, "updateReadOnlyDetail", nil)
+}
+
+// UpdateReadOnlyDetailWin says "Rakko 在只读位置，先移到有写权限的文件夹。"
+// in the language the app shows.
+func UpdateReadOnlyDetailWin() string { return In(i18n.Locale()).UpdateReadOnlyDetailWin() }
+
+// UpdateReadOnlyDetailWin says "Rakko 在只读位置，先移到有写权限的文件夹。"
+// in the language of msgs.
+func (msgs Messages) UpdateReadOnlyDetailWin() string {
+	return Catalog.Format(msgs.locale, "updateReadOnlyDetailWin", nil)
 }
 
 // UpdateRetry says "重试"
@@ -6531,6 +6551,16 @@ func ClipPasteHint() string { return In(i18n.Locale()).ClipPasteHint() }
 // in the language of msgs.
 func (msgs Messages) ClipPasteHint() string {
 	return Catalog.Format(msgs.locale, "clipPasteHint", nil)
+}
+
+// ClipPasteHintWin says "Enter 粘贴"
+// in the language the app shows.
+func ClipPasteHintWin() string { return In(i18n.Locale()).ClipPasteHintWin() }
+
+// ClipPasteHintWin says "Enter 粘贴"
+// in the language of msgs.
+func (msgs Messages) ClipPasteHintWin() string {
+	return Catalog.Format(msgs.locale, "clipPasteHintWin", nil)
 }
 
 // ClipShortcut says "⌘{n} 粘贴"

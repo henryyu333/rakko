@@ -38,7 +38,7 @@ func (a *shelf) itemSelected(id string) bool {
 
 func (a *shelf) itemTile(c *ui.Context, item store.Item) {
 	l := loc(c)
-	title := itemTitleIn(l, item)
+	title := itemTitleShown(l, c, item)
 	name := title
 	if item.Missing {
 		name = l.ClipMovedName(title)
@@ -170,7 +170,7 @@ func formatBadge(c *ui.Context, item store.Item) {
 // as a muted digit so the shortcut needs no explaining.
 func (a *shelf) clipRow(c *ui.Context, item store.Item, number int) {
 	l := tloc(c)
-	title := itemTitleIn(l, item)
+	title := itemTitleShown(l, c, item)
 	row := ui.Row(c.Key(item.ID)).Height(clipRowH).Padding(0, 8, 0, 8).Gap(8).Radius(8).
 		AlignItems(ui.Center).Label(title)
 	if a.reveal == item.ID {
@@ -207,7 +207,7 @@ func (a *shelf) clipRow(c *ui.Context, item store.Item, number int) {
 		}
 		ui.Text(c, text).SingleLine().FontSize(12).TextColor(ink).Grow(1).MinWidth(0)
 		if selected && a.focusMode {
-			ui.Text(c, l.ClipPasteHint()).SingleLine().FontSize(10.5).TextColor(ink3)
+			ui.Text(c, osText(l.ClipPasteHint(), l.ClipPasteHintWin())).SingleLine().FontSize(10.5).TextColor(ink3)
 		}
 		if item.Pinned {
 			ui.Icon(c.Key("pin"), pinFill).Size(10, 10).TextColor(ink.Alpha(0.5)).Label(l.ClipPinned())
@@ -321,6 +321,16 @@ func relativeTime(l locales.Messages, t, now time.Time) string {
 	default:
 		return l.ClipDate(local)
 	}
+}
+
+// itemTitleShown is itemTitleIn for a drawn row: a screenshot's name is a
+// time, so it follows the region and hour cycle like every other time on
+// screen. The file dragged out keeps its fixed name.
+func itemTitleShown(l locales.Messages, c *ui.Context, item store.Item) string {
+	if item.Kind == store.KindImage {
+		return l.ClipScreenshot(stampIn(c.Locale(), c.Region(), item.CreatedAt.Local()))
+	}
+	return itemTitleIn(l, item)
 }
 
 // itemTitle is itemTitleIn in the language the app shows, for the

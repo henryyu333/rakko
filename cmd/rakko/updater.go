@@ -711,7 +711,7 @@ func (a *shelf) updateUnavailableReason() string {
 	if updateDevBuild() {
 		return l.SettingsUpdateResultDisabled()
 	}
-	return l.UpdateReadOnlyDetail()
+	return osText(l.UpdateReadOnlyDetail(), l.UpdateReadOnlyDetailWin())
 }
 
 // updateDevBuild wraps mygo.IsDev behind a seam: it is true under go

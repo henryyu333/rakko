@@ -45,6 +45,33 @@ func stampIn(locale string, r i18n.Region, t time.Time) string {
 	})
 }
 
+// clockIn is a time of day the way the user's regional settings write it:
+// the 12- or 24-hour clock of the region, in the language's own digits and
+// separators. A headless context has no region, so a test sees its
+// language's CLDR default.
+func clockIn(locale string, r i18n.Region, t time.Time) string {
+	if locale == "" || r == (i18n.Region{}) {
+		if strings.HasPrefix(locale, "zh") {
+			return t.Format("15:04")
+		}
+		locale = "en"
+	}
+	return i18n.FormatDate(r.FormatLocale(locale), t, i18n.DateOptions{
+		Skeleton: "jm", HourCycle: r.HourCycle,
+	})
+}
+
+// dayIn is just a calendar date the way the user's regional settings write
+// it: the region's short date, else the language's compact form.
+func dayIn(locale string, r i18n.Region, t time.Time) string {
+	if locale == "" || r == (i18n.Region{}) {
+		return t.Format("2006-01-02")
+	}
+	return i18n.FormatDate(r.FormatLocale(locale), t, i18n.DateOptions{
+		Skeleton: "yMd",
+	})
+}
+
 // appLoc returns the messages of the language the shelf shows, for the
 // native surfaces built outside a view: the tray, its menus and dialogs.
 // A headless shelf keeps the source language until a test sets a.locale.

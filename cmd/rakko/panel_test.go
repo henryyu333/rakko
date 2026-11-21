@@ -92,7 +92,7 @@ func TestClearAllButtonAndPerItemRemove(t *testing.T) {
 	}
 	// 移除入口在右键菜单里（设计去掉了行内按钮）。
 	for _, it := range s.Items {
-		title := itemTitle(it)
+		title := shownItemTitle(it)
 		if err := view.RightClick(title); err != nil {
 			t.Fatalf("right-click %q: %v", title, err)
 		}
@@ -231,7 +231,7 @@ func TestClearOnlyEmptiesItsOwnPage(t *testing.T) {
 	// 剪贴板页：截图仍列出（它只是离开托盘）；这一页的清空才真删。
 	a.setTab(pageClipboard)
 	view.Frame()
-	if !view.HasText(itemTitle(clipImg)) {
+	if !view.HasText(shownItemTitle(clipImg)) {
 		t.Fatalf("the capture hidden from the tray is missing from the clipboard page; texts %v", view.Texts())
 	}
 	a.search = "复制"
@@ -285,12 +285,12 @@ func TestClipboardClearHidesCaptureFromClipboardPageOnly(t *testing.T) {
 		t.Fatalf("managed png deleted by clipboard clear: %v", err)
 	}
 	view.Frame()
-	if view.HasText(itemTitle(clip)) {
+	if view.HasText(shownItemTitle(clip)) {
 		t.Fatal("the clipboard page still lists the capture it cleared")
 	}
 	a.setTab(pageTray)
 	view.Frame()
-	if !view.HasText(itemTitle(clip)) {
+	if !view.HasText(shownItemTitle(clip)) {
 		t.Fatalf("the tray lost the capture hidden from the clipboard page; texts %v", view.Texts())
 	}
 
@@ -315,12 +315,12 @@ func TestClipboardClearHidesCaptureFromClipboardPageOnly(t *testing.T) {
 		t.Fatalf("the re-copy did not refresh CreatedAt: %v", shown.CreatedAt)
 	}
 	view.Frame()
-	if !view.HasText(itemTitle(shown)) {
+	if !view.HasText(shownItemTitle(shown)) {
 		t.Fatalf("re-copy did not bring the capture back to the tray: %+v; texts %v", shown, view.Texts())
 	}
 	a.setTab(pageClipboard)
 	view.Frame()
-	if !view.HasText(itemTitle(s.Items[0])) {
+	if !view.HasText(shownItemTitle(s.Items[0])) {
 		t.Fatalf("re-copy did not bring the capture back to the clipboard page; texts %v", view.Texts())
 	}
 
@@ -988,7 +988,7 @@ func TestTrayClearHidesClipboardCaptureInsteadOfDeleting(t *testing.T) {
 	}
 	a.setTab(pageClipboard)
 	view.Frame()
-	if !view.HasText(itemTitle(clip)) {
+	if !view.HasText(shownItemTitle(clip)) {
 		t.Fatal("hidden capture missing from the clipboard page")
 	}
 	// 剪贴板页的「清空」才是真正的删除。
@@ -1045,7 +1045,7 @@ func TestTrayMenuRemoveHidesClipboardCapture(t *testing.T) {
 	}
 	a.setTab(pageClipboard)
 	view.Frame()
-	if !view.HasText(itemTitle(clip)) {
+	if !view.HasText(shownItemTitle(clip)) {
 		t.Fatal("hidden capture missing from the clipboard page")
 	}
 	// 再次复制同一张图：去重命中，回到托盘最前。去重会刷新条目的时间，

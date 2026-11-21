@@ -20,6 +20,9 @@ import (
 	"rakko/internal/note"
 	"rakko/internal/platform"
 	"rakko/internal/settings"
+
+	"github.com/egoist/mygo/i18n"
+
 	"rakko/locales"
 )
 
@@ -722,14 +725,24 @@ func TestUpdateWhenClassifiesCalendarDays(t *testing.T) {
 	a := &shelf{}
 	now := time.Date(2026, 10, 29, 15, 30, 0, 0, time.Local)
 	today := time.Date(2026, 10, 29, 9, 12, 0, 0, time.Local)
-	if got := a.updateWhen(l, today, now); got != l.SettingsUpdateToday("09:12") {
+	when := func(at time.Time) string { return a.updateWhen("zh-Hans", i18n.Region{}, l, at, now) }
+	if got := when(today); got != l.SettingsUpdateToday("09:12") {
 		t.Fatalf("today = %q", got)
 	}
-	if got := a.updateWhen(l, time.Date(2026, 10, 28, 21, 5, 0, 0, time.Local), now); got != l.SettingsUpdateYesterday("21:05") {
+	if got := when(time.Date(2026, 10, 28, 21, 5, 0, 0, time.Local)); got != l.SettingsUpdateYesterday("21:05") {
 		t.Fatalf("yesterday = %q", got)
 	}
-	if got := a.updateWhen(l, time.Date(2026, 10, 20, 8, 0, 0, 0, time.Local), now); got != l.SettingsUpdateOn("2026-10-20 08:00") {
+	if got := when(time.Date(2026, 10, 20, 8, 0, 0, 0, time.Local)); got != l.SettingsUpdateOn("2026-10-20 08:00") {
 		t.Fatalf("older = %q", got)
+	}
+	// Yesterday across a month (and a year) boundary.
+	firstOfMonth := time.Date(2026, 11, 1, 10, 0, 0, 0, time.Local)
+	if got := a.updateWhen("zh-Hans", i18n.Region{}, l, time.Date(2026, 10, 31, 12, 0, 0, 0, time.Local), firstOfMonth); got != l.SettingsUpdateYesterday("12:00") {
+		t.Fatalf("yesterday across a month = %q", got)
+	}
+	newYear := time.Date(2027, 1, 1, 10, 0, 0, 0, time.Local)
+	if got := a.updateWhen("zh-Hans", i18n.Region{}, l, time.Date(2026, 12, 31, 23, 30, 0, 0, time.Local), newYear); got != l.SettingsUpdateYesterday("23:30") {
+		t.Fatalf("yesterday across a year = %q", got)
 	}
 }
 

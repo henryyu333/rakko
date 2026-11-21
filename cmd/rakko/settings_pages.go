@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/agentnotify"
@@ -472,7 +473,7 @@ func (a *shelf) settingsAgentGroup(c *ui.Context) {
 				caption = note
 				capColor = danger
 				if note == agentNeedsAppNote {
-					caption = l.SettingsAgentNeedsApp()
+					caption = osText(l.SettingsAgentNeedsApp(), l.SettingsAgentNeedsAppWin())
 				}
 			}
 			a.settingsAgentToolRow(c, "agent", tool, caption, capColor, status, color,
@@ -521,7 +522,7 @@ func (a *shelf) settingsApprovalGroup(c *ui.Context) {
 				caption = note
 				capColor = danger
 				if note == agentNeedsAppNote {
-					caption = l.SettingsAgentNeedsApp()
+					caption = osText(l.SettingsAgentNeedsApp(), l.SettingsAgentNeedsAppWin())
 				}
 			}
 			a.settingsAgentToolRow(c, "approval", tool, caption, capColor, status, color,
@@ -917,7 +918,7 @@ func (a *shelf) settingsAboutPage(c *ui.Context) {
 			settingsToggleRow(c, "autoinstall", l.UpdateAutoInstallSettingsRow(), "",
 				a.settings.UpdateAutoInstall, a.setUpdateAutoInstall)
 			settingsSep(c, "autoinstall")
-			settingsRow(c, "check", l.SettingsUpdateLastRow(), a.updateCaption(l), func() {})
+			settingsRow(c, "check", l.SettingsUpdateLastRow(), a.updateCaption(c.Locale(), c.Region(), l), func() {})
 			if a.updateInstalled && a.update != nil {
 				settingsSep(c, "ready")
 				settingsRow(c, "ready", l.UpdateReady(), "", func() {
@@ -943,7 +944,7 @@ func (a *shelf) settingsAboutPage(c *ui.Context) {
 
 const sourceURL = "https://github.com/henryyu333/rakko"
 
-func (a *shelf) updateCaption(l locales.Messages) string {
+func (a *shelf) updateCaption(locale string, region i18n.Region, l locales.Messages) string {
 	if reason := a.updateUnavailableReason(); reason != "" {
 		return reason
 	}
@@ -957,7 +958,7 @@ func (a *shelf) updateCaption(l locales.Messages) string {
 	case a.updateLastCheck.IsZero():
 		return l.SettingsUpdateNever()
 	}
-	when := a.updateWhen(l, a.updateLastCheck, time.Now())
+	when := a.updateWhen(locale, region, l, a.updateLastCheck, time.Now())
 	var result string
 	switch a.updateLastResult {
 	case updateResultLatest:
@@ -974,16 +975,19 @@ func (a *shelf) updateCaption(l locales.Messages) string {
 	return l.SettingsUpdateLast(when, result)
 }
 
-func (a *shelf) updateWhen(l locales.Messages, at, now time.Time) string {
-	y1, m1, d1 := at.Date()
-	y2, m2, d2 := now.Date()
-	clock := at.Format("15:04")
+func (a *shelf) updateWhen(locale string, region i18n.Region, l locales.Messages, at, now time.Time) string {
+	clock := clockIn(locale, region, at)
+	day := func(t time.Time) int {
+		y, m, d := t.Date()
+		return y*10000 + int(m)*100 + d
+	}
 	switch {
-	case y1 == y2 && m1 == m2 && d1 == d2:
+	case day(at) == day(now):
 		return l.SettingsUpdateToday(clock)
-	case y1 == y2 && m1 == m2 && d1 == d2-1:
+	case day(at) == day(now.AddDate(0, 0, -1)):
+		// Yesterday, across month and year boundaries alike.
 		return l.SettingsUpdateYesterday(clock)
 	default:
-		return l.SettingsUpdateOn(at.Format("2006-01-02 15:04"))
+		return l.SettingsUpdateOn(dayIn(locale, region, at) + " " + clock)
 	}
 }

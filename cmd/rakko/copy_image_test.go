@@ -21,8 +21,22 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/settings"
+	"github.com/egoist/mygo/i18n"
+
 	"rakko/internal/store"
+	"rakko/locales"
 )
+
+// shownItemTitle is the title a headless view draws for an item: no
+// locale and no region, so a screenshot's name is the source language's
+// label with the English short date (the same values itemTitleIn uses for
+// the file's own name).
+func shownItemTitle(item store.Item) string {
+	if item.Kind == store.KindImage {
+		return locales.In("").ClipScreenshot(stampIn("", i18n.Region{}, item.CreatedAt.Local()))
+	}
+	return itemTitleIn(locales.In(""), item)
+}
 
 // copyImageShelf returns a shelf whose tray holds one picture: a managed
 // clipboard screenshot (KindImage) or a PNG file (KindFile), a headless
@@ -92,7 +106,7 @@ func TestItemMenuCopiesImageData(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			a, view, rec, item, pngBytes := copyImageShelf(t, file)
-			if err := view.RightClick(itemTitle(item)); err != nil {
+			if err := view.RightClick(shownItemTitle(item)); err != nil {
 				t.Fatal(err)
 			}
 			if !slices.Contains(view.Menu(), "复制图片") {
@@ -118,7 +132,7 @@ func TestItemMenuCopiesImageData(t *testing.T) {
 // their existing behavior (no clipboard write).
 func TestTrayCmdCCopiesSelectedPicture(t *testing.T) {
 	_, view, rec, item, pngBytes := copyImageShelf(t, false)
-	if err := view.Click(itemTitle(item)); err != nil {
+	if err := view.Click(shownItemTitle(item)); err != nil {
 		t.Fatal(err)
 	}
 	view.Key(ui.Cmd, ui.KeyC)

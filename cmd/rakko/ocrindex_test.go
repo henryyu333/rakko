@@ -250,7 +250,7 @@ func TestRecognizeCopyMenuItem(t *testing.T) {
 	view := ui.NewTester(a.view, sheetW, panelTestH)
 	a.setTab(pageClipboard)
 	view.Frame()
-	if err := view.RightClick(itemTitle(it)); err != nil {
+	if err := view.RightClick(shownItemTitle(it)); err != nil {
 		t.Fatal(err)
 	}
 	menu := view.Menu()

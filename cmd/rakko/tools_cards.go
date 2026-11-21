@@ -897,12 +897,13 @@ func (a *shelf) recentThumb(c *ui.Context, item store.Item) {
 // recentThumbAt is recentThumb for a widget-driven size (the home canvas
 // uses 24/26pt thumbs, the card rows 30).
 func (a *shelf) recentThumbAt(c *ui.Context, item store.Item, size float32) {
+	l := loc(c)
 	rad := float32(8)
 	if size == 30 {
 		rad = 7
 	}
 	thumb := ui.Row(c.Key(fmt.Sprintf("recent-%s-%g", item.ID, size))).Size(size, size).Radius(rad).Center().Clip().
-		Label(itemTitle(item))
+		Label(itemTitleShown(l, c, item))
 	if !item.Missing {
 		thumb.HandleInput(func(ev ui.InputEvent) bool {
 			// The drag starts on the thumbnail itself: let the card's
@@ -939,7 +940,7 @@ func (a *shelf) toolClipBody(c *ui.Context, card ui.Element, span int, surf tool
 		wide := span > 1 || surf == cardDesktop
 		w := cardW(layout.Card{ID: "clip", Span: span}, surf)
 		it, ok := a.latestClipboardItem()
-		text := itemTitle(it)
+		text := itemTitleShown(l, c, it)
 		if !ok {
 			text = l.NoClipItems()
 		}

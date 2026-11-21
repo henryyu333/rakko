@@ -21,6 +21,9 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/settings"
+
+	"github.com/egoist/mygo/i18n"
+
 	"rakko/locales"
 )
 
@@ -264,7 +267,7 @@ func TestCheckedUpdateNilKeepsInstallState(t *testing.T) {
 	if item := a.updateMenu(); !strings.Contains(item.Label, "1.2.3") {
 		t.Fatalf("menu label = %q, want the version being installed", item.Label)
 	}
-	if got := a.updateCaption(locales.In("zh-Hans")); !strings.Contains(got, "1.2.3") {
+	if got := a.updateCaption("zh-Hans", i18n.Region{}, locales.In("zh-Hans")); !strings.Contains(got, "1.2.3") {
 		t.Fatalf("caption = %q, want the version being installed", got)
 	}
 
@@ -273,7 +276,7 @@ func TestCheckedUpdateNilKeepsInstallState(t *testing.T) {
 	if a.update != up || !a.updateInstalled {
 		t.Fatal("an up-to-date check dropped the staged update")
 	}
-	if got := a.updateCaption(locales.In("zh-Hans")); !strings.Contains(got, "1.2.3") {
+	if got := a.updateCaption("zh-Hans", i18n.Region{}, locales.In("zh-Hans")); !strings.Contains(got, "1.2.3") {
 		t.Fatalf("caption = %q, want the staged version", got)
 	}
 }
@@ -287,14 +290,14 @@ func TestUpdateReadersWithoutOffer(t *testing.T) {
 	if item := a.updateMenu(); item.Label == "" {
 		t.Fatal("the menu lost its label while installing without an offer")
 	}
-	if got := a.updateCaption(locales.In("zh-Hans")); got == "" {
+	if got := a.updateCaption("zh-Hans", i18n.Region{}, locales.In("zh-Hans")); got == "" {
 		t.Fatal("the caption is empty while installing without an offer")
 	}
 	a.updateInstalling, a.updateInstalled = false, true
 	if item := a.updateMenu(); item.Label == "" {
 		t.Fatal("the menu lost its label with a staged version but no offer")
 	}
-	if got := a.updateCaption(locales.In("zh-Hans")); got == "" {
+	if got := a.updateCaption("zh-Hans", i18n.Region{}, locales.In("zh-Hans")); got == "" {
 		t.Fatal("the caption is empty with a staged version but no offer")
 	}
 }

@@ -379,7 +379,7 @@ func (a *shelf) updateSmallText(c *ui.Context, l locales.Messages, p updatePalet
 		status = l.UpdateReadyShort()
 	case updateStageLatest:
 		status = l.UpdateUpToDateTitle()
-		detail = l.UpdateUpToDateMeta(appVersion(), a.updateLastCheck.Format("15:04"))
+		detail = l.UpdateUpToDateMeta(appVersion(), clockIn(c.Locale(), c.Region(), a.updateLastCheck))
 	case updateStageFailed:
 		status = l.UpdateFailedTitle()
 		statusColor = p.danger
