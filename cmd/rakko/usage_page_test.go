@@ -1986,9 +1986,18 @@ func TestCodexPopoverShowsStaleData(t *testing.T) {
 func TestCodexResetSurvivesAFoldedPanel(t *testing.T) {
 	fx := newUsageFixture(t, true)
 	stubCodexReset(fx.f)
+	// Two queues, because the two kinds of work are not interchangeable:
+	// a worker task runs on its own goroutine, while anything the feature
+	// posts for the main thread must run on this one — the state it touches
+	// (the quota it records) is only safe under one thread, exactly as the
+	// app's own main thread makes it.
+	type queued struct {
+		fn   func()
+		main bool
+	}
 	var (
 		mu      sync.Mutex
-		pending []func()
+		pending []queued
 		calls   int
 		release = make(chan struct{})
 		arrived = make(chan struct{})
@@ -1997,29 +2006,31 @@ func TestCodexResetSurvivesAFoldedPanel(t *testing.T) {
 	oldWork, oldMain := goWork, dispatchMain
 	goWork = func(fn func()) {
 		mu.Lock()
-		pending = append(pending, fn)
+		pending = append(pending, queued{fn: fn})
 		mu.Unlock()
 	}
 	dispatchMain = func(fn func()) {
 		mu.Lock()
-		pending = append(pending, fn)
+		pending = append(pending, queued{fn: fn, main: true})
 		mu.Unlock()
 	}
 	t.Cleanup(func() { goWork, dispatchMain = oldWork, oldMain })
-	pop := func() (func(), bool) {
+	pop := func(wantMain bool) (func(), bool) {
 		mu.Lock()
 		defer mu.Unlock()
-		if len(pending) == 0 {
-			return nil, false
+		for i, q := range pending {
+			if q.main != wantMain {
+				continue
+			}
+			pending = append(pending[:i], pending[i+1:]...)
+			return q.fn, true
 		}
-		fn := pending[0]
-		pending = pending[1:]
-		return fn, true
+		return nil, false
 	}
-	waitPending := func() func() {
+	wait := func(wantMain bool) func() {
 		t.Helper()
 		for i := 0; i < 400; i++ {
-			if fn, ok := pop(); ok {
+			if fn, ok := pop(wantMain); ok {
 				return fn
 			}
 			time.Sleep(5 * time.Millisecond)
@@ -2027,6 +2038,7 @@ func TestCodexResetSurvivesAFoldedPanel(t *testing.T) {
 		t.Fatal("no queued work arrived")
 		return nil
 	}
+
 	fx.f.deps.fetchCodex = func(ctx context.Context) aiusage.Quota {
 		mu.Lock()
 		calls++
@@ -2047,11 +2059,11 @@ func TestCodexResetSurvivesAFoldedPanel(t *testing.T) {
 	fx.f.requestUseCodexReset()
 	fx.f.confirmUseCodexReset()
 	// The consume answers; the post-consume refresh starts and blocks.
-	consume := waitPending()
+	consume := wait(false)
 	go consume()
-	remote := waitPending()
+	remote := wait(true) // the consume's answer, posted for the main thread
 	remote()
-	refresh, ok := pop()
+	refresh, ok := pop(false)
 	if !ok {
 		t.Fatal("the post-consume refresh did not start")
 	}
@@ -2066,7 +2078,7 @@ func TestCodexResetSurvivesAFoldedPanel(t *testing.T) {
 		t.Fatal("the busy guard outlived the finished consume")
 	}
 	close(release)
-	late := waitPending()
+	late := wait(true)
 	late() // the cancelled answer reports nothing for Codex
 
 	// The next visit refreshes Codex again and the button follows the
@@ -2077,19 +2089,27 @@ func TestCodexResetSurvivesAFoldedPanel(t *testing.T) {
 	mu.Unlock()
 	fx.view.Click("AI 用量")
 	fx.f.tick(*fx.now)
-	// Run whatever the visit queued until the Codex fetch shows up: the
-	// page may queue other work (the credential probe, a scan) first.
+	// Run whatever the visit queued until the Codex answer has landed on
+	// this thread: the page may queue other work (the credential probe, a
+	// scan) first, and the answer arrives through the main-thread queue.
 	deadline := time.Now().Add(3 * time.Second)
 	for {
-		if fn, ok := pop(); ok {
-			go fn()
-			continue
-		}
+		// The call count is read before any queued answer runs: the answer
+		// to this refresh carries no credit count, and running it first
+		// would erase the number the button reads.
 		mu.Lock()
 		after := calls
 		mu.Unlock()
 		if after > before {
 			break
+		}
+		if fn, ok := pop(true); ok {
+			fn()
+			continue
+		}
+		if fn, ok := pop(false); ok {
+			go fn()
+			continue
 		}
 		if time.Now().After(deadline) {
 			t.Fatalf("Codex did not refresh after the fold (calls %d → %d)", before, after)
@@ -2098,6 +2118,16 @@ func TestCodexResetSurvivesAFoldedPanel(t *testing.T) {
 	}
 	if ok, reason := fx.f.canUseCodexReset(); !ok {
 		t.Fatalf("the reset button did not come back: %s", reason)
+	}
+	// Drain the answer that refresh posts, so no goroutine outlives the
+	// test and writes into its fixture afterwards.
+	drain := time.Now().Add(2 * time.Second)
+	for time.Now().Before(drain) {
+		if fn, ok := pop(true); ok {
+			fn()
+			continue
+		}
+		break
 	}
 }
 
