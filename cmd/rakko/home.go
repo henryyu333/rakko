@@ -9,6 +9,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/note"
+	"rakko/locales"
 	"rakko/internal/platform"
 	"rakko/internal/store"
 )
@@ -60,6 +61,19 @@ type homeHit struct {
 	sub    string
 	run    func()
 	reveal func()
+	// item is the shelf entry behind a tray or clipboard row, so the row's
+	// title can render with the region's date and hour cycle instead of the
+	// stored compact form.
+	item    store.Item
+	hasItem bool
+}
+
+// rowTitle is the title a drawn row shows: a screenshot's name is a time.
+func (h homeHit) rowTitle(l locales.Messages, c *ui.Context) string {
+	if h.hasItem {
+		return itemTitleShown(l, c, h.item)
+	}
+	return h.title
 }
 
 // bitmap is the row's Finder icon, or nil for rows that draw a glyph.
@@ -121,6 +135,7 @@ func (a *shelf) computeHomeHits() []homeHit {
 				switch {
 				case it.Source == store.SourceClipboard && it.Kind == store.KindText && !it.OffClip:
 					clip = append(clip, homeHit{group: l.HomeGroupClipboard(), icon: clipNavSymbol, title: title,
+						item: it, hasItem: true,
 						sub: a.clipRowMeta(l, it), run: func() {
 							if a.copyItem(it) {
 								a.hide(hideExplicit)
@@ -129,6 +144,7 @@ func (a *shelf) computeHomeHits() []homeHit {
 				case it.Kind != store.KindText && !it.OffTray && !it.Missing:
 					trayPaths = append(trayPaths, it.Path)
 					tray = append(tray, homeHit{group: l.HomeGroupTray(), icon: fileSymbol, path: it.Path, title: title,
+						item: it, hasItem: true,
 						sub: relativeTime(l, it.CreatedAt, now), run: func() {
 							if err := mygo.Shell.OpenPath(it.Path); err != nil {
 								a.report(err)
@@ -493,7 +509,7 @@ func (a *shelf) resultsView(c *ui.Context, r ui.Rect, opacity float32) {
 				})
 			}
 			row := ui.ButtonBase(c.Key(rowKey{"hit", i})).Height(resultsRowH).FillWidth().Radius(12).
-				Padding(0, 8, 0, 8).Gap(10).AlignItems(ui.Center).Justify(ui.Start).Label(hit.title)
+				Padding(0, 8, 0, 8).Gap(10).AlignItems(ui.Center).Justify(ui.Start).Label(hit.rowTitle(l, c))
 			if i == a.homeSel {
 				row.Background(fill2)
 			} else if row.Hovered() {
@@ -516,7 +532,7 @@ func (a *shelf) resultsView(c *ui.Context, r ui.Rect, opacity float32) {
 				})
 				// A row shows the name and its source beneath the group heading.
 				ui.Column(c.Key(rowKey{"hit-txt", i})).Grow(1).MinWidth(0).Gap(1).Justify(ui.Center).Children(func() {
-					ui.Text(c, hit.title).SingleLine().FontSize(13).FontWeight(600).TextColor(ink)
+					ui.Text(c, hit.rowTitle(l, c)).SingleLine().FontSize(13).FontWeight(600).TextColor(ink)
 					if hit.sub != "" {
 						ui.Text(c, hit.sub).SingleLine().FontSize(11.5).TextColor(ink3)
 					}
