@@ -307,15 +307,17 @@ func TestFetchCodexMissingFields(t *testing.T) {
 	// No plan_type, missing used_percent in primary, secondary window
 	// without a length — a window is published only when its utilization
 	// AND its duration are known; absent fields stay unknown instead of
-	// fabricating a healthy 100%-left number.
+	// fabricating a healthy 100%-left number. And an answer with no
+	// recognizable window at all is a failure, not a frozen OK: the card
+	// must say the reading did not come back.
 	writeCodexAuth(t, makeJWT(fakeNow.Add(time.Hour).Unix()), "acct-1")
 	srv, _ := codexServer(t, 200, fixture(t, "codex_usage_missing_fields.json"), nil)
 	env := codexEnv(srv)
 	env.Home = t.TempDir()
 
 	q := FetchCodex(context.Background(), env)
-	if q.Status != QuotaOK {
-		t.Fatalf("status = %v, err %q", q.Status, q.Err)
+	if q.Status != QuotaFailed || q.Err != "no usage windows" {
+		t.Fatalf("status = %v, err %q; want QuotaFailed with no usage windows", q.Status, q.Err)
 	}
 	if q.Plan != "" {
 		t.Fatalf("plan = %q", q.Plan)

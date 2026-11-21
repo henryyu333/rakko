@@ -80,8 +80,15 @@ type ClaudeAccount struct {
 }
 
 // inDeniedBackoff reports whether a Keychain read may not be retried yet.
+// askedAt lives under mu like the struct's comment promises; reading it
+// unlocked raced the login worker's Invalidate in -race.
 func (a *ClaudeAccount) inDeniedBackoff(now time.Time) bool {
-	if a == nil || a.askedAt.IsZero() {
+	if a == nil {
+		return false
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.askedAt.IsZero() {
 		return false
 	}
 	return now.Sub(a.askedAt) < claudeDeniedTTL

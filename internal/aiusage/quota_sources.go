@@ -158,11 +158,28 @@ func readOpenCodeAuthEntry(env Env, providers ...string) string {
 	return ""
 }
 
+// hostAllowed reports whether a base URL's host is one of domains or a
+// subdomain of one: a token configured against some other URL — a proxy
+// or a look-alike whose name merely mentions the vendor — must never be
+// claimed and sent to the vendor's real endpoint.
+func hostAllowed(raw string, domains ...string) bool {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") {
+		return false
+	}
+	host := strings.ToLower(u.Hostname())
+	for _, d := range domains {
+		if host == d || strings.HasSuffix(host, "."+d) {
+			return true
+		}
+	}
+	return false
+}
+
 func readGLMKey(env Env) (key, base string, ok bool) {
 	tok, baseURL := readClaudeSettingsEnv(env)
-	lower := strings.ToLower(baseURL)
-	if tok != "" && (strings.Contains(lower, "bigmodel.cn") || strings.Contains(lower, "z.ai")) {
-		if strings.Contains(lower, "z.ai") {
+	if tok != "" && hostAllowed(baseURL, "bigmodel.cn", "z.ai") {
+		if hostAllowed(baseURL, "z.ai") {
 			return tok, "https://api.z.ai", true
 		}
 		return tok, "https://open.bigmodel.cn", true
@@ -220,7 +237,7 @@ func readCommandCodeKey(env Env) (string, bool) {
 
 func readDeepSeekKey(env Env) (string, bool) {
 	tok, baseURL := readClaudeSettingsEnv(env)
-	if tok != "" && strings.Contains(strings.ToLower(baseURL), "deepseek.com") {
+	if tok != "" && hostAllowed(baseURL, "deepseek.com") {
 		return tok, true
 	}
 	if k := readOpenCodeAuthEntry(env, "deepseek"); k != "" {

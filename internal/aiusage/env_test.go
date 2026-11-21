@@ -2,6 +2,8 @@ package aiusage
 
 import (
 	"net/http"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -92,5 +94,59 @@ func TestDefaultEnv(t *testing.T) {
 	}
 	if env.Now == nil {
 		t.Fatal("Now should be set")
+	}
+}
+
+// A token configured through ~/.claude/settings.json is claimed for a
+// vendor only when the base URL's host really is that vendor's: a proxy
+// or a look-alike whose name merely mentions the vendor must never have
+// its token sent to the vendor's real endpoint.
+func TestVendorTokenClaimNeedsVendorHost(t *testing.T) {
+	home := t.TempDir()
+	claude := filepath.Join(home, ".claude")
+	if err := os.MkdirAll(claude, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write := func(base string) {
+		if err := os.WriteFile(filepath.Join(claude, "settings.json"),
+			[]byte(`{"env":{"ANTHROPIC_AUTH_TOKEN":"tok-1","ANTHROPIC_BASE_URL":"`+base+`"}}`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, base := range []string{
+		"https://open.bigmodel.cn/api/anthropic",
+		"https://api.z.ai/v1",
+	} {
+		write(base)
+		env := testEnv(home)
+		if _, _, ok := readGLMKey(env); !ok {
+			t.Errorf("readGLMKey rejected the vendor's own host %q", base)
+		}
+		if _, ok := readDeepSeekKey(env); ok {
+			t.Errorf("readDeepSeekKey claimed a GLM host %q", base)
+		}
+	}
+	write("https://api.deepseek.com/anthropic")
+	env := testEnv(home)
+	if _, ok := readDeepSeekKey(env); !ok {
+		t.Error("readDeepSeekKey rejected the vendor's own host")
+	}
+	if _, _, ok := readGLMKey(env); ok {
+		t.Error("readGLMKey claimed a DeepSeek host")
+	}
+	for _, base := range []string{
+		"https://evil-deepseek.com.example/anthropic",
+		"https://bigmodel.cn.evil.example/api/anthropic",
+		"https://z.ai-proxy.example/v1",
+		"http://deepseek.com.fake/",
+	} {
+		write(base)
+		env := testEnv(home)
+		if _, _, ok := readGLMKey(env); ok {
+			t.Errorf("readGLMKey claimed a token configured for %q", base)
+		}
+		if _, ok := readDeepSeekKey(env); ok {
+			t.Errorf("readDeepSeekKey claimed a token configured for %q", base)
+		}
 	}
 }

@@ -81,6 +81,54 @@ func TestFetchGLMStatuses(t *testing.T) {
 	}
 }
 
+// A GLM window without a percentage is unknown data, not 0% used: the
+// card must not wear a healthy ring the vendor never sent. An answer
+// where no window can be understood is a failure, so the card says the
+// reading did not come back instead of freezing the last good one.
+func TestFetchGLMUnknownWindowsFail(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"success":true,"data":{"level":"pro","limits":[` +
+			`{"type":"TOKENS_LIMIT","unit":3,"number":5,"nextResetTime":1795096800000}]}}`))
+	}))
+	defer srv.Close()
+	env := testEnv(t.TempDir())
+	env.GLMBaseURL = srv.URL
+	claudeDir := filepath.Join(env.Home, ".claude")
+	_ = os.MkdirAll(claudeDir, 0o755)
+	_ = os.WriteFile(filepath.Join(claudeDir, "settings.json"),
+		[]byte(`{"env":{"ANTHROPIC_AUTH_TOKEN":"glm-key-1","ANTHROPIC_BASE_URL":"https://open.bigmodel.cn/api/anthropic"}}`), 0o600)
+
+	q := FetchGLM(context.Background(), env)
+	if q.Status != QuotaFailed || q.Err != "no usage windows" || len(q.Windows) != 0 {
+		t.Fatalf("missing percentage = %+v; want QuotaFailed with no usage windows", q)
+	}
+}
+
+// A numeric timestamp keeps its year whichever magnitude the vendor sent
+// it in: an inflated far-future reset time would fail to save, and the
+// reading would be dropped.
+func TestParseFlexibleTimeHandlesEveryMagnitude(t *testing.T) {
+	cases := []struct {
+		name string
+		v    float64
+	}{
+		{"seconds", 1.739e9},
+		{"milliseconds", 1.739e12},
+		{"microseconds", 1.739e15},
+		{"nanoseconds", 1.739e18},
+	}
+	for _, c := range cases {
+		got := parseFlexibleTime(c.v)
+		if got.Year() < 2020 || got.Year() > 2100 {
+			t.Errorf("%s: parseFlexibleTime(%v) = %s (year %d)", c.name, c.v, got, got.Year())
+		}
+		w := Window{Name: "5 hours", ResetsAt: got}
+		if _, err := json.Marshal(w); err != nil {
+			t.Errorf("%s: marshal fails: %v", c.name, err)
+		}
+	}
+}
+
 func TestFetchKimiStatuses(t *testing.T) {
 	var mode string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

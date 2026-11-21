@@ -124,6 +124,13 @@ func FetchCodex(ctx context.Context, env Env) Quota {
 		week.Name = "7 days"
 		q.Windows = append(q.Windows, *week)
 	}
+	if len(q.Windows) == 0 {
+		// A schema drift or a non-subscription answer dressed as 200:
+		// saying OK would freeze the last good numbers and hide it.
+		q.Status = QuotaFailed
+		q.Err = "no usage windows"
+		return q
+	}
 	q.Status = QuotaOK
 	return q
 }

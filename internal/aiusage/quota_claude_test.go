@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -524,4 +525,27 @@ func TestFetchClaudeSignedOutWithoutCLIReturnsNoCLI(t *testing.T) {
 	if q.Status != QuotaNoCLI {
 		t.Fatalf("status = %v, want QuotaNoCLI", q.Status)
 	}
+}
+
+// The Keychain denial backoff's read path takes the same mutex the writers
+// hold: under -race, a login worker invalidating the account while a quota
+// refresh checks the backoff must not collide on askedAt.
+func TestClaudeAccountBackoffReadsUnderTheMutex(t *testing.T) {
+	a := &ClaudeAccount{}
+	now := time.Now()
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for range 200000 {
+			a.noteDenied(now)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for range 200000 {
+			a.inDeniedBackoff(now)
+		}
+	}()
+	wg.Wait()
 }

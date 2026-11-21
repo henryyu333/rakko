@@ -72,11 +72,21 @@ func parseFlexibleTime(v any) time.Time {
 	return time.Time{}
 }
 
+// epochTime reads a numeric timestamp in whichever magnitude it arrives in
+// — seconds, milliseconds, microseconds or nanoseconds — so an unusual
+// unit cannot inflate a reset time into the far future (where saving the
+// reading would fail and be dropped).
 func epochTime(v float64) time.Time {
-	if v < 1e12 {
+	switch {
+	case v < 1e12:
 		return time.Unix(int64(v), 0)
+	case v < 1e15:
+		return time.UnixMilli(int64(v))
+	case v < 1e18:
+		return time.UnixMicro(int64(v))
+	default:
+		return time.Unix(0, int64(v))
 	}
-	return time.UnixMilli(int64(v))
 }
 
 // FetchGLM reads GLM Coding Plan's 5-hour and weekly quota windows.
@@ -174,10 +184,13 @@ func FetchGLM(ctx context.Context, env Env) Quota {
 		if strings.EqualFold(l.Type, "TIME_LIMIT") {
 			continue
 		}
-		var used float64
-		if l.Percentage != nil {
-			used = max(0, min(100, *l.Percentage))
+		if l.Percentage == nil {
+			// A window without a utilization is unknown data, not a
+			// healthy 0%-used one: presenting it would say "far below
+			// even pace" about a number the vendor never sent.
+			continue
 		}
+		used := max(0, min(100, *l.Percentage))
 		var resets time.Time
 		if l.NextResetTime > 0 {
 			resets = time.UnixMilli(l.NextResetTime)
@@ -202,6 +215,14 @@ func FetchGLM(ctx context.Context, env Env) Quota {
 				ResetsAt: resets,
 			})
 		}
+	}
+	if len(q.Windows) == 0 {
+		// No window the answer named could be understood — the same
+		// protection Kimi and the others have: a healthy card here would
+		// freeze the last good numbers and hide that anything changed.
+		q.Status = QuotaFailed
+		q.Err = "no usage windows"
+		return q
 	}
 	q.Status = QuotaOK
 	return q
