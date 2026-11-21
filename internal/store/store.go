@@ -1236,12 +1236,14 @@ func (s *Store) imagesDirReal() bool {
 // behind: atomicfile names them .<file>.tmp-<random>, and its deferred
 // removal only runs while the process lives, so a crash between the
 // write and the rename leaves one forever. Only that exact naming
-// convention is touched, in the directories Rakko owns — the root and
-// images always, converted only when it is a real directory — and only
-// regular files; a future Open retries whatever could not be removed.
+// convention is touched, in the directories Rakko owns — the root always,
+// images and converted only when each lstats as a real directory, never a
+// symlink out of the data directory — and only regular files; a future
+// Open retries whatever could not be removed.
 func (s *Store) cleanTempLeftovers() {
-	for _, dir := range []string{s.Root, s.imagesDir()} {
-		s.removeTempLeftovers(dir)
+	s.removeTempLeftovers(s.Root)
+	if s.imagesDirReal() {
+		s.removeTempLeftovers(s.imagesDir())
 	}
 	if s.convertedDirReal() {
 		s.removeTempLeftovers(s.convertedDir())

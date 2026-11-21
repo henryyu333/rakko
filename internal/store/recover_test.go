@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -198,4 +199,99 @@ func mustState(t *testing.T, items []Item) string {
 		t.Fatal(err)
 	}
 	return string(data)
+}
+
+// 写备份失败时原件要改名回原处：界面上说「保持原样」，磁盘上也得是原样，
+// 不能留下一个没有 state.json 的空货架。
+func TestRecoverStatePutsTheOriginalBackWhenTheWriteFails(t *testing.T) {
+	root, bad := corruptStateDir(t)
+	bak := mustState(t, []Item{{ID: "b", Kind: KindText, Text: "from backup"}})
+	if err := os.WriteFile(filepath.Join(root, stateFileName+".bak"), []byte(bak), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	orig := writeStateFile
+	writeStateFile = func(string, string, []byte, os.FileMode) error { return errors.New("disk full") }
+	t.Cleanup(func() { writeStateFile = orig })
+
+	err := RecoverState(root, stateFileName+".bak")
+	if err == nil {
+		t.Fatal("the failed backup write was reported as a successful recovery")
+	}
+	if errors.As(err, new(*RecoverFailure)) {
+		t.Fatalf("a rolled-back recovery must not name a moved original: %v", err)
+	}
+	data, rerr := os.ReadFile(filepath.Join(root, stateFileName))
+	if rerr != nil {
+		t.Fatalf("state.json is gone after the failed write: %v", rerr)
+	}
+	if string(data) != bad {
+		t.Fatalf("state.json = %q, want the corrupt bytes back verbatim", data)
+	}
+	ents, derr := os.ReadDir(root)
+	if derr != nil {
+		t.Fatal(derr)
+	}
+	for _, ent := range ents {
+		if strings.Contains(ent.Name(), ".corrupt-") {
+			t.Fatalf("the rolled-back original is still named %s", ent.Name())
+		}
+	}
+}
+
+// 连改回也失败时，错误里必须写清两个文件名，界面才能说原件在哪。
+func TestRecoverStateNamesBothFilesWhenTheOriginalCannotGoBack(t *testing.T) {
+	root, bad := corruptStateDir(t)
+	bak := mustState(t, []Item{{ID: "b", Kind: KindText, Text: "from backup"}})
+	if err := os.WriteFile(filepath.Join(root, stateFileName+".bak"), []byte(bak), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	orig := writeStateFile
+	// The write fails *and* leaves a directory where state.json was, so the
+	// rollback rename cannot land either.
+	writeStateFile = func(dir, name string, _ []byte, _ os.FileMode) error {
+		if err := os.Mkdir(filepath.Join(dir, name), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		return errors.New("disk full")
+	}
+	t.Cleanup(func() { writeStateFile = orig })
+
+	err := RecoverState(root, stateFileName+".bak")
+	var moved *RecoverFailure
+	if !errors.As(err, &moved) || moved.Aside == "" {
+		t.Fatalf("error = %v, want a RecoverFailure naming the moved original", err)
+	}
+	for _, want := range []string{moved.Aside, stateFileName} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error %q does not name %s", err.Error(), want)
+		}
+	}
+	data, rerr := os.ReadFile(filepath.Join(root, moved.Aside))
+	if rerr != nil {
+		t.Fatalf("the original is not at %s: %v", moved.Aside, rerr)
+	}
+	if string(data) != bad {
+		t.Fatalf("the original at %s = %q, want the corrupt bytes", moved.Aside, data)
+	}
+}
+
+// images 是软链接时，清理不跟出去：目标目录里同名的崩溃残留不能被删。
+func TestOpenDoesNotCleanThroughASymlinkedImagesDir(t *testing.T) {
+	root := t.TempDir()
+	elsewhere := t.TempDir()
+	leftover := filepath.Join(elsewhere, ".x.png.tmp-42")
+	if err := os.WriteFile(leftover, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(elsewhere, filepath.Join(root, imagesDirName)); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	s, err := Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if _, err := os.Stat(leftover); err != nil {
+		t.Fatalf("cleanup followed the images symlink: %v", err)
+	}
 }

@@ -294,13 +294,18 @@ func exitWithDialog(message, detail string) {
 func startupStateRecovery(dir string, why error) {
 	lm := startupLoc(dir)
 	backups := store.RecoveryBackups(dir)
-	buttons := []string{lm.StartupStateStartOver()}
+	buttons := []string{lm.StartupStateStartOver(), lm.StartupStateQuit()}
 	restore := -1 // the restore button's index, -1 when there is no backup to offer
 	if len(backups) > 0 {
 		restore = 0
-		buttons = []string{lm.StartupStateRestoreBackup(), lm.StartupStateStartOver()}
+		buttons = []string{lm.StartupStateRestoreBackup(), lm.StartupStateStartOver(), lm.StartupStateQuit()}
 	}
-	startOver := len(buttons) - 1
+	startOver := len(buttons) - 2
+	// Quit is both the default and the cancel button: Enter, Esc, ⌘. and the
+	// close box all leave every file as it was, and the destructive start-over
+	// is never what a stray Enter picks. mygo reports a dismissed dialog as the
+	// cancel button's index, so the one branch below covers every way out.
+	quit := len(buttons) - 1
 	mygo.App.SetName(appName)
 	mygo.App.SetActivationPolicy(mygo.ActivationPolicyAccessory)
 	mygo.App.WhenReady(func() {
@@ -311,14 +316,10 @@ func startupStateRecovery(dir string, why error) {
 				Message:            lm.StartupHistoryUnreadable(appName),
 				Detail:             lm.StartupStateCorruptDetail(dir, why.Error()),
 				Buttons:            buttons,
-				DefaultButton:      0,
-				CancelButton:       -1,
+				DefaultButton:      quit,
+				CancelButton:       quit,
 				DestructiveButtons: []int{startOver},
 			})
-			// Dismissed without a button (Esc, the close box, a dialog that
-			// could not show): mygo reports the CancelButton value, -1 here,
-			// and -1 can never be a button's index. Nothing has been touched
-			// then — say so and quit, whichever button layout there was.
 			if derr != nil || !(res.Button == startOver || (restore >= 0 && res.Button == restore)) {
 				showStartupNotice(lm, dir, why)
 				return
@@ -329,8 +330,14 @@ func startupStateRecovery(dir string, why error) {
 			}
 			if rerr := store.RecoverState(dir, backup); rerr != nil {
 				log.Printf("%s: %v", appName, rerr)
-				// 恢复失败：坏原件未动，原样说明后退出。
-				showStartupNotice(lm, dir, why)
+				// 恢复失败：原件要么已改回原处，要么停在 .corrupt-* 里；
+				// 说明按事实写，不声称「保持原样」。
+				detail := lm.StartupStateRecoveryRolledBackDetail(dir, rerr.Error())
+				var moved *store.RecoverFailure
+				if errors.As(rerr, &moved) && moved.Aside != "" {
+					detail = lm.StartupStateRecoveryMovedDetail(dir, moved.Aside, rerr.Error())
+				}
+				showStartupNoticeDetail(lm, detail)
 				return
 			}
 			// 恢复好的目录要一条干净的启动：同一个可执行文件、同样的
@@ -347,11 +354,17 @@ func startupStateRecovery(dir string, why error) {
 // showStartupNotice ends a recovery run by saying what stopped the
 // launch and that every file stayed as it was, then quits.
 func showStartupNotice(lm locales.Messages, dir string, why error) {
+	showStartupNoticeDetail(lm, lm.StartupHistoryUnreadableDetail(dir, why.Error()))
+}
+
+// showStartupNoticeDetail is showStartupNotice with the words the caller
+// built: a failed recovery says where the original is instead.
+func showStartupNoticeDetail(lm locales.Messages, detail string) {
 	_, _ = mygo.Dialog.Message(mygo.MessageOptions{
 		Type:    mygo.MessageError,
 		Title:   appName,
 		Message: lm.StartupHistoryUnreadable(appName),
-		Detail:  lm.StartupHistoryUnreadableDetail(dir, why.Error()),
+		Detail:  detail,
 	})
 	mygo.App.Quit()
 }

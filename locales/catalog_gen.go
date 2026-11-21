@@ -1339,6 +1339,40 @@ func (msgs Messages) StartupStateRestoreBackup() string {
 	return Catalog.Format(msgs.locale, "startupStateRestoreBackup", nil)
 }
 
+// StartupStateQuit says "退出"
+// in the language the app shows.
+func StartupStateQuit() string { return In(i18n.Locale()).StartupStateQuit() }
+
+// StartupStateQuit says "退出"
+// in the language of msgs.
+func (msgs Messages) StartupStateQuit() string {
+	return Catalog.Format(msgs.locale, "startupStateQuit", nil)
+}
+
+// StartupStateRecoveryRolledBackDetail says "把备份写进 state.json …"
+// in the language the app shows.
+func StartupStateRecoveryRolledBackDetail(dataDir string, err string) string {
+	return In(i18n.Locale()).StartupStateRecoveryRolledBackDetail(dataDir, err)
+}
+
+// StartupStateRecoveryRolledBackDetail says "把备份写进 state.json …"
+// in the language of msgs.
+func (msgs Messages) StartupStateRecoveryRolledBackDetail(dataDir string, err string) string {
+	return Catalog.Format(msgs.locale, "startupStateRecoveryRolledBackDetail", map[string]any{"dataDir": dataDir, "err": err})
+}
+
+// StartupStateRecoveryMovedDetail says "把备份写进 state.json 失败，坏原件也没能改回 state.json，现在保存在数据目录下的 {aside}…"
+// in the language the app shows.
+func StartupStateRecoveryMovedDetail(aside string, dataDir string, err string) string {
+	return In(i18n.Locale()).StartupStateRecoveryMovedDetail(aside, dataDir, err)
+}
+
+// StartupStateRecoveryMovedDetail says "把备份写进 state.json 失败，坏原件也没能改回 state.json，现在保存在数据目录下的 {aside}…"
+// in the language of msgs.
+func (msgs Messages) StartupStateRecoveryMovedDetail(aside string, dataDir string, err string) string {
+	return Catalog.Format(msgs.locale, "startupStateRecoveryMovedDetail", map[string]any{"aside": aside, "dataDir": dataDir, "err": err})
+}
+
 // StartupStateNewer says "历史来自更新版本的 {app}"
 // in the language the app shows.
 func StartupStateNewer(app string) string { return In(i18n.Locale()).StartupStateNewer(app) }
@@ -9703,16 +9737,6 @@ func SysMonDiskFree(size string) string { return In(i18n.Locale()).SysMonDiskFre
 // in the language of msgs.
 func (msgs Messages) SysMonDiskFree(size string) string {
 	return Catalog.Format(msgs.locale, "sysMonDiskFree", map[string]any{"size": size})
-}
-
-// SysMonWindowAgo says "60s 前"
-// in the language the app shows.
-func SysMonWindowAgo() string { return In(i18n.Locale()).SysMonWindowAgo() }
-
-// SysMonWindowAgo says "60s 前"
-// in the language of msgs.
-func (msgs Messages) SysMonWindowAgo() string {
-	return Catalog.Format(msgs.locale, "sysMonWindowAgo", nil)
 }
 
 // SysMonWindowAgoSec says "{n, number, ::group-off}s 前"
