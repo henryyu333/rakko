@@ -1307,6 +1307,38 @@ func (msgs Messages) StartupHistoryUnreadableDetail(dataDir string, err string) 
 	return Catalog.Format(msgs.locale, "startupHistoryUnreadableDetail", map[string]any{"dataDir": dataDir, "err": err})
 }
 
+// StartupStateCorruptDetail says "无法解析 state.json…"
+// in the language the app shows.
+func StartupStateCorruptDetail(dataDir string, err string) string {
+	return In(i18n.Locale()).StartupStateCorruptDetail(dataDir, err)
+}
+
+// StartupStateCorruptDetail says "无法解析 state.json…"
+// in the language of msgs.
+func (msgs Messages) StartupStateCorruptDetail(dataDir string, err string) string {
+	return Catalog.Format(msgs.locale, "startupStateCorruptDetail", map[string]any{"dataDir": dataDir, "err": err})
+}
+
+// StartupStateRestoreBackup says "用最近的备份恢复"
+// in the language the app shows.
+func StartupStateRestoreBackup() string { return In(i18n.Locale()).StartupStateRestoreBackup() }
+
+// StartupStateRestoreBackup says "用最近的备份恢复"
+// in the language of msgs.
+func (msgs Messages) StartupStateRestoreBackup() string {
+	return Catalog.Format(msgs.locale, "startupStateRestoreBackup", nil)
+}
+
+// StartupStateStartOver says "把坏文件挪到一边并重新开始"
+// in the language the app shows.
+func StartupStateStartOver() string { return In(i18n.Locale()).StartupStateStartOver() }
+
+// StartupStateStartOver says "把坏文件挪到一边并重新开始"
+// in the language of msgs.
+func (msgs Messages) StartupStateStartOver() string {
+	return Catalog.Format(msgs.locale, "startupStateStartOver", nil)
+}
+
 // StartupAlreadyRunning says "{app} 已在运行"
 // in the language the app shows.
 func StartupAlreadyRunning(app string) string { return In(i18n.Locale()).StartupAlreadyRunning(app) }
@@ -2695,6 +2727,16 @@ func UsageUnavailable() string { return In(i18n.Locale()).UsageUnavailable() }
 // in the language of msgs.
 func (msgs Messages) UsageUnavailable() string {
 	return Catalog.Format(msgs.locale, "usageUnavailable", nil)
+}
+
+// UsageProxyAuth says "代理需要认证\nRakko 暂不支持"
+// in the language the app shows.
+func UsageProxyAuth() string { return In(i18n.Locale()).UsageProxyAuth() }
+
+// UsageProxyAuth says "代理需要认证\nRakko 暂不支持"
+// in the language of msgs.
+func (msgs Messages) UsageProxyAuth() string {
+	return Catalog.Format(msgs.locale, "usageProxyAuth", nil)
 }
 
 // UsagePaceSteady says "节奏正常，可撑到重置"
@@ -6243,6 +6285,16 @@ func HomeLyricsFailed() string { return In(i18n.Locale()).HomeLyricsFailed() }
 // in the language of msgs.
 func (msgs Messages) HomeLyricsFailed() string {
 	return Catalog.Format(msgs.locale, "homeLyricsFailed", nil)
+}
+
+// HomeLyricsProxyAuth says "代理需要认证，Rakko 暂不支持"
+// in the language the app shows.
+func HomeLyricsProxyAuth() string { return In(i18n.Locale()).HomeLyricsProxyAuth() }
+
+// HomeLyricsProxyAuth says "代理需要认证，Rakko 暂不支持"
+// in the language of msgs.
+func (msgs Messages) HomeLyricsProxyAuth() string {
+	return Catalog.Format(msgs.locale, "homeLyricsProxyAuth", nil)
 }
 
 // HomeDate says "{t, date, ::MMMMd}"

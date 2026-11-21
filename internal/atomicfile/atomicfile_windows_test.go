@@ -79,3 +79,40 @@ func TestWriteFileRetriesWhileTargetIsBrieflyOpen(t *testing.T) {
 	}
 	assertNoTempFiles(t, dir)
 }
+
+// A read-only target (backup and restore tools add the attribute) is not
+// waited out: the save fails at once — no second of retrying on every
+// save of the session — and the old file stays whole.
+func TestWriteFileFailsFastOnReadonlyTarget(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "state.json")
+	if err := os.WriteFile(target, []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(target, 0o444); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	if err := WriteFile(dir, "state.json", []byte("new"), 0o600); err == nil {
+		t.Fatal("replacing a read-only target reported success")
+	}
+	if elapsed := time.Since(start); elapsed > 500*time.Millisecond {
+		t.Fatalf("a read-only target was retried for %v; want an immediate failure", elapsed)
+	}
+	got, err := os.ReadFile(target)
+	if err != nil || string(got) != "old" {
+		t.Fatalf("read-only file damaged by a failed save: %q, %v", got, err)
+	}
+	assertNoTempFiles(t, dir)
+
+	// The attribute off, the same save succeeds again.
+	if err := os.Chmod(target, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteFile(dir, "state.json", []byte("new"), 0o600); err != nil {
+		t.Fatalf("WriteFile after clearing the attribute: %v", err)
+	}
+	if got, err := os.ReadFile(target); err != nil || string(got) != "new" {
+		t.Fatalf("target after successful save = %q, %v", got, err)
+	}
+}

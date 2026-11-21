@@ -96,3 +96,30 @@ func TestWriteFileNoSyncKeepsTheTemporaryFileMode(t *testing.T) {
 		t.Fatalf("mode = %v, want the temporary file's %v", got.Mode(), want.Mode())
 	}
 }
+
+// IsTempName names exactly the files writeFile's cleanup may remove:
+// the .<target>.tmp-<random> convention, and nothing else — not a
+// user's dotfile, not a backup.
+func TestIsTempNameMatchesOnlyTheWriteConvention(t *testing.T) {
+	for _, name := range []string{
+		".state.json.tmp-123456",
+		".a1b2c3.png.tmp-789",
+		".converted-out.pdf.tmp-42",
+	} {
+		if !IsTempName(name) {
+			t.Errorf("IsTempName(%q) = false, want true", name)
+		}
+	}
+	for _, name := range []string{
+		"state.json",
+		"state.json.bak",
+		".hidden-config",
+		".state.json.draft",
+		".tmp-notes",
+		"..tmp-",
+	} {
+		if IsTempName(name) {
+			t.Errorf("IsTempName(%q) = true, want false", name)
+		}
+	}
+}

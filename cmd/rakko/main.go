@@ -105,6 +105,13 @@ func main() {
 	}
 	s, err := store.Open(*dataDir)
 	if err != nil {
+		// 坏掉的 state.json 先给选择框：恢复最近的备份，或把坏文件挪到
+		// 一边重新开始；原件永远保留。其余打不开的原因照旧只报错退出。
+		if errors.Is(err, store.ErrStateUnreadable) {
+			log.Printf("%s: %v", appName, err)
+			startupStateRecovery(*dataDir, err)
+			return
+		}
 		// 历史未成功打开时不创建托盘、快捷键或监控，也不改写原件。
 		log.Printf("%s: %v", appName, err)
 		lm := startupLoc(*dataDir)
@@ -256,6 +263,81 @@ func exitWithDialog(message, detail string) {
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// startupStateRecovery is the way out of an unreadable state.json: a
+// dialog offers restoring the newest readable backup, or moving the bad
+// file aside and starting over — whichever the user picks, the corrupt
+// original is kept, never deleted or overwritten. Dismissing the dialog
+// leaves every file as it was and shows the usual unreadable notice. A
+// choice made, the recovered directory is relaunched into with the same
+// arguments (--data-dir included), and this process ends with the
+// dialog's app.
+func startupStateRecovery(dir string, why error) {
+	lm := startupLoc(dir)
+	backups := store.RecoveryBackups(dir)
+	restore, startOver := 0, 1
+	buttons := []string{lm.StartupStateStartOver()}
+	if len(backups) > 0 {
+		buttons = []string{lm.StartupStateRestoreBackup(), lm.StartupStateStartOver()}
+	} else {
+		restore, startOver = -1, 0
+	}
+	mygo.App.SetName(appName)
+	mygo.App.SetActivationPolicy(mygo.ActivationPolicyAccessory)
+	mygo.App.WhenReady(func() {
+		go func() {
+			res, _ := mygo.Dialog.Message(mygo.MessageOptions{
+				Type:               mygo.MessageError,
+				Title:              appName,
+				Message:            lm.StartupHistoryUnreadable(appName),
+				Detail:             lm.StartupStateCorruptDetail(dir, why.Error()),
+				Buttons:            buttons,
+				DefaultButton:      0,
+				CancelButton:       -1,
+				DestructiveButtons: []int{startOver},
+			})
+			var backup string
+			switch res.Button {
+			case restore:
+				if restore < 0 {
+					mygo.App.Quit()
+					return
+				}
+				backup = backups[0]
+			case startOver:
+			default:
+				// 没选（Esc/关掉）：什么都不动，原样说明后退出。
+				showStartupNotice(lm, dir, why)
+				return
+			}
+			if rerr := store.RecoverState(dir, backup); rerr != nil {
+				log.Printf("%s: %v", appName, rerr)
+				// 恢复失败：坏原件未动，原样说明后退出。
+				showStartupNotice(lm, dir, why)
+				return
+			}
+			// 恢复好的目录要一条干净的启动：同一个可执行文件、同样的
+			// 参数（--data-dir 一并保留）重启自己，本次进程随 dialog 的
+			// app 一起结束。
+			mygo.App.Relaunch()
+		}()
+	})
+	if err := mygo.App.Run(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// showStartupNotice ends a recovery run by saying what stopped the
+// launch and that every file stayed as it was, then quits.
+func showStartupNotice(lm locales.Messages, dir string, why error) {
+	_, _ = mygo.Dialog.Message(mygo.MessageOptions{
+		Type:    mygo.MessageError,
+		Title:   appName,
+		Message: lm.StartupHistoryUnreadable(appName),
+		Detail:  lm.StartupHistoryUnreadableDetail(dir, why.Error()),
+	})
+	mygo.App.Quit()
 }
 
 // startupLoc says the messages of the language a launch shows, for the

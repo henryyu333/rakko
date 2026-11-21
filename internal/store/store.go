@@ -170,11 +170,17 @@ func configRoot(name string) (string, error) {
 // converted path already exists as a symlink or any non-directory entry
 // it is left untouched and everything converted-related is disabled for
 // the session (AddConverted refuses, cleanup skips it) rather than
-// following into a foreign directory. Missing state starts empty;
-// corrupt or wrong-version state returns an error (lock released) and
-// is never overwritten. File/image items whose paths are genuinely
-// nonexistent are dropped; items whose paths exist but cannot be
-// statted (e.g. permission errors) are kept with Missing=true.
+// following into a foreign directory. Missing state starts empty; a
+// state file that cannot be parsed, carries a version this build does
+// not understand, or holds an item kind a newer Rakko wrote returns an
+// error wrapping ErrStateUnreadable (lock released) and is never
+// overwritten — RecoverState is the way out of it. File/image items whose
+// paths are genuinely nonexistent are dropped; a file on a volume that
+// is not mounted (an unplugged drive) is kept with Missing=true and
+// recovers through Refresh once the volume is back, and so are items
+// whose paths exist but cannot be statted (e.g. permission errors).
+// Temporary files a killed process left behind (the .*.tmp-* naming
+// atomicfile writes) are removed best-effort; nothing else is touched.
 // Leftover files and folders inside a real <root>/converted that no
 // loaded item references (e.g. from a conversion interrupted before it
 // was registered) are deleted best-effort; nothing outside
@@ -223,6 +229,7 @@ func Open(root string) (*Store, error) {
 			s.Close()
 		}
 	}()
+	s.cleanTempLeftovers()
 	data, err := os.ReadFile(s.statePath())
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -234,11 +241,8 @@ func Open(root string) (*Store, error) {
 		return nil, fmt.Errorf("store: reading %s: %w", stateFileName, err)
 	}
 	var sf stateFile
-	if err := json.Unmarshal(data, &sf); err != nil {
-		return nil, fmt.Errorf("store: parsing %s: %w", stateFileName, err)
-	}
-	if sf.Version != stateVersion {
-		return nil, fmt.Errorf("store: unsupported state version %d", sf.Version)
+	if sf, err = parseState(data); err != nil {
+		return nil, err
 	}
 	seen := make(map[string]struct{}, len(sf.Items))
 	kept := make([]Item, 0, len(sf.Items))
@@ -248,22 +252,28 @@ func Open(root string) (*Store, error) {
 			it.ID = newID()
 		}
 		seen[it.ID] = struct{}{}
-		if it.Kind == KindText {
+		switch it.Kind {
+		case KindText:
 			it.Missing = false
 			kept = append(kept, it)
 			continue
-		}
-		if it.Kind == KindImage {
+		case KindImage:
 			// 旧格式（绝对路径或按当时数据根拼出的相对路径）在下次
 			// 保存时改写为相对 images 目录的文件名；先留一份可恢复原件。
 			if it.Path != "" && it.Path != filepath.Base(it.Path) {
 				migrate = true
 			}
 			it.Path = s.resolveImagePath(it.Path)
-		} else if it.Converted {
-			// 转换产物与受管图片同样按文件名持久化，重开时解析回当前
-			// converted 目录，保证数据目录整体搬迁后仍然有效。
-			it.Path = s.resolveConvertedPath(it.Path)
+		case KindFile:
+			if it.Converted {
+				// 转换产物与受管图片同样按文件名持久化，重开时解析回当前
+				// converted 目录，保证数据目录整体搬迁后仍然有效。
+				it.Path = s.resolveConvertedPath(it.Path)
+			}
+		default:
+			// 新版 Rakko 写入的未知 kind：拒绝打开而不是丢弃条目——
+			// 一次 Save 就会把它永久抹掉。文件原样保留，升级或恢复由用户定。
+			return nil, fmt.Errorf("%w: %s holds a %q item a newer Rakko wrote; upgrade rather than let this one erase it", ErrStateUnreadable, stateFileName, it.Kind)
 		}
 		_, statErr := os.Stat(it.Path)
 		switch {
@@ -284,6 +294,14 @@ func Open(root string) (*Store, error) {
 			}
 			// Stat says not-exist. Keep dangling symlinks (the link
 			// itself still exists) and odd lstat errors as Missing.
+			if volumeMissing(it.Path) {
+				// 外置盘、网络盘没挂载时，文件“不存在”只是盘不在：
+				// 保留为 Missing 等盘接回，Refresh 会自动恢复；盘在
+				// 而文件不在，才照旧当作真删了。
+				it.Missing = true
+				kept = append(kept, it)
+				continue
+			}
 			if _, lerr := os.Lstat(it.Path); !os.IsNotExist(lerr) {
 				it.Missing = true
 				kept = append(kept, it)
@@ -313,9 +331,12 @@ func Open(root string) (*Store, error) {
 // A managed image's stable identity is its file name inside the current
 // images directory, so absolute paths that resolve into the managed
 // directory — including entries written through a symlinked root — are
-// unified to the current root's actual location. Absolute paths pointing
-// elsewhere are kept as they were (an image item deliberately pointing
-// outside must keep working).
+// unified to the current root's actual location. An absolute path
+// elsewhere that no longer resolves (the data directory moved, a backup
+// was restored) falls back to the same-name file in the current images
+// directory before it is given up as Missing — the same recovery
+// resolveConvertedPath has — while an image deliberately pointing
+// outside that still resolves is kept as it was, so it keeps working.
 func (s *Store) resolveImagePath(stored string) string {
 	if stored == "" {
 		return ""
@@ -324,6 +345,15 @@ func (s *Store) resolveImagePath(stored string) string {
 		clean := filepath.Clean(stored)
 		if resolved, err := filepath.EvalSymlinks(clean); err == nil && s.managedPath(resolved) {
 			return filepath.Join(s.imagesDir(), filepath.Base(resolved))
+		}
+		// 旧绝对路径已经失效时，当前 images 目录里的同名文件就是这条
+		// 记录的受管原件——图片的稳定身份是文件名，和转换产物一致；
+		// 否则这条记录会被标成 Missing，同名文件还成了孤儿。
+		if s.imagesDirReal() {
+			candidate := filepath.Join(s.imagesDir(), filepath.Base(clean))
+			if _, lerr := os.Lstat(candidate); lerr == nil {
+				return candidate
+			}
 		}
 		return clean
 	}
@@ -1191,6 +1221,48 @@ func (s *Store) convertedPath(p string) bool {
 func (s *Store) convertedDirReal() bool {
 	fi, err := os.Lstat(s.convertedDir())
 	return err == nil && fi.IsDir()
+}
+
+// imagesDirReal reports whether <root>/images lstats as a real
+// directory, the same guarantee convertedDirReal gives the converted
+// directory: only then may the same-name fallback or the leftover
+// cleanup touch its entries.
+func (s *Store) imagesDirReal() bool {
+	fi, err := os.Lstat(s.imagesDir())
+	return err == nil && fi.IsDir()
+}
+
+// cleanTempLeftovers removes the temporary files a killed process left
+// behind: atomicfile names them .<file>.tmp-<random>, and its deferred
+// removal only runs while the process lives, so a crash between the
+// write and the rename leaves one forever. Only that exact naming
+// convention is touched, in the directories Rakko owns — the root and
+// images always, converted only when it is a real directory — and only
+// regular files; a future Open retries whatever could not be removed.
+func (s *Store) cleanTempLeftovers() {
+	for _, dir := range []string{s.Root, s.imagesDir()} {
+		s.removeTempLeftovers(dir)
+	}
+	if s.convertedDirReal() {
+		s.removeTempLeftovers(s.convertedDir())
+	}
+}
+
+func (s *Store) removeTempLeftovers(dir string) {
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return // best-effort: the next Open tries again.
+	}
+	for _, ent := range ents {
+		if !atomicfile.IsTempName(ent.Name()) {
+			continue
+		}
+		fi, ferr := ent.Info() // lstat 语义：不跟随链接。
+		if ferr != nil || !fi.Mode().IsRegular() {
+			continue
+		}
+		_ = os.Remove(filepath.Join(dir, ent.Name()))
+	}
 }
 
 // insideDir reports whether p is inside dir, resolving symlinked

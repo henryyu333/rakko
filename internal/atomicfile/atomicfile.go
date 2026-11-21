@@ -12,11 +12,14 @@ package atomicfile
 import (
 	"os"
 	"path/filepath"
+	"strings"
 )
 
-// WriteFile writes data to dir/name atomically, through a temporary file in
-// dir. perm is the temporary file's mode; on Windows only its read-only bit
-// survives, as usual. The temporary file is synced before the replace, so a
+// WriteFile writes data to dir/name atomically, through a temporary file
+// in dir. perm is the temporary file's mode; on Windows only its
+// read-only bit survives, as usual. The temporary file is synced to the
+// storage device (F_FULLFSYNC on macOS, fsync elsewhere) before the
+// replace, and the replace flushes the directory entry afterwards, so a
 // crash or a power loss leaves the old contents or the new ones, whole.
 func WriteFile(dir, name string, data []byte, perm os.FileMode) error {
 	return writeFile(dir, name, data, perm, true)
@@ -50,7 +53,7 @@ func writeFile(dir, name string, data []byte, perm os.FileMode, sync bool) error
 		return err
 	}
 	if sync {
-		if err := tmp.Sync(); err != nil {
+		if err := syncData(tmp); err != nil {
 			tmp.Close()
 			return err
 		}
@@ -59,4 +62,16 @@ func writeFile(dir, name string, data []byte, perm os.FileMode, sync bool) error
 		return err
 	}
 	return replace(tmpName, filepath.Join(dir, name))
+}
+
+// IsTempName reports whether name follows writeFile's temporary-file
+// convention: ".<target>.tmp-<random>", as os.CreateTemp fills the
+// pattern in, with a nonempty target name of its own. Open-time cleanup
+// removes exactly these leftovers — a killed process's deferred removal
+// never ran — and leaves every other file in the directory alone.
+func IsTempName(name string) bool {
+	if !strings.HasPrefix(name, ".") {
+		return false
+	}
+	return strings.Index(name, ".tmp-") > 1
 }

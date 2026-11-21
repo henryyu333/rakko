@@ -16,6 +16,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -2597,5 +2599,144 @@ func TestConvertedDirOccupiedByFile(t *testing.T) {
 	got, err := os.ReadFile(occupier)
 	if err != nil || string(got) != "mine" {
 		t.Fatalf("occupying file disturbed: %v", err)
+	}
+}
+
+// 外置盘没挂载时，盘上的文件项在 Open 里不丢：保留为 Missing 等盘接回，
+// Refresh 在盘接回后自动恢复；盘还在而文件真被删了，才照旧清掉。
+func TestOpenKeepsFileOnUnmountedVolume(t *testing.T) {
+	root := t.TempDir()
+	s, err := Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unplugged := unpluggedVolumePath(t)
+	if err := s.AddFiles([]string{unplugged}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	s2, err := Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s2.Close()
+	if len(s2.Items) != 1 || !s2.Items[0].Missing {
+		t.Fatalf("unmounted-volume file not kept Missing: %+v", s2.Items)
+	}
+	// The volume comes back (the file does not): Refresh keeps the row
+	// until the file itself returns.
+	s2.Refresh()
+	if !s2.Items[0].Missing {
+		t.Fatal("Refresh must not clear Missing while the file is still gone")
+	}
+
+	// A file on a mounted volume that was deleted stays a deletion.
+	root2 := t.TempDir()
+	s3, err := Open(root2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gone := filepath.Join(t.TempDir(), "deleted.txt")
+	if err := os.WriteFile(gone, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := s3.AddFiles([]string{gone}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s3.Close(); err != nil {
+		t.Fatal(err)
+	}
+	os.Remove(gone)
+	s4, err := Open(root2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s4.Close()
+	for _, it := range s4.Items {
+		if it.Kind == KindFile && filepath.Base(it.Path) == "deleted.txt" {
+			t.Fatalf("deleted file on a mounted volume survived Open: %+v", it)
+		}
+	}
+}
+
+// unpluggedVolumePath is a path on a volume that is not mounted right
+// now, per platform: macOS mounts external and network volumes under
+// /Volumes, so a name there that does not exist is an unplugged drive;
+// on Windows a drive letter whose root answers "gone or unreachable" is
+// one — an empty card-reader slot counts, which is exactly the case to
+// keep.
+func unpluggedVolumePath(t *testing.T) string {
+	t.Helper()
+	name := "RakkoTest-" + filepath.Base(t.TempDir())
+	if runtime.GOOS == "windows" {
+		for _, c := range "ABDEFGHIJKLMNOPQRSTUVWXYZ" {
+			if p := string(c) + `:\report.pdf`; volumeMissing(p) {
+				return p
+			}
+		}
+		t.Skip("every drive letter answers as mounted; no unmounted volume to test")
+	}
+	return "/Volumes/" + name + "/report.pdf"
+}
+
+// 旧绝对路径失效的图片项，若当前 images 目录里有同名文件，则解析回它——
+// 与转换产物同名回退一致，而不是把条目丢成孤儿。
+func TestLegacyImageFindsSameNameInCurrentImages(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, imagesDirName), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, imagesDirName, "pic.png"), []byte("png"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	state := `{"version":1,"items":[{"id":"img1","kind":"image","path":` + strconv.Quote(
+		filepath.Join(t.TempDir(), "oldroot", "images", "pic.png")) + `,"createdAt":"2026-11-20T10:00:00Z"}]}`
+	if err := os.WriteFile(filepath.Join(root, stateFileName), []byte(state), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := Open(root)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer s.Close()
+	var found *Item
+	for i := range s.Items {
+		if s.Items[i].Kind == KindImage {
+			found = &s.Items[i]
+		}
+	}
+	if found == nil {
+		t.Fatalf("image item dropped though images/pic.png exists: %+v", s.Items)
+	}
+	want := filepath.Join(realRoot(t, root), imagesDirName, "pic.png")
+	if found.Path != want || found.Missing {
+		t.Fatalf("resolved to %q Missing=%v, want %q", found.Path, found.Missing, want)
+	}
+}
+
+// 未知 kind 是更新版本写的数据：拒绝打开并保留文件，绝不静默丢条目。
+func TestUnknownKindRefusesOpen(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, imagesDirName), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	state := `{"version":1,"items":[{"id":"v2","kind":"video","path":"/x.mp4","createdAt":"2026-11-20T10:00:00Z"}]}`
+	if err := os.WriteFile(filepath.Join(root, stateFileName), []byte(state), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(root)
+	if s != nil {
+		s.Close()
+	}
+	if !errors.Is(err, ErrStateUnreadable) {
+		t.Fatalf("Open on unknown kind = %v, want ErrStateUnreadable", err)
+	}
+	got, rerr := os.ReadFile(filepath.Join(root, stateFileName))
+	if rerr != nil || string(got) != state {
+		t.Fatalf("refused state file disturbed: %v", rerr)
 	}
 }
