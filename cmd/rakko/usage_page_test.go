@@ -889,7 +889,7 @@ func TestUsageCancelledRefreshKeepsPriorAnswer(t *testing.T) {
 		t.Fatal("first look must publish the good answer")
 	}
 
-	*fx.now = fx.now.Add(6 * time.Minute) // past both manual refresh floors
+	*fx.now = (*fx.now).Add(6 * time.Minute) // past both manual refresh floors
 	fx.f.requestRefresh()
 	if !fx.f.quotaState(aiusage.ToolClaude).busy {
 		t.Fatal("the manual refresh must start a Claude fetch")
@@ -1804,5 +1804,177 @@ func TestUsageChartHasNoLegend(t *testing.T) {
 		if fx.view.HasText(gone) {
 			t.Fatalf("per-agent legend %q is still drawn; texts=%v", gone, fx.view.Texts())
 		}
+	}
+}
+
+// A reset being consumed freezes refreshes: an automatic or manual one
+// started after the confirm would land with a sequence number the busy
+// guard cannot tell from the post-consume refresh, and unlock the button
+// while the consume is still in flight.
+func TestCodexResetFreezesRefreshesWhileBusy(t *testing.T) {
+	fx := newUsageFixture(t, true)
+	stubCodexReset(fx.f)
+	// The consume runs on a queued worker, so the test can look at the
+	// state while it is still in flight.
+	flush := stubUsageSeams(t, true)
+	q := okQuota(aiusage.ToolCodex, "Plus", *fx.now)
+	q = windowUsed(q, 0, 50)
+	q.ResetCredits = &aiusage.ResetCredits{Count: 2, FirstID: "cr-1"}
+	st := fx.f.quotaState(aiusage.ToolCodex)
+	st.latest, st.good = q, q
+	fx.f.requestUseCodexReset()
+	fx.f.confirmUseCodexReset()
+	if !fx.f.codexResetBusy {
+		t.Fatal("confirm did not take the busy guard")
+	}
+	if st.minSeq != st.seq+1 {
+		t.Fatalf("minSeq = %d after confirm, want seq+1 = %d", st.minSeq, st.seq+1)
+	}
+	calls := fx.codex.calls
+	// A five-minute tick and a manual refresh both stay out of the way.
+	*fx.now = (*fx.now).Add(6 * time.Minute)
+	fx.f.ensureFresh(*fx.now)
+	fx.f.requestRefresh()
+	if fx.codex.calls != calls {
+		t.Fatalf("a refresh started while the reset was in flight (%d calls, want %d)", fx.codex.calls, calls)
+	}
+	flush()
+}
+
+// A finished reset spends the credit on screen at once: when the refresh
+// after it fails, the old count must not come back and invite a second
+// consume of a finite resource.
+func TestCodexResetSpendsCreditBeforeRefresh(t *testing.T) {
+	fx := newUsageFixture(t, true)
+	stubCodexReset(fx.f)
+	q := okQuota(aiusage.ToolCodex, "Plus", *fx.now)
+	q = windowUsed(q, 0, 50)
+	q.ResetCredits = &aiusage.ResetCredits{Count: 2, FirstID: "cr-1"}
+	// The refresh after the consume fails on the way.
+	fx.codex.qs = []aiusage.Quota{{Tool: aiusage.ToolCodex, Status: aiusage.QuotaFailed, Err: "offline", FetchedAt: *fx.now}}
+	st := fx.f.quotaState(aiusage.ToolCodex)
+	st.latest, st.good = q, q
+	fx.f.requestUseCodexReset()
+	fx.f.confirmUseCodexReset()
+	if fx.f.codexResetBusy {
+		t.Fatal("the consume should have finished")
+	}
+	shown, stale := fx.f.quotaShown(aiusage.ToolCodex)
+	if !stale {
+		t.Fatal("the failed refresh should leave the last good numbers up, dimmed")
+	}
+	if shown.ResetCredits == nil || shown.ResetCredits.Count != 1 {
+		t.Fatalf("shown credits = %+v, want the consumed credit gone (1 left)", shown.ResetCredits)
+	}
+}
+
+// A fold or a page switch drops the reset confirmation: it belongs to the
+// page it was opened on, and must not pop back with old numbers.
+func TestCodexResetConfirmClearedWhenWorkStops(t *testing.T) {
+	fx := newUsageFixture(t, true)
+	fx.f.codexResetConfirm = true
+	fx.f.stopWork()
+	if fx.f.codexResetConfirm {
+		t.Fatal("the confirmation survived a page leave")
+	}
+}
+
+// A quota answer whose credit sub-call failed keeps the count Rakko last
+// knew: the row must not vanish as if the account had none.
+func TestCodexCreditsSurviveAFailedSubCall(t *testing.T) {
+	fx := newUsageFixture(t, true)
+	good := okQuota(aiusage.ToolCodex, "Plus", *fx.now)
+	good.ResetCredits = &aiusage.ResetCredits{Count: 2, FirstID: "cr-1"}
+	st := fx.f.quotaState(aiusage.ToolCodex)
+	st.latest, st.good = good, good
+	later := (*fx.now).Add(time.Minute)
+	q := okQuota(aiusage.ToolCodex, "Plus", later)
+	q.ResetCreditsStale = true
+	fx.f.gotQuota(q, st.generation, st.seq, st.attemptAt, false)
+	if st.latest.ResetCredits == nil || st.latest.ResetCredits.Count != 2 {
+		t.Fatalf("credits = %+v after an unreadable sub-call, want the last known 2", st.latest.ResetCredits)
+	}
+	// A readable answer with no credits clears the row for real.
+	empty := okQuota(aiusage.ToolCodex, "Plus", later.Add(time.Minute))
+	fx.f.gotQuota(empty, st.generation, st.seq, st.attemptAt, false)
+	if st.latest.ResetCredits != nil {
+		t.Fatalf("credits = %+v after a readable empty answer, want none", st.latest.ResetCredits)
+	}
+}
+
+// With no quota card on, the page narrows to the local panel alone: no
+// empty left column, no wider sheet than the numbers need.
+func TestUsagePageNarrowsWhenNoQuotaCardOn(t *testing.T) {
+	fx := newUsageFixture(t, true)
+	for _, tool := range fx.a.settings.AIUsage.SelectedQuotaTools() {
+		fx.a.settings.AIUsage.SetQuotaCard(tool, false)
+	}
+	if got := fx.f.width(); got != usageLocalSheetW {
+		t.Fatalf("width with no quota card = %v, want %v", got, usageLocalSheetW)
+	}
+	fx.view.Click("AI 用量")
+	fx.view.Frame()
+	fx.view.Frame()
+	if !fx.view.HasText("本机用量") {
+		t.Fatalf("local usage missing: %v", fx.view.Texts())
+	}
+	if fx.view.HasText("Codex") || fx.view.HasText("Claude Code") {
+		t.Fatalf("a quota card is still drawn: %v", fx.view.Texts())
+	}
+}
+
+// A lapsed key asks for a fresh key in Settings; only the app-based tools
+// talk about reopening.
+func TestUsageExpiredWordingFollowsTheSource(t *testing.T) {
+	fx := newUsageFixtureWith(t, true, func(d *usageDeps) {
+		d.fetchMore = map[aiusage.Tool]func(context.Context) aiusage.Quota{
+			aiusage.ToolGLM: func(context.Context) aiusage.Quota {
+				return aiusage.Quota{Tool: aiusage.ToolGLM, Status: aiusage.QuotaExpired}
+			},
+		}
+	})
+	fx.a.settings.AIUsage.SetQuotaCard(aiusage.ToolGLM, true)
+	fx.a.settings.AIUsage.SetQuotaCard(aiusage.ToolCodex, false)
+	fx.a.settings.AIUsage.SetQuotaCard(aiusage.ToolClaude, false)
+	fx.view.Click("AI 用量")
+	fx.f.tick(*fx.now)
+	fx.view.Frame()
+	fx.view.Frame()
+	if !fx.view.HasText("在设置里粘贴 API Key") {
+		t.Fatalf("a lapsed GLM key still asks to reopen the app: %v", fx.view.Texts())
+	}
+	if fx.view.HasText("重新打开 GLM") {
+		t.Fatalf("the reopen wording reached a key tool: %v", fx.view.Texts())
+	}
+}
+
+// The hover detail carries the staleness the card shows: dimmed numbers
+// and the same 「N 分钟前的数据」 note, not a fresh-looking panel.
+func TestCodexPopoverShowsStaleData(t *testing.T) {
+	now := time.Date(2026, 11, 19, 12, 0, 0, 0, time.Local)
+	a, f := makeV1170Shelf(t, "zh-Hans", []aiusage.Tool{aiusage.ToolCodex}, now)
+	stubCodexReset(f)
+	// A transient failure after a good answer: the card falls back to the
+	// last numbers, dimmed and dated.
+	good := okQuota(aiusage.ToolCodex, "Plus", now.Add(-10*time.Minute))
+	good.ResetCredits = &aiusage.ResetCredits{Count: 2, FirstID: "cr-1"}
+	good.Windows[0].UsedPct = 50
+	st := f.quotaState(aiusage.ToolCodex)
+	st.good = good
+	st.latest = aiusage.Quota{Tool: aiusage.ToolCodex, Status: aiusage.QuotaRateLimited, FetchedAt: now.Add(-time.Minute)}
+	view := ui.NewTester(a.view, sheetW, sheetH)
+	view.SetLocale("zh-Hans")
+	view.Move(sheetW-4, sheetH-4)
+	view.Frame()
+	codex, ok := view.Find("Codex")
+	if !ok {
+		t.Fatal("missing Codex card")
+	}
+	cx, cy := center(codex)
+	view.Move(cx, cy)
+	view.Frame()
+	view.Frame()
+	if !view.HasText("的数据") {
+		t.Fatalf("the detail dresses stale numbers as fresh: %v", view.Texts())
 	}
 }

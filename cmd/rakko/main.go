@@ -465,9 +465,18 @@ func (a *shelf) ready(show bool) {
 		fetchCodex: func(ctx context.Context) aiusage.Quota {
 			q := aiusage.FetchCodex(ctx, usageEnv)
 			if q.Status == aiusage.QuotaOK {
-				if rc, err := aiusage.FetchCodexResetCredits(ctx, usageEnv); err == nil && rc != nil {
+				rc, err := aiusage.FetchCodexResetCredits(ctx, usageEnv)
+				switch {
+				case err != nil:
+					// The quota answer stands, but the credit count was not
+					// read: say unknown, so the last known count keeps
+					// showing instead of the row vanishing.
+					q.ResetCreditsStale = true
+				case rc != nil:
 					q.ResetCredits = rc
 				}
+				// A readable answer with no credits leaves ResetCredits
+				// nil: the row is gone for real.
 			}
 			return q
 		},

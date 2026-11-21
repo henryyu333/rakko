@@ -153,6 +153,9 @@ type usageFeature struct {
 	// Codex reset-credit confirmation overlay and result toast.
 	codexResetConfirm bool
 	codexResetBusy    bool
+	// codexPostConsume marks the one refresh a finished consume is allowed
+	// to start while the busy guard is still up; every other start waits.
+	codexPostConsume bool
 
 	// Rakko's own Claude sign-in; loginGen retires a cancelled run's
 	// late answer.
@@ -278,6 +281,9 @@ func (f *usageFeature) stopWork() {
 		st.busy = false
 	}
 	f.localBusy = false
+	// The reset confirmation belongs to the page it was opened on; a fold
+	// or a switch must not bring it back with old numbers.
+	f.codexResetConfirm = false
 	f.invalidate()
 }
 
@@ -409,6 +415,13 @@ func (f *usageFeature) startQuota(tool aiusage.Tool) {
 	if st.busy {
 		return
 	}
+	if tool == aiusage.ToolCodex && f.codexResetBusy && !f.codexPostConsume {
+		// A reset is being consumed: an automatic or manual refresh would
+		// land with a sequence number the busy guard cannot tell from the
+		// post-consume one, and unlock the button mid-consume. Only the
+		// post-consume refresh starts while busy.
+		return
+	}
 	fetch := f.fetcher(tool)
 	if fetch == nil {
 		return
@@ -484,6 +497,11 @@ func (f *usageFeature) gotQuota(q aiusage.Quota, gen int, seq uint64, attempted 
 	}
 	if q.FetchedAt.Before(st.latest.FetchedAt) {
 		return
+	}
+	if q.Tool == aiusage.ToolCodex && q.Status == aiusage.QuotaOK && q.ResetCreditsStale {
+		// The quota answer is fresh; the credit count is not. Keep the last
+		// known count rather than letting this answer erase it.
+		q.ResetCredits = st.good.ResetCredits
 	}
 	st.latest = q
 	if q.Status == aiusage.QuotaOK && quotaUsable(q) {
@@ -804,6 +822,37 @@ func (f *usageFeature) canUseCodexReset() (bool, string) {
 	return false, l.UsageResetNothingToReset()
 }
 
+// spendLocalResetCredit takes the credit the toast just announced off the
+// numbers on screen. A reset is a finite resource: if the refresh after it
+// fails, the old count must not come back and invite a second consume.
+func (f *usageFeature) spendLocalResetCredit() {
+	st := f.quotaState(aiusage.ToolCodex)
+	spend := func(q *aiusage.Quota) bool {
+		if q.ResetCredits == nil {
+			return false
+		}
+		next := *q.ResetCredits
+		next.Count--
+		if next.Count <= 0 {
+			q.ResetCredits = nil
+		} else {
+			q.ResetCredits = &next
+		}
+		return true
+	}
+	// latest and good usually share the answer's pointer: spend once and
+	// hand the same result to both.
+	orig := st.latest.ResetCredits
+	if !spend(&st.latest) {
+		return
+	}
+	if st.good.ResetCredits == orig {
+		st.good.ResetCredits = st.latest.ResetCredits
+	} else {
+		spend(&st.good)
+	}
+}
+
 func (f *usageFeature) refreshCodexAfterConsume() {
 	st := f.quotaState(aiusage.ToolCodex)
 	st.minSeq = st.seq + 1
@@ -813,7 +862,9 @@ func (f *usageFeature) refreshCodexAfterConsume() {
 		f.codexResetBusy = false
 		return
 	}
+	f.codexPostConsume = true
 	f.startQuota(aiusage.ToolCodex)
+	f.codexPostConsume = false
 }
 
 // requestUseCodexReset opens the confirmation overlay if Codex has a reset
@@ -850,6 +901,10 @@ func (f *usageFeature) confirmUseCodexReset() {
 		return
 	}
 	f.codexResetBusy = true
+	// Freeze every refresh already in flight: their answers predate the
+	// consume and must not clear the busy state that guards it.
+	st := f.quotaState(aiusage.ToolCodex)
+	st.minSeq = st.seq + 1
 	f.invalidate()
 	use := f.deps.useCodexReset
 	goWork(func() {
@@ -868,6 +923,7 @@ func (f *usageFeature) confirmUseCodexReset() {
 				}
 			case out.Code == "reset":
 				f.host.toastStatus(l.UsageResetDone(), time.Time{}, statusInfo)
+				f.spendLocalResetCredit()
 				f.refreshCodexAfterConsume()
 			case out.Code == "nothing_to_reset":
 				f.codexResetBusy = false
@@ -950,9 +1006,18 @@ func (f *usageFeature) saveAPIKey(t aiusage.Tool, key string) {
 	})
 }
 
-// invalidate asks the panel for a repaint after state changed.
+// invalidate asks the panel and the Settings window for a repaint after
+// state changed: both draw this feature's answers (the panel's cards, the
+// Settings rows' credential sources), and neither redraws on its own.
 func (f *usageFeature) invalidate() {
-	if a := f.host; a != nil && a.win != nil {
+	a := f.host
+	if a == nil {
+		return
+	}
+	if a.win != nil {
 		a.win.Invalidate()
+	}
+	if a.settingsWin != nil {
+		a.settingsWin.Invalidate()
 	}
 }

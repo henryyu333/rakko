@@ -157,8 +157,13 @@ type Quota struct {
 	Windows      []Window
 	Balance      *BalanceInfo
 	ResetCredits *ResetCredits
-	Status       QuotaStatus
-	FetchedAt    time.Time
+	// ResetCreditsStale says ResetCredits carries no verdict from this
+	// answer: the quota call succeeded but the credits sub-call failed, so
+	// the field is nil because it is unknown, not because the account has
+	// none. A reader keeps the last known count.
+	ResetCreditsStale bool
+	Status            QuotaStatus
+	FetchedAt         time.Time
 	// LimitResetsAt is when the allowance a QuotaLimitReached answer
 	// blocked comes back, when the vendor's message named it.
 	LimitResetsAt time.Time

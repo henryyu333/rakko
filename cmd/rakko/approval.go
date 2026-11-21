@@ -199,11 +199,15 @@ func (f *approvalFeature) wait(ctx context.Context, ap *approval) agentnotify.De
 			f.mu.Lock()
 			armed, deadline = ap.armed, ap.deadline
 			f.mu.Unlock()
-			if time.Now().Before(deadline) {
-				continue // the countdown started after this timer was armed
-			}
 			if armed {
+				if time.Now().Before(deadline) {
+					continue // the countdown started after this timer was armed
+				}
 				return f.conclude(ap, pass, approvalExpired)
+			}
+			// Still hidden: only the total wall governs this card.
+			if time.Now().Before(outer) {
+				continue
 			}
 			// The total wall ran out on a card the user never saw: hand
 			// it back and say so on the notch.

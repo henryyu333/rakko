@@ -50,6 +50,10 @@ const (
 	usageCompactRingSize = 28
 )
 
+// usageLocalSheetW is the sheet with no quota card on: the local panel
+// alone, never an empty left column (2×12 padding + 197).
+const usageLocalSheetW = usageRightW + 24
+
 // Symbols the page adds to panel.go's set: the refresh button and the ear
 // icon's fallback gauge. The two tools' marks inside the ring are the
 // official logos: OpenAI's Blossom (white) from the brand-page download
@@ -136,10 +140,15 @@ func (f *usageFeature) enabledQuotaTools() []aiusage.Tool {
 }
 
 // width implements pageWidth: 1–2 cards keep the 440pt sheet, 3–4 cards
-// widen to 679pt for the 2×2 card grid beside local usage.
+// widen to 679pt for the 2×2 card grid beside local usage, and with no
+// quota card on the page narrows to the local panel alone — never an
+// empty left column.
 func (f *usageFeature) width() float32 {
-	if len(f.enabledQuotaTools()) > 2 {
+	switch n := len(f.enabledQuotaTools()); {
+	case n > 2:
 		return usageWideSheetW
+	case n == 0 && f.localOn():
+		return usageLocalSheetW
 	}
 	return sheetW
 }
@@ -365,9 +374,11 @@ func (f *usageFeature) body(c *ui.Context, _ bool, _ bool) ui.Element {
 	root.Children(func() {
 		prevHover := f.hoverTool
 		f.hoverTool = "" // rebuilt each frame by the cards below
-		ui.Column(c.Key("usage-quota")).Width(quotaW).FillHeight().Gap(usageCardGap).Children(func() {
-			f.quotaGrid(c, enabled, wide)
-		})
+		if len(enabled) > 0 {
+			ui.Column(c.Key("usage-quota")).Width(quotaW).FillHeight().Gap(usageCardGap).Children(func() {
+				f.quotaGrid(c, enabled, wide)
+			})
+		}
 		if f.localOn() {
 			ui.Column(c.Key("usage-local")).Width(usageRightW).FillHeight().Children(func() {
 				f.localPanel(c)
@@ -393,7 +404,7 @@ func (f *usageFeature) body(c *ui.Context, _ bool, _ bool) ui.Element {
 				if wide && popCol == 0 {
 					popLeft = usageLeftW
 				}
-				q, _ := f.quotaShown(popTool)
+				q, popStale := f.quotaShown(popTool)
 				interactivePop := popTool == aiusage.ToolCodex && q.ResetCredits != nil && q.ResetCredits.Count > 0
 				popTop := float32(6)
 				if interactivePop {
@@ -409,7 +420,7 @@ func (f *usageFeature) body(c *ui.Context, _ bool, _ bool) ui.Element {
 					pop.IgnoreInput(true)
 					f.popHovered = false
 				}
-				pop.Children(func() { f.popoverBody(c, popTool) })
+				pop.Children(func() { f.popoverBody(c, popTool, popStale) })
 				if tentativePop && !f.popHovered {
 					f.lastInteractivePop = false
 				} else {
@@ -609,7 +620,15 @@ func (f *usageFeature) compactStatusText(c *ui.Context, tool aiusage.Tool, st *u
 		}
 		return l.UsagePasteKeyPrompt()
 	case aiusage.QuotaExpired:
-		return l.UsageSignInExpired(toolName(tool))
+		// A lapsed key wants a fresh key, not "reopen the app".
+		switch tool {
+		case aiusage.ToolClaude, aiusage.ToolCodex:
+			return l.UsageSignInExpired(toolName(tool))
+		case aiusage.ToolCursor:
+			return l.SettingsAISourceMissing()
+		default:
+			return l.UsagePasteKeyPrompt()
+		}
 	case aiusage.QuotaLimitReached:
 		return l.UsageLimitReached()
 	case aiusage.QuotaRateLimited:
@@ -856,7 +875,15 @@ func (f *usageFeature) quotaMessage(c *ui.Context, tool aiusage.Tool, q aiusage.
 			lines = l.UsagePasteKeyPrompt()
 		}
 	case aiusage.QuotaExpired:
-		lines = l.UsageSignInExpired(toolName(tool))
+		// A lapsed key wants a fresh key, not "reopen the app".
+		switch tool {
+		case aiusage.ToolClaude, aiusage.ToolCodex:
+			lines = l.UsageSignInExpired(toolName(tool))
+		case aiusage.ToolCursor:
+			lines = l.SettingsAISourceMissing()
+		default:
+			lines = l.UsagePasteKeyPrompt()
+		}
 	case aiusage.QuotaLimitReached:
 		// The vendor said the allowance is used up: say so, and when it
 		// comes back if its message named the reset.
@@ -1082,7 +1109,7 @@ func strokeRingTick(p *ui.Painter, cx, cy, rad, lw, frac float32) {
 
 // popoverBody fills the Synara-style detail card: tool + plan, a legend,
 // and per window a track bar with the even-pace tick and the pace delta.
-func (f *usageFeature) popoverBody(c *ui.Context, tool aiusage.Tool) {
+func (f *usageFeature) popoverBody(c *ui.Context, tool aiusage.Tool, stale bool) {
 	q, _ := f.quotaShown(tool)
 	now := f.deps.now()
 	ui.Row(c.Key("ph")).AlignItems(ui.End).Children(func() {
@@ -1119,16 +1146,22 @@ func (f *usageFeature) popoverBody(c *ui.Context, tool aiusage.Tool) {
 		// More windows than the card holds (a plan with per-model weeks), or
 		// Codex with reset credits: compact meters keep the popover within 174pt.
 		for _, w := range ordered {
-			f.popCompact(c, w, now)
+			f.popCompact(c, w, now, stale)
 		}
 	} else {
 		for _, w := range ordered {
-			f.popWindow(c, w, now)
+			f.popWindow(c, w, now, stale)
 		}
 	}
 	if hasReset {
 		ui.Box(c).Height(6)
-		f.resetCreditsLine(c, q.ResetCredits, false, true)
+		f.resetCreditsLine(c, q.ResetCredits, stale, true)
+	}
+	if stale {
+		// The card dims its numbers and says how old they are; the detail
+		// must say the same, not dress them as fresh.
+		panelLabel(c, nil, tloc(c).UsageStaleData(usageAgo(tloc(c), q.FetchedAt, now)), 10, 0).
+			TextColor(ink3).Margin(6, 0, 0, 0)
 	}
 }
 
@@ -1142,15 +1175,20 @@ func popLegend(c *ui.Context, col ui.Color, s string) {
 // popWindow is one detail block: name, the shown share and the long reset
 // over the track (fill3 bar, coloured share, white/red even-pace tick),
 // then the pace delta and the depletion estimate.
-func (f *usageFeature) popWindow(c *ui.Context, w aiusage.Window, now time.Time) {
+func (f *usageFeature) popWindow(c *ui.Context, w aiusage.Window, now time.Time, stale bool) {
 	l := tloc(c)
 	name := windowLabel(l, w)
 	shown := f.windowShown(w)
 	col := windowColor(w)
+	numCol := ink2
+	if stale {
+		col = col.Alpha(0.45)
+		numCol = ink3
+	}
 	pi, hasPace := f.paceOf(&w, now)
 	ui.Row(c.Key("pw-"+name)).AlignItems(ui.End).Margin(12, 0, 0, 0).Children(func() {
 		panelLabel(c, nil, name, 13, 600).TextColor(ink)
-		panelLabel(c, nil, f.shownLabel(l, shown), 11, 600).TextColor(ink2).Margin(0, 0, 0, 6)
+		panelLabel(c, nil, f.shownLabel(l, shown), 11, 600).TextColor(numCol).Margin(0, 0, 0, 6)
 		ui.Box(c).Grow(1)
 		panelLabel(c, nil, usageResetLong(l, w.ResetsAt, now), 11, 0).TextColor(ink3)
 	})
@@ -1192,15 +1230,20 @@ func (f *usageFeature) popWindow(c *ui.Context, w aiusage.Window, now time.Time)
 
 // popCompact is one line plus a thin meter: the shape a plan with more
 // than two windows uses so every window stays visible in the sheet.
-func (f *usageFeature) popCompact(c *ui.Context, w aiusage.Window, now time.Time) {
+func (f *usageFeature) popCompact(c *ui.Context, w aiusage.Window, now time.Time, stale bool) {
 	l := tloc(c)
 	name := windowLabel(l, w)
 	shown := f.windowShown(w)
 	col := windowColor(w)
+	numCol := ink2
+	if stale {
+		col = col.Alpha(0.45)
+		numCol = ink3
+	}
 	ui.Row(c.Key("pc-"+name)).AlignItems(ui.Center).Margin(4, 0, 0, 0).Gap(6).Children(func() {
 		panelLabel(c, nil, name, 12, 600).TextColor(ink)
 		ui.Box(c).Grow(1)
-		panelLabel(c, nil, f.shownLabel(l, shown), 11, 600).TextColor(ink2)
+		panelLabel(c, nil, f.shownLabel(l, shown), 11, 600).TextColor(numCol)
 		if !w.ResetsAt.IsZero() {
 			panelLabel(c, nil, usageResetShort(l, w.ResetsAt, now), 10.5, 0).TextColor(ink3)
 		}

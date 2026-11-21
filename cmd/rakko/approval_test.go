@@ -409,3 +409,67 @@ func TestApprovalDuplicateReplacesOld(t *testing.T) {
 		t.Fatalf("queue count %d after dedupe", n)
 	}
 }
+
+// A card that waited behind another keeps its full reading time: the 45 s
+// countdown starts when the card reaches the screen, not when it arrived.
+func TestApprovalQueuedCardCountsFromDisplay(t *testing.T) {
+	a, f := approvalTestShelf(t)
+	first := testApproval(t, testID(11), "claude", `{"command":"ls one"}`)
+	second := testApproval(t, testID(12), "claude", `{"command":"ls two"}`)
+	// One request per report: outside the duplicate window, so the queue
+	// treats this as a second, independent waiting request.
+	second.at = second.at.Add(3 * time.Second)
+	if !f.enqueue(first) || !f.enqueue(second) {
+		t.Fatal("enqueue refused")
+	}
+	now := time.Now()
+	if ev, ok := a.liveNow(now, true); !ok || ev.ask != first {
+		t.Fatalf("first card = %+v ok=%v", ev, ok)
+	}
+	// The first card is answered, and the second comes up long after its
+	// arrival: an arrival-based deadline would already be spent here.
+	f.decide(first.id, agentnotify.DecisionAllow, "")
+	shown := now.Add(approvalWait + 5*time.Second)
+	if ev, ok := a.liveNow(shown, true); !ok || ev.ask != second {
+		t.Fatalf("second card = %+v ok=%v", ev, ok)
+	}
+	if !second.armed {
+		t.Fatal("the card reached the screen without arming its countdown")
+	}
+	if want := shown.Add(approvalWait); !second.deadline.Equal(want) {
+		t.Fatalf("deadline = %v, want the display time plus %v (%v)", second.deadline, approvalWait, want)
+	}
+	if second.at.Add(approvalWait).After(shown) {
+		t.Fatal("test premise: the arrival-based deadline had not passed yet")
+	}
+}
+
+// A card the queue never showed hands itself back at the client's own
+// budget, and the notch says so instead of the request vanishing.
+func TestApprovalQueuedCardReturnsAtTheTotalWall(t *testing.T) {
+	a, f := approvalTestShelf(t)
+	first := testApproval(t, testID(21), "claude", `{"command":"ls one"}`)
+	second := testApproval(t, testID(22), "claude", `{"command":"ls two"}`)
+	second.at = second.at.Add(3 * time.Second)
+	if !f.enqueue(first) || !f.enqueue(second) {
+		t.Fatal("enqueue refused")
+	}
+	if ev, ok := a.liveNow(time.Now(), true); !ok || ev.ask != first {
+		t.Fatalf("first card = %+v ok=%v", ev, ok)
+	}
+	// The second card's total wall is up while it still waits unseen.
+	second.at = time.Now().Add(-approvalTotalWait - time.Second)
+	d := f.wait(context.Background(), second)
+	if d.ID != second.id || d.Decision != agentnotify.DecisionPass {
+		t.Fatalf("the unseen card's hook was told %+v, want pass", d)
+	}
+	if second.state != approvalExpired {
+		t.Fatalf("the unseen card shows %v, want expired", second.state)
+	}
+	for _, ev := range a.live.queued {
+		if ev.kind == liveAgentBack && ev.pct == 1 {
+			return
+		}
+	}
+	t.Fatalf("no note that the request went back to the terminal: %+v", a.live.queued)
+}
