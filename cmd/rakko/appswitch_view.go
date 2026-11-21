@@ -37,7 +37,6 @@ const (
 	appPopFoot = 40  // 浮层尾行
 	appPopGap  = 10  // 壳 → 浮层间距
 	appPopR    = 16  // 浮层圆角
-	appEntryW  = 30  // 收起态应用入口按钮的宽（音乐翼 / 空闲小岛）
 	// appsTipRoom is the strip below the wings the window keeps for the
 	// hover tips: a tip hangs under its button, outside the drawn shell,
 	// and needs that height plus the shell→tip gap, its shadow and the
@@ -803,64 +802,6 @@ func (a *shelf) appRowBtn(c *ui.Context, key string, icon *ui.SVG, label string,
 func (a *shelf) overAppsPop(p mygo.Point) bool {
 	r := a.apps.popRect
 	return r.Width > 0 && insideRect(p, r)
-}
-
-// overAppEntry reports whether p is on the collapsed state's app-entry
-// button — the one drawn into the hover band, the music wings' right end,
-// or the idle island capsule.
-func (a *shelf) overAppEntry(p mygo.Point) bool {
-	r := a.apps.entryRect
-	return r.Width > 0 && insideRect(p, r)
-}
-
-// noteAppEntry records an element's drawn box in screen coordinates for the
-// press test: the pointer gate works in screen space, the element's bounds
-// in window space.
-func (a *shelf) noteAppEntry(e ui.Element) {
-	b := e.Bounds()
-	if b.W <= 0 {
-		return
-	}
-	a.apps.entryRect = mygo.Rectangle{
-		X:      a.frame.X + int(b.X+0.5),
-		Y:      a.frame.Y + int(b.Y+0.5),
-		Width:  int(b.W + 0.5),
-		Height: int(b.H + 0.5),
-	}
-}
-
-// appEntryRadius and appEntryGlyph are the entry's corner radius and icon
-// size for a drawn box of size — one rule for every entry (the music wings,
-// the idle island capsule, the chevron band) and for the resting capsule's
-// picture, so handing a capsule over from the panel to its picture cannot
-// move or resize the glyph. The 12pt floor keeps the 16pt band entry's grid
-// legible.
-func appEntryRadius(size float32) float32 { return min(7, size/2-1) }
-
-func appEntryGlyph(size float32) float32 { return max(12, size*0.53) }
-
-// appsEntryButton is the small dedicated entry drawn in the collapsed
-// state: it opens the wings directly instead of the search bar. size is
-// the drawn box (and the hit box — noteAppEntry records the button's own
-// bounds): 30 in the music wings and the idle island capsule, the compact
-// 16 in the chevron band whose 18pt body sits mostly behind the bottom
-// corner cuts. Same key kinds, hover fill and tap action at every size so
-// every drawn entry stays the one button. hover forces the hover fill on
-// for the caller: the idle capsule's entry is hovered while the resting
-// picture draws over the panel, which the panel's own hit test cannot see.
-func (a *shelf) appsEntryButton(c *ui.Context, key string, size float32, hover bool) ui.Element {
-	l := loc(c)
-	b := ui.ButtonBase(c.Key(key)).Size(size, size).Radius(appEntryRadius(size)).Center().
-		Label(l.AppsSwitch()).Tooltip(l.AppsSwitch())
-	if hover || b.Hovered() {
-		b.Background(fill2)
-	}
-	b.Children(func() { ui.Icon(c, appsSymbol).Size(appEntryGlyph(size), appEntryGlyph(size)).TextColor(ink2) })
-	if b.Clicked() {
-		a.openAppSwitch()
-	}
-	a.noteAppEntry(b)
-	return b
 }
 
 // winInvalidate repaints the resident window when there is one.

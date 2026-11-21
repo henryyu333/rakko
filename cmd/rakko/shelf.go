@@ -50,7 +50,6 @@ type shelf struct {
 	lastShortcutAt                                              time.Time
 	stopWakeObs                                                 func()
 	idleIslandDrawn                                             bool // the canvas on screen is the island style's resting capsule
-	idleEntryHover                                              bool // pointer on the resting capsule's app entry; the picture draws its hover
 	animationStart                                              time.Time
 	animationFrom, progress                                     float32
 	level                                                       int       // drawn level: 1 search bar (76), 2 page (250)
@@ -245,6 +244,10 @@ type shelf struct {
 	ocrBusyAt      time.Time
 	ocrRunID       int
 	ocrSheet       bool
+	// ocrSheetGranted is the card's second step: the user sent themselves to
+	// System Settings, and the grant only reaches this process on the next
+	// launch. The card then offers the same relaunch the Settings page has.
+	ocrSheetGranted bool
 	// ocrSheetShot remembers that the sheet is the screenshot flow's: the
 	// same permission card, with the screenshot title.
 	ocrSheetShot bool

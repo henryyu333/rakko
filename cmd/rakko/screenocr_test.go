@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+
+	"rakko/locales"
 )
 
 // ocrSeams swaps every injectable of screenocr.go and puts them back when
@@ -382,5 +384,64 @@ func TestScreenOCRCancelRepaints(t *testing.T) {
 	a.finishScreenOCR(time.NewTimer(time.Hour), "", false, nil) // Esc 取消
 	if paints != 1 {
 		t.Fatalf("silent finish repainted %d times, want 1", paints)
+	}
+}
+
+// The card's second step: after 打开系统设置 the same card says the grant
+// needs a relaunch, offers the Settings page's own button, and keeps the
+// cancel. The card keeps its shape — one title line and one button row.
+func TestScreenOCRSheetRelaunchStep(t *testing.T) {
+	ocrSeams(t)
+	ocrPreflight = func() bool { return false }
+	ocrGrant = func() bool { return false }
+	origExe, origStart, origQuit := relaunchExecutable, relaunchStart, relaunchQuit
+	relaunchExecutable = func() (string, error) { return "/tmp/Rakko", nil }
+	relaunchStart = func(relaunchPlan) error { return nil }
+	quit := false
+	relaunchQuit = func() { quit = true }
+	t.Cleanup(func() { relaunchExecutable, relaunchStart, relaunchQuit = origExe, origStart, origQuit })
+
+	a := &shelf{}
+	a.startScreenOCR()
+	view := ui.NewTester(a.view, sheetW, panelTestH)
+	l := locales.In("")
+	before, okBefore := view.Find(l.Cancel())
+	if err := view.Click(l.OcrOpenSettings()); err != nil {
+		t.Fatalf("grant click: %v", err)
+	}
+	view.Frame()
+	if !view.HasText(l.PermRelaunchStep()) || !view.HasText(l.PermRelaunchButton()) {
+		t.Fatalf("the second step is missing; texts=%v", view.Texts())
+	}
+	if view.HasText(l.OcrOpenSettings()) {
+		t.Fatalf("the first step is still drawn; texts=%v", view.Texts())
+	}
+	after, okAfter := view.Find(l.Cancel())
+	if okBefore && okAfter && (before.Y != after.Y || before.H != after.H) {
+		t.Fatalf("the card grew between its steps: cancel %+v -> %+v", before, after)
+	}
+	if err := view.Click(l.PermRelaunchButton()); err != nil {
+		t.Fatalf("relaunch click: %v", err)
+	}
+	if !quit {
+		t.Fatal("the relaunch button did not restart the app")
+	}
+}
+
+// The capture keys are not swallowed while the card is up: a new attempt
+// updates which permission the card explains.
+func TestScreenOCRSheetFollowsNewAttempts(t *testing.T) {
+	ocrSeams(t)
+	ocrPreflight = func() bool { return false }
+	ocrGrant = func() bool { return false }
+	a := &shelf{ocrSheet: true, ocrSheetShot: false}
+	a.startScreenshotOnMain()
+	if !a.ocrSheet || !a.ocrSheetShot {
+		t.Fatal("the screenshot key did not switch the card to the screenshot's step")
+	}
+	a.ocrSheetGranted = true
+	a.startScreenOCR()
+	if !a.ocrSheet || a.ocrSheetShot || a.ocrSheetGranted {
+		t.Fatal("the capture-text key did not switch the card back to its first step")
 	}
 }

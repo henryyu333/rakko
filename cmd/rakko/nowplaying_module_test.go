@@ -319,7 +319,7 @@ func TestPeekWingsShowCoverAndBarsOnly(t *testing.T) {
 		x, y float32
 	}{
 		{"cover", r.X + npWingsPad + npWingsArt/2, r.Y + r.H/2 - 2},
-		{"bars", r.X + r.W - npWingsPad - appEntryW - 6 - eqBars*eqBarW - (eqBars-1)*eqBarGap + 2, r.Y + r.H/2 - 2},
+		{"bars", r.X + r.W - npWingsPad - eqBars*eqBarW - (eqBars-1)*eqBarGap + 2, r.Y + r.H/2 - 2},
 	} {
 		// A closed panel: the previous click took the keyboard, and hide()
 		// would have given it back (headless tests skip the hide).

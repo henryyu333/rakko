@@ -57,9 +57,17 @@ var (
 func (a *shelf) startScreenOCR() {
 	ocrDispatch(func() {
 		switch {
-		case a.ocrScan || a.ocrSheet:
-			// One capture at a time, and no new round while the permission
-			// card still waits for the user's grant — both are ignored.
+		case a.ocrScan:
+			// One capture at a time.
+			return
+		case a.ocrSheet:
+			// The permission card is up: the key updates it to the capture
+			// this attempt asked for instead of being swallowed.
+			a.ocrSheetShot = false
+			a.ocrSheetGranted = false
+			if a.win != nil {
+				a.win.Invalidate()
+			}
 			return
 		case !ocrPreflight():
 			// No prompt from us: the panel opens on the current page's
@@ -215,11 +223,18 @@ func (a *shelf) ocrLiveStatus(now time.Time) (string, any, bool) {
 // relaunch note — a grant only reaches CGPreflightScreenCaptureAccess on
 // the next launch — and the two actions.
 func (a *shelf) ocrSheetStage(c *ui.Context) {
-	title := loc(c).OcrPermissionTitle()
+	l := loc(c)
+	title := l.OcrPermissionTitle()
 	var glyph *ui.SVG = ocrSymbol
 	if a.ocrSheetShot {
-		title = loc(c).ShotPermissionTitle()
+		title = l.ShotPermissionTitle()
 		glyph = shotSymbol
+	}
+	if a.ocrSheetGranted {
+		// Second step: the user has opened System Settings; the grant only
+		// reaches the cached preflight on the next launch, so the card says
+		// so and offers the Settings page's own relaunch button.
+		title = l.PermRelaunchStep()
 	}
 	card := ui.Row(c.Key("ocr-sheet")).Margin(0, 0, 6, 0).Radius(14).Background(fill1).
 		Padding(16, 16, 16, 16).Gap(14).AlignItems(ui.Start)
@@ -231,27 +246,40 @@ func (a *shelf) ocrSheetStage(c *ui.Context) {
 		ui.Column(c.Key("txt")).Grow(1).MinWidth(0).Children(func() {
 			ui.Text(c, title).FontSize(13).FontWeight(600).TextColor(ink)
 			ui.Row(c.Key("acts")).Gap(8).Margin(10, 0, 0, 0).Children(func() {
+				primaryLabel := osText(l.OcrOpenSettings(), l.OcrOpenSettingsWin())
+				if a.ocrSheetGranted {
+					primaryLabel = l.PermRelaunchButton()
+				}
 				primary := ui.ButtonBase(c.Key("grant")).Height(24).Radius(12).Padding(0, 10, 0, 10).
-					Background(accent).Center().Label(osText(loc(c).OcrOpenSettings(), loc(c).OcrOpenSettingsWin()))
+					Background(accent).Center().Label(primaryLabel)
 				primary.Children(func() {
-					ui.Text(c, osText(loc(c).OcrOpenSettings(), loc(c).OcrOpenSettingsWin())).SingleLine().FontSize(11).FontWeight(600).TextColor(ink)
+					ui.Text(c, primaryLabel).SingleLine().FontSize(11).FontWeight(600).TextColor(ink)
 				})
 				if primary.Clicked() {
-					ocrGrant()
+					if a.ocrSheetGranted {
+						a.relaunchShelf()
+					} else {
+						ocrGrant()
+						a.ocrSheetGranted = true
+						if a.win != nil {
+							a.win.Invalidate()
+						}
+					}
 				}
 				cancel := ui.ButtonBase(c.Key("cancel")).Height(24).Radius(12).Padding(0, 10, 0, 10).
-					Center().Label(loc(c).Cancel())
+					Center().Label(l.Cancel())
 				if cancel.Hovered() {
 					cancel.Background(fill2)
 				} else {
 					cancel.Background(fill1)
 				}
 				cancel.Children(func() {
-					ui.Text(c, loc(c).Cancel()).SingleLine().FontSize(11).FontWeight(600).TextColor(ink)
+					ui.Text(c, l.Cancel()).SingleLine().FontSize(11).FontWeight(600).TextColor(ink)
 				})
 				if cancel.Clicked() {
 					a.ocrSheet = false
 					a.ocrSheetShot = false
+					a.ocrSheetGranted = false
 					if a.win != nil {
 						a.win.Invalidate()
 					}

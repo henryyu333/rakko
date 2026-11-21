@@ -80,7 +80,7 @@ type approval struct {
 	// armed marks the first time the card reached the screen: the 45 s
 	// countdown starts there, not at arrival. shownCh closes with it and
 	// wakes the waiter, whose timer was armed against the total wall.
-	armed  bool
+	armed   bool
 	shownCh chan struct{}
 
 	state       approvalState

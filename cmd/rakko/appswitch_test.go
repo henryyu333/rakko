@@ -992,12 +992,6 @@ func TestAppsAnchorStillSearches(t *testing.T) {
 		t.Fatalf("outside anchor press must open search: visible=%v on=%v", a.visible, a.apps.on)
 	}
 	a.hide(hideExplicit)
-	// The collapse entry's outside-routed press opens the wings.
-	a.apps.entryRect = mygo.Rectangle{X: a.frame.X + 500, Y: a.frame.Y + 40, Width: 30, Height: 30}
-	a.mouseDown(false, 0, mygo.Point{X: a.frame.X + 500 + 15, Y: a.frame.Y + 40 + 15})
-	if !a.apps.on {
-		t.Fatal("entry press routed outside must open the wings")
-	}
 }
 
 // Cornered island: a dragged island keeps the wings inside the work area
@@ -1060,32 +1054,6 @@ func TestAppsGeomCramped(t *testing.T) {
 	}
 	if r.Y < a.dispWork.Y || r.Y+r.Height > a.dispWork.Y+a.dispWork.Height {
 		t.Fatalf("popover %v escapes %v vertically", r, a.dispWork)
-	}
-}
-
-// The chevron probe is a bare arrow now: it draws no app entry of its own.
-// The music wings still carry theirs and record the box the gate clicks.
-func TestChevronProbeCarriesNoAppEntry(t *testing.T) {
-	a := appSwitchShelf(t)
-	stubApps(t, &appsStub{paths: map[string]string{}})
-	a.peeking, a.peekProgress, a.peekFrom = true, 1, 1
-	v := ui.NewTester(a.view, 1000, 200)
-	v.Frame()
-	if a.fx.peekKind != peekChevron {
-		t.Fatalf("probe drew kind %d, want the chevron", a.fx.peekKind)
-	}
-	if a.apps.entryRect.Width != 0 {
-		t.Fatalf("the chevron probe must not draw an app entry: %+v", a.apps.entryRect)
-	}
-
-	fakeTrack(a, true)
-	v.Frame()
-	v.Frame()
-	if a.fx.peekKind != peekWings {
-		t.Fatalf("a track must turn the probe into the music wings, got %d", a.fx.peekKind)
-	}
-	if a.apps.entryRect.Width <= 0 {
-		t.Fatal("the music wings must record their app entry")
 	}
 }
 

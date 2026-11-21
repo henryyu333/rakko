@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
-	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/platform"
 	"rakko/internal/settings"
@@ -226,85 +225,5 @@ func TestFocusDropStepsHoldAt120Hz(t *testing.T) {
 	}
 	if last != drop {
 		t.Fatalf("the drop settled at %d, want %d", last, drop)
-	}
-}
-
-// The resting capsule is one picture in two windows: the panel's idle frame
-// and the picture that covers its blank resizes. The app entry has to look
-// the same in both, hover fill included.
-func TestIdleCapsuleEntryDrawsItsHover(t *testing.T) {
-	a := islandShelf(false, settings.ShellStyleNotch)
-	shot := func(hover bool) *ui.Tester {
-		a.idleEntryHover = hover
-		v := ui.NewTester(a.mainIdleCapsuleView, islandIdleW, islandIdleH)
-		v.Frame()
-		return v
-	}
-	off := shot(false).Image()
-	on := shot(true).Image()
-
-	// The entry is the 30pt box at the capsule's right end, inset 4pt; the
-	// glyph sits in its middle, so a point 6pt from its left edge is fill
-	// only.
-	entryLeft := islandIdleW - 4 - appEntryW
-	x, y := entryLeft+6, islandIdleH/2
-	r0, g0, b0, _ := off.At(x, y).RGBA()
-	r1, g1, b1, _ := on.At(x, y).RGBA()
-	if r1>>8 <= r0>>8 || g1>>8 <= g0>>8 || b1>>8 <= b0>>8 {
-		t.Fatalf("entry hover fill did not brighten (%d,%d,%d) -> (%d,%d,%d)",
-			r0>>8, g0>>8, b0>>8, r1>>8, g1>>8, b1>>8)
-	}
-	// The capsule's body away from the entry is the same picture.
-	if c0, c1 := off.At(10, islandIdleH/2), on.At(10, islandIdleH/2); c0 != c1 {
-		t.Fatalf("the hover repainted the capsule body: %v -> %v", c0, c1)
-	}
-	// The entry's corners stay the capsule's black (the fill is rounded).
-	corner := off.At(entryLeft, islandIdleH-1)
-	if c := on.At(entryLeft, islandIdleH-1); c != corner {
-		t.Fatalf("the hover fill leaked outside the rounded entry: %v -> %v", corner, c)
-	}
-}
-
-// Hovering the app entry keeps the capsule and its entry on screen; moving
-// off it and onto the capsule's body peeks as before.
-func TestHoveringTheIdleEntryKeepsTheCapsule(t *testing.T) {
-	a := islandShelf(false, settings.ShellStyleNotch)
-	a.fx.w, a.fx.h = islandIdleW, islandIdleH
-	r := a.islandRect()
-	// The box the idle frame registers for the entry (noteAppEntry): the
-	// capsule's right end, inset 4pt.
-	a.apps.entryRect = mygo.Rectangle{
-		X: r.X + r.Width - 4 - appEntryW, Y: r.Y, Width: appEntryW, Height: appEntryW,
-	}
-	entry := mygo.Point{X: a.apps.entryRect.X + appEntryW/2, Y: a.apps.entryRect.Y + appEntryW/2}
-
-	// The entry keeps the capsule and shows its hover.
-	driveMonitor(t, a, entry, false, 0, nil)
-	if a.peeking {
-		t.Fatal("hovering the app entry folded the capsule into the peek")
-	}
-	if !a.idleEntryHover {
-		t.Fatal("hovering the app entry did not register the hover")
-	}
-	// The capsule's body beside it still peeks, and the entry's hover goes
-	// with the capsule it belongs to.
-	driveMonitor(t, a, mygo.Point{X: r.X + 20, Y: r.Y + 10}, false, 0, nil)
-	if !a.peeking {
-		t.Fatal("the capsule body did not peek")
-	}
-	if a.idleEntryHover {
-		t.Fatal("the capsule body was taken for the entry")
-	}
-	// While the chevron peek is up it owns the capsule: its frame clears the
-	// entry's box (nothing has drawn the entry), so the peek stays until the
-	// pointer leaves.
-	driveMonitor(t, a, entry, false, 0, nil)
-	if !a.peeking {
-		t.Fatal("the peeking capsule folded under a pointer over the peek")
-	}
-	// Leaving the capsule drops the peek.
-	driveMonitor(t, a, mygo.Point{X: r.X + 20, Y: r.Y + 200}, false, 0, nil)
-	if a.idleEntryHover || a.peeking {
-		t.Fatalf("leaving the capsule left hover %v peek %v", a.idleEntryHover, a.peeking)
 	}
 }

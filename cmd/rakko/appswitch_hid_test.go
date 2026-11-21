@@ -302,24 +302,10 @@ func TestHIDAppsClickLaunchesTargets(t *testing.T) {
 	t.Cleanup(func() { warpPointerTo(t, float64(old.X), float64(old.Y)) })
 
 	seat := hidAnchorPoint(t, a)
-	// Rest on the anchor: overAnchor's pad is what holds the peek on a
-	// visit, and the parked pointer must still be there for the entry.
 	warpPointerTo(t, float64(seat.X), float64(seat.Y))
-	waitApps(t, a, "the pointer to wake the peek", func() bool {
-		return a.peeking && a.peekProgress > 0.5
-	})
-	// The music wings' entry is drawn where the frame says.
-	er := hidEntryRect(t, a)
-	shotAppsWindow(t, a.win, "hid-np-entry")
-
-	// Real HID click on the entry: nothing in this path bypasses the gate.
-	clickOverlayAt(t, a, float64(er.X+er.Width/2), float64(er.Y+er.Height/2))
-	var on bool
-	waitApps(t, a, "the wings after the entry click", func() bool {
-		onMain(func() { on = a.apps.on })
-		return on
-	})
-	waitApps(t, a, "the wings to settle", func() bool { return a.peekProgress >= 0.99 })
+	// The switcher opens from the panel's navigation now: the collapsed
+	// state draws no entry button to click.
+	openAppsWings(t, a)
 	// The production ticket draws two seats: A then B.
 	x, y := appSeat(t, a, 0)
 	clickOverlayAt(t, a, x, y)
@@ -339,14 +325,8 @@ func TestHIDAppsClickLaunchesTargets(t *testing.T) {
 		t.Fatalf("the frontmost PID slipped back to %d after the switch", still)
 	}
 
-	// Reopen and take the activate branch. The pointer is still parked on
-	// the anchor; the band entry draws again.
-	er2 := hidEntryRect(t, a)
-	clickOverlayAt(t, a, float64(er2.X+er2.Width/2), float64(er2.Y+er2.Height/2))
-	waitApps(t, a, "the reopen wings", func() bool {
-		onMain(func() { on = a.apps.on })
-		return on
-	})
+	// Reopen and take the activate branch.
+	openAppsWings(t, a)
 	waitApps(t, a, "the reopened wings to settle", func() bool { return a.peekProgress >= 0.99 })
 	// Seat 1 is B: activating a running fixture.
 	x2, y2 := appSeat(t, a, 1)
@@ -394,13 +374,8 @@ func TestHIDAppsClickLaunchesTargets(t *testing.T) {
 	t.Logf("hidden precondition: pid=%d shown=%v hiddenConfirm=%v windowVisible=false",
 		pidB2, hidFileExists(filepath.Join(hidFixtures, hidName(hidTargetB)+".shown")),
 		hidFileExists(hiddenDoneFile))
-	// The same real click path the user owns: the entry then seat 1.
-	er3 := hidEntryRect(t, a)
-	clickOverlayAt(t, a, float64(er3.X+er3.Width/2), float64(er3.Y+er3.Height/2))
-	waitApps(t, a, "the third-round wings", func() bool {
-		onMain(func() { on = a.apps.on })
-		return on
-	})
+	// The same real click path the user owns: open, then seat 1.
+	openAppsWings(t, a)
 	waitApps(t, a, "the third-round wings to settle", func() bool { return a.peekProgress >= 0.99 })
 	x3, y3 := appSeat(t, a, 1)
 	clickOverlayAt(t, a, x3, y3)
@@ -539,20 +514,6 @@ func waitAppsBecomes(t *testing.T, cond func() bool, what string, d time.Duratio
 
 // hidWindowOn reports the probe's answer without wanting a budget.
 func hidWindowOn(t *testing.T, pid int) bool { return hidWindowVisible(t, pid) }
-
-// hidEntryRect waits for the collapsed shell's app entry — the music
-// wings' right-hand button — and returns its box. The chevron probe draws
-// no entry of its own any more, so this is the entry a user has while a
-// track plays.
-func hidEntryRect(t *testing.T, a *shelf) mygo.Rectangle {
-	t.Helper()
-	waitApps(t, a, "the music wings' app entry", func() bool {
-		return a.apps.entryRect.Width > 0 && a.fx.peekKind == peekWings
-	})
-	// Read the box once it stops moving: an earlier frame's box is a
-	// different place, and a click aimed there lands beside the button.
-	return settledAppsEntry(t, a)
-}
 
 // hidAnchorPoint is the screen point at the centre of the anchor's hover
 // zone — the notch for the notched shelf (island smoke uses its own).

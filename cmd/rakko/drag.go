@@ -308,13 +308,6 @@ func (a *shelf) monitorDrag(now time.Time) {
 	// The otter follows the same pointer: it is carried by a press of its
 	// own, and it reads a drag crossing the shelf for its pose.
 	a.petTick(now, p, dragLeftDown())
-	// The idle capsule's app entry is a button of its own, so the capsule
-	// stays the capsule while the pointer is on it: the entry shows its
-	// hover fill (the panel's idle frame and the resting picture both draw
-	// it) instead of folding into the chevron peek, which stops drawing the
-	// entry and would make the press under the pointer open the search bar
-	// instead of the app switcher.
-	a.setIdleEntryHover(a.idleEntryHoverAt(p))
 	// The pointer inside the notch drop band grows 「松开放入」 and takes
 	// the drop; outside it the shell only shows the narrow hint.
 	// The peek wings reach past the notch on both sides: the pointer must
@@ -322,7 +315,7 @@ func (a *shelf) monitorDrag(now time.Time) {
 	// pinReturning and petReturning hold the pill for the whole put-back
 	// zone, which reaches past the pill's own body. The app switcher holds
 	// the shell for its mode, not for the pointer.
-	holdPeek := (overAnchor && !a.idleEntryHover) || a.pinReturning || a.petReturning || a.apps.on || (a.peeking && a.overPeekPill(p))
+	holdPeek := overAnchor || a.pinReturning || a.petReturning || a.apps.on || (a.peeking && a.overPeekPill(p))
 	suppressedFS := a.fullscreenSuppressed()
 	// Dragging or hovering reveals the pill; only a click or a real incoming
 	// drag in the trigger zone can open the full panel.

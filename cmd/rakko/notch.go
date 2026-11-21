@@ -1021,15 +1021,6 @@ func (a *shelf) mouseDown(inside bool, button int, p mygo.Point) {
 		a.beginIslandPress(p)
 		return
 	}
-	// A press on the app entry that slipped to another surface still opens
-	// the switcher — the entry's drawn box is the click target, and an
-	// inside press already reached the button itself through the window.
-	if a.overAppEntry(p) && !a.visible {
-		if !inside {
-			a.openAppSwitch()
-		}
-		return
-	}
 	// The capsule is drawn over the menu bar's empty centre. WindowServer
 	// often gives that press to the menu bar or the app underneath, so the
 	// overlay paints a "click to expand" pill that never receives the click.
@@ -1103,7 +1094,7 @@ func (a *shelf) mouseDown(inside bool, button int, p mygo.Point) {
 		// island, so its box counts too.
 		inMenuBar = inMenuBar || insideRect(p, a.islandRect())
 	}
-	if a.apps.on && !a.overAppsPop(p) && !a.overAppEntry(p) {
+	if a.apps.on && !a.overAppsPop(p) {
 		// 锚点（刘海 / 灵动岛胶囊）上的外路由按压仍是搜索——和带内
 		// UI 一样先收两翼再展开，不在激活后把焦点切回去。
 		if a.overAnchor(p) {
@@ -1714,7 +1705,6 @@ func (a *shelf) panelContentH(levelK float32) float32 {
 
 func (a *shelf) show(edge bool) {
 	a.endAppSwitch() // 面板与应用切换互斥: 展开前两翼先退场
-	a.apps.entryRect = mygo.Rectangle{}
 	if a.visible {
 		return
 	}
@@ -2054,7 +2044,6 @@ func (a *shelf) leaveFocusMode() {
 // instead of flashing the default one; finishClose retires it.
 func (a *shelf) hide(exit hideExit) {
 	a.endAppSwitch() // 收起同样结束应用切换(保险路径; 通常已经不在)
-	a.apps.entryRect = mygo.Rectangle{}
 	// The note window outlives the panel: land what it holds even when the
 	// panel was already folded (opening the note folds it), so a second
 	// hide cannot skip the draft. Idempotent when there is nothing to land.
@@ -2155,6 +2144,7 @@ func (a *shelf) finishClose() {
 	// 要么授权已完成（预检通过直接框选），都不该回到一张旧卡。
 	a.ocrSheet = false
 	a.ocrSheetShot = false
+	a.ocrSheetGranted = false
 	a.resetToolsEdit()         // 工具页的编辑与目录不跨收起保留
 	a.music.out.loaded = false // the output device may have changed while closed
 	a.selection.clear()

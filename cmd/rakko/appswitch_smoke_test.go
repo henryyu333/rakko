@@ -155,9 +155,9 @@ func waitApps(t *testing.T, a *shelf, what string, cond func() bool) {
 	}
 	var st string
 	onMain(func() {
-		st = fmt.Sprintf("visible=%v progress=%.2f openK=%.2f peekKind=%d peek=%.2f entry=%+v pop=%+v fb.drawn=%v live.shown=%v liveAllow=%v apps.on=%v",
+		st = fmt.Sprintf("visible=%v progress=%.2f openK=%.2f peekKind=%d peek=%.2f pop=%+v fb.drawn=%v live.shown=%v liveAllow=%v apps.on=%v",
 			a.visible, a.progress, a.fx.openK, a.fx.peekKind, a.peekProgress,
-			a.apps.entryRect, a.apps.popRect, a.fb.drawn, a.live.shown, a.liveAllow(), a.apps.on)
+			a.apps.popRect, a.fb.drawn, a.live.shown, a.liveAllow(), a.apps.on)
 	})
 	t.Fatalf("timed out waiting for %s: %s", what, st)
 }
@@ -200,18 +200,17 @@ func clickOverlayAt(t *testing.T, a *shelf, x, y float64) {
 					p.Y >= top && float64(p.Y) <= float64(top)+float64(baseH+appsBody)+0.5
 			} else {
 				drawable = insideRect(p, a.frame) &&
-					(a.overPeekPill(p) || a.overAppsPop(p) || a.overAppEntry(p) ||
-						(a.island && a.overAnchor(p)))
+					(a.overPeekPill(p) || a.overAppsPop(p) || (a.island && a.overAnchor(p)))
 			}
 			// The popover hangs below the wings' own box; its rows are
 			// still this window's drawn content.
-			drawable = drawable || a.overAppsPop(p) || a.overAppEntry(p)
+			drawable = drawable || a.overAppsPop(p)
 		})
 		if !drawable {
 			var diag string
 			onMain(func() {
-				diag = fmt.Sprintf("frame=%+v pill=%+v pop=%+v entry=%+v peekKind=%d off=%.1f island=%v",
-					a.frame, a.peekPillRect(), a.apps.popRect, a.apps.entryRect,
+				diag = fmt.Sprintf("frame=%+v pill=%+v pop=%+v peekKind=%d off=%.1f island=%v",
+					a.frame, a.peekPillRect(), a.apps.popRect,
 					a.fx.peekKind, a.appsDrawOff(), a.island)
 			})
 			t.Fatalf("refusing click at (%.0f,%.0f): outside the test window's drawn shape — %s", x, y, diag)
@@ -291,27 +290,6 @@ func libCFOrDie(cg uintptr) uintptr {
 	return lib
 }
 
-// settledAppsEntry returns the app entry's box once it stops moving: the
-// shell's springs and the content's re-layout both write it, and a click
-// aimed at a mid-morph box lands beside the button. Two equal readings a
-// pause apart, with the wings drawn, are the resting place.
-func settledAppsEntry(t *testing.T, a *shelf) mygo.Rectangle {
-	t.Helper()
-	var last, now mygo.Rectangle
-	deadline := time.Now().Add(4 * time.Second)
-	for time.Now().Before(deadline) {
-		onMain(func() { now = a.apps.entryRect })
-		if now.Width > 0 && now == last {
-			return now
-		}
-		last = now
-		time.Sleep(80 * time.Millisecond)
-	}
-	t.Fatalf("the app entry never settled: %+v (kind=%d)", now, a.fx.peekKind)
-	return mygo.Rectangle{}
-}
-
-// closeAppsWings folds the wings and waits for the fold to land.
 func closeAppsWings(t *testing.T, a *shelf) {
 	onMain(func() {
 		a.endAppSwitch()
@@ -371,27 +349,11 @@ func appSeat(t *testing.T, a *shelf, i int) (x, y float64) {
 // window. The chevron probe is deliberately bare now — its right corner
 // no longer holds a second, smaller button — and this case keeps that
 // promise as a regression: with no track loaded, no entry is recorded.
-func TestSmokeAppsWingsOpenFromEntry(t *testing.T) {
+func TestSmokeAppsWingsOpenAndLaunch(t *testing.T) {
 	a := appsSmokeShelf(t, smokeApps)
-	onMain(func() {
-		a.peeking, a.peekProgress, a.peekFrom = true, 1, 1
-		a.syncWindowFrame()
-		a.win.Invalidate()
-	})
-	var er mygo.Rectangle
 	var on bool
-	onMain(func() { fakeTrack(a, true) })
-	waitApps(t, a, "the music wings' entry", func() bool {
-		return a.apps.entryRect.Width > 0 && a.fx.peekKind == peekWings
-	})
-	// The box the wait saw belongs to an earlier frame, and the shell is
-	// still growing; the click asks for the entry's resting place instead.
-	er = settledAppsEntry(t, a)
-	clickOverlayAt(t, a, float64(er.X+er.Width/2), float64(er.Y+er.Height/2))
-	onMain(func() { on = a.apps.on })
-	if !on {
-		t.Fatal("clicking the entry did not open the wings")
-	}
+	// The switcher opens from the panel's navigation now: no collapsed
+	// state draws an entry button any more.
 	openAppsWings(t, a)
 	shotAppsWindow(t, a.win, "wings-open")
 
@@ -561,50 +523,6 @@ func TestSmokeAppsCenterSearchAndCancel(t *testing.T) {
 		t.Fatalf("Esc must fold only the wings: visible=%v on=%v", visible, on)
 	}
 	closeAppsWings(t, a)
-}
-
-// While a track is loaded the right wing keeps its own app entry — the
-// music wings and the entry coexist; clicking it opens the apps mode and
-// folding returns the music wings, not the bare chevron.
-func TestSmokeAppsEntryOnMusicWings(t *testing.T) {
-	a := appsSmokeShelf(t, smokeApps)
-	onMain(func() { fakeTrack(a, true) })
-	peekShelf(a)
-	// The entry is drawn only once the real loop renders the wings:
-	// wait for its recorded box, not a fixed sleep.
-	var er mygo.Rectangle
-	waitApps(t, a, "the music wings' app entry", func() bool {
-		er = a.apps.entryRect
-		return er.Width > 0 && a.fx.peekKind == peekWings
-	})
-	shotAppsWindow(t, a.win, "music-wings-entry")
-	// The box the wait captured belongs to an earlier frame: re-read the
-	// entry's current drawn position right before the click — the wings
-	// may have re-laid out since (real shot: 689 stale vs 864 drawn).
-	onMain(func() { er = a.apps.entryRect })
-	clickOverlayAt(t, a, float64(er.X+er.Width/2), float64(er.Y+er.Height/2))
-	var on bool
-	onMain(func() { on = a.apps.on })
-	if !on {
-		t.Fatal("the music wings' app entry did not open the mode")
-	}
-	shotAppsWindow(t, a.win, "music-to-apps")
-	closeAppsWings(t, a)
-	// The fixture has no hover monitor: with the wings folded the shell
-	// only peeks again when the pointer is still over the notch and the
-	// monitor re-fires — the production path the user takes. Drive that
-	// same settle path (peekShelf is the existing helper for it), then
-	// the track's wings draw again.
-	peekShelf(a)
-	waitApps(t, a, "the music wings back", func() bool {
-		return a.fx.peekKind == peekWings || a.apps.entryRect.Width > 0
-	})
-	var pw, mw float32
-	onMain(func() { pw, _ = a.peekSize(); mw, _ = a.wingsSize() })
-	if pw != mw {
-		t.Fatalf("wings did not return after the mode: %.0f != %.0f", pw, mw)
-	}
-	onMain(func() { a.np = nil })
 }
 
 // A showing live notice pauses for the wings and resumes after — through

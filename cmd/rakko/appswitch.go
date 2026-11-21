@@ -45,7 +45,6 @@ type appSwitcher struct {
 	installedLoad bool                  // 后台取数在途
 	icons         map[string]*ui.Bitmap // bundle → 64pt 图标缓存（跨开关复用）
 	popRect       mygo.Rectangle        // 浮层在屏幕上的盒子（命中测试用）
-	entryRect     mygo.Rectangle        // 收起态应用入口按钮的盒子（命中测试用）
 	keys          map[string]bool       // 模式持有的全局键（Left/Right/Enter，可能含 Escape）
 
 	shownL, shownR []appEntry  // 两翼当前画出的座位（由快照 + 位宽重建）
@@ -215,7 +214,7 @@ func (a *shelf) endAppSwitch() {
 	}
 	a.apps.on = false
 	a.apps.more, a.apps.manage = false, false
-	a.apps.popRect, a.apps.entryRect = mygo.Rectangle{}, mygo.Rectangle{}
+	a.apps.popRect = mygo.Rectangle{}
 	// 模式结束同样作废在途扫描：结果落地时已无人需要它。
 	a.apps.installedGen++
 	a.releaseAppsKeys()

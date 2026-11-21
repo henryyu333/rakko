@@ -727,15 +727,8 @@ func (a *shelf) view(c *ui.Context) {
 		a.fb.clearExpired(now, true)
 		if a.island {
 			zone.Label(loc(c).PanelExpand())
-			// 空闲胶囊右端的应用入口：与探头带、音乐两翼同一颗按钮。窗
-			// 口比胶囊宽（给探头留位），按钮要钉在胶囊右缘而不是窗口右缘。
-			baseW, _ := a.anchorSize()
-			frameW := float32(a.frame.Width)
-			if frameW < baseW+appEntryW {
-				frameW = baseW + peekExtraW
-			}
-			e := a.appsEntryButton(c, "apps-island-entry", appEntryW, a.idleEntryHover)
-			e.Absolute().Right((frameW-baseW)/2 + 4).Top(float32(a.islandTop + (islandIdleH-appEntryW)/2))
+			// The resting capsule carries no app-switch button: the
+			// switcher's entry is in the panel's navigation only.
 			// This canvas is the resting capsule; a resize now would flash
 			// its old canvas stretched (issue #5, see syncWindowFrame).
 			idleDrawn = true
@@ -1037,7 +1030,6 @@ func (a *shelf) view(c *ui.Context) {
 		if !expanded {
 			if closing || !peeked {
 				// 收起途中只有壳缩回刘海，不画内容。
-				a.apps.entryRect = mygo.Rectangle{}
 				return
 			}
 			a.peekView(c, shellW, shellH, openK, peekK, shake, over, peekTarget == 0)
@@ -1922,7 +1914,6 @@ func (a *shelf) peekView(c *ui.Context, shellW, shellH, openK, peekK, shake floa
 		// The entry lives only where it is drawn — the chevron band, the
 		// music wings' right end, the idle island capsule; a stale box
 		// must never claim presses. Drawn entries refill it this frame.
-		a.apps.entryRect = mygo.Rectangle{}
 	}
 	switch kind {
 	case peekCapsule:

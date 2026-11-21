@@ -186,6 +186,14 @@ func (a *shelf) startScreenshotOnMain() {
 		return
 	}
 	if a.ocrSheet {
+		// The permission card is up: show the screenshot's own step of it
+		// rather than swallowing the key.
+		if !a.ocrSheetShot || a.ocrSheetGranted {
+			a.ocrSheetShot, a.ocrSheetGranted = true, false
+			if a.win != nil {
+				a.win.Invalidate()
+			}
+		}
 		return
 	}
 	if !shotPreflight() {

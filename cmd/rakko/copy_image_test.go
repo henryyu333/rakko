@@ -20,8 +20,8 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"rakko/internal/settings"
 	"github.com/egoist/mygo/i18n"
+	"rakko/internal/settings"
 
 	"rakko/internal/store"
 	"rakko/locales"

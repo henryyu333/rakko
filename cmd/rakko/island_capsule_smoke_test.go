@@ -106,9 +106,8 @@ func TestSmokeIslandCapsuleHandover(t *testing.T) {
 		t.Fatalf("picture frame %+v, want the island %+v", capsule, want)
 	}
 
-	// Both windows at rest, hover off.
+	// Both windows at rest.
 	onMain(func() {
-		a.idleEntryHover = false
 		a.win.Invalidate()
 		a.mainIdle.win.Invalidate()
 	})
@@ -126,74 +125,12 @@ func TestSmokeIslandCapsuleHandover(t *testing.T) {
 		t.Fatalf("capsule height: picture %dpx, panel %dpx", picBox.Dy(), panelBox.Dy())
 	}
 
-	// The app entry's glyph sits in the same place in both.
-	glyph := func(img image.Image, area image.Rectangle) image.Rectangle {
-		return inkBox(img, area, 0x6000)
-	}
-	picGlyph := glyph(pic, picBox)
-	// The panel's capture is its whole window; the glyph's place there is
-	// read in the capsule crop's own space.
-	panelGlyph := glyph(panel, panelArea).Sub(panelArea.Min)
-	if dx, dy := picGlyph.Min.X-panelGlyph.Min.X, picGlyph.Min.Y-panelGlyph.Min.Y; dx < -2 || dx > 2 || dy < -2 || dy > 2 {
-		t.Fatalf("entry glyph moved between the picture and the panel: %+v vs %+v", picGlyph, panelGlyph)
-	}
-	t.Logf("capsule %+v: picture %v glyph %v; panel %v glyph %v", capsule,
-		picBox, picGlyph, panelBox, panelGlyph)
-
 	// Both boxes are read in their own capsule-relative space: the picture's
 	// window is the capsule itself, the panel's capture was cropped to it.
 	if dx, dy := panelBox.Min.X-picBox.Min.X, panelBox.Min.Y-picBox.Min.Y; dx < -2 || dx > 2 || dy < -2 || dy > 2 {
 		t.Fatalf("capsule box: picture %v, panel %v (panel relative to its crop)", picBox, panelBox)
 	}
-
-	// Hover on: the entry's fill appears in both windows, and nothing else
-	// of the capsule changes. redAt reads one pixel's red channel: the fill
-	// is a white opacity over the black capsule, the body stays black.
-	redAt := func(img image.Image, at image.Point) uint32 {
-		r, _, _, _ := img.At(at.X, at.Y).RGBA()
-		return r
-	}
-	// Both captures are of the same 120 × 30 capsule: one offset inside it
-	// lands on the same point in each, scaled by its own backing.
-	picScale := float64(pic.Bounds().Dx()) / islandIdleW
-	panelScale := float64(panel.Bounds().Dx()) / float64(panelFrame.Width)
-	// Four points inside the entry's left edge, three points left of the
-	// glyph: fill only, at the capsule's mid-height.
-	entryOffset := image.Pt(int((islandIdleW-4-appEntryW+4)*picScale), int(float64(islandIdleH)*picScale/2))
-	entryPoint := picBox.Min.Add(entryOffset)
-	panelEntryPoint := panelArea.Min.Add(image.Pt(
-		int((islandIdleW-4-appEntryW+4)*panelScale), int(float64(islandIdleH)*panelScale/2)))
-	bodyPoint := picBox.Min.Add(image.Pt(picBox.Dx()/10, picBox.Dy()/2))
-	bodyBefore := redAt(pic, bodyPoint)
-
-	onMain(func() {
-		a.idleEntryHover = true
-		a.win.Invalidate()
-		a.mainIdle.win.Invalidate()
-	})
-	time.Sleep(250 * time.Millisecond)
-	pic2 := captureOnly(t, a.mainIdle.win, "capsule-picture-hover")
-	panel2 := captureOnly(t, a.win, "capsule-panel-hover")
-
-	r0 := redAt(pic, entryPoint)
-	r1 := redAt(pic2, entryPoint)
-	if r1 <= r0 {
-		t.Fatalf("the picture's entry did not brighten under hover: %d -> %d", r0, r1)
-	}
-	pr := redAt(panel, panelEntryPoint)
-	pr2 := redAt(panel2, panelEntryPoint)
-	if pr2 <= pr {
-		t.Fatalf("the panel's entry did not brighten under hover: %d -> %d", pr, pr2)
-	}
-	if got := redAt(pic2, bodyPoint); got != bodyBefore {
-		t.Fatalf("the hover repainted the capsule body: %d -> %d", bodyBefore, got)
-	}
-
-	onMain(func() {
-		a.idleEntryHover = false
-		a.win.Invalidate()
-		a.mainIdle.win.Invalidate()
-	})
+	t.Logf("capsule %+v: picture %v; panel %v", capsule, picBox, panelBox)
 }
 
 // captureOnly takes a shot of one window for a second look at the same

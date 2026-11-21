@@ -50,21 +50,11 @@ type mainIdleCapsule struct {
 	shown bool
 }
 
-// mainIdleCapsuleView draws the same capsule and app entry as the resident
-// window's idle frame, in a window exactly the capsule's size.
+// mainIdleCapsuleView draws the same capsule as the resident window's idle
+// frame, in a window exactly the capsule's size.
 func (a *shelf) mainIdleCapsuleView(c *ui.Context) {
 	c.Root().Background(ui.Transparent)
 	ui.Column(c.Key("main-idle-island")).Fill().Label(loc(c).PanelExpand()).Draw(drawIslandCapsule)
-	entry := ui.Row(c.Key("apps-island-entry")).Absolute().Right(4).Top(0).Size(appEntryW, appEntryW).Center()
-	// The picture is the button's face while it covers the panel: without
-	// the hover fill here the entry reads as inert, and the panel's own
-	// fill never shows through (idleEntryHover is that same pointer).
-	if a.idleEntryHover {
-		entry.Radius(appEntryRadius(appEntryW)).Background(fill2)
-	}
-	entry.Children(func() {
-		ui.Icon(c, appsSymbol).Size(appEntryGlyph(appEntryW), appEntryGlyph(appEntryW)).TextColor(ink2)
-	})
 }
 
 // openMainIdleCapsule creates the resident display's picture-only capsule.
@@ -296,29 +286,4 @@ func (a *shelf) idleIslandAt(p mygo.Point) bool {
 		}
 	}
 	return false
-}
-
-// idleEntryHoverAt reports whether the pointer is on the resident resting
-// capsule's app entry. The entry's box is the one the panel's last drawn
-// idle frame registered (noteAppEntry); it is cleared as soon as any other
-// peek draws, so this only answers while the resting capsule is what the
-// screen shows.
-func (a *shelf) idleEntryHoverAt(p mygo.Point) bool {
-	return a.island && !a.visible && !a.peeking && !a.apps.on && a.overAppEntry(p)
-}
-
-// setIdleEntryHover records that answer and repaints the two surfaces that
-// draw the entry: the resident window's idle frame and the resting
-// capsule's picture window, which covers it.
-func (a *shelf) setIdleEntryHover(on bool) {
-	if a.idleEntryHover == on {
-		return
-	}
-	a.idleEntryHover = on
-	if a.win != nil {
-		a.win.Invalidate()
-	}
-	if a.mainIdle != nil {
-		a.mainIdle.win.Invalidate()
-	}
 }

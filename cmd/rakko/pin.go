@@ -88,14 +88,14 @@ type pinItem struct {
 	cy           int  // the collapsed strip's centre-Y while docked — the slot it returns to
 	frame        mygo.Rectangle
 	leftAt       time.Time
-	dropAt       time.Time // accent border lingers this long after a drop
-	jiggleAt     time.Time // a tap that could not act gave the card a brief shake
-	pressed      bool      // a press on the card is being held
-	pressWas     bool      // it was already expanded when that press began
+	dropAt       time.Time      // accent border lingers this long after a drop
+	jiggleAt     time.Time      // a tap that could not act gave the card a brief shake
+	pressed      bool           // a press on the card is being held
+	pressWas     bool           // it was already expanded when that press began
 	pressFrame   mygo.Rectangle // the card's frame when that press began
 	upMisses     int            // polls that saw the button up during that press
-	moving       bool      // the press went far: it is a window move, not a click
-	didMove      bool      // that press did move — its release is a drop, never a tap
+	moving       bool           // the press went far: it is a window move, not a click
+	didMove      bool           // that press did move — its release is a drop, never a tap
 	grabX        int
 	grabY        int
 	wantKill     bool // a menu asked to remove it; pinTick does the destroy

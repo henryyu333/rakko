@@ -81,12 +81,10 @@ func (m *nowPlayingModule) peekWings(c *ui.Context, host *shelf, w, h, k float32
 		Justify(ui.SpaceBetween).Opacity(min(max(k*k, 0), 1)).Label(label)
 	wings.Children(func() {
 		m.coverArt(c, "np-wings-art", npWingsArt, npWingsArtR)
-		// 设计稿 idle-right：均衡器右边再放一颗独立应用入口——正常播放
-		// 期间入口一直在，只有短时通知的两翼会让位。入口是最内层按钮，
-		// 按压落在它身上不会冒泡成「展开搜索」。
+		// The wings draw no app-switch button any more: the panel's
+		// navigation is the switcher's only entry.
 		ui.Row(c.Key("np-right")).Gap(6).AlignItems(ui.Center).Children(func() {
 			m.eqBars(c, st.Playing)
-			host.appsEntryButton(c, "np-apps-entry", appEntryW, false)
 		})
 	})
 	if wings.Clicked() {
