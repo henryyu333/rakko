@@ -1028,7 +1028,7 @@ func TestTrayMenuRemoveHidesClipboardCapture(t *testing.T) {
 	a := &shelf{store: s, thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{}}
 	view := ui.NewTester(a.view, sheetW, panelTestH)
 
-	if err := view.RightClick(itemTitle(clip)); err != nil {
+	if err := view.RightClick(shownItemTitle(clip)); err != nil {
 		t.Fatalf("right-click clip: %v", err)
 	}
 	if err := view.ChooseMenuItem("移除"); err != nil {
@@ -1058,7 +1058,7 @@ func TestTrayMenuRemoveHidesClipboardCapture(t *testing.T) {
 	if len(s.Items) != 1 || s.Items[0].ID != clip.ID || s.Items[0].OffTray {
 		t.Fatalf("re-capture left the item off the tray: %+v", s.Items)
 	}
-	if !view.HasText(itemTitle(s.Items[0])) {
+	if !view.HasText(shownItemTitle(s.Items[0])) {
 		t.Fatalf("re-capture did not bring the item back to the tray; texts %v", view.Texts())
 	}
 }

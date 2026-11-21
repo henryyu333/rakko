@@ -202,11 +202,14 @@ func TestForegroundFullscreenSuppressesClosedPanelClicks(t *testing.T) {
 		t.Fatal("clicking idle island under fullscreen must not arm island press or open panel")
 	}
 
+	// The fullscreen takeover folds the wings the switcher rode in on, so
+	// the switcher ends with them: a press must not leave it steering an
+	// invisible selection.
 	d := fullscreenTestShelf()
 	d.apps.on = true
 	d.mouseDown(false, 0, mygo.Point{X: d.notchX + d.notchW/2, Y: d.notchY + d.notchH/2})
-	if d.visible || !d.apps.on {
-		t.Fatal("clicking anchor in apps mode under fullscreen must not open panel or mutate state")
+	if d.visible || d.apps.on {
+		t.Fatalf("a fullscreen press must not open the panel and must end the switcher (visible=%v apps=%v)", d.visible, d.apps.on)
 	}
 
 	// 3. Explicitly open panel still handles outside click to hide under fullscreen.
