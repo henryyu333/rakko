@@ -16,6 +16,7 @@ package agentnotify
 // program or command, and the argument array when the tool takes one.
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 )
@@ -95,10 +96,12 @@ func shimPath(dataDir string, kind hookKind, tool Tool) string {
 
 // moduleSource is the module source Rakko writes for a tool and kind. Only
 // Copilot CLI differs: its files are JSON, and Windows uses the argv form.
+// Its approval file carries the outer wall in seconds, filled in here from
+// the one constant so it cannot drift from the other tools' entries.
 func moduleSource(s spec, kind hookKind) string {
 	if s.tool == ToolCopilot {
 		if kind == hookApproval {
-			return copilotApproveHooksExec
+			return fmt.Sprintf(copilotApproveHooksExec, approveTimeout)
 		}
 		return copilotHooksExec
 	}

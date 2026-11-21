@@ -465,12 +465,14 @@ func itoa(n int) string {
 // --- module sources ---
 
 // copilotApproveHooks is Copilot CLI's permission hook file. It is separate
-// from the completion file so either switch can be turned off alone.
+// from the completion file so either switch can be turned off alone. The
+// timeoutSec is filled from approveTimeout, the same wall every other
+// approval entry carries, so a rewrite always catches up with it.
 const copilotApproveHooks = `{
   "version": 1,
   "hooks": {
     "permissionRequest": [
-      { "type": "command", "bash": __RAKKO_APPROVE_CMD__, "timeoutSec": 60 }
+      { "type": "command", "bash": __RAKKO_APPROVE_CMD__, "timeoutSec": %d }
     ]
   }
 }

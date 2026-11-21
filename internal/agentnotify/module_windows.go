@@ -19,7 +19,7 @@ const copilotHooksExec = `{
 const copilotApproveHooksExec = `{
   "version": 1,
   "hooks": {
-    "permissionRequest": [{ __RAKKO_ENTRY:permissionRequest__, "timeoutSec": 60 }]
+    "permissionRequest": [{ __RAKKO_ENTRY:permissionRequest__, "timeoutSec": %d }]
   }
 }
 `

@@ -583,3 +583,40 @@ func TestConnectApproveRefreshesNamedMemberTimeout(t *testing.T) {
 		t.Fatalf("the refresh changed more than the timeout:\nbefore:\n%s\nafter:\n%s", older, after)
 	}
 }
+
+// Copilot 的审批钩子要和其它工具用同一个外层上限：排队里的第二张卡不能
+// 在 60 秒就被 Copilot 杀掉，而界面还在画 45 秒的倒计时。打开开关会整份
+// 重写这个文件，旧版本写下的 60 秒也要被带回新值。
+func TestCopilotApprovalHookCarriesTheOuterWall(t *testing.T) {
+	t.Setenv("HERMES_HOME", "")
+	home := t.TempDir()
+	dataDir := t.TempDir()
+	exe := filepath.Join(home, "Rakko")
+	if err := ConnectApprove(home, dataDir, exe, ToolCopilot); err != nil {
+		t.Fatal(err)
+	}
+	path := ApproveConfigPath(home, ToolCopilot)
+	want := fmt.Sprintf(`"timeoutSec": %d`, approveTimeout)
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), want) {
+		t.Fatalf("copilot approval file does not carry %s:\n%s", want, raw)
+	}
+	// 旧版本写的 60 秒：再打开一次开关，文件必须被改写。
+	old := strings.Replace(string(raw), want, `"timeoutSec": 60`, 1)
+	if err := os.WriteFile(path, []byte(old), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := ConnectApprove(home, dataDir, exe, ToolCopilot); err != nil {
+		t.Fatal(err)
+	}
+	raw, err = os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), `"timeoutSec": 60`) || !strings.Contains(string(raw), want) {
+		t.Fatalf("the older timeout survived the switch:\n%s", raw)
+	}
+}

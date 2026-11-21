@@ -1115,3 +1115,50 @@ func TestDecisionReasonSurvivesPowerShellUnderACodePage(t *testing.T) {
 		t.Logf("the raw UTF-8 decision was re-encoded (mojibake for the tool)")
 	}
 }
+
+// Copilot 的 Windows 审批文件同样带外层上限：argv 形式只是 shell 字段的
+// 差别，timeoutSec 和 Mac 一样取自 approveTimeout。
+func TestCopilotApprovalExecFormCarriesTheOuterWall(t *testing.T) {
+	t.Setenv("HERMES_HOME", "")
+	home := t.TempDir()
+	redirectAppData(t, home)
+	dataDir := t.TempDir()
+	exe := helperExe(t)
+	if err := ConnectApprove(home, dataDir, exe, ToolCopilot); err != nil {
+		t.Fatal(err)
+	}
+	path := ApproveConfigPath(home, ToolCopilot)
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Hooks map[string][]struct {
+			TimeoutSec int `json:"timeoutSec"`
+		} `json:"hooks"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("%s: %v\n%s", path, err, raw)
+	}
+	entries := doc.Hooks["permissionRequest"]
+	if len(entries) != 1 || entries[0].TimeoutSec != approveTimeout {
+		t.Fatalf("permissionRequest = %+v, want one entry with timeoutSec %d\n%s", entries, approveTimeout, raw)
+	}
+	// An older Rakko wrote 60 here; turning the switch on again must bring
+	// the file up to the current wall without touching anything else.
+	want := fmt.Sprintf(`"timeoutSec": %d`, approveTimeout)
+	old := strings.Replace(string(raw), want, `"timeoutSec": 60`, 1)
+	if err := os.WriteFile(path, []byte(old), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := ConnectApprove(home, dataDir, exe, ToolCopilot); err != nil {
+		t.Fatal(err)
+	}
+	raw, err = os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), `"timeoutSec": 60`) || !strings.Contains(string(raw), want) {
+		t.Fatalf("the older timeout survived the switch:\n%s", raw)
+	}
+}
