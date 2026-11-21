@@ -406,8 +406,15 @@ func (a *shelf) liveNow(now time.Time, allow bool) (liveEvent, bool) {
 		// card actually reaches the screen.
 		until := now.Add(ev.hold)
 		if ev.kind == liveAgentAsk && ev.ask != nil {
-			a.approvalFeature().armDeadline(ev.ask, now)
-			until = ev.ask.deadline
+			ask := ev.ask
+			if !a.approvalFeature().armDeadline(ask, now) {
+				// Its hook has less budget left than a card is worth: hand
+				// it back now and count it with the requests never seen.
+				a.approvalFeature().finish(ask, agentnotify.Decision{ID: ask.id, Decision: agentnotify.DecisionPass}, approvalExpired, now)
+				a.pushAgentBack(1, now)
+				continue
+			}
+			until = ask.deadline
 		}
 		q.cur, q.until, q.shown = ev, until, true
 		if ev.kind == liveAgentAsk {

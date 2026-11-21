@@ -121,7 +121,7 @@ func TestTimerAlertStaysAcrossPanelNoticesAndApproval(t *testing.T) {
 	// A queued approval card preempts the alert even though the queue is
 	// otherwise held back.
 	a.settings.Approval.Enabled = true
-	a.live.queued = []liveEvent{{kind: liveAgentAsk, ask: &approval{deadline: now.Add(time.Minute)}}}
+	a.live.queued = []liveEvent{{kind: liveAgentAsk, ask: &approval{at: now, deadline: now.Add(time.Minute)}}}
 	ev, ok := a.liveNow(now, false)
 	if !ok || ev.kind != liveAgentAsk {
 		t.Fatalf("queued approval = %+v ok=%v", ev, ok)

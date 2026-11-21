@@ -217,19 +217,43 @@ func (f *approvalFeature) wait(ctx context.Context, ap *approval) agentnotify.De
 	}
 }
 
+// approvalRevealMargin is the sliver of the client's budget kept back from
+// a card's own deadline: the answer must leave in time for the hook to read
+// it before the client gives up and the tool takes its own flow.
+const approvalRevealMargin = 2 * time.Second
+
+// approvalMinShow is the least budget a card must have left to be worth
+// showing. Below it the answer could not reach the hook, so the request is
+// handed back at once and counted with the others that were never seen.
+const approvalMinShow = 10 * time.Second
+
 // armDeadline (main thread) starts the card's own countdown at the
 // moment it first reaches the screen, and wakes the waiter, whose timer
-// was armed against the total wall while the card sat in the queue.
-func (f *approvalFeature) armDeadline(ap *approval, now time.Time) {
+// was armed against the total wall while the card sat in the queue. The
+// countdown is the reading time, but never past the client's remaining
+// budget: a card that waited 90 s in the queue must not promise 45 s when
+// its hook has 20 s left. It reports false when too little budget is left
+// to show the card at all.
+func (f *approvalFeature) armDeadline(ap *approval, now time.Time) bool {
 	f.mu.Lock()
-	if !ap.armed {
-		ap.armed = true
-		ap.deadline = now.Add(approvalWait)
-		if ap.shownCh != nil {
-			close(ap.shownCh)
-		}
+	defer f.mu.Unlock()
+	if ap.armed {
+		return true
 	}
-	f.mu.Unlock()
+	budget := ap.at.Add(approvalTotalWait - approvalRevealMargin).Sub(now)
+	if budget < approvalMinShow {
+		return false
+	}
+	deadline := now.Add(approvalWait)
+	if wall := now.Add(budget); deadline.After(wall) {
+		deadline = wall
+	}
+	ap.armed = true
+	ap.deadline = deadline
+	if ap.shownCh != nil {
+		close(ap.shownCh)
+	}
+	return true
 }
 
 // conclude tries to end a card from this side and returns the answer the

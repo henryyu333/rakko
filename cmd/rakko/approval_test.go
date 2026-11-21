@@ -473,3 +473,67 @@ func TestApprovalQueuedCardReturnsAtTheTotalWall(t *testing.T) {
 	}
 	t.Fatalf("no note that the request went back to the terminal: %+v", a.live.queued)
 }
+
+// 排队很久的卡不能假装还有 45 秒：上屏时刻的倒计时取「上屏 + 45 秒」和
+// 「到达 + 客户端预算 − 余量」里更早的那个。
+func TestApprovalLateCardDeadlineStopsAtTheClientBudget(t *testing.T) {
+	_, f := approvalTestShelf(t)
+	ap := testApproval(t, testID(41), "claude", `{"command":"ls"}`)
+	shown := time.Now()
+	arrival := shown.Add(-90 * time.Second)
+	ap.at = arrival
+	if !f.armDeadline(ap, shown) {
+		t.Fatal("a card with 20 s of budget left was refused")
+	}
+	want := arrival.Add(approvalTotalWait - approvalRevealMargin)
+	if !ap.deadline.Equal(want) {
+		t.Fatalf("deadline = %v, want the client's remaining budget (%v)", ap.deadline, want)
+	}
+	if !ap.deadline.Before(shown.Add(approvalWait)) {
+		t.Fatalf("deadline = %v did not shrink below the reading time", ap.deadline)
+	}
+}
+
+// 预算不够上屏的请求不画卡：直接交回终端，并计入「另有 N 个请求已交回」。
+func TestApprovalCardWithoutBudgetNeverReachesTheScreen(t *testing.T) {
+	a, f := approvalTestShelf(t)
+	first := testApproval(t, testID(51), "claude", `{"command":"ls one"}`)
+	second := testApproval(t, testID(52), "claude", `{"command":"ls two"}`)
+	second.at = second.at.Add(3 * time.Second)
+	if !f.enqueue(first) || !f.enqueue(second) {
+		t.Fatal("enqueue refused")
+	}
+	now := time.Now()
+	if ev, ok := a.liveNow(now, true); !ok || ev.ask != first {
+		t.Fatalf("first card = %+v ok=%v", ev, ok)
+	}
+	f.decide(first.id, agentnotify.DecisionAllow, "")
+	// The second's hook has five seconds of budget left when the first card
+	// finally clears the notch.
+	later := now.Add(2 * time.Second)
+	second.at = later.Add(-approvalTotalWait + 5*time.Second)
+	ev, ok := a.liveNow(later, true)
+	if ok && ev.ask == second {
+		t.Fatal("a card with 5 s of hook budget left was put on screen")
+	}
+	if second.state != approvalExpired || second.armed {
+		t.Fatalf("the skipped card shows %v (armed=%v), want expired and never armed", second.state, second.armed)
+	}
+	select {
+	case d := <-second.done:
+		if d.ID != second.id || d.Decision != agentnotify.DecisionPass {
+			t.Fatalf("the hook was told %+v, want pass", d)
+		}
+	default:
+		t.Fatal("the skipped card left no decision for its hook")
+	}
+	if a.live.shown && a.live.cur.kind == liveAgentBack && a.live.cur.pct == 1 {
+		return
+	}
+	for _, queued := range a.live.queued {
+		if queued.kind == liveAgentBack && queued.pct == 1 {
+			return
+		}
+	}
+	t.Fatalf("no note that the request went back to the terminal: %+v", a.live.queued)
+}
