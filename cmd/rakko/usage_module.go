@@ -156,6 +156,10 @@ type usageFeature struct {
 	// codexPostConsume marks the one refresh a finished consume is allowed
 	// to start while the busy guard is still up; every other start waits.
 	codexPostConsume bool
+	// codexConsumeInFlight says the reset request itself is still on its
+	// way to the server. Only then may the busy guard outlive a cancelled
+	// refresh: once the consume has answered, nothing is left to guard.
+	codexConsumeInFlight bool
 
 	// Rakko's own Claude sign-in; loginGen retires a cancelled run's
 	// late answer.
@@ -284,6 +288,13 @@ func (f *usageFeature) stopWork() {
 	// The reset confirmation belongs to the page it was opened on; a fold
 	// or a switch must not bring it back with old numbers.
 	f.codexResetConfirm = false
+	// A cancelled post-consume refresh reports nothing (its aborted branch
+	// returns early for Codex), so the busy guard would outlive every
+	// answer and block all later refreshes. Once the consume itself has
+	// finished, its guard goes with the work that was cancelled.
+	if !f.codexConsumeInFlight {
+		f.codexResetBusy = false
+	}
 	f.invalidate()
 }
 
@@ -901,6 +912,7 @@ func (f *usageFeature) confirmUseCodexReset() {
 		return
 	}
 	f.codexResetBusy = true
+	f.codexConsumeInFlight = true
 	// Freeze every refresh already in flight: their answers predate the
 	// consume and must not clear the busy state that guards it.
 	st := f.quotaState(aiusage.ToolCodex)
@@ -912,6 +924,7 @@ func (f *usageFeature) confirmUseCodexReset() {
 		out, err := use(ctx)
 		cancel()
 		dispatchMain(func() {
+			f.codexConsumeInFlight = false
 			l := f.host.appLoc()
 			switch {
 			case err != nil:

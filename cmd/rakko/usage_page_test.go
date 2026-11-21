@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1976,5 +1977,126 @@ func TestCodexPopoverShowsStaleData(t *testing.T) {
 	view.Frame()
 	if !view.HasText("的数据") {
 		t.Fatalf("the detail dresses stale numbers as fresh: %v", view.Texts())
+	}
+}
+
+// A refresh cancelled by folding the panel must not leave the reset guard
+// behind: once the consume has answered, the next visit refreshes Codex
+// and the button follows the credit count again.
+func TestCodexResetSurvivesAFoldedPanel(t *testing.T) {
+	fx := newUsageFixture(t, true)
+	stubCodexReset(fx.f)
+	var (
+		mu      sync.Mutex
+		pending []func()
+		calls   int
+		release = make(chan struct{})
+		arrived = make(chan struct{})
+		gateOne sync.Once
+	)
+	oldWork, oldMain := goWork, dispatchMain
+	goWork = func(fn func()) {
+		mu.Lock()
+		pending = append(pending, fn)
+		mu.Unlock()
+	}
+	dispatchMain = func(fn func()) {
+		mu.Lock()
+		pending = append(pending, fn)
+		mu.Unlock()
+	}
+	t.Cleanup(func() { goWork, dispatchMain = oldWork, oldMain })
+	pop := func() (func(), bool) {
+		mu.Lock()
+		defer mu.Unlock()
+		if len(pending) == 0 {
+			return nil, false
+		}
+		fn := pending[0]
+		pending = pending[1:]
+		return fn, true
+	}
+	waitPending := func() func() {
+		t.Helper()
+		for i := 0; i < 400; i++ {
+			if fn, ok := pop(); ok {
+				return fn
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+		t.Fatal("no queued work arrived")
+		return nil
+	}
+	fx.f.deps.fetchCodex = func(ctx context.Context) aiusage.Quota {
+		mu.Lock()
+		calls++
+		mu.Unlock()
+		gateOne.Do(func() { close(arrived) })
+		<-release
+		if ctx.Err() != nil {
+			return aiusage.Quota{Tool: aiusage.ToolCodex, Status: aiusage.QuotaFailed, Err: ctx.Err().Error()}
+		}
+		return okQuota(aiusage.ToolCodex, "Plus", *fx.now)
+	}
+	q := okQuota(aiusage.ToolCodex, "Plus", *fx.now)
+	q = windowUsed(q, 0, 50)
+	q.ResetCredits = &aiusage.ResetCredits{Count: 2, FirstID: "cr-1"}
+	st := fx.f.quotaState(aiusage.ToolCodex)
+	st.latest, st.good = q, q
+
+	fx.f.requestUseCodexReset()
+	fx.f.confirmUseCodexReset()
+	// The consume answers; the post-consume refresh starts and blocks.
+	consume := waitPending()
+	go consume()
+	remote := waitPending()
+	remote()
+	refresh, ok := pop()
+	if !ok {
+		t.Fatal("the post-consume refresh did not start")
+	}
+	go refresh()
+	<-arrived
+	if !fx.f.codexResetBusy {
+		t.Fatal("the guard is down while the post-consume refresh is in flight")
+	}
+	// Folding the panel cancels that refresh before it answers.
+	fx.f.stopWork()
+	if fx.f.codexResetBusy {
+		t.Fatal("the busy guard outlived the finished consume")
+	}
+	close(release)
+	late := waitPending()
+	late() // the cancelled answer reports nothing for Codex
+
+	// The next visit refreshes Codex again and the button follows the
+	// remaining credit.
+	*fx.now = (*fx.now).Add(6 * time.Minute)
+	mu.Lock()
+	before := calls
+	mu.Unlock()
+	fx.view.Click("AI 用量")
+	fx.f.tick(*fx.now)
+	// Run whatever the visit queued until the Codex fetch shows up: the
+	// page may queue other work (the credential probe, a scan) first.
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		if fn, ok := pop(); ok {
+			go fn()
+			continue
+		}
+		mu.Lock()
+		after := calls
+		mu.Unlock()
+		if after > before {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("Codex did not refresh after the fold (calls %d → %d)", before, after)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if ok, reason := fx.f.canUseCodexReset(); !ok {
+		t.Fatalf("the reset button did not come back: %s", reason)
 	}
 }
