@@ -41,3 +41,19 @@ func TestDragGuardDoesNotMoveCursor(t *testing.T) {
 		t.Fatalf("drag guard moved cursor from %+v to %+v", before, after)
 	}
 }
+
+// A Windows drag declares no formats before it reaches one of our windows,
+// so shaking must not summon the basket for it: only a caller that already
+// knows the drag carries files or images does.
+func TestDragMayCarryFilesNeedsDeclaredFiles(t *testing.T) {
+	for _, types := range [][]string{nil, {"public.utf8-plain-text"}, {"text/plain"}} {
+		if DragMayCarryFiles(types) {
+			t.Fatalf("%v must not wake the basket", types)
+		}
+	}
+	for _, types := range [][]string{{"CF_HDROP"}, {"image/png"}} {
+		if !DragMayCarryFiles(types) {
+			t.Fatalf("%v must wake the basket", types)
+		}
+	}
+}
