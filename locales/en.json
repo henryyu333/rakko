@@ -705,6 +705,7 @@
   "liveStatusLow": "Low Battery {pct, number, ::group-off}%",
   "liveAgentDone": "Done",
   "liveAgentTaskFallback": "a turn",
+  "liveAgentBack": "{n, plural, one {One request went back to the terminal} other {Another {n, number, ::group-off} requests went back to the terminal}}",
   "liveStatusAgentDone": "{agent} · {task} · Done",
   "audioLevelLeft": "Left {pct, number, ::group-off}%",
   "audioLevelRight": "Right {pct, number, ::group-off}%",

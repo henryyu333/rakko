@@ -331,6 +331,11 @@ func (a *shelf) liveCapsule(c *ui.Context, shellW, shellH, k float32, ev liveEve
 				ui.Text(c, middleEllipsis(c, ev.label, w-13-2*fbPadX-verbW-7-fbGap*3-7)).
 					SingleLine().FontSize(12).FontWeight(500).TextColor(ink2)
 				ui.Box(c.Key("live-done-dot")).Size(7, 7).Radius(3.5).Background(liveGreen)
+			case liveAgentBack:
+				// One quiet line: requests the queue could not show were
+				// answered back in the terminal, and that is the whole of
+				// the news.
+				ui.Text(c, l.LiveAgentBack(ev.pct)).SingleLine().FontSize(12).FontWeight(600).TextColor(ink)
 			}
 		})
 		if ev.kind == liveDownloadDone && body.Clicked() {

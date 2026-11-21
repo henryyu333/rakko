@@ -44,7 +44,9 @@ func deadlineApproval(t *testing.T, id string) *approval {
 		done:     make(chan agentnotify.Decision, 1),
 		at:       now,
 		deadline: now.Add(-time.Second),
-		state:    approvalShown,
+		// These cards are already on screen with their countdown spent.
+		armed: true,
+		state: approvalShown,
 	}
 }
 

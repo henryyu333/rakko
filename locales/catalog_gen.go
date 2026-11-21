@@ -7153,6 +7153,16 @@ func (msgs Messages) LiveAgentDone() string {
 	return Catalog.Format(msgs.locale, "liveAgentDone", nil)
 }
 
+// LiveAgentBack says "{n, plural, other {另有 {n, number, ::group-off} 个请求已交回终端}}"
+// in the language the app shows.
+func LiveAgentBack(n int) string { return In(i18n.Locale()).LiveAgentBack(n) }
+
+// LiveAgentBack says "{n, plural, other {另有 {n, number, ::group-off} 个请求已交回终端}}"
+// in the language of msgs.
+func (msgs Messages) LiveAgentBack(n int) string {
+	return Catalog.Format(msgs.locale, "liveAgentBack", map[string]any{"n": n})
+}
+
 // LiveAgentTaskFallback says "一轮任务"
 // in the language the app shows.
 func LiveAgentTaskFallback() string { return In(i18n.Locale()).LiveAgentTaskFallback() }

@@ -20,8 +20,16 @@ import (
 )
 
 // approvalWait is how long a card stays before it is handed back to the
-// terminal. It is below the client's 55 s budget and the hook's 60 s.
+// terminal. The countdown starts when the card reaches the screen, so a
+// request queued behind another keeps its full reading time; it is below
+// the client's 110 s budget and the hook's 120 s.
 var approvalWait = 45 * time.Second
+
+// approvalTotalWait bounds how long a request may wait in the queue
+// without ever being seen: at the client's own budget the hook gives up,
+// and the request is handed back with a note on the notch instead of
+// disappearing.
+var approvalTotalWait = agentnotify.ApproveWait
 
 // approvalResultHold is how long an answer stays on the card.
 const (
@@ -68,6 +76,12 @@ type approval struct {
 	done     chan agentnotify.Decision
 	at       time.Time
 	deadline time.Time
+
+	// armed marks the first time the card reached the screen: the 45 s
+	// countdown starts there, not at arrival. shownCh closes with it and
+	// wakes the waiter, whose timer was armed against the total wall.
+	armed  bool
+	shownCh chan struct{}
 
 	state       approvalState
 	verdict     string
@@ -138,6 +152,7 @@ func (f *approvalFeature) ask(ctx context.Context, a agentnotify.Ask) agentnotif
 	ap := &approval{
 		id: a.ID, ask: a, analysis: an,
 		done:     make(chan agentnotify.Decision, 1),
+		shownCh:  make(chan struct{}),
 		at:       now,
 		deadline: now.Add(approvalWait),
 		state:    approvalShown,
@@ -151,19 +166,66 @@ func (f *approvalFeature) ask(ctx context.Context, a agentnotify.Ask) agentnotif
 // wait blocks one admitted request until it is answered, expires or the
 // hook hangs up. It is ask's second half, so tests can admit on the test
 // thread and then wait without a second goroutine touching the queue.
+// While the card has not reached the screen the timer runs against the
+// total wall; the display re-arms it to the card's own countdown.
 func (f *approvalFeature) wait(ctx context.Context, ap *approval) agentnotify.Decision {
 	a := ap.ask
-	timer := time.NewTimer(time.Until(ap.deadline))
-	defer timer.Stop()
 	pass := agentnotify.Decision{ID: a.ID, Decision: agentnotify.DecisionPass}
-	select {
-	case d := <-ap.done:
-		return d
-	case <-ctx.Done():
-		return f.conclude(ap, pass, approvalWithdrawn)
-	case <-timer.C:
-		return f.conclude(ap, pass, approvalExpired)
+	outer := ap.at.Add(approvalTotalWait)
+	displayed := ap.shownCh
+	for {
+		f.mu.Lock()
+		armed, deadline := ap.armed, ap.deadline
+		f.mu.Unlock()
+		wait := time.Until(deadline)
+		if !armed {
+			// Still hidden behind another card: only the total wall can
+			// end this wait, and the first display re-arms the timer.
+			wait = time.Until(outer)
+		}
+		timer := time.NewTimer(wait)
+		select {
+		case d := <-ap.done:
+			timer.Stop()
+			return d
+		case <-ctx.Done():
+			timer.Stop()
+			return f.conclude(ap, pass, approvalWithdrawn)
+		case <-displayed:
+			timer.Stop()
+			displayed = nil
+		case <-timer.C:
+			timer.Stop()
+			f.mu.Lock()
+			armed, deadline = ap.armed, ap.deadline
+			f.mu.Unlock()
+			if time.Now().Before(deadline) {
+				continue // the countdown started after this timer was armed
+			}
+			if armed {
+				return f.conclude(ap, pass, approvalExpired)
+			}
+			// The total wall ran out on a card the user never saw: hand
+			// it back and say so on the notch.
+			f.main(func() { f.host.pushAgentBack(1, time.Now()) })
+			return f.conclude(ap, pass, approvalExpired)
+		}
 	}
+}
+
+// armDeadline (main thread) starts the card's own countdown at the
+// moment it first reaches the screen, and wakes the waiter, whose timer
+// was armed against the total wall while the card sat in the queue.
+func (f *approvalFeature) armDeadline(ap *approval, now time.Time) {
+	f.mu.Lock()
+	if !ap.armed {
+		ap.armed = true
+		ap.deadline = now.Add(approvalWait)
+		if ap.shownCh != nil {
+			close(ap.shownCh)
+		}
+	}
+	f.mu.Unlock()
 }
 
 // conclude tries to end a card from this side and returns the answer the

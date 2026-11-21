@@ -99,8 +99,10 @@ const (
 	// under the notch (agentCard).
 	liveAgentDone
 	// liveAgentAsk is an agent asking for permission: the interactive card
-	// (approvalCard), which owns the notch until it is answered.
 	liveAgentAsk
+	// liveAgentBack is requests that waited too long in the queue and were
+	// handed back to the terminal without ever reaching the screen.
+	liveAgentBack
 )
 
 // wings reports whether the event uses the wide two-wing shape instead of
@@ -185,7 +187,7 @@ func (a *shelf) liveEnabled(kind liveKind) bool {
 		return s.Downloads
 	case liveAgentDone:
 		return a.settings.AgentNotify.Enabled
-	case liveAgentAsk:
+	case liveAgentAsk, liveAgentBack:
 		return a.settings.Approval.Enabled
 	}
 	return false
@@ -251,6 +253,24 @@ func (a *shelf) pushDownloaded(paths []string, now time.Time) {
 	a.pushLive(liveEvent{
 		kind: liveDownloadDone, label: downloadDoneLabel(a.appLoc(), paths), paths: paths,
 	}, downloadDoneHold(len(paths)), now)
+}
+
+// pushAgentBack notes on the notch that n permission requests were handed
+// back to the terminal: they waited behind another card until the client's
+// own budget ran out, and the user never saw them. A notice already
+// waiting in the queue says the total, so a burst is one line.
+func (a *shelf) pushAgentBack(n int, now time.Time) {
+	for i := range a.live.queued {
+		ev := &a.live.queued[i]
+		if ev.kind != liveAgentBack {
+			continue
+		}
+		ev.pct += n
+		baseW, _ := a.anchorSize()
+		ev.width = liveCapsuleWidth(a.appLoc(), *ev, baseW)
+		return
+	}
+	a.pushLive(liveEvent{kind: liveAgentBack, pct: n}, liveHoldAgent, now)
 }
 
 // downloadDoneLabel is the completion capsule's noun: the file's own name,
@@ -374,16 +394,19 @@ func (a *shelf) liveNow(now time.Time, allow bool) (liveEvent, bool) {
 		// A download result is not a transient state: the file the user
 		// asked for finished, whether or not a busy queue delayed the
 		// words. An agent completion waits for the panel to fold, which can
-		// take longer than the bound. Every other kind is stale after it.
+		// take longer than the bound, and a request handed back is news
+		// about this very queue's wait. Every other kind is stale after it.
 		if ev.kind != liveDownloadDone && ev.kind != liveAgentDone && ev.kind != liveAgentAsk &&
-			now.Sub(ev.queuedAt) > liveQueueMaxWait {
+			ev.kind != liveAgentBack && now.Sub(ev.queuedAt) > liveQueueMaxWait {
 			continue
 		}
 		// The hold starts now, not at arrival, so waiting behind another
 		// notice never eats this one's own duration. A permission request
-		// keeps its own deadline instead: its hook is waiting too.
+		// keeps its own countdown, which also starts here — the moment the
+		// card actually reaches the screen.
 		until := now.Add(ev.hold)
 		if ev.kind == liveAgentAsk && ev.ask != nil {
+			a.approvalFeature().armDeadline(ev.ask, now)
 			until = ev.ask.deadline
 		}
 		q.cur, q.until, q.shown = ev, until, true
@@ -492,6 +515,8 @@ func liveCapsuleWidth(l locales.Messages, ev liveEvent, baseW float32) float32 {
 		add(ev.task, 12)
 		add("·", 12)
 		add(l.LiveAgentDone(), 12)
+	case liveAgentBack:
+		add(l.LiveAgentBack(ev.pct), 12)
 	}
 	w = max(w, minW, baseW+60)
 	return min(w, fbMaxW)
@@ -624,6 +649,8 @@ func (ev liveEvent) statusLineIn(l locales.Messages) string {
 		}
 		age := int(time.Since(ev.ask.at).Seconds())
 		return l.LiveStatusAgentAsk(ev.agent, what) + " · " + l.LiveApprovalAge(age)
+	case liveAgentBack:
+		return l.LiveAgentBack(ev.pct)
 	case liveHeadsetOff:
 		return l.LiveStatusOff(ev.label)
 	case liveHeadset:

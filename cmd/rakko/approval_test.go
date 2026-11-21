@@ -58,6 +58,7 @@ func testApproval(t *testing.T, id, tool, input string) *approval {
 	return &approval{
 		id: id, ask: ask, analysis: an,
 		done:     make(chan agentnotify.Decision, 1),
+		shownCh:  make(chan struct{}),
 		at:       now,
 		deadline: now.Add(approvalWait),
 		state:    approvalShown,

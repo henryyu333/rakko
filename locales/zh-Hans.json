@@ -704,6 +704,7 @@
   "liveStatusCharged": "已充满 {pct, number, ::group-off}%",
   "liveStatusLow": "电量低 {pct, number, ::group-off}%",
   "liveAgentDone": "完成",
+  "liveAgentBack": "{n, plural, other {另有 {n, number, ::group-off} 个请求已交回终端}}",
   "liveAgentTaskFallback": "一轮任务",
   "liveStatusAgentDone": "{agent} · {task} · 完成",
   "audioLevelLeft": "左 {pct, number, ::group-off}%",
