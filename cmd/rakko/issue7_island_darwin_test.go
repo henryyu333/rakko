@@ -124,3 +124,20 @@ func TestIslandDisplayDisconnectOrOccludedDoesNotDeadlockBlankFrame(t *testing.T
 		}
 	})
 }
+
+// A blank-frame handshake the window never painted must not stay armed
+// when the target falls back to the current frame: the next growth resize
+// would skip its transparent frame and stretch the capsule canvas.
+func TestStaleBlankHandshakeClearsWhenTargetMatchesFrame(t *testing.T) {
+	a, _ := islandBlankShelf(t, false)
+	a.visible = false
+	rest := a.targetFrame()
+	a.frame = rest // no resize is pending at all
+	a.blankQueued, a.blankFrame, a.blankReady = true, true, false
+	a.blankQueuedAt = time.Now().Add(-2 * blankQueueTimeout)
+	a.syncWindowFrame()
+	if a.blankFrame || a.blankQueued || a.blankReady || !a.blankQueuedAt.IsZero() {
+		t.Fatalf("a stale blank handshake stayed armed: blank=%v queued=%v ready=%v at=%v",
+			a.blankFrame, a.blankQueued, a.blankReady, a.blankQueuedAt)
+	}
+}

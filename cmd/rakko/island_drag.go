@@ -285,16 +285,16 @@ func (a *shelf) panelFlipStep(zone ui.Element) {
 
 // beginIslandPress arms a press on the closed island: the panel opens on the
 // release unless the press travels first (islandDragTick). The grab point is
-// kept inside the capsule box, so a press on the wider hover/live pill still
-// moves the shell without it jumping out from under the pointer.
+// kept where the pointer actually touched — including on the wider hover or
+// live pill around the capsule — so the shell moves without jumping out
+// from under the pointer the moment the drag starts.
 func (a *shelf) beginIslandPress(p mygo.Point) {
 	r := a.islandRect()
-	top := a.frameTop() + a.sheetTop()
 	a.islandPress = islandPress{
 		active: true,
 		at:     p,
-		grabX:  min(max(p.X-r.X, 0), islandIdleW-1),
-		grabY:  min(max(p.Y-top, 0), islandIdleH-1),
+		grabX:  p.X - r.X,
+		grabY:  p.Y - r.Y,
 	}
 	a.islandDrag = false
 	// The notch's corridor must not clamp the user's own gesture: this parks

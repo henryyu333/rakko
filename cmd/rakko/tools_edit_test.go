@@ -755,3 +755,27 @@ func TestToolsLibraryHitRectFollowsTheIslandTop(t *testing.T) {
 		}
 	})
 }
+
+// A fold during the 120 ms fade resets tool editing like a finished close
+// does; reopening right away must not land in the editing state.
+func TestToolsEditingResetsWhenPanelReopens(t *testing.T) {
+	a, p, _ := setupToolsDragTester(t, []layout.Card{{ID: "zip", Span: 1, Rows: 1}})
+	p.editing = true
+	a.hide(hidePassive)
+	a.show(false)
+	if p.editing {
+		t.Fatal("the tools page reopened still editing")
+	}
+}
+
+// The home page discards drops, so it must not advertise 松开放入.
+func TestHomeDoesNotPromiseADropItDiscards(t *testing.T) {
+	a, _, view := setupToolsDragTester(t, []layout.Card{{ID: "zip", Span: 1, Rows: 1}})
+	a.tab = pageHome
+	a.dragging, a.ownDrag = true, false
+	a.drop.on = false
+	view.Frame()
+	if _, ok := view.Find(a.appLoc().DropRelease()); ok {
+		t.Fatal("the home page promises a drop it discards")
+	}
+}

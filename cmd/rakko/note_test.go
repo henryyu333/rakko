@@ -470,3 +470,15 @@ func TestNoteShowFrontHidesPanel(t *testing.T) {
 		t.Fatal("panel stayed visible after showFront")
 	}
 }
+
+// A hide lands the note window's draft even when the panel was already
+// folded (opening the note folds it): the second hide must not skip it and
+// leave the sentence only in memory.
+func TestHideLandsNoteDraftWhenPanelAlreadyFolded(t *testing.T) {
+	a, n := noteTestShelf(t)
+	n.draft = "# 面板早已收起，这句要落盘"
+	a.hide(hidePassive) // already folded: nothing to fold
+	if got := fileText(t, n); got != "# 面板早已收起，这句要落盘" {
+		t.Fatalf("the folded panel's hide did not land the draft; disk holds %q", got)
+	}
+}

@@ -151,6 +151,14 @@ func main() {
 	// broken read never claims the install is new — that file is never
 	// rewritten behind the user's back.
 	prefs.Onboarding.Pending = onboardingOwed(freshInstall, perr, prefs.Onboarding.Pending)
+	if freshInstall && prefs.Onboarding.Pending {
+		// Write the debt down now: the intro screen saves nothing until the
+		// first step change, and a quit on that screen must not lose the
+		// guide forever. A failed write is retried by the next launch.
+		if err := settings.Save(*dataDir, prefs); err != nil {
+			log.Printf("%s: 记录首次启动引导失败：%v", appName, err)
+		}
+	}
 	a := &shelf{store: s, settings: prefs, dataDir: *dataDir, companion: comp, stop: make(chan struct{}), thumbnails: make(map[string]*ui.Bitmap), thumbPending: make(map[string]bool)}
 	// 剪贴板文字限额来自设置；小于 1 的值由 store 回落到默认 30。
 	s.SetTextLimit(prefs.ClipboardLimit)

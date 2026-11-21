@@ -1748,7 +1748,8 @@ func (a *shelf) toastLayer(c *ui.Context, over bool) {
 		// The drop zone carries its own release hint in the back row;
 		// the 松开放入 capsule stays hidden while it is up (or while
 		// waiting for an edge-opened Windows drag's initial Offer).
-		if (over || (a.dragging && !a.ownDrag)) && !a.drop.on && !a.awaitingHoverOffer(c.Now()) && a.tab != pageTools {
+		if (over || (a.dragging && !a.ownDrag)) && !a.drop.on && !a.awaitingHoverOffer(c.Now()) &&
+			a.tab != pageTools && !a.homeTakesNoDrop() {
 			a.pill(c, "drop", l.DropRelease(), false)
 		}
 	})

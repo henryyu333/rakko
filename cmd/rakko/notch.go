@@ -740,6 +740,11 @@ func (a *shelf) syncWindowFrame() {
 	a.syncMainIdleCapsule()
 	r := a.targetFrame()
 	if r == a.frame {
+		// Nothing is resizing, so a blank-frame handshake recorded earlier
+		// never painted (the window was covered, asleep, or on another
+		// Space): a queued request would let the next growth resize skip
+		// its transparent frame and stretch the capsule canvas instead.
+		a.blankFrame, a.blankQueued, a.blankReady, a.blankQueuedAt = false, false, false, time.Time{}
 		return
 	}
 	if a.buildingView && a.winH != 0 {
@@ -983,6 +988,9 @@ func (a *shelf) mouseDown(inside bool, button int, p mygo.Point) {
 			a.ownPress = false
 			a.syncDragGuard()
 		}
+		// The wings just vanished: the switcher they carried must end with
+		// them, or ←/→/⏎ keep steering an unseen selection.
+		a.endAppSwitch()
 		a.releaseKeys()
 		return
 	}
@@ -999,7 +1007,16 @@ func (a *shelf) mouseDown(inside bool, button int, p mygo.Point) {
 	// A press on another screen's idle capsule moves the resident window
 	// there first — every screen's island opens its own panel. It arms the
 	// drag the same way, so an idle capsule anywhere can be moved.
-	if !inside && button == 0 && !a.visible && a.idleIslandAt(p) {
+	if !inside && button == 0 && a.idleIslandAt(p) {
+		if a.visible {
+			// A press on another screen's idle capsule is that screen's
+			// request for its own panel: fold this one and open there, in
+			// one click, instead of asking for a second.
+			a.hide(hidePassive)
+			a.place(p)
+			a.show(false)
+			return
+		}
 		a.place(p)
 		a.beginIslandPress(p)
 		return
@@ -2038,6 +2055,10 @@ func (a *shelf) leaveFocusMode() {
 func (a *shelf) hide(exit hideExit) {
 	a.endAppSwitch() // 收起同样结束应用切换(保险路径; 通常已经不在)
 	a.apps.entryRect = mygo.Rectangle{}
+	// The note window outlives the panel: land what it holds even when the
+	// panel was already folded (opening the note folds it), so a second
+	// hide cannot skip the draft. Idempotent when there is nothing to land.
+	a.noteFlush()
 	if !a.visible && !a.peeking {
 		return
 	}
@@ -2090,8 +2111,6 @@ func (a *shelf) hide(exit hideExit) {
 	// content fade and finishClose retires them.
 	a.cancelHomeSpot()
 	a.releaseKeys()
-	// The note window outlives the panel; what it holds is landed now.
-	a.noteFlush()
 	// 当前拖拽不再次触发；松开鼠标或出现新会话后解除。
 	a.suppressed = true
 	a.hidePending = false
@@ -2099,6 +2118,7 @@ func (a *shelf) hide(exit hideExit) {
 	// The fold runs inside the envelope the open panel had: take it before
 	// the first closing frame, so no tick resizes the surface under the
 	// shell coming down.
+	a.resetToolsEdit()
 	if p := a.toolsPage(); p != nil {
 		p.cancelGestures()
 	}
