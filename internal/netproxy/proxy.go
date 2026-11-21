@@ -27,6 +27,7 @@
 package netproxy
 
 import (
+	"errors"
 	"log"
 	"net"
 	"net/http"
@@ -306,4 +307,31 @@ func NewClient(timeout time.Duration) *http.Client {
 // updater bounds its own requests with a context.
 func InstallDefaultClient() {
 	http.DefaultClient = &http.Client{Transport: Shared()}
+}
+
+// ErrProxyAuthRequired marks an outbound request a proxy refused with
+// 407. Rakko reads a proxy's scheme, host and port from the environment
+// and the system settings, but never its credentials — on macOS they
+// live in the keychain and go to CFNetwork, not to Go — so a proxy that
+// demands a sign-in fails every request the same way. Callers turn this
+// into one explanatory line instead of retrying into the wall.
+var ErrProxyAuthRequired = errors.New("netproxy: the proxy requires authentication")
+
+// proxyAuthMarker is how Go surfaces a CONNECT the proxy refused: the
+// transport turns the answer's reason phrase into the error text, so
+// the standard 407 phrase is the tell across every Go version.
+const proxyAuthMarker = "Proxy Authentication Required"
+
+// IsProxyAuthRequired reports whether err came from a proxy that
+// answered 407 — directly, or wrapped by a caller's own error.
+func IsProxyAuthRequired(err error) bool {
+	return err != nil && (errors.Is(err, ErrProxyAuthRequired) ||
+		strings.Contains(err.Error(), proxyAuthMarker))
+}
+
+// ProxyAuthText is IsProxyAuthRequired for a stored one-line summary
+// instead of the error itself: aiusage keeps "HTTP 407" or the
+// transport's reason phrase in Quota.Err.
+func ProxyAuthText(s string) bool {
+	return strings.Contains(s, proxyAuthMarker) || strings.Contains(s, "HTTP 407")
 }

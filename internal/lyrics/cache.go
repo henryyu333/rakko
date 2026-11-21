@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -47,10 +48,18 @@ func NewCache(dir string) *Cache {
 	return &Cache{dir: dir, now: time.Now}
 }
 
-// Key identifies a track for the cache: case-folded title, artist and the
-// rounded duration.
+// Key identifies a track for the cache: case-folded title, artist and
+// the rounded duration — the match LRCLIB uses — plus, when the player
+// reports one, the album: an album version, a live release and a
+// re-recording can share a title, an artist and a length. A track
+// without an album keeps the old three-part form, so an existing cache
+// file still answers.
 func Key(t Track) string {
-	return normText(t.Title) + "|" + normText(t.Artist) + "|" + strconv.Itoa(t.Duration)
+	key := normText(t.Title) + "|" + normText(t.Artist) + "|" + strconv.Itoa(t.Duration)
+	if strings.TrimSpace(t.Album) != "" {
+		key += "|" + normText(t.Album)
+	}
+	return key
 }
 
 // Get answers a fresh entry, dropping an expired one.

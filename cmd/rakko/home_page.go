@@ -19,21 +19,21 @@ import (
 
 	"rakko/internal/companion"
 	"rakko/internal/lyrics"
+	"rakko/internal/netproxy"
 	"rakko/internal/platform"
 	"rakko/internal/store"
 	"rakko/locales"
 )
 
 const (
-	homeLyricsW     = 640              // the page beside the lyrics column
-	homePlayerCol   = 300              // the player's column there
-	homeLineH       = 28               // one lyric line
-	homeLyricsBtn   = 30               // the player's lyrics button
-	homeOtterW      = 112              // the idle page's otter
+	homeLyricsW          = 640              // the page beside the lyrics column
+	homePlayerCol        = 300              // the player's column there
+	homeLineH            = 28               // one lyric line
+	homeLyricsBtn        = 30               // the player's lyrics button
+	homeOtterW           = 112              // the idle page's otter
 	homeLyricsWait       = 10 * time.Second // lrclib, its retries and netease
 	homeLyricsFirstRetry = 5 * time.Second  // quick retry after an initial failure
 	homeLyricsRetry      = 30 * time.Second // backoff for repeated failures
-	homeLyricsMaxRetries = 3                // automatic retries per track
 )
 
 var (
@@ -61,19 +61,21 @@ var (
 type homePage struct {
 	host *shelf
 
-	key      string // the track the state below belongs to
-	lines    []lyrics.Line
-	synced   string
-	none     bool // a completed lookup with nothing to show
+	key       string // the track the state below belongs to
+	lines     []lyrics.Line
+	synced    string
+	none      bool // a completed lookup with nothing to show
 	loading   bool
 	failed    bool      // this track's lookup failed: stay on the player
 	failedAt  time.Time // when it failed; a retry waits retryDelay()
+	failedErr error     // why it failed; the note's wording follows it
 	failCount int       // consecutive failures for this track
 	fetched   bool      // the fetch for key was started
-	shown    int       // lyric line the scroll was last moved to
-	scrollTo int       // line to centre once the scroll has a measured range
+	shown     int       // lyric line the scroll was last moved to
+	scrollTo  int       // line to centre once the scroll has a measured range
 
-	lscroll ui.ScrollState
+	fetchCancel context.CancelFunc // the lookup in flight for this page, if any
+	lscroll     ui.ScrollState
 }
 
 func (p *homePage) id() pageID                        { return pageHome }
@@ -128,12 +130,16 @@ func (p *homePage) body(c *ui.Context, _ bool, live bool) ui.Element {
 func (p *homePage) prepare(live bool) {
 	st, ok := p.track()
 	if !ok {
-		p.key, p.lines, p.none, p.loading, p.failed, p.failedAt, p.failCount, p.fetched, p.shown, p.scrollTo = "", nil, false, false, false, time.Time{}, 0, false, -1, -1
+		p.key, p.lines, p.none, p.loading, p.failed, p.failedAt, p.failedErr, p.failCount, p.fetched, p.shown, p.scrollTo = "", nil, false, false, false, time.Time{}, nil, 0, false, -1, -1
+		p.cancelFetch()
 		return
 	}
 	key := homeTrackKey(st)
 	if key != p.key {
-		p.key, p.lines, p.none, p.loading, p.failed, p.failedAt, p.failCount, p.fetched, p.shown, p.scrollTo = key, nil, false, false, false, time.Time{}, 0, false, -1, -1
+		p.key, p.lines, p.none, p.loading, p.failed, p.failedAt, p.failedErr, p.failCount, p.fetched, p.shown, p.scrollTo = key, nil, false, false, false, time.Time{}, nil, 0, false, -1, -1
+		// The new track makes the old lookup's answer irrelevant: stop it
+		// instead of letting a whole request round finish on its own.
+		p.cancelFetch()
 		if r, ok := p.host.lyricsCache().Get(key); ok {
 			p.adopt(r)
 		}
@@ -142,7 +148,7 @@ func (p *homePage) prepare(live bool) {
 		if delay, ok := p.retryDelay(); ok && time.Since(p.failedAt) >= delay {
 			// The service was busy or down; ask again with bounded backoff
 			// instead of blacklisting the track for as long as it plays.
-			p.failed, p.fetched = false, false
+			p.failed, p.failedErr, p.fetched = false, nil, false
 		}
 	}
 	if !live || !p.host.settings.LyricsOn() || p.loading || p.fetched || p.failed || len(p.lines) > 0 || p.none {
@@ -153,12 +159,23 @@ func (p *homePage) prepare(live bool) {
 		Title: st.Title, Artist: st.Artist, Album: st.Album,
 		Duration: int(math.Round(st.Duration)),
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), homeLyricsWait)
+	p.fetchCancel = cancel
 	homeGo(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), homeLyricsWait)
 		defer cancel()
 		res, err := homeFetch(ctx, t)
 		homeOnMain(func() { p.apply(key, res, err) })
 	})
+}
+
+// cancelFetch stops the lookup this page no longer needs — no track, or a
+// new one — so a rapid song change does not leave a trail of requests
+// racing each other to the same services.
+func (p *homePage) cancelFetch() {
+	if p.fetchCancel != nil {
+		p.fetchCancel()
+		p.fetchCancel = nil
+	}
 }
 
 // adopt folds one answer into the page's lines: only synced words count,
@@ -173,15 +190,20 @@ func (p *homePage) adopt(r lyrics.Result) {
 }
 
 // apply stores a lookup answer and asks for the frame that widens the page
-// to its lyrics. Errors leave the player up.
+// to its lyrics. Errors leave the player up — and ask for their own frame,
+// because a paused track is the one case where nothing else redraws.
 func (p *homePage) apply(key string, r lyrics.Result, err error) {
 	if key != p.key {
 		return // the track changed while the answer was on its way
 	}
 	p.loading = false
+	p.fetchCancel = nil
 	if err != nil {
-		p.failed, p.failedAt = true, time.Now()
+		p.failed, p.failedAt, p.failedErr = true, time.Now(), err
 		p.failCount++
+		// The loading line must give way to the failure line even while
+		// paused: nothing else animates this page then.
+		p.host.homeChanged()
 		return
 	}
 	p.failCount = 0
@@ -190,10 +212,11 @@ func (p *homePage) apply(key string, r lyrics.Result, err error) {
 	p.host.homeChanged()
 }
 
+// retryDelay is the pause before this track is asked again. It never
+// gives up on the track: after the quick first retries the cadence settles
+// at homeLyricsRetry, so a network that comes back mid-song is enough — no
+// song change needed to restart the asking.
 func (p *homePage) retryDelay() (time.Duration, bool) {
-	if p.failCount > homeLyricsMaxRetries {
-		return 0, false
-	}
 	switch p.failCount {
 	case 0, 1:
 		return homeLyricsFirstRetry, true
@@ -204,10 +227,10 @@ func (p *homePage) retryDelay() (time.Duration, bool) {
 	}
 }
 
-// homeTrackKey is the cache key for a track: title, artist and the
-// rounded duration LRCLIB matches on.
+// homeTrackKey is the cache key for a track: title, artist, the album when
+// the player reports one, and the rounded duration LRCLIB matches on.
 func homeTrackKey(st platform.NowPlayingState) string {
-	return lyrics.Key(lyrics.Track{Title: st.Title, Artist: st.Artist, Duration: int(math.Round(st.Duration))})
+	return lyrics.Key(lyrics.Track{Title: st.Title, Artist: st.Artist, Album: st.Album, Duration: int(math.Round(st.Duration))})
 }
 
 // openHomePage opens the home page (the tools page's music card, or a
@@ -387,6 +410,11 @@ func (p *homePage) lyricsNote(c *ui.Context, w float32) {
 		text = l.HomeLyricsLoading()
 	case p.failed:
 		text = l.HomeLyricsFailed()
+		if netproxy.IsProxyAuthRequired(p.failedErr) {
+			// The one failure with a reason worth saying: the proxy wants
+			// credentials, and no retry will change that.
+			text = l.HomeLyricsProxyAuth()
+		}
 		// Nothing else animates on this page, so ask for the frame that
 		// lets prepare ask again at the end of the pause.
 		if delay, ok := p.retryDelay(); ok {

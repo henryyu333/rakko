@@ -6,6 +6,9 @@ package netproxy
 // needs the network: the live routing is proxy_live_test.go.
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"testing"
@@ -353,3 +356,40 @@ var errTestRead = errFailedRead{}
 type errFailedRead struct{}
 
 func (errFailedRead) Error() string { return "no settings" }
+
+// A proxy that demands authentication shows up one way: Go turns the
+// CONNECT refusal into an error carrying the reason phrase. Both the
+// error form and the stored one-line summaries must be recognized, and
+// nothing else may be.
+func TestProxyAuthDetection(t *testing.T) {
+	marker := errors.New(`Get "https://lrclib.net/api/get": Proxy Authentication Required`)
+	if !IsProxyAuthRequired(marker) {
+		t.Error("a CONNECT refusal must be recognized")
+	}
+	if !IsProxyAuthRequired(fmt.Errorf("lyrics: %w", marker)) {
+		t.Error("a wrapped CONNECT refusal must be recognized")
+	}
+	if !IsProxyAuthRequired(ErrProxyAuthRequired) {
+		t.Error("the sentinel itself must be recognized")
+	}
+	for _, err := range []error{
+		errors.New(`Get "https://lrclib.net": connection reset`),
+		context.DeadlineExceeded,
+		errors.New("HTTP 407 in a title"),
+		nil,
+	} {
+		if IsProxyAuthRequired(err) {
+			t.Errorf("recognized %v as proxy auth; want not", err)
+		}
+	}
+	for _, s := range []string{"HTTP 407", "Proxy Authentication Required"} {
+		if !ProxyAuthText(s) {
+			t.Errorf("ProxyAuthText(%q) = false, want true", s)
+		}
+	}
+	for _, s := range []string{"HTTP 500", "connection reset", ""} {
+		if ProxyAuthText(s) {
+			t.Errorf("ProxyAuthText(%q) = true, want false", s)
+		}
+	}
+}

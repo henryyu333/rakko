@@ -17,13 +17,14 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
-
 	"rakko/internal/agentnotify"
 	"rakko/internal/aiusage"
 	"rakko/internal/lyrics"
+	"rakko/internal/netproxy"
 	"rakko/internal/platform"
 	"rakko/internal/settings"
 	"rakko/internal/store"
+	"rakko/locales"
 )
 
 // homeShelf builds a home page at level 2 with a track when st is not nil.
@@ -703,5 +704,113 @@ func TestHomePlayerPaused(t *testing.T) {
 	}
 	if view.HasText("暂停") {
 		t.Fatal("a paused track must offer play, not pause")
+	}
+}
+
+// Repeated failures keep asking at the settled cadence: the page never
+// gives up on the track it is showing, so a network that comes back
+// mid-song is enough and no song change is needed.
+func TestHomeLyricsRetryNeverStops(t *testing.T) {
+	st := homeTrack()
+	oldFetch, oldGo, oldMain := homeFetch, homeGo, homeOnMain
+	var calls int
+	homeFetch = func(context.Context, lyrics.Track) (lyrics.Result, error) {
+		calls++
+		return lyrics.Result{}, context.DeadlineExceeded
+	}
+	homeGo = func(fn func()) { fn() }
+	homeOnMain = func(fn func()) { fn() }
+	t.Cleanup(func() { homeFetch, homeGo, homeOnMain = oldFetch, oldGo, oldMain })
+
+	_, view, p := homeShelfWith(t, &st, homeLyricsW+2*earR, func(a *shelf, _ *homePage) {
+		a.settings.SetLyrics(true)
+	})
+	view.Frame()
+	view.Frame()
+	// Far beyond the old three-retry limit the track is still asked again
+	// once the settled pause has passed.
+	p.failCount = 9
+	p.failedAt = time.Now().Add(-homeLyricsRetry - time.Second)
+	view.Frame()
+	if calls != 2 {
+		t.Fatalf("after ten failures the track was asked %d times; a give-up limit survived", calls)
+	}
+	// The note still schedules its own frame, whichever failure it shows.
+	if delay, ok := p.retryDelay(); !ok || delay != homeLyricsRetry {
+		t.Fatalf("retryDelay after many failures = %v, %v; want %v, true", delay, ok, homeLyricsRetry)
+	}
+}
+
+// A new track cancels the lookup still in flight: rapid song changes must
+// not leave a trail of requests racing each other to the services.
+func TestHomeLyricsSongChangeCancelsInflightLookup(t *testing.T) {
+	st := homeTrack()
+	oldFetch, oldGo, oldMain := homeFetch, homeGo, homeOnMain
+	started := make(chan context.Context, 4)
+	applied := make(chan func(), 4)
+	homeFetch = func(ctx context.Context, _ lyrics.Track) (lyrics.Result, error) {
+		started <- ctx
+		<-ctx.Done()
+		return lyrics.Result{}, ctx.Err()
+	}
+	homeGo = func(fn func()) { go fn() }
+	homeOnMain = func(fn func()) { applied <- fn }
+	t.Cleanup(func() { homeFetch, homeGo, homeOnMain = oldFetch, oldGo, oldMain })
+
+	a, view, _ := homeShelfWith(t, &st, homeLyricsW+2*earR, func(a *shelf, _ *homePage) {
+		a.settings.SetLyrics(true)
+	})
+	view.Frame()
+	first := <-started
+	// The track changes while the first lookup is still on its way.
+	next := homeTrack()
+	next.Title = "以父之名"
+	a.np.last = next
+	a.np.last.Received = time.Now()
+	view.Frame()
+	select {
+	case <-first.Done():
+	case <-time.After(5 * time.Second):
+		t.Fatal("the previous track's lookup was left running")
+	}
+	// The first lookup's answer arrives after the switch and is dropped
+	// on the main thread, the way the running app would.
+	select {
+	case fn := <-applied:
+		fn()
+	case <-time.After(5 * time.Second):
+		t.Fatal("the canceled lookup never reported back")
+	}
+	// The new track asks on its own, with its own budget.
+	second := <-started
+	select {
+	case <-second.Done():
+		t.Fatal("the new track's lookup was canceled without a song change")
+	default:
+	}
+}
+
+// A proxy that demands authentication says so in the lyrics column, in
+// the words of the setting's language, instead of the generic failure.
+func TestHomeLyricsProxyAuthNote(t *testing.T) {
+	st := homeTrack()
+	oldFetch, oldGo, oldMain := homeFetch, homeGo, homeOnMain
+	homeFetch = func(context.Context, lyrics.Track) (lyrics.Result, error) {
+		return lyrics.Result{}, netproxy.ErrProxyAuthRequired
+	}
+	homeGo = func(fn func()) { fn() }
+	homeOnMain = func(fn func()) { fn() }
+	t.Cleanup(func() { homeFetch, homeGo, homeOnMain = oldFetch, oldGo, oldMain })
+
+	_, view, _ := homeShelfWith(t, &st, homeLyricsW+2*earR, func(a *shelf, _ *homePage) {
+		a.settings.SetLyrics(true)
+	})
+	view.Frame()
+	view.Frame()
+	if !view.HasText(locales.In("zh-Hans").HomeLyricsProxyAuth()) {
+		t.Fatalf("the proxy-auth note is not shown: %v", view.Texts())
+	}
+	if view.HasText(locales.In("zh-Hans").HomeLyricsFailed()) {
+		t.Fatalf("the generic failure hides the proxy reason: %v", view.Texts())
 	}
 }

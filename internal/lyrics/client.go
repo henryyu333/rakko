@@ -3,6 +3,7 @@ package lyrics
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -62,8 +63,12 @@ type apiTrack struct {
 
 // Fetch looks one track up. LRCLIB answers first, with the exact match,
 // then a search, then a search of the title without its trailing version
-// tag; NetEase answers when LRCLIB has an error or no synced lyrics. Both
-// services missing the song is None; only both failing is an error.
+// tag; NetEase answers when LRCLIB has an error or no synced lyrics.
+// "No synced lyrics" is a verdict only when both services completed and
+// neither found any: one source failing on the way is no verdict, and
+// comes back as an error the caller can retry, not a week of "no
+// lyrics" baked into the cache. A proxy that demands authentication
+// fails every request the same way and is reported as itself.
 func (f Fetcher) Fetch(ctx context.Context, t Track) (Result, error) {
 	if strings.TrimSpace(t.Title) == "" {
 		return Result{None: true}, nil
@@ -86,19 +91,34 @@ func (f Fetcher) Fetch(ctx context.Context, t Track) (Result, error) {
 	switch {
 	case nerr == nil && !nr.None:
 		return nr, nil
-	case nerr == nil:
-		// NetEase agrees there are no words; keep LRCLIB's reason if it
-		// had one.
-		if lerr == nil {
-			return lr, nil
-		}
-		return nr, nil
-	case lerr == nil:
-		// LRCLIB answered; NetEase only failed on the way.
+	case nerr == nil && lerr == nil:
+		// Both services completed without synced words. LRCLIB's reason
+		// (an instrumental, plain lyrics only) is the one worth showing.
 		return lr, nil
 	default:
-		return Result{}, fmt.Errorf("lyrics: lrclib: %v; netease: %w", lerr, nerr)
+		// A source failed on the way — a timeout, a proxy, a stalled
+		// connection — so "no lyrics" here would be a guess. Say the
+		// search did not conclude instead, and let the caller retry.
+		if netproxy.IsProxyAuthRequired(lerr) || netproxy.IsProxyAuthRequired(nerr) {
+			return Result{}, netproxy.ErrProxyAuthRequired
+		}
+		return Result{}, fmt.Errorf("lyrics: no confirmed answer: lrclib: %v; netease: %v", lerr, nerr)
 	}
+}
+
+// stepCtx bounds one of the serial steps of a lookup to its share of
+// whatever budget is left on ctx: a stalled early step must not spend
+// the whole phase, or the steps after it start with nothing and the
+// lookup fails as a whole. Without a deadline on ctx the fixed
+// per-request timeout applies unchanged.
+func stepCtx(ctx context.Context, share int) (context.Context, context.CancelFunc) {
+	timeout := lyricsHTTPTimeout
+	if deadline, ok := ctx.Deadline(); ok {
+		if rem := time.Until(deadline); rem > 0 && rem/time.Duration(share) < timeout {
+			timeout = rem / time.Duration(share)
+		}
+	}
+	return context.WithTimeout(ctx, timeout)
 }
 
 // fetchLRCLIB asks LRCLIB: the exact track, a search for it, and a search
@@ -203,6 +223,11 @@ func (f Fetcher) readRetryUA(ctx context.Context, u, userAgent string) ([]byte, 
 		if ctx.Err() != nil {
 			return nil, 0, ctx.Err()
 		}
+		if errors.Is(err, netproxy.ErrProxyAuthRequired) {
+			// A proxy demanding credentials answers every attempt alike;
+			// retrying only delays the explanation.
+			return body, status, err
+		}
 		if err == nil && !retryableStatus(status) {
 			return body, status, nil
 		}
@@ -247,10 +272,23 @@ func (f Fetcher) readUA(ctx context.Context, u, userAgent string) ([]byte, int, 
 		return nil, 0, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusProxyAuthRequired {
+		// A proxy between the app and the service wants credentials Rakko
+		// cannot supply: the other source, a retry and a later lookup all
+		// meet the same wall, so hand the caller the one error it can
+		// explain instead of a status it would treat as the service's.
+		return nil, resp.StatusCode, netproxy.ErrProxyAuthRequired
+	}
 	var body json.RawMessage
 	// A lyrics answer is a few kilobytes; never read more than a bound.
 	dec := json.NewDecoder(io.LimitReader(resp.Body, 2<<20))
-	if err := dec.Decode(&body); err != nil {
+	err = dec.Decode(&body)
+	// Drain what is left so keep-alive can reuse the connection: a body
+	// abandoned mid-read is closed, and a closed connection means a new
+	// TCP+TLS handshake on every lookup. An oversized remainder is given
+	// up on instead — no reuse, but no unbounded read either.
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
+	if err != nil {
 		if resp.StatusCode == http.StatusOK {
 			return nil, resp.StatusCode, fmt.Errorf("lyrics: reading answer: %w", err)
 		}

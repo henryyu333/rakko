@@ -71,7 +71,13 @@ func (f Fetcher) fetchNetease(ctx context.Context, t Track) (Result, error) {
 		vals.Set("s", query)
 		vals.Set("type", "1")
 		vals.Set("limit", "10")
-		body, status, err := f.readRetryUA(ctx, base+"/api/search/get/web?"+vals.Encode(), neteaseUserAgent)
+		// The search is the first of two serial steps, and a stalled one
+		// would otherwise run the fixed per-request timeout down to the
+		// phase's last bytes: bound it to half of whatever budget is
+		// left, so the lyric read after it still has its share.
+		sctx, cancel := stepCtx(ctx, 2)
+		body, status, err := f.readRetryUA(sctx, base+"/api/search/get/web?"+vals.Encode(), neteaseUserAgent)
+		cancel()
 		if err != nil {
 			return Result{}, fmt.Errorf("lyrics: netease search: %w", err)
 		}

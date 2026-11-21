@@ -3,6 +3,7 @@ package lyrics
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -10,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"rakko/internal/netproxy"
 )
 
 func TestParseLRC(t *testing.T) {
@@ -347,7 +350,7 @@ func TestFetchStripsTrailingVersionTag(t *testing.T) {
 	}
 }
 
-func TestFetchOnlyBothSourcesFailingIsAnError(t *testing.T) {
+func TestFetchNoneNeedsBothSourcesConfirming(t *testing.T) {
 	broken := func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "down", http.StatusInternalServerError)
 	}
@@ -360,15 +363,30 @@ func TestFetchOnlyBothSourcesFailingIsAnError(t *testing.T) {
 		t.Fatal("both services failing must be an error")
 	}
 
-	// One completed miss is enough to answer None, even if the other failed.
+	// One completed miss does not make a verdict while the other source
+	// failed on the way: an error keeps the caller retrying instead of
+	// baking a week of "no lyrics" into the cache.
 	lrOK := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(apiTrack{Duration: 100})
 	}))
 	defer lrOK.Close()
-	got, err := Fetcher{BaseURL: lrOK.URL, NeteaseBaseURL: ne.URL}.Fetch(
+	if _, err := (Fetcher{BaseURL: lrOK.URL, NeteaseBaseURL: ne.URL}).Fetch(
+		context.Background(), Track{Title: "T", Artist: "A", Duration: 100}); err == nil {
+		t.Fatal("lrclib miss + netease failure must be an error, not a cached None")
+	}
+	neOK := emptyNetease(t)
+	defer neOK.Close()
+	if _, err := (Fetcher{BaseURL: lr.URL, NeteaseBaseURL: neOK.URL}).Fetch(
+		context.Background(), Track{Title: "T", Artist: "A", Duration: 100}); err == nil {
+		t.Fatal("lrclib failure + netease miss must be an error, not a cached None")
+	}
+
+	// Both sources completing without synced words is the one miss that
+	// counts, whichever order it came in.
+	got, err := (Fetcher{BaseURL: lrOK.URL, NeteaseBaseURL: neOK.URL}).Fetch(
 		context.Background(), Track{Title: "T", Artist: "A", Duration: 100})
 	if err != nil || !got.None {
-		t.Fatalf("lrclib miss + netease failure = %+v, %v; want None", got, err)
+		t.Fatalf("both confirming none = %+v, %v; want None", got, err)
 	}
 }
 
@@ -586,5 +604,41 @@ func TestFetchFallsBackToNeteaseWhenLRCLIBTimesOut(t *testing.T) {
 	}
 	if got.Synced != "[00:01.00]fallback" {
 		t.Fatalf("result = %+v, want fallback lyrics", got)
+	}
+}
+
+// Key keeps two recordings apart when the player reports the album —
+// a re-recording shares title, artist and length with its original —
+// and stays on the old three-part form without one, so an existing
+// cache file still answers.
+func TestKeySeparatesAlbums(t *testing.T) {
+	base := Key(Track{Title: "夜曲", Artist: "周杰伦", Duration: 227})
+	if with := Key(Track{Title: "夜曲", Artist: "周杰伦", Album: "11月的萧邦", Duration: 227}); with == base {
+		t.Fatalf("an album version shares the cache key with the original: %q", with)
+	}
+	if folded := Key(Track{Title: "夜曲", Artist: "周杰伦", Album: " 11月 的萧邦 ", Duration: 227}); folded == base {
+		t.Fatalf("the album is not normalised into the key: %q", folded)
+	}
+	if noAlbum := Key(Track{Title: "夜曲", Artist: "周杰伦", Album: " ", Duration: 227}); noAlbum != base {
+		t.Fatalf("a blank album must keep the old key form: %q vs %q", noAlbum, base)
+	}
+}
+
+// A proxy answering 407 is the one failure that needs no retry and no
+// other source: both services sit behind the same wall, so Fetch reports
+// the proxy itself.
+func TestFetchReportsProxyAuthentication(t *testing.T) {
+	refused := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Proxy-Authenticate", `Basic realm="proxy"`)
+		http.Error(w, "Proxy Authentication Required", http.StatusProxyAuthRequired)
+	}
+	lr := httptest.NewServer(http.HandlerFunc(refused))
+	defer lr.Close()
+	ne := httptest.NewServer(http.HandlerFunc(refused))
+	defer ne.Close()
+	f := Fetcher{BaseURL: lr.URL, NeteaseBaseURL: ne.URL}
+	_, err := f.Fetch(context.Background(), Track{Title: "T", Artist: "A", Duration: 100})
+	if !errors.Is(err, netproxy.ErrProxyAuthRequired) {
+		t.Fatalf("407 from the proxy = %v, want netproxy.ErrProxyAuthRequired", err)
 	}
 }
