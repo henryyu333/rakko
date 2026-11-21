@@ -184,7 +184,7 @@ func writeDiagnostics(a *shelf, dir string) (string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
-	name := fmt.Sprintf("diagnostics-%s.txt", now.Format("20060102-150405"))
+	name := fmt.Sprintf("diagnostics-%s.txt", now.Format("20060102-150405.000"))
 	content := []byte(formatDiagnostics(snap, stacks))
 	if err := atomicfile.WriteFile(dir, name, content, 0o600); err != nil {
 		return "", err

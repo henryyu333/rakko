@@ -242,6 +242,9 @@ typedef struct {
   char *text; // string answers, e.g. the client bundle id
 } NPRequest;
 
+#define NS_REAPER_CAP 64
+static int g_reapers; // abandoned requests still being reaped (helper thread)
+
 static NPRequest *request(void) {
   NPRequest *r = calloc(1, sizeof *r);
   if (r) r->done = dispatch_semaphore_create(0);
@@ -256,6 +259,13 @@ static int waitRequest(NPRequest *r) {
   if (dispatch_semaphore_wait(
           r->done, dispatch_time(DISPATCH_TIME_NOW, 3LL * NSEC_PER_SEC)) == 0)
     return 1;
+  // A late completion still writes into the request, so it cannot be freed
+  // here. The reaper waits for that answer — but at most a fixed number of
+  // reapers: a wedged MediaRemote would otherwise park one thread per
+  // timeout forever. Over the cap the request is leaked (a few dozen bytes)
+  // instead of the thread.
+  if (g_reapers >= NS_REAPER_CAP) return 0;
+  g_reapers++;
   __block NPRequest *bg = r;
   dispatch_async(dispatch_get_global_queue(QOS_CLASS_BACKGROUND, 0), ^{
     dispatch_semaphore_wait(bg->done, DISPATCH_TIME_FOREVER);
@@ -263,6 +273,7 @@ static int waitRequest(NPRequest *r) {
     free(bg->text);
     dispatch_release(bg->done);
     free(bg);
+    g_reapers--;
   });
   return 0;
 }
@@ -389,6 +400,10 @@ static char *base64Copy(const unsigned char *data, long n) {
 // snapshot copies the current system state into s, freeing whatever s
 // already held. Callers must freeSnap or hand it to publish afterwards.
 static void snapshot(Snapshot *s) {
+  // Keep the last frame if the metadata read fails: blanking here made the
+  // reader see "track changed" and flash the empty state on one bad read.
+  CFDictionaryRef info = readInfo();
+  if (!info) return;
   freeSnap(s);
   memset(s, 0, sizeof *s);
   s->at = nowUnix();
@@ -402,8 +417,6 @@ static void snapshot(Snapshot *s) {
   char *bundle = readClientBundle();
   setStr(&s->app, bundle);
   free(bundle);
-  CFDictionaryRef info = readInfo();
-  if (!info) return;
   char *t = cstr(strval(info, KeyTitle));
   setStr(&s->title, t);
   free(t);

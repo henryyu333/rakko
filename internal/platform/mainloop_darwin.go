@@ -225,6 +225,24 @@ func AfterMainOnce(d time.Duration, fn func()) {
 	}
 	timer := mlTimerCreate(0, mlTime()+d.Seconds(), 0, 0, 0, deadlineCb, &tc)
 	if timer == 0 {
+		// The allocation failed (memory pressure, an exhausted run loop).
+		// Giving up here would stop every clock the shell schedules; try
+		// again shortly instead of going silent.
+		deadlineMu.Lock()
+		deadlineJob = nil
+		deadlineMu.Unlock()
+		time.AfterFunc(500*time.Millisecond, func() {
+			WakeMain(func() {
+				// A deadline scheduled since then means the scheduler is
+				// back; the retry would only resurrect a replaced job.
+				deadlineMu.Lock()
+				pending := deadlineTimer != 0 || deadlineJob != nil
+				deadlineMu.Unlock()
+				if !pending {
+					AfterMainOnce(d, fn)
+				}
+			})
+		})
 		return
 	}
 	deadlineMu.Lock()
@@ -236,7 +254,9 @@ func AfterMainOnce(d time.Duration, fn func()) {
 }
 
 // StartMainTicker calls fn on the main run loop every interval until stop is
-// called. It uses a repeating CFRunLoopTimer in the default and
+// called. A failed timer creation returns nil — not a no-op stop — so a
+// caller that keeps the ticker sees it is not running and asks again. It
+// uses a repeating CFRunLoopTimer in the default and
 // event-tracking modes, so an active shell is driven without a Go timer and
 // a cross-thread wakeup on every frame.
 func StartMainTicker(interval time.Duration, fn func()) (stop func()) {
@@ -246,7 +266,9 @@ func StartMainTicker(interval time.Duration, fn func()) (stop func()) {
 	var tc cfRunLoopTimerContext
 	timer := mlTimerCreate(0, mlTime()+interval.Seconds(), interval.Seconds(), 0, 0, tickerCb, &tc)
 	if timer == 0 {
-		return func() {}
+		// No timer: report it as not running (nil), so the caller's next
+		// schedule asks again instead of keeping an empty stop.
+		return nil
 	}
 	tickerMu.Lock()
 	tickerFns[timer] = fn

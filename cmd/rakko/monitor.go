@@ -257,6 +257,18 @@ func (a *shelf) scheduleMonitor(now time.Time) {
 	if a.monitorActive(now) {
 		if a.activeTickerStop == nil {
 			a.activeTickerStop = platform.StartMainTicker(pointerInterval, func() { a.monitorRun() })
+			if a.activeTickerStop == nil {
+				// The native timer could not be created: keep the loop alive
+				// through the deadline clock and ask again on the next pass,
+				// instead of going silent for the rest of the session.
+				gen := a.monitorGen.Add(1)
+				platform.AfterMainOnce(pointerInterval, func() {
+					if a.quitting || a.monitorGen.Load() != gen {
+						return
+					}
+					a.monitorRun()
+				})
+			}
 		}
 		return
 	}

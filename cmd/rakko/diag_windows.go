@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"unsafe"
 )
@@ -28,10 +29,12 @@ func diagLogDir(dataDir string) string {
 	return os.TempDir()
 }
 
-// startDiagnostics creates the named Win32 auto-reset event
-// Local\RakkoDiagnostics-<pid>; signalling it dumps live state and
-// goroutine stacks into %LOCALAPPDATA%\Rakko\Logs\diagnostics-<time>.txt.
-func (a *shelf) startDiagnostics() {
+// installDiagSignal creates the named Win32 auto-reset event
+// Local\RakkoDiagnostics-<pid> as early as main can; signalling it dumps
+// live state and goroutine stacks into %LOCALAPPDATA%\Rakko\Logs\
+// diagnostics-<time>.txt. Before the shelf exists the report carries the
+// stacks alone.
+func installDiagSignal() {
 	name, err := syscall.UTF16PtrFromString(fmt.Sprintf(`Local\RakkoDiagnostics-%d`, os.Getpid()))
 	if err != nil {
 		return
@@ -41,7 +44,6 @@ func (a *shelf) startDiagnostics() {
 		log.Printf("diagnostics: CreateEventW: %v", err)
 		return
 	}
-	dir := diagLogDir(a.dataDir)
 	go func() {
 		defer diagCloseHandle.Call(h)
 		const infinite = 0xFFFFFFFF
@@ -51,7 +53,14 @@ func (a *shelf) startDiagnostics() {
 			if r != waitObject0 {
 				return
 			}
-			path, err := writeDiagnostics(a, dir)
+			diagReportMu.Lock()
+			target := diagTarget
+			diagReportMu.Unlock()
+			dir := diagLogDir("")
+			if target != nil {
+				dir = diagLogDir(target.dataDir)
+			}
+			path, err := writeDiagnostics(target, dir)
 			if err != nil {
 				log.Printf("diagnostics: %v", err)
 			} else {
@@ -59,4 +68,17 @@ func (a *shelf) startDiagnostics() {
 			}
 		}
 	}()
+}
+
+// diagTarget is the shelf live reports read, registered once it exists.
+var (
+	diagReportMu sync.Mutex
+	diagTarget   *shelf
+)
+
+// startDiagnostics lets live reports read this shelf's state.
+func (a *shelf) startDiagnostics() {
+	diagReportMu.Lock()
+	diagTarget = a
+	diagReportMu.Unlock()
 }

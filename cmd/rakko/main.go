@@ -23,6 +23,10 @@ import (
 )
 
 func main() {
+	// SIGUSR1 / the diagnostics event is armed first: the default signal
+	// action kills the process, and a launch that never becomes ready is
+	// exactly the one whose report is wanted.
+	installDiagSignal()
 	// The mygo updater takes no client: it calls http.DefaultClient directly
 	// for its manifest and its download. Route that through the same proxy
 	// rules as everything else, before any request can be issued and before
