@@ -954,6 +954,7 @@
   "sysMonUpDown": "Up/Down",
   "sysMonDiskFree": "{size} free",
   "sysMonWindowAgo": "60s ago",
+  "sysMonWindowAgoSec": "{n, number, ::group-off}s ago",
   "sysMonPeak": "Peak {val}",
   "sysMonMemUsedLabel": "{pct} used",
   "sysMonMemBreakdown": "App {app} · Wired {wired} · Compressed {comp}",

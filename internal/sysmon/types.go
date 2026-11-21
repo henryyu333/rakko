@@ -46,8 +46,14 @@ type RawProc struct {
 // Snapshot is one sampled frame ready for cards, wings, and the detail popover.
 type Snapshot struct {
 	At       time.Time
-	Ready    bool
-	CPUReady bool
+	// Ready says at least one metric could be read; the per-metric flags
+	// say which ones, so a failed counter draws "--" without blanking the
+	// rest of the card.
+	Ready     bool
+	CPUReady  bool
+	MemReady  bool
+	NetReady  bool
+	DiskReady bool
 
 	CPUPercent float64
 
@@ -160,7 +166,6 @@ func (s *Sampler) Sample(now time.Time, wantProcs bool, batt BatteryInfo) Snapsh
 
 	snap := Snapshot{
 		At:      now,
-		Ready:   true,
 		Battery: batt,
 	}
 
@@ -209,7 +214,9 @@ func (s *Sampler) Sample(now time.Time, wantProcs bool, batt BatteryInfo) Snapsh
 	}
 
 	// Disk
+	diskReady := false
 	if total, free, rVal, wVal, directRate, ok := s.reader.ReadDisk(); ok {
+		diskReady = true
 		snap.DiskTotal = total
 		snap.DiskFree = min(free, total)
 		if total > 0 {
@@ -235,19 +242,30 @@ func (s *Sampler) Sample(now time.Time, wantProcs bool, batt BatteryInfo) Snapsh
 		}
 	}
 
-	// Processes (only read when detail popover needs Top 3)
+	// Processes (only read when the detail popover needs Top 3). The
+	// per-process baseline survives a closed popover, but no list is
+	// published without one: a sample with no usable delta would rank every
+	// process at 0% by memory, which the popover would show as a CPU
+	// ranking. An empty list is the waiting state; the next sample (the
+	// module asks for one straight away after opening) ranks by CPU.
 	if wantProcs {
-		if raw, ok := s.reader.ReadProcs(); ok {
-			snap.TopCPU, snap.TopMem = s.rankProcs(raw, dt, validDelta)
+		raw, ok := s.reader.ReadProcs()
+		if ok {
+			var measured bool
+			snap.TopCPU, snap.TopMem, measured = s.rankProcs(raw, dt, validDelta)
+			if !measured {
+				// The memory ranking needs no baseline; only the CPU list
+				// waits for a delta (an empty list is the waiting state).
+				snap.TopCPU = nil
+			}
 		} else {
 			snap.TopCPU = s.last.TopCPU
 			snap.TopMem = s.last.TopMem
 		}
-	} else {
-		clear(s.prevProcs)
-		snap.TopCPU = s.last.TopCPU
-		snap.TopMem = s.last.TopMem
 	}
+
+	snap.MemReady, snap.NetReady, snap.DiskReady = memReady, netReady, diskReady
+	snap.Ready = memReady || netReady || diskReady || snap.CPUReady
 
 	s.prevAt = now
 	s.hasPrev = true
@@ -267,7 +285,7 @@ func (s *Sampler) Sample(now time.Time, wantProcs bool, batt BatteryInfo) Snapsh
 	return snap
 }
 
-func (s *Sampler) rankProcs(raw []RawProc, dt time.Duration, validDelta bool) (topCPU, topMem []ProcEntry) {
+func (s *Sampler) rankProcs(raw []RawProc, dt time.Duration, validDelta bool) (topCPU, topMem []ProcEntry, measured bool) {
 	nextPrev := make(map[int32]uint64, len(raw))
 	entries := make([]ProcEntry, 0, len(raw))
 	dtNS := float64(dt.Nanoseconds())
@@ -281,6 +299,7 @@ func (s *Sampler) rankProcs(raw []RawProc, dt time.Duration, validDelta bool) (t
 		if validDelta && dtNS > 0 {
 			if prevNS, ok := s.prevProcs[p.PID]; ok && p.CPUTimeNS >= prevNS {
 				cpuPct = float64(p.CPUTimeNS-prevNS) * 100 / dtNS
+				measured = true
 			}
 		}
 		entries = append(entries, ProcEntry{
@@ -332,7 +351,7 @@ func (s *Sampler) rankProcs(raw []RawProc, dt time.Duration, validDelta bool) (t
 		byMem = byMem[:3]
 	}
 
-	return byCPU, byMem
+	return byCPU, byMem, measured
 }
 
 // History returns copied slices of the rolling 60-sample buffers.

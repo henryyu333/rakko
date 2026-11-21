@@ -9685,6 +9685,16 @@ func (msgs Messages) SysMonWindowAgo() string {
 	return Catalog.Format(msgs.locale, "sysMonWindowAgo", nil)
 }
 
+// SysMonWindowAgoSec says "{n, number, ::group-off}s 前"
+// in the language the app shows.
+func SysMonWindowAgoSec(n int) string { return In(i18n.Locale()).SysMonWindowAgoSec(n) }
+
+// SysMonWindowAgoSec says "{n, number, ::group-off}s 前"
+// in the language of msgs.
+func (msgs Messages) SysMonWindowAgoSec(n int) string {
+	return Catalog.Format(msgs.locale, "sysMonWindowAgoSec", map[string]any{"n": n})
+}
+
 // SysMonPeak says "峰值 {val}"
 // in the language the app shows.
 func SysMonPeak(val string) string { return In(i18n.Locale()).SysMonPeak(val) }

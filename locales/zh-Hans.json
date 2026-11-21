@@ -954,6 +954,7 @@
   "sysMonUpDown": "上下行",
   "sysMonDiskFree": "{size} 可用",
   "sysMonWindowAgo": "60s 前",
+  "sysMonWindowAgoSec": "{n, number, ::group-off}s 前",
   "sysMonPeak": "峰值 {val}",
   "sysMonMemUsedLabel": "{pct} 已用",
   "sysMonMemBreakdown": "App {app} · 联动 {wired} · 压缩 {comp}",

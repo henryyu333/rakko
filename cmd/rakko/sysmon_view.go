@@ -61,7 +61,10 @@ func sysmonFitText(c *ui.Context, text string, base, floor float32, weight int, 
 }
 
 func sysmonPercentText(snap sysmon.Snapshot, pct float64, cpu bool) string {
-	if !snap.Ready || (cpu && !snap.CPUReady) {
+	if cpu && !snap.CPUReady {
+		return "--"
+	}
+	if !cpu && !snap.MemReady {
 		return "--"
 	}
 	return sysmon.FormatPercent(pct)
@@ -229,7 +232,7 @@ func (a *shelf) toolSysMon1x1(c *ui.Context, cardW float32, snap sysmon.Snapshot
 		hero = sysmonPercentText(snap, snap.MemPercent, false)
 		heroCol = ink2
 		strokeCol = ink.Alpha(0.82)
-		if snap.Ready {
+		if snap.MemReady {
 			heroCol = sysmonLoadColor(snap.MemPercent, ink)
 			strokeCol = sysmonLoadColor(snap.MemPercent, ink.Alpha(0.85))
 		}
@@ -237,7 +240,7 @@ func (a *shelf) toolSysMon1x1(c *ui.Context, cardW float32, snap sysmon.Snapshot
 		activeDot = 1
 	case settings.SysMonMetricNet:
 		tag = l.SysMonNetShort()
-		if snap.Ready {
+		if snap.NetReady {
 			hero = "↓" + sysmon.FormatRate(snap.NetDownBps, true)
 			heroCol = ink
 		} else {
@@ -252,7 +255,7 @@ func (a *shelf) toolSysMon1x1(c *ui.Context, cardW float32, snap sysmon.Snapshot
 		hero = sysmonPercentText(snap, snap.CPUPercent, true)
 		heroCol = ink2
 		strokeCol = ink.Alpha(0.82)
-		if snap.Ready && snap.CPUReady {
+		if snap.CPUReady {
 			heroCol = sysmonLoadColor(snap.CPUPercent, ink)
 			strokeCol = sysmonLoadColor(snap.CPUPercent, ink.Alpha(0.85))
 		}
@@ -288,7 +291,7 @@ func (a *shelf) toolSysMon2x1(c *ui.Context, cardW float32, snap sysmon.Snapshot
 	cpuStr := sysmonPercentText(snap, snap.CPUPercent, true)
 	cpuCol := ink2
 	cpuStroke := ink.Alpha(0.82)
-	if snap.Ready && snap.CPUReady {
+	if snap.CPUReady {
 		cpuCol = sysmonLoadColor(snap.CPUPercent, ink)
 		cpuStroke = sysmonLoadColor(snap.CPUPercent, ink.Alpha(0.85))
 	}
@@ -296,13 +299,13 @@ func (a *shelf) toolSysMon2x1(c *ui.Context, cardW float32, snap sysmon.Snapshot
 	memStr := sysmonPercentText(snap, snap.MemPercent, false)
 	memCol := ink2
 	memStroke := ink.Alpha(0.68)
-	if snap.Ready {
+	if snap.MemReady {
 		memCol = sysmonLoadColor(snap.MemPercent, ink)
 		memStroke = sysmonLoadColor(snap.MemPercent, ink.Alpha(0.78))
 	}
 
 	netStr := "↓-- ↑--"
-	if snap.Ready {
+	if snap.NetReady {
 		netStr = "↓" + sysmon.FormatRate(snap.NetDownBps, true) + " ↑" + sysmon.FormatRate(snap.NetUpBps, true)
 	}
 
@@ -314,7 +317,7 @@ func (a *shelf) toolSysMon2x1(c *ui.Context, cardW float32, snap sysmon.Snapshot
 		rightCol = sysmonBatteryColor(snap.Battery, ink2)
 		rightAvail = 50
 	} else {
-		if snap.Ready {
+		if snap.DiskReady {
 			rightStr = l.SysMonDiskShort() + " " + sysmon.FormatPercent(snap.DiskPercent)
 			rightCol = sysmonLoadColor(snap.DiskPercent, ink2)
 		} else {
@@ -356,7 +359,7 @@ func (a *shelf) toolSysMon2x2(c *ui.Context, cardW float32, snap sysmon.Snapshot
 	cpuStr := sysmonPercentText(snap, snap.CPUPercent, true)
 	cpuCol := ink2
 	cpuStroke := ink.Alpha(0.88)
-	if snap.Ready && snap.CPUReady {
+	if snap.CPUReady {
 		cpuCol = sysmonLoadColor(snap.CPUPercent, ink)
 		cpuStroke = sysmonLoadColor(snap.CPUPercent, ink.Alpha(0.9))
 	}
@@ -365,7 +368,7 @@ func (a *shelf) toolSysMon2x2(c *ui.Context, cardW float32, snap sysmon.Snapshot
 	memValCol := ink2
 	memFillCol := progress
 	memFrac := float32(0)
-	if snap.Ready {
+	if snap.MemReady {
 		memPair = sysmon.FormatMemPair(snap.MemUsed, snap.MemTotal)
 		memValCol = sysmonLoadColor(snap.MemPercent, ink)
 		memFillCol = sysmonLoadColor(snap.MemPercent, progress)
@@ -373,7 +376,7 @@ func (a *shelf) toolSysMon2x2(c *ui.Context, cardW float32, snap sysmon.Snapshot
 	}
 
 	netStr := "↓--  ↑--"
-	if snap.Ready {
+	if snap.NetReady {
 		netStr = "↓" + sysmon.FormatRate(snap.NetDownBps, false) + "  ↑" + sysmon.FormatRate(snap.NetUpBps, false)
 	}
 
@@ -411,7 +414,7 @@ func (a *shelf) toolSysMon2x2(c *ui.Context, cardW float32, snap sysmon.Snapshot
 		ui.Row(c.Key("sm-2x2-foot")).FillWidth().Height(14).AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
 			if snap.Battery.Present {
 				diskLeft := l.SysMonDiskShort() + " --"
-				if snap.Ready {
+				if snap.DiskReady {
 					diskLeft = l.SysMonDiskShort() + " " + l.SysMonDiskFree(sysmon.FormatBytesShort(snap.DiskFree))
 				}
 				sysmonFitText(c, diskLeft, 10, 8.5, 500, "tnum", innerW-58).TextColor(ink2)
@@ -420,7 +423,7 @@ func (a *shelf) toolSysMon2x2(c *ui.Context, cardW float32, snap sysmon.Snapshot
 				diskLeft := l.SysMonDisk() + " --"
 				diskRight := "--"
 				diskCol := ink2
-				if snap.Ready {
+				if snap.DiskReady {
 					diskLeft = l.SysMonDisk() + " " + l.SysMonDiskFree(sysmon.FormatBytesShort(snap.DiskFree))
 					diskRight = sysmon.FormatPercent(snap.DiskPercent)
 					diskCol = sysmonLoadColor(snap.DiskPercent, ink2)
@@ -522,7 +525,7 @@ func (p *toolsPage) sysmonPopoverOverlay(c *ui.Context, live bool) {
 		switch focus {
 		case settings.SysMonMetricMem:
 			heroStr = sysmonPercentText(snap, snap.MemPercent, false)
-			if snap.Ready {
+			if snap.MemReady {
 				heroCol = sysmonLoadColor(snap.MemPercent, ink)
 				chartCol = sysmonLoadColor(snap.MemPercent, ink.Alpha(0.88))
 				peakStr = l.SysMonPeak(sysmon.FormatPercent(sysmonPeakPct(hist.Mem, snap.MemPercent)))
@@ -532,7 +535,7 @@ func (p *toolsPage) sysmonPopoverOverlay(c *ui.Context, live bool) {
 			}
 			chartVals = hist.Mem
 		case settings.SysMonMetricNet:
-			if snap.Ready {
+			if snap.NetReady {
 				heroStr = "↓" + sysmon.FormatRate(snap.NetDownBps, false)
 				peakStr = l.SysMonPeak(sysmon.FormatRate(sysmonPeakRate(hist.NetDown, snap.NetDownBps), false))
 			} else {
@@ -543,7 +546,7 @@ func (p *toolsPage) sysmonPopoverOverlay(c *ui.Context, live bool) {
 			chartVals, chartMax = sysmonNetSeries(hist.NetDown, snap.NetDownBps)
 		default:
 			heroStr = sysmonPercentText(snap, snap.CPUPercent, true)
-			if snap.Ready && snap.CPUReady {
+			if snap.CPUReady {
 				heroCol = sysmonLoadColor(snap.CPUPercent, ink)
 				chartCol = sysmonLoadColor(snap.CPUPercent, ink.Alpha(0.88))
 				peakStr = l.SysMonPeak(sysmon.FormatPercent(sysmonPeakPct(hist.CPU, snap.CPUPercent)))
@@ -594,7 +597,7 @@ func (p *toolsPage) sysmonPopoverOverlay(c *ui.Context, live bool) {
 		ui.Column(c.Key("pop-chart-grp")).FillWidth().Gap(2).Children(func() {
 			sysmonSparkline(c, "pop-chart", chartVals, chartMax, chartCol, true, 1.5).FillWidth().Height(chartH)
 			ui.Row(c.Key("pop-axis")).FillWidth().Height(11).AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
-				fitText(c, l.SysMonWindowAgo(), 9.5, 0, 70).TextColor(ink3)
+				fitText(c, l.SysMonWindowAgoSec(sysmonWindowSeconds(a)), 9.5, 0, 80).TextColor(ink3)
 				sysmonFitText(c, peakStr, 9.5, 8.5, 0, "tnum", innerW-76).TextColor(ink3)
 			})
 		})
@@ -604,7 +607,7 @@ func (p *toolsPage) sysmonPopoverOverlay(c *ui.Context, live bool) {
 			memPair := "--"
 			memUsedStr := l.SysMonMemUsedLabel("--")
 			memCol := ink2
-			if snap.Ready {
+			if snap.MemReady {
 				memPair = sysmon.FormatMemPair(snap.MemUsed, snap.MemTotal)
 				pctStr := sysmon.FormatPercent(snap.MemPercent)
 				memUsedStr = l.SysMonMemUsedLabel(pctStr)
@@ -615,7 +618,7 @@ func (p *toolsPage) sysmonPopoverOverlay(c *ui.Context, live bool) {
 				sysmonFitText(c, memUsedStr, 10, 8.5, 600, "tnum", 70).TextColor(memCol)
 			})
 			ui.Box(c.Key("mem-seg")).FillWidth().Height(4).Radius(2).Background(fill2).Draw(func(p *ui.Painter, r ui.Rect) {
-				if !snap.Ready || snap.MemTotal == 0 {
+				if !snap.MemReady || snap.MemTotal == 0 {
 					return
 				}
 				tot := float32(snap.MemTotal)
@@ -645,7 +648,7 @@ func (p *toolsPage) sysmonPopoverOverlay(c *ui.Context, live bool) {
 				})
 			})
 			appStr, wiredStr, compStr := "--", "--", "--"
-			if snap.Ready {
+			if snap.MemReady {
 				appStr = sysmon.FormatBytesShort(snap.MemApp)
 				wiredStr = sysmon.FormatBytesShort(snap.MemWired)
 				compStr = sysmon.FormatBytesShort(snap.MemCompressed)
@@ -662,7 +665,7 @@ func (p *toolsPage) sysmonPopoverOverlay(c *ui.Context, live bool) {
 		// 4. Disk + optional Battery
 		ui.Row(c.Key("pop-disk")).FillWidth().Height(12).AlignItems(ui.Center).Justify(ui.SpaceBetween).Children(func() {
 			diskDetail := l.SysMonDiskDetail("--", "--", "--")
-			if snap.Ready {
+			if snap.DiskReady {
 				diskDetail = l.SysMonDiskDetail(
 					sysmon.FormatBytesShort(snap.DiskFree),
 					sysmon.FormatRate(snap.DiskReadBps, true),
@@ -745,6 +748,17 @@ func (p *toolsPage) sysmonPopoverOverlay(c *ui.Context, live bool) {
 
 // sysmonWingsSize is the closed resting sysmon wings' shell size: the anchor
 // plus one visible wing on each side, matching the live charging/timer wings.
+// sysmonWindowSeconds is how much time the 60-sample chart covers at the
+// configured interval: the axis label must follow the interval, or a 2 s
+// setting still claims "60s ago".
+func sysmonWindowSeconds(a *shelf) int {
+	interval := 1
+	if a != nil && a.settings.SysMon.IntervalSec == 2 {
+		interval = 2
+	}
+	return sysmon.HistoryCap * interval
+}
+
 func (a *shelf) sysmonWingsSize() (w, h float32) {
 	baseW, baseH := a.anchorSize()
 	return baseW + 2*float32(a.liveWingW()), baseH + npWingsBody
@@ -755,24 +769,24 @@ func (a *shelf) sysmonWingText(metric string, snap sysmon.Snapshot, l locales.Me
 	case settings.SysMonWingMem:
 		txt := l.SysMonMemShort() + " " + sysmonPercentText(snap, snap.MemPercent, false)
 		col := ink
-		if snap.Ready {
+		if snap.MemReady {
 			col = sysmonLoadColor(snap.MemPercent, ink)
 		}
 		return txt, col
 	case settings.SysMonWingNetDown:
-		if !snap.Ready {
+		if !snap.NetReady {
 			return "↓--", ink
 		}
 		return "↓" + sysmon.FormatRate(snap.NetDownBps, true), ink
 	case settings.SysMonWingNetBoth:
-		if !snap.Ready {
+		if !snap.NetReady {
 			return "↓-- ↑--", ink
 		}
 		return "↓" + sysmon.FormatRate(snap.NetDownBps, true) + " ↑" + sysmon.FormatRate(snap.NetUpBps, true), ink
 	case settings.SysMonWingDisk:
 		txt := l.SysMonDiskShort() + " " + sysmonPercentText(snap, snap.DiskPercent, false)
 		col := ink
-		if snap.Ready {
+		if snap.DiskReady {
 			col = sysmonLoadColor(snap.DiskPercent, ink)
 		}
 		return txt, col
@@ -785,7 +799,7 @@ func (a *shelf) sysmonWingText(metric string, snap sysmon.Snapshot, l locales.Me
 	default:
 		txt := l.SysMonCPU() + " " + sysmonPercentText(snap, snap.CPUPercent, true)
 		col := ink
-		if snap.Ready && snap.CPUReady {
+		if snap.CPUReady {
 			col = sysmonLoadColor(snap.CPUPercent, ink)
 		}
 		return txt, col

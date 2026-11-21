@@ -99,7 +99,7 @@ func (m *sysmonModule) needed() bool {
 	if a.quitting {
 		return false
 	}
-	if a.sysmonWingsUp() {
+	if a.sysmonWingsShown() {
 		return true
 	}
 	if a.hasExpandedSysMonPin() {
@@ -126,7 +126,7 @@ func (m *sysmonModule) nextTick(now time.Time) time.Time {
 	if m.lastSample.IsZero() {
 		return now
 	}
-	if (m.snap.Ready && !m.snap.CPUReady) || m.wantProcsSoon {
+	if !m.snap.CPUReady || m.wantProcsSoon {
 		return m.lastSample.Add(sysmonColdDelta)
 	}
 	return m.lastSample.Add(m.interval())
@@ -326,7 +326,7 @@ func (a *shelf) sysmonSnapshot() (sysmon.Snapshot, sysmon.History) {
 
 func (a *shelf) sysmonCardTitle(l locales.Messages) string {
 	snap, _ := a.sysmonSnapshot()
-	if !snap.Ready {
+	if !snap.CPUReady && !snap.MemReady {
 		return l.CardSysMon()
 	}
 	cpuStr := "--"

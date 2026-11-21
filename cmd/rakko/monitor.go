@@ -410,7 +410,13 @@ func (a *shelf) pointerNearZone(p mygo.Point) bool {
 		if !suppressedFS && (a.overAnchor(p) || a.dropBandX(p) || a.overPeekPill(p) || a.overAppsPop(p)) {
 			return true
 		}
-		if a.win != nil && !suppressedFS && (a.overShell(p) || a.overBelow(p)) {
+		shellHit := a.overShell(p)
+		if a.sysmonWingsUp() {
+			// The wings are wider than the capsule but only take clicks:
+			// hovering their black band must not hold the 30 ms cadence.
+			shellHit = a.overAnchor(p)
+		}
+		if a.win != nil && !suppressedFS && (shellHit || a.overBelow(p)) {
 			return true
 		}
 	} else if !suppressedFS {

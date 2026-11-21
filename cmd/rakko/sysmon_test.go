@@ -865,3 +865,101 @@ func TestSysMonExportShots(t *testing.T) {
 	st.Frame()
 	writePNG("mygo-sysmon-settings.png", st.Image())
 }
+
+// auditFailingReader reads CPU fine and fails every other counter.
+type auditFailingReader struct{ cpu *fakeSysMonReader }
+
+func (r *auditFailingReader) ReadCPU() (uint64, uint64, bool) { return r.cpu.ReadCPU() }
+func (r *auditFailingReader) ReadMem() (uint64, uint64, uint64, uint64, uint64, bool) {
+	return 0, 0, 0, 0, 0, false
+}
+func (r *auditFailingReader) ReadNet() (uint64, uint64, bool) { return 0, 0, false }
+func (r *auditFailingReader) ReadDisk() (uint64, uint64, uint64, uint64, bool, bool) {
+	return 0, 0, 0, 0, false, false
+}
+func (r *auditFailingReader) ReadProcs() ([]sysmon.RawProc, bool) { return nil, false }
+
+// The popover's first process sample ranks by real CPU deltas: the
+// per-process baseline survives while the popover is closed.
+func TestSysMonPopoverFirstProcSampleRankedByCPU(t *testing.T) {
+	a, reader, now := makeTestSysMonShelf(t, "zh-Hans", []layout.Card{
+		{ID: "sysmon", Span: 2, Rows: 1},
+	})
+	m := a.sysmon
+	reader.procs = []sysmon.RawProc{
+		{PID: 201, Name: "cpuHog", CPUTimeNS: 0, MemBytes: 100 << 20},
+		{PID: 202, Name: "memHog", CPUTimeNS: 0, MemBytes: 8 << 30},
+	}
+	a.visible, a.level, a.tab = true, 2, pageTools
+	stepFakeSysMon(reader, now, time.Second, 20, 50, 1<<20, 1<<20)
+	m.tick(*now) // popover closed
+	reader.procs[0].CPUTimeNS += 200_000_000
+	m.setPopoverOpen(true)
+	stepFakeSysMon(reader, now, sysmonColdDelta, 20, 50, 1<<20, 1<<20)
+	m.tick(*now)
+	// With no baseline yet the list is the waiting state — never a fake
+	// all-zero ranking sorted by memory.
+	if got := m.snap.TopCPU; len(got) != 0 {
+		t.Fatalf("a sample without deltas published a ranking: %+v", got)
+	}
+	stepFakeSysMon(reader, now, time.Second, 20, 50, 1<<20, 1<<20)
+	m.tick(*now)
+	got := m.snap.TopCPU
+	if len(got) == 0 || got[0].Name != "cpuHog" || got[0].CPUPercent <= 0 {
+		t.Fatalf("the CPU ranking is wrong after a measured sample (want cpuHog): %+v", got)
+	}
+}
+
+// A failed counter draws "--", not a healthy 0%, and the other counters
+// keep drawing.
+func TestSysMonFailedReadsRenderDashes(t *testing.T) {
+	a, reader, now := makeTestSysMonShelf(t, "zh-Hans", []layout.Card{
+		{ID: "sysmon", Span: 2, Rows: 1},
+	})
+	m := a.sysmon
+	fail := &auditFailingReader{cpu: reader}
+	m.sampler = sysmon.NewSampler(fail)
+	a.visible, a.level, a.tab = true, 2, pageTools
+	stepFakeSysMon(reader, now, time.Second, 20, 50, 1<<20, 1<<20)
+	m.tick(*now)
+	stepFakeSysMon(reader, now, time.Second, 20, 50, 1<<20, 1<<20)
+	m.tick(*now)
+	if txt := sysmonPercentText(m.snap, m.snap.MemPercent, false); txt != "--" {
+		t.Fatalf("a failed memory read still shows %q; want --", txt)
+	}
+	if !m.snap.CPUReady {
+		t.Fatal("the CPU counter, which reads fine, was blanked too")
+	}
+}
+
+// Wings preempted by the app switcher stop waking the sampler; clearing the
+// preemption brings it back.
+func TestSysMonWingsStopSamplingWhilePreempted(t *testing.T) {
+	a, _, now := makeTestSysMonShelf(t, "zh-Hans", nil)
+	a.settings.SysMon.WingsEnabled = true
+	if !a.sysmon.needed() {
+		t.Fatal("resting wings do not need sampling")
+	}
+	a.apps.on = true
+	if a.sysmon.needed() {
+		t.Fatal("sampling continues while the switcher owns the notch")
+	}
+	a.apps.on = false
+	if !a.sysmon.needed() {
+		t.Fatal("sampling did not come back after the preemption")
+	}
+	_ = now
+}
+
+// The chart's axis label follows the sampling interval.
+func TestSysMonAxisLabelFollowsInterval(t *testing.T) {
+	a, _, _ := makeTestSysMonShelf(t, "zh-Hans", nil)
+	a.settings.SysMon.IntervalSec = 1
+	if got := sysmonWindowSeconds(a); got != 60 {
+		t.Fatalf("1 s interval axis = %ds, want 60", got)
+	}
+	a.settings.SysMon.IntervalSec = 2
+	if got := sysmonWindowSeconds(a); got != 120 {
+		t.Fatalf("2 s interval axis = %ds, want 120", got)
+	}
+}

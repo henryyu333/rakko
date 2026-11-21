@@ -266,19 +266,26 @@ func (darwinReader) ReadDisk() (total, free, readBytes, writeBytes uint64, direc
 	free = st.Bavail * bsize
 
 	if loadDarwinIOKit() {
-		readBytes, writeBytes = readDarwinBlockStorageStats()
+		var ok bool
+		readBytes, writeBytes, ok = readDarwinBlockStorageStats()
+		if !ok {
+			// The counters could not be read: say so instead of passing 0
+			// off as the count, or the next good sample sees a delta from 0
+			// and draws a many-GB/s spike.
+			return total, free, 0, 0, false, false
+		}
 	}
 	return total, free, readBytes, writeBytes, false, total > 0
 }
 
-func readDarwinBlockStorageStats() (readBytes, writeBytes uint64) {
+func readDarwinBlockStorageStats() (readBytes, writeBytes uint64, ok bool) {
 	match := fnIOServiceMatching(&cStrBlockDriver[0])
 	if match == 0 {
-		return 0, 0
+		return 0, 0, false
 	}
 	var iter uint32
 	if fnIOServiceMatchingSv(0, match, &iter) != 0 || iter == 0 {
-		return 0, 0
+		return 0, 0, false
 	}
 	defer fnIOObjectRelease(iter)
 
@@ -310,7 +317,7 @@ func readDarwinBlockStorageStats() (readBytes, writeBytes uint64) {
 		}
 		fnIOObjectRelease(svc)
 	}
-	return readBytes, writeBytes
+	return readBytes, writeBytes, true
 }
 
 func (darwinReader) ReadProcs() ([]RawProc, bool) {
