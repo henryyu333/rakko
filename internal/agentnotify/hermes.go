@@ -564,10 +564,17 @@ func editHermesConfig(home string, edit func(raw []byte) ([]byte, bool, error)) 
 	})
 }
 
-// nudgeHermesReload asks a running gateway to rediscover plugins, so a switch
-// turned on takes effect in the next CLI session without restarting the
-// user's gateway. Every failure is silent: the config is already saved.
+// nudgeHermesReload asks a running gateway to rediscover plugins, so a
+// switch turned on takes effect in the next CLI session without
+// restarting the user's gateway. Every failure is silent: the config is
+// already saved. The nudge runs off the caller's thread — a gateway that
+// does not answer must not hold the app's UI for the socket's whole
+// timeout.
 func nudgeHermesReload(home string) {
+	go nudgeHermesReloadSync(home)
+}
+
+func nudgeHermesReloadSync(home string) {
 	dir := hermesHome(home)
 	socket := join(dir, "gateway.sock")
 	if !exists(socket) {
@@ -841,11 +848,15 @@ func hermesAddEnabled(raw []byte, name string) ([]byte, bool, error) {
 		return nil, false, err
 	}
 	if !ok {
-		ind = 2
-		if child, _, found, err := yamlChild(d, start, end, "disabled"); err == nil && found {
-			ind = yamlIndent(d.lines[child])
+		// yamlChild reports the indent of the block's own subkeys even
+		// without finding the key: a 4-space plugins block gains a
+		// 4-space child, never a hard-coded 2-space one. A block with no
+		// subkeys at all has nothing to match, and 2-space YAML is what
+		// we write there.
+		if ind < 0 {
+			ind = 2
 		}
-		yamlInsertAt(&d, start+1, "  enabled:\n")
+		yamlInsertAt(&d, start+1, strings.Repeat(" ", ind)+"enabled:\n")
 		yamlInsertAt(&d, start+2, strings.Repeat(" ", ind)+"- "+name+"\n")
 		return d.bytes(), true, nil
 	}

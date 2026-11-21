@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -375,7 +377,7 @@ func connectNamed(s spec, home, dataDir, exe string) error {
 	if timeout == 0 {
 		timeout = hookTimeout
 	}
-	return connectNamedMember(s, home, dataDir, namedHook, events, timeout, func(ev string) string {
+	return connectNamedMember(s, home, dataDir, namedHook, events, timeout, hookCompletion, func(ev string) string {
 		event := ""
 		if s.eventArg {
 			event = ev
@@ -385,8 +387,11 @@ func connectNamed(s spec, home, dataDir, exe string) error {
 }
 
 // connectNamedMember writes one member of a named hooks document:
-// {"<member>": {"<event>": [{"type", "command", "timeout"}]}}.
-func connectNamedMember(s spec, home, dataDir, member string, events []string, timeout int, commandFor func(ev string) string) error {
+// {"<member>": {"<event>": [{"type", "command", "timeout"}]}}. A member
+// that is already Rakko's is not rewritten: only its timeout is brought
+// up to date, so a launch with a newer outer wall refreshes what an
+// older one wrote.
+func connectNamedMember(s spec, home, dataDir, member string, events []string, timeout int, kind hookKind, commandFor func(ev string) string) error {
 	path := s.config(home)
 	return updateFile(path, func(raw []byte, existed bool, mode os.FileMode) (filePlan, error) {
 		doc, derr := newJSONDoc(raw)
@@ -394,7 +399,15 @@ func connectNamedMember(s spec, home, dataDir, member string, events []string, t
 			return filePlan{}, fmt.Errorf("agentnotify: %s: %w", path, derr)
 		}
 		if m, _ := doc.root.lookup(member); m != nil {
-			return filePlan{}, nil
+			changed, rerr := refreshMemberTimeout(doc, m, s, events, kind, timeout, dataDir)
+			if rerr != nil || !changed {
+				return filePlan{}, rerr
+			}
+			mf := os.FileMode(0o600)
+			if existed {
+				mf = mode.Perm()
+			}
+			return filePlan{data: doc.bytes(), mode: mf, changed: true}, nil
 		}
 		render := func(indent string) string {
 			inner := indent + doc.indent
@@ -435,6 +448,29 @@ func connectNamedMember(s spec, home, dataDir, member string, events []string, t
 			return nil
 		}}, nil
 	})
+}
+
+// refreshMemberTimeout brings the timeout of Rakko's own entries inside
+// an existing named member up to date, in place, and touches nothing
+// else: entries written by an older Rakko carry an older outer wall.
+func refreshMemberTimeout(doc *jsonDoc, m *jnode, s spec, events []string, kind hookKind, timeout int, dataDir string) (bool, error) {
+	if m == nil || m.kind != jObject {
+		return false, nil
+	}
+	for _, ev := range events {
+		arr, _ := m.lookup(ev)
+		if arr == nil || arr.kind != jArray {
+			continue
+		}
+		for _, item := range arr.items {
+			if itemCarries(doc, item, s.tool, kind, dataDir) {
+				// splice re-parses and invalidates the tree; one entry per
+				// event is all Rakko writes.
+				return refreshHookTimeout(doc, item, timeout)
+			}
+		}
+	}
+	return false, nil
 }
 
 // disconnectNamed removes Rakko's completion member, and the file when
@@ -486,7 +522,9 @@ func addHook(doc *jsonDoc, s spec, exe, dataDir, ev string, timeout int) (bool, 
 
 // addHookCommand is addHook for any Rakko command line and marker: the
 // completion entry and the approval entry share the splice-and-reparse
-// rules but never see each other's marker.
+// rules but never see each other's marker. An entry that is already
+// Rakko's is not duplicated: only its timeout is brought up to date, so
+// a launch with a newer outer wall refreshes what an older one wrote.
 func addHookCommand(doc *jsonDoc, s spec, ev string, timeout int, entry hookEntry, kind hookKind, dataDir string) (bool, error) {
 	hooks := hooksIn(doc, s.bare)
 	if hooks == nil && !s.bare {
@@ -511,7 +549,10 @@ func addHookCommand(doc *jsonDoc, s spec, ev string, timeout int, entry hookEntr
 	}
 	for _, item := range arr.items {
 		if itemCarries(doc, item, s.tool, kind, dataDir) {
-			return false, nil
+			// Already ours: bring an older write's timeout up to date, in
+			// place, and touch nothing else. splice re-parses, so the
+			// loop ends here.
+			return refreshHookTimeout(doc, item, timeout)
 		}
 	}
 	render := func(indent string) string {
@@ -526,6 +567,34 @@ func addHookCommand(doc *jsonDoc, s spec, ev string, timeout int, entry hookEntr
 	}
 	return true, doc.appendItem(arr, render)
 }
+
+// refreshHookTimeout rewrites, in place, the timeout of one hook item
+// that is already Rakko's: an entry written by an older Rakko carries an
+// older outer wall, and a launch must bring it up to date without
+// touching any other member or any other item. It reports whether the
+// document changed.
+func refreshHookTimeout(doc *jsonDoc, item *jnode, timeout int) (bool, error) {
+	if item == nil || item.start < 0 || item.end > len(doc.src) {
+		return false, nil
+	}
+	span := doc.src[item.start:item.end]
+	// Our entries write the timeout last; the last match in the item is
+	// the one to take.
+	locs := hookTimeoutRe.FindAllSubmatchIndex(span, -1)
+	if len(locs) == 0 {
+		return false, nil
+	}
+	loc := locs[len(locs)-1]
+	cur, err := strconv.Atoi(string(span[loc[2]:loc[3]]))
+	if err != nil || cur == timeout {
+		return false, nil
+	}
+	return true, doc.splice(item.start+loc[2], item.start+loc[3], strconv.Itoa(timeout))
+}
+
+// hookTimeoutRe finds the timeout member of one hook entry, however the
+// file's style spaces the colon.
+var hookTimeoutRe = regexp.MustCompile(`"timeout"\s*:\s*([0-9]+)`)
 
 // hooksIn is the object keyed by event: the "hooks" member, or the whole
 // document for a tool whose hooks file is nothing else (bare).

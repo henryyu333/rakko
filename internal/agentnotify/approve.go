@@ -21,10 +21,14 @@ import (
 
 const (
 	// approveTimeout is the seconds written into each approval hook entry:
-	// the outer wall above the client's 55 s budget.
-	approveTimeout = 60
+	// the outer wall above the client's 110 s budget.
+	approveTimeout = 120
 	// approveBudget is how long the client waits for a card.
-	approveBudget = 55 * time.Second
+	approveBudget = 110 * time.Second
+	// ApproveWait exposes the client's wait: the app's queue must hand a
+	// still-hidden request back to the terminal before this wall, or the
+	// hook gives up first and the queue's answer is never seen.
+	ApproveWait = approveBudget
 	// approveDial is how long the client looks around for the app before
 	// falling back.
 	approveDial = 300 * time.Millisecond
@@ -276,6 +280,14 @@ func askRakko(ctx context.Context, dataDir string, a Ask) (Decision, bool) {
 	if err != nil {
 		return Decision{}, false
 	}
+	if len(body)+1 > forwardReadLimit {
+		// The server reads one line of at most forwardReadLimit bytes; a
+		// frame that already exceeds it here would be cut off over there
+		// without a reply, and the tool would wait out the whole budget
+		// before falling back. Refusing it now sends the tool to its own
+		// flow at once.
+		return Decision{}, false
+	}
 	_ = conn.SetWriteDeadline(time.Now().Add(approveWrite))
 	if _, err := conn.Write(append(body, '\n')); err != nil {
 		return Decision{}, false
@@ -484,7 +496,7 @@ function askRakko(payload) {
     const env = { ...process.env };
     if (payload.cwd) env.PWD = payload.cwd;
     const child = execFile(EXE, args,
-      { timeout: 57000, maxBuffer: 1 << 20, env }, (err, out) => {
+      { timeout: 114000, maxBuffer: 1 << 20, env }, (err, out) => {
         if (err || !out) return resolve(null);
         try { resolve(JSON.parse(out)); } catch { resolve(null); }
       });
@@ -532,7 +544,7 @@ function askRakko(payload) {
     const args = ["--agent-approve", "--tool", TOOL];
     if (DATA) args.push("--data-dir", DATA);
     const child = execFile(EXE, args,
-      { timeout: 57000, maxBuffer: 1 << 20 }, (err, out) => {
+      { timeout: 114000, maxBuffer: 1 << 20 }, (err, out) => {
         if (err || !out) return resolve(null);
         try { resolve(JSON.parse(out)); } catch { resolve(null); }
       });
@@ -582,7 +594,7 @@ function askRakko(payload, signal) {
     if (!existsSync(EXE)) return resolve(null);
     const args = ["--agent-approve", "--tool", TOOL];
     if (DATA) args.push("--data-dir", DATA);
-    const options = { timeout: 57000, maxBuffer: 1 << 20 };
+    const options = { timeout: 114000, maxBuffer: 1 << 20 };
     if (signal) options.signal = signal;
     const child = execFile(EXE, args, options, (err, out) => {
       if (err || !out) return resolve(null);

@@ -12,6 +12,7 @@ package agentnotify
 // read is never rewritten, and the modules answer dsh's own events.
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -421,5 +422,29 @@ func TestDshRealBinaryLoadsModules(t *testing.T) {
 	// modules cleanly without runtime or syntax errors.
 	if out, err := exec.Command(dshBin, "headless", "--help").CombinedOutput(); err != nil {
 		t.Fatalf("dsh headless --help failed: %v\n%s", err, out)
+	}
+}
+
+// Removing Rakko's dsh patch entry must also work after an editor
+// normalized the file's line endings to CRLF: the whole block goes, not
+// just the marker line that leaves an orphan "- insert:" behind.
+func TestRemoveDSHPatchAfterCRLF(t *testing.T) {
+	raw, changed, _, _, err := addDSHPatch([]byte("# user notes\n"), dshEntryCompletion, "/tmp/mod.mjs")
+	if err != nil || !changed {
+		t.Fatalf("addDSHPatch: err=%v changed=%v", err, changed)
+	}
+	crlf := bytes.ReplaceAll(raw, []byte("\n"), []byte("\r\n"))
+	out, changed, err := removeDSHPatch(crlf, dshEntryCompletion, originRecord{})
+	if err != nil {
+		t.Fatalf("removeDSHPatch: %v", err)
+	}
+	if !changed {
+		t.Fatal("removeDSHPatch reported no change")
+	}
+	if strings.Contains(string(out), "- insert:") {
+		t.Fatalf("orphan insert block left behind:\n%s", out)
+	}
+	if strings.Contains(string(out), dshEntryCompletion) {
+		t.Fatalf("module import row left behind:\n%s", out)
 	}
 }

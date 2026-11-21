@@ -8,6 +8,7 @@ package agentnotify
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -503,5 +504,82 @@ func TestApproveEntryShapes(t *testing.T) {
 		if tool == ToolPi && !strings.Contains(text, `pi.on("tool_call"`) {
 			t.Errorf("pi module does not hook tool_call")
 		}
+	}
+}
+
+// A launch with a newer approval wall brings an older Rakko's entry up to
+// date: only its timeout changes, byte for byte, and a second connect
+// changes nothing.
+func TestConnectApproveRefreshesOlderTimeout(t *testing.T) {
+	home, data := t.TempDir(), t.TempDir()
+	exe := "/Applications/Rakko.app/Contents/MacOS/Rakko"
+	if err := ConnectApprove(home, data, exe, ToolClaude); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(home, ".claude", "settings.json")
+	fresh, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	older := strings.Replace(string(fresh), fmt.Sprintf(`"timeout": %d`, approveTimeout), `"timeout": 60`, 1)
+	if older == string(fresh) {
+		t.Fatalf("no timeout to age in:\n%s", fresh)
+	}
+	if err := os.WriteFile(path, []byte(older), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ConnectApprove(home, data, exe, ToolClaude); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(fresh) {
+		t.Fatalf("the refresh changed more than the timeout:\nbefore:\n%s\nafter:\n%s", older, after)
+	}
+	if err := ConnectApprove(home, data, exe, ToolClaude); err != nil {
+		t.Fatal(err)
+	}
+	again, _ := os.ReadFile(path)
+	if string(again) != string(fresh) {
+		t.Fatalf("a second connect changed the file:\n%s", again)
+	}
+}
+
+// The named-member form gets the same refresh: an older Rakko's
+// Antigravity member keeps its place, and only the timeout moves.
+func TestConnectApproveRefreshesNamedMemberTimeout(t *testing.T) {
+	home, data := t.TempDir(), t.TempDir()
+	exe := "/Applications/Rakko.app/Contents/MacOS/Rakko"
+	if err := os.MkdirAll(filepath.Join(home, ".gemini", "antigravity-cli"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := ConnectApprove(home, data, exe, ToolAntigravity); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(home, ".gemini", "config", "hooks.json")
+	fresh, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("antigravity hooks: %v", err)
+	}
+	older := strings.Replace(string(fresh), fmt.Sprintf(`"timeout": %d`, approveTimeout), `"timeout": 60`, 1)
+	if older == string(fresh) {
+		t.Fatalf("no timeout to age in:\n%s", fresh)
+	}
+	if err := os.WriteFile(path, []byte(older), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ConnectApprove(home, data, exe, ToolAntigravity); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(fresh) {
+		t.Fatalf("the refresh changed more than the timeout:\nbefore:\n%s\nafter:\n%s", older, after)
 	}
 }

@@ -200,3 +200,23 @@ func TestAskContextCancel(t *testing.T) {
 		t.Fatal("a hanging-up client did not cancel the ask")
 	}
 }
+
+// A frame the server could never read in one line is refused at the
+// client, at once: writing it anyway would have the server cut the
+// connection without a reply, and the tool would wait out the whole
+// approval budget before falling back.
+func TestAskRakkoRefusesOversizedFrameAtOnce(t *testing.T) {
+	path, _ := listenAsk(t, func(context.Context, Ask) Decision {
+		t.Error("the server saw a frame it cannot read")
+		return Decision{Decision: DecisionAllow}
+	})
+	a := askFrame(t, testAskID, "claude")
+	a.Input = json.RawMessage(`{"command":"` + strings.Repeat("x", forwardReadLimit) + `"}`)
+	start := time.Now()
+	if d, ok := askRakko(context.Background(), filepath.Dir(path), a); ok {
+		t.Fatalf("oversized ask answered %+v", d)
+	}
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Fatalf("the refusal took %v; the tool must fall back at once", elapsed)
+	}
+}

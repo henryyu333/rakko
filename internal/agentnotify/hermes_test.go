@@ -810,3 +810,21 @@ transports["rakko"](Request())
 		t.Fatalf("approval cwd = %q, want the session's project directory", ask.Cwd)
 	}
 }
+
+// Inserting plugins.enabled keeps the block's own indentation: a 4-space
+// plugins block must not gain a 2-space child that breaks the YAML.
+func TestHermesEnabledIndentMatchesSiblings(t *testing.T) {
+	raw := []byte("plugins:\n    auto_load: true\nsecurity:\n    mode: strict\n")
+	out, changed, err := hermesAddEnabled(raw, "rakko-completion")
+	if err != nil || !changed {
+		t.Fatalf("hermesAddEnabled: err=%v changed=%v", err, changed)
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		if line == "  enabled:" {
+			t.Fatalf("enabled inserted at 2 spaces while sibling keys sit at 4:\n%s", out)
+		}
+	}
+	if !strings.Contains(string(out), "    enabled:\n    - rakko-completion") {
+		t.Fatalf("enabled not inserted at the block's 4-space indent:\n%s", out)
+	}
+}

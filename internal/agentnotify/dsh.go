@@ -208,7 +208,9 @@ func dshHasPatchBlock(raw []byte) bool {
 		bytes.Contains(raw, []byte(dshPatchMarker(dshEntryApproval)))
 }
 
-// lineText returns the line at start without its newline.
+// lineText returns the line at start without its newline or its carriage
+// return: a file saved by an editor that normalizes line endings must
+// match the same comparisons a Unix file does.
 func lineText(raw []byte, start int) string {
 	if start >= len(raw) {
 		return ""
@@ -217,7 +219,7 @@ func lineText(raw []byte, start int) string {
 	if nl := bytes.IndexByte(line, '\n'); nl >= 0 {
 		line = line[:nl]
 	}
-	return string(line)
+	return string(bytes.TrimSuffix(line, []byte("\r")))
 }
 
 // nextLine returns the offset after the newline that ends the line at
