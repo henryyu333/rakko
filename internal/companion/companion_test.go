@@ -296,8 +296,8 @@ func TestStoreDayNeverGoesBackwards(t *testing.T) {
 	}
 }
 
-// 时钟被调到未来不会一次买来几年的陪伴天数：单次超过 maxDayJump 的
-// 跳变停在已确认的那天，不落盘；时钟回来后按真实日历继续。
+// 同一次运行里把时钟拨到未来不会买来陪伴天数：日历多出的天数远超单调
+// 时钟实际经过的时间时，停在已确认的那天，不落盘；时钟回来后照常继续。
 func TestStoreDayIgnoresFutureClockJump(t *testing.T) {
 	dir := t.TempDir()
 	s, err := Open(dir)
@@ -308,12 +308,16 @@ func TestStoreDayIgnoresFutureClockJump(t *testing.T) {
 	if err := s.Seed(start); err != nil {
 		t.Fatal(err)
 	}
+	orig := elapsedSince
+	t.Cleanup(func() { elapsedSince = orig })
 	if day, ok := s.Day(start.AddDate(0, 0, 9)); !ok || day != 10 {
 		t.Fatalf("day %d, ok %v; want 10", day, ok)
 	}
 
-	// A dead RTC battery says 2036: the count stays where the real
-	// calendar left it, and the jump is never written to disk.
+	// A dead RTC battery says 2036 while the monotonic clock says minutes
+	// passed: the count stays where the real calendar left it, and the jump
+	// is never written to disk.
+	elapsedSince = func(from, to time.Time) time.Duration { return 10 * time.Minute }
 	huge := start.AddDate(10, 0, 0)
 	if day, ok := s.Day(huge); !ok || day != 10 {
 		t.Fatalf("future clock read day %d, ok %v; want 10", day, ok)
@@ -326,28 +330,23 @@ func TestStoreDayIgnoresFutureClockJump(t *testing.T) {
 		t.Fatalf("relaunch after the jump reads day %d, ok %v; want 10", day, ok)
 	}
 
-	// The clock comes back: the count moves on as it always did.
-	if day, ok := again.Day(start.AddDate(0, 0, 11)); !ok || day != 12 {
+	// The clock comes back for a normal next day: the count moves on.
+	if day, ok := s.Day(start.AddDate(0, 0, 10)); !ok || day != 11 {
 		t.Fatalf("the count did not resume: day %d", day)
-	}
-
-	// A genuine gap within the limit is still believed in one step.
-	if day, ok := again.Day(start.AddDate(0, 0, 11+maxDayJump)); !ok || day != 12+maxDayJump {
-		t.Fatalf("a real year-long gap read day %d; want %d", day, 12+maxDayJump)
 	}
 }
 
-// A genuine long absence is believed: the file has been sitting unwritten
-// for about the leap it claims, so the count lands where the calendar
-// really is — the same way the first count of a start seeded long ago
-// (an existing install's folder birth) is believed whole.
-func TestStoreDayBelievesConfirmedAbsence(t *testing.T) {
+// A real absence across launches is believed whole: a new process has no
+// earlier monotonic reading to compare with, so the calendar's leap is the
+// truth — the same way the first count of a start seeded long ago (an
+// existing install's folder birth) is believed whole.
+func TestStoreDayBelievesAGapAcrossLaunches(t *testing.T) {
 	dir := t.TempDir()
 	s, err := Open(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	away := 410
+	away := 409
 	start := time.Now().AddDate(0, 0, -(away + 9))
 	if err := s.Seed(start); err != nil {
 		t.Fatal(err)
@@ -356,14 +355,14 @@ func TestStoreDayBelievesConfirmedAbsence(t *testing.T) {
 	if day, ok := s.Day(past); !ok || day != 10 {
 		t.Fatalf("last day before the absence: day %d, ok %v; want 10", day, ok)
 	}
-	// The machine sat off for `away` days; the file last written then.
-	stale := time.Now().AddDate(0, 0, -away)
-	if err := os.Chtimes(filepath.Join(dir, FileName), stale, stale); err != nil {
+	// The app was closed for `away` days; reopening reads the whole gap.
+	again, err := Open(dir)
+	if err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now()
-	if day, ok := s.Day(now); !ok || day != away+10 {
-		t.Fatalf("a confirmed absence read day %d, ok %v; want %d", day, ok, away+10)
+	if day, ok := again.Day(now); !ok || day != Day(start, now) {
+		t.Fatalf("a gap across launches read day %d, ok %v; want %d", day, ok, Day(start, now))
 	}
 
 	// The first count of a start seeded long ago is the calendar's, whole.
@@ -445,5 +444,31 @@ func TestStoreFileWithoutDaysCountsFromTheStart(t *testing.T) {
 	}
 	if day, _ := again.Day(time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)); day != 8 {
 		t.Fatalf("after the upgrade a relaunch reads day %d; want 8", day)
+	}
+}
+
+// 睡眠唤醒后不再拿同一只单调钟比对：合盖期间日历照走而单调钟可能停着，
+// 唤醒后日历的天数就是真相，长期不关机的笔记本不会把陪伴天数冻住。
+func TestStoreDayBelievesAGapAcrossAWake(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Date(2026, 6, 1, 9, 0, 0, 0, time.Local)
+	if err := s.Seed(start); err != nil {
+		t.Fatal(err)
+	}
+	orig := elapsedSince
+	t.Cleanup(func() { elapsedSince = orig })
+	elapsedSince = func(from, to time.Time) time.Duration { return time.Minute }
+	if day, ok := s.Day(start.AddDate(0, 0, 9)); !ok || day != 10 {
+		t.Fatalf("day %d, ok %v; want 10", day, ok)
+	}
+	// Three days with the lid shut: the wake releases the reference and
+	// the calendar's leap is believed.
+	s.Wake()
+	if day, ok := s.Day(start.AddDate(0, 0, 12)); !ok || day != 13 {
+		t.Fatalf("the count after a wake read day %d, ok %v; want 13", day, ok)
 	}
 }

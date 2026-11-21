@@ -701,6 +701,12 @@ func (a *shelf) canWaitBlankFrame(target mygo.Rectangle) bool {
 // woke: displays may have changed during sleep and a blank-frame wait may
 // have been stranded by the window being occluded.
 func (a *shelf) handleSystemWake() {
+	// A suspend can stop the monotonic clock while the calendar runs on:
+	// the companionship count must trust the calendar again, or a laptop
+	// left shut for days would stop growing its days.
+	if a.companion != nil {
+		a.companion.Wake()
+	}
 	a.blankFrame, a.blankQueued, a.blankReady, a.blankQueuedAt = false, false, false, time.Time{}
 	a.frame = mygo.Rectangle{}
 	a.place(cursorPoint())
