@@ -855,16 +855,18 @@ func (f *usageFeature) spendLocalResetCredit() {
 		return true
 	}
 	// latest and good usually share the answer's pointer: spend once and
-	// hand the same result to both.
+	// hand the same result to both. When the card shows an older good answer
+	// that the latest failure never replaced, the count the user is looking
+	// at must come down too — otherwise it invites a second consume.
 	orig := st.latest.ResetCredits
-	if !spend(&st.latest) {
+	spent := spend(&st.latest)
+	if st.good.ResetCredits == orig {
+		if spent {
+			st.good.ResetCredits = st.latest.ResetCredits
+		}
 		return
 	}
-	if st.good.ResetCredits == orig {
-		st.good.ResetCredits = st.latest.ResetCredits
-	} else {
-		spend(&st.good)
-	}
+	spend(&st.good)
 }
 
 func (f *usageFeature) refreshCodexAfterConsume() {
@@ -879,6 +881,18 @@ func (f *usageFeature) refreshCodexAfterConsume() {
 	f.codexPostConsume = true
 	f.startQuota(aiusage.ToolCodex)
 	f.codexPostConsume = false
+}
+
+// endCodexReset releases the consume guard on a path that will not start the
+// post-consume refresh. Raising minSeq dropped the answer of any refresh that
+// was in flight, so nothing else would clear its busy flag: the tool would
+// look in flight until the panel folded, and every later refresh would be
+// held back. The attempt time goes too, so the next refresh is due at once.
+func (f *usageFeature) endCodexReset() {
+	f.codexResetBusy = false
+	st := f.quotaState(aiusage.ToolCodex)
+	st.busy = false
+	st.attemptAt = time.Time{}
 }
 
 // requestUseCodexReset opens the confirmation overlay if Codex has a reset
@@ -935,20 +949,20 @@ func (f *usageFeature) confirmUseCodexReset() {
 				if out.PostSent {
 					f.refreshCodexAfterConsume()
 				} else {
-					f.codexResetBusy = false
+					f.endCodexReset()
 				}
 			case out.Code == "reset":
 				f.host.toastStatus(l.UsageResetDone(), time.Time{}, statusInfo)
 				f.spendLocalResetCredit()
 				f.refreshCodexAfterConsume()
 			case out.Code == "nothing_to_reset":
-				f.codexResetBusy = false
+				f.endCodexReset()
 				f.host.toastStatus(l.UsageResetNothingToReset(), time.Time{}, statusInfo)
 			case out.Code == "no_credit":
-				f.codexResetBusy = false
+				f.endCodexReset()
 				f.host.toastStatus(l.UsageResetNoCredit(), time.Time{}, statusInfo)
 			default:
-				f.codexResetBusy = false
+				f.endCodexReset()
 				f.host.toastStatus(l.UsageResetFailed(out.Code), time.Time{}, statusErr)
 			}
 			f.invalidate()

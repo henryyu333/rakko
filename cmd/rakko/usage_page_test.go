@@ -9,6 +9,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"image"
 	"image/png"
 	"math"
@@ -2164,5 +2165,64 @@ func TestUsageDoesNotFetchAtSearchBarLevel(t *testing.T) {
 	fx.f.tick(*fx.now)
 	if fx.codex.calls != calls {
 		t.Fatalf("the search bar still refreshes quota cards (%d → %d)", calls, fx.codex.calls)
+	}
+}
+
+// 正在显示的是过期数字（latest 失败、good 还有卡）时，重置成功也要把用户
+// 看得到的那份卡数扣掉：否则 toast 说已重置，卡片仍是旧张数，可以再消费一次。
+func TestCodexResetSpendsCreditOnTheStaleGoodAnswer(t *testing.T) {
+	fx := newUsageFixture(t, true)
+	good := okQuota(aiusage.ToolCodex, "Plus", *fx.now)
+	good = windowUsed(good, 0, 50)
+	good.ResetCredits = &aiusage.ResetCredits{Count: 2, FirstID: "cr-1"}
+	failed := aiusage.Quota{Tool: aiusage.ToolCodex, Status: aiusage.QuotaFailed, Err: "offline", FetchedAt: (*fx.now).Add(time.Minute)}
+	st := fx.f.quotaState(aiusage.ToolCodex)
+	st.good, st.latest = good, failed
+	fx.f.spendLocalResetCredit()
+	if st.good.ResetCredits == nil || st.good.ResetCredits.Count != 1 {
+		t.Fatalf("the shown count = %+v, want 1 after the reset", st.good.ResetCredits)
+	}
+	if st.latest.ResetCredits != nil {
+		t.Fatalf("the failed answer grew credits out of nowhere: %+v", st.latest.ResetCredits)
+	}
+	// 同一份答案（同一个指针）只扣一次。
+	shared := okQuota(aiusage.ToolCodex, "Plus", *fx.now)
+	shared = windowUsed(shared, 0, 50)
+	shared.ResetCredits = &aiusage.ResetCredits{Count: 3, FirstID: "cr-2"}
+	st.good, st.latest = shared, shared
+	fx.f.spendLocalResetCredit()
+	if st.good.ResetCredits == nil || st.good.ResetCredits.Count != 2 {
+		t.Fatalf("a shared answer was spent twice: %+v", st.good.ResetCredits)
+	}
+}
+
+// 确认重置时有一次刷新在途，随后 consume 失败：那次刷新的答案被 minSeq
+// 丢掉，Codex 不能一直显示「正在刷新」，下一次手动刷新必须发得出去。
+func TestCodexResetFailureReleasesTheInFlightRefresh(t *testing.T) {
+	fx := newUsageFixture(t, true)
+	flush := stubUsageSeams(t, true)
+	q := okQuota(aiusage.ToolCodex, "Plus", *fx.now)
+	q = windowUsed(q, 0, 50)
+	q.ResetCredits = &aiusage.ResetCredits{Count: 2, FirstID: "cr-1"}
+	st := fx.f.quotaState(aiusage.ToolCodex)
+	st.latest, st.good = q, q
+	st.busy, st.attemptAt, st.seq = true, *fx.now, 7
+	fx.f.deps.useCodexReset = func(context.Context) (aiusage.ResetOutcome, error) {
+		return aiusage.ResetOutcome{}, errors.New("network is down")
+	}
+	fx.f.requestUseCodexReset()
+	fx.f.confirmUseCodexReset()
+	flush()
+	if fx.f.codexResetBusy {
+		t.Fatal("the consume guard outlived its failure")
+	}
+	if st.busy || !st.attemptAt.IsZero() {
+		t.Fatalf("the dropped refresh still looks in flight (busy=%v, attemptAt=%v)", st.busy, st.attemptAt)
+	}
+	before := fx.codex.calls
+	fx.f.requestRefresh()
+	flush()
+	if fx.codex.calls != before+1 {
+		t.Fatalf("the manual refresh did not reach Codex (%d calls, want %d)", fx.codex.calls, before+1)
 	}
 }
