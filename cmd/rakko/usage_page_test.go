@@ -2002,11 +2002,13 @@ func TestCodexResetSurvivesAFoldedPanel(t *testing.T) {
 		release = make(chan struct{})
 		arrived = make(chan struct{})
 		gateOne sync.Once
+		workers sync.WaitGroup
 	)
 	oldWork, oldMain := goWork, dispatchMain
 	goWork = func(fn func()) {
+		workers.Add(1)
 		mu.Lock()
-		pending = append(pending, queued{fn: fn})
+		pending = append(pending, queued{fn: func() { defer workers.Done(); fn() }})
 		mu.Unlock()
 	}
 	dispatchMain = func(fn func()) {
@@ -2014,7 +2016,20 @@ func TestCodexResetSurvivesAFoldedPanel(t *testing.T) {
 		pending = append(pending, queued{fn: fn, main: true})
 		mu.Unlock()
 	}
-	t.Cleanup(func() { goWork, dispatchMain = oldWork, oldMain })
+	t.Cleanup(func() {
+		// Cancel and drain every worker before the seams go back: a worker
+		// still running would read the restored dispatchMain while the next
+		// test's is being put in place.
+		fx.f.stopWork()
+		done := make(chan struct{})
+		go func() { workers.Wait(); close(done) }()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Errorf("a queued worker did not finish after the fold")
+		}
+		goWork, dispatchMain = oldWork, oldMain
+	})
 	pop := func(wantMain bool) (func(), bool) {
 		mu.Lock()
 		defer mu.Unlock()
