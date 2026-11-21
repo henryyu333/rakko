@@ -1205,3 +1205,28 @@ func TestPinPressClearsWhenButtonAlreadyUp(t *testing.T) {
 		t.Fatal("the pin session stayed pressed after a lost release")
 	}
 }
+
+// A free card saved on a larger display or above a shorter work area comes
+// back inside the work area, not off-screen where no pointer reaches it.
+func TestPinRestoreClampsFreeCardsIntoTheWorkArea(t *testing.T) {
+	withPinDisplays(t, pinTestDisplays)
+	origOpen := pinOpenWindow
+	pinOpenWindow = func(*pinItem) {}
+	t.Cleanup(func() { pinOpenWindow = origOpen })
+	a := &shelf{dataDir: t.TempDir()}
+	l := layout.Default()
+	// Saved far below and right of the work area (a taller Dock, a smaller
+	// display since).
+	l.Pins = []layout.Pin{{ID: "awake", Span: 1, Rows: 1, Display: pinDisplayID(1), X: pinTestArea.Width + 500, Y: pinTestArea.Height + 500}}
+	a.setTools(l)
+	a.pinRestore()
+	if len(a.pins) != 1 {
+		t.Fatalf("pins = %d", len(a.pins))
+	}
+	it := a.pins[0]
+	area := it.displayRect()
+	if it.frame.X < area.X || it.frame.Y < area.Y ||
+		it.frame.X+it.frame.Width > area.X+area.Width || it.frame.Y+it.frame.Height > area.Y+area.Height {
+		t.Fatalf("a restored free card sits outside the work area: %+v in %+v", it.frame, area)
+	}
+}

@@ -860,7 +860,10 @@ func (a *shelf) pinRestore() {
 		area := pinArea(disp)
 		var frame mygo.Rectangle
 		if edge == pinFree {
-			frame = mygo.Rectangle{X: area.X + p.X, Y: area.Y + p.Y, Width: w, Height: pinCardH}
+			// A free card comes back inside its display's work area: a
+			// smaller resolution or a taller Dock since the save must not
+			// leave it off-screen and unreachable.
+			frame = pinClamp(mygo.Rectangle{X: area.X + p.X, Y: area.Y + p.Y, Width: w, Height: pinCardH}, area)
 		} else {
 			frame = pinClamp(mygo.Rectangle{X: area.X + p.X, Y: area.Y + p.Y, Width: pinStripW, Height: pinStripH}, area)
 		}
