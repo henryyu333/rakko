@@ -99,8 +99,16 @@ func isFullscreenState(quns uint32, fgOwn, zoomed, hasCaption, toolWindow bool, 
 	if fgOwn {
 		return false
 	}
-	switch quns {
-	case qunsRunningD3DFullScreen, qunsPresentationMode:
+	// Presentation mode is the system saying it is on a stage: every display
+	// steps aside with it.
+	if quns == qunsPresentationMode {
+		return true
+	}
+	// An exclusive full-screen game answers for its own monitor only; a
+	// readable rect decides which monitor that is. Without one, keep the
+	// system-wide answer as before.
+	d3d := quns == qunsRunningD3DFullScreen
+	if d3d && (!hasRects || monRect.Right <= monRect.Left || monRect.Bottom <= monRect.Top) {
 		return true
 	}
 	if zoomed || toolWindow || !hasRects || isShellDesktopClass(fgClass) {
@@ -112,7 +120,7 @@ func isFullscreenState(quns uint32, fgOwn, zoomed, hasCaption, toolWindow bool, 
 	if !coversMonitor {
 		return false
 	}
-	if quns == qunsBusy {
+	if d3d || quns == qunsBusy {
 		return true
 	}
 	return !hasCaption
