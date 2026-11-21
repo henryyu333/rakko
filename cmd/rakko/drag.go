@@ -317,6 +317,12 @@ func (a *shelf) monitorDrag(now time.Time) {
 	// the shell for its mode, not for the pointer.
 	holdPeek := overAnchor || a.pinReturning || a.petReturning || a.apps.on || (a.peeking && a.overPeekPill(p))
 	suppressedFS := a.fullscreenSuppressed()
+	if suppressedFS && a.apps.on {
+		// Another app took the screen without any press of ours (⌘Tab, a
+		// game's own fullscreen): the wings are gone, so the switcher must go
+		// with them or ←/→/⏎ would keep steering an invisible selection.
+		a.endAppSwitch()
+	}
 	// Dragging or hovering reveals the pill; only a click or a real incoming
 	// drag in the trigger zone can open the full panel.
 	if !suppressedFS && (active || holdPeek) {
