@@ -19,6 +19,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/aiusage"
+	"rakko/internal/netproxy"
 	"rakko/internal/settings"
 	"rakko/locales"
 )
@@ -869,6 +870,11 @@ func (f *usageFeature) quotaMessage(c *ui.Context, tool aiusage.Tool, q aiusage.
 		lines = l.UsageNoCLI()
 	default:
 		lines = l.UsageUnavailable()
+		if netproxy.ProxyAuthText(q.Err) {
+			// The one failure with a cause worth naming: the proxy wants
+			// credentials, and no retry of this card will change that.
+			lines = l.UsageProxyAuth()
+		}
 	}
 	panelLines(c, lines, 10.5, 0).TextColor(ink3).Margin(4, 0, 0, 0)
 }
