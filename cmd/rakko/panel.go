@@ -1910,11 +1910,6 @@ func (a *shelf) peekView(c *ui.Context, shellW, shellH, openK, peekK, shake floa
 			peekKindTrace(kind)
 		}
 	}
-	if !folding {
-		// The entry lives only where it is drawn — the chevron band, the
-		// music wings' right end, the idle island capsule; a stale box
-		// must never claim presses. Drawn entries refill it this frame.
-	}
 	switch kind {
 	case peekCapsule:
 		a.capsuleView(c, shellW, shellH, openK, peekK, shake, now)
@@ -2034,8 +2029,7 @@ func (a *shelf) peekView(c *ui.Context, shellW, shellH, openK, peekK, shake floa
 				}
 			})
 			// 收起态探头胶囊只有下箭头：整块胶囊的点击仍是展开搜索。
-			// 应用切换入口在别处——播放中音乐两翼右侧、空闲灵动岛的
-			// 胶囊右端，以及展开面板的导航胶囊。
+			// 应用切换的入口只剩展开面板的导航胶囊。
 		})
 	})
 	if pill.Clicked() {

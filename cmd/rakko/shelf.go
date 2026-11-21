@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
@@ -90,6 +91,8 @@ type shelf struct {
 	homeQuery                                                   string               // the home search bar's text
 	homeScope                                                   platform.SearchScope // what the bar searches: 全部 / 应用 / 文件, never saved
 	homeSel                                                     int                  // the selected result row
+	homeLocale                                                  string               // the sheet frame's language, for matching what the rows show
+	homeRegion                                                  i18n.Region          // the sheet frame's regional formats, same
 	homeSearch                                                  homeSearchState      // the bar's Spotlight query and hits
 	homeRows                                                    []homeHit            // the current build pass's grouped rows
 	homeRowsOK                                                  bool

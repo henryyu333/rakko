@@ -9,9 +9,9 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/note"
-	"rakko/locales"
 	"rakko/internal/platform"
 	"rakko/internal/store"
+	"rakko/locales"
 )
 
 // The home (design/explore/notch-v3.html): a click on the notch grows a
@@ -128,6 +128,12 @@ func (a *shelf) computeHomeHits() []homeHit {
 			for _, it := range a.store.Items {
 				title := itemTitleIn(l, it)
 				hay := strings.ToLower(title + " " + it.Text + " " + it.OCRText)
+				if it.Kind == store.KindImage {
+					// The row shows the region's date and hour cycle; typing
+					// what is on screen must find it. The stored compact form
+					// stays in the haystack for the way it was searched before.
+					hay += " " + strings.ToLower(l.ClipScreenshot(stampIn(a.homeLocale, a.homeRegion, it.CreatedAt.Local())))
+				}
 				if !strings.Contains(hay, q) {
 					continue
 				}
@@ -347,6 +353,7 @@ func (a *shelf) overBelow(p mygo.Point) bool {
 // search row. The field holds the keyboard while the panel is open on it.
 func (a *shelf) homeBar(c *ui.Context, w float32) {
 	l := loc(c)
+	a.homeLocale, a.homeRegion = c.Locale(), c.Region()
 	ui.Column(c.Key("home")).Width(w).Height(float32(bandH + homeBarH)).Children(func() {
 		// The search bar's black strip is the band at this level: a ringing
 		// countdown keeps its 停止 capsule here too, so the alert always has
@@ -476,6 +483,7 @@ func (a *shelf) resultsView(c *ui.Context, r ui.Rect, opacity float32) {
 		return
 	}
 	l := loc(c)
+	a.homeLocale, a.homeRegion = c.Locale(), c.Region()
 	hits := a.homeHits()
 	a.homeSel = min(a.homeSel, max(len(hits)-1, 0))
 	a.noteHomePainted(hits)

@@ -8,13 +8,16 @@ package main
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/platform"
 	"rakko/internal/store"
+	"rakko/locales"
 )
 
 // resultsShelf is a home shelf whose query finds a tray file, a clipboard
@@ -210,5 +213,33 @@ func TestResultsSheetEmptyQueryPaintsNothing(t *testing.T) {
 	}
 	if live == blank {
 		t.Fatalf("the guard took a live sheet with it: pixel %v", live)
+	}
+}
+
+// 首页搜索要能搜到截图上显示的日期和时间（地区格式、12 小时制），同时
+// 旧固定格式「11-21 09:30」也照旧命中。
+func TestHomeSearchFindsAScreenshotByItsShownTime(t *testing.T) {
+	region := i18n.Region{Locale: "en-US", HourCycle: 12}
+	at := time.Date(2026, 11, 21, 9, 30, 0, 0, time.Local)
+	s := &store.Store{Items: []store.Item{
+		{ID: "i1", Kind: store.KindImage, Path: filepath.Join(t.TempDir(), "shot.png"), CreatedAt: at},
+	}}
+	a := &shelf{store: s, level: 1, visible: true, locale: "en",
+		homeLocale: "en", homeRegion: region, appNames: map[string]string{}}
+	a.homeSearch.done = true
+	l := locales.In("en")
+	shown := l.ClipScreenshot(stampIn("en", region, at.Local()))
+	if !strings.Contains(shown, "AM") && !strings.Contains(shown, "PM") {
+		t.Fatalf("test premise: %q is not a 12-hour stamp", shown)
+	}
+	for _, q := range []string{"am", "11/21", "11-21"} {
+		a.homeQuery = q
+		if hits := a.computeHomeHits(); len(hits) != 1 {
+			t.Fatalf("query %q found %d rows, want the screenshot: %+v", q, len(hits), hits)
+		}
+	}
+	a.homeQuery = "09:30"
+	if hits := a.computeHomeHits(); len(hits) != 1 {
+		t.Fatalf("the stored compact time no longer matches: %d rows", len(hits))
 	}
 }
