@@ -198,7 +198,10 @@ func SetOverlayAcceptsMouse(window uintptr, accept bool) {
 // SetWindowIgnoresMouseEvents toggles the window's click-through bit. A
 // non-layered window is made layered once so WS_EX_TRANSPARENT is honoured;
 // subsequent toggles only flip WS_EX_TRANSPARENT without re-applying alpha or
-// sending SWP_FRAMECHANGED.
+// sending SWP_FRAMECHANGED. The frame change is left out in both directions:
+// a game playing exclusive fullscreen on another display must not be
+// disturbed by the pointer passing over the shell, and a desktop hover never
+// reproduced the shell refusing clicks without it.
 func SetWindowIgnoresMouseEvents(window uintptr, ignore bool) {
 	if window == 0 {
 		return
@@ -206,17 +209,7 @@ func SetWindowIgnoresMouseEvents(window uintptr, ignore bool) {
 	if ignore && windowExStyle(window)&wsExLayered == 0 {
 		setLayeredAlpha(window)
 	}
-	if ignore {
-		// Click-through on: no frame-change notification, so a full-screen
-		// window underneath is not disturbed.
-		setExBitsNoFrame(window, wsExTransparent, true)
-		return
-	}
-	// Click-through off is what makes the shell clickable again, and a
-	// layered window only starts honouring that after a frame change: this
-	// switch takes the notifying path or the shell keeps swallowing clicks
-	// it no longer receives.
-	setExBits(window, wsExTransparent, false)
+	setExBitsNoFrame(window, wsExTransparent, ignore)
 }
 
 // OverlayIgnoresMouse reads whether the window currently has both

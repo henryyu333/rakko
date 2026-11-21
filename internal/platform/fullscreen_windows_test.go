@@ -31,6 +31,8 @@ func TestIsFullscreenState(t *testing.T) {
 		{"QUNS_BUSY on non-covering window does not suppress", qunsBusy, false, false, true, false, "Notepad", winRect{Left: 100, Top: 100, Right: 800, Bottom: 600}, mon, true, false},
 		{"QUNS_BUSY on tool window overlay does not suppress", qunsBusy, false, false, false, true, "MyDockFinderOverlay", full, mon, true, false},
 		{"QUNS_RUNNING_D3D_FULL_SCREEN covering the pointer's monitor suppresses", qunsRunningD3DFullScreen, false, false, false, false, "SDL_app", full, mon, true, true},
+		{"maximized D3D fullscreen on the pointer's monitor suppresses", qunsRunningD3DFullScreen, false, true, false, false, "SDL_app", autoHideMaximized, mon, true, true},
+		{"maximized D3D fullscreen on another monitor keeps the shell", qunsRunningD3DFullScreen, false, true, false, false, "SDL_app", winRect{Left: 1920, Top: -8, Right: 3848, Bottom: 1048}, mon, true, false},
 		{"QUNS_RUNNING_D3D_FULL_SCREEN on another monitor keeps the shell", qunsRunningD3DFullScreen, false, false, false, false, "SDL_app", winRect{Left: 1920, Top: 0, Right: 3840, Bottom: 1080}, mon, true, false},
 		{"QUNS_RUNNING_D3D_FULL_SCREEN without rects suppresses as before", qunsRunningD3DFullScreen, false, false, false, false, "", winRect{}, winRect{}, false, true},
 		{"QUNS_PRESENTATION_MODE suppresses", qunsPresentationMode, false, false, false, false, "", winRect{}, winRect{}, false, true},

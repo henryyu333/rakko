@@ -108,19 +108,27 @@ func isFullscreenState(quns uint32, fgOwn, zoomed, hasCaption, toolWindow bool, 
 	// readable rect decides which monitor that is. Without one, keep the
 	// system-wide answer as before.
 	d3d := quns == qunsRunningD3DFullScreen
-	if d3d && (!hasRects || monRect.Right <= monRect.Left || monRect.Bottom <= monRect.Top) {
+	hasMonitor := hasRects && monRect.Right > monRect.Left && monRect.Bottom > monRect.Top
+	if d3d && !hasMonitor {
+		return true
+	}
+	coversMonitor := hasMonitor &&
+		fgRect.Left <= monRect.Left && fgRect.Top <= monRect.Top &&
+		fgRect.Right >= monRect.Right && fgRect.Bottom >= monRect.Bottom
+	// Windows' full-screen optimizations often present an exclusive game as
+	// a maximized borderless window while still reporting QUNS_RUNNING_D3D_FULL_SCREEN.
+	// The exclusive state and a covering window decide before the maximized
+	// shape does: this monitor steps aside, another monitor's does not.
+	if d3d && coversMonitor {
 		return true
 	}
 	if zoomed || toolWindow || !hasRects || isShellDesktopClass(fgClass) {
 		return false
 	}
-	coversMonitor := monRect.Right > monRect.Left && monRect.Bottom > monRect.Top &&
-		fgRect.Left <= monRect.Left && fgRect.Top <= monRect.Top &&
-		fgRect.Right >= monRect.Right && fgRect.Bottom >= monRect.Bottom
 	if !coversMonitor {
 		return false
 	}
-	if d3d || quns == qunsBusy {
+	if quns == qunsBusy {
 		return true
 	}
 	return !hasCaption
