@@ -258,7 +258,10 @@ func (f *usageFeature) localOn() bool {
 // usageVisible reports whether the AI 用量 page is the one the open panel
 // shows: refreshes only happen while the user can see them.
 func (f *usageFeature) usageVisible() bool {
-	return f.host.visible && f.host.currentPage().id() == pageUsage
+	// Level 1 is the search bar: the page is gone from the screen even
+	// though the tab still names it, so nothing may refresh or scan there
+	// (the weekly page already draws this line).
+	return f.host.visible && f.host.currentLevel() == 2 && f.host.currentPage().id() == pageUsage
 }
 
 // workContext returns the background context current work runs under; it is

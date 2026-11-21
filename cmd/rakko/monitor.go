@@ -96,7 +96,6 @@ var monitorActiveConditions = []monitorActiveCondition{
 		return p != nil && (p.pressed || p.moving || !p.slideAt.IsZero())
 	}},
 	{"pet-return-zone", func(a *shelf, _ time.Time) bool { return a.petReturning }},
-	{"note-window", func(a *shelf, _ time.Time) bool { return a.note != nil && a.note.win != nil }},
 	{"rename-window", func(a *shelf, _ time.Time) bool { return a.rn != nil && a.rn.win != nil }},
 	{"converter", func(a *shelf, _ time.Time) bool { return a.conv != nil && a.conv.job != nil }},
 	{"awake-hold", func(a *shelf, _ time.Time) bool { return a.awake != nil && a.awake.active() }},

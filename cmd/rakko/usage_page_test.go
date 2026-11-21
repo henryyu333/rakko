@@ -2100,3 +2100,24 @@ func TestCodexResetSurvivesAFoldedPanel(t *testing.T) {
 		t.Fatalf("the reset button did not come back: %s", reason)
 	}
 }
+
+// Esc leaves the page for the search bar: the quota must stop refreshing
+// and the local scan must stop redrawing the panel there.
+func TestUsageDoesNotFetchAtSearchBarLevel(t *testing.T) {
+	fx := newUsageFixture(t, true)
+	fx.codex.q = okQuota(aiusage.ToolCodex, "Plus", *fx.now)
+	fx.a.setTab(pageUsage)
+	fx.a.visible = true
+	fx.a.setLevel(2)
+	fx.f.tick(*fx.now)
+	calls := fx.codex.calls
+	if calls == 0 {
+		t.Fatal("the page did not fetch while visible")
+	}
+	fx.a.setLevel(1) // the search bar
+	*fx.now = (*fx.now).Add(6 * time.Minute)
+	fx.f.tick(*fx.now)
+	if fx.codex.calls != calls {
+		t.Fatalf("the search bar still refreshes quota cards (%d → %d)", calls, fx.codex.calls)
+	}
+}

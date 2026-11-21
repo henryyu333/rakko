@@ -56,7 +56,6 @@ func TestMonitorActiveConditionsEnterCadence(t *testing.T) {
 		{"pins", func(a *shelf) { a.pins = []*pinItem{{pressed: true}} }},
 		{"pet", func(a *shelf) { a.pet = &petWindow{pressed: true} }},
 		{"pet-return-zone", func(a *shelf) { a.petReturning = true }},
-		{"note-window", func(a *shelf) { a.note = &noteUI{win: new(mygo.Window)} }},
 		{"rename-window", func(a *shelf) { a.rn = &renameUI{win: new(mygo.Window)} }},
 		{"converter", func(a *shelf) { a.conv = &converter{job: &convertJob{}} }},
 		{"awake-hold", func(a *shelf) { a.awake = &awakeModule{id: platform.PowerAssertionID(1)} }},
