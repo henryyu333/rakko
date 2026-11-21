@@ -128,6 +128,8 @@
   "startupHistoryUnreadableDetail": "The history files are unchanged and this launch stopped. Back them up and check state.json in the data directory first.\n\nData directory: {dataDir}\n\n{err}",
   "startupStateCorruptDetail": "state.json cannot be parsed. Restore the latest backup, or move the bad file aside and start over — either way the corrupt original stays in the data directory.\n\nData directory: {dataDir}\n\nReason: {err}",
   "startupStateRestoreBackup": "Restore the Latest Backup",
+  "startupStateNewer": "The History Came from a Newer {app}",
+  "startupStateNewerDetail": "The state.json in the data directory was written by a newer {app}, and this version does not understand it. The file is intact and untouched: install the latest {app} and open it again.\n\nData directory: {dataDir}\n\nReason: {err}",
   "startupStateStartOver": "Move the Bad File Aside and Start Over",
   "startupAlreadyRunning": "{app} Is Already Running",
   "startupAlreadyRunningDetail": "One instance owns a data directory at a time, so this one will quit and leave the existing history alone.\n\nData directory: {dataDir}",

@@ -117,7 +117,13 @@ func main() {
 		lm := startupLoc(*dataDir)
 		message := lm.StartupHistoryUnreadable(appName)
 		detail := lm.StartupHistoryUnreadableDetail(*dataDir, err.Error())
-		if errors.Is(err, store.ErrLocked) {
+		switch {
+		case errors.Is(err, store.ErrStateNewer):
+			// 更新版 Rakko 写的历史：文件没坏，这一版太旧，不给恢复
+			// 选择（「重新开始」会让人误以为历史全没了）。
+			message = lm.StartupStateNewer(appName)
+			detail = lm.StartupStateNewerDetail(appName, *dataDir, err.Error())
+		case errors.Is(err, store.ErrLocked):
 			message = lm.StartupAlreadyRunning(appName)
 			detail = lm.StartupAlreadyRunningDetail(*dataDir)
 		}
@@ -276,18 +282,18 @@ func exitWithDialog(message, detail string) {
 func startupStateRecovery(dir string, why error) {
 	lm := startupLoc(dir)
 	backups := store.RecoveryBackups(dir)
-	restore, startOver := 0, 1
 	buttons := []string{lm.StartupStateStartOver()}
+	restore := -1 // the restore button's index, -1 when there is no backup to offer
 	if len(backups) > 0 {
+		restore = 0
 		buttons = []string{lm.StartupStateRestoreBackup(), lm.StartupStateStartOver()}
-	} else {
-		restore, startOver = -1, 0
 	}
+	startOver := len(buttons) - 1
 	mygo.App.SetName(appName)
 	mygo.App.SetActivationPolicy(mygo.ActivationPolicyAccessory)
 	mygo.App.WhenReady(func() {
 		go func() {
-			res, _ := mygo.Dialog.Message(mygo.MessageOptions{
+			res, derr := mygo.Dialog.Message(mygo.MessageOptions{
 				Type:               mygo.MessageError,
 				Title:              appName,
 				Message:            lm.StartupHistoryUnreadable(appName),
@@ -297,19 +303,17 @@ func startupStateRecovery(dir string, why error) {
 				CancelButton:       -1,
 				DestructiveButtons: []int{startOver},
 			})
-			var backup string
-			switch res.Button {
-			case restore:
-				if restore < 0 {
-					mygo.App.Quit()
-					return
-				}
-				backup = backups[0]
-			case startOver:
-			default:
-				// 没选（Esc/关掉）：什么都不动，原样说明后退出。
+			// Dismissed without a button (Esc, the close box, a dialog that
+			// could not show): mygo reports the CancelButton value, -1 here,
+			// and -1 can never be a button's index. Nothing has been touched
+			// then — say so and quit, whichever button layout there was.
+			if derr != nil || !(res.Button == startOver || (restore >= 0 && res.Button == restore)) {
 				showStartupNotice(lm, dir, why)
 				return
+			}
+			var backup string
+			if restore >= 0 && res.Button == restore {
+				backup = backups[0]
 			}
 			if rerr := store.RecoverState(dir, backup); rerr != nil {
 				log.Printf("%s: %v", appName, rerr)

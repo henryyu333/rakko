@@ -468,8 +468,8 @@ func TestUnsupportedVersionErrors(t *testing.T) {
 	os.MkdirAll(filepath.Join(root, imagesDirName), 0o700)
 	data, _ := json.Marshal(stateFile{Version: 99, Items: []Item{}})
 	os.WriteFile(filepath.Join(root, stateFileName), data, 0o600)
-	if _, err := Open(root); err == nil {
-		t.Fatal("expected version error")
+	if _, err := Open(root); err == nil || !errors.Is(err, ErrStateNewer) {
+		t.Fatalf("version error = %v, want ErrStateNewer", err)
 	}
 }
 
@@ -2732,8 +2732,8 @@ func TestUnknownKindRefusesOpen(t *testing.T) {
 	if s != nil {
 		s.Close()
 	}
-	if !errors.Is(err, ErrStateUnreadable) {
-		t.Fatalf("Open on unknown kind = %v, want ErrStateUnreadable", err)
+	if !errors.Is(err, ErrStateNewer) || errors.Is(err, ErrStateUnreadable) {
+		t.Fatalf("Open on unknown kind = %v, want ErrStateNewer and only it", err)
 	}
 	got, rerr := os.ReadFile(filepath.Join(root, stateFileName))
 	if rerr != nil || string(got) != state {

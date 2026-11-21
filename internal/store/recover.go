@@ -12,12 +12,18 @@ import (
 	"rakko/internal/atomicfile"
 )
 
-// ErrStateUnreadable marks a state.json Open refused to read: it cannot
-// be parsed, it carries a version this build does not understand, or it
-// holds an item kind a newer Rakko wrote. The file is intact on disk and
-// Open never overwrites it; every way out of it is the user's call, and
-// RecoverState is the one this package offers.
+// ErrStateUnreadable marks a state.json Open refused to read because the
+// file cannot be parsed: the bytes are not the format, truncated or
+// corrupt. The file is intact on disk and Open never overwrites it; the
+// recovery dialog is the way out of it.
 var ErrStateUnreadable = errors.New("store: state file is unreadable")
+
+// ErrStateNewer marks a state.json Open refused to read because a newer
+// Rakko wrote it: a state version above this build's, or an item kind
+// this build does not know. Nothing is wrong with the user's data —
+// this build is simply too old for it — so recovery offers nothing:
+// the launch says so and the user upgrades.
+var ErrStateNewer = errors.New("store: state file was written by a newer Rakko")
 
 // corruptTimeLayout names the moved-aside unreadable original:
 // state.json.corrupt-<20060102-150405>. The bad file is never deleted
@@ -28,13 +34,18 @@ const corruptTimeLayout = "20060102-150405"
 // contents. Open and the recovery paths agree through it on what
 // "readable" means: the JSON parses, the version is one this build
 // understands, and every item is a kind this build knows — a state a
-// newer Rakko wrote must be refused, not silently trimmed.
+// newer Rakko wrote must be refused as newer, not silently trimmed.
 func parseState(data []byte) (stateFile, error) {
 	var sf stateFile
 	if err := json.Unmarshal(data, &sf); err != nil {
 		return sf, fmt.Errorf("%w: parsing %s: %v", ErrStateUnreadable, stateFileName, err)
 	}
+	if sf.Version > stateVersion {
+		return sf, fmt.Errorf("%w: %s holds state version %d, this Rakko understands %d",
+			ErrStateNewer, stateFileName, sf.Version, stateVersion)
+	}
 	if sf.Version != stateVersion {
+		// 低于当前版本的文件只会来自残缺或手改：按坏文件走恢复路径。
 		return sf, fmt.Errorf("%w: %s holds state version %d, this Rakko understands %d",
 			ErrStateUnreadable, stateFileName, sf.Version, stateVersion)
 	}
@@ -43,7 +54,7 @@ func parseState(data []byte) (stateFile, error) {
 		case KindText, KindImage, KindFile:
 		default:
 			return sf, fmt.Errorf("%w: %s holds a %q item a newer Rakko wrote; upgrade rather than let this one erase it",
-				ErrStateUnreadable, stateFileName, it.Kind)
+				ErrStateNewer, stateFileName, it.Kind)
 		}
 	}
 	return sf, nil

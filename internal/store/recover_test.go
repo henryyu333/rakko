@@ -160,8 +160,8 @@ func corruptStateDir(t *testing.T) (root, bad string) {
 	if err := os.WriteFile(filepath.Join(root, stateFileName), []byte(bad), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Open(root); err == nil || !errors.Is(err, ErrStateUnreadable) {
-		t.Fatalf("Open on corrupt state = %v, want ErrStateUnreadable", err)
+	if _, err := Open(root); err == nil || !errors.Is(err, ErrStateUnreadable) || errors.Is(err, ErrStateNewer) {
+		t.Fatalf("Open on corrupt state = %v, want ErrStateUnreadable and only it", err)
 	}
 	return root, bad
 }

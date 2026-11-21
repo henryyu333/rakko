@@ -128,6 +128,8 @@
   "startupHistoryUnreadableDetail": "历史文件保持原样，本次启动已停止。请先备份并检查数据目录中的 state.json。\n\n数据目录：{dataDir}\n\n{err}",
   "startupStateCorruptDetail": "无法解析 state.json。可以恢复最近的备份，或把坏文件挪到一边重新开始；无论选哪个，坏原件都会原样留在数据目录里。\n\n数据目录：{dataDir}\n\n原因：{err}",
   "startupStateRestoreBackup": "用最近的备份恢复",
+  "startupStateNewer": "历史来自更新版本的 {app}",
+  "startupStateNewerDetail": "数据目录里的 state.json 是更新版本的 {app} 写的，这一版不认识它。文件完好，也没有被改动：请安装最新版 {app} 后再打开。\n\n数据目录：{dataDir}\n\n原因：{err}",
   "startupStateStartOver": "把坏文件挪到一边并重新开始",
   "startupAlreadyRunning": "{app} 已在运行",
   "startupAlreadyRunningDetail": "同一个数据目录同时只能被一个实例使用，本实例将退出，不会改动已有历史。\n\n数据目录：{dataDir}",

@@ -1329,6 +1329,28 @@ func (msgs Messages) StartupStateRestoreBackup() string {
 	return Catalog.Format(msgs.locale, "startupStateRestoreBackup", nil)
 }
 
+// StartupStateNewer says "历史来自更新版本的 {app}"
+// in the language the app shows.
+func StartupStateNewer(app string) string { return In(i18n.Locale()).StartupStateNewer(app) }
+
+// StartupStateNewer says "历史来自更新版本的 {app}"
+// in the language of msgs.
+func (msgs Messages) StartupStateNewer(app string) string {
+	return Catalog.Format(msgs.locale, "startupStateNewer", map[string]any{"app": app})
+}
+
+// StartupStateNewerDetail says "数据目录里的 state.json 是更新版本的 {app} …"
+// in the language the app shows.
+func StartupStateNewerDetail(app string, dataDir string, err string) string {
+	return In(i18n.Locale()).StartupStateNewerDetail(app, dataDir, err)
+}
+
+// StartupStateNewerDetail says "数据目录里的 state.json 是更新版本的 {app} …"
+// in the language of msgs.
+func (msgs Messages) StartupStateNewerDetail(app string, dataDir string, err string) string {
+	return Catalog.Format(msgs.locale, "startupStateNewerDetail", map[string]any{"app": app, "dataDir": dataDir, "err": err})
+}
+
 // StartupStateStartOver says "把坏文件挪到一边并重新开始"
 // in the language the app shows.
 func StartupStateStartOver() string { return In(i18n.Locale()).StartupStateStartOver() }
