@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.18.3
+
+- 托盘：放在 U 盘、移动硬盘或网络盘上的文件，拔盘后重启 Rakko 不再消失，会显示为灰色，插回后自动恢复。
+- 历史文件损坏时不再直接退出：可以选择用最近的备份恢复，或把坏文件移到一边重新开始，原文件始终保留。历史文件来自更新版本的 Rakko 时，会提示安装最新版。
+- 歌词：偶尔查不到时会自动重试，不再一周都显示没有歌词；暂停时不再卡在「正在查找歌词…」；同名的现场版、专辑版不再串词。
+- 代理需要账号密码时，歌词和 AI 用量会说明「代理需要认证，Rakko 暂不支持」。
+- AI 用量：读不到额度时显示「读不到」，不再显示错误的 0% 或旧数字；Codex 重置卡在重置过程中不会被重复使用，重置后张数立即更新；额度卡全部关闭时页面自动收窄；API Key 失效时提示去设置里重新粘贴。
+- Agent 审批：同时有多个请求时，排队的卡从显示出来才开始倒计时；等不到的请求交回终端，并在刘海提示「另有 N 个请求已交回终端」。修复内容很大的审批请求会让 Agent 卡住约一分钟的问题，以及 Hermes、dsh 配置可能被写坏的问题。
+- 截图与框选文字：授权「屏幕录制」后，权限卡会提示「重新打开 Rakko」才生效。
+- 灵动岛样式：空闲胶囊和音乐两翼不再显示应用切换按钮，入口统一在面板底部导航。
+- 系统监控：读不到的数据显示「--」，不再显示 0%；进程排行打开时直接按 CPU 排序；走势图注随采样间隔变化。
+- 时间显示跟随系统的地区格式和 12/24 小时制；每月 1 号也能正确显示「昨天」。
+- 修复全屏应用接管时方向键和回车仍被 Rakko 占用、工具页拖开 ⊖ 仍删卡、首页拖入显示「松开放入」却不接收、双屏时点另一块屏的胶囊无反应、钉在桌面的卡片在分辨率变小后跑出屏幕等交互问题。
+- Windows：独占全屏游戏只让所在屏幕的胶囊让位；部分提示改用 Windows 的说法。
+- 更省电：页面看不见时不再后台刷新，两翼被其他内容挡住时停止采样，空闲的便利贴窗口不再频繁唤醒。
+
+### English
+
+- Shelf: files on a USB drive, external disk or network share no longer vanish when the drive is unplugged and Rakko restarts; they show greyed out and come back when the drive does.
+- A damaged history file no longer just stops Rakko: restore the newest backup, or move the damaged file aside and start fresh; the original is always kept. History written by a newer Rakko now asks you to update.
+- Lyrics: a failed lookup retries instead of showing no lyrics for a week; a paused track no longer sticks on "Looking for lyrics…"; live and album versions with the same title no longer share lyrics.
+- When a proxy asks for a username and password, lyrics and AI usage say the proxy needs authentication, which Rakko does not support yet.
+- AI usage: unreadable quotas say so instead of showing 0% or stale numbers; a Codex reset credit cannot be spent twice while a reset runs, and the count updates right after; with every quota card off the page narrows; an expired API key points you to Settings.
+- Agent approvals: with several requests at once, a queued card's countdown starts when it appears; requests that cannot wait go back to the terminal, and the notch says how many. Fixed very large approval requests stalling the agent for about a minute, and Hermes and dsh configs that could be written incorrectly.
+- Screenshot and text capture: after granting Screen Recording, the permission card tells you to reopen Rakko.
+- Dynamic Island style: the idle capsule and the music wings no longer show the app switcher button; it lives in the panel's bottom bar.
+- System monitor: unreadable readings show "--" instead of 0%; the process list ranks by CPU as soon as it opens; the chart caption follows the sampling interval.
+- Times follow your region and 12/24-hour setting; "Yesterday" now works on the first of the month.
+- Fixed arrow keys and Return staying captured when a full-screen app takes over, dragging off the ⊖ badge still removing a card, the home page promising a drop it then ignored, clicks on another display's capsule doing nothing, and desktop pins left off-screen after the resolution shrinks.
+- Windows: an exclusive full-screen game only makes its own display's capsule step aside; a few hints now use Windows wording.
+- Lighter on power: hidden pages stop refreshing in the background, covered wings stop sampling, and an idle sticky note no longer wakes Rakko constantly.
+
 ## 1.18.2
 
 - Windows：去除透明悬浮窗（主岛、副屏胶囊、桌宠、固定卡片、拖放篮与截图遮罩）在 Windows 11 上可能出现的 1px 系统圆角边框与阴影。
