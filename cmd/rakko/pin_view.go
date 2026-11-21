@@ -159,6 +159,15 @@ func (it *pinItem) trackPress(e ui.Element) {
 			if !it.pressed || ev.Button != 0 {
 				return false
 			}
+			if ev.Canceled {
+				// Undo the press: the card returns to where it was before,
+				// and nothing is dropped or docked.
+				it.pressed, it.moving, it.didMove = false, false, false
+				it.expanded = it.pressWas
+				it.frame = it.pressFrame
+				it.applyFrame()
+				return true
+			}
 			// A fast drag's release still locks as a move before it ends.
 			it.lockMove(int(ev.X)-it.grabX, int(ev.Y)-it.grabY)
 			it.pressed, it.moving = false, false
@@ -181,6 +190,7 @@ func (it *pinItem) trackPress(e ui.Element) {
 func (it *pinItem) pressAt(px, py float64) {
 	it.grabX, it.grabY = int(px+0.5), int(py+0.5)
 	it.pressWas = it.expanded
+	it.pressFrame = it.frame
 	it.moving, it.didMove = false, false
 	it.pressed = true
 }

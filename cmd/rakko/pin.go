@@ -92,6 +92,8 @@ type pinItem struct {
 	jiggleAt     time.Time // a tap that could not act gave the card a brief shake
 	pressed      bool      // a press on the card is being held
 	pressWas     bool      // it was already expanded when that press began
+	pressFrame   mygo.Rectangle // the card's frame when that press began
+	upMisses     int            // polls that saw the button up during that press
 	moving       bool      // the press went far: it is a window move, not a click
 	didMove      bool      // that press did move — its release is a drop, never a tap
 	grabX        int
@@ -603,7 +605,29 @@ func (a *shelf) pinTick(now time.Time, p mygo.Point, down, fileDrag bool) {
 		}
 		area := it.displayRect()
 		if it.pressed {
-			if down && it.moving {
+			if !down {
+				// A poll that sees the button up waits for the press's own
+				// release first: the event usually follows within a frame,
+				// and only it can decide a drop or a docking. A release that
+				// never arrives (it went to another app, a system gesture or
+				// a display seam) would keep the card pressed and the
+				// monitor at 30 ms forever, so after a few silent polls the
+				// session ends where the card stands, the way the drag
+				// tracker's own release fallback does.
+				it.upMisses++
+				if it.upMisses < 3 {
+					continue
+				}
+				it.upMisses = 0
+				it.pressed, it.moving = false, false
+				if it.didMove {
+					it.didMove = false
+					a.savePins()
+				}
+				continue
+			}
+			it.upMisses = 0
+			if it.moving {
 				// Only follow an event-owned gesture. Sampling the
 				// button here must not create or finish a session.
 				it.display = displayIDAt(p, it.display)

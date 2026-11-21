@@ -1047,6 +1047,12 @@ func (p *toolsPage) toolCardInput(c *ui.Context, card ui.Element, cell toolCell,
 			if d == nil || d.id != cell.id {
 				return false
 			}
+			if ev.Canceled {
+				// The system took the release (⌘Tab, a gesture, a menu):
+				// undo the press rather than commit its drop or tap.
+				p.cancelGestures()
+				return true
+			}
 			if d.settling {
 				return true
 			}
@@ -1402,10 +1408,11 @@ func (p *toolsPage) toolChrome(c *ui.Context, live bool) {
 			}
 		}
 		minus.HandleInput(func(ev ui.InputEvent) bool {
-			if ev.Kind == ui.InputPointerUp {
-				remove()
-			}
-			return true // swallow the down too, so no card press starts
+			// Swallow the down so no card press starts; the removal itself
+			// is the badge's click (OnClick below), which only fires when
+			// the pointer is still on it — a press dragged off and
+			// released must not delete the card.
+			return ev.Kind == ui.InputPointerDown
 		})
 		// A screen reader, or automation driving the accessibility tree,
 		// presses the badge through its Invoke pattern, which reports a
@@ -1462,6 +1469,15 @@ func (p *toolsPage) toolResizeHandle(c *ui.Context, cell toolCell, spec layout.C
 			}
 		case ui.InputPointerUp:
 			if p.rs != nil && p.rs.id == cell.id {
+				if ev.Canceled {
+					// Undo the resize: nothing is written, and with the
+					// session gone the card packs at its layout size again.
+					p.rs = nil
+					if p.host.win != nil {
+						p.host.win.Invalidate()
+					}
+					return true
+				}
 				p.endResize()
 				return true
 			}

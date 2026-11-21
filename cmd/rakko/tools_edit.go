@@ -187,6 +187,12 @@ func (p *toolsPage) libTile(c *ui.Context, def toolCardDef, live bool) {
 			if lp == nil || !lp.down || lp.id != def.id {
 				return false
 			}
+			if ev.Canceled {
+				// The system took the release: neither add the card nor
+				// finish the fresh drag it began.
+				p.cancelGestures()
+				return true
+			}
 			p.lp = nil
 			if lp.started {
 				p.endFreshDragAt(wx, wy, ev.Time)

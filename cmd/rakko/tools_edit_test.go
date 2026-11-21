@@ -779,3 +779,26 @@ func TestHomeDoesNotPromiseADropItDiscards(t *testing.T) {
 		t.Fatal("the home page promises a drop it discards")
 	}
 }
+
+// A press dragged off the ⊖ badge and released there keeps the card: the
+// badge's click only counts while the pointer is still on it.
+func TestMinusBadgeDragAwayKeepsCard(t *testing.T) {
+	a, _, view := editPage(t, []layout.Card{{ID: "awake"}, {ID: "ocr"}})
+	view.Advance(300 * time.Millisecond)
+	view.Frame()
+	badge, ok := view.Find(a.appLoc().Remove())
+	if !ok || badge.W <= 0 {
+		t.Fatalf("no ⊖ badge: %+v ok=%v", badge, ok)
+	}
+	bx, by := badge.X+badge.W/2, badge.Y+badge.H/2
+	view.Press(bx, by)
+	view.Move(bx+120, by+120)
+	view.Release(bx+120, by+120)
+	view.Frame()
+	for _, c := range a.toolsLayout().Cards {
+		if c.ID == "awake" {
+			return // the drag-away kept the card — correct
+		}
+	}
+	t.Fatal("a press dragged off the ⊖ badge still deleted the card")
+}

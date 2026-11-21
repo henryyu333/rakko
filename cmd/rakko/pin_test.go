@@ -1185,3 +1185,23 @@ func TestAwakePinUsesTheCompactDesktopLayout(t *testing.T) {
 		t.Fatalf("the pinned awake's reading %+v overlaps its chips %+v", hero, chip)
 	}
 }
+
+// A release lost to another window or a system gesture must not leave the
+// card pressed forever: after a few polls that see the button up, the
+// session ends where the card stands. A single poll still waits for the
+// press's own release (TestPinDragReleaseIsNotATap).
+func TestPinPressClearsWhenButtonAlreadyUp(t *testing.T) {
+	withPinDisplays(t, pinTestDisplays)
+	a := &shelf{}
+	it := a.pinRegister(&pinItem{
+		cardID: "zip", cardW: pinCardW, display: 1, edge: pinLeft,
+		frame: pinStripFrame(pinLeft, pinTestArea, 500),
+	})
+	it.pressAt(4, 500)
+	for i := 0; i < 3; i++ {
+		a.pinTick(time.Now(), mygo.Point{X: 500, Y: 500}, false, false)
+	}
+	if it.pressed {
+		t.Fatal("the pin session stayed pressed after a lost release")
+	}
+}
