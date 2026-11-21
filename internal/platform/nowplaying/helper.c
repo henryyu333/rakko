@@ -243,7 +243,11 @@ typedef struct {
 } NPRequest;
 
 #define NS_REAPER_CAP 64
-static int g_reapers; // abandoned requests still being reaped (helper thread)
+// Abandoned requests still being reaped: the polling thread adds one per
+// timeout and each reaper thread takes it back after the late answer, so the
+// counter is shared and stays atomic — a lost update would let the cap drift
+// and leak a request per timeout after a recovery.
+static _Atomic int g_reapers;
 
 static NPRequest *request(void) {
   NPRequest *r = calloc(1, sizeof *r);
@@ -264,8 +268,8 @@ static int waitRequest(NPRequest *r) {
   // reapers: a wedged MediaRemote would otherwise park one thread per
   // timeout forever. Over the cap the request is leaked (a few dozen bytes)
   // instead of the thread.
-  if (g_reapers >= NS_REAPER_CAP) return 0;
-  g_reapers++;
+  if (atomic_load(&g_reapers) >= NS_REAPER_CAP) return 0;
+  atomic_fetch_add(&g_reapers, 1);
   __block NPRequest *bg = r;
   dispatch_async(dispatch_get_global_queue(QOS_CLASS_BACKGROUND, 0), ^{
     dispatch_semaphore_wait(bg->done, DISPATCH_TIME_FOREVER);
@@ -273,7 +277,7 @@ static int waitRequest(NPRequest *r) {
     free(bg->text);
     dispatch_release(bg->done);
     free(bg);
-    g_reapers--;
+    atomic_fetch_sub(&g_reapers, 1);
   });
   return 0;
 }
@@ -398,12 +402,13 @@ static char *base64Copy(const unsigned char *data, long n) {
 }
 
 // snapshot copies the current system state into s, freeing whatever s
-// already held. Callers must freeSnap or hand it to publish afterwards.
-static void snapshot(Snapshot *s) {
-  // Keep the last frame if the metadata read fails: blanking here made the
-  // reader see "track changed" and flash the empty state on one bad read.
+// already held. It reports false when the metadata read failed and s is
+// untouched: the caller must not publish that frame, because the leftover
+// pending (empty after the last publish) would look like a track change and
+// flash the empty state on one bad read.
+static int snapshot(Snapshot *s) {
   CFDictionaryRef info = readInfo();
-  if (!info) return;
+  if (!info) return 0;
   freeSnap(s);
   memset(s, 0, sizeof *s);
   s->at = nowUnix();
@@ -475,6 +480,7 @@ static void snapshot(Snapshot *s) {
     if (now - seenArtAt >= artGrace) s->artMissing = 1;
   }
   CFRelease(info);
+  return 1;
 }
 
 // ---- change detection and emission --------------------------------------
@@ -530,8 +536,9 @@ static void publish(void) {
 // poll is the periodic read (and the notification-triggered one).
 static void poll(void) {
   lastSample = nowUnix();
-  snapshot(&pending); // frees the previous unread sample first
-  publish();
+  // A failed read publishes nothing: the last frame stays the reader's, and
+  // the next successful poll carries the fresh anchor.
+  if (snapshot(&pending)) publish();
 }
 
 // ---- notifications ------------------------------------------------------

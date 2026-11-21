@@ -607,3 +607,72 @@ func TestDecodeIsPlayingTimeout(t *testing.T) {
 		t.Error("a timed-out isPlaying read must not report playing")
 	}
 }
+
+// 播放中一次读失败不能发空帧：helper 的 snapshot 失败时 publish 必须整轮
+// 跳过，否则留下的空 pending 和上一帧一对比就成了「换歌」，读者会闪一下
+// 空卡片。用 stub 顶掉 MediaRemote 的调用，驱动真实的 poll/publish。
+func TestHelperPublishesNothingWhenTheReadFails(t *testing.T) {
+	clang, err := exec.LookPath("clang")
+	if err != nil {
+		t.Skipf("clang not available: %v", err)
+	}
+	dir := t.TempDir()
+	harness := filepath.Join(dir, "harness.c")
+	const src = `
+#include "helper.c"
+
+static void stubInfo(dispatch_queue_t q, void (^cb)(CFDictionaryRef)) {
+  CFMutableDictionaryRef d = CFDictionaryCreateMutable(NULL, 0,
+      &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+  CFDictionarySetValue(d, KeyTitle, CFSTR("Song"));
+  dispatch_sync(q, ^{ cb(d); });
+  CFRelease(d);
+}
+static void stubNoInfo(dispatch_queue_t q, void (^cb)(CFDictionaryRef)) {
+  dispatch_sync(q, ^{ cb(NULL); });
+}
+static void stubPlaying(dispatch_queue_t q, void (^cb)(Boolean)) {
+  dispatch_sync(q, ^{ cb(1); });
+}
+static void stubState(dispatch_queue_t q, void (^cb)(int)) {
+  dispatch_sync(q, ^{ cb(2); });
+}
+static void stubClient(dispatch_queue_t q, void (^cb)(id)) {
+  dispatch_sync(q, ^{ cb(nil); });
+}
+
+int main(void) {
+  workQ = dispatch_queue_create("rakko-harness", NULL);
+  loadMediaRemote();
+  MRGetInfo = stubInfo;
+  MRGetIsPlaying = stubPlaying;
+  MRGetAppState = stubState;
+  MRGetClient = stubClient;
+  poll(); // one good frame
+  MRGetInfo = stubNoInfo;
+  poll(); // metadata read fails: nothing may be published
+  poll();
+  return 0;
+}
+`
+	if err := os.WriteFile(harness, []byte(src), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	exe := filepath.Join(dir, "harness")
+	build := exec.Command(clang, "-fblocks", "-I", "nowplaying", "-o", exe, harness,
+		"-framework", "CoreFoundation", "-framework", "Foundation")
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("compile helper harness: %v\n%s", err, out)
+	}
+	out, err := exec.Command(exe).Output()
+	if err != nil {
+		t.Fatalf("run helper harness: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	if len(lines) != 1 {
+		t.Fatalf("a failed read published %d lines, want the one good frame:\n%s", len(lines), out)
+	}
+	if !strings.Contains(lines[0], `"title":"Song"`) || !strings.Contains(lines[0], `"isPlaying":true`) {
+		t.Fatalf("the good frame is missing its state: %s", lines[0])
+	}
+}
