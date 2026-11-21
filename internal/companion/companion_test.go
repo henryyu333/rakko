@@ -296,6 +296,91 @@ func TestStoreDayNeverGoesBackwards(t *testing.T) {
 	}
 }
 
+// 时钟被调到未来不会一次买来几年的陪伴天数：单次超过 maxDayJump 的
+// 跳变停在已确认的那天，不落盘；时钟回来后按真实日历继续。
+func TestStoreDayIgnoresFutureClockJump(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Date(2026, 6, 1, 9, 0, 0, 0, time.Local)
+	if err := s.Seed(start); err != nil {
+		t.Fatal(err)
+	}
+	if day, ok := s.Day(start.AddDate(0, 0, 9)); !ok || day != 10 {
+		t.Fatalf("day %d, ok %v; want 10", day, ok)
+	}
+
+	// A dead RTC battery says 2036: the count stays where the real
+	// calendar left it, and the jump is never written to disk.
+	huge := start.AddDate(10, 0, 0)
+	if day, ok := s.Day(huge); !ok || day != 10 {
+		t.Fatalf("future clock read day %d, ok %v; want 10", day, ok)
+	}
+	again, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if day, ok := again.Day(start); !ok || day != 10 {
+		t.Fatalf("relaunch after the jump reads day %d, ok %v; want 10", day, ok)
+	}
+
+	// The clock comes back: the count moves on as it always did.
+	if day, ok := again.Day(start.AddDate(0, 0, 11)); !ok || day != 12 {
+		t.Fatalf("the count did not resume: day %d", day)
+	}
+
+	// A genuine gap within the limit is still believed in one step.
+	if day, ok := again.Day(start.AddDate(0, 0, 11+maxDayJump)); !ok || day != 12+maxDayJump {
+		t.Fatalf("a real year-long gap read day %d; want %d", day, 12+maxDayJump)
+	}
+}
+
+// A genuine long absence is believed: the file has been sitting unwritten
+// for about the leap it claims, so the count lands where the calendar
+// really is — the same way the first count of a start seeded long ago
+// (an existing install's folder birth) is believed whole.
+func TestStoreDayBelievesConfirmedAbsence(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	away := 410
+	start := time.Now().AddDate(0, 0, -(away + 9))
+	if err := s.Seed(start); err != nil {
+		t.Fatal(err)
+	}
+	past := time.Now().AddDate(0, 0, -away)
+	if day, ok := s.Day(past); !ok || day != 10 {
+		t.Fatalf("last day before the absence: day %d, ok %v; want 10", day, ok)
+	}
+	// The machine sat off for `away` days; the file last written then.
+	stale := time.Now().AddDate(0, 0, -away)
+	if err := os.Chtimes(filepath.Join(dir, FileName), stale, stale); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	if day, ok := s.Day(now); !ok || day != away+10 {
+		t.Fatalf("a confirmed absence read day %d, ok %v; want %d", day, ok, away+10)
+	}
+
+	// The first count of a start seeded long ago is the calendar's, whole.
+	fresh := t.TempDir()
+	s2, err := Open(fresh)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seedStart := now.AddDate(-2, 0, 0)
+	if err := s2.Seed(seedStart); err != nil {
+		t.Fatal(err)
+	}
+	if day, ok := s2.Day(now); !ok || day != Day(seedStart, now) {
+		t.Fatalf("a start two years ago read day %d, ok %v; want %d", day, ok, Day(seedStart, now))
+	}
+}
+
 // TestMilestoneWindowDoesNotReturnAfterClockRollback: the home line shows
 // in one seven-day window per milestone. Setting the clock back into a
 // window that has already passed must not show it for a second week.

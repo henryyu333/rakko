@@ -31,6 +31,14 @@ var ErrCorrupt = errors.New("companion: state file is not valid")
 // DateLayout is the calendar date the file stores, "2006-01-02".
 const DateLayout = "2006-01-02"
 
+// maxDayJump is the largest single forward move Day believes without
+// asking whether time really passed: day-to-day growth never exceeds it.
+// A larger leap is genuine only when the companion file has been
+// unwritten for about that long (the app was not running); otherwise it
+// is a clock set into the future, and the count holds at the last
+// confirmed day until the clock returns.
+const maxDayJump = 366
+
 const formatVersion = 1
 
 // document is the on-disk file. Days is the highest day shown so far; a
@@ -125,7 +133,13 @@ func (s *Store) SaveErr() error {
 // Day is which day of companionship now is, the first day counting as 1.
 // The number never goes backwards: a date crossed westwards, or a clock
 // set back, cannot make it smaller than a day already shown, so a
-// milestone's seven days do not come round again. It reports false when
+// milestone's seven days do not come round again. The first count is the
+// calendar's — a start seeded long ago (an existing install's folder
+// birth, a backup's first day) is believed whole. Later, a forward leap
+// beyond maxDayJump is time the app was genuinely not running only when
+// the file has sat unwritten for about that long; a file written moments
+// ago cannot have skipped years, so a clock set into the future holds at
+// the last confirmed day until the clock returns. It reports false when
 // the start is unknown or the file is unreadable.
 func (s *Store) Day(now time.Time) (int, bool) {
 	s.mu.Lock()
@@ -139,6 +153,12 @@ func (s *Store) Day(now time.Time) (int, bool) {
 	}
 	day := Day(start, now)
 	if day > s.days {
+		if s.days > 0 && day-s.days > maxDayJump && !gapConfirmed(s.dir, day-s.days, now) {
+			// 时钟被调到未来（RTC 电池没电、手动改错）不会买来几年的
+			// 陪伴天数：保持已确认的数，本次不落盘；时钟回来后照常
+			// 继续，已过的里程碑不受影响。
+			return s.days, true
+		}
 		s.days = day
 		// The day is on disk before it is on screen: a relaunch must not
 		// step back either. A failed write still shows the day now and is
@@ -148,6 +168,24 @@ func (s *Store) Day(now time.Time) (int, bool) {
 		day = s.days
 	}
 	return day, true
+}
+
+// gapConfirmed reports whether a forward leap of gap days is time the
+// app was genuinely not running. The companion file is rewritten every
+// time a day is confirmed, so its write time is the last confirmed day:
+// a leap is real only when the file has been sitting unwritten for about
+// that long. A file written moments ago cannot have skipped years —
+// that is a clock set into the future. Two days of slack absorb a write
+// that failed near the leap's edge.
+func gapConfirmed(dir string, gap int, now time.Time) bool {
+	if dir == "" {
+		return false // 无从判断：按异常处理，不跳。
+	}
+	fi, err := os.Stat(filepath.Join(dir, FileName))
+	if err != nil {
+		return false
+	}
+	return now.Sub(fi.ModTime()) >= time.Duration(gap-2)*24*time.Hour
 }
 
 // Seed stores the first day, unless a day is already known (or the file is
