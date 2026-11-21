@@ -146,7 +146,7 @@ func (m *sysmonModule) tick(now time.Time) {
 	a := m.host
 	batt := m.batteryNow()
 	wantProcs := m.popoverOpen && a.settings.SysMon.ShowTopProcs
-	if wantProcs || !m.popoverOpen {
+	if !wantProcs {
 		m.wantProcsSoon = false
 	}
 	m.lastSample = now
@@ -154,6 +154,7 @@ func (m *sysmonModule) tick(now time.Time) {
 		snap := m.sampler.Sample(now, wantProcs, batt)
 		hist := m.sampler.History()
 		m.publish(snap, hist)
+		m.noteProcs(wantProcs, snap)
 		return
 	}
 	m.inFlight = true
@@ -170,9 +171,19 @@ func (m *sysmonModule) tick(now time.Time) {
 func (m *sysmonModule) finishSample(snap sysmon.Snapshot, hist sysmon.History) {
 	m.inFlight = false
 	m.publish(snap, hist)
+	wantProcs := m.host != nil && m.popoverOpen && m.host.settings.SysMon.ShowTopProcs
+	m.noteProcs(wantProcs, snap)
 	if m.host != nil {
 		m.host.wakeMonitor()
 	}
+}
+
+// noteProcs decides whether the popover still needs the quick re-sample that
+// gives it a real CPU ranking: a frame without one keeps the 250 ms cadence
+// (the reopened popover's first frame is the waiting state), and a ranked
+// frame goes back to the normal interval.
+func (m *sysmonModule) noteProcs(wantProcs bool, snap sysmon.Snapshot) {
+	m.wantProcsSoon = wantProcs && len(snap.TopCPU) == 0
 }
 
 func (m *sysmonModule) publish(snap sysmon.Snapshot, hist sysmon.History) {
@@ -333,7 +344,11 @@ func (a *shelf) sysmonCardTitle(l locales.Messages) string {
 	if snap.CPUReady {
 		cpuStr = sysmon.FormatPercent(snap.CPUPercent)
 	}
-	return l.SysMonCardLabel(cpuStr, sysmon.FormatPercent(snap.MemPercent))
+	memStr := "--"
+	if snap.MemReady {
+		memStr = sysmon.FormatPercent(snap.MemPercent)
+	}
+	return l.SysMonCardLabel(cpuStr, memStr)
 }
 
 // sysmonActiveTab returns the current popover focus tab ("cpu", "mem", or "net").

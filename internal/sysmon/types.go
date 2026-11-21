@@ -45,7 +45,7 @@ type RawProc struct {
 
 // Snapshot is one sampled frame ready for cards, wings, and the detail popover.
 type Snapshot struct {
-	At       time.Time
+	At time.Time
 	// Ready says at least one metric could be read; the per-metric flags
 	// say which ones, so a failed counter draws "--" without blanking the
 	// rest of the card.
@@ -114,7 +114,14 @@ type Sampler struct {
 	hasDiskIO    bool
 	prevDiskR    uint64
 	prevDiskW    uint64
-	prevProcs    map[int32]uint64
+	// prevProcs is the process CPU-time baseline and prevProcsAt when it was
+	// read: its own clock, because the popover can stay closed while the
+	// other counters keep sampling. procsStale marks a sample in between
+	// that did not read processes, so the reopening's first frame reports no
+	// delta instead of averaging the closed period.
+	prevProcs   map[int32]uint64
+	prevProcsAt time.Time
+	procsStale  bool
 
 	last Snapshot
 
@@ -140,6 +147,8 @@ func (s *Sampler) Reset() {
 	s.hasNet = false
 	s.hasDiskIO = false
 	clear(s.prevProcs)
+	s.prevProcsAt = time.Time{}
+	s.procsStale = true
 }
 
 // Sample captures a new Snapshot at now and appends to the 60-point history.
@@ -159,6 +168,8 @@ func (s *Sampler) Sample(now time.Time, wantProcs bool, batt BatteryInfo) Snapsh
 			s.hasNet = false
 			s.hasDiskIO = false
 			clear(s.prevProcs)
+			s.prevProcsAt = time.Time{}
+			s.procsStale = true
 		} else {
 			validDelta = true
 		}
@@ -243,25 +254,31 @@ func (s *Sampler) Sample(now time.Time, wantProcs bool, batt BatteryInfo) Snapsh
 	}
 
 	// Processes (only read when the detail popover needs Top 3). The
-	// per-process baseline survives a closed popover, but no list is
-	// published without one: a sample with no usable delta would rank every
-	// process at 0% by memory, which the popover would show as a CPU
-	// ranking. An empty list is the waiting state; the next sample (the
-	// module asks for one straight away after opening) ranks by CPU.
+	// per-process baseline survives a closed popover, and its age is its own:
+	// a sample taken while the popover was closed did not refresh it, so the
+	// first frame after reopening has no usable delta and is the waiting
+	// state. Ranking it over the whole closed period would paint an average,
+	// not the CPU load the popover claims to show. The next sample, asked for
+	// straight away, ranks by CPU.
 	if wantProcs {
+		procDT, procValid := s.procDelta(now)
 		raw, ok := s.reader.ReadProcs()
 		if ok {
 			var measured bool
-			snap.TopCPU, snap.TopMem, measured = s.rankProcs(raw, dt, validDelta)
+			snap.TopCPU, snap.TopMem, measured = s.rankProcs(raw, procDT, procValid)
 			if !measured {
 				// The memory ranking needs no baseline; only the CPU list
 				// waits for a delta (an empty list is the waiting state).
 				snap.TopCPU = nil
 			}
+			s.prevProcsAt = now
+			s.procsStale = false
 		} else {
 			snap.TopCPU = s.last.TopCPU
 			snap.TopMem = s.last.TopMem
 		}
+	} else {
+		s.procsStale = true
 	}
 
 	snap.MemReady, snap.NetReady, snap.DiskReady = memReady, netReady, diskReady
@@ -283,6 +300,21 @@ func (s *Sampler) Sample(now time.Time, wantProcs bool, batt BatteryInfo) Snapsh
 	}
 
 	return snap
+}
+
+// procDelta is how long the process CPU counters ran since their own last
+// reading, and whether that gap can be differentiated: a baseline read by
+// this popover's previous frame, not one that sat through a closed popover,
+// a clock jump or a wake.
+func (s *Sampler) procDelta(now time.Time) (time.Duration, bool) {
+	if s.procsStale || s.prevProcsAt.IsZero() || len(s.prevProcs) == 0 {
+		return 0, false
+	}
+	dt := now.Sub(s.prevProcsAt)
+	if dt <= 0 || dt > maxDeltaWindow {
+		return 0, false
+	}
+	return dt, true
 }
 
 func (s *Sampler) rankProcs(raw []RawProc, dt time.Duration, validDelta bool) (topCPU, topMem []ProcEntry, measured bool) {

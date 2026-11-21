@@ -9,6 +9,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -25,14 +26,14 @@ import (
 )
 
 type fakeSysMonReader struct {
-	cpuBusy, cpuTotal             uint64
-	memTotal, memUsed             uint64
-	memApp, memWired, memComp     uint64
-	netRX, netTX                  uint64
-	diskTotal, diskFree, dR, dW   uint64
-	diskDirect                    bool
-	procs                         []sysmon.RawProc
-	procReads                     atomic.Int64
+	cpuBusy, cpuTotal           uint64
+	memTotal, memUsed           uint64
+	memApp, memWired, memComp   uint64
+	netRX, netTX                uint64
+	diskTotal, diskFree, dR, dW uint64
+	diskDirect                  bool
+	procs                       []sysmon.RawProc
+	procReads                   atomic.Int64
 }
 
 func (r *fakeSysMonReader) ReadCPU() (uint64, uint64, bool) { return r.cpuBusy, r.cpuTotal, true }
@@ -961,5 +962,68 @@ func TestSysMonAxisLabelFollowsInterval(t *testing.T) {
 	a.settings.SysMon.IntervalSec = 2
 	if got := sysmonWindowSeconds(a); got != 120 {
 		t.Fatalf("2 s interval axis = %ds, want 120", got)
+	}
+}
+
+// 浮层关着的时候采样不停，但进程基线不更新：再打开时首帧不能拿关闭期间
+// 累计的 CPU 时间除以一个采样间隔（会画出几千个百分点），而是先等一帧
+// --，250 ms 后再采一次给真实排行。
+func TestSysMonReopenedPopoverWaitsForARealProcDelta(t *testing.T) {
+	a, reader, now := makeTestSysMonShelf(t, "zh-Hans", []layout.Card{
+		{ID: "sysmon", Span: 2, Rows: 1},
+	})
+	m := a.sysmon
+	a.visible, a.level, a.tab = true, 2, pageTools
+	m.setPopoverOpen(true)
+	stepFakeSysMon(reader, now, sysmonColdDelta, 20, 50, 1<<20, 1<<20)
+	m.tick(*now) // the waiting frame, no baseline yet
+	stepFakeSysMon(reader, now, sysmonColdDelta, 20, 50, 1<<20, 1<<20)
+	m.tick(*now)
+	if len(m.snap.TopCPU) == 0 {
+		t.Fatalf("the popover never produced a CPU ranking: %+v", m.snap)
+	}
+
+	// Close it and let the counters pile up for a minute of normal sampling.
+	m.setPopoverOpen(false)
+	for range 60 {
+		stepFakeSysMon(reader, now, time.Second, 20, 50, 1<<20, 1<<20)
+		m.tick(*now)
+	}
+	m.setPopoverOpen(true)
+	m.tick(*now) // still inside the quick re-sample window
+	stepFakeSysMon(reader, now, sysmonColdDelta, 20, 50, 1<<20, 1<<20)
+	m.tick(*now)
+	if got := m.snap.TopCPU; len(got) != 0 {
+		t.Fatalf("the reopened popover ranked %+v over the closed period", got)
+	}
+	if next := m.nextTick(*now); !next.Equal(m.lastSample.Add(sysmonColdDelta)) {
+		t.Fatalf("next sample = %v, want a quick re-sample at %v", next, m.lastSample.Add(sysmonColdDelta))
+	}
+	stepFakeSysMon(reader, now, sysmonColdDelta, 20, 50, 1<<20, 1<<20)
+	m.tick(*now)
+	got := m.snap.TopCPU
+	if len(got) == 0 || got[0].Name != "clang" {
+		t.Fatalf("the second frame did not rank by CPU: %+v", got)
+	}
+	if got[0].CPUPercent > 8*100 {
+		t.Fatalf("process CPU = %.0f%%, past anything eight cores can do in one frame", got[0].CPUPercent)
+	}
+}
+
+// 卡片标题行的内存也要守 MemReady：读不到写 --，不能和卡体里的 -- 自相矛盾。
+func TestSysMonCardTitleDashesAFailedMemoryRead(t *testing.T) {
+	a, reader, now := makeTestSysMonShelf(t, "zh-Hans", []layout.Card{
+		{ID: "sysmon", Span: 2, Rows: 1},
+	})
+	m := a.sysmon
+	m.sampler = sysmon.NewSampler(&auditFailingReader{cpu: reader})
+	a.visible, a.level, a.tab = true, 2, pageTools
+	stepFakeSysMon(reader, now, time.Second, 20, 50, 1<<20, 1<<20)
+	m.tick(*now)
+	stepFakeSysMon(reader, now, time.Second, 20, 50, 1<<20, 1<<20)
+	m.tick(*now)
+	title := a.sysmonCardTitle(locales.In("zh-Hans"))
+	if strings.Contains(title, "内存 0%") || !strings.Contains(title, "内存 --") {
+		t.Fatalf("card title = %q, want a dash for the unread memory", title)
 	}
 }
