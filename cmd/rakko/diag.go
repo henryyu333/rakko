@@ -165,21 +165,23 @@ func allGoroutineStacks() []byte {
 }
 
 // writeDiagnostics collects goroutine stacks and (with a 1s timeout) main
-// thread state, then writes a timestamped report into dir.
+// thread state, then writes a timestamped report into dir. Before the shelf
+// exists — a launch that has not become ready — the report carries the
+// stacks alone, and is written at once: waiting a second for a main thread
+// that does not exist yet would only delay the one thing that helps.
 func writeDiagnostics(a *shelf, dir string) (string, error) {
 	now := time.Now()
 	stacks := allGoroutineStacks()
-	ch := make(chan diagSnapshot, 1)
+	snap := diagSnapshot{Time: now, PID: os.Getpid()}
 	if a != nil {
+		ch := make(chan diagSnapshot, 1)
 		diagDispatch(func() {
 			ch <- collectDiagSnapshot(a)
 		})
-	}
-	var snap diagSnapshot
-	select {
-	case snap = <-ch:
-	case <-time.After(1 * time.Second):
-		snap = diagSnapshot{Time: now, PID: os.Getpid(), MainThreadOK: false}
+		select {
+		case snap = <-ch:
+		case <-time.After(1 * time.Second):
+		}
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
