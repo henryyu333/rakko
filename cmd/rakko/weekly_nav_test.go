@@ -134,8 +134,8 @@ func TestWeeklyReportEscapeReturnsHome(t *testing.T) {
 }
 
 func TestWeeklyReportShowsUnreadableToolsAndRegistryNames(t *testing.T) {
-	if got := weeklyToolName(aiusage.ToolAntigravity); got != "Antigravity" {
-		t.Fatalf("weeklyToolName(ToolAntigravity) = %q, want Antigravity", got)
+	if got := aiusage.ToolAntigravity.Name(); got != "Antigravity" {
+		t.Fatalf("ToolAntigravity.Name() = %q, want Antigravity", got)
 	}
 	now := time.Date(2026, 11, 16, 12, 0, 0, 0, time.Local)
 	a := weeklyNavShelf(t, true)

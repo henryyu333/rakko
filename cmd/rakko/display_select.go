@@ -1,6 +1,7 @@
 package main
 
 import (
+	"math"
 	"strconv"
 
 	"github.com/egoist/mygo"
@@ -97,8 +98,8 @@ func displayPosRelative(primary, other mygo.Display) displayPosKind {
 	// normalized centre delta along each axis.
 	dx := float64(ob.X+ob.Width/2) - float64(pb.X+pb.Width/2)
 	dy := float64(ob.Y+ob.Height/2) - float64(pb.Y+pb.Height/2)
-	nx := absFloat(dx) / float64(max(1, pb.Width+ob.Width))
-	ny := absFloat(dy) / float64(max(1, pb.Height+ob.Height))
+	nx := math.Abs(dx) / float64(max(1, pb.Width+ob.Width))
+	ny := math.Abs(dy) / float64(max(1, pb.Height+ob.Height))
 	if ny >= nx {
 		if dy < 0 {
 			return displayPosAbove
@@ -109,13 +110,6 @@ func displayPosRelative(primary, other mygo.Display) displayPosKind {
 		return displayPosLeft
 	}
 	return displayPosRight
-}
-
-func absFloat(v float64) float64 {
-	if v < 0 {
-		return -v
-	}
-	return v
 }
 
 func displayPosSuffix(kind displayPosKind, l locales.Messages) string {

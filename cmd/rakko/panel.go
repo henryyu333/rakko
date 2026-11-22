@@ -37,6 +37,12 @@ var (
 // panelPage); tray and clipboard are the built-in pages, further pages
 // register themselves in ear order.
 
+// dropOpts is the transfer contract shared by every desktop drop zone.
+var dropOpts = transfer.DropOptions{
+	Formats:    []transfer.Format{transfer.FileList, transfer.URIList, transfer.PNG, transfer.Text},
+	Operations: transfer.Copy,
+}
+
 func symbol(paths string) *ui.SVG {
 	return symbolWidth(paths, 1.7)
 }
@@ -517,7 +523,6 @@ func (a *shelf) view(c *ui.Context) {
 		// paint it away at the root.
 		c.Root().Opacity(0)
 	}
-	opts := transfer.DropOptions{Formats: []transfer.Format{transfer.FileList, transfer.URIList, transfer.PNG, transfer.Text}, Operations: transfer.Copy}
 	now := c.Now()
 	// What a closed panel has to say grows out of the notch (feedback.go);
 	// the text is measured before the shell is sized around it.
@@ -698,7 +703,7 @@ func (a *shelf) view(c *ui.Context) {
 	var offer transfer.Offer
 	var over bool
 	if accepts {
-		offer, over = ui.DataDragOver(zone, opts)
+		offer, over = ui.DataDragOver(zone, dropOpts)
 	}
 	if hoverFilesFromOffer && a.win != nil && over && !a.dragging && !a.ownDrag {
 		if active, serial := dragState(); active {
@@ -735,7 +740,7 @@ func (a *shelf) view(c *ui.Context) {
 		} else {
 			a.syncMousePassThrough()
 			if accepts {
-				if drop, ok := ui.DropData(zone, opts); ok {
+				if drop, ok := ui.DropData(zone, dropOpts); ok {
 					a.drop.done = true
 					a.receive(drop.Data)
 				}
@@ -1166,7 +1171,7 @@ func (a *shelf) view(c *ui.Context) {
 	if !accepts {
 		return
 	}
-	if drop, ok := ui.DropData(zone, opts); ok {
+	if drop, ok := ui.DropData(zone, dropOpts); ok {
 		a.drop.done = true
 		if !a.homeTakesNoDrop() {
 			a.receive(drop.Data)

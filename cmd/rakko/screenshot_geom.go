@@ -47,12 +47,6 @@ func shotGlobalRect(r mygo.Rectangle, t shotTarget) mygo.Rectangle {
 	return mygo.Rectangle{X: r.X + t.Bounds.X, Y: r.Y + t.Bounds.Y, Width: r.Width, Height: r.Height}
 }
 
-// shotPointInRect reports whether p is inside r (half-open, as rectangles
-// are everywhere else).
-func shotPointInRect(p mygo.Point, r mygo.Rectangle) bool {
-	return p.X >= r.X && p.X < r.X+r.Width && p.Y >= r.Y && p.Y < r.Y+r.Height
-}
-
 // shotNormalizeRect builds the rectangle between two corners, whatever
 // order they were dragged in.
 func shotNormalizeRect(a, b mygo.Point) mygo.Rectangle {
@@ -214,7 +208,7 @@ func shotCursorFor(sel mygo.Rectangle, p mygo.Point, hasSel bool, tool shotTool)
 		case shotHandleNE, shotHandleSW:
 			return ui.CursorResizeNESW
 		}
-		if shotPointInRect(p, sel) {
+		if insideRect(p, sel) {
 			if tool == shotToolText {
 				return ui.CursorText
 			}
@@ -271,7 +265,7 @@ func shotWindowAt(windows []platform.ScreenWindow, p mygo.Point, t shotTarget) (
 		if !shotRectsIntersect(r, area) {
 			continue
 		}
-		if shotPointInRect(p, r) {
+		if insideRect(p, r) {
 			return shotIntersectRect(r, area), true
 		}
 	}
@@ -660,26 +654,26 @@ func shotToolbarLayout(sel, display mygo.Rectangle, tool shotTool) shotToolbar {
 // contains reports whether p is on either bar, so a press in a gap never
 // reaches the selection behind it.
 func (tb shotToolbar) contains(p mygo.Point) bool {
-	if shotPointInRect(p, tb.rect) {
+	if insideRect(p, tb.rect) {
 		return true
 	}
-	return tb.hasProps && shotPointInRect(p, tb.props.rect)
+	return tb.hasProps && insideRect(p, tb.props.rect)
 }
 
 // shotBarAt returns the control under p, if any.
 func (tb shotToolbar) shotBarAt(p mygo.Point) (shotBarItem, bool) {
 	search := func(strip shotBarStrip) (shotBarItem, bool) {
 		for _, it := range strip.items {
-			if shotPointInRect(p, it.rect) {
+			if insideRect(p, it.rect) {
 				return it, true
 			}
 		}
 		return shotBarItem{}, false
 	}
-	if shotPointInRect(p, tb.rect) {
+	if insideRect(p, tb.rect) {
 		return search(tb.shotBarStrip)
 	}
-	if tb.hasProps && shotPointInRect(p, tb.props.rect) {
+	if tb.hasProps && insideRect(p, tb.props.rect) {
 		return search(tb.props)
 	}
 	return shotBarItem{}, false

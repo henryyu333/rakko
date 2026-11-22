@@ -317,7 +317,7 @@ func shotMagnifierAt(cx, cy, dw, dh, bw, bh int, avoid mygo.Rectangle) (int, int
 // what the crop will contain.
 func (s *shotSession) drawMagnifier(p *ui.Painter, d *shotDisplay) {
 	c := s.cursor
-	if !shotPointInRect(c, d.Bounds) {
+	if !insideRect(c, d.Bounds) {
 		return
 	}
 	const (
@@ -397,4 +397,4 @@ var (
 
 // shotMosaicSymbol is a rounded frame holding a 2×2 checker, the same
 // stroke weight as the other tools' glyphs.
-var shotMosaicSymbol = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="M5 5h7v7H5zM12 12h7v7h-7z" fill="currentColor" stroke="none"/></svg>`))
+var shotMosaicSymbol = symbol(`<rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="M5 5h7v7H5zM12 12h7v7h-7z" fill="currentColor" stroke="none"/>`)

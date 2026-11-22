@@ -171,6 +171,7 @@ func fadeOr(c *ui.Context, a ui.Animation) ui.Animation {
 // Symbols the pages share.
 var (
 	checkSymbol    = symbol(`<path d="M5 12.5l4.5 4.5L19 7.5"/>`)
+	checkSymbol16  = ui.MustParseSVG([]byte(`<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.2 8.3 6.8 10.9 11.8 5.2"/></svg>`))
 	warnSymbol     = symbol(`<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5.5M12 16.5v.1"/>`)
 	downloadSymbol = symbol(`<path d="M12 4v10m-4-4 4 4 4-4M5 19h14"/>`)
 )

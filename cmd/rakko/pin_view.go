@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
-	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/layout"
@@ -65,11 +64,10 @@ func (it *pinItem) view(c *ui.Context) {
 		return
 	}
 	// Desktop drops belong to this zone, not the tools-page snapshot.
-	opts := transfer.DropOptions{Formats: []transfer.Format{transfer.FileList, transfer.URIList, transfer.PNG, transfer.Text}, Operations: transfer.Copy}
 	zone := ui.Column(c.Key("pin")).Fill().Radius(18).Clip()
 	zone.Background(surface).Border(0.5, pinEdgeColor)
 	slide := zone.AnimateTo(pinRevealKey{it}, 1, pinExpandAnim)
-	_, over := ui.DataDragOver(zone, opts)
+	_, over := ui.DataDragOver(zone, dropOpts)
 	zone.Children(func() {
 		// The card keeps its grid rectangle's rows: the music player draws
 		// its full 2 × 2 form in the pin, not the 2 × 1 strip's.
@@ -110,7 +108,7 @@ func (it *pinItem) view(c *ui.Context) {
 		}
 	}
 	it.pinMenu(zone)
-	if drop, ok := ui.DropData(zone, opts); ok {
+	if drop, ok := ui.DropData(zone, dropOpts); ok {
 		a.pinReceive(it, drop.Data)
 	}
 }

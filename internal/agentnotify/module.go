@@ -11,7 +11,10 @@ package agentnotify
 // the agent unaffected. Every module carries moduleMarker, which is how a
 // later disconnect knows the file is Rakko's.
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+)
 
 // moduleMarker marks a module file as Rakko's own.
 const moduleMarker = "rakko-agent-completion"
@@ -201,10 +204,10 @@ const copilotHooks = `{
   "version": 1,
   "hooks": {
     "userPromptSubmitted": [
-      { "type": "command", "bash": __RAKKO_CMD:userPromptSubmitted__, "timeoutSec": 5 }
+      { "type": "command", "bash": __RAKKO_CMD:userPromptSubmitted__, "timeoutSec": __RAKKO_HOOK_TIMEOUT__ }
     ],
     "agentStop": [
-      { "type": "command", "bash": __RAKKO_CMD:agentStop__, "timeoutSec": 5 }
+      { "type": "command", "bash": __RAKKO_CMD:agentStop__, "timeoutSec": __RAKKO_HOOK_TIMEOUT__ }
     ]
   }
 }
@@ -218,14 +221,14 @@ const kiroHooks = `{
       "name": "` + moduleMarker + `-prompt",
       "trigger": "UserPromptSubmit",
       "action": { "type": "command", "command": __RAKKO_CMD:__ },
-      "timeout": 5,
+      "timeout": __RAKKO_HOOK_TIMEOUT__,
       "enabled": true
     },
     {
       "name": "` + moduleMarker + `-stop",
       "trigger": "Stop",
       "action": { "type": "command", "command": __RAKKO_CMD:__ },
-      "timeout": 5,
+      "timeout": __RAKKO_HOOK_TIMEOUT__,
       "enabled": true
     }
   ]
@@ -249,6 +252,7 @@ func fillModule(tmpl string, tool Tool, exe, dataDir string, kind hookKind) stri
 		"__RAKKO_EXE__", quoteJSON(exe),
 		"__RAKKO_DATA__", quoteJSON(dataDir),
 		"__RAKKO_TOOL__", quoteJSON(string(tool)),
+		"__RAKKO_HOOK_TIMEOUT__", strconv.Itoa(hookTimeout),
 	)
 	out := r.Replace(tmpl)
 	out = fillEntryPlaceholder(out, "__RAKKO_CMD:", func(event string) string {

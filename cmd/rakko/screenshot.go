@@ -326,7 +326,7 @@ func (s *shotSession) install(results []shotCapture, elapsedMS int64) {
 	}
 	active := 0
 	for i, d := range s.displays {
-		if shotPointInRect(s.cursor, d.Bounds) {
+		if insideRect(s.cursor, d.Bounds) {
 			active = i
 		}
 	}
@@ -600,7 +600,7 @@ func (s *shotSession) refreshWindows() {
 // displayAt returns the index of the display containing p, or -1.
 func (s *shotSession) displayAt(p mygo.Point) int {
 	for i, d := range s.displays {
-		if shotPointInRect(p, d.Bounds) {
+		if insideRect(p, d.Bounds) {
 			return i
 		}
 	}
@@ -661,7 +661,7 @@ func (s *shotSession) pointerDown(p mygo.Point, ev ui.InputEvent, di int) bool {
 				s.startTextMove(idx, p)
 				return true
 			}
-			if shotPointInRect(p, s.sel) && ev.Clicks >= 2 {
+			if insideRect(p, s.sel) && ev.Clicks >= 2 {
 				s.copy()
 				return true
 			}
@@ -669,7 +669,7 @@ func (s *shotSession) pointerDown(p mygo.Point, ev ui.InputEvent, di int) bool {
 				s.mode, s.resizeH, s.press = shotModeResize, h, p
 				return true
 			}
-			if shotPointInRect(p, s.sel) {
+			if insideRect(p, s.sel) {
 				if s.tool == shotToolText {
 					s.startTextDraft(p)
 				} else if s.tool != shotToolNone {

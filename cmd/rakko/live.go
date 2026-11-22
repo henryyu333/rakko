@@ -473,8 +473,8 @@ func (a *shelf) liveShape(ev liveEvent) (w, h float32) {
 	return w, float32(a.capsuleBodyH())
 }
 
-// liveDownloadDoneShape is the completion capsule's box, computed from the
-// event exactly as liveShape does (used by the click test).
+// liveCapsuleWidth is the completion capsule's width, computed from the
+// event so layout tests match liveShape.
 func liveCapsuleWidth(l locales.Messages, ev liveEvent, baseW float32) float32 {
 	minW := float32(280)
 	switch ev.kind {

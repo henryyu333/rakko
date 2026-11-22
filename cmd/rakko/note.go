@@ -95,18 +95,29 @@ func (a *shelf) noteSession() *noteUI {
 		return nil
 	}
 	n := &noteUI{host: a, store: store}
+	n.rewatch()
+	a.note = n
+	return n
+}
+
+// rewatch stops any prior file watch, loads the active note, and starts
+// watching its file so edits made in another editor show up immediately.
+func (n *noteUI) rewatch() {
+	if n.watch != nil {
+		n.watch.Close()
+		n.watch = nil
+	}
+	a := n.host
 	if err := n.load(); err != nil {
 		a.report(err)
 	}
-	if w, werr := note.WatchFile(store.Path(), func() {
-		mygo.RunOnMain(n.host.noteOutside)
-	}); werr == nil {
+	if w, err := note.WatchFile(n.store.Path(), func() {
+		mygo.RunOnMain(a.noteOutside)
+	}); err == nil {
 		n.watch = w
 	} else {
-		a.report(werr)
+		a.report(err)
 	}
-	a.note = n
-	return n
 }
 
 // load reads the note into text and draft. A note that cannot be read stays
@@ -137,21 +148,7 @@ func (n *noteUI) selectNote(id string) error {
 	if err := n.store.Select(id); err != nil {
 		return err
 	}
-	if n.watch != nil {
-		n.watch.Close()
-		n.watch = nil
-	}
-	a := n.host
-	if err := n.load(); err != nil {
-		a.report(err)
-	}
-	if w, err := note.WatchFile(n.store.Path(), func() {
-		mygo.RunOnMain(a.noteOutside)
-	}); err == nil {
-		n.watch = w
-	} else {
-		a.report(err)
-	}
+	n.rewatch()
 	n.invalidate()
 	return nil
 }
@@ -180,22 +177,8 @@ func (n *noteUI) newNote() error {
 	if err := n.store.New(); err != nil {
 		return err
 	}
-	if n.watch != nil {
-		n.watch.Close()
-		n.watch = nil
-	}
-	a := n.host
-	if err := n.load(); err != nil {
-		a.report(err)
-	}
-	if w, err := note.WatchFile(n.store.Path(), func() {
-		mygo.RunOnMain(a.noteOutside)
-	}); err == nil {
-		n.watch = w
-	} else {
-		a.report(err)
-	}
-	a.noteStale()
+	n.rewatch()
+	n.host.noteStale()
 	n.invalidate()
 	return nil
 }

@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"sync"
 	"syscall"
 	"unsafe"
 )
@@ -68,17 +67,4 @@ func installDiagSignal() {
 			}
 		}
 	}()
-}
-
-// diagTarget is the shelf live reports read, registered once it exists.
-var (
-	diagReportMu sync.Mutex
-	diagTarget   *shelf
-)
-
-// startDiagnostics lets live reports read this shelf's state.
-func (a *shelf) startDiagnostics() {
-	diagReportMu.Lock()
-	diagTarget = a
-	diagReportMu.Unlock()
 }

@@ -35,7 +35,7 @@ type appEntry struct {
 type appSwitcher struct {
 	on           bool              // 模式打开：壳是应用两翼，透明区收自己的点击
 	list         []appEntry        // 快照：固定在前（含 missing）、其他运行中在后
-	sel          int               // 键盘选择（只数可激活的应用，selApps 的下标）；<0 = 无
+	sel          int               // 键盘选择（只数可激活的应用，appSelRows 的下标）；<0 = 无
 	more         bool              // 「更多」浮层开着
 	manage       bool              // 「编辑常用应用」浮层开着（比 more 深一层）
 	appsScroll   ui.ScrollState    // 浮层列表的滚动
@@ -278,17 +278,10 @@ func (a *shelf) appsKey(key string) {
 	}
 }
 
-// selApps are the selectable entries in shown order: pinned seats that can
-// actually launch (missing ones are占位 but not selectable), then the other
-// running apps the wings draw. 「更多」 is not in this list — the design's
-// left/right walk only visits app buttons. The list is the same shown set
-// the view draws, so a seat hidden by a narrow screen is never selected.
-func (a *shelf) selApps() []appEntry { return a.appSelRows() }
-
 // moveAppSel walks the selection across the selectable buttons, left wing
 // first then right, wrapping at both ends.
 func (a *shelf) moveAppSel(d int) {
-	n := len(a.selApps())
+	n := len(a.appSelRows())
 	if n == 0 {
 		a.apps.sel = -1
 		return
@@ -298,7 +291,7 @@ func (a *shelf) moveAppSel(d int) {
 
 // activateAppSel runs the selected app, like a click on its button.
 func (a *shelf) activateAppSel() {
-	apps := a.selApps()
+	apps := a.appSelRows()
 	if a.apps.sel < 0 || a.apps.sel >= len(apps) {
 		return
 	}
@@ -456,14 +449,4 @@ func (a *shelf) ensureInstalled() {
 			}
 		})
 	}()
-}
-
-// toggleAppSwitch is the App Switcher global shortcut: the same path the
-// entry click walks — a second press folds the wings back.
-func (a *shelf) toggleAppSwitch() {
-	if a.apps.on {
-		a.endAppSwitch()
-		return
-	}
-	a.openAppSwitch()
 }

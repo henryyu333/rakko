@@ -464,7 +464,7 @@ func TestAppSelectionWalkAndEnter(t *testing.T) {
 	stubApps(t, st)
 	a.openAppSwitch()
 	list := a.apps.list
-	sel := a.selApps()
+	sel := a.appSelRows()
 	if len(list) != 3 || len(sel) != 2 {
 		t.Fatalf("snapshot %v, selectable %v", list, sel)
 	}

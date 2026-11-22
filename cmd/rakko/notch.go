@@ -999,10 +999,7 @@ func (a *shelf) peekPillRect() mygo.Rectangle {
 }
 
 func (a *shelf) overPeekPill(p mygo.Point) bool {
-	r := a.peekPillRect()
-	return r.Width > 0 && r.Height > 0 &&
-		p.X >= r.X && p.X < r.X+r.Width &&
-		p.Y >= r.Y && p.Y < r.Y+r.Height
+	return insideRect(p, a.peekPillRect())
 }
 
 // mouseDown is the AppKit mouse-down observer. inside means the event was

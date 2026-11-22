@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"sync"
 	"syscall"
 )
 
@@ -34,25 +33,10 @@ func installDiagSignal() {
 	}()
 }
 
-// diagTarget is the shelf live reports read, registered once it exists.
-var (
-	diagReportMu sync.Mutex
-	diagTarget   *shelf
-)
-
 func diagLogDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" {
 		return os.TempDir()
 	}
 	return filepath.Join(home, "Library", "Logs", "Rakko")
-}
-
-// startDiagnostics lets live SIGUSR1 reports read this shelf's state; the
-// signal itself is armed at the top of main so a launch that never reaches
-// here still answers the signal with a goroutine-stack report.
-func (a *shelf) startDiagnostics() {
-	diagReportMu.Lock()
-	diagTarget = a
-	diagReportMu.Unlock()
 }

@@ -125,9 +125,15 @@ var pinDisplays = func() []mygo.Display { return screenDisplays() }
 // ID is gone (unplugged, or a test list that lacks it): the remembered
 // edge survives the move.
 func pinArea(display int64) mygo.Rectangle {
+	return workAreaIn(pinDisplays(), display)
+}
+
+// workAreaIn returns the work area of id from ds, or of the primary when
+// the ID is absent (unplugged, or a test list that lacks it).
+func workAreaIn(ds []mygo.Display, id int64) mygo.Rectangle {
 	var primary mygo.Rectangle
-	for _, d := range pinDisplays() {
-		if d.ID == display {
+	for _, d := range ds {
+		if d.ID == id {
 			return d.WorkArea
 		}
 		if d.Primary || primary == (mygo.Rectangle{}) {

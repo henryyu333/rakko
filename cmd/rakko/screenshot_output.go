@@ -18,6 +18,8 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
+
+	"rakko/internal/atomicfile"
 )
 
 // Outputs.
@@ -199,16 +201,7 @@ func (s *shotSession) pinFrame(d *shotDisplay) mygo.Rectangle {
 // workAreaOf is the display's visible frame, or the primary's when the
 // display is gone (unplugged during the capture).
 func workAreaOf(id int64) mygo.Rectangle {
-	var primary mygo.Rectangle
-	for _, d := range shotDisplays() {
-		if d.ID == id {
-			return d.WorkArea
-		}
-		if d.Primary || primary == (mygo.Rectangle{}) {
-			primary = d.WorkArea
-		}
-	}
-	return primary
+	return workAreaIn(shotDisplays(), id)
 }
 
 // writeShotTempPNG puts png in the app's temporary screenshot folder under
@@ -238,7 +231,7 @@ func (a *shelf) saveShotPNG(png []byte) (string, error) {
 		return err == nil
 	})
 	path := filepath.Join(dir, name)
-	return path, os.WriteFile(path, png, 0o644)
+	return path, atomicfile.WriteFile(dir, name, png, 0o644)
 }
 
 // shotName is the system screenshot's file name in the app's language.

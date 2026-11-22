@@ -126,7 +126,7 @@ func TestShotToolbarStaysOnDisplay(t *testing.T) {
 	if tb.rect.X+tb.rect.Width != sel.X+sel.Width {
 		t.Fatalf("toolbar is not right-aligned: %+v", tb.rect)
 	}
-	if !shotPointInRect(mygo.Point{X: tb.rect.X + tb.rect.Width/2, Y: tb.rect.Y + tb.rect.Height/2}, display) {
+	if !insideRect(mygo.Point{X: tb.rect.X + tb.rect.Width/2, Y: tb.rect.Y + tb.rect.Height/2}, display) {
 		t.Fatal("toolbar left the display")
 	}
 
@@ -159,7 +159,7 @@ func TestShotPropertyBarFollowsTheTool(t *testing.T) {
 	if tb.props.rect.X+tb.props.rect.Width != tb.rect.X+tb.rect.Width {
 		t.Fatalf("property bar is not right-aligned with the main bar: %+v", tb.props.rect)
 	}
-	if !shotPointInRect(mygo.Point{X: tb.props.rect.X + 1, Y: tb.props.rect.Y + 1}, display) ||
+	if !insideRect(mygo.Point{X: tb.props.rect.X + 1, Y: tb.props.rect.Y + 1}, display) ||
 		tb.props.rect.Y+tb.props.rect.Height > display.Height-8 {
 		t.Fatalf("property bar left the display: %+v", tb.props.rect)
 	}
@@ -273,7 +273,7 @@ func TestShotMosaicStrokeCoversFastDrag(t *testing.T) {
 		p := mygo.Point{X: 10 + i, Y: 10 + i}
 		covered := false
 		for _, cell := range cells {
-			if shotPointInRect(p, cell.rect) {
+			if insideRect(p, cell.rect) {
 				covered = true
 				break
 			}

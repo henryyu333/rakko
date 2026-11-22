@@ -107,7 +107,7 @@ func TestPetClampKeepsItOnScreen(t *testing.T) {
 		{"below the Dock", mygo.Rectangle{X: 300, Y: area.Y + area.Height - 10, Width: 74, Height: 96},
 			mygo.Rectangle{X: 300, Y: area.Y + area.Height - 96, Width: 74, Height: 96}},
 	} {
-		if got := petClampFrame(c.in, area); got != c.want {
+		if got := pinClamp(c.in, area); got != c.want {
 			t.Errorf("%s: clamp = %+v, want %+v", c.name, got, c.want)
 		}
 	}

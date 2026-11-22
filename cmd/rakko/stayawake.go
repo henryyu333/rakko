@@ -232,7 +232,10 @@ func (m *awakeModule) remainText(now time.Time) string {
 	if !m.active() {
 		return ""
 	}
-	l := m.host.appLoc()
+	return m.remainTextIn(m.host.appLoc(), now)
+}
+
+func (m *awakeModule) remainTextIn(l locales.Messages, now time.Time) string {
 	if m.until.IsZero() {
 		return l.AwakeUntilOff()
 	}

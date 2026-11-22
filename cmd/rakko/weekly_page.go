@@ -502,7 +502,7 @@ func (f *weeklyFeature) aiUnreadableNote(c *ui.Context, w float32) {
 // estimate's caveat stays in the section note below.
 func (f *weeklyFeature) aiMetrics(c *ui.Context, w float32, sum aiusage.Summary) {
 	l := tloc(c)
-	tokens := weeklyTokens(sum.Total)
+	tokens := usageTokens(totalTokens(sum.Total))
 	ui.Row(c.Key("weekly-ai-metrics")).Width(w).Margin(12, 0, 0, 0).Gap(42).AlignItems(ui.End).Children(func() {
 		ui.Row(c.Key("tok")).AlignItems(ui.End).Gap(4).Children(func() {
 			panelLabel(c, nil, tokens, 23, 620).TextColor(ink)
@@ -530,7 +530,7 @@ func (f *weeklyFeature) aiTrack(c *ui.Context, w float32, sum aiusage.Summary) {
 	var parts []slice
 	var total int64
 	for tool, tot := range sum.ByTool {
-		n := weeklyToolTokens(tot)
+		n := totalTokens(tot)
 		if n <= 0 {
 			continue
 		}
@@ -564,7 +564,7 @@ func (f *weeklyFeature) aiTrack(c *ui.Context, w float32, sum aiusage.Summary) {
 					continue
 				}
 				ui.Box(c.Key("seg-" + string(p.tool))).Height(5).Radius(2).Width(width).
-					Background(weeklyToolTint(i)).Label(weeklyToolName(p.tool))
+					Background(weeklyToolTint(i)).Label(p.tool.Name())
 			}
 		})
 	}
@@ -581,7 +581,7 @@ func (f *weeklyFeature) aiTrack(c *ui.Context, w float32, sum aiusage.Summary) {
 				row := ui.Row(c.Key("leg-" + string(p.tool))).Gap(5).AlignItems(ui.Center)
 				row.Children(func() {
 					ui.Box(c.Key("dot")).Size(5, 5).Radius(3).Background(weeklyToolTint(j))
-					panelLabel(c, nil, weeklyToolName(p.tool)+" "+weeklyTokensValue(p.value), 10, 0).TextColor(ink2)
+					panelLabel(c, nil, p.tool.Name()+" "+usageTokens(p.value), 10, 0).TextColor(ink2)
 				})
 			}
 		})
@@ -806,31 +806,6 @@ func weeklyCompare(prev, cur time.Duration, l locales.Messages) string {
 		sign, delta = "−", -delta
 	}
 	return l.WeeklyCompare(sign + weeklyHM(delta, l))
-}
-
-// weeklyTokensValue formats a token count for the legend.
-func weeklyTokensValue(n int64) string {
-	switch {
-	case n < 1_000:
-		return strconv.FormatInt(n, 10)
-	case n < 1_000_000:
-		return compact(float64(n)/1e3, "K")
-	case n < 1_000_000_000:
-		return compact(float64(n)/1e6, "M")
-	default:
-		return compact(float64(n)/1e9, "B")
-	}
-}
-
-// weeklyTokens is the metric's leading number.
-func weeklyTokens(t aiusage.Totals) string { return weeklyTokensValue(totalTokens(t)) }
-
-// weeklyToolTokens is one tool's tokens, the same sum as the chart.
-func weeklyToolTokens(t aiusage.Totals) int64 { return totalTokens(t) }
-
-// weeklyToolName names every reader the scanner supports from the registry.
-func weeklyToolName(t aiusage.Tool) string {
-	return t.Name()
 }
 
 // weeklyAppName is the stored display name, or the bundle id when the app

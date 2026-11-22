@@ -7,6 +7,7 @@ package main
 // translocation check and the quarantine strip are the platform's.
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -111,7 +112,7 @@ func runLocation(exe, home string) runOrigin {
 // bundle in ~/Downloads, never the folder).
 func withinDir(path, dir string) bool {
 	rel, err := filepath.Rel(dir, path)
-	return err == nil && rel != "." && !strings.HasPrefix(rel, "..")
+	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // translocatedSource recovers the bundle a translocated app was staged
@@ -262,7 +263,7 @@ func moveBundleToApplications(bundle, destDir string) (string, error) {
 		switch {
 		case err == nil:
 			staged = true
-		case errorsIsEXDEV(err):
+		case errors.Is(err, syscall.EXDEV):
 			// Downloads and /Applications on different volumes: copy, then
 			// drop the source once the new app is in place.
 			if cerr := onbCopyBundle(bundle, stage); cerr != nil {
@@ -301,23 +302,6 @@ func moveBundleToApplications(bundle, destDir string) (string, error) {
 		}
 	}
 	return dest, nil
-}
-
-func errorsIsEXDEV(err error) bool {
-	for e := err; e != nil; e = unwrapErr(e) {
-		if e == syscall.EXDEV {
-			return true
-		}
-	}
-	return false
-}
-
-func unwrapErr(err error) error {
-	type unwrapper interface{ Unwrap() error }
-	if u, ok := err.(unwrapper); ok {
-		return u.Unwrap()
-	}
-	return nil
 }
 
 // copyBundle copies the app bundle wholesale (symlinks preserved) for the

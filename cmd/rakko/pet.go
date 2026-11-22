@@ -145,20 +145,12 @@ func petBox(h int) (w, height int) {
 	return int(math.Round(float64(h) * float64(picW) / float64(picH))), h
 }
 
-// petClampFrame holds r inside area: the otter is never parked off screen,
-// under the menu bar or behind the Dock.
-func petClampFrame(r mygo.Rectangle, area mygo.Rectangle) mygo.Rectangle {
-	r.X = min(max(r.X, area.X), max(area.X, area.X+area.Width-r.Width))
-	r.Y = min(max(r.Y, area.Y), max(area.Y, area.Y+area.Height-r.Height))
-	return r
-}
-
 // petSettleFrame is where a released otter comes to rest: inside the work
 // area, seated on its floor when it was dropped there (the Dock's top, or
 // the screen's own edge), and flush to a side edge when it was dropped
 // against one. Everywhere else it stays exactly where it was let go.
 func petSettleFrame(r mygo.Rectangle, area mygo.Rectangle) mygo.Rectangle {
-	r = petClampFrame(r, area)
+	r = pinClamp(r, area)
 	if r.Y+r.Height >= area.Y+area.Height-petSnapDist {
 		r.Y = area.Y + area.Height - r.Height
 	}
@@ -174,7 +166,7 @@ func petSettleFrame(r mygo.Rectangle, area mygo.Rectangle) mygo.Rectangle {
 // bottom right, standing on the work area's floor — on the Dock's top edge
 // when the Dock is up — a hand's width from the side.
 func petDefaultSpot(area mygo.Rectangle, w, h int) mygo.Rectangle {
-	return petClampFrame(mygo.Rectangle{
+	return pinClamp(mygo.Rectangle{
 		X:     area.X + area.Width - w - petSnapDist,
 		Y:     area.Y + area.Height - h,
 		Width: w, Height: h,
@@ -276,7 +268,7 @@ func (a *shelf) petStart() {
 	area := petArea(display)
 	frame := petDefaultSpot(area, w, h)
 	if remembered {
-		frame = petClampFrame(mygo.Rectangle{X: area.X + spot.X, Y: area.Y + spot.Y, Width: w, Height: h}, area)
+		frame = pinClamp(mygo.Rectangle{X: area.X + spot.X, Y: area.Y + spot.Y, Width: w, Height: h}, area)
 	}
 	pet := &petWindow{owner: a, display: display, frame: frame}
 	a.pet = pet
@@ -496,7 +488,7 @@ func (a *shelf) petTick(now time.Time, p mygo.Point, down bool) {
 	if pet.pressed {
 		if down && pet.moving {
 			pet.display = displayIDAt(p, pet.display)
-			pet.frame = petClampFrame(mygo.Rectangle{
+			pet.frame = pinClamp(mygo.Rectangle{
 				X: p.X - pet.grabX, Y: p.Y - pet.grabY,
 				Width: pet.frame.Width, Height: pet.frame.Height,
 			}, petArea(pet.display))
@@ -665,7 +657,7 @@ func (a *shelf) petRelease(p mygo.Point) {
 	}
 	pet.display = displayIDAt(p, pet.display)
 	area := petArea(pet.display)
-	frame := petClampFrame(mygo.Rectangle{
+	frame := pinClamp(mygo.Rectangle{
 		X: p.X - pet.grabX, Y: p.Y - pet.grabY,
 		Width: pet.frame.Width, Height: pet.frame.Height,
 	}, area)
@@ -712,14 +704,10 @@ func (pet *petWindow) view(c *ui.Context) {
 	a := pet.owner
 	pet.reduceMotion = c.Preferences().ReduceMotion
 	zone := ui.Column(c.Key("pet")).Fill().Label(a.appLoc().PetLabel())
-	opts := transfer.DropOptions{
-		Formats:    []transfer.Format{transfer.FileList, transfer.URIList, transfer.PNG, transfer.Text},
-		Operations: transfer.Copy,
-	}
 	// A drag held over the otter is the view's own reading of the pointer:
 	// asking the screen module here would need the main loop, which a
 	// headless render does not run.
-	_, over := ui.DataDragOver(zone, opts)
+	_, over := ui.DataDragOver(zone, dropOpts)
 	if a.ownDrag {
 		over = false // our own drag-out is not something to catch
 	}
@@ -739,7 +727,7 @@ func (pet *petWindow) view(c *ui.Context) {
 	}
 	pet.trackPress(zone, a)
 	pet.menu(zone)
-	if drop, ok := ui.DropData(zone, opts); ok {
+	if drop, ok := ui.DropData(zone, dropOpts); ok {
 		a.petReceive(drop.Data)
 	}
 }

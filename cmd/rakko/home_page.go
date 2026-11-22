@@ -601,7 +601,7 @@ func (p *homePage) statusLines(c *ui.Context, now time.Time) {
 	case a.awake != nil && a.awake.active():
 		rows = append(rows, func() {
 			line("home-awake", func() { ui.Icon(c, cupSymbol).Size(14, 14).TextColor(ink3) },
-				l.AwakeLine(l.AwakeTitle(), homeAwakeRemain(l, a.awake, now)))
+				l.AwakeLine(l.AwakeTitle(), a.awake.remainTextIn(l, now)))
 		})
 	case a.settings.AIUsage.Enabled && a.usage != nil:
 		five, week, tool, ok := a.usage.leastWindow()
@@ -684,19 +684,6 @@ func (p *homePage) companionRow(c *ui.Context, now time.Time) func() {
 			p.host.openSupport()
 		}
 	}
-}
-
-// homeAwakeRemain is awakeModule.remainText in the language of the page:
-// the native menu's wording would follow the app's language instead.
-func homeAwakeRemain(l locales.Messages, m *awakeModule, now time.Time) string {
-	if m.until.IsZero() {
-		return l.AwakeUntilOff()
-	}
-	rem := m.until.Sub(now)
-	if rem < 0 {
-		rem = 0
-	}
-	return l.AwakeRemaining(formatClock(rem.Seconds()))
 }
 
 // homeTrayCount is how many files and folders the tray holds now.

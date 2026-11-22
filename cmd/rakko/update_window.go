@@ -287,7 +287,7 @@ func (a *shelf) updateAutoRow(c *ui.Context, l locales.Messages, p updatePalette
 		}
 		box.Children(func() {
 			if on {
-				ui.Icon(c.Key("tick"), updateCheckSymbol).Size(16, 16).TextColor(ui.Hex("#FFFFFF"))
+				ui.Icon(c.Key("tick"), checkSymbol16).Size(16, 16).TextColor(ui.Hex("#FFFFFF"))
 			}
 		})
 		ui.Text(c, l.UpdateAutoInstallRow()).FontSize(12).TextColor(p.ink2)
@@ -296,9 +296,6 @@ func (a *shelf) updateAutoRow(c *ui.Context, l locales.Messages, p updatePalette
 		a.setUpdateAutoInstall(on)
 	}
 }
-
-// updateCheckSymbol is the checkbox's tick, sized for its 16×16 frame.
-var updateCheckSymbol = ui.MustParseSVG([]byte(`<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.2 8.3 6.8 10.9 11.8 5.2"/></svg>`))
 
 // updateFoundButtons is the row 跳过这个版本 · · · 稍后提醒我 [安装更新].
 func (a *shelf) updateFoundButtons(c *ui.Context, l locales.Messages, p updatePalette) {

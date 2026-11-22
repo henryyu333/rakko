@@ -401,7 +401,7 @@ func (m *sysmonModule) setProcSort(sortBy string) {
 	}
 }
 
-// sysmonCPUHist converts net or pct series nicely for charting.
+// formatProcMetric formats a process row's memory or CPU metric for display.
 func formatProcMetric(p sysmon.ProcEntry, sortBy string) string {
 	if sortBy == settings.SysMonMetricMem {
 		return sysmon.FormatBytesShort(p.MemBytes)

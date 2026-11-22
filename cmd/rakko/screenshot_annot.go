@@ -249,13 +249,11 @@ func shotDragAnnotation(tool shotTool, color ui.Color, width int, start, cur myg
 			an.b = shotSnapPoint(start, cur)
 		}
 	case shotToolPen:
-		a, b := start, cur
+		b := cur
 		if shift {
 			b = shotSnapPoint(start, cur)
-			an.points = []mygo.Point{a, b}
-		} else {
-			an.points = []mygo.Point{a, b}
 		}
+		an.points = []mygo.Point{start, b}
 	}
 	return an
 }

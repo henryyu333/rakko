@@ -241,7 +241,7 @@ func (s *Store) Flush() error {
 		return err
 	}
 	data = append(data, '\n')
-	if err := writeAtomic(s.dir, data); err != nil {
+	if err := atomicfile.WriteFile(s.dir, FileName, data, 0o600); err != nil {
 		s.saveErr = err
 		return err
 	}
@@ -267,21 +267,6 @@ func (s *Store) MaybeFlush(now time.Time, interval time.Duration) error {
 		return nil
 	}
 	return s.Flush()
-}
-
-// writeAtomic replaces dir/FileName with data through a temporary file in
-// the same directory.
-func writeAtomic(dir string, data []byte) error {
-	if err := atomicfile.WriteFile(dir, FileName, data, 0o600); err != nil {
-		return err
-	}
-	// The rename itself must reach the disk too, or a crash can leave the
-	// old file — acceptable — or, on some filesystems, neither name.
-	if d, err := os.Open(dir); err == nil {
-		_ = d.Sync()
-		_ = d.Close()
-	}
-	return nil
 }
 
 // dayKey is the local calendar date of t, the history's day identity.

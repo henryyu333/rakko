@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -53,7 +54,21 @@ type diagSnapshot struct {
 	LastShortcutAt   time.Time
 }
 
-var diagDispatch = mygo.RunOnMain
+var (
+	diagDispatch = mygo.RunOnMain
+	// diagTarget is the shelf live reports read, registered once it exists.
+	diagReportMu sync.Mutex
+	diagTarget   *shelf
+)
+
+// startDiagnostics lets live diagnostics reports read this shelf's state;
+// the platform trigger is armed at the top of main so a launch that never
+// reaches here still answers with a goroutine-stack report.
+func (a *shelf) startDiagnostics() {
+	diagReportMu.Lock()
+	diagTarget = a
+	diagReportMu.Unlock()
+}
 
 // collectDiagSnapshot reads shelf state; must run on the main thread.
 func collectDiagSnapshot(a *shelf) diagSnapshot {

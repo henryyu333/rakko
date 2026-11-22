@@ -10,8 +10,8 @@ package agentnotify
 const copilotHooksExec = `{
   "version": 1,
   "hooks": {
-    "userPromptSubmitted": [{ __RAKKO_ENTRY:userPromptSubmitted__, "timeoutSec": 5 }],
-    "agentStop": [{ __RAKKO_ENTRY:agentStop__, "timeoutSec": 5 }]
+    "userPromptSubmitted": [{ __RAKKO_ENTRY:userPromptSubmitted__, "timeoutSec": __RAKKO_HOOK_TIMEOUT__ }],
+    "agentStop": [{ __RAKKO_ENTRY:agentStop__, "timeoutSec": __RAKKO_HOOK_TIMEOUT__ }]
   }
 }
 `

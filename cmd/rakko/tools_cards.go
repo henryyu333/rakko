@@ -1045,11 +1045,7 @@ func (a *shelf) toolUsageRing(c *ui.Context, tool aiusage.Tool, five, week *aius
 	})
 }
 
-// usageCardLabel is the AI 用量 card's accessible name and hover tip: the
-// least-remaining tool, then each window's shown share — used, or left
-// when the setting asks — or 暂无数据 before any quota answer.
-func (a *shelf) usageCardLabel(c *ui.Context) string {
-	l := loc(c)
+func (a *shelf) usageCardLabelWith(l locales.Messages, fmtWin func(aiusage.Window) string) string {
 	if a.usage == nil {
 		return l.AiUsage() + " · " + l.NoData()
 	}
@@ -1059,12 +1055,22 @@ func (a *shelf) usageCardLabel(c *ui.Context) string {
 	}
 	parts := []string{toolName(tool)}
 	if five != nil {
-		parts = append(parts, l.UsageWindowFive()+" "+a.usage.shownShort(l, *five))
+		parts = append(parts, l.UsageWindowFive()+" "+fmtWin(*five))
 	}
 	if week != nil {
-		parts = append(parts, l.UsageWindowWeekly()+" "+a.usage.shownShort(l, *week))
+		parts = append(parts, l.UsageWindowWeekly()+" "+fmtWin(*week))
 	}
 	return strings.Join(parts, " · ")
+}
+
+// usageCardLabel is the AI 用量 card's accessible name and hover tip: the
+// least-remaining tool, then each window's shown share — used, or left
+// when the setting asks — or 暂无数据 before any quota answer.
+func (a *shelf) usageCardLabel(c *ui.Context) string {
+	l := loc(c)
+	return a.usageCardLabelWith(l, func(w aiusage.Window) string {
+		return a.usage.shownShort(l, w)
+	})
 }
 
 // usageWideShares are the 2 × 1 card's values: the tightest window's
@@ -1099,21 +1105,9 @@ func (a *shelf) usageWideShares() (hero, week, five float64, ok bool) {
 // used/left setting, so the name says 剩余 too.
 func (a *shelf) usageCardLeftLabel(c *ui.Context) string {
 	l := loc(c)
-	if a.usage == nil {
-		return l.AiUsage() + " · " + l.NoData()
-	}
-	five, week, tool, ok := a.usage.leastWindow()
-	if !ok {
-		return l.AiUsage() + " · " + l.NoData()
-	}
-	parts := []string{toolName(tool)}
-	if five != nil {
-		parts = append(parts, l.UsageWindowFive()+" "+l.UsageShownLeft(quotaPctText(a.usage.windowLeft(*five))))
-	}
-	if week != nil {
-		parts = append(parts, l.UsageWindowWeekly()+" "+l.UsageShownLeft(quotaPctText(a.usage.windowLeft(*week))))
-	}
-	return strings.Join(parts, " · ")
+	return a.usageCardLabelWith(l, func(w aiusage.Window) string {
+		return l.UsageShownLeft(quotaPctText(a.usage.windowLeft(w)))
+	})
 }
 
 // toolPlayingTall is the music card in its 2 × 2 form: the full player —

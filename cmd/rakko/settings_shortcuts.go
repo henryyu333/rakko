@@ -134,7 +134,7 @@ func (a *shelf) shortcutRun(k shortcutKind) func() {
 	case shortcutPet:
 		return a.togglePet
 	case shortcutAppSwitch:
-		return a.toggleAppSwitch
+		return a.openAppSwitch
 	}
 	return func() {}
 }

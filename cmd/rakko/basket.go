@@ -204,9 +204,8 @@ func (a *shelf) basketReceive(data transfer.Data) {
 // delivered between the pointer leaving and this frame must still land.
 func (a *shelf) basketView(c *ui.Context) {
 	c.Root().Background(ui.Transparent)
-	opts := transfer.DropOptions{Formats: []transfer.Format{transfer.FileList, transfer.URIList, transfer.PNG, transfer.Text}, Operations: transfer.Copy}
 	zone := ui.Column(c.Key("basket")).Fill().Padding(basketEdge).Clip()
-	_, over := ui.DataDragOver(zone, opts)
+	_, over := ui.DataDragOver(zone, dropOpts)
 	zone.Children(func() {
 		card := ui.Column(c.Key("card")).Fill().Radius(22).Center().Gap(8).Padding(10)
 		accent := c.Theme().Accent
@@ -235,7 +234,7 @@ func (a *shelf) basketView(c *ui.Context) {
 			}
 		})
 	})
-	if drop, ok := ui.DropData(zone, opts); ok {
+	if drop, ok := ui.DropData(zone, dropOpts); ok {
 		a.basketReceive(drop.Data)
 		return
 	}

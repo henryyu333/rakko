@@ -99,7 +99,7 @@ func (a *shelf) settingsNotchPage(c *ui.Context) {
 					})
 					ui.Box(c.Key("chk")).Size(18, 18).Shrink(0).Center().Children(func() {
 						if opt.selected {
-							ui.Icon(c.Key("tick"), displayCheckSymbol).Size(14, 14).TextColor(accent)
+							ui.Icon(c.Key("tick"), checkSymbol16).Size(14, 14).TextColor(accent)
 						}
 					})
 				})
@@ -209,8 +209,6 @@ func (a *shelf) settingsSysMonGroup(c *ui.Context) {
 		})
 	})
 }
-
-var displayCheckSymbol = ui.MustParseSVG([]byte(`<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.4 8.3 6.5 11.4 12.6 4.8"/></svg>`))
 
 func settingsShapeTile(c *ui.Context, key, label string, island, selected bool, onSelect func()) {
 	b := ui.ButtonBase(c.Key("shape-"+key)).Grow(1).MinWidth(0).Radius(10).

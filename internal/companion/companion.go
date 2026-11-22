@@ -244,26 +244,11 @@ func (s *Store) save() error {
 		s.saveErr = err
 		return err
 	}
-	if err := writeAtomic(s.dir, append(data, '\n')); err != nil {
+	if err := atomicfile.WriteFile(s.dir, FileName, append(data, '\n'), 0o600); err != nil {
 		s.saveErr = err
 		return err
 	}
 	s.saveErr = nil
-	return nil
-}
-
-// writeAtomic replaces companion.json in one rename, so a crash leaves
-// either the old file or the new one, never half of either.
-func writeAtomic(dir string, data []byte) error {
-	if err := atomicfile.WriteFile(dir, FileName, data, 0o600); err != nil {
-		return err
-	}
-	// The rename itself must reach the disk too, or a crash can leave the
-	// old file — acceptable — or, on some filesystems, neither name.
-	if d, err := os.Open(dir); err == nil {
-		_ = d.Sync()
-		_ = d.Close()
-	}
 	return nil
 }
 

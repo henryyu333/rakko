@@ -222,7 +222,7 @@ func (s *shotSession) measureTexts(c *ui.Context) {
 // textAt returns the topmost finished text under p.
 func (s *shotSession) textAt(p mygo.Point) (int, bool) {
 	for i := len(s.textRects) - 1; i >= 0; i-- {
-		if shotPointInRect(p, s.textRects[i].rect) {
+		if insideRect(p, s.textRects[i].rect) {
 			return s.textRects[i].index, true
 		}
 	}

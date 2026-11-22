@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"syscall"
 )
 
@@ -47,18 +46,4 @@ func lockRoot(root string) (*os.File, error) {
 	_ = f.Truncate(0)
 	_, _ = f.WriteAt([]byte(fmt.Sprintf("%d\n", os.Getpid())), 0)
 	return f, nil
-}
-
-// lockHolder is the " (pid N)" note for a lock conflict, or "" when the
-// holder recorded no pid.
-func lockHolder(lockPath string) string {
-	data, err := os.ReadFile(lockPath)
-	if err != nil {
-		return ""
-	}
-	pid := strings.TrimSpace(string(data))
-	if pid == "" {
-		return ""
-	}
-	return " (pid " + pid + ")"
 }

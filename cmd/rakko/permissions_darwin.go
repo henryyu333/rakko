@@ -263,19 +263,12 @@ func (a *shelf) stopPermissionFlow() {
 // beginPermissionStep and never requested, so their TCC record is never
 // cleared.
 func (a *shelf) startPermissionFlow() {
-	a.stopPermissionFlow()
 	missing := missingSystemPermissions()
-	if len(missing) == 0 {
-		a.repaintSettings()
-		return
-	}
 	ids := make([]string, len(missing))
 	for i, p := range missing {
 		ids[i] = p.id
 	}
-	a.perm = permissionFlow{stage: permissionWaiting, ids: ids}
-	a.repaintSettings()
-	a.beginPermissionStep()
+	a.startPermissionWalk(ids)
 }
 
 // startPermissionWalk runs the same guided flow over caller-chosen ids: the
@@ -394,17 +387,13 @@ type relaunchPlan struct {
 // development run) the executable is started directly. The original
 // arguments are preserved, including --data-dir.
 func relaunchPlanFor(exe string, args []string, pid int) relaunchPlan {
+	if bundle, ok := appBundleForExecutable(exe); ok {
+		return relaunchPlanForBundle(bundle, args, pid)
+	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "while kill -0 %d 2>/dev/null; do sleep 0.1; done; sleep 0.3; ", pid)
-	if bundle, ok := appBundleForExecutable(exe); ok {
-		fmt.Fprintf(&b, "exec /usr/bin/open -n %s", shellQuote(bundle))
-		if len(args) > 0 {
-			b.WriteString(" --args")
-		}
-	} else {
-		b.WriteString("exec ")
-		b.WriteString(shellQuote(exe))
-	}
+	b.WriteString("exec ")
+	b.WriteString(shellQuote(exe))
 	for _, arg := range args {
 		b.WriteByte(' ')
 		b.WriteString(shellQuote(arg))

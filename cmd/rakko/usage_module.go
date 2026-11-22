@@ -977,7 +977,7 @@ func (f *usageFeature) sourceOf(t aiusage.Tool) aiusage.QuotaSource {
 	return f.sources[t]
 }
 
-// refreshSources probes credential sources for all 9 quota tools off the main
+// refreshSources probes credential sources for all 8 quota tools off the main
 // thread and caches the results for the Settings UI.
 func (f *usageFeature) refreshSources(force bool) {
 	if f.deps.detectSource == nil {
