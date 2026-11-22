@@ -246,10 +246,3 @@ func quotableFor(shell windowsShell, value string) bool {
 	}
 	return true
 }
-
-func shellName(shell windowsShell) string {
-	if shell == shellPowerShell {
-		return "PowerShell"
-	}
-	return "cmd.exe"
-}

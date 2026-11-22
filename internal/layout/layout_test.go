@@ -2,8 +2,6 @@ package layout
 
 import (
 	"encoding/json"
-	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -153,7 +151,7 @@ func TestWriteThenLoadRoundTrips(t *testing.T) {
 	dir := t.TempDir()
 	l := Default()
 	l.MoveCard("resize", 0)
-	l.SetSpan("ocr", 2)
+	l.SetCardSize("ocr", 2, 1)
 	l.AddPin(Pin{ID: "clip", Span: 2, Edge: EdgeRight, X: 4, Y: 120, AlwaysOpen: true})
 	if err := Write(dir, l); err != nil {
 		t.Fatal(err)
@@ -471,21 +469,21 @@ func TestSetCardSize(t *testing.T) {
 func TestAddCardKeepsOnePlace(t *testing.T) {
 	l := Default()
 	before := len(l.Cards)
-	l.AddCard("ocr", 2) // already placed: no-op
+	l.AddCardSize("ocr", 2, 1) // already placed: no-op
 	if got := cardIDs(l); len(got) != before {
 		t.Fatalf("duplicated card added: %v", got)
 	}
-	l.AddCard("mystery", 2)
+	l.AddCardSize("mystery", 2, 1)
 	if got := cardIDs(l); got[len(got)-1] != "mystery" || l.Cards[len(l.Cards)-1].Span != 2 {
 		t.Fatalf("mystery not appended with span 2: %+v", l.Cards)
 	}
 	l.AddPin(Pin{ID: "widgetx"})
-	l.AddCard("widgetx", 2) // pinned already: still no-op
+	l.AddCardSize("widgetx", 2, 1) // pinned already: still no-op
 	if slices.Contains(cardIDs(l), "widgetx") {
 		t.Fatalf("pinned card joined the grid: %v", cardIDs(l))
 	}
 	n := len(l.Cards)
-	l.AddCard("playing", 1) // already in the grid: no-op
+	l.AddCardSize("playing", 1, 1) // already in the grid: no-op
 	if len(l.Cards) != n {
 		t.Fatalf("duplicated card added: %v", cardIDs(l))
 	}
@@ -507,19 +505,6 @@ func TestMoveCard(t *testing.T) {
 		t.Fatalf("zip did not move last: %v", got)
 	}
 	l.MoveCard("missing", 0) // absent: no-op, no panic
-}
-
-func TestSetSpan(t *testing.T) {
-	l := Default()
-	l.SetSpan("ocr", 2)
-	if l.Cards[l.index("ocr")].Span != 2 {
-		t.Fatal("span not set")
-	}
-	l.SetSpan("ocr", 9) // out of range: ignored
-	if l.Cards[l.index("ocr")].Span != 2 {
-		t.Fatal("out-of-range span applied")
-	}
-	l.SetSpan("missing", 2) // absent: no panic
 }
 
 func TestAddPinRemovesFromGrid(t *testing.T) {
@@ -622,31 +607,6 @@ func TestGridPersistenceRoundTrip(t *testing.T) {
 	}
 	if len(got.Pins) != 1 || got.Pins[0] != l.Pins[0] {
 		t.Fatalf("pins = %+v, want %+v", got.Pins, l.Pins)
-	}
-}
-
-func TestLoadQuietWith(t *testing.T) {
-	prev := log.Writer()
-	log.SetOutput(io.Discard)
-	t.Cleanup(func() { log.SetOutput(prev) })
-
-	missing := t.TempDir()
-	if got := LoadQuietWith(missing, false); !slices.Equal(got.Home, DefaultWith(false).Home) {
-		t.Fatalf("missing file home = %+v", got.Home)
-	}
-	if _, err := os.Stat(filepath.Join(missing, FileName)); err != nil {
-		t.Fatalf("LoadQuietWith did not create the file: %v", err)
-	}
-
-	broken := t.TempDir()
-	if err := os.WriteFile(filepath.Join(broken, FileName), []byte("{nope"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if got := LoadQuietWith(broken, true); !slices.Equal(cardIDs(got), cardIDs(Default())) {
-		t.Fatalf("broken file cards = %v", cardIDs(got))
-	}
-	if got := LoadQuiet(broken); !slices.Equal(cardIDs(got), cardIDs(Default())) {
-		t.Fatalf("LoadQuiet cards = %v", cardIDs(got))
 	}
 }
 

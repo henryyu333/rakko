@@ -19,6 +19,7 @@ import (
 	"github.com/egoist/mygo/transfer"
 
 	"rakko/internal/platform"
+	"rakko/locales"
 )
 
 // Real-window drop-zone checks, run only under RAKKO_BASKET_SMOKE=1 so the
@@ -165,7 +166,7 @@ func TestDropZoneScreenshots(t *testing.T) {
 	if err := os.WriteFile(payload, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := writeZip(zipPath, []string{payload}, []string{"inner.txt"}, &convertJob{}); err != nil {
+	if err := writeZipIn(locales.In(""), zipPath, []string{payload}, []string{"inner.txt"}, &convertJob{}); err != nil {
 		t.Fatal(err)
 	}
 	shotDropZone(t, a, []string{zipPath}, "zone-archive")
@@ -207,7 +208,7 @@ func TestDropActionsRun(t *testing.T) {
 	drop := func(paths []string, actionID string) {
 		t.Helper()
 		var act *dropAction
-		for _, c := range dropActions(paths) {
+		for _, c := range dropActionsForIn(locales.In(""), paths, classifyDrop(paths)) {
 			if c.id == actionID {
 				cc := c
 				act = &cc
@@ -242,7 +243,7 @@ func TestDropActionsRun(t *testing.T) {
 	if err := os.WriteFile(payload, []byte("内容"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := writeZip(zipSrc, []string{payload}, []string{"内文.txt"}, &convertJob{}); err != nil {
+	if err := writeZipIn(locales.In(""), zipSrc, []string{payload}, []string{"内文.txt"}, &convertJob{}); err != nil {
 		t.Fatal(err)
 	}
 	drop([]string{zipSrc}, "extract")

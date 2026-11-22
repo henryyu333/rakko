@@ -19,7 +19,6 @@ package agentnotify
 // rules, not by cmd's own, so a path ending in a backslash survives.
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -89,27 +88,6 @@ func cmdArg(s string) string {
 	b.WriteString(strings.Repeat(`\\`, slashes))
 	b.WriteByte('"')
 	return b.String()
-}
-
-// shimFallbackEchoSafe reports whether a fallback line can be echoed by
-// cmd.exe unchanged. Every fallback Rakko writes today is plain JSON.
-func shimFallbackEchoSafe(fallback string) bool {
-	return !strings.ContainsAny(fallback, "%!^&|<>()\r\n")
-}
-
-// validateShimFallbacks checks every tool's fallback once, so a future
-// fallback that cmd.exe would mangle fails the tests instead of a user's
-// tool.
-func validateShimFallbacks() error {
-	for _, s := range specs {
-		if s.approve == nil || s.approve.fallback == "" {
-			continue
-		}
-		if !shimFallbackEchoSafe(s.approve.fallback) {
-			return fmt.Errorf("agentnotify: %s's fallback cannot be echoed by cmd.exe", s.tool)
-		}
-	}
-	return nil
 }
 
 // shimExisted reports whether this tool's shim was already on disk before a

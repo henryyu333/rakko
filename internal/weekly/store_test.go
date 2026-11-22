@@ -40,9 +40,6 @@ func TestWeekStartIsLocalMonday(t *testing.T) {
 	if got, want := start.Format(time.RFC3339), "2026-03-09T00:00:00-04:00"; got != want {
 		t.Fatalf("DST week start = %s, want %s", got, want)
 	}
-	if end := WeekEnd(start); !end.Equal(time.Date(2026, 3, 16, 0, 0, 0, 0, ny)) {
-		t.Fatalf("WeekEnd = %v", end)
-	}
 	// A week that *contains* the spring-forward day still has seven days.
 	prev := WeekStart(time.Date(2026, 3, 8, 12, 0, 0, 0, ny))
 	if prev.Equal(start) {

@@ -46,8 +46,8 @@ func TestSmokePinnedOneColumnMusic(t *testing.T) {
 	time.Sleep(300 * time.Millisecond)
 	onMain(func() {
 		p := a.toolsPage()
-		p.toolCardDrop(&toolPress{id: "playing", dragging: true, px: 60, py: 2000, grabDX: 10, grabDY: 10},
-			mygo.Point{X: 60, Y: 2000})
+		p.toolCardDropAt(&toolPress{id: "playing", dragging: true, px: 60, py: 2000, grabDX: 10, grabDY: 10},
+			mygo.Point{X: 60, Y: 2000}, time.Time{})
 	})
 	time.Sleep(400 * time.Millisecond)
 	var num int

@@ -12,7 +12,7 @@ import (
 	"rakko/locales"
 )
 
-// writeZip archives srcs — files and whole folders — into dst, each at
+// writeZipIn archives srcs — files and whole folders — into dst, each at
 // the archive's root under the matching name in roots, as Finder's
 // 压缩 does: folders keep their structure, symbolic links are stored as
 // links (never followed), permissions and modification times are kept,
@@ -20,13 +20,7 @@ import (
 // entries and job.done advances per entry; cancelling stops between
 // entries with errConvertCanceled. The archive is written to a temporary
 // file beside dst and renamed into place, so a failed or cancelled run
-// leaves nothing behind. An entry's failure is worded in the source
-// language; writeZipIn words it in the language of l.
-func writeZip(dst string, srcs, roots []string, job *convertJob) (err error) {
-	return writeZipIn(locales.In(""), dst, srcs, roots, job)
-}
-
-// writeZipIn is writeZip with its errors in the language of l.
+// leaves nothing behind. An entry's failure is worded in the language of l.
 func writeZipIn(l locales.Messages, dst string, srcs, roots []string, job *convertJob) (err error) {
 	total := 0
 	for _, src := range srcs {

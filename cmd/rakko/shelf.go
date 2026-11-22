@@ -137,7 +137,6 @@ type shelf struct {
 	aiQuotaKeyInput                                             string                  // transient API key input buffer (never written to settings.json)
 	aiQuotaDragPending                                          bool                    // true after pressing a quota row handle, before crossing drag slop
 	aiQuotaDragActive                                           bool                    // true while dragging a quota row in Settings to reorder
-	aiQuotaDragIdx                                              int                     // index of the quota row being dragged
 	aiQuotaDragTool                                             aiusage.Tool            // tool currently being dragged in Settings
 	aiQuotaDragDownX, aiQuotaDragDownY                          float32                 // local pointer coords at press for slop check
 	update                                                      *mygo.Update            // version the feed offers, waiting for the user

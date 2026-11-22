@@ -269,12 +269,8 @@ func (p *toolsPage) moveFreshDrag(wx, wy float32, evTime time.Time) {
 	}
 }
 
-// endFreshDrag commits the fresh card at the slot, or cancels it by flying
+// endFreshDragAt commits the fresh card at the slot, or cancels it by flying
 // smoothly back to its library tile.
-func (p *toolsPage) endFreshDrag(wx, wy float32) {
-	p.endFreshDragAt(wx, wy, time.Now())
-}
-
 func (p *toolsPage) endFreshDragAt(wx, wy float32, now time.Time) {
 	d := p.press
 	if d == nil || !d.fresh {

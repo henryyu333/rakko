@@ -309,14 +309,6 @@ func previewFrameForVisual(cursor mygo.Point, area mygo.Rectangle, v dragCardVis
 	return frame, padL, padT, subX, subY
 }
 
-// syncDragPreview shows, moves, or closes the preview window for a card of
-// span columns and cardW pixels grabbed at grabDX/grabDY. inside means the
-// pointer is still inside the panel shape (with hysteresis), where the panel
-// itself draws the card and no desktop preview window opens.
-func (a *shelf) syncDragPreview(pv *dragPreview, id string, span, cardW int, grabDX, grabDY, srcW, srcH float32, cursor mygo.Point, inside bool, tilt float32) {
-	a.syncDragPreviewMorph(pv, layout.Card{ID: id, Span: span, Rows: 1}, cardW, grabDX, grabDY, srcW, srcH, cursor, inside, tilt, 1, 1, time.Time{}, 1, false, time.Now())
-}
-
 // syncDragPreviewMorph places or closes the preview window at now: the
 // morph phase is read on the caller's clock, so an event's own time decides
 // the pose of the frame it produces instead of a second read of the wall
@@ -382,12 +374,8 @@ func (p *toolsPage) toolPointer(ev ui.InputEvent) mygo.Point {
 	}
 }
 
-// syncDragPreview decides between the panel-drawn lifted card and the desktop
+// syncDragPreviewAt decides between the panel-drawn lifted card and the desktop
 // preview window using the panel's drawn shell shape (with hysteresis on exit).
-func (p *toolsPage) syncDragPreview(cursor mygo.Point) {
-	p.syncDragPreviewAt(cursor, time.Now())
-}
-
 func (p *toolsPage) syncDragPreviewAt(cursor mygo.Point, now time.Time) {
 	a, d := p.host, p.press
 	if d == nil || !d.dragging || a.winH == 0 || (a.win == nil && !allowHeadlessPreview) {

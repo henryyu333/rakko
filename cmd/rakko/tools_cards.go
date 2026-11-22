@@ -72,7 +72,6 @@ var (
 	// ocrSymbol 由 screenocr.go（任务 C）提供，这里直接用。
 	// minusSymbol is the edit-mode ⊖ badge.
 	minusSymbol = symbol(`<path d="M5 12h14"/>`)
-	awakeWarn   = warning // 保持唤醒的橙点（设计稿 var(--warn)）
 )
 
 // toolCatalog is every card in library order: actions first, then
@@ -886,15 +885,7 @@ func (a *shelf) toolRecentBody(c *ui.Context, card ui.Element, span int, surf to
 	})
 }
 
-// recentThumb is one 40pt tray file thumbnail on the card: it drags out
-// exactly like the tray tile (the copy lands in drag-out/, original
-// untouched); 拖出后从托盘移除 does not apply — the card is not the tray
-// page.
-func (a *shelf) recentThumb(c *ui.Context, item store.Item) {
-	a.recentThumbAt(c, item, 40)
-}
-
-// recentThumbAt is recentThumb for a widget-driven size (the home canvas
+// recentThumbAt draws a tray file thumbnail at size (the home canvas
 // uses 24/26pt thumbs, the card rows 30).
 func (a *shelf) recentThumbAt(c *ui.Context, item store.Item, size float32) {
 	l := loc(c)
@@ -995,7 +986,7 @@ func (a *shelf) toolUsageBody(c *ui.Context, card ui.Element, span int, surf too
 		}
 		if span < 2 {
 			card.Center().Children(func() {
-				a.toolUsageRing(c, toolUsageRingSize, tool, five, week, stale, ok)
+				a.toolUsageRing(c, tool, five, week, stale, ok)
 			})
 			return
 		}
@@ -1023,34 +1014,22 @@ func (a *shelf) toolUsageBody(c *ui.Context, card ui.Element, span int, surf too
 }
 
 // toolUsageRingSize is the 1 × 1 card's ring diameter: the page's 64pt
-// quota ring at k = 1, which leaves 10pt above and below in the 84pt cell.
-// The 2 × 1 card keeps its shipped 44pt ring, metrics rounded to halves.
-const (
-	toolUsageRingSize     = 64
-	toolUsageRingSizeWide = 44
-)
+// quota ring, which leaves 10pt above and below in the 84pt cell.
+const toolUsageRingSize = 64
 
-// toolUsageRing draws the card's double ring at d, scaled from the page's
-// 64pt one (28 / 20pt radii, 5pt stroke, white even-pace tick): weekly
-// outside, 5-hour inside. mark puts the selected tool's own mark in the
-// middle; without it — and whenever there is no quota data — the gauge
-// does. A stale fetch dims the arcs as the quota card does.
-func (a *shelf) toolUsageRing(c *ui.Context, d float32, tool aiusage.Tool, five, week *aiusage.Window, stale, mark bool) {
-	k := d / 64
-	outer, inner, lw, gauge := 28*k, 20*k, 5*k, 20*k
-	if d != toolUsageRingSize {
-		outer, inner, lw, gauge = 19, 13.5, 3.5, 14 // the 2 × 1 card's ring, unchanged
-	}
-	e := ui.Box(c.Key("tc-ring")).Size(d, d).Center()
+// toolUsageRing draws the 1 × 1 card's double ring (28 / 20pt radii, 5pt
+// stroke, white even-pace tick): weekly outside, 5-hour inside. mark puts
+// the selected tool's own mark in the middle; without it — and whenever
+// there is no quota data — the gauge does. A stale fetch dims the arcs as
+// the quota card does.
+func (a *shelf) toolUsageRing(c *ui.Context, tool aiusage.Tool, five, week *aiusage.Window, stale, mark bool) {
+	const outer, inner, lw, gauge = float32(28), float32(20), float32(5), float32(20)
+	e := ui.Box(c.Key("tc-ring")).Size(toolUsageRingSize, toolUsageRingSize).Center()
 	e.Draw(func(p *ui.Painter, r ui.Rect) {
 		cx, cy := r.X+r.W/2, r.Y+r.H/2
 		if a.usage == nil {
-			// No usage feature at all: the 1 × 1 card still shows its
-			// tracks under the gauge (design §3); the 2 × 1 kept none.
-			if d == toolUsageRingSize {
-				strokeRingTrack(p, cx, cy, outer, lw)
-				strokeRingTrack(p, cx, cy, inner, lw)
-			}
+			strokeRingTrack(p, cx, cy, outer, lw)
+			strokeRingTrack(p, cx, cy, inner, lw)
 			return
 		}
 		a.usage.drawWindowRing(p, r, outer, lw, week, usageWeekly, stale, true)
@@ -1062,7 +1041,7 @@ func (a *shelf) toolUsageRing(c *ui.Context, d float32, tool aiusage.Tool, five,
 			return
 		}
 		logo, col, box := toolLogo(tool)
-		ui.Icon(c, logo).Size(box*k, box*k).TextColor(col)
+		ui.Icon(c, logo).Size(box, box).TextColor(col)
 	})
 }
 

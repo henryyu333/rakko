@@ -194,22 +194,11 @@ func (s *Scanner) Scan(ctx context.Context, progress func(done, total int64)) er
 	prev := s.files
 	s.mu.RUnlock()
 
-	// Carry active DB states (handled below) and drop every other cached
-	// file not seen in this walk. Every parsed record stays in its own
-	// file's state — duplicates are removed when Summary aggregates, so a
-	// surviving copy still counts when the file that "won" a key disappears.
+	// Active DB states are carried below; every other cached file not seen in
+	// this walk is dropped. Every parsed record stays in its own file's state —
+	// duplicates are removed when Summary aggregates, so a surviving copy
+	// still counts when the file that "won" a key disappears.
 	files := make(map[string]*fileState, len(prev))
-	for p, st := range prev {
-		if st == nil {
-			continue
-		}
-		if _, ok := want[p]; ok {
-			continue
-		}
-		if seenDB[p] {
-			continue
-		}
-	}
 
 	type job struct {
 		path string

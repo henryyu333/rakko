@@ -372,7 +372,7 @@ func FetchClaude(ctx context.Context, env Env) Quota {
 		q.Err = shortErr(ctx.Err())
 		return q
 	}
-	if errors.Is(runErr, errClaudeNotInstalled) {
+	if errors.Is(runErr, ErrClaudeNotInstalled) {
 		q.Status = QuotaNoCLI
 		return q
 	}
@@ -474,5 +474,3 @@ func runClaudeCode(ctx context.Context, env Env, args []string, configDir string
 
 // ErrClaudeNotInstalled says no Claude Code binary was found on the machine.
 var ErrClaudeNotInstalled = errors.New("Claude Code is not installed")
-
-var errClaudeNotInstalled = ErrClaudeNotInstalled

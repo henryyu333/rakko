@@ -313,15 +313,9 @@ func extractZipFiles(l locales.Messages, files []*zip.File, stage string, job *c
 	return nil
 }
 
-// listArchive asks bsdtar for a member listing — also the format check,
+// listArchiveIn asks bsdtar for a member listing — also the format check,
 // since an unreadable archive fails here before anything is staged — and
-// rejects unsafe names. Its errors are in the source language;
-// listArchiveIn words them in the language of l.
-func listArchive(src string, job *convertJob) (total int64, err error) {
-	return listArchiveIn(locales.In(""), src, job)
-}
-
-// listArchiveIn is listArchive with its errors in the language of l.
+// rejects unsafe names. Its errors are worded in the language of l.
 func listArchiveIn(l locales.Messages, src string, job *convertJob) (total int64, err error) {
 	out, err := bsdtarRun(job, "-tf", src)
 	if err != nil {

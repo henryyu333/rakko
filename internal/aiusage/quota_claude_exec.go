@@ -24,7 +24,7 @@ func claudeBinary(env Env) (string, error) {
 			return p, nil
 		}
 	}
-	return "", errClaudeNotInstalled
+	return "", ErrClaudeNotInstalled
 }
 
 // cleanClaudeEnv strips the environment variables that would point Claude

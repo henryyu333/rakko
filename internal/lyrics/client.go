@@ -248,10 +248,6 @@ func retryableStatus(status int) bool {
 	return status == http.StatusTooManyRequests || status >= 500
 }
 
-func (f Fetcher) read(ctx context.Context, u string) ([]byte, int, error) {
-	return f.readUA(ctx, u, f.UserAgent)
-}
-
 func (f Fetcher) readUA(ctx context.Context, u, userAgent string) ([]byte, int, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {

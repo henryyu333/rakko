@@ -767,18 +767,6 @@ func enumMonitors() []screenMonitor {
 	return out
 }
 
-func primaryMonitor(ms []screenMonitor) int {
-	for i, m := range ms {
-		if m.bounds.Left == 0 && m.bounds.Top == 0 {
-			return i
-		}
-	}
-	if len(ms) > 0 {
-		return 0
-	}
-	return -1
-}
-
 // dipOrigin is a display's top-left corner in mygo's DIP space, which is
 // the public screen coordinate space: every display's origin is its pixel
 // origin scaled by the smallest scale of the set, so displays of different

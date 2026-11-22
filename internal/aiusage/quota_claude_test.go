@@ -172,7 +172,7 @@ func TestFetchClaudeAuthStatusSaysLoggedOut(t *testing.T) {
 }
 
 func TestFetchClaudeNoCLI(t *testing.T) {
-	cli := &fakeClaudeCLI{usageFail: errClaudeNotInstalled}
+	cli := &fakeClaudeCLI{usageFail: ErrClaudeNotInstalled}
 	env := claudeEnv(t, t.TempDir())
 	env.RunClaude = cli.run
 

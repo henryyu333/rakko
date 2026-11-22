@@ -702,12 +702,6 @@ func settingsToggleRowCap(c *ui.Context, key, label, caption string, captionColo
 	settingsSwitchRow(c, key, label, caption, captionColor, nil, on, apply)
 }
 
-func settingsToggleRowMark(c *ui.Context, key, label, caption string, logo *ui.SVG, color ui.Color, mark float32, on bool, apply func(bool)) {
-	settingsSwitchRow(c, key, label, caption, settingsInk3, func() {
-		settingsMark(c, logo, color, mark)
-	}, on, apply)
-}
-
 // settingsMark draws a row's lead logo inside a 20×20 slot scaled to 16pt.
 func settingsMark(c *ui.Context, logo *ui.SVG, color ui.Color, mark float32) {
 	slot := ui.Box(c.Key("mark")).Size(settingsMarkSlot, settingsMarkSlot)

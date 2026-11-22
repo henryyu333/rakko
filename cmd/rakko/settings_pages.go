@@ -368,7 +368,6 @@ func (a *shelf) settingsAIUsagePage(c *ui.Context) {
 			if i > 0 {
 				settingsSep(c, "quota-"+string(tool))
 			}
-			idx := i
 			t := tool
 			panelOn := a.settings.AIUsage.QuotaCardEnabled(t)
 
@@ -384,7 +383,6 @@ func (a *shelf) settingsAIUsagePage(c *ui.Context) {
 						if ev.Button == 0 {
 							a.aiQuotaDragPending = true
 							a.aiQuotaDragActive = false
-							a.aiQuotaDragIdx = idx
 							a.aiQuotaDragTool = t
 							a.aiQuotaDragDownX = ev.X
 							a.aiQuotaDragDownY = ev.Y
@@ -428,7 +426,6 @@ func (a *shelf) settingsAIUsagePage(c *ui.Context) {
 								target = min(len(curTools)-1, curIdx+steps)
 							}
 							if target != curIdx {
-								a.aiQuotaDragIdx = target
 								a.setAIUsage(func(s *settings.Settings) { s.AIUsage.MoveQuotaTool(curIdx, target) })
 							}
 						}

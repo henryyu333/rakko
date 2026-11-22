@@ -147,9 +147,6 @@ func (a Analysis) Sentence(l locales.Messages) string {
 	}
 }
 
-// HasRisk reports whether any tag was matched.
-func (a Analysis) HasRisk() bool { return len(a.Risks) > 0 }
-
 // MaxRisks is how many tags the card shows; the rest are cut but their
 // severity still colours the card.
 const MaxRisks = 4
@@ -264,16 +261,6 @@ func NeedsHuman(tool Tool, a Analysis) bool {
 		}
 		_, ok := mcpServer(a.ToolName)
 		return ok
-	}
-	return false
-}
-
-// A-class tools are the ones whose hook only fires when the tool would have
-// prompted. The card is the whole point; there is no risk filter.
-func toolClassA(tool Tool) bool {
-	switch tool {
-	case ToolClaude, ToolCodex, ToolQwen, ToolDevin, ToolOpencode, ToolHermes, ToolDsh:
-		return true
 	}
 	return false
 }

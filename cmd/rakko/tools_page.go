@@ -1176,13 +1176,9 @@ func (p *toolsPage) captureSettleOrigin(d *toolPress, now time.Time) (startX, st
 	return startX, startY, startScale, startRot, svx, svy
 }
 
-// toolCardDrop ends a reorder: inside the panel it commits the index shown
+// toolCardDropAt ends a reorder: inside the panel it commits the index shown
 // during the drag, outside the panel it pins the card to the desktop
 // (design §2 把卡片拖出面板边缘 = 固定到桌面), elsewhere it flies back.
-func (p *toolsPage) toolCardDrop(d *toolPress, cursor mygo.Point) {
-	p.toolCardDropAt(d, cursor, time.Now())
-}
-
 func (p *toolsPage) toolCardDropAt(d *toolPress, cursor mygo.Point, now time.Time) {
 	if now.IsZero() {
 		now = time.Now()

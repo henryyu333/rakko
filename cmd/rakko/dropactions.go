@@ -306,26 +306,9 @@ func (a *shelf) finishDropClassify(seq uint64, class dropClass) {
 	a.drop.class = class
 }
 
-// dropActions picks the action cells for the dragged paths, left to
-// right, at most dropMaxCells. No paths — a source vending promised or
-// remote files exposes none until the drop — shows only the 放入托盘 row.
-// It names the cells in the source language; dropActionsIn says them in
-// the language of l.
-func dropActions(paths []string) []dropAction {
-	return dropActionsIn(locales.In(""), paths)
-}
-
-// dropActionsIn is dropActions in the language of l.
-func dropActionsIn(l locales.Messages, paths []string) []dropAction {
-	return dropActionsForIn(l, paths, classifyDrop(paths))
-}
-
-// dropActionsFor is dropActionsIn on a classification the caller already
-// made, in the source language.
-func dropActionsFor(paths []string, class dropClass) []dropAction {
-	return dropActionsForIn(locales.In(""), paths, class)
-}
-
+// dropActionsForIn picks the action cells for paths, left to right, at most
+// dropMaxCells. No paths — a source vending promised or remote files
+// exposes none until the drop — shows only the 放入托盘 row.
 // dropActionsForIn is the cell table in the language of l; the zone
 // classifies once per pasteboard change and reuses the class here.
 func dropActionsForIn(l locales.Messages, paths []string, class dropClass) []dropAction {
@@ -386,18 +369,6 @@ func zipAction(l locales.Messages, n int) dropAction {
 		sub = l.DropCountItems(n)
 	}
 	return dropAction{id: "zip", icon: zipSymbol, label: l.CardZip(), sub: sub, target: toZip}
-}
-
-// dropCountText is the module-bar count: 「3 张图片」, 「1 个压缩包」,
-// 「2 个 PDF」, 「2 项」 for anything mixed.
-func dropCountText(paths []string) string {
-	return dropCountTextIn(locales.In(""), len(paths), classifyDrop(paths))
-}
-
-// dropCountTextFor is dropCountText on a classification the caller
-// already made, in the source language.
-func dropCountTextFor(n int, class dropClass) string {
-	return dropCountTextIn(locales.In(""), n, class)
 }
 
 // dropCountTextIn says the count in the language of l: 「3 张图片」,

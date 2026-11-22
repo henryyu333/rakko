@@ -115,7 +115,7 @@ func TestToolsDropBelowTheViewportPins(t *testing.T) {
 	before := a.toolsLayout().Cards
 	last := before[len(before)-1].ID
 	d := &toolPress{id: last, dragging: true, px: 60, py: py, index: 0, cardX: 0, cardY: 0}
-	p.toolCardDrop(d, mygo.Point{X: 60, Y: 2000})
+	p.toolCardDropAt(d, mygo.Point{X: 60, Y: 2000}, time.Time{})
 	if len(a.pins) != 1 || a.pins[0].cardID != last {
 		t.Fatalf("a release below the viewport did not pin: %d pins", len(a.pins))
 	}
@@ -153,7 +153,7 @@ func TestPinnedWideWidgetsKeepTwoColumns(t *testing.T) {
 	a.frame = mygo.Rectangle{X: a.x, Y: a.y, Width: sheetW, Height: sheetH}
 	p := a.toolsPage()
 	p.editing = true
-	p.toolCardDrop(&toolPress{id: "playing", dragging: true, px: 60, py: 2000, grabDX: 10, grabDY: 10}, mygo.Point{X: 60, Y: 2000})
+	p.toolCardDropAt(&toolPress{id: "playing", dragging: true, px: 60, py: 2000, grabDX: 10, grabDY: 10}, mygo.Point{X: 60, Y: 2000}, time.Time{})
 	if len(a.pins) != 1 || a.pins[0].cardW != pinCardW2 {
 		t.Fatalf("the pinned music card is %+v, want a %dpt window", a.pins, pinCardW2)
 	}

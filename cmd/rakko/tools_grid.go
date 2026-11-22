@@ -255,14 +255,10 @@ func pickInsertSlot(candCount int, current int, px, py float32, cellAt func(i in
 	return current
 }
 
-// toolInsertIndex is where the pointer means to drop the dragged card:
+// toolInsertIndexStable is where the pointer means to drop the dragged card:
 // the index inside cards (without it) whose packed cell's centre is
 // nearest, in row-major scan order, packed at cols columns. It returns -1
 // when the drag id is unknown. px, py are stage content coordinates.
-func toolInsertIndex(cards []layout.Card, cols int, dragID string, current int, px, py float32) int {
-	return toolInsertIndexStable(cards, cols, dragID, current, px, py, nil, nil, nil, time.Time{})
-}
-
 func toolInsertIndexStable(cards []layout.Card, cols int, dragID string, current int, px, py float32, skip func(string) bool, candIdx *int, candSince *time.Time, now time.Time) int {
 	drag := layout.Card{ID: dragID}
 	for _, card := range cards {
@@ -285,13 +281,9 @@ func toolInsertIndexStable(cards []layout.Card, cols int, dragID string, current
 	}, candIdx, candSince, now)
 }
 
-// toolInsertIndexFresh is toolInsertIndex for a card that is not in the
-// list yet (dragged in from the library): the candidate list is the cards
-// with id inserted at each index.
-func toolInsertIndexFresh(cards []layout.Card, cols int, spec layout.Card, current int, px, py float32) int {
-	return toolInsertIndexFreshStable(cards, cols, spec, current, px, py, nil, nil, nil, time.Time{})
-}
-
+// toolInsertIndexFreshStable is toolInsertIndexStable for a card that is not
+// in the list yet (dragged in from the library): the candidate list is the
+// cards with id inserted at each index.
 func toolInsertIndexFreshStable(cards []layout.Card, cols int, spec layout.Card, current int, px, py float32, skip func(string) bool, candIdx *int, candSince *time.Time, now time.Time) int {
 	if spec.ID == "" {
 		return -1

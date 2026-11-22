@@ -11,10 +11,8 @@ package platform
 // the UI still only wakes on a revision change.
 
 import (
-	"context"
 	"crypto/sha1"
 	"encoding/hex"
-	"io"
 	"math"
 	"runtime"
 	"sync"
@@ -119,12 +117,6 @@ type npAction struct {
 // through SMTC.
 func NewNowPlayingHost() *NowPlayingHost {
 	return &NowPlayingHost{updates: make(chan struct{}, 1), done: make(chan struct{})}
-}
-
-// NewNowPlayingHostWithSource keeps the Mac constructor's signature for
-// the tests that drive the protocol with a stub child.
-func NewNowPlayingHostWithSource(source func(ctx context.Context) (io.WriteCloser, io.ReadCloser, func() error, error)) *NowPlayingHost {
-	return NewNowPlayingHost()
 }
 
 // Start begins reading the playing session. A nil error means the host is

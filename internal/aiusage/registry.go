@@ -796,15 +796,6 @@ var registryByTool = func() map[Tool]toolEntry {
 	return m
 }()
 
-// AllTools returns every registered AI tool in display order.
-func AllTools() []Tool {
-	out := make([]Tool, len(registry))
-	for i, e := range registry {
-		out[i] = e.tool
-	}
-	return out
-}
-
 // Name returns the tool's human-readable product name.
 func (t Tool) Name() string {
 	if e, ok := registryByTool[t]; ok {

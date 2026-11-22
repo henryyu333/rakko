@@ -468,7 +468,7 @@ func TestToolsDropInVisibleGridCommits(t *testing.T) {
 	cursorPoint = func() mygo.Point { return mygo.Point{X: 200, Y: 200} } // inside the panel
 	d := &toolPress{id: last, dragging: true, px: 20, py: py, index: 0,
 		cardX: 0, cardY: 400}
-	p.toolCardDrop(d, cursorPoint())
+	p.toolCardDropAt(d, cursorPoint(), time.Time{})
 	after := a.toolsLayout().Cards
 	if len(a.pins) != 0 {
 		t.Fatalf("a drop inside the visible grid pinned the card: %d pins", len(a.pins))
@@ -514,7 +514,7 @@ func TestToolsDragOutWriteFailureKeepsGrid(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
 	a.x, a.y = 400, 0
 	p := &toolsPage{host: a, editing: true}
-	p.toolCardDrop(&toolPress{id: "zip", dragging: true, grabDX: 8, grabDY: 8, px: 20, py: 2000, index: 0}, cursorPoint())
+	p.toolCardDropAt(&toolPress{id: "zip", dragging: true, grabDX: 8, grabDY: 8, px: 20, py: 2000, index: 0}, cursorPoint(), time.Time{})
 	if len(a.pins) != 0 {
 		t.Fatalf("a failed write still opened a pin window: %d pins", len(a.pins))
 	}

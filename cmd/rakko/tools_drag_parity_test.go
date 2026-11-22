@@ -73,15 +73,15 @@ func TestSyncDragPreviewSkipsRedundantFrameUpdates(t *testing.T) {
 
 	pv := &dragPreview{it: &pinItem{owner: a, cardID: "zip", span: 1, cardW: pinCardW, frame: mygo.Rectangle{X: 100, Y: 100, Width: pinCardW, Height: pinCardH}}}
 	cursor := mygo.Point{X: 300, Y: 300}
-	a.syncDragPreview(pv, "zip", 1, pinCardW, 20, 20, 100, 84, cursor, false, 2.31)
+	a.syncDragPreviewMorph(pv, layout.Card{ID: "zip", Span: 1, Rows: 1}, pinCardW, 20, 20, 100, 84, cursor, false, 2.31, 1, 1, time.Time{}, 1, false, time.Now())
 	if pv.it.tilt != 2.31 {
-		t.Fatalf("syncDragPreview tilt=%v, want 2.31", pv.it.tilt)
+		t.Fatalf("syncDragPreviewMorph tilt=%v, want 2.31", pv.it.tilt)
 	}
 	callsAfterFirst := frameCalls
 	// Calling again with identical cursor and tilt must not issue another SetWindowFrame.
-	a.syncDragPreview(pv, "zip", 1, pinCardW, 20, 20, 100, 84, cursor, false, 2.31)
+	a.syncDragPreviewMorph(pv, layout.Card{ID: "zip", Span: 1, Rows: 1}, pinCardW, 20, 20, 100, 84, cursor, false, 2.31, 1, 1, time.Time{}, 1, false, time.Now())
 	if frameCalls != callsAfterFirst {
-		t.Fatalf("redundant syncDragPreview called SetWindowFrame %d -> %d times", callsAfterFirst, frameCalls)
+		t.Fatalf("redundant syncDragPreviewMorph called SetWindowFrame %d -> %d times", callsAfterFirst, frameCalls)
 	}
 }
 

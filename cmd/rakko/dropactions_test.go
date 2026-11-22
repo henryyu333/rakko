@@ -17,7 +17,12 @@ import (
 
 	"rakko/internal/platform"
 	"rakko/internal/store"
+	"rakko/locales"
 )
+
+func testDropActions(paths []string) []dropAction {
+	return dropActionsForIn(locales.In(""), paths, classifyDrop(paths))
+}
 
 // writeFile makes a real file under dir so classification stats it.
 func writeFile(t *testing.T, dir, name string, data []byte) string {
@@ -55,7 +60,7 @@ func TestDropActionsImageRules(t *testing.T) {
 	dir := t.TempDir()
 	png := writeFile(t, dir, "截图.png", testPNGBytes(t))
 
-	one := dropActions([]string{png})
+	one := testDropActions([]string{png})
 	if got := actionIDs(one); !slices.Equal(got, []string{"fit1m", "topdf", "tojpeg", "airdrop"}) {
 		t.Fatalf("one image got %v", got)
 	}
@@ -64,7 +69,7 @@ func TestDropActionsImageRules(t *testing.T) {
 	}
 
 	png2 := writeFile(t, dir, "b.png", testPNGBytes(t))
-	two := dropActions([]string{png, png2})
+	two := testDropActions([]string{png, png2})
 	if two[1].label != "合成一个 PDF" || two[1].target != toMergedPDF {
 		t.Fatalf("multi-image PDF cell = %q target %v", two[1].label, two[1].target)
 	}
@@ -74,13 +79,13 @@ func TestDropActionsAllJPEGSwapsToPNG(t *testing.T) {
 	dir := t.TempDir()
 	a := writeFile(t, dir, "a.jpg", []byte("jpeg"))
 	b := writeFile(t, dir, "b.jpeg", []byte("jpeg"))
-	acts := dropActions([]string{a, b})
+	acts := testDropActions([]string{a, b})
 	if got := actionIDs(acts); !slices.Equal(got, []string{"fit1m", "topdf", "topng", "airdrop"}) {
 		t.Fatalf("all-JPEG got %v", got)
 	}
 	// A PNG among JPEGs keeps 转 JPEG — the swap is all-or-nothing.
 	c := writeFile(t, dir, "c.png", testPNGBytes(t))
-	mixed := dropActions([]string{a, c})
+	mixed := testDropActions([]string{a, c})
 	if !slices.Contains(actionIDs(mixed), "tojpeg") {
 		t.Fatalf("jpeg+png got %v, want tojpeg", actionIDs(mixed))
 	}
@@ -89,7 +94,7 @@ func TestDropActionsAllJPEGSwapsToPNG(t *testing.T) {
 func TestDropActionsPDFRules(t *testing.T) {
 	dir := t.TempDir()
 	pdf := writeFile(t, dir, "报告.pdf", []byte("%PDF-1.4"))
-	acts := dropActions([]string{pdf})
+	acts := testDropActions([]string{pdf})
 	if got := actionIDs(acts); !slices.Equal(got, []string{"toword", "topng", "zip", "airdrop"}) {
 		t.Fatalf("pdf got %v", got)
 	}
@@ -102,7 +107,7 @@ func TestDropActionsArchiveAndMixed(t *testing.T) {
 	dir := t.TempDir()
 	z := writeFile(t, dir, "素材.zip", []byte("PK"))
 	r := writeFile(t, dir, "备份.tar.gz", []byte("x"))
-	if got := actionIDs(dropActions([]string{z, r})); !slices.Equal(got, []string{"extract", "airdrop"}) {
+	if got := actionIDs(testDropActions([]string{z, r})); !slices.Equal(got, []string{"extract", "airdrop"}) {
 		t.Fatalf("archives got %v", got)
 	}
 	folder := filepath.Join(dir, "文件夹")
@@ -110,7 +115,7 @@ func TestDropActionsArchiveAndMixed(t *testing.T) {
 		t.Fatal(err)
 	}
 	txt := writeFile(t, dir, "备忘.txt", []byte("x"))
-	if got := actionIDs(dropActions([]string{folder, txt})); !slices.Equal(got, []string{"zip", "airdrop"}) {
+	if got := actionIDs(testDropActions([]string{folder, txt})); !slices.Equal(got, []string{"zip", "airdrop"}) {
 		t.Fatalf("folder+file got %v", got)
 	}
 	// Folder named like an archive is still a folder, not an archive.
@@ -118,17 +123,17 @@ func TestDropActionsArchiveAndMixed(t *testing.T) {
 	if err := os.Mkdir(zipDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if got := actionIDs(dropActions([]string{zipDir})); !slices.Equal(got, []string{"zip", "airdrop"}) {
+	if got := actionIDs(testDropActions([]string{zipDir})); !slices.Equal(got, []string{"zip", "airdrop"}) {
 		t.Fatalf("folder ending .zip got %v", got)
 	}
 	// Image mixed with a plain file is a mixed drop: zip + airdrop only.
 	img := writeFile(t, dir, "img.png", testPNGBytes(t))
-	if got := actionIDs(dropActions([]string{img, txt})); !slices.Equal(got, []string{"zip", "airdrop"}) {
+	if got := actionIDs(testDropActions([]string{img, txt})); !slices.Equal(got, []string{"zip", "airdrop"}) {
 		t.Fatalf("image+text got %v", got)
 	}
 	// An unreadable path counts as mixed.
 	gone := filepath.Join(dir, "不存在.jpg")
-	if got := actionIDs(dropActions([]string{img, gone})); !slices.Equal(got, []string{"zip", "airdrop"}) {
+	if got := actionIDs(testDropActions([]string{img, gone})); !slices.Equal(got, []string{"zip", "airdrop"}) {
 		t.Fatalf("missing file got %v", got)
 	}
 }
@@ -153,7 +158,7 @@ func TestDropCountText(t *testing.T) {
 		{nil, ""},
 	}
 	for i, tc := range cases {
-		if got := dropCountText(tc.paths); got != tc.want {
+		if got := dropCountTextIn(locales.In(""), len(tc.paths), classifyDrop(tc.paths)); got != tc.want {
 			t.Fatalf("case %d: dropCountText = %q, want %q", i, got, tc.want)
 		}
 	}
@@ -186,7 +191,7 @@ func fileDrop(t *testing.T, paths ...string) transfer.Data {
 func TestRunDropActionConvertDoesNotShelveSources(t *testing.T) {
 	a, f, dir := dropShelf(t)
 	png := writeFile(t, dir, "截图.png", testPNGBytes(t))
-	act := dropActions([]string{png})[2] // 转 JPEG
+	act := testDropActions([]string{png})[2] // 转 JPEG
 	if act.id != "tojpeg" {
 		t.Fatalf("picked %v", act.id)
 	}
@@ -213,7 +218,7 @@ func TestRunDropActionMergedPDFAndFit(t *testing.T) {
 	a, f, dir := dropShelf(t)
 	imgA := writeFile(t, dir, "a.png", testPNGBytes(t))
 	imgB := writeFile(t, dir, "b.png", testPNGBytes(t))
-	acts := dropActions([]string{imgA, imgB})
+	acts := testDropActions([]string{imgA, imgB})
 	if acts[1].id != "topdf" {
 		t.Fatalf("acts = %v", actionIDs(acts))
 	}
@@ -224,7 +229,7 @@ func TestRunDropActionMergedPDFAndFit(t *testing.T) {
 	// 压缩到 1 MB rides the fit pipeline.
 	a2, f3, dir3 := dropShelf(t)
 	img := writeFile(t, dir3, "big.png", make([]byte, 1_500_000))
-	a2.runDropAction(dropActions([]string{img})[0], fileDrop(t, img))
+	a2.runDropAction(testDropActions([]string{img})[0], fileDrop(t, img))
 	if len(f3.fit) != 1 || f3.fit[0][0] != img {
 		t.Fatalf("fit jobs = %v", f3.fit)
 	}
@@ -234,7 +239,7 @@ func TestRunDropActionZipAndExtract(t *testing.T) {
 	a, _, dir := dropShelf(t)
 	x := writeFile(t, dir, "甲.txt", []byte("甲"))
 	y := writeFile(t, dir, "乙.txt", []byte("乙"))
-	a.runDropAction(dropActions([]string{x, y})[0], fileDrop(t, x, y))
+	a.runDropAction(testDropActions([]string{x, y})[0], fileDrop(t, x, y))
 	if len(a.store.Items) != 1 || filepath.Ext(a.store.Items[0].Path) != ".zip" {
 		t.Fatalf("tray = %+v, want one zip", a.store.Items)
 	}
@@ -253,13 +258,13 @@ func TestRunDropActionZipAndExtract(t *testing.T) {
 
 	// 解压: build a zip first, then drop it on the extract cell.
 	arc := filepath.Join(dir, "包.zip")
-	if err := writeZip(arc, []string{x}, []string{"甲.txt"}, &convertJob{}); err != nil {
+	if err := writeZipIn(locales.In(""), arc, []string{x}, []string{"甲.txt"}, &convertJob{}); err != nil {
 		t.Fatal(err)
 	}
 	a2, _, _ := dropShelf(t)
-	act := dropActions([]string{arc})[0]
+	act := testDropActions([]string{arc})[0]
 	if act.id != "extract" {
-		t.Fatalf("archive actions = %v", actionIDs(dropActions([]string{arc})))
+		t.Fatalf("archive actions = %v", actionIDs(testDropActions([]string{arc})))
 	}
 	a2.runDropAction(act, fileDrop(t, arc))
 	if len(a2.store.Items) != 1 || !a2.store.Items[0].Converted {
@@ -281,7 +286,7 @@ func TestRunDropActionAirDropShelveNothing(t *testing.T) {
 		return nil
 	}
 	t.Cleanup(func() { shareNearby = old })
-	for _, act := range dropActions([]string{png}) {
+	for _, act := range testDropActions([]string{png}) {
 		if act.isShare {
 			a.runDropAction(act, fileDrop(t, png))
 		}
@@ -300,7 +305,7 @@ func TestRunDropActionBusyFallsBackToTray(t *testing.T) {
 	// A conversion in flight greys the cells; a drop on one still lands,
 	// on the tray this time.
 	a.conv.job = &convertJob{}
-	a.runDropAction(dropActions([]string{png})[2], fileDrop(t, png))
+	a.runDropAction(testDropActions([]string{png})[2], fileDrop(t, png))
 	if len(f.formats) != 0 {
 		t.Fatalf("busy converter still ran: %v", f.formats)
 	}
@@ -313,7 +318,7 @@ func TestRunDropActionNonFilesFallsBackToTray(t *testing.T) {
 	a, _, _ := dropShelf(t)
 	// A text drop on a cell is unreachable in the UI (cells only accept
 	// files), but the runner defends: no file paths means plain receive.
-	a.runDropAction(dropActions([]string{"/x.png"})[0], transfer.TextData("只是文字"))
+	a.runDropAction(testDropActions([]string{"/x.png"})[0], transfer.TextData("只是文字"))
 	if len(a.store.Items) != 1 || a.store.Items[0].Kind != store.KindText {
 		t.Fatalf("text drop = %+v", a.store.Items)
 	}
@@ -482,7 +487,7 @@ func TestDropZoneSurvivesReleaseFrame(t *testing.T) {
 		t.Fatalf("release frame lost the drop zone; texts %v", view.Texts())
 	}
 	// The cell drop now executes the action, not nothing.
-	a.runDropAction(dropActions([]string{img})[2], fileDrop(t, img)) // 转 JPEG
+	a.runDropAction(testDropActions([]string{img})[2], fileDrop(t, img)) // 转 JPEG
 	if !slices.Equal(f.formats, []platform.ImageFormat{platform.FormatJPEG}) {
 		t.Fatalf("the released action never ran: formats %v", f.formats)
 	}
@@ -583,11 +588,11 @@ func TestDropActionSubtitlesMatchBehavior(t *testing.T) {
 	dir := t.TempDir()
 	one := writeFile(t, dir, "solo.png", testPNGBytes(t))
 	more := writeFile(t, dir, "extra.png", testPNGBytes(t))
-	single := dropActions([]string{one})
+	single := testDropActions([]string{one})
 	if single[1].id != "topdf" || single[1].sub != "1 页" || single[1].target != toPDF {
 		t.Fatalf("single image pdf cell = %+v", single[1])
 	}
-	double := dropActions([]string{one, more})
+	double := testDropActions([]string{one, more})
 	if double[1].target != toMergedPDF {
 		t.Fatalf("multi image pdf cell = %+v", double[1])
 	}
@@ -697,7 +702,7 @@ func TestRunDropActionUsesWhatWasShown(t *testing.T) {
 	png2 := writeFile(t, dir, "图2.png", testPNGBytes(t))
 	a.drop.files = []string{png} // what the zone displayed
 	a.drop.class = classifyDrop(a.drop.files)
-	act := dropActionsFor(a.drop.files, a.drop.class)[1] // 转成 PDF · 1 页
+	act := dropActionsForIn(locales.In(""), a.drop.files, a.drop.class)[1] // 转成 PDF · 1 页
 	if act.id != "topdf" || act.target != toPDF {
 		t.Fatalf("picked %v", act)
 	}

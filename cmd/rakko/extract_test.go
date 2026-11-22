@@ -15,6 +15,8 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+
+	"rakko/locales"
 )
 
 // writeZip builds a zip at path with entries {name → data}; names may be
@@ -626,7 +628,7 @@ func TestExtractErrorExcludesListing(t *testing.T) {
 		}
 	}
 	// The listing path reports a plain-language reason, not raw stderr.
-	if _, err := listArchive(broken, &convertJob{}); err == nil || !strings.Contains(err.Error(), "损坏") {
+	if _, err := listArchiveIn(locales.In(""), broken, &convertJob{}); err == nil || !strings.Contains(err.Error(), "损坏") {
 		t.Fatalf("listArchive error = %v, want the damaged-archive reason", err)
 	}
 }

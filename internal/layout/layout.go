@@ -14,7 +14,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"log"
 	"os"
 	"path/filepath"
 	"slices"
@@ -340,13 +339,6 @@ func (l *Layout) hasCard(id string) bool {
 	return slices.ContainsFunc(l.Pins, func(p Pin) bool { return p.ID == id })
 }
 
-// AddCard appends id to the end of the tool page grid with span clamped
-// to 1 or 2; it is a no-op when the card is already placed anywhere
-// (home canvas, grid, or desktop), the one-card-one-place rule.
-func (l *Layout) AddCard(id string, span int) {
-	l.AddCardSize(id, span, 1)
-}
-
 // AddCardSize places id at the end of the grid with a column and row span.
 func (l *Layout) AddCardSize(id string, span, rows int) {
 	if id == "" || l.hasCard(id) {
@@ -425,16 +417,6 @@ func (l *Layout) RemoveCard(id string) {
 	}
 }
 
-// SetSpan switches id's column span between 1 and 2; absent cards and
-// out-of-range spans do nothing.
-func (l *Layout) SetSpan(id string, span int) {
-	i := l.index(id)
-	if i < 0 || span < 1 || span > 2 {
-		return
-	}
-	l.Cards[i].Span = span
-}
-
 // MoveCard reorders id to before position to: the index it inserts at
 // counting the list without it (n cards means to == n appends). A
 // negative to clamps to 0, an over-the-end one to len.
@@ -506,26 +488,6 @@ func clampSpan(span int) int {
 // clampCells confines a widget side to the 1..2 cells a widget may span.
 func clampCells(n int) int {
 	return max(1, min(n, 2))
-}
-
-// LoadQuiet is Load with the error logged instead of returned, for the
-// app shell's startup path: a broken file falls back to defaults and the
-// user still gets a working page.
-func LoadQuiet(dir string) Layout {
-	l, err := Load(dir)
-	if err != nil {
-		log.Print(err)
-	}
-	return l
-}
-
-// LoadQuietWith is LoadWith with the error logged instead of returned.
-func LoadQuietWith(dir string, aiUsage bool) Layout {
-	l, err := LoadWith(dir, aiUsage)
-	if err != nil {
-		log.Print(err)
-	}
-	return l
 }
 
 // InsertCardSize places id at at in the grid (clamped), with a column and

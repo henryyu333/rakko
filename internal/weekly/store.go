@@ -324,9 +324,6 @@ func WeekStart(t time.Time) time.Time {
 	return midnight.AddDate(0, 0, -(wd - 1))
 }
 
-// WeekEnd is the local Monday after start.
-func WeekEnd(start time.Time) time.Time { return start.AddDate(0, 0, 7) }
-
 // Week aggregates the history inside [start, start+7 days) in start's
 // location. Days with no samples remain Sampled=false; apps are sorted by
 // the larger of the two measures, then by name.

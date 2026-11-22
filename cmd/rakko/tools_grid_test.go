@@ -4,6 +4,7 @@ package main
 
 import (
 	"testing"
+	"time"
 
 	"rakko/internal/layout"
 )
@@ -156,19 +157,19 @@ func TestToolInsertIndex(t *testing.T) {
 	colW, rowH := toolColW(1), float32(toolCellH)
 	// Pointer over cell 2's centre while dragging "a": index 2 — the
 	// virtual order is b c a d e, and a lands where c was.
-	if got := toolInsertIndex(cards, 4, "a", -1, 2*colW+2*toolCellGap+colW/2, rowH/2); got != 2 {
+	if got := toolInsertIndexStable(cards, 4, "a", -1, 2*colW+2*toolCellGap+colW/2, rowH/2, nil, nil, nil, time.Time{}); got != 2 {
 		t.Fatalf("insert = %d, want 2", got)
 	}
 	// Over the first cell: 0.
-	if got := toolInsertIndex(cards, 4, "a", -1, colW/2, rowH/2); got != 0 {
+	if got := toolInsertIndexStable(cards, 4, "a", -1, colW/2, rowH/2, nil, nil, nil, time.Time{}); got != 0 {
 		t.Fatalf("insert = %d, want 0", got)
 	}
 	// Past the last cell of a full row: 4 (before e).
-	if got := toolInsertIndex(cards, 4, "a", -1, 3*colW+3*toolCellGap+colW-1, rowH/2); got != 3 && got != 4 {
+	if got := toolInsertIndexStable(cards, 4, "a", -1, 3*colW+3*toolCellGap+colW-1, rowH/2, nil, nil, nil, time.Time{}); got != 3 && got != 4 {
 		t.Fatalf("row-end insert = %d", got)
 	}
 	// Unknown card: -1.
-	if got := toolInsertIndex(cards, 4, "zz", -1, 0, 0); got != -1 {
+	if got := toolInsertIndexStable(cards, 4, "zz", -1, 0, 0, nil, nil, nil, time.Time{}); got != -1 {
 		t.Fatalf("unknown card insert = %d", got)
 	}
 }
@@ -178,7 +179,7 @@ func TestToolInsertIndexSpans(t *testing.T) {
 	// after "a" rather than overlapping columns.
 	cards := []layout.Card{{ID: "a"}, {ID: "b", Span: 2}, {ID: "c"}, {ID: "d"}}
 	colW := toolColW(1)
-	if got := toolInsertIndex(cards, 4, "b", -1, 2*colW+2*toolCellGap+colW/2, toolCellH/2); got < 1 || got > 3 {
+	if got := toolInsertIndexStable(cards, 4, "b", -1, 2*colW+2*toolCellGap+colW/2, toolCellH/2, nil, nil, nil, time.Time{}); got < 1 || got > 3 {
 		t.Fatalf("span insert = %d", got)
 	}
 }

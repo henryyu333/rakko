@@ -14,6 +14,7 @@ import (
 	"rakko/internal/layout"
 	"rakko/internal/settings"
 	"rakko/internal/store"
+	"rakko/locales"
 )
 
 func TestWindowsHidesShareEverywhereAndPreservesLayoutRecord(t *testing.T) {
@@ -40,7 +41,7 @@ func TestWindowsHidesShareEverywhereAndPreservesLayoutRecord(t *testing.T) {
 		{"mixed", []string{img, txt}, []string{"zip"}},
 	}
 	for _, tc := range cases {
-		acts := dropActions(tc.paths)
+		acts := dropActionsForIn(locales.In(""), tc.paths, classifyDrop(tc.paths))
 		got := make([]string, len(acts))
 		for i, a := range acts {
 			got[i] = a.id

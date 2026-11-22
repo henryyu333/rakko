@@ -24,8 +24,6 @@ const (
 	cardPad     = 10 // content inset, same as the design's 10
 	cardRowH    = 28 // the header row (graphic, name, hero)
 	cardCtrlH   = 24 // the action row
-	cardHeroRow = 26 // 2-column hero
-	cardHero11  = 22 // 1-column hero
 	cardHeroBig = 40 // 2 × 2 hero
 	cardRadius  = 14
 )
@@ -143,26 +141,9 @@ func (a *shelf) cardFoot(c *ui.Context, card ui.Element, key string) ui.Element 
 		Height(cardCtrlH).AlignItems(ui.Center).Gap(5)
 }
 
-// cardTL is the 1-column graphic slot: 10 / 10.
-func (a *shelf) cardTL(c *ui.Context, card ui.Element, key string) ui.Element {
-	return ui.Row(c.Key(key)).Absolute().Left(cardPad).Top(cardPad).Height(22).AlignItems(ui.Center)
-}
-
 // cardTR is the 1-column control slot at the top right: 8 / 8.
 func (a *shelf) cardTR(c *ui.Context, card ui.Element, key string) ui.Element {
 	return ui.Row(c.Key(key)).Absolute().Right(8).Top(8).Height(22).Gap(4).AlignItems(ui.Center)
-}
-
-// cardBL is the 1-column value slot: 10pt from the left and bottom.
-func (a *shelf) cardBL(c *ui.Context, card ui.Element, key string) ui.Element {
-	return ui.Row(c.Key(key)).Absolute().Left(cardPad).Bottom(cardPad).Height(24).AlignItems(ui.End)
-}
-
-// cardName is the 12pt semibold name that follows the status graphic.
-func cardName(c *ui.Context, key string, name string, col ui.Color, avail float32) ui.Element {
-	t := fitText(c, name, 12, 600, avail).TextColor(col)
-	_ = key
-	return t
 }
 
 // cardRingLead draws the status graphic inside a progress ring: a fill3

@@ -194,19 +194,6 @@ type PaceInfo struct {
 	LastsUntilReset bool
 }
 
-// Record is one assistant message's token usage, as logged by its tool.
-// Cost is the tool's own price; Priced is false when the record carried no
-// price (only omp records prices).
-type Record struct {
-	Tool                     Tool
-	At                       time.Time
-	Model                    string
-	Input, Output, CacheRead int64
-	CacheWrite               int64
-	Cost                     float64
-	Priced                   bool
-}
-
 // Range is the usage summary's time span.
 type Range int
 

@@ -311,13 +311,6 @@ func VolumeSupported() bool {
 
 var errAudioVolume = errors.New("windows: the default output device has no writable volume")
 
-// errDomain builds the failure of a call whose platform implementation is
-// scheduled for a later batch. The error names the owning domain, so a
-// user-visible report names the missing feature instead of a blank result.
-func errDomain(domain string) error {
-	return errors.New("platform: the " + domain + " feature is not implemented on Windows yet")
-}
-
 // clampVolume keeps a volume inside the endpoint's 0..1 scalar range. NaN
 // becomes 0 so a calculation slip cannot mute the system by accident.
 func clampVolume(v float32) float32 {

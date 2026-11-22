@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -63,7 +64,7 @@ func dropPin(t *testing.T, id string, size ...int) (*shelf, *pinItem) {
 	p := a.toolsPage()
 	p.editing = true
 	d := &toolPress{id: id, dragging: true, grabDX: 10, grabDY: 10, px: 60, py: 1200}
-	p.toolCardDrop(d, mygo.Point{X: 60, Y: 1200})
+	p.toolCardDropAt(d, mygo.Point{X: 60, Y: 1200}, time.Time{})
 	if len(a.pins) != 1 || a.pins[0].cardID != id {
 		t.Fatalf("drag-out did not pin %s: %+v", id, a.pins)
 	}
