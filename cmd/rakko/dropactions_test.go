@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -779,5 +780,79 @@ func TestDarwinDropZoneIgnoresHoverOfferAndWait(t *testing.T) {
 	a.edgeOpened = true
 	if a.awaitingHoverOffer(time.Now()) {
 		t.Fatal("darwin should never wait for Windows Offer.Files")
+	}
+}
+
+func TestDropZoneClassifyDoesNotBlockRenderThread(t *testing.T) {
+	dir := t.TempDir()
+	// Folder ending with .png: extension alone guesses image, real stat says mixed.
+	dirAsPng := filepath.Join(dir, "folder.png")
+	if err := os.Mkdir(dirAsPng, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	realImg := writeFile(t, dir, "real.png", testPNGBytes(t))
+
+	a, _, _ := snapShelf(t, []string{realImg, dirAsPng})
+
+	gate := make(chan struct{})
+	statStarted := make(chan struct{})
+	var closeGateOnce sync.Once
+	oldStat := dropStat
+	oldUpdate := dropClassifyUpdate
+	t.Cleanup(func() {
+		closeGateOnce.Do(func() { close(gate) })
+		dropStat = oldStat
+		dropClassifyUpdate = oldUpdate
+	})
+	dropStat = func(p string) (os.FileInfo, error) {
+		select {
+		case statStarted <- struct{}{}:
+		default:
+		}
+		<-gate
+		return os.Stat(p)
+	}
+	updated := make(chan struct{}, 1)
+	dropClassifyUpdate = func(_ *shelf, fn func()) {
+		fn()
+		select {
+		case updated <- struct{}{}:
+		default:
+		}
+	}
+
+	// Render frame calls dropZoneSnap while dropStat is blocked on slow SMB I/O:
+	// must return immediately with conservative extension fallback.
+	doneRender := make(chan []string, 1)
+	go func() {
+		doneRender <- a.dropZoneSnap(true)
+	}()
+	select {
+	case got := <-doneRender:
+		if len(got) != 2 {
+			t.Fatalf("dropZoneSnap returned %v", got)
+		}
+	case <-time.After(150 * time.Millisecond):
+		t.Fatal("dropZoneSnap blocked render thread waiting on slow os.Stat")
+	}
+	if a.drop.class != classImages {
+		t.Fatalf("while stat pending expected extension fallback classImages, got %v", a.drop.class)
+	}
+
+	select {
+	case <-statStarted:
+	case <-time.After(time.Second):
+		t.Fatal("background classify never started")
+	}
+
+	// Unblock slow stat: background worker updates classification to classMixed.
+	closeGateOnce.Do(func() { close(gate) })
+	select {
+	case <-updated:
+	case <-time.After(time.Second):
+		t.Fatal("background classify never called update callback")
+	}
+	if a.drop.class != classMixed {
+		t.Fatalf("after stat completed expected classMixed, got %v", a.drop.class)
 	}
 }

@@ -107,12 +107,13 @@ var (
 // files swallowed. done marks the drop consumed (a cell or the plain
 // receive path ran); the grace only ever covers the delivery lag.
 type dropZoneState struct {
-	serial int64     // drag session the cache belongs to
-	count  int64     // drag pasteboard changeCount last read
-	loaded bool      // count and files belong to this session, even when count is zero
-	files  []string  // paths read at count
-	class  dropClass // their classification
-	until  time.Time // hold deadline once the drag flag fell
+	serial   int64     // drag session the cache belongs to
+	count    int64     // drag pasteboard changeCount last read
+	loaded   bool      // count and files belong to this session, even when count is zero
+	files    []string  // paths read at count
+	class    dropClass // their classification (extension estimate first, refined by stat)
+	classSeq uint64    // generation of the active or latest background classifyDrop
+	until    time.Time // hold deadline once the drag flag fell
 	done   bool      // this session's drop already landed
 	frozen bool      // the release happened (or the board rewrote): the shown set is final
 	on     bool      // the zone drew this frame
@@ -207,6 +208,47 @@ const (
 	classMixed                     // anything else: folders, other files, a mix
 )
 
+var (
+	dropStat           = os.Stat
+	dropClassifyWork   = func(fn func()) { go fn() }
+	dropClassifyUpdate = func(a *shelf, fn func()) {
+		if a.win != nil {
+			a.win.Update(fn)
+		}
+	}
+)
+
+// classifyDropByExt classifies paths by filename extension without filesystem I/O.
+// The drop zone uses it on the first frame so slow or disconnected network
+// volumes cannot stall rendering while background stat runs.
+func classifyDropByExt(paths []string) dropClass {
+	if len(paths) == 0 {
+		return classMixed
+	}
+	images, pdfs, archives := true, true, true
+	for _, p := range paths {
+		ext := strings.ToLower(filepath.Ext(p))
+		if !imageExts[ext] {
+			images = false
+		}
+		if ext != ".pdf" {
+			pdfs = false
+		}
+		if archiveExt(p) == "" {
+			archives = false
+		}
+	}
+	switch {
+	case images:
+		return classImages
+	case pdfs:
+		return classPDFs
+	case archives:
+		return classArchives
+	}
+	return classMixed
+}
+
 // classifyDrop sorts the dragged paths into the group the action rules
 // read. A path that fails os.Stat counts as mixed — a vanished file could
 // be anything, and the file actions would only fail later anyway.
@@ -216,7 +258,7 @@ func classifyDrop(paths []string) dropClass {
 	}
 	images, pdfs, archives := true, true, true
 	for _, p := range paths {
-		fi, err := os.Stat(p)
+		fi, err := dropStat(p)
 		if err != nil || fi.IsDir() {
 			return classMixed
 		}
@@ -240,6 +282,28 @@ func classifyDrop(paths []string) dropClass {
 		return classArchives
 	}
 	return classMixed
+}
+
+func (a *shelf) startDropClassify(paths []string) {
+	d := &a.drop
+	d.classSeq++
+	seq := d.classSeq
+	d.class = classifyDropByExt(paths)
+	if len(paths) == 0 {
+		return
+	}
+	check := slices.Clone(paths)
+	dropClassifyWork(func() {
+		class := classifyDrop(check)
+		dropClassifyUpdate(a, func() { a.finishDropClassify(seq, class) })
+	})
+}
+
+func (a *shelf) finishDropClassify(seq uint64, class dropClass) {
+	if a.quitting || a.drop.classSeq != seq {
+		return
+	}
+	a.drop.class = class
 }
 
 // dropActions picks the action cells for the dragged paths, left to
@@ -388,13 +452,13 @@ func (a *shelf) dropZoneSnap(over bool) []string {
 	if a.homeTakesNoDrop() {
 		// The home page is 此刻, not a target: a file dragged over it gets
 		// no zone and no drop, and any picture an earlier page left goes.
-		*d = dropZoneState{serial: d.serial}
+		*d = dropZoneState{serial: d.serial, classSeq: d.classSeq + 1}
 		return nil
 	}
 	if a.ownDrag {
 		// Rakko's own drag-out writes the pasteboard too. It is not an
 		// incoming drag, and a set an earlier drop left must not linger.
-		*d = dropZoneState{serial: d.serial}
+		*d = dropZoneState{serial: d.serial, classSeq: d.classSeq + 1}
 		return nil
 	}
 	// The catch outlives the drop: the otter holds the file, then sinks
@@ -409,7 +473,7 @@ func (a *shelf) dropZoneSnap(over bool) []string {
 	if raw := os.Getenv("RAKKO_DEBUG_DROP_FILES"); raw != "" {
 		if !slices.Equal(d.files, dropDebugFiles()) {
 			d.files = dropDebugFiles()
-			d.class = classifyDrop(d.files)
+			a.startDropClassify(d.files)
 		}
 		if len(d.files) > 0 {
 			d.on, _ = a.dropZoneShow()
@@ -426,14 +490,14 @@ func (a *shelf) dropZoneSnap(over bool) []string {
 	if d.frozen {
 		if d.done || len(d.files) == 0 || (d.until.IsZero() || time.Now().After(d.until)) {
 			d.frozen = false
-			*d = dropZoneState{}
+			*d = dropZoneState{classSeq: d.classSeq + 1}
 			return nil
 		}
 		if a.win != nil {
 			p := cursorPoint()
 			if !insideRect(p, a.panelDropRect()) {
 				d.frozen = false
-				*d = dropZoneState{}
+				*d = dropZoneState{classSeq: d.classSeq + 1}
 				return nil // released outside the panel: nothing to deliver
 			}
 		}
@@ -442,7 +506,7 @@ func (a *shelf) dropZoneSnap(over bool) []string {
 	}
 	if a.dragging {
 		if d.serial != a.dragSerial {
-			*d = dropZoneState{serial: a.dragSerial}
+			*d = dropZoneState{serial: a.dragSerial, classSeq: d.classSeq + 1}
 		}
 		inside := over || a.win == nil
 		if !inside {
@@ -454,6 +518,7 @@ func (a *shelf) dropZoneSnap(over bool) []string {
 			// set must not keep painting the tools page. Re-entering reads
 			// the board again below.
 			d.files, d.class, d.loaded = nil, 0, false
+			d.classSeq++
 			return nil
 		}
 		// Once the zone has files its picture is the snapshot the user aims
@@ -463,7 +528,7 @@ func (a *shelf) dropZoneSnap(over bool) []string {
 		if count := dragFilesChange(a); !d.loaded || (count != d.count && len(d.files) == 0) {
 			d.count, d.loaded = count, true
 			d.files = dragFiles(a)
-			d.class = classifyDrop(d.files)
+			a.startDropClassify(d.files)
 		} else if len(d.files) > 0 && count != d.count {
 			d.frozen = true
 			d.until = time.Now().Add(dropHoldGrace)

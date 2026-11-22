@@ -479,13 +479,8 @@ func (a *shelf) ready(show bool) {
 	// Rakko's own Claude Code lives in its data directory, so an app update
 	// never moves the sign-in and the Mac's own ~/.claude stays untouched.
 	usageEnv.RakkoClaudeDir = filepath.Join(a.dataDir, "claude")
-	usageEnv.Secrets = func(tool aiusage.Tool) string {
-		v, err := mygo.Secrets.Get("aiusage-" + string(tool))
-		if err != nil {
-			return ""
-		}
-		return string(v)
-	}
+	keyStore := newUsageKeyStore(a.dataDir, mygoSecretBackend{})
+	usageEnv.Secrets = keyStore.Get
 	deps := usageDeps{
 		fetchCodex: func(ctx context.Context) aiusage.Quota {
 			q := aiusage.FetchCodex(ctx, usageEnv)
@@ -520,13 +515,7 @@ func (a *shelf) ready(show bool) {
 		detectSource: func(tool aiusage.Tool) aiusage.QuotaSource {
 			return aiusage.DetectQuotaSource(tool, usageEnv)
 		},
-		saveSecret: func(tool aiusage.Tool, key string) error {
-			k := "aiusage-" + string(tool)
-			if key == "" {
-				return mygo.Secrets.Delete(k)
-			}
-			return mygo.Secrets.Set(k, []byte(key))
-		},
+		saveSecret: keyStore.Set,
 		// Rakko signs in its own Claude Code; Claude Code keeps, refreshes
 		// and revokes the credentials, this app only starts the process.
 		loginClaude: func(ctx context.Context) error {
