@@ -795,7 +795,7 @@ func TestDropZoneClassifyDoesNotBlockRenderThread(t *testing.T) {
 	a, _, _ := snapShelf(t, []string{realImg, dirAsPng})
 
 	gate := make(chan struct{})
-	statStarted := make(chan struct{})
+	statStarted := make(chan struct{}, 1)
 	var closeGateOnce sync.Once
 	oldStat := dropStat
 	oldUpdate := dropClassifyUpdate
@@ -855,4 +855,87 @@ func TestDropZoneClassifyDoesNotBlockRenderThread(t *testing.T) {
 	if a.drop.class != classMixed {
 		t.Fatalf("after stat completed expected classMixed, got %v", a.drop.class)
 	}
+}
+
+func TestDropZoneStaleClassifyAfterResetDoesNotOverwriteNewDrag(t *testing.T) {
+	dir := t.TempDir()
+	// Folder ending in .png guesses classImages by extension, resolves to classMixed after stat.
+	dirAsPng := filepath.Join(dir, "folder.png")
+	if err := os.Mkdir(dirAsPng, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	realImg := writeFile(t, dir, "real.png", testPNGBytes(t))
+
+	runCase := func(t *testing.T, closePanel bool) {
+		t.Helper()
+		var workers []func()
+		oldWork := dropClassifyWork
+		oldUpdate := dropClassifyUpdate
+		dropClassifyWork = func(fn func()) { workers = append(workers, fn) }
+		dropClassifyUpdate = func(_ *shelf, fn func()) { fn() }
+		t.Cleanup(func() {
+			dropClassifyWork = oldWork
+			dropClassifyUpdate = oldUpdate
+		})
+
+		curFiles := []string{dirAsPng}
+		a, _, _ := snapShelf(t, curFiles)
+		a.visible = false
+		a.dragging = false
+		oldFiles := dragFiles
+		dragFiles = func(*shelf) []string { return curFiles }
+		t.Cleanup(func() { dragFiles = oldFiles })
+		view := ui.NewTester(a.view, sheetW, panelTestH)
+
+		// Drag 1 starts while panel is open, queuing slow stat worker[0].
+		a.dragSerial = 1
+		a.dragging = true
+		a.visible = true
+		view.Frame()
+		if len(workers) != 1 {
+			t.Fatalf("expected 1 queued worker for drag 1, got %d", len(workers))
+		}
+		if a.drop.class != classImages {
+			t.Fatalf("drag 1 initial extension fallback = %v, want classImages", a.drop.class)
+		}
+
+		if closePanel {
+			// Closing the panel resets a.drop while drag 1's worker is still pending.
+			a.dragging = false
+			a.visible = false
+			view.Frame()
+		} else {
+			// Completing the drop resets a.drop on the d.done path.
+			a.dragging = false
+			a.drop.done = true
+			a.dropZoneSnap(false)
+		}
+
+		// Drag 2 starts with a real PNG; workers[1] completes with classImages.
+		curFiles = []string{realImg}
+		a.dragSerial = 2
+		a.dragging = true
+		a.visible = true
+		view.Frame()
+		if len(workers) != 2 {
+			t.Fatalf("expected 2 queued workers total, got %d", len(workers))
+		}
+		workers[1]()
+		if a.drop.class != classImages {
+			t.Fatalf("drag 2 classification = %v, want classImages", a.drop.class)
+		}
+
+		// Drag 1's stale stat worker finishes late: must NOT overwrite drag 2's classImages.
+		workers[0]()
+		if a.drop.class != classImages {
+			t.Fatalf("stale drag 1 worker overwrote drag 2 class to %v, want classImages", a.drop.class)
+		}
+	}
+
+	t.Run("after-drop-done-reset", func(t *testing.T) {
+		runCase(t, false)
+	})
+	t.Run("after-panel-close-reset", func(t *testing.T) {
+		runCase(t, true)
+	})
 }

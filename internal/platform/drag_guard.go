@@ -88,10 +88,25 @@ var (
 
 	// Tap-thread-only drag pasteboard state; accessed solely inside the serial
 	// CGEventTap callback.
-	tapDragPB      uintptr
+	tapDragPB       uintptr
 	tapDragPBInited bool
-	tapDragFile    bool
+	tapDragFile     bool
+
+	tapPBCalls          atomic.Int64
+	tapPBCreateFn       = func(name uintptr, out *uintptr) int32 { return pbCreate(name, out) }
+	tapPBSyncFn         = func(pb uintptr) uint32 { return pbSync(pb) }
+	tapGetLocationFn    = func(ev uintptr) CGPoint { return cgEventGetLocation(ev) }
+	tapSetLocationFn    = func(ev uintptr, p CGPoint) { cgEventSetLocation(ev, p) }
+	tapWarpCursorFn     = warpCursor
+	tapLeftButtonDownFn = func() bool {
+		return cgEventSourceButtonState(kCGEventSourceStateCombinedSessionState, kCGMouseButtonLeft)
+	}
 )
+
+// DragGuardPasteboardCalls returns the total drag-pasteboard calls made from
+// the CGEventTap callback. Single-screen setups with no upper barrier keep
+// this at zero across clicks, moves, and drags.
+func DragGuardPasteboardCalls() int64 { return tapPBCalls.Load() }
 
 type dragGuardState struct {
 	region DragGuardRegion
@@ -231,13 +246,19 @@ func warpCursor(p CGPoint) {
 	cgAssociateMouseAndCursor(true)
 }
 
+func tapSyncPB(pb uintptr) uint32 {
+	tapPBCalls.Add(1)
+	return tapPBSyncFn(pb)
+}
+
 func ensureTapDragPB() uintptr {
 	if !tapDragPBInited {
 		tapDragPBInited = true
 		if dragBoardName != 0 && pbCreate != nil {
+			tapPBCalls.Add(1)
 			var pb uintptr
-			if pbCreate(uintptr(dragBoardName), &pb) == 0 && pb != 0 {
-				pbSync(pb)
+			if tapPBCreateFn(uintptr(dragBoardName), &pb) == 0 && pb != 0 {
+				tapSyncPB(pb)
 				tapDragPB = pb
 			}
 		}
@@ -288,15 +309,67 @@ func tapUpdateFileDrag(leftDown bool) bool {
 	pb := ensureTapDragPB()
 	if !leftDown {
 		if tapDragFile && pb != 0 {
-			pbSync(pb)
+			tapSyncPB(pb)
 		}
 		tapDragFile = false
 		return false
 	}
-	if pb != 0 && pbSync(pb)&kPasteboardModified != 0 {
+	if pb != 0 && tapSyncPB(pb)&kPasteboardModified != 0 {
 		tapDragFile = tapDragBoardCarriesFiles(pb)
 	}
 	return tapDragFile
+}
+
+func handleDragGuardEvent(s *dragGuardState, parked bool, typ uint32, event uintptr) uintptr {
+	switch typ {
+	case kCGEventLeftMouseDown:
+		if s.region.BarrierEnabled {
+			if pb := ensureTapDragPB(); pb != 0 {
+				tapSyncPB(pb)
+			}
+		}
+		tapDragFile = false
+		if event != 0 && !parked {
+			p := tapGetLocationFn(event)
+			evalMacEdgeGuard(p, s.region, false, true, false)
+		}
+	case kCGEventLeftMouseUp:
+		if s.region.BarrierEnabled {
+			if pb := ensureTapDragPB(); pb != 0 {
+				tapSyncPB(pb)
+			}
+		}
+		tapDragFile = false
+		if event != 0 && !parked {
+			p := tapGetLocationFn(event)
+			evalMacEdgeGuard(p, s.region, false, false, false)
+		}
+	case kCGEventMouseMoved, kCGEventLeftMouseDragged, kCGEventOtherMouseDragged:
+		leftDown := true
+		if typ == kCGEventMouseMoved {
+			leftDown = tapLeftButtonDownFn()
+		}
+		fileDrag := false
+		if s.region.BarrierEnabled {
+			fileDrag = tapUpdateFileDrag(leftDown)
+		} else {
+			tapDragFile = false
+		}
+		if event != 0 {
+			p := tapGetLocationFn(event)
+			if q, changed := evalMacEdgeGuard(p, s.region, parked, leftDown, fileDrag); changed {
+				// Rewrite the event and the hardware cursor:
+				// WindowServer's Spaces edge reads the cursor, not
+				// only the dragged-event location.
+				tapSetLocationFn(event, q)
+				tapWarpCursorFn(q)
+			}
+		}
+	case cgEventTapDisabledByTimeout, cgEventTapDisabledByUserInput:
+		// The event argument is NOT the tap's mach port.
+		cgEventTapEnable(s.port, true)
+	}
+	return event
 }
 
 // A single trampoline serves every drag; purego callbacks cannot be freed.
@@ -308,56 +381,7 @@ func dragGuardCallbackAddr() uintptr {
 			if s == nil {
 				return event
 			}
-			parked := dragGuardParked.Load()
-			switch typ {
-			case kCGEventLeftMouseDown:
-				if pb := ensureTapDragPB(); pb != 0 {
-					pbSync(pb)
-				}
-				tapDragFile = false
-				if event != 0 && !parked {
-					p := cgEventGetLocation(event)
-					evalMacEdgeGuard(p, s.region, false, true, false)
-				}
-			case kCGEventLeftMouseUp:
-				if pb := ensureTapDragPB(); pb != 0 {
-					pbSync(pb)
-				}
-				tapDragFile = false
-				if event != 0 && !parked {
-					p := cgEventGetLocation(event)
-					evalMacEdgeGuard(p, s.region, false, false, false)
-				}
-			case kCGEventMouseMoved:
-				leftDown := cgEventSourceButtonState(kCGEventSourceStateCombinedSessionState, kCGMouseButtonLeft)
-				fileDrag := tapUpdateFileDrag(leftDown)
-				if event != 0 {
-					p := cgEventGetLocation(event)
-					if q, changed := evalMacEdgeGuard(p, s.region, parked, leftDown, fileDrag); changed {
-						// Rewrite the event and the hardware cursor:
-						// WindowServer's Spaces edge reads the cursor, not
-						// only the dragged-event location.
-						cgEventSetLocation(event, q)
-						warpCursor(q)
-					}
-				}
-			case kCGEventLeftMouseDragged, kCGEventOtherMouseDragged:
-				fileDrag := tapUpdateFileDrag(true)
-				if event != 0 {
-					p := cgEventGetLocation(event)
-					if q, changed := evalMacEdgeGuard(p, s.region, parked, true, fileDrag); changed {
-						// Rewrite the event and the hardware cursor:
-						// WindowServer's Spaces edge reads the cursor, not
-						// only the dragged-event location.
-						cgEventSetLocation(event, q)
-						warpCursor(q)
-					}
-				}
-			case cgEventTapDisabledByTimeout, cgEventTapDisabledByUserInput:
-				// The event argument is NOT the tap's mach port.
-				cgEventTapEnable(s.port, true)
-			}
-			return event
+			return handleDragGuardEvent(s, dragGuardParked.Load(), typ, event)
 		})
 	})
 	return dragGuardCallback

@@ -184,12 +184,50 @@ func displayOptions(displays []mygo.Display, friendlyNames map[int64]string, set
 	return opts
 }
 
-func (a *shelf) displaySettingOptions(l locales.Messages) []displayOption {
+type displayOptionsCache struct {
+	valid    bool
+	displays []mygo.Display
+	friendly map[int64]string
+	setting  string
+	langKey  string
+	opts     []displayOption
+}
+
+func (a *shelf) refreshDisplayOptions(l locales.Messages) {
 	displays := screenDisplays()
-	if len(displays) <= 1 {
-		return nil
+	var friendly map[int64]string
+	var opts []displayOption
+	if len(displays) > 1 {
+		friendly = displayFriendlyNames()
+		opts = displayOptions(displays, friendly, a.settings.Display, l)
 	}
-	return displayOptions(displays, displayFriendlyNames(), a.settings.Display, l)
+	a.displayOpts = displayOptionsCache{
+		valid:    true,
+		displays: displays,
+		friendly: friendly,
+		setting:  settings.NormalizeDisplay(a.settings.Display),
+		langKey:  l.SettingsDisplayFollow(),
+		opts:     opts,
+	}
+}
+
+func (a *shelf) displaySettingOptions(l locales.Messages) []displayOption {
+	if !a.displayOpts.valid {
+		a.refreshDisplayOptions(l)
+		return a.displayOpts.opts
+	}
+	mode := settings.NormalizeDisplay(a.settings.Display)
+	langKey := l.SettingsDisplayFollow()
+	if a.displayOpts.setting != mode || a.displayOpts.langKey != langKey {
+		a.displayOpts.setting = mode
+		a.displayOpts.langKey = langKey
+		if len(a.displayOpts.displays) > 1 {
+			a.displayOpts.opts = displayOptions(a.displayOpts.displays, a.displayOpts.friendly, a.settings.Display, l)
+		} else {
+			a.displayOpts.opts = nil
+		}
+	}
+	return a.displayOpts.opts
 }
 
 func (a *shelf) setDisplay(choice string) {
@@ -202,6 +240,7 @@ func (a *shelf) setDisplay(choice string) {
 	if !a.applySettings(next) {
 		return
 	}
+	a.refreshDisplayOptions(a.appLoc())
 	if a.win != nil {
 		a.place(cursorPoint())
 		a.syncMousePassThrough()

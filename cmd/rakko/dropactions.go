@@ -549,7 +549,7 @@ func (a *shelf) dropZoneSnap(over bool) []string {
 		// The drop was consumed: nothing is left to deliver, so the set
 		// does not outlive its own drop (a held set would keep the tools
 		// page looking like a drag the user already finished).
-		*d = dropZoneState{serial: d.serial}
+		*d = dropZoneState{serial: d.serial, classSeq: d.classSeq + 1}
 		return nil
 	}
 	if len(d.files) == 0 {

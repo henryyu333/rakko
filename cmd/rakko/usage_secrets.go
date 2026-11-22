@@ -11,6 +11,7 @@ import (
 	"github.com/egoist/mygo"
 
 	"rakko/internal/aiusage"
+	"rakko/internal/atomicfile"
 )
 
 const usageKeysFileName = "aiusage-keys.json"
@@ -60,7 +61,7 @@ func (s *usageKeyStore) loadFile() map[string]string {
 	return m
 }
 
-func (s *usageKeyStore) writeFileAtomic(m map[string]string) error {
+func (s *usageKeyStore) saveFile(m map[string]string) error {
 	dir := filepath.Dir(s.path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
@@ -70,38 +71,7 @@ func (s *usageKeyStore) writeFileAtomic(m map[string]string) error {
 		return err
 	}
 	data = append(data, '\n')
-	tmp, err := os.CreateTemp(dir, "."+usageKeysFileName+".tmp-*")
-	if err != nil {
-		return err
-	}
-	tmpName := tmp.Name()
-	cleanup := true
-	defer func() {
-		if cleanup {
-			_ = os.Remove(tmpName)
-		}
-	}()
-	if err := tmp.Chmod(0o600); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(tmpName, s.path); err != nil {
-		return err
-	}
-	cleanup = false
-	_ = os.Chmod(s.path, 0o600)
-	return nil
+	return atomicfile.WriteFile(dir, filepath.Base(s.path), data, 0o600)
 }
 
 // Get returns the API key for tool. If absent from the key file, it checks the
@@ -131,7 +101,7 @@ func (s *usageKeyStore) Get(tool aiusage.Tool) string {
 		return ""
 	}
 	keys[string(tool)] = v
-	if err := s.writeFileAtomic(keys); err != nil {
+	if err := s.saveFile(keys); err != nil {
 		return v
 	}
 	_ = s.legacy.Delete(s.secretKey(tool))
@@ -151,7 +121,7 @@ func (s *usageKeyStore) Set(tool aiusage.Tool, key string) error {
 	trimmed := strings.TrimSpace(key)
 	if trimmed == "" {
 		delete(keys, string(tool))
-		if err := s.writeFileAtomic(keys); err != nil {
+		if err := s.saveFile(keys); err != nil {
 			return err
 		}
 		if s.legacy != nil {
@@ -160,5 +130,5 @@ func (s *usageKeyStore) Set(tool aiusage.Tool, key string) error {
 		return nil
 	}
 	keys[string(tool)] = trimmed
-	return s.writeFileAtomic(keys)
+	return s.saveFile(keys)
 }

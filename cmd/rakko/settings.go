@@ -179,6 +179,9 @@ func init() { settingsOpen = (*shelf).openSettings }
 func (a *shelf) openSettings() {
 	if a.settingsWin != nil {
 		a.loginOn, a.loginErr = openAtLogin(), ""
+		if a.settingsPage == settingsPageNotch {
+			a.refreshDisplayOptions(a.appLoc())
+		}
 		a.repaintSettings()
 		platform.ActivateSelf()
 		a.settingsWin.Show()
@@ -190,6 +193,9 @@ func (a *shelf) openSettings() {
 	a.settingsRecording = shortcutNone
 	if !permissionsSupported && a.settingsPage == settingsPagePermissions {
 		a.settingsPage = settingsPageGeneral
+	}
+	if a.settingsPage == settingsPageNotch {
+		a.refreshDisplayOptions(a.appLoc())
 	}
 	winW, winH := a.settingsLastW, a.settingsLastH
 	if winW <= 0 || winH <= 0 {
@@ -378,6 +384,9 @@ func (a *shelf) setSettingsPage(page settingsPageID) {
 	}
 	a.settingsPage = page
 	a.settingsScroll.Y = 0
+	if page == settingsPageNotch {
+		a.refreshDisplayOptions(a.appLoc())
+	}
 	a.endShortcutRecording()
 	a.repaintSettings()
 }

@@ -243,12 +243,95 @@ func TestDisplaySettingsPageInteraction(t *testing.T) {
 
 	// Unplugging down to 1 display hides the entire group.
 	rig.unplug(2)
+	a.displaysChanged()
 	v.Frame()
 	if _, ok := v.Find(l.SettingsDisplayGroup()); ok {
 		t.Fatal("display group still visible with only 1 display connected")
 	}
 	if len(overflows) > 0 {
 		t.Fatalf("label overflows: %v", overflows)
+	}
+}
+
+func TestDisplaySettingsCachesEnumeration(t *testing.T) {
+	rig := newStackedDualDisplayRig(t, true)
+	rig.displays[0].Label = "Built-in"
+	rig.displays[1].Label = "External"
+
+	var dispCalls, friendlyCalls int
+	origDisp := screenDisplays
+	origFriendly := displayFriendlyNames
+	screenDisplays = func() []mygo.Display {
+		dispCalls++
+		return origDisp()
+	}
+	displayFriendlyNames = func() map[int64]string {
+		friendlyCalls++
+		return nil
+	}
+	t.Cleanup(func() {
+		screenDisplays = origDisp
+		displayFriendlyNames = origFriendly
+	})
+
+	a := &shelf{
+		dataDir:      t.TempDir(),
+		settings:     settings.Default(),
+		locale:       "zh-Hans",
+		settingsPage: settingsPageGeneral,
+		thumbnails:   map[string]*ui.Bitmap{},
+		thumbPending: map[string]bool{},
+		appNames:     map[string]string{},
+	}
+	v := ui.NewTester(a.settingsView, settingsWidth, settingsHeight)
+	v.SetLocale("zh-Hans")
+	v.Frame()
+	if dispCalls != 0 || friendlyCalls != 0 {
+		t.Fatalf("General page enumerated displays: disp=%d friendly=%d", dispCalls, friendlyCalls)
+	}
+
+	// Entering settingsPageNotch populates the cache once; subsequent frames read cache only.
+	a.setSettingsPage(settingsPageNotch)
+	if dispCalls != 1 || friendlyCalls != 1 {
+		t.Fatalf("entering page enumerated disp=%d friendly=%d, want 1, 1", dispCalls, friendlyCalls)
+	}
+	for range 10 {
+		v.Frame()
+	}
+	if dispCalls != 1 || friendlyCalls != 1 {
+		t.Fatalf("frames re-enumerated displays: disp=%d friendly=%d, want 1, 1", dispCalls, friendlyCalls)
+	}
+
+	// Clicking an option refreshes once (plus placeAt); further frames do not re-enumerate.
+	if err := v.Click("External · 上方"); err != nil {
+		t.Fatalf("click External: %v", err)
+	}
+	afterClickDisp, afterClickFriendly := dispCalls, friendlyCalls
+	if afterClickFriendly != 2 {
+		t.Fatalf("click friendlyCalls = %d, want 2", afterClickFriendly)
+	}
+	for range 5 {
+		v.Frame()
+	}
+	if dispCalls != afterClickDisp || friendlyCalls != afterClickFriendly {
+		t.Fatalf("frames after click re-enumerated displays: disp %d->%d friendly %d->%d",
+			afterClickDisp, dispCalls, afterClickFriendly, friendlyCalls)
+	}
+
+	// Display unplug/change refreshes cache once (place + refreshDisplayOptions);
+	// subsequent frames read cache only.
+	rig.unplug(2)
+	beforeUnplug := dispCalls
+	a.displaysChanged()
+	afterUnplug := dispCalls
+	for range 5 {
+		v.Frame()
+	}
+	if dispCalls != afterUnplug || friendlyCalls != 2 {
+		t.Fatalf("after displaysChanged frames re-enumerated: disp %d->%d friendly=%d", beforeUnplug, dispCalls, friendlyCalls)
+	}
+	if _, ok := v.Find(locales.In("zh-Hans").SettingsDisplayGroup()); ok {
+		t.Fatal("display group still shown after unplug + displaysChanged")
 	}
 }
 

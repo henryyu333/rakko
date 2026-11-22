@@ -7,8 +7,9 @@ package platform
 // screen's top edge, so when no display sits above Rakko the guard is a
 // no-op and never clamps or warps the cursor. When another display sits
 // directly above Rakko's anchor segment, the shared edge barrier stops
-// upward crossings (except non-file drags) at the junction until the user
-// pushes 80 DIP further up.
+// ordinary upward moves and any OLE drag (files, text, links) at the
+// junction until the user pushes 80 DIP further up, while window moves
+// (not an OLE drag) pass straight through.
 //
 // Windows exposes no API for another process's OLE drag: the data object
 // stays in the source. What it does expose is the capture window OLE puts
@@ -56,9 +57,9 @@ type guiThreadInfo struct {
 	rcCaret       [4]int32
 }
 
-// oleDragCaptureClass (dragCapture) is the capture window OLE's drag loop
-// holds. The class is ole32's hidden clipboard/drag window, shared by every
-// OLE drag source.
+// oleDragCaptureClass is the capture window OLE's drag loop holds. The
+// class is ole32's hidden clipboard/drag window, shared by every OLE drag
+// source.
 const oleDragCaptureClass = "CLIPBRDWNDCLASS"
 
 func windowClass(h uintptr) string {
@@ -183,7 +184,19 @@ var (
 
 	winEdgeMu    sync.Mutex
 	winEdgeState EdgeGuardState
+
+	winCursorPos = getWinCursorPos
+	winLeftHeld  = leftHeld
+	winOLEDrag   = isOLEDragActive
 )
+
+func getWinCursorPos() (winPoint, bool) {
+	var pt winPoint
+	if r, _, _ := procGetCursorPos.Call(uintptr(unsafe.Pointer(&pt))); r == 0 {
+		return winPoint{}, false
+	}
+	return pt, true
+}
 
 // winBarrierRegionIn converts a DIP-space DragGuardRegion into physical screen
 // pixel coordinates and scaled push/reset thresholds for WH_MOUSE_LL.
@@ -266,14 +279,18 @@ func evalWinEdgeBarrier(pt winPoint) (winPoint, bool) {
 	nearOrIn := pt.Y <= int32(reg.BarrierY+reg.BarrierResetMargin) &&
 		(active || (pt.X >= int32(reg.BarrierX) && pt.X < int32(reg.BarrierX+reg.BarrierWidth)))
 	if !active && !nearOrIn {
+		winEdgeMu.Lock()
+		if !winEdgeState.Active() {
+			winEdgeState.Seed(float64(pt.Y))
+		}
+		winEdgeMu.Unlock()
 		return pt, false
 	}
 	// If an external SetCursorPos moved the cursor back below the junction
 	// while passed was armed, re-seed from the real current cursor position so
 	// the very next fast upward sweep still stops at the top edge.
 	if passed && pt.Y <= int32(reg.BarrierY+reg.BarrierResetMargin) {
-		var cur winPoint
-		if r, _, _ := procGetCursorPos.Call(uintptr(unsafe.Pointer(&cur))); r != 0 && cur.Y > int32(reg.BarrierY+reg.BarrierResetMargin) {
+		if cur, ok := winCursorPos(); ok && cur.Y > int32(reg.BarrierY+reg.BarrierResetMargin) {
 			winEdgeMu.Lock()
 			if winEdgeState.Passed() {
 				winEdgeState.Seed(float64(cur.Y))
@@ -281,10 +298,10 @@ func evalWinEdgeBarrier(pt winPoint) (winPoint, bool) {
 			winEdgeMu.Unlock()
 		}
 	}
-	leftDown := leftHeld()
+	leftDown := winLeftHeld()
 	fileDrag := false
 	if leftDown && nearOrIn {
-		fileDrag = isOLEDragActive()
+		fileDrag = winOLEDrag()
 	}
 	parked := winBarrierParked.Load()
 	winEdgeMu.Lock()

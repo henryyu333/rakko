@@ -98,3 +98,84 @@ func TestWinBarrierRegionMixedDPI(t *testing.T) {
 		t.Fatalf("150%% lower + 100%% upper physical adjacency = (%d,%d,%d,%v), want (550,0,180,true)", bx, by, bw, ok)
 	}
 }
+
+func setupWinBarrierTest(t *testing.T, leftDown, oleDrag bool) {
+	t.Helper()
+	origCursor := winCursorPos
+	origLeft := winLeftHeld
+	origOLE := winOLEDrag
+	t.Cleanup(func() {
+		winCursorPos = origCursor
+		winLeftHeld = origLeft
+		winOLEDrag = origOLE
+		winBarrierArmed.Store(false)
+		winBarrierParked.Store(false)
+		winBarrierRegion.Store(nil)
+		winEdgeMu.Lock()
+		winEdgeState = EdgeGuardState{}
+		winEdgeMu.Unlock()
+	})
+	winCursorPos = func() (winPoint, bool) { return winPoint{}, false }
+	winLeftHeld = func() bool { return leftDown }
+	winOLEDrag = func() bool { return oleDrag }
+	winBarrierArmed.Store(true)
+	winBarrierParked.Store(false)
+	winEdgeMu.Lock()
+	winEdgeState = EdgeGuardState{}
+	winEdgeMu.Unlock()
+	reg := DragGuardRegion{
+		BarrierEnabled:     true,
+		BarrierX:           645,
+		BarrierY:           0,
+		BarrierWidth:       180,
+		BarrierPushPt:      80,
+		BarrierResetMargin: 20,
+	}
+	winBarrierRegion.Store(&reg)
+}
+
+func TestWinEdgeBarrierSkipsDoNotLeaveStalePrevY(t *testing.T) {
+	setupWinBarrierTest(t, false, false)
+
+	// Start in anchor X range below the junction, move outside anchor X range,
+	// cross onto upper display outside anchor X range, then slide horizontally
+	// back into anchor X range on the upper display. Must NOT yank to BarrierY.
+	if got, blocked := evalWinEdgeBarrier(winPoint{X: 735, Y: 10}); blocked || got != (winPoint{X: 735, Y: 10}) {
+		t.Fatalf("step 1 below anchor failed: got=%+v blocked=%v", got, blocked)
+	}
+	if got, blocked := evalWinEdgeBarrier(winPoint{X: 300, Y: 10}); blocked || got != (winPoint{X: 300, Y: 10}) {
+		t.Fatalf("step 2 outside anchor below failed: got=%+v blocked=%v", got, blocked)
+	}
+	if got, blocked := evalWinEdgeBarrier(winPoint{X: 300, Y: -250}); blocked || got != (winPoint{X: 300, Y: -250}) {
+		t.Fatalf("step 3 upper outside anchor failed: got=%+v blocked=%v", got, blocked)
+	}
+	if got, blocked := evalWinEdgeBarrier(winPoint{X: 735, Y: -250}); blocked || got != (winPoint{X: 735, Y: -250}) {
+		t.Fatalf("step 4 horizontal entry on upper display yanked cursor: got=%+v blocked=%v", got, blocked)
+	}
+}
+
+func TestWinEdgeBarrierBlocksOLEDragAndPassesWindowDrag(t *testing.T) {
+	// Any OLE drag (files, text, links) stops at BarrierY until 80px upward push.
+	setupWinBarrierTest(t, true, true)
+	if got, blocked := evalWinEdgeBarrier(winPoint{X: 735, Y: 40}); blocked || got != (winPoint{X: 735, Y: 40}) {
+		t.Fatalf("OLE drag below edge altered: got=%+v blocked=%v", got, blocked)
+	}
+	if got, blocked := evalWinEdgeBarrier(winPoint{X: 735, Y: -20}); !blocked || got != (winPoint{X: 735, Y: 0}) {
+		t.Fatalf("OLE drag first crossing did not stop at BarrierY: got=%+v blocked=%v", got, blocked)
+	}
+	if got, blocked := evalWinEdgeBarrier(winPoint{X: 735, Y: -50}); !blocked || got != (winPoint{X: 735, Y: 0}) {
+		t.Fatalf("OLE drag released early at 50px: got=%+v blocked=%v", got, blocked)
+	}
+	if got, blocked := evalWinEdgeBarrier(winPoint{X: 735, Y: -30}); blocked || got != (winPoint{X: 735, Y: -30}) {
+		t.Fatalf("OLE drag did not release after 80px push: got=%+v blocked=%v", got, blocked)
+	}
+
+	// Non-OLE held drag (window move) passes straight across without blocking.
+	setupWinBarrierTest(t, true, false)
+	if got, blocked := evalWinEdgeBarrier(winPoint{X: 735, Y: 40}); blocked || got != (winPoint{X: 735, Y: 40}) {
+		t.Fatalf("window drag below edge altered: got=%+v blocked=%v", got, blocked)
+	}
+	if got, blocked := evalWinEdgeBarrier(winPoint{X: 735, Y: -20}); blocked || got != (winPoint{X: 735, Y: -20}) {
+		t.Fatalf("window drag across junction was blocked: got=%+v blocked=%v", got, blocked)
+	}
+}

@@ -609,6 +609,10 @@ func (a *shelf) ready(show bool) {
 func (a *shelf) displaysChanged() {
 	// 常驻窗口按显示设置重新定位（跟随时按光标，固定时落在指定屏或回主屏）。
 	a.place(cursorPoint())
+	a.refreshDisplayOptions(a.appLoc())
+	if a.settingsPage == settingsPageNotch {
+		a.repaintSettings()
+	}
 	a.wakeMonitor()
 	// 拔掉显示器的固定项回主显示器同一边。
 	a.pinDisplaysChanged()

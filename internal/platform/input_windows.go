@@ -133,10 +133,11 @@ const hookMoveInterval = 8 * time.Millisecond
 
 var hookLastMove atomic.Int64
 
-// mouseHookProc copies one event and returns. Nothing here touches a window
-// or a business callback: a hook proc that blocks makes the system drop the
-// hook, which is what silently stopped hover, click-through switching and
-// drag watching before.
+// mouseHookProc copies one event and returns without blocking calls — it
+// only performs non-blocking queries such as GetAsyncKeyState,
+// GetGUIThreadInfo, and GetCursorPos (never a business callback): a hook
+// proc that blocks makes the system drop the hook, which is what silently
+// stopped hover, click-through switching and drag watching before.
 func mouseHookProc(nCode, wParam, lParam uintptr) uintptr {
 	if int32(nCode) == hcAction {
 		switch wParam {
