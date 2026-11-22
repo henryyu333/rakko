@@ -18,21 +18,21 @@ import (
 // CGPoint uses global display coordinates, with Y increasing downwards.
 type CGPoint struct{ X, Y float64 }
 
-// DragGuardRegion is the notch's protected approach corridor, in screen points.
-// Drag events inside it stop at its lower edge, which remains inside the shelf's
-// drop target. Other displays and the rest of the menu bar are unaffected.
-type DragGuardRegion struct{ X, Y, Width, Height int }
-
 const (
 	kCGHIDEventTap                = 0
 	kCGSessionEventTap            = 1
 	kCGHeadInsertEventTap         = 0
 	kCGEventTapOptionDefault      = 0
+	kCGEventLeftMouseDown         = 1
+	kCGEventLeftMouseUp           = 2
 	kCGEventMouseMoved            = 5
 	kCGEventLeftMouseDragged      = 6
 	kCGEventOtherMouseDragged     = 27
 	cgEventTapDisabledByTimeout   = 0xFFFFFFFE
 	cgEventTapDisabledByUserInput = 0xFFFFFFFF
+
+	kPasteboardModified = 1
+	cfUTF8Encoding      = 0x08000100
 
 	// pinInterval is how often the pin re-checks the cursor during a file
 	// drag. WindowServer reacts to the cursor sitting at the top edge, so a
@@ -54,6 +54,14 @@ var (
 	cgAssociateMouseAndCursor     func(connected bool) int32
 	axIsProcessTrusted            func() bool
 	axIsProcessTrustedWithOptions func(options uintptr) bool
+	pbCreate                      func(name uintptr, out *uintptr) int32
+	pbSync                        func(pb uintptr) uint32
+	pbGetItemCount                func(pb uintptr, count *uintptr) int32
+	pbGetItemIdentifier           func(pb uintptr, index int, item *uintptr) int32
+	pbCopyItemFlavors             func(pb uintptr, item uintptr, out *uintptr) int32
+	cfArrayGetCount               func(arr uintptr) int
+	cfArrayGetValueAtIndex        func(arr uintptr, idx int) uintptr
+	cfStringGetCString            func(s uintptr, buf *byte, maxLen int, enc uint32) bool
 	cfRunLoopGetCurrent           func() uintptr
 	cfRunLoopRunInMode            func(mode uintptr, seconds float64, returnAfterSourceHandled bool) int32
 	cfRunLoopStop                 func(runLoop uintptr)
@@ -67,13 +75,19 @@ var (
 	dragGuardOnce                 sync.Once
 	dragGuardErr                  error
 	dragGuardArmed                atomic.Pointer[dragGuardState]
-	// dragGuardParked makes the armed filter pass drag events through
-	// untouched. The app's own island gesture parks it: the corridor's clamp
-	// would push that swipe — and the capsule under the pointer — down onto
-	// its landing row, which the user never asked for.
+	// dragGuardParked makes the armed filter pass events through untouched.
 	dragGuardParked       atomic.Bool
 	dragGuardCallbackOnce sync.Once
 	dragGuardCallback     uintptr
+
+	macEdgeMu    sync.Mutex
+	macEdgeState EdgeGuardState
+
+	// Tap-thread-only drag pasteboard state; accessed solely inside the serial
+	// CGEventTap callback.
+	tapDragPB      uintptr
+	tapDragPBInited bool
+	tapDragFile    bool
 )
 
 type dragGuardState struct {
@@ -105,6 +119,11 @@ func loadDragGuard() error {
 		}
 		purego.RegisterLibFunc(&axIsProcessTrusted, services, "AXIsProcessTrusted")
 		purego.RegisterLibFunc(&axIsProcessTrustedWithOptions, services, "AXIsProcessTrustedWithOptions")
+		purego.RegisterLibFunc(&pbCreate, services, "PasteboardCreate")
+		purego.RegisterLibFunc(&pbSync, services, "PasteboardSynchronize")
+		purego.RegisterLibFunc(&pbGetItemCount, services, "PasteboardGetItemCount")
+		purego.RegisterLibFunc(&pbGetItemIdentifier, services, "PasteboardGetItemIdentifier")
+		purego.RegisterLibFunc(&pbCopyItemFlavors, services, "PasteboardCopyItemFlavors")
 		purego.RegisterLibFunc(&cgEventTapCreate, libCG, "CGEventTapCreate")
 		purego.RegisterLibFunc(&cgEventTapEnable, libCG, "CGEventTapEnable")
 		purego.RegisterLibFunc(&cgEventCreate, libCG, "CGEventCreate")
@@ -112,6 +131,9 @@ func loadDragGuard() error {
 		purego.RegisterLibFunc(&cgEventSetLocation, libCG, "CGEventSetLocation")
 		purego.RegisterLibFunc(&cgWarpMouseCursorPosition, libCG, "CGWarpMouseCursorPosition")
 		purego.RegisterLibFunc(&cgAssociateMouseAndCursor, libCG, "CGAssociateMouseAndMouseCursorPosition")
+		purego.RegisterLibFunc(&cfArrayGetCount, libCoreFoundation, "CFArrayGetCount")
+		purego.RegisterLibFunc(&cfArrayGetValueAtIndex, libCoreFoundation, "CFArrayGetValueAtIndex")
+		purego.RegisterLibFunc(&cfStringGetCString, libCoreFoundation, "CFStringGetCString")
 		purego.RegisterLibFunc(&cfRunLoopGetCurrent, libCoreFoundation, "CFRunLoopGetCurrent")
 		purego.RegisterLibFunc(&cfRunLoopRunInMode, libCoreFoundation, "CFRunLoopRunInMode")
 		purego.RegisterLibFunc(&cfRunLoopStop, libCoreFoundation, "CFRunLoopStop")
@@ -144,10 +166,6 @@ func CanSendInput() bool {
 }
 
 // RequestAccessibility is the user-initiated path to grant the permission.
-// macOS ties an ad-hoc signed app's grant to its exact build, so an update
-// leaves a stale, switched-on entry that no longer applies and suppresses the
-// system prompt. When untrusted, the app's own entry is cleared first (it
-// grants nothing to this build) and macOS is then asked to prompt again.
 func RequestAccessibility() bool {
 	if err := loadDragGuard(); err != nil {
 		return false
@@ -156,8 +174,6 @@ func RequestAccessibility() bool {
 		return true
 	}
 	if id := bundleIdentifier(); id != "" {
-		// Fails harmlessly when there is no record yet (first grant);
-		// the prompt below covers that case.
 		_ = exec.Command("/usr/bin/tccutil", "reset", "Accessibility", id).Run()
 	}
 	trusted := false
@@ -170,8 +186,6 @@ func RequestAccessibility() bool {
 	return trusted
 }
 
-// bundleIdentifier is empty when running outside an app bundle (go run/test),
-// which keeps development runs from touching any permission record.
 func bundleIdentifier() string {
 	var out string
 	withPool(func() {
@@ -181,12 +195,21 @@ func bundleIdentifier() string {
 }
 
 func clampDragPoint(p CGPoint, r DragGuardRegion) CGPoint {
-	if r.Width <= 0 || r.Height <= 0 || p.X < float64(r.X) || p.X >= float64(r.X+r.Width) ||
-		p.Y < float64(r.Y) || p.Y >= float64(r.Y+r.Height) {
+	nx, ny, changed := clampCorridorPoint(p.X, p.Y, r)
+	if !changed {
 		return p
 	}
-	p.Y = float64(r.Y + r.Height)
-	return p
+	return CGPoint{X: nx, Y: ny}
+}
+
+func evalMacEdgeGuard(p CGPoint, r DragGuardRegion, parked, leftDown, fileDrag bool) (CGPoint, bool) {
+	macEdgeMu.Lock()
+	nx, ny, changed := macEdgeState.Eval(p.X, p.Y, r, parked, leftDown, fileDrag, true)
+	macEdgeMu.Unlock()
+	if !changed {
+		return p, false
+	}
+	return CGPoint{X: nx, Y: ny}, true
 }
 
 // warpCursor moves the hardware cursor and immediately re-associates the
@@ -197,34 +220,122 @@ func warpCursor(p CGPoint) {
 	cgAssociateMouseAndCursor(true)
 }
 
-// A single trampoline serves every drag; purego callbacks cannot be freed.
-// It runs on the filter's own thread and only compares and rewrites points.
+func ensureTapDragPB() uintptr {
+	if !tapDragPBInited {
+		tapDragPBInited = true
+		if dragBoardName != 0 && pbCreate != nil {
+			var pb uintptr
+			if pbCreate(uintptr(dragBoardName), &pb) == 0 && pb != 0 {
+				pbSync(pb)
+				tapDragPB = pb
+			}
+		}
+	}
+	return tapDragPB
+}
+
+func tapDragBoardCarriesFiles(pb uintptr) bool {
+	if pb == 0 {
+		return false
+	}
+	var count uintptr
+	if pbGetItemCount(pb, &count) != 0 || count == 0 {
+		return false
+	}
+	if count > 8 {
+		count = 8
+	}
+	var flavors []string
+	var buf [128]byte
+	for i := 1; i <= int(count); i++ {
+		var itemID uintptr
+		if pbGetItemIdentifier(pb, i, &itemID) != 0 {
+			continue
+		}
+		var arr uintptr
+		if pbCopyItemFlavors(pb, itemID, &arr) != 0 || arr == 0 {
+			continue
+		}
+		n := cfArrayGetCount(arr)
+		for j := 0; j < n; j++ {
+			cfStr := cfArrayGetValueAtIndex(arr, j)
+			if cfStr != 0 && cfStringGetCString(cfStr, &buf[0], len(buf), cfUTF8Encoding) {
+				for k, b := range buf {
+					if b == 0 {
+						flavors = append(flavors, string(buf[:k]))
+						break
+					}
+				}
+			}
+		}
+		cfRelease(arr)
+	}
+	return DragMayCarryFiles(flavors)
+}
+
+func tapUpdateFileDrag(leftDown bool) bool {
+	pb := ensureTapDragPB()
+	if !leftDown {
+		if tapDragFile && pb != 0 {
+			pbSync(pb)
+		}
+		tapDragFile = false
+		return false
+	}
+	if pb != 0 && pbSync(pb)&kPasteboardModified != 0 {
+		tapDragFile = tapDragBoardCarriesFiles(pb)
+	}
+	return tapDragFile
+}
+
+// A single trampoline serves every event; purego callbacks cannot be freed.
 func dragGuardCallbackAddr() uintptr {
 	dragGuardCallbackOnce.Do(func() {
 		dragGuardCallback = purego.NewCallback(func(_ uintptr, typ uint32, event uintptr, _ uintptr) uintptr {
 			s := dragGuardArmed.Load()
-			if s == nil || dragGuardParked.Load() {
+			if s == nil {
 				return event
 			}
+			parked := dragGuardParked.Load()
 			switch typ {
-			case kCGEventMouseMoved:
-				if !cgEventSourceButtonState(kCGEventSourceStateCombinedSessionState, kCGMouseButtonLeft) {
-					return event
+			case kCGEventLeftMouseDown:
+				if pb := ensureTapDragPB(); pb != 0 {
+					pbSync(pb)
 				}
-				fallthrough
-			case kCGEventLeftMouseDragged, kCGEventOtherMouseDragged:
+				tapDragFile = false
+				if event != 0 && !parked {
+					p := cgEventGetLocation(event)
+					evalMacEdgeGuard(p, s.region, false, true, false)
+				}
+			case kCGEventLeftMouseUp:
+				if pb := ensureTapDragPB(); pb != 0 {
+					pbSync(pb)
+				}
+				tapDragFile = false
+				if event != 0 && !parked {
+					p := cgEventGetLocation(event)
+					evalMacEdgeGuard(p, s.region, false, false, false)
+				}
+			case kCGEventMouseMoved:
+				leftDown := cgEventSourceButtonState(kCGEventSourceStateCombinedSessionState, kCGMouseButtonLeft)
+				fileDrag := tapUpdateFileDrag(leftDown)
 				if event != 0 {
 					p := cgEventGetLocation(event)
-					if q := clampDragPoint(p, s.region); q != p {
-						// Rewrite the event and the hardware cursor:
-						// WindowServer's Spaces edge reads the cursor, not
-						// only the dragged-event location.
+					if q, changed := evalMacEdgeGuard(p, s.region, parked, leftDown, fileDrag); changed {
+						cgEventSetLocation(event, q)
+						warpCursor(q)
+					}
+				}
+			case kCGEventLeftMouseDragged, kCGEventOtherMouseDragged:
+				fileDrag := tapUpdateFileDrag(true)
+				if event != 0 {
+					p := cgEventGetLocation(event)
+					if q, changed := evalMacEdgeGuard(p, s.region, parked, true, fileDrag); changed {
 						cgEventSetLocation(event, q)
 						warpCursor(q)
 					}
 				}
 			case cgEventTapDisabledByTimeout, cgEventTapDisabledByUserInput:
-				// The event argument is NOT the tap's mach port.
 				cgEventTapEnable(s.port, true)
 			}
 			return event
@@ -233,11 +344,9 @@ func dragGuardCallbackAddr() uintptr {
 	return dragGuardCallback
 }
 
-// StartDragGuard installs an active mouse-drag filter on a dedicated thread,
-// so a busy UI thread can neither delay drag events nor get the filter
-// disabled by the system for being slow. It never requests a permission.
-// Missing trust or native setup failure is returned to the caller.
-// Only one guard may be active; start/stop are called on the AppKit main thread.
+// StartDragGuard installs an active mouse filter on a dedicated thread.
+// Missing Accessibility trust or setup failure returns an error without
+// prompting the user. Main thread only.
 func StartDragGuard(region DragGuardRegion) (func(), error) {
 	if region.Width <= 0 || region.Height <= 0 {
 		return nil, errors.New("notch drag guard region is invalid")
@@ -251,9 +360,16 @@ func StartDragGuard(region DragGuardRegion) (func(), error) {
 	if dragGuardArmed.Load() != nil {
 		return nil, errors.New("mac: a drag guard is already active")
 	}
+	if ev := cgEventCreate(0); ev != 0 {
+		p := cgEventGetLocation(ev)
+		cfRelease(ev)
+		macEdgeMu.Lock()
+		macEdgeState.Seed(p.Y)
+		macEdgeMu.Unlock()
+	}
 	var (
 		stopping atomic.Bool
-		ready    = make(chan uintptr, 1) // filter thread's run loop, 0 on failure
+		ready    = make(chan uintptr, 1)
 		done     = make(chan struct{})
 		failure  error
 	)
@@ -261,10 +377,11 @@ func StartDragGuard(region DragGuardRegion) (func(), error) {
 		runtime.LockOSThread()
 		defer runtime.UnlockOSThread()
 		defer close(done)
-		// HID-level first: WindowServer's edge gesture reads the cursor
-		// before a session tap can rewrite it. Fall back to a session tap
-		// when the process is trusted but the HID tap is refused.
-		const dragMask = 1<<kCGEventLeftMouseDragged | 1<<kCGEventMouseMoved | 1<<kCGEventOtherMouseDragged
+		const dragMask = 1<<kCGEventLeftMouseDown |
+			1<<kCGEventLeftMouseUp |
+			1<<kCGEventMouseMoved |
+			1<<kCGEventLeftMouseDragged |
+			1<<kCGEventOtherMouseDragged
 		port := cgEventTapCreate(kCGHIDEventTap, kCGHeadInsertEventTap, kCGEventTapOptionDefault,
 			dragMask, dragGuardCallbackAddr(), 0)
 		if port == 0 {
@@ -310,47 +427,48 @@ func StartDragGuard(region DragGuardRegion) (func(), error) {
 			stopping.Store(true)
 			cfRunLoopStop(loop)
 			<-done
+			macEdgeMu.Lock()
+			macEdgeState.Reset()
+			macEdgeMu.Unlock()
 		})
 	}, nil
 }
 
-// SetDragGuardRegion updates the armed corridor without tearing the tap
-// down. No-op when no guard is running.
+// SetDragGuardRegion updates the armed region without tearing the tap down.
 func SetDragGuardRegion(region DragGuardRegion) {
 	s := dragGuardArmed.Load()
 	if s == nil || region.Width <= 0 || region.Height <= 0 {
 		return
 	}
+	if s.region != region {
+		macEdgeMu.Lock()
+		macEdgeState.Reset()
+		macEdgeMu.Unlock()
+	}
 	dragGuardArmed.Store(&dragGuardState{region: region, port: s.port})
 }
 
-// ParkDragGuard parks or unparks the armed filter, if any: a parked filter
-// clamps nothing and rewrites no event, and it keeps its corridor for the
-// unpark. The tap deliberately stays installed — the app parks it for its own
-// island gesture, which must never be pushed by the notch corridor, and a
-// teardown there would cost a new tap (and a new permission check) on every
-// click. Unlike the region, parking is independent of whether a tap exists,
-// so the caller may set it at any time. Main thread only, like StartDragGuard.
+// ParkDragGuard parks or unparks the armed filter.
 func ParkDragGuard(parked bool) {
 	dragGuardParked.Store(parked)
 }
 
 var pin struct {
 	region atomic.Pointer[DragGuardRegion]
-	// armed is set by each SetDragPin(active) call — made only while
-	// DragState sees the button held — and cleared by the pin itself on
-	// button release, so a click right after a drop is never moved.
-	armed atomic.Bool
-	stop  chan struct{} // non-nil while the pin goroutine runs; main thread only
-	done  chan struct{}
+	armed  atomic.Bool
+	stop   chan struct{}
+	done   chan struct{}
 }
 
-// SetDragPin keeps the cursor out of region while a file drag is active,
-// independently of the event filter: it needs no permission and catches the
-// cursor even when no drag event reaches the filter. It polls the cursor on
-// its own goroutine every pinInterval and only runs during drags.
-// Main thread only.
+// SetDragPin keeps the cursor out of the legacy drop corridor during drags when
+// no Accessibility event tap is handling upper-display barriers. Main thread only.
 func SetDragPin(region DragGuardRegion, active bool) {
+	if s := dragGuardArmed.Load(); s != nil && s.region.BarrierEnabled {
+		active = false
+	}
+	// Untrusted processes never block on upper displays; keep single-screen
+	// corridor pin behavior identical to before.
+	region.BarrierEnabled = false
 	if !active || region.Width <= 0 || region.Height <= 0 || loadDragGuard() != nil {
 		pin.armed.Store(false)
 		if pin.stop != nil {
@@ -390,7 +508,7 @@ func SetDragPin(region DragGuardRegion, active bool) {
 			}
 			p := cgEventGetLocation(ev)
 			cfRelease(ev)
-			if q := clampDragPoint(p, *pin.region.Load()); q != p {
+			if q, changed := evalMacEdgeGuard(p, *pin.region.Load(), dragGuardParked.Load(), true, true); changed {
 				warpCursor(q)
 			}
 		}

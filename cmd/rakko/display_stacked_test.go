@@ -55,12 +55,15 @@ func newStackedDualDisplayRig(t *testing.T, lowerNotch bool) *syntheticDisplayRi
 	oldDisplays := screenDisplays
 	oldNotch := notchRect
 	oldCursor := cursorPoint
+	oldBarrier := resolveUpperSegment
 	t.Cleanup(func() {
 		displayNearest = oldNearest
 		screenDisplays = oldDisplays
 		notchRect = oldNotch
 		cursorPoint = oldCursor
+		resolveUpperSegment = oldBarrier
 	})
+	resolveUpperSegment = upperDisplayTouchesSegment
 
 	displayNearest = func(p mygo.Point) mygo.Display {
 		return nearestDisplayIn(rig.displays, p)

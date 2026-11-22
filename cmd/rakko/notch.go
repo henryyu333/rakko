@@ -72,11 +72,13 @@ func (a *shelf) placeAt(p mygo.Point) {
 	// when the notch style is chosen; the measurement below is what encodes
 	// that, so the flag is applied first.
 	platform.SetSimulatedNotch(a.settings.ShellStyle.Normalized() != settings.ShellStyleIsland)
-	var ds []mygo.Display
+	ds := screenDisplays()
+	var resolveList []mygo.Display
 	if !a.followsPointerDisplay() {
-		ds = screenDisplays()
+		resolveList = ds
 	}
-	d := resolveTargetDisplay(ds, a.settings.Display, p, displayNearest)
+	d := resolveTargetDisplay(resolveList, a.settings.Display, p, displayNearest)
+	a.displays = ds
 	a.dispBounds, a.dispWork = d.Bounds, d.WorkArea
 	a.dispID = d.ID
 	nx, ny, nw, nh, hasNotch := notchRect(d.ID)
@@ -158,6 +160,14 @@ func (a *shelf) overHoverAnchor(p mygo.Point, now time.Time) bool {
 		return false
 	}
 	if a.island || !notchTopEdgeHoverOnly || a.shellVisibleOnNotch(now) {
+		if a.island && a.islandDY == 0 && a.upperBarrierActive() {
+			r := a.islandRect()
+			if a.notchW > 0 && a.notchH > 0 &&
+				p.X >= r.X-notchHoverPadX && p.X <= r.X+r.Width+notchHoverPadX &&
+				p.Y >= a.dispBounds.Y && p.Y <= r.Y+r.Height+notchHoverPadY {
+				return true
+			}
+		}
 		return a.overAnchor(p)
 	}
 	return a.notchW > 0 && a.notchH > 0 &&

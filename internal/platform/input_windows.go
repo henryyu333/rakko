@@ -143,8 +143,16 @@ func mouseHookProc(nCode, wParam, lParam uintptr) uintptr {
 		case wmLButtonDown, wmRButtonDown, wmMButtonDown, wmXButtonDown:
 			queueMouseEvent(mouseHookEvent{press: true, button: mouseButton(wParam), pt: hookPoint(lParam)})
 		case wmMouseMove:
+			pt := hookPoint(lParam)
+			if clamped, blocked := evalWinEdgeBarrier(pt); blocked {
+				if hookMoveDue() {
+					queueMouseEvent(mouseHookEvent{pt: clamped, drag: leftHeld()})
+				}
+				procSetCursorPos.Call(uintptr(clamped.X), uintptr(clamped.Y))
+				return 1
+			}
 			if hookMoveDue() {
-				queueMouseEvent(mouseHookEvent{pt: hookPoint(lParam), drag: leftHeld()})
+				queueMouseEvent(mouseHookEvent{pt: pt, drag: leftHeld()})
 			}
 		}
 	}

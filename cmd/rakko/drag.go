@@ -47,8 +47,12 @@ func (a *shelf) dropBandX(p mygo.Point) bool {
 		// row below it. Rows above the capsule stay the menu bar's.
 		r := a.islandRect()
 		_, baseH := a.anchorSize()
+		topY := r.Y
+		if a.islandDY == 0 && a.upperBarrierActive() {
+			topY = a.dispBounds.Y
+		}
 		return p.X >= r.X-dropBandPadX && p.X < r.X+r.Width+dropBandPadX &&
-			p.Y >= r.Y && p.Y < r.Y+dropBandH(int(baseH))
+			p.Y >= topY && p.Y < r.Y+dropBandH(int(baseH))
 	}
 	return p.X >= a.notchX-dropBandPadX && p.X < a.notchX+a.notchW+dropBandPadX &&
 		p.Y >= a.notchY && p.Y < a.notchY+dropBandH(a.notchH)
@@ -100,10 +104,10 @@ func (a *shelf) dragGuardRegion() platform.DragGuardRegion {
 	// stays blocked, but its landing row is inside the shell: with the
 	// island that is its capsule (or the grown drop pill in-band), never a
 	// row below it where the cursor could not reach the drop target.
-	return platform.DragGuardRegion{
+	return applyBarrierSegment(platform.DragGuardRegion{
 		X: a.stripCenter() - a.bandW()/2, Y: a.y,
 		Width: a.bandW(), Height: a.sheetTop() + h,
-	}
+	}, a)
 }
 
 // dragSummonsBasket reports whether this drag may wake the shake-to-summon
@@ -169,7 +173,7 @@ func (a *shelf) syncDragGuard() {
 	}
 	stop, err := platform.StartDragGuard(region)
 	a.guard = dragGuard{stop: stop, region: region, attempted: true, trusted: platform.CanSendInput()}
-	if err != nil {
+	if err != nil && platform.CanSendInput() {
 		log.Printf("刘海拖拽保护未启用：%v", err)
 	}
 }
