@@ -96,6 +96,7 @@ var (
 	procMonitorFromWindow   = sysProc(user32, "MonitorFromWindow")
 	procGetMonitorInfo      = sysProc(user32, "GetMonitorInfoW")
 	procEnumDisplayMonitors = sysProc(user32, "EnumDisplayMonitors")
+	procEnumDisplayDevices  = sysProc(user32, "EnumDisplayDevicesW")
 	procGetDpiForWindow     = sysProc(user32, "GetDpiForWindow")
 	procGetAsyncKeyState    = sysProc(user32, "GetAsyncKeyState")
 	procSetWindowsHookEx    = sysProc(user32, "SetWindowsHookExW")
@@ -585,6 +586,9 @@ type screenMonitor struct {
 	// target is the physical monitor's device interface path, "" when the
 	// display configuration query has no answer for this output.
 	target string
+	// friendly is the monitor's user-facing friendly name from
+	// DisplayConfigGetDeviceInfo (falling back to the monitor device string).
+	friendly string
 }
 
 // displayTargetsTTL bounds how long an output's monitor path may be cached.
@@ -594,34 +598,52 @@ type screenMonitor struct {
 // conversion.
 const displayTargetsTTL = 2 * time.Second
 
+type displayTargetInfo struct {
+	path     string
+	friendly string
+}
+
 var displayTargetsCache struct {
 	mu      sync.Mutex
 	expires time.Time
-	paths   map[string]string
+	targets map[string]displayTargetInfo
 }
 
-// displayTargetPaths maps each active output's GDI device name
-// ("\\.\DISPLAY1") to the physical monitor's device interface path
-// ("\\?\DISPLAY#DEL4098#5&...#{e6f07b5f-...}"). The GDI name numbers an
-// adapter output, so it follows output enumeration rather than the monitor
-// the user saved a layout for; the device path names the monitor.
-func displayTargetPaths() map[string]string {
+// displayTargets maps each active output's GDI device name ("\\.\DISPLAY1")
+// to the physical monitor's device interface path and friendly name. The GDI
+// name numbers an adapter output, so it follows output enumeration rather than
+// the monitor the user saved a layout for; the device path names the monitor.
+func displayTargets() map[string]displayTargetInfo {
 	displayTargetsCache.mu.Lock()
 	defer displayTargetsCache.mu.Unlock()
-	if displayTargetsCache.paths != nil && time.Now().Before(displayTargetsCache.expires) {
-		return displayTargetsCache.paths
+	if displayTargetsCache.targets != nil && time.Now().Before(displayTargetsCache.expires) {
+		return displayTargetsCache.targets
 	}
-	paths := queryDisplayTargetPaths()
-	displayTargetsCache.paths = paths
+	targets := queryDisplayTargets()
+	displayTargetsCache.targets = targets
 	displayTargetsCache.expires = time.Now().Add(displayTargetsTTL)
-	return paths
+	return targets
 }
 
-// queryDisplayTargetPaths reads the active outputs and their monitors from the
+func queryDisplayTargetPaths() map[string]string {
+	targets := queryDisplayTargets()
+	if len(targets) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(targets))
+	for name, info := range targets {
+		if info.path != "" {
+			out[name] = info.path
+		}
+	}
+	return out
+}
+
+// queryDisplayTargets reads the active outputs and their monitors from the
 // display configuration. A session without a display configuration (a service,
 // a headless remote session) yields an empty map, and displays then fall back
 // to their GDI name.
-func queryDisplayTargetPaths() map[string]string {
+func queryDisplayTargets() map[string]displayTargetInfo {
 	// The display configuration can change between sizing the buffers and
 	// querying them; the system then asks for a second attempt.
 	for range 2 {
@@ -646,7 +668,7 @@ func queryDisplayTargetPaths() map[string]string {
 		default:
 			return nil
 		}
-		out := make(map[string]string, numPaths)
+		out := make(map[string]displayTargetInfo, numPaths)
 		for _, p := range paths[:numPaths] {
 			src := displayConfigSourceDeviceName{header: displayConfigDeviceInfoHeader{
 				deviceType: displayConfigGetSourceName,
@@ -667,13 +689,42 @@ func queryDisplayTargetPaths() map[string]string {
 				continue
 			}
 			name := windows.UTF16ToString(src.gdiName[:])
-			if path := windows.UTF16ToString(tgt.devicePath[:]); name != "" && path != "" {
-				out[name] = path
+			path := windows.UTF16ToString(tgt.devicePath[:])
+			friendly := strings.TrimSpace(windows.UTF16ToString(tgt.friendlyName[:]))
+			if friendly == "" && name != "" {
+				friendly = monitorDeviceString(name)
+			}
+			if name != "" && (path != "" || friendly != "") {
+				out[name] = displayTargetInfo{path: path, friendly: friendly}
 			}
 		}
 		return out
 	}
 	return nil
+}
+
+type winDisplayDevice struct {
+	cb           uint32
+	deviceName   [32]uint16
+	deviceString [128]uint16
+	stateFlags   uint32
+	deviceID     [128]uint16
+	deviceKey    [128]uint16
+}
+
+func monitorDeviceString(gdiName string) string {
+	pDev, err := windows.UTF16PtrFromString(gdiName)
+	if err != nil {
+		return ""
+	}
+	var dd winDisplayDevice
+	dd.cb = uint32(unsafe.Sizeof(dd))
+	if r, _, _ := procEnumDisplayDevices.Call(uintptr(unsafe.Pointer(pDev)), 0, uintptr(unsafe.Pointer(&dd)), 0); r != 0 {
+		if s := strings.TrimSpace(windows.UTF16ToString(dd.deviceString[:])); s != "" {
+			return s
+		}
+	}
+	return ""
 }
 
 // enumMonitors lists the active displays. The fixed monitor callback reads
@@ -682,7 +733,7 @@ func queryDisplayTargetPaths() map[string]string {
 // repeated a few thousand times would exhaust the runtime's callback slots.
 func enumMonitors() []screenMonitor {
 	var out []screenMonitor
-	targets := displayTargetPaths()
+	targets := displayTargets()
 	token := beginEnum(func(handle uintptr) bool {
 		var mi monitorInfoEx
 		mi.cbSize = uint32(unsafe.Sizeof(mi))
@@ -695,13 +746,19 @@ func enumMonitors() []screenMonitor {
 			dpi = int(dx)
 		}
 		device := windows.UTF16ToString(mi.szDevice[:])
+		info := targets[device]
+		friendly := info.friendly
+		if friendly == "" {
+			friendly = monitorDeviceString(device)
+		}
 		out = append(out, screenMonitor{
-			handle: handle,
-			bounds: mi.rcMonitor,
-			work:   mi.rcWork,
-			dpi:    dpi,
-			device: device,
-			target: targets[device],
+			handle:   handle,
+			bounds:   mi.rcMonitor,
+			work:     mi.rcWork,
+			dpi:      dpi,
+			device:   device,
+			target:   info.path,
+			friendly: friendly,
 		})
 		return true
 	})

@@ -289,3 +289,22 @@ func ordinaryWindow(h uintptr) bool {
 	}
 	return windowText(h) != ""
 }
+
+// DisplayFriendlyNames returns each active monitor's user-facing name keyed by
+// its stable display id.
+func DisplayFriendlyNames() map[int64]string {
+	return friendlyNamesIn(enumMonitors())
+}
+
+func friendlyNamesIn(ms []screenMonitor) map[int64]string {
+	if len(ms) == 0 {
+		return nil
+	}
+	out := make(map[int64]string, len(ms))
+	for _, m := range ms {
+		if m.friendly != "" {
+			out[stableDisplayID(m)] = m.friendly
+		}
+	}
+	return out
+}

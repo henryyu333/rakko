@@ -1,12 +1,22 @@
 package main
 
 import (
+	"os"
 	"testing"
 
 	"github.com/egoist/mygo"
 
 	"rakko/internal/settings"
 )
+
+func init() {
+	// Headless unit tests run without mygo's main loop, where
+	// mygo.Screen.Displays blocks on onMain. Default screenDisplays to nil
+	// unless smoke mode or a display test rig replaces it.
+	if os.Getenv("RAKKO_BASKET_SMOKE") != "1" {
+		screenDisplays = func() []mygo.Display { return nil }
+	}
+}
 
 // syntheticDisplayRig replaces displayNearest, screenDisplays, notchRect and
 // cursorPoint with an editable multi-display layout for headless tests, and

@@ -588,15 +588,7 @@ func (a *shelf) ready(show bool) {
 		next.Onboarding.Step = a.onb.steps()[a.onb.step]
 		a.applySettings(next)
 	}
-	mygo.Screen.OnDisplaysChanged(func() {
-		// 常驻窗口跟随光标所在显示器重新定位（收起态无感）。
-		a.place(mygo.Screen.CursorScreenPoint())
-		a.wakeMonitor()
-		// 拔掉显示器的固定项回主显示器同一边。
-		a.pinDisplaysChanged()
-		// 桌宠所在的显示器拔掉了就回主显示器。
-		a.petDisplaysChanged()
-	})
+	mygo.Screen.OnDisplaysChanged(a.displaysChanged)
 	if a.store != nil {
 		if merr := a.store.MigrationError(); merr != nil {
 			a.notice(a.appLoc().StartupBackupFailed(merr.Error()))
@@ -607,7 +599,7 @@ func (a *shelf) ready(show bool) {
 	} else {
 		// Keep the same top-anchored transparent strip when idle or peeking;
 		// only its drawing and mouse pass-through change on hover.
-		a.place(mygo.Screen.CursorScreenPoint())
+		a.place(cursorPoint())
 		a.syncMousePassThrough()
 		a.win.ShowInactive()
 	}
@@ -623,6 +615,16 @@ func (a *shelf) ready(show bool) {
 	a.approvalStartEnabled()
 	a.startMonitoring()
 	log.Print("Rakko ready")
+}
+
+func (a *shelf) displaysChanged() {
+	// 常驻窗口按显示设置重新定位（跟随时按光标，固定时落在指定屏或回主屏）。
+	a.place(cursorPoint())
+	a.wakeMonitor()
+	// 拔掉显示器的固定项回主显示器同一边。
+	a.pinDisplaysChanged()
+	// 桌宠所在的显示器拔掉了就回主显示器。
+	a.petDisplaysChanged()
 }
 
 // newNotchWindow creates the persistent notch window: one transparent,

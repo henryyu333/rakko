@@ -77,6 +77,39 @@ func (a *shelf) settingsNotchPage(c *ui.Context) {
 		}
 	})
 
+	if opts := a.displaySettingOptions(l); len(opts) > 0 {
+		settingsGroupRows(c, "display", l.SettingsDisplayGroup(), "", a.settingsBroken, func() {
+			for i, opt := range opts {
+				opt := opt
+				if i > 0 {
+					settingsSep(c, "disp-"+opt.key)
+				}
+				row := ui.ButtonBase(c.Key("disp-"+opt.key)).FillWidth().Radius(0).
+					MinHeight(settingsRowMinHeight).AlignItems(ui.Center).Justify(ui.Start).
+					Gap(14).Padding(settingsRowPadY, settingsRowPadX).Label(opt.a11yLabel)
+				if row.Hovered() {
+					row.Background(settingsRowHoverBg)
+				}
+				row.Children(func() {
+					ui.Row(c.Key("lbl")).Grow(1).MinWidth(0).AlignItems(ui.Baseline).Gap(4).Children(func() {
+						settingsLabel(c, opt.name, 13, 400).TextColor(ink).MinWidth(0).Shrink(1)
+						if opt.suffix != "" {
+							settingsText(c, opt.suffix, 12).SingleLine().TextColor(settingsInk3).Shrink(0)
+						}
+					})
+					ui.Box(c.Key("chk")).Size(18, 18).Shrink(0).Center().Children(func() {
+						if opt.selected {
+							ui.Icon(c.Key("tick"), displayCheckSymbol).Size(14, 14).TextColor(accent)
+						}
+					})
+				})
+				if row.Clicked() {
+					a.setDisplay(opt.key)
+				}
+			}
+		})
+	}
+
 	if petArt() != nil {
 		settingsGroupRows(c, "pet", l.SettingsPetGroup(), "", a.settingsBroken, func() {
 			settingsToggleRow(c, "pet-show", l.SettingsPetShowRow(), "", a.settings.Pet.Shown, a.setPetShown)
@@ -176,6 +209,8 @@ func (a *shelf) settingsSysMonGroup(c *ui.Context) {
 		})
 	})
 }
+
+var displayCheckSymbol = ui.MustParseSVG([]byte(`<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.4 8.3 6.5 11.4 12.6 4.8"/></svg>`))
 
 func settingsShapeTile(c *ui.Context, key, label string, island, selected bool, onSelect func()) {
 	b := ui.ButtonBase(c.Key("shape-"+key)).Grow(1).MinWidth(0).Radius(10).

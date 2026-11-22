@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 
 	"rakko/internal/agentnotify"
@@ -57,6 +58,10 @@ type Settings struct {
 	// ShellStyle is the closed shelf's outer shape on a screen with a
 	// camera housing. Screens without one always draw the island.
 	ShellStyle ShellStyle `json:"shellStyle"`
+	// Display pins the shelf to a screen: "" follows the pointer, "main"
+	// stays on the primary display, and a decimal display id pins to that
+	// display (falling back to primary while unplugged).
+	Display string `json:"display,omitempty"`
 	// SnapWindows lets a window dragged by its title bar to the notch pick
 	// one of six arrangements.
 	SnapWindows bool `json:"snapWindows"`
@@ -442,6 +447,29 @@ func (s ShellStyle) Normalized() ShellStyle {
 	return ShellStyleNotch
 }
 
+// DisplayFollow and DisplayMain are the symbolic values of Settings.Display;
+// any other valid value is a decimal stable display id.
+const (
+	DisplayFollow = ""
+	DisplayMain   = "main"
+)
+
+// NormalizeDisplay maps a saved display choice to its canonical form: "" for
+// follow-mouse, "main" for the primary display, or a positive decimal display
+// id. Unknown strings fall back to follow-mouse.
+func NormalizeDisplay(v string) string {
+	v = strings.TrimSpace(v)
+	switch v {
+	case DisplayFollow, DisplayMain:
+		return v
+	}
+	id, err := strconv.ParseInt(v, 10, 64)
+	if err != nil || id <= 0 {
+		return DisplayFollow
+	}
+	return strconv.FormatInt(id, 10)
+}
+
 // SearchMode is the mode the home search bar opens on. It is a default,
 // not a memory of the last search: every opening starts here, and Tab
 // changes only the search on screen.
@@ -695,6 +723,7 @@ func Load(dir string) (Settings, error) {
 		s.ClipboardLimit = defaultClipboardLimit
 	}
 	s.ShellStyle = s.ShellStyle.Normalized()
+	s.Display = NormalizeDisplay(s.Display)
 	s.SearchMode = s.SearchMode.Normalized()
 	s.Pet.Size = s.Pet.Size.Normalized()
 	s.SysMon = s.SysMon.Normalized()

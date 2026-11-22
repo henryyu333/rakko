@@ -119,7 +119,7 @@ type pinItem struct {
 }
 
 // pinDisplays is the display list the geometry sees; tests replace it.
-var pinDisplays = screenDisplays
+var pinDisplays = func() []mygo.Display { return screenDisplays() }
 
 // pinArea returns the work area of a display, or of the primary when the
 // ID is gone (unplugged, or a test list that lacks it): the remembered

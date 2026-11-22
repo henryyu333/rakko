@@ -212,10 +212,10 @@ func (a *shelf) syncIdleIslands() {
 	displays := screenDisplays()
 	ds := make([]islandDisplay, 0, len(displays))
 	for _, d := range displays {
-		_, _, _, notchH, hasNotch := platform.NotchRect(d.ID)
+		_, _, _, notchH, hasNotch := notchRect(d.ID)
 		ds = append(ds, islandDisplay{ID: d.ID, Bounds: d.Bounds, HasNotch: hasNotch, NotchH: notchH})
 	}
-	want := idleIslandPlacements(ds, a.dispID, a.settings.ShellStyle, a.settings.IslandPos)
+	want := idleIslandPlacementsForMode(ds, a.dispID, a.settings.ShellStyle, a.settings.IslandPos, a.settings.Display)
 	have := make(map[int64]*idleIslandWindow, len(a.idleIslands))
 	for _, w := range a.idleIslands {
 		have[w.dispID] = w

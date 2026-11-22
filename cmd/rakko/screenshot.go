@@ -35,7 +35,7 @@ import (
 // the real ones; headless tests replace them and never touch a window
 // server, a pasteboard or the user's Desktop.
 var (
-	shotDisplays       = screenDisplays
+	shotDisplays       = func() []mygo.Display { return screenDisplays() }
 	shotCursorPoint    = func() mygo.Point { return mygo.Screen.CursorScreenPoint() }
 	shotCaptureDisplay = platform.CaptureDisplay
 	shotNormalWindow   = platform.NormalWindows

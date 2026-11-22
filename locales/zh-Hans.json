@@ -977,5 +977,14 @@
   "settingsSysMonInterval1s": "1 秒",
   "settingsSysMonInterval2s": "2 秒",
   "sysMonCardLabel": "系统监控 · CPU {cpu} · 内存 {mem}",
-  "sysMonWingLabel": "系统监控 · 左 {left} · 右 {right}"
+  "sysMonWingLabel": "系统监控 · 左 {left} · 右 {right}",
+  "settingsDisplayGroup": "显示在",
+  "settingsDisplayFollow": "跟随鼠标",
+  "settingsDisplayMain": "主显示器",
+  "settingsDisplayPosPrimary": "· 主显示器",
+  "settingsDisplayPosAbove": "· 上方",
+  "settingsDisplayPosBelow": "· 下方",
+  "settingsDisplayPosLeft": "· 左侧",
+  "settingsDisplayPosRight": "· 右侧",
+  "settingsDisplayUnknown": "显示器"
 }

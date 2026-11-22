@@ -977,5 +977,14 @@
   "settingsSysMonInterval1s": "1s",
   "settingsSysMonInterval2s": "2s",
   "sysMonCardLabel": "System Monitor · CPU {cpu} · Mem {mem}",
-  "sysMonWingLabel": "System Monitor · Left {left} · Right {right}"
+  "sysMonWingLabel": "System Monitor · Left {left} · Right {right}",
+  "settingsDisplayGroup": "Display On",
+  "settingsDisplayFollow": "Follow Mouse",
+  "settingsDisplayMain": "Primary Display",
+  "settingsDisplayPosPrimary": "· Primary",
+  "settingsDisplayPosAbove": "· Above",
+  "settingsDisplayPosBelow": "· Below",
+  "settingsDisplayPosLeft": "· Left",
+  "settingsDisplayPosRight": "· Right",
+  "settingsDisplayUnknown": "Display"
 }

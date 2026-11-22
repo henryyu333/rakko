@@ -214,7 +214,7 @@ func (a *shelf) pointerDragged() {
 	}
 	a.dragging, a.pointerDrag = true, true
 	p := cursorPoint()
-	if !a.visible && !insideRect(p, a.dispBounds) {
+	if a.followsPointerDisplay() && !a.visible && !insideRect(p, a.dispBounds) {
 		a.place(p)
 	}
 	a.updateDragBand(p, true)
@@ -275,7 +275,7 @@ func (a *shelf) monitorDrag(now time.Time) {
 	}
 	a.settlePendingHide(now)
 	p := a.pointerTick
-	if !a.visible && !insideRect(p, a.dispBounds) {
+	if a.followsPointerDisplay() && !a.visible && !insideRect(p, a.dispBounds) {
 		a.place(p)
 	}
 	// A press held on the closed island owns the gesture: it is a move (or a

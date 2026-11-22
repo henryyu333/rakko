@@ -804,3 +804,52 @@ func TestSysMonSettingsLoadAndNormalize(t *testing.T) {
 		t.Fatalf("invalid enums normalized to %+v, want %+v", s3.SysMon, want3)
 	}
 }
+
+func TestDisplaySettingLoadAndNormalize(t *testing.T) {
+	// Missing key in an older settings.json keeps follow-mouse ("").
+	dir1 := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir1, FileName), []byte(`{"shellStyle":"notch"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s1, err := Load(dir1)
+	if err != nil {
+		t.Fatalf("Load(dir1): %v", err)
+	}
+	if s1.Display != DisplayFollow {
+		t.Fatalf("missing display = %q, want %q", s1.Display, DisplayFollow)
+	}
+
+	// Normalization handles symbolic values, display IDs, and garbage.
+	for in, want := range map[string]string{
+		"":            DisplayFollow,
+		"   ":         DisplayFollow,
+		"main":        DisplayMain,
+		" main ":      DisplayMain,
+		"69733248":    "69733248",
+		" 69733248 ":  "69733248",
+		"0":           DisplayFollow,
+		"-42":         DisplayFollow,
+		"not-an-id":   DisplayFollow,
+	} {
+		if got := NormalizeDisplay(in); got != want {
+			t.Errorf("NormalizeDisplay(%q) = %q, want %q", in, got, want)
+		}
+	}
+
+	// Save and reload round-trips both "main" and numeric display IDs.
+	for _, want := range []string{DisplayFollow, DisplayMain, "69733248"} {
+		dir := t.TempDir()
+		s := Default()
+		s.Display = want
+		if err := Save(dir, s); err != nil {
+			t.Fatalf("Save(%q): %v", want, err)
+		}
+		got, err := Load(dir)
+		if err != nil {
+			t.Fatalf("Load(%q): %v", want, err)
+		}
+		if got.Display != want {
+			t.Fatalf("roundtrip Display = %q, want %q", got.Display, want)
+		}
+	}
+}

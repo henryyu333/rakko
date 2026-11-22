@@ -481,7 +481,7 @@ func (a *shelf) pointerMoved() {
 	gateMoveUntil.Store(now.Add(gatePollWindow).UnixNano())
 	wakeGatePoll()
 	p := cursorPoint()
-	if !a.visible && a.dispBounds.Width > 0 && !insideRect(p, a.dispBounds) {
+	if a.followsPointerDisplay() && !a.visible && a.dispBounds.Width > 0 && !insideRect(p, a.dispBounds) {
 		a.place(p)
 		a.wakeMonitor()
 	}

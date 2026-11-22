@@ -72,7 +72,11 @@ func (a *shelf) placeAt(p mygo.Point) {
 	// when the notch style is chosen; the measurement below is what encodes
 	// that, so the flag is applied first.
 	platform.SetSimulatedNotch(a.settings.ShellStyle.Normalized() != settings.ShellStyleIsland)
-	d := displayNearest(p)
+	var ds []mygo.Display
+	if !a.followsPointerDisplay() {
+		ds = screenDisplays()
+	}
+	d := resolveTargetDisplay(ds, a.settings.Display, p, displayNearest)
 	a.dispBounds, a.dispWork = d.Bounds, d.WorkArea
 	a.dispID = d.ID
 	nx, ny, nw, nh, hasNotch := notchRect(d.ID)
@@ -1728,7 +1732,7 @@ func (a *shelf) show(edge bool) {
 	// Transient notices never pop out after the panel closes.
 	a.clearLive()
 	if a.win != nil {
-		a.placeAt(mygo.Screen.CursorScreenPoint())
+		a.placeAt(cursorPoint())
 	}
 	if a.store != nil {
 		a.store.Refresh()

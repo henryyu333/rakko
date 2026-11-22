@@ -266,3 +266,13 @@ func idleIslandPlacements(displays []islandDisplay, current int64, style setting
 	}
 	return out
 }
+
+// idleIslandPlacementsForMode hides extra-screen idle capsules whenever the
+// shelf is pinned to a fixed display ("main" or a display id); only follow-
+// mouse mode draws resting capsules on the other screens.
+func idleIslandPlacementsForMode(displays []islandDisplay, current int64, style settings.ShellStyle, saved map[string]settings.IslandPos, displaySetting string) []idlePlacement {
+	if settings.NormalizeDisplay(displaySetting) != settings.DisplayFollow {
+		return nil
+	}
+	return idleIslandPlacements(displays, current, style, saved)
+}

@@ -9938,3 +9938,93 @@ func SysMonWingLabel(left string, right string) string {
 func (msgs Messages) SysMonWingLabel(left string, right string) string {
 	return Catalog.Format(msgs.locale, "sysMonWingLabel", map[string]any{"left": left, "right": right})
 }
+
+// SettingsDisplayGroup says "显示在"
+// in the language the app shows.
+func SettingsDisplayGroup() string { return In(i18n.Locale()).SettingsDisplayGroup() }
+
+// SettingsDisplayGroup says "显示在"
+// in the language of msgs.
+func (msgs Messages) SettingsDisplayGroup() string {
+	return Catalog.Format(msgs.locale, "settingsDisplayGroup", nil)
+}
+
+// SettingsDisplayFollow says "跟随鼠标"
+// in the language the app shows.
+func SettingsDisplayFollow() string { return In(i18n.Locale()).SettingsDisplayFollow() }
+
+// SettingsDisplayFollow says "跟随鼠标"
+// in the language of msgs.
+func (msgs Messages) SettingsDisplayFollow() string {
+	return Catalog.Format(msgs.locale, "settingsDisplayFollow", nil)
+}
+
+// SettingsDisplayMain says "主显示器"
+// in the language the app shows.
+func SettingsDisplayMain() string { return In(i18n.Locale()).SettingsDisplayMain() }
+
+// SettingsDisplayMain says "主显示器"
+// in the language of msgs.
+func (msgs Messages) SettingsDisplayMain() string {
+	return Catalog.Format(msgs.locale, "settingsDisplayMain", nil)
+}
+
+// SettingsDisplayPosPrimary says "· 主显示器"
+// in the language the app shows.
+func SettingsDisplayPosPrimary() string { return In(i18n.Locale()).SettingsDisplayPosPrimary() }
+
+// SettingsDisplayPosPrimary says "· 主显示器"
+// in the language of msgs.
+func (msgs Messages) SettingsDisplayPosPrimary() string {
+	return Catalog.Format(msgs.locale, "settingsDisplayPosPrimary", nil)
+}
+
+// SettingsDisplayPosAbove says "· 上方"
+// in the language the app shows.
+func SettingsDisplayPosAbove() string { return In(i18n.Locale()).SettingsDisplayPosAbove() }
+
+// SettingsDisplayPosAbove says "· 上方"
+// in the language of msgs.
+func (msgs Messages) SettingsDisplayPosAbove() string {
+	return Catalog.Format(msgs.locale, "settingsDisplayPosAbove", nil)
+}
+
+// SettingsDisplayPosBelow says "· 下方"
+// in the language the app shows.
+func SettingsDisplayPosBelow() string { return In(i18n.Locale()).SettingsDisplayPosBelow() }
+
+// SettingsDisplayPosBelow says "· 下方"
+// in the language of msgs.
+func (msgs Messages) SettingsDisplayPosBelow() string {
+	return Catalog.Format(msgs.locale, "settingsDisplayPosBelow", nil)
+}
+
+// SettingsDisplayPosLeft says "· 左侧"
+// in the language the app shows.
+func SettingsDisplayPosLeft() string { return In(i18n.Locale()).SettingsDisplayPosLeft() }
+
+// SettingsDisplayPosLeft says "· 左侧"
+// in the language of msgs.
+func (msgs Messages) SettingsDisplayPosLeft() string {
+	return Catalog.Format(msgs.locale, "settingsDisplayPosLeft", nil)
+}
+
+// SettingsDisplayPosRight says "· 右侧"
+// in the language the app shows.
+func SettingsDisplayPosRight() string { return In(i18n.Locale()).SettingsDisplayPosRight() }
+
+// SettingsDisplayPosRight says "· 右侧"
+// in the language of msgs.
+func (msgs Messages) SettingsDisplayPosRight() string {
+	return Catalog.Format(msgs.locale, "settingsDisplayPosRight", nil)
+}
+
+// SettingsDisplayUnknown says "显示器"
+// in the language the app shows.
+func SettingsDisplayUnknown() string { return In(i18n.Locale()).SettingsDisplayUnknown() }
+
+// SettingsDisplayUnknown says "显示器"
+// in the language of msgs.
+func (msgs Messages) SettingsDisplayUnknown() string {
+	return Catalog.Format(msgs.locale, "settingsDisplayUnknown", nil)
+}

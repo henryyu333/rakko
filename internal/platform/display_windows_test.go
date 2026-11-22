@@ -713,3 +713,19 @@ func TestOverlayAcceptsMouseIdempotentPreservesPreviewOrder(t *testing.T) {
 		t.Fatal("idempotent SetOverlayAcceptsMouse(panel, true) raised panel above drag preview")
 	}
 }
+
+func TestDisplayFriendlyNames(t *testing.T) {
+	ms := []screenMonitor{
+		{device: `\\.\DISPLAY1`, target: `\\?\DISPLAY#DEL4098#1`, friendly: "DELL U2723QE"},
+		{device: `\\.\DISPLAY2`, target: `\\?\DISPLAY#OTR0001#2`, friendly: ""},
+	}
+	names := friendlyNamesIn(ms)
+	if got := names[stableDisplayID(ms[0])]; got != "DELL U2723QE" {
+		t.Fatalf("friendlyNamesIn[0] = %q, want DELL U2723QE", got)
+	}
+	if _, ok := names[stableDisplayID(ms[1])]; ok {
+		t.Fatalf("empty friendly name leaked into map: %v", names)
+	}
+	// Live query should not panic on the host machine.
+	_ = DisplayFriendlyNames()
+}
