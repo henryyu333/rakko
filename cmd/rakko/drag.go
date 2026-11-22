@@ -214,6 +214,9 @@ func (a *shelf) pointerDragged() {
 		a.hoverWaitUntil = time.Time{}
 	}
 	if !active {
+		if a.dragging {
+			a.monitorDrag(time.Now())
+		}
 		return
 	}
 	a.dragging, a.pointerDrag = true, true
@@ -258,6 +261,7 @@ func (a *shelf) monitorDrag(now time.Time) {
 		a.ownPress = false
 		a.syncDragGuard()
 	}
+	wasDragging, wasDropHot, wasInBand := a.dragging, a.dropHot, a.inBand
 	active, serial := dragState()
 	if serial != a.dragSerial {
 		a.dragSerial = serial
@@ -269,6 +273,10 @@ func (a *shelf) monitorDrag(now time.Time) {
 	a.dragging = active
 	if !active {
 		a.suppressed = false
+		a.inBand = false
+		a.dropHot = false
+		a.hoverOfferKnown = false
+		a.hoverOfferFiles = nil
 		if !dragLeftDown() {
 			a.pointerDrag = false
 		}
@@ -343,6 +351,11 @@ func (a *shelf) monitorDrag(now time.Time) {
 	}
 	if (!active && !a.visible && !holdPeek) || suppressedFS {
 		a.setPeek(false)
+	}
+	if a.win != nil && (wasDragging != a.dragging || wasDropHot != a.dropHot || wasInBand != a.inBand) {
+		// Drag state changed (e.g. mouse-up while cursor stayed over the notch):
+		// force a redraw even when peeking or window frame stayed unchanged.
+		a.win.Invalidate()
 	}
 	// 自动收起：仅拖拽唤出的托盘在未收到内容、光标离开面板与触发区
 	// edgeLeaveDelay 后缩回刘海；点击探头/托盘唤出的托盘由用户显式收起。

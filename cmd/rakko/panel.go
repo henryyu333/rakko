@@ -1883,13 +1883,11 @@ func (a *shelf) peekView(c *ui.Context, shellW, shellH, openK, peekK, shake floa
 			// outside it only the widened hint shows — never a glyph. A
 			// file drag outranks the wings and the app switcher: the same
 			// shape peekSize() reports.
-			if over || a.dropHot {
+			if a.dropHot {
 				kind = peekDrop
 			} else {
 				kind = peekHint
 			}
-		case over:
-			kind = peekDrop
 		case a.apps.on:
 			kind = peekApps
 		case a.downloadRunning():
@@ -1995,6 +1993,7 @@ func (a *shelf) peekView(c *ui.Context, shellW, shellH, openK, peekK, shake floa
 		// band-height, never a glyph below the notch.
 		return
 	}
+	baseW, notchH := a.anchorSize()
 	pw, ph := a.peekSize()
 	if folding {
 		// Folding keeps the content kind frozen but lays it out at the
@@ -2003,10 +2002,14 @@ func (a *shelf) peekView(c *ui.Context, shellW, shellH, openK, peekK, shake floa
 		// the live peekSize() answer (a loaded track's wings) pushes
 		// them outside even sooner.
 		pw, ph = shellW, shellH
+	} else if kind == peekDrop || kind == peekReturn || kind == peekPetStow {
+		// Guarantee the drop/return pill never lays out inside a shorter
+		// hover or hint box even if a caller reaches peekView mid-change.
+		pw = max(pw, baseW+dropPillExtraW)
+		ph = max(ph, notchH+dropPillBody)
 	}
 	// 内容从壳顶内侧开始：刘海样式空出刘海那一条，灵动岛空出胶囊本身
 	// 的高度，文字落在它下面长出的那一截。
-	_, notchH := a.anchorSize()
 	l := loc(c)
 	pill := ui.Column(c.Key("peek")).Width(shellW).Height(shellH).Clip().
 		AlignItems(ui.Center).Label(l.PanelExpand()).Margin(float32(a.sheetTop()), 0, 0, 0)

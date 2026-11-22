@@ -158,7 +158,7 @@ func (a *shelf) noteHoverOffer(over bool, offer transfer.Offer) {
 	if a.hoverOfferSerial != a.dragSerial {
 		a.resetHoverOffer(a.dragSerial)
 	}
-	if !over {
+	if !over || !a.dragging || a.ownDrag {
 		return
 	}
 	a.hoverOfferKnown = true

@@ -68,6 +68,7 @@ var screenDisplays = func() []mygo.Display {
 var notchRect = platform.NotchRect
 
 func (a *shelf) placeAt(p mygo.Point) {
+	prevDisp := a.dispID
 	// A platform without a camera housing measures a simulated one only
 	// when the notch style is chosen; the measurement below is what encodes
 	// that, so the flag is applied first.
@@ -97,6 +98,11 @@ func (a *shelf) placeAt(p mygo.Point) {
 	// A held envelope was measured around the previous anchor; the caller
 	// takes a fresh one for the new row (show, holdSurface).
 	a.frameHold = mygo.Rectangle{}
+	if prevDisp != 0 && prevDisp != a.dispID {
+		// Mid-drag display switches invalidate band geometry from the prior screen.
+		a.inBand = false
+		a.dropHot = false
+	}
 }
 
 // overAnchor 只认实测几何：光标真正进入锚点热区（刘海，或者灵动岛的
