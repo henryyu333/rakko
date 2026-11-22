@@ -9,6 +9,7 @@
 package weekly
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -115,6 +116,7 @@ func Open(dir string) (*Store, error) {
 		return st, fmt.Errorf("%w: %v", ErrCorrupt, err)
 	}
 	var h history
+	data = bytes.TrimPrefix(data, []byte{0xEF, 0xBB, 0xBF})
 	if err := json.Unmarshal(data, &h); err != nil {
 		st.corrupt = true
 		return st, fmt.Errorf("%w: %v", ErrCorrupt, err)

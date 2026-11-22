@@ -119,12 +119,19 @@ func (a *ClaudeAccount) Invalidate() {
 	a.mu.Unlock()
 }
 
+// isKeychainNotFound reports whether err is `security` exit code 44
+// (errSecItemNotFound), meaning no authorization dialog was presented.
+func isKeychainNotFound(err error) bool {
+	var xe *exec.ExitError
+	return errors.As(err, &xe) && xe.ExitCode() == 44
+}
+
 // keychainDenied says whether a failed `security find-generic-password`
 // could have been a dialog the user answered no to: 44 is the item not
 // being there, which asks nobody.
 func keychainDenied(err error) bool {
 	var xe *exec.ExitError
-	return errors.As(err, &xe) && xe.ExitCode() != 44
+	return errors.As(err, &xe) && !isKeychainNotFound(err)
 }
 
 // claudeKeychainServiceFor is the Keychain service Claude Code keeps a

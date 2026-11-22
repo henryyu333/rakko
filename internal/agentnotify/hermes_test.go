@@ -828,3 +828,87 @@ func TestHermesEnabledIndentMatchesSiblings(t *testing.T) {
 		t.Fatalf("enabled not inserted at the block's 4-space indent:\n%s", out)
 	}
 }
+
+func TestHermesConfigBackupOnce(t *testing.T) {
+	home, dataDir, path := hermesHomeWithConfig(t)
+	if err := Connect(home, dataDir, exePath, ToolHermes); err != nil {
+		t.Fatal(err)
+	}
+	backups, err := filepath.Glob(path + ".rakko-backup-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(backups) != 1 {
+		t.Fatalf("backups after Connect = %v, want 1", backups)
+	}
+	if got := readFile(t, backups[0]); got != hermesUserConfig {
+		t.Fatalf("backup content = %q, want original config", got)
+	}
+	if err := ConnectApprove(home, dataDir, exePath, ToolHermes); err != nil {
+		t.Fatal(err)
+	}
+	if err := DisconnectApprove(home, dataDir, ToolHermes); err != nil {
+		t.Fatal(err)
+	}
+	if err := Disconnect(home, dataDir, ToolHermes); err != nil {
+		t.Fatal(err)
+	}
+	backupsAfter, _ := filepath.Glob(path + ".rakko-backup-*")
+	if len(backupsAfter) != 1 {
+		t.Fatalf("backups after round-trip = %v, want 1", backupsAfter)
+	}
+}
+
+func TestHermesCorruptStateDoesNotRemovePlugin(t *testing.T) {
+	home, dataDir, _ := hermesHomeWithConfig(t)
+	if err := Connect(home, dataDir, exePath, ToolHermes); err != nil {
+		t.Fatal(err)
+	}
+	if err := ConnectApprove(home, dataDir, exePath, ToolHermes); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, hermesStatePath(home), "{corrupt")
+
+	if st, _ := Status(home, dataDir, ToolHermes); st != StateError {
+		t.Fatalf("Status with corrupt state = %v, want StateError", st)
+	}
+	if st, _ := StatusApprove(home, dataDir, ToolHermes); st != StateError {
+		t.Fatalf("StatusApprove with corrupt state = %v, want StateError", st)
+	}
+	if err := DisconnectApprove(home, dataDir, ToolHermes); err == nil {
+		t.Fatal("DisconnectApprove succeeded despite corrupt state.json")
+	}
+	if _, err := os.Stat(hermesInitPath(home)); err != nil {
+		t.Fatalf("DisconnectApprove removed plugin on corrupt state: %v", err)
+	}
+	if err := Disconnect(home, dataDir, ToolHermes); err == nil {
+		t.Fatal("Disconnect succeeded despite corrupt state.json")
+	}
+	if _, err := os.Stat(hermesInitPath(home)); err != nil {
+		t.Fatalf("Disconnect removed plugin on corrupt state: %v", err)
+	}
+}
+
+func TestHermesYAMLCommentsAndQuotes(t *testing.T) {
+	raw := []byte("plugins:\n  enabled:\n    - \"rakko\" # enabled by user\nsecurity:\n  approval:\n    transport: 'rakko' # rakko transport\n    transport_fallback: \"builtin\" # keep builtin\n")
+	if ok, err := hermesHasEnabled(raw, hermesPluginName); err != nil || !ok {
+		t.Fatalf("hermesHasEnabled = %v, %v; want true, nil", ok, err)
+	}
+	if ok, err := hermesHasTransport(raw); err != nil || !ok {
+		t.Fatalf("hermesHasTransport = %v, %v; want true, nil", ok, err)
+	}
+	if _, changed, err := hermesAddEnabled(raw, hermesPluginName); err != nil || changed {
+		t.Fatalf("hermesAddEnabled duplicated quoted+commented entry: changed=%v err=%v", changed, err)
+	}
+	if _, changed, err := hermesSetTransport(raw); err != nil || changed {
+		t.Fatalf("hermesSetTransport changed quoted+commented entry: changed=%v err=%v", changed, err)
+	}
+	after, changed, err := hermesRemoveEnabled(raw, hermesPluginName)
+	if err != nil || !changed || strings.Contains(string(after), "plugins:") {
+		t.Fatalf("hermesRemoveEnabled: changed=%v err=%v\n%s", changed, err, after)
+	}
+	after, changed, err = hermesRemoveTransport(after)
+	if err != nil || !changed || strings.Contains(string(after), "security:") {
+		t.Fatalf("hermesRemoveTransport: changed=%v err=%v\n%s", changed, err, after)
+	}
+}

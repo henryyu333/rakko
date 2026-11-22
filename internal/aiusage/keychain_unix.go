@@ -22,11 +22,6 @@ var (
 	errKeychainCooldown = errors.New("keychain lookup cooled down after denial")
 )
 
-func isKeychainNotFound(err error) bool {
-	var exitErr *exec.ExitError
-	return errors.As(err, &exitErr) && exitErr.ExitCode() == 44
-}
-
 // keychainPassword reads a generic password via /usr/bin/security, which does
 // not pop an authorization dialog for the items Claude Code stores. The
 // account name is part of the lookup, as Claude Code writes its item under

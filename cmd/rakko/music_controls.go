@@ -159,11 +159,10 @@ func (a *shelf) volumeRail(c *ui.Context, key string, frac float32, enabled bool
 // glyph's size and gap the space around it.
 func (a *shelf) volumeRow(c *ui.Context, key string, icon, gap float32) {
 	// The row is the only place that knows about the output device, so
-	// while a player surface is on screen it asks for the next frame at
-	// the poll's pace: a paused panel then still notices a device switch.
-	if a.visible && (a.tab == pageHome || a.tab == pageTools) {
-		c.After(volumePoll)
-	}
+	// whenever a volume bar is actually rendered (main panel or a desktop
+	// pinned card) it asks for the next frame at the poll's pace: a paused
+	// player surface then still notices an external volume or device change.
+	c.After(volumePoll)
 	v, ok := a.outputVolume(c.Now())
 	row := ui.Row(c.Key(key)).AlignItems(ui.Center).Gap(gap).FillWidth()
 	if !ok {

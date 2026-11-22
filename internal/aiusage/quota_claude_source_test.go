@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -157,5 +158,33 @@ func TestFetchClaudeSourceCachesSeparate(t *testing.T) {
 	}
 	if asked[claudeHomeService] != 1 {
 		t.Fatalf("home keychain reads = %d within the 10s cache, want 1", asked[claudeHomeService])
+	}
+}
+
+func TestDetectQuotaSourceUsesClaudeConfigDirKeychain(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("keychain detection only runs on darwin")
+	}
+	dir := filepath.Join(t.TempDir(), "custom-claude")
+	wantSvc := claudeKeychainServiceFor(dir)
+	var gotSvc, gotAcct string
+	env := Env{
+		Home:            t.TempDir(),
+		ClaudeConfigDir: dir,
+		ClaudeUser:      "alice",
+		Keychain: func(_ context.Context, service, account string) ([]byte, error) {
+			gotSvc, gotAcct = service, account
+			if service == wantSvc {
+				return []byte(`{"claudeAiOauth":{"accessToken":"tok"}}`), nil
+			}
+			return nil, exitError(t, 44)
+		},
+	}
+	src := DetectQuotaSource(ToolClaude, env)
+	if src.Kind != SourceLocalLogin {
+		t.Fatalf("DetectQuotaSource = %+v, want SourceLocalLogin", src)
+	}
+	if gotSvc != wantSvc || gotAcct != "alice" {
+		t.Fatalf("keychain lookup = (%q, %q), want (%q, %q)", gotSvc, gotAcct, wantSvc, "alice")
 	}
 }

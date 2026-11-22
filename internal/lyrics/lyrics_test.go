@@ -642,3 +642,27 @@ func TestFetchReportsProxyAuthentication(t *testing.T) {
 		t.Fatalf("407 from the proxy = %v, want netproxy.ErrProxyAuthRequired", err)
 	}
 }
+
+func TestCacheStripsUTF8BOM(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Date(2026, 11, 22, 12, 0, 0, 0, time.UTC)
+	entry, err := json.Marshal(cacheFile{
+		Version: 1,
+		Entries: map[string]cacheEntry{
+			"k": {Synced: "[00:01.00]hi", At: now},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := append([]byte{0xEF, 0xBB, 0xBF}, entry...)
+	if err := os.WriteFile(filepath.Join(dir, cacheFileName), body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c := NewCache(dir)
+	c.now = func() time.Time { return now }
+	got, ok := c.Get("k")
+	if !ok || got.Synced != "[00:01.00]hi" {
+		t.Fatalf("Cache.Get with BOM = (%+v, %v), want synced lyrics", got, ok)
+	}
+}

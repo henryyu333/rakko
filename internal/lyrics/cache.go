@@ -1,6 +1,7 @@
 package lyrics
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -108,6 +109,7 @@ func (c *Cache) loadLocked() {
 		return
 	}
 	var f cacheFile
+	data = bytes.TrimPrefix(data, []byte{0xEF, 0xBB, 0xBF})
 	if err := json.Unmarshal(data, &f); err != nil {
 		return
 	}

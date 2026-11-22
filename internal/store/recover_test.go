@@ -295,3 +295,18 @@ func TestOpenDoesNotCleanThroughASymlinkedImagesDir(t *testing.T) {
 		t.Fatalf("cleanup followed the images symlink: %v", err)
 	}
 }
+
+func TestParseStateStripsUTF8BOM(t *testing.T) {
+	raw, err := json.Marshal(stateFile{Version: stateVersion})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bom := append([]byte{0xEF, 0xBB, 0xBF}, raw...)
+	sf, err := parseState(bom)
+	if err != nil {
+		t.Fatalf("parseState with UTF-8 BOM: %v", err)
+	}
+	if sf.Version != stateVersion {
+		t.Fatalf("version = %d, want %d", sf.Version, stateVersion)
+	}
+}

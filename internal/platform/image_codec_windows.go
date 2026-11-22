@@ -23,6 +23,8 @@ import (
 	stddraw "golang.org/x/image/draw"
 	_ "golang.org/x/image/tiff"
 	_ "golang.org/x/image/webp"
+
+	"rakko/internal/atomicfile"
 )
 
 // convertQuality is the lossy quality ConvertImage writes (the Mac build's
@@ -271,7 +273,7 @@ func writeImageAtomic(dst string, img *image.RGBA, format ImageFormat, quality f
 	if err != nil {
 		return err
 	}
-	return writeAtomicFile(dst, data)
+	return atomicfile.WriteFile(filepath.Dir(dst), filepath.Base(dst), data, 0o644)
 }
 
 // scaleImage returns img scaled so its longer side is at most maxPx; a

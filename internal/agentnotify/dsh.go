@@ -104,7 +104,7 @@ func emptyFlowOffset(raw []byte) int {
 		line := strings.TrimSpace(string(raw[off : off+end]))
 		if line != "" && !strings.HasPrefix(line, "#") && line != "---" {
 			if line == "[]" {
-				return off + bytes.Index(raw[off:off+end], []byte("[]"))
+				return off
 			}
 			return -1
 		}
@@ -125,11 +125,11 @@ func addDSHPatch(raw []byte, entry, module string) (out []byte, changed, noFinal
 		// The block ends with a newline, so it replaces the token's whole
 		// line: removing it puts "[]\n" back, or "[]" when the token ended
 		// the file without one.
-		tail := raw[off+2:]
-		if nl := bytes.IndexByte(tail, '\n'); nl >= 0 {
-			tail = tail[nl+1:]
+		var tail []byte
+		if nl := bytes.IndexByte(raw[off:], '\n'); nl >= 0 {
+			tail = raw[off+nl+1:]
 		} else {
-			tail, noFinalNewline = nil, true
+			noFinalNewline = true
 		}
 		res := make([]byte, 0, len(raw)+len(dshPatchBlock(entry, module)))
 		res = append(res, raw[:off]...)

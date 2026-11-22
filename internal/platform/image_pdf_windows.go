@@ -14,9 +14,12 @@ import (
 	"image"
 	"image/draw"
 	stdjpeg "image/jpeg"
+	"path/filepath"
 	"strings"
 
 	"github.com/ledongthuc/pdf"
+
+	"rakko/internal/atomicfile"
 )
 
 // PDFText returns the text of every page (index = page-1), each page split
@@ -35,7 +38,7 @@ func PDFText(src string) (pages [][]string, err error) {
 		if err := pdfPageText(r, i+1, &text); err != nil {
 			return nil, err
 		}
-		pages[i] = pdfLines(text)
+		pages[i] = pdfLines(NormalizeText(text))
 	}
 	return pages, nil
 }
@@ -118,7 +121,7 @@ func ImagesToPDF(srcs []string, dst string) error {
 		}
 		pages = append(pages, pdfPage{w: img.Rect.Dx(), h: img.Rect.Dy(), jpeg: data})
 	}
-	return writeAtomicFile(dst, pdfDocument(pages))
+	return atomicfile.WriteFile(filepath.Dir(dst), filepath.Base(dst), pdfDocument(pages), 0o644)
 }
 
 // pdfPage is one page of an export: the picture's size in points and its

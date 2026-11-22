@@ -735,3 +735,61 @@ func TestScanSQLiteUnsupportedSchemaVsEmptyTable(t *testing.T) {
 		}
 	}
 }
+
+func TestSQLiteSingleCopyPerDBScan(t *testing.T) {
+	if _, err := os.Stat(sqlite3Path); err != nil {
+		t.Skip("sqlite3 not installed")
+	}
+	home := t.TempDir()
+	cacheDir := t.TempDir()
+
+	mkDB := func(p, schema string) {
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		runSQLite(t, p, schema)
+	}
+	copilotDB := filepath.Join(home, ".copilot", "data.db")
+	mkDB(copilotDB, `
+		CREATE TABLE sessions (id TEXT, total_input_tokens INTEGER, total_output_tokens INTEGER, updated_at INTEGER);
+		INSERT INTO sessions VALUES ('s1', 100, 20, 1792404000000);
+	`)
+	hermesDB := filepath.Join(home, ".hermes", "state.db")
+	mkDB(hermesDB, `
+		CREATE TABLE sessions (id TEXT, started_at REAL, last_activity_at REAL, ended_at REAL);
+		CREATE TABLE session_model_usage (session_id TEXT, model TEXT, billing_provider TEXT, billing_base_url TEXT, billing_mode TEXT, task TEXT, api_call_count INTEGER, input_tokens INTEGER, output_tokens INTEGER, cache_read_tokens INTEGER, cache_write_tokens INTEGER, estimated_cost_usd REAL, actual_cost_usd REAL, first_seen REAL, last_seen REAL);
+		INSERT INTO session_model_usage VALUES ('s1', 'm1', 'p', '', 'direct', '', 1, 50, 10, 0, 0, 0.01, NULL, 1792404000, 1792404000);
+	`)
+	devinDB := filepath.Join(xdgDataHome(home), "devin", "cli", "sessions.db")
+	mkDB(devinDB, `
+		CREATE TABLE sessions (id TEXT, model TEXT);
+		CREATE TABLE message_nodes (session_id TEXT, node_id INTEGER, created_at INTEGER, chat_message TEXT);
+		INSERT INTO message_nodes VALUES ('s1', 1, 1792404000, '{"role":"assistant","metadata":{"model":"m1","metrics":{"input_tokens":10,"output_tokens":5}}}');
+	`)
+
+	var copies int
+	sqliteCopyHook = func() { copies++ }
+	t.Cleanup(func() { sqliteCopyHook = nil })
+
+	pool := map[string]*string{}
+	if _, _, err := readCopilotDataDB(context.Background(), copilotDB, cacheDir, pool, nil); err != nil {
+		t.Fatal(err)
+	}
+	if copies != 1 {
+		t.Fatalf("readCopilotDataDB copied DB %d times, want 1", copies)
+	}
+	copies = 0
+	if _, _, err := readHermesDB(context.Background(), hermesDB, cacheDir, pool, nil); err != nil {
+		t.Fatal(err)
+	}
+	if copies != 1 {
+		t.Fatalf("readHermesDB copied DB %d times, want 1", copies)
+	}
+	copies = 0
+	if _, err := readDevinDB(context.Background(), devinDB, cacheDir, pool); err != nil {
+		t.Fatal(err)
+	}
+	if copies != 1 {
+		t.Fatalf("readDevinDB copied DB %d times, want 1", copies)
+	}
+}

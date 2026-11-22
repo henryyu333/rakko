@@ -516,3 +516,61 @@ func TestOCRCompactionKeepsLatinSpacing(t *testing.T) {
 		}
 	}
 }
+
+func TestPDFTextNormalizesCompatibilityChars(t *testing.T) {
+	// Map single-byte codes A, B, C via ToUnicode CMap to compatibility forms:
+	// A -> U+FF21 (fullwidth 'Ａ'), B -> U+FB01 ('ﬁ'), C -> U+2F00 (CJK radical '⼀').
+	cmap := `/CIDInit /ProcSet findresource begin
+12 dict begin
+begincmap
+/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def
+/CMapName /Adobe-Identity-UCS def
+/CMapType 2 def
+1 begincodespacerange
+<00> <FF>
+endcodespacerange
+3 beginbfchar
+<41> <FF21>
+<42> <FB01>
+<43> <2F00>
+endbfchar
+endcmap
+CMapName currentdict /CMap defineresource pop
+end
+end`
+	body := "q BT /F1 12 Tf 72 720 Td (ABC) Tj ET Q"
+	objs := []string{
+		"<< /Type /Catalog /Pages 2 0 R >>",
+		"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
+		"<< /Length " + itoa(len(body)) + " >>\nstream\n" + body + "\nendstream",
+		"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /ToUnicode 6 0 R >>",
+		"<< /Length " + itoa(len(cmap)) + " >>\nstream\n" + cmap + "\nendstream",
+	}
+	var buf bytes.Buffer
+	buf.WriteString("%PDF-1.4\n")
+	offsets := make([]int, len(objs)+1)
+	for i, objBody := range objs {
+		offsets[i+1] = buf.Len()
+		buf.WriteString(strings.Join([]string{itoa(i + 1), "0 obj", objBody, "endobj"}, "\n"))
+		buf.WriteString("\n")
+	}
+	start := buf.Len()
+	buf.WriteString("xref\n0 " + itoa(len(objs)+1) + "\n0000000000 65535 f \n")
+	for i := 1; i <= len(objs); i++ {
+		buf.WriteString(pad10(offsets[i]) + " 00000 n \n")
+	}
+	buf.WriteString("trailer\n<< /Size " + itoa(len(objs)+1) + " /Root 1 0 R >>\nstartxref\n" + itoa(start) + "\n%%EOF\n")
+
+	path := filepath.Join(t.TempDir(), "compat.pdf")
+	if err := os.WriteFile(path, buf.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	pages, err := PDFText(path)
+	if err != nil {
+		t.Fatalf("PDFText: %v", err)
+	}
+	if len(pages) != 1 || len(pages[0]) != 1 || pages[0][0] != "Afi一" {
+		t.Fatalf("PDFText = %q, want [[\"Afi一\"]]", pages)
+	}
+}

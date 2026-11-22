@@ -13,6 +13,8 @@ import (
 	"image"
 	"os"
 	"path/filepath"
+
+	"rakko/internal/atomicfile"
 )
 
 // ImageFormat selects the encoding a conversion writes.
@@ -122,7 +124,7 @@ func FitImage(src, dst string, format ImageFormat, limit int64) (over bool, err 
 			return fmt.Errorf("windows: cannot encode image %s", src)
 		}
 		over = int64(len(best)) > limit
-		return writeAtomicFile(dst, best)
+		return atomicfile.WriteFile(filepath.Dir(dst), filepath.Base(dst), best, 0o644)
 	})
 	return over, err
 }
@@ -227,26 +229,3 @@ const fitQuality = 0.4
 
 // fitMinPx is the smallest longer side a fitted image shrinks to.
 const fitMinPx = 640
-
-// writeAtomicFile writes data beside dst and renames it into place.
-func writeAtomicFile(dst string, data []byte) error {
-	f, err := os.CreateTemp(filepath.Dir(dst), ".rakko-image-*")
-	if err != nil {
-		return err
-	}
-	tmp := f.Name()
-	if _, err := f.Write(data); err != nil {
-		f.Close()
-		os.Remove(tmp)
-		return err
-	}
-	if err := f.Close(); err != nil {
-		os.Remove(tmp)
-		return err
-	}
-	if err := os.Rename(tmp, dst); err != nil {
-		os.Remove(tmp)
-		return err
-	}
-	return nil
-}

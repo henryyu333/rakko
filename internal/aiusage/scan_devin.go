@@ -46,11 +46,13 @@ type devinChatMsg struct {
 }
 
 func readDevinDB(ctx context.Context, dbPath, cacheDir string, pool map[string]*string) ([]rec, error) {
-	if err := requireSQLiteTable(ctx, "devin", dbPath, cacheDir, "message_nodes"); err != nil {
-		return nil, err
-	}
 	var rows []devinRow
-	if err := readSQLiteJSON(ctx, "devin", dbPath, cacheDir, devinQuery, &rows); err != nil {
+	if err := withSQLiteCopy(ctx, "devin", dbPath, cacheDir, func(db sqliteCopy) error {
+		if err := db.requireTable(ctx, "message_nodes"); err != nil {
+			return err
+		}
+		return db.queryJSON(ctx, devinQuery, &rows)
+	}); err != nil {
 		return nil, err
 	}
 	out := make([]rec, 0, len(rows))

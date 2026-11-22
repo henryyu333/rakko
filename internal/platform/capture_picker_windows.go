@@ -14,10 +14,13 @@ package platform
 import (
 	"fmt"
 	"image"
+	"path/filepath"
 	"unsafe"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+
+	"rakko/internal/atomicfile"
 )
 
 // pickDisplay is one frozen display with its overlay window.
@@ -259,7 +262,7 @@ func (p *picker) commit(di int) {
 	for y := 0; y < r.Dy(); y++ {
 		copy(out.Pix[y*out.Stride:y*out.Stride+r.Dx()*4], d.img.Pix[(r.Min.Y+y)*d.img.Stride+r.Min.X*4:])
 	}
-	if err := writeAtomicFile(p.path, encodePNG(out)); err != nil {
+	if err := atomicfile.WriteFile(filepath.Dir(p.path), filepath.Base(p.path), encodePNG(out), 0o644); err != nil {
 		p.finishErr(err)
 		return
 	}

@@ -75,12 +75,21 @@ func copilotContentSig(sessionID string, rc rec) string {
 // `assistant_usage_events`. data.db builds that only keep per-session
 // totals go through readCopilotDataDB instead.
 func readCopilotDB(ctx context.Context, dbPath, cacheDir string, pool map[string]*string) ([]rec, error) {
-	recs, ok, err := readCopilotEvents(ctx, dbPath, cacheDir, pool)
+	var recs []rec
+	err := withSQLiteCopy(ctx, "copilot", dbPath, cacheDir, func(db sqliteCopy) error {
+		var ok bool
+		var err error
+		recs, ok, err = readCopilotEvents(ctx, db, pool)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return errUnsupportedDBSchema
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
-	}
-	if !ok {
-		return nil, errUnsupportedDBSchema
 	}
 	return recs, nil
 }
@@ -90,26 +99,37 @@ func readCopilotDB(ctx context.Context, dbPath, cacheDir string, pool map[string
 // the same cumulative ledger as Hermes so a session's earlier days keep their
 // usage when it is resumed.
 func readCopilotDataDB(ctx context.Context, dbPath, cacheDir string, pool map[string]*string, old *fileState) ([]rec, map[string]cumSnapshot, error) {
-	recs, ok, err := readCopilotEvents(ctx, dbPath, cacheDir, pool)
+	var recs []rec
+	var ok bool
+	var rows []cumRow
+	var supported bool
+	err := withSQLiteCopy(ctx, "copilot", dbPath, cacheDir, func(db sqliteCopy) error {
+		var err error
+		recs, ok, err = readCopilotEvents(ctx, db, pool)
+		if err != nil || ok {
+			return err
+		}
+		hasSessions, err := db.tableExists(ctx, "sessions")
+		if err != nil {
+			return err
+		}
+		if !hasSessions {
+			return errUnsupportedDBSchema
+		}
+		rows, supported, err = readCopilotDataSessions(ctx, db, pool)
+		if err != nil {
+			return err
+		}
+		if !supported {
+			return errUnsupportedDBSchema
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, nil, err
 	}
 	if ok {
 		return recs, nil, nil
-	}
-	hasSessions, err := sqliteTableExists(ctx, "copilot", dbPath, cacheDir, "sessions")
-	if err != nil {
-		return nil, nil, err
-	}
-	if !hasSessions {
-		return nil, nil, errUnsupportedDBSchema
-	}
-	rows, supported, err := readCopilotDataSessions(ctx, dbPath, cacheDir, pool)
-	if err != nil {
-		return nil, nil, err
-	}
-	if !supported {
-		return nil, nil, errUnsupportedDBSchema
 	}
 	ledger, oldRecs := copilotSessionsBaseline(old)
 	out, snap := applyCumulativeRows(rows, ledger, oldRecs, copilotKeyPrefix, time.Now().UnixMilli())
@@ -154,8 +174,8 @@ func copilotSessionsBaseline(old *fileState) (map[string]cumSnapshot, []rec) {
 
 // readCopilotEvents reads `assistant_usage_events`; ok is false when the
 // database has no such table.
-func readCopilotEvents(ctx context.Context, dbPath, cacheDir string, pool map[string]*string) (_ []rec, ok bool, _ error) {
-	hasEvents, err := sqliteTableExists(ctx, "copilot", dbPath, cacheDir, "assistant_usage_events")
+func readCopilotEvents(ctx context.Context, db sqliteCopy, pool map[string]*string) (_ []rec, ok bool, _ error) {
+	hasEvents, err := db.tableExists(ctx, "assistant_usage_events")
 	if err != nil {
 		return nil, false, err
 	}
@@ -163,7 +183,7 @@ func readCopilotEvents(ctx context.Context, dbPath, cacheDir string, pool map[st
 		return nil, false, nil
 	}
 	var rows []map[string]any
-	if err := readSQLiteJSON(ctx, "copilot", dbPath, cacheDir, `SELECT * FROM assistant_usage_events`, &rows); err != nil {
+	if err := db.queryJSON(ctx, `SELECT * FROM assistant_usage_events`, &rows); err != nil {
 		return nil, false, err
 	}
 	out := make([]rec, 0, len(rows))
@@ -205,11 +225,11 @@ func copilotSessionLedgerKey(sessionID string) string {
 
 // readCopilotDataSessions returns the `sessions` totals as cumulative rows;
 // supported is false when the table has no token columns.
-func readCopilotDataSessions(ctx context.Context, dbPath, cacheDir string, pool map[string]*string) ([]cumRow, bool, error) {
+func readCopilotDataSessions(ctx context.Context, db sqliteCopy, pool map[string]*string) ([]cumRow, bool, error) {
 	var cols []struct {
 		Name string `json:"name"`
 	}
-	if err := readSQLiteJSON(ctx, "copilot", dbPath, cacheDir, `PRAGMA table_info('sessions')`, &cols); err != nil {
+	if err := db.queryJSON(ctx, `PRAGMA table_info('sessions')`, &cols); err != nil {
 		return nil, false, err
 	}
 	hasTokenCol := false
@@ -223,7 +243,7 @@ func readCopilotDataSessions(ctx context.Context, dbPath, cacheDir string, pool 
 		return nil, false, nil
 	}
 	var rows []map[string]any
-	if err := readSQLiteJSON(ctx, "copilot", dbPath, cacheDir, `SELECT * FROM sessions`, &rows); err != nil {
+	if err := db.queryJSON(ctx, `SELECT * FROM sessions`, &rows); err != nil {
 		return nil, false, err
 	}
 	out := make([]cumRow, 0, len(rows))

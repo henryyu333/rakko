@@ -158,3 +158,30 @@ func TestOpencodeDetectsSameSizeSameMtime(t *testing.T) {
 		t.Fatalf("opencode missed same-size same-mtime insert: %+v", o)
 	}
 }
+
+func TestOpencodeDBPathRespectsXDGDataHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	defaultDB := opencodeTestDB(t, home)
+	xdg := filepath.Join(t.TempDir(), "custom-xdg")
+	t.Setenv("XDG_DATA_HOME", xdg)
+
+	want := filepath.Join(xdg, "opencode", "opencode.db")
+	if got := opencodeDBPath(home); got != want {
+		t.Fatalf("opencodeDBPath(%q) = %q, want %q", home, got, want)
+	}
+	if err := os.MkdirAll(filepath.Dir(want), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(defaultDB, want); err != nil {
+		t.Fatal(err)
+	}
+	s := NewScanner(home, t.TempDir())
+	if err := s.Scan(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	if o := s.Summary(RangeToday, fixtureNow()).ByTool[ToolOpencode]; o.Requests != 2 || o.Input != 300 {
+		t.Fatalf("opencode under XDG_DATA_HOME = %+v, want 2 requests / 300 input", o)
+	}
+}

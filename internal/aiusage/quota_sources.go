@@ -92,8 +92,14 @@ func hasClaudeLocalLogin(env Env) bool {
 		}
 	}
 	if env.Keychain != nil && runtime.GOOS == "darwin" {
-		if out, err := env.Keychain(context.Background(), "Claude Code-credentials", env.ClaudeUser); err == nil && len(out) > 0 {
+		acct := claudeKeychainAccount(env)
+		if out, err := env.Keychain(context.Background(), claudeKeychainServiceFor(env.ClaudeConfigDir), acct); err == nil && len(out) > 0 {
 			return true
+		}
+		if env.RakkoClaudeDir != "" {
+			if out, err := env.Keychain(context.Background(), claudeKeychainServiceFor(env.RakkoClaudeDir), acct); err == nil && len(out) > 0 {
+				return true
+			}
 		}
 	}
 	return false

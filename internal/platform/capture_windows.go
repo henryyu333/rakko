@@ -13,10 +13,13 @@ import (
 	"fmt"
 	"image"
 	"image/png"
+	"path/filepath"
 	"time"
 	"unsafe"
 
 	"github.com/egoist/mygo"
+
+	"rakko/internal/atomicfile"
 )
 
 var captureDisplayTimeout = 15 * time.Second
@@ -65,7 +68,7 @@ func CaptureDisplay(index int, path string) error {
 			done <- ctx.Err()
 			return
 		}
-		done <- writeAtomicFile(path, pngBytes)
+		done <- atomicfile.WriteFile(filepath.Dir(path), filepath.Base(path), pngBytes, 0o644)
 	}()
 	select {
 	case err := <-done:

@@ -448,3 +448,34 @@ func TestRemoveDSHPatchAfterCRLF(t *testing.T) {
 		t.Fatalf("module import row left behind:\n%s", out)
 	}
 }
+
+func TestDshIndentedEmptyFlowSequence(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{name: "with_newline", raw: "  []\n", want: "[]\n"},
+		{name: "without_newline", raw: "  []", want: "[]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			patched, changed, noNL, flowEmpty, err := addDSHPatch([]byte(tc.raw), dshEntryCompletion, "/tmp/mod.mjs")
+			if err != nil || !changed || !flowEmpty {
+				t.Fatalf("addDSHPatch: changed=%v flowEmpty=%v err=%v", changed, flowEmpty, err)
+			}
+			if bytes.Contains(patched, []byte("[]")) {
+				t.Fatalf("indented [] survived:\n%s", patched)
+			}
+			restored, changed, err := removeDSHPatch(patched, dshEntryCompletion, originRecord{
+				NoFinalNewline: noNL,
+				FlowEmpty:      flowEmpty,
+			})
+			if err != nil || !changed {
+				t.Fatalf("removeDSHPatch: changed=%v err=%v\n%s", changed, err, patched)
+			}
+			if string(restored) != tc.want {
+				t.Fatalf("restored = %q, want %q", string(restored), tc.want)
+			}
+		})
+	}
+}

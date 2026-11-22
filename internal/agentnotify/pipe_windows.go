@@ -173,20 +173,15 @@ func (l *pipeListener) Close() error {
 	l.closed = true
 	pending := l.pending
 	l.pending = 0
-	waiting := make([]windows.Handle, 0, len(l.waiting))
+	// Cancel pending overlapped accepts while holding l.mu so Accept cannot
+	// remove and CloseHandle an entry before CancelIoEx runs on it.
 	for h := range l.waiting {
-		waiting = append(waiting, h)
+		_ = windows.CancelIoEx(h, nil)
 	}
 	l.mu.Unlock()
 
 	if pending != 0 {
 		windows.CloseHandle(pending)
-	}
-	// Every blocked ConnectNamedPipe completes with an error; the accepting
-	// goroutine owns the handle and closes it before it drops out of
-	// l.active.
-	for _, h := range waiting {
-		_ = windows.CancelIoEx(h, nil)
 	}
 	l.mu.Lock()
 	for l.active > 0 {
@@ -556,11 +551,10 @@ func (c *pipeConn) setDeadline(t time.Time, read bool) {
 	} else {
 		ev = c.wdeadlineEvent
 	}
-	closed := c.closed
-	c.mu.Unlock()
-	if ev != 0 && !closed {
+	if ev != 0 && !c.closed {
 		_ = windows.SetEvent(ev)
 	}
+	c.mu.Unlock()
 }
 
 // timeoutError is net.Conn's deadline error: it reports Timeout and matches

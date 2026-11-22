@@ -15,19 +15,28 @@ import (
 // but lacks the expected table(s) for that tool (e.g. a pre-telemetry DB).
 var errUnsupportedDBSchema = errors.New("unsupported database schema")
 
-func sqliteTableExists(ctx context.Context, tag, dbPath, cacheDir, table string) (bool, error) {
+// sqliteCopyHook is an optional test seam called whenever copySQLiteDB creates
+// a temporary read copy.
+var sqliteCopyHook func()
+
+type sqliteCopy struct {
+	tag  string
+	path string
+}
+
+func (c sqliteCopy) tableExists(ctx context.Context, table string) (bool, error) {
 	var tables []struct {
 		Name string `json:"name"`
 	}
 	q := fmt.Sprintf("SELECT name FROM sqlite_master WHERE type='table' AND name='%s'", table)
-	if err := readSQLiteJSON(ctx, tag, dbPath, cacheDir, q, &tables); err != nil {
+	if err := c.queryJSON(ctx, q, &tables); err != nil {
 		return false, err
 	}
 	return len(tables) > 0, nil
 }
 
-func requireSQLiteTable(ctx context.Context, tag, dbPath, cacheDir, table string) error {
-	ok, err := sqliteTableExists(ctx, tag, dbPath, cacheDir, table)
+func (c sqliteCopy) requireTable(ctx context.Context, table string) error {
+	ok, err := c.tableExists(ctx, table)
 	if err != nil {
 		return err
 	}
@@ -37,13 +46,28 @@ func requireSQLiteTable(ctx context.Context, tag, dbPath, cacheDir, table string
 	return nil
 }
 
-// readSQLiteJSON copies a SQLite database (plus any -wal) into cacheDir and
-// runs query, unmarshaling the resulting JSON rows into dst. Retries up to 3
-// times to ride out mid-checkpoint WAL races.
-func readSQLiteJSON(ctx context.Context, tag, dbPath, cacheDir, query string, dst any) error {
+func (c sqliteCopy) queryJSON(ctx context.Context, query string, dst any) error {
+	raw, err := querySQLiteJSON(ctx, c.tag, c.path, query)
+	if err != nil {
+		return err
+	}
+	if len(raw) == 0 {
+		return nil
+	}
+	if err := json.Unmarshal(raw, dst); err != nil {
+		return fmt.Errorf("%s: decoding sqlite output: %w", c.tag, err)
+	}
+	return nil
+}
+
+// withSQLiteCopy copies a SQLite database (plus any -wal) into cacheDir once
+// per attempt and runs fn against that private copy, retrying up to 3 times to
+// ride out mid-checkpoint WAL races.
+func withSQLiteCopy(ctx context.Context, tag, dbPath, cacheDir string, fn func(sqliteCopy) error) error {
 	var err error
 	for range 3 {
-		if err = readSQLiteJSONOnce(ctx, tag, dbPath, cacheDir, query, dst); err == nil || ctx.Err() != nil {
+		err = withSQLiteCopyOnce(ctx, tag, dbPath, cacheDir, fn)
+		if err == nil || ctx.Err() != nil || errors.Is(err, errUnsupportedDBSchema) {
 			return err
 		}
 		select {
@@ -55,7 +79,7 @@ func readSQLiteJSON(ctx context.Context, tag, dbPath, cacheDir, query string, ds
 	return err
 }
 
-func readSQLiteJSONOnce(ctx context.Context, tag, dbPath, cacheDir, query string, dst any) error {
+func withSQLiteCopyOnce(ctx context.Context, tag, dbPath, cacheDir string, fn func(sqliteCopy) error) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -64,20 +88,13 @@ func readSQLiteJSONOnce(ctx context.Context, tag, dbPath, cacheDir, query string
 		return err
 	}
 	defer cleanup()
-	raw, err := querySQLiteJSON(ctx, tag, copyPath, query)
-	if err != nil {
-		return err
-	}
-	if len(raw) == 0 {
-		return nil
-	}
-	if err := json.Unmarshal(raw, dst); err != nil {
-		return fmt.Errorf("%s: decoding sqlite output: %w", tag, err)
-	}
-	return nil
+	return fn(sqliteCopy{tag: tag, path: copyPath})
 }
 
 func copySQLiteDB(ctx context.Context, tag, dbPath, cacheDir string) (string, func(), error) {
+	if sqliteCopyHook != nil {
+		sqliteCopyHook()
+	}
 	if cacheDir != "" {
 		if err := os.MkdirAll(cacheDir, 0o700); err != nil {
 			return "", nil, fmt.Errorf("%s: making the read copy: %w", tag, err)

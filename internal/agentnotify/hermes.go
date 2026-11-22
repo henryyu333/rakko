@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net"
 	"os"
 	"path/filepath"
@@ -73,13 +74,19 @@ type hermesState struct {
 	Approval   bool `json:"approval"`
 }
 
-func readHermesState(home string) hermesState {
+func readHermesState(home string) (hermesState, error) {
 	var st hermesState
 	raw, err := os.ReadFile(hermesStatePath(home))
-	if err == nil {
-		_ = json.Unmarshal(raw, &st)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return st, nil
+		}
+		return st, err
 	}
-	return st
+	if err := json.Unmarshal(raw, &st); err != nil {
+		return hermesState{}, err
+	}
+	return st, nil
 }
 
 func writeHermesState(home string, st hermesState) error {
@@ -370,10 +377,13 @@ func connectHermes(s spec, home, dataDir, exe string) error {
 	if err := precheckHermesConfig(home, false); err != nil {
 		return err
 	}
+	st, err := readHermesState(home)
+	if err != nil {
+		return err
+	}
 	if err := writeHermesPlugin(home, dataDir, exe); err != nil {
 		return err
 	}
-	st := readHermesState(home)
 	st.Completion = true
 	if err := writeHermesState(home, st); err != nil {
 		return err
@@ -390,7 +400,10 @@ func connectHermes(s spec, home, dataDir, exe string) error {
 // disconnectHermes removes the completion half. With approval still on, the
 // plugin stays and only its state changes.
 func disconnectHermes(s spec, home, dataDir string) error {
-	st := readHermesState(home)
+	st, err := readHermesState(home)
+	if err != nil {
+		return err
+	}
 	st.Completion = false
 	if exists(hermesInitPath(home)) {
 		if err := writeHermesState(home, st); err != nil {
@@ -420,10 +433,13 @@ func connectHermesApprove(s spec, home, dataDir, exe string) error {
 	if err := precheckHermesConfig(home, true); err != nil {
 		return err
 	}
+	st, err := readHermesState(home)
+	if err != nil {
+		return err
+	}
 	if err := writeHermesPlugin(home, dataDir, exe); err != nil {
 		return err
 	}
-	st := readHermesState(home)
 	st.Approval = true
 	if err := writeHermesState(home, st); err != nil {
 		return err
@@ -445,7 +461,10 @@ func connectHermesApprove(s spec, home, dataDir, exe string) error {
 // disconnectHermesApprove removes the approval half. With completion still
 // on, the plugin stays and only its state changes.
 func disconnectHermesApprove(s spec, home, dataDir string) error {
-	st := readHermesState(home)
+	st, err := readHermesState(home)
+	if err != nil {
+		return err
+	}
 	st.Approval = false
 	if exists(hermesInitPath(home)) {
 		if err := writeHermesState(home, st); err != nil {
@@ -481,7 +500,11 @@ func statusHermes(home string) (State, string) {
 	if !ownsModule(raw, ToolHermes, "") {
 		return StateError, hermesInitPath(home) + " was not written by Rakko"
 	}
-	if !readHermesState(home).Completion {
+	st, err := readHermesState(home)
+	if err != nil {
+		return StateError, err.Error()
+	}
+	if !st.Completion {
 		return StateNotInjected, ""
 	}
 	cfg, present, _, err := readConfig(hermesConfigPath(home))
@@ -517,7 +540,11 @@ func statusHermesApprove(home string) (State, string) {
 	if !ownsModule(raw, ToolHermes, "") {
 		return StateError, hermesInitPath(home) + " was not written by Rakko"
 	}
-	if !readHermesState(home).Approval {
+	st, err := readHermesState(home)
+	if err != nil {
+		return StateError, err.Error()
+	}
+	if !st.Approval {
 		return StateNotInjected, ""
 	}
 	cfg, present, _, err := readConfig(hermesConfigPath(home))
@@ -560,7 +587,10 @@ func editHermesConfig(home string, edit func(raw []byte) ([]byte, bool, error)) 
 		if !changed {
 			return filePlan{}, nil
 		}
-		return filePlan{data: after, mode: mode.Perm(), changed: true}, nil
+		return filePlan{data: after, mode: mode.Perm(), changed: true, before: func() error {
+			_, err := backupOnce(path, existed)
+			return err
+		}}, nil
 	})
 }
 
@@ -802,6 +832,55 @@ func yamlListItems(d yamlLines, key int) []int {
 	return out
 }
 
+// yamlScalar unquotes a YAML scalar and strips any trailing inline comment.
+func yamlScalar(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	if q := s[0]; q == '"' || q == '\'' {
+		var b strings.Builder
+		for i := 1; i < len(s); i++ {
+			if q == '"' && s[i] == '\\' && i+1 < len(s) {
+				i++
+				b.WriteByte(s[i])
+				continue
+			}
+			if q == '\'' && s[i] == '\'' && i+1 < len(s) && s[i+1] == '\'' {
+				b.WriteByte('\'')
+				i++
+				continue
+			}
+			if s[i] == q {
+				rest := strings.TrimSpace(s[i+1:])
+				if rest == "" || strings.HasPrefix(rest, "#") {
+					return b.String()
+				}
+				break
+			}
+			b.WriteByte(s[i])
+		}
+		return s
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] == '#' && (i == 0 || s[i-1] == ' ' || s[i-1] == '\t') {
+			return strings.TrimSpace(s[:i])
+		}
+	}
+	return s
+}
+
+func hermesListItemMatches(line, name string) bool {
+	text := strings.TrimSpace(yamlBare(line))
+	if !strings.HasPrefix(text, "-") {
+		return false
+	}
+	if len(text) > 1 && text[1] != ' ' && text[1] != '\t' {
+		return false
+	}
+	return yamlScalar(text[1:]) == name
+}
+
 // hermesHasEnabled reports whether plugins.enabled lists name.
 func hermesHasEnabled(raw []byte, name string) (bool, error) {
 	d := splitYAML(raw)
@@ -821,8 +900,7 @@ func hermesHasEnabled(raw []byte, name string) (bool, error) {
 		return false, errors.New("plugins.enabled is not a block list; left alone")
 	}
 	for _, item := range yamlListItems(d, enabled) {
-		text := strings.TrimSpace(yamlBare(d.lines[item]))
-		if len(text) > 1 && strings.TrimSpace(text[1:]) == name {
+		if hermesListItemMatches(d.lines[item], name) {
 			return true, nil
 		}
 	}
@@ -867,8 +945,7 @@ func hermesAddEnabled(raw []byte, name string) ([]byte, bool, error) {
 	items := yamlListItems(d, enabled)
 	itemIndent := ind + 2
 	for _, item := range items {
-		text := strings.TrimSpace(yamlBare(d.lines[item]))
-		if len(text) > 1 && strings.TrimSpace(text[1:]) == name {
+		if hermesListItemMatches(d.lines[item], name) {
 			return raw, false, nil
 		}
 		itemIndent = yamlIndent(d.lines[item])
@@ -896,8 +973,7 @@ func hermesRemoveEnabled(raw []byte, name string) ([]byte, bool, error) {
 	removed := false
 	items := yamlListItems(d, enabled)
 	for i := len(items) - 1; i >= 0; i-- {
-		text := strings.TrimSpace(yamlBare(d.lines[items[i]]))
-		if len(text) > 1 && strings.TrimSpace(text[1:]) == name {
+		if hermesListItemMatches(d.lines[items[i]], name) {
 			yamlRemove(&d, items[i])
 			removed = true
 		}
@@ -949,7 +1025,7 @@ func hermesHasTransport(raw []byte) (bool, error) {
 			return false, nil
 		}
 		_, value, _ := yamlKey(d.lines[key])
-		if strings.TrimSpace(value) != pair[1] {
+		if yamlScalar(value) != pair[1] {
 			return false, nil
 		}
 	}
@@ -1012,8 +1088,8 @@ func hermesSetTransport(raw []byte) ([]byte, bool, error) {
 		}
 		if ok {
 			_, value, _ := yamlKey(d.lines[key])
-			if strings.TrimSpace(value) != pair[1] {
-				return nil, false, fmt.Errorf("security.approval.%s is already set to %q; left alone", pair[0], strings.TrimSpace(value))
+			if yamlScalar(value) != pair[1] {
+				return nil, false, fmt.Errorf("security.approval.%s is already set to %q; left alone", pair[0], yamlScalar(value))
 			}
 			continue
 		}
@@ -1054,8 +1130,8 @@ func hermesRemoveTransport(raw []byte) ([]byte, bool, error) {
 			continue
 		}
 		_, value, _ := yamlKey(d.lines[key])
-		if strings.TrimSpace(value) != pair[1] {
-			return nil, false, fmt.Errorf("security.approval.%s was changed to %q; left alone", pair[0], strings.TrimSpace(value))
+		if yamlScalar(value) != pair[1] {
+			return nil, false, fmt.Errorf("security.approval.%s was changed to %q; left alone", pair[0], yamlScalar(value))
 		}
 		yamlRemove(&d, key)
 		removed = true

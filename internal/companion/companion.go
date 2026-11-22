@@ -8,6 +8,7 @@
 package companion
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -85,6 +86,7 @@ func Open(dir string) (*Store, error) {
 		return s, fmt.Errorf("%w: %v", ErrCorrupt, err)
 	}
 	var d document
+	data = bytes.TrimPrefix(data, []byte{0xEF, 0xBB, 0xBF})
 	if err := json.Unmarshal(data, &d); err != nil {
 		s.corrupt = true
 		return s, fmt.Errorf("%w: %v", ErrCorrupt, err)

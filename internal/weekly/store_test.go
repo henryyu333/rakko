@@ -217,3 +217,18 @@ func TestEarliestDay(t *testing.T) {
 		t.Fatalf("earliest = %v, want %v", got, want)
 	}
 }
+
+func TestOpenStripsUTF8BOM(t *testing.T) {
+	dir := t.TempDir()
+	body := append([]byte{0xEF, 0xBB, 0xBF}, []byte(`{"version":1,"days":{"2026-11-22":{"rakko":{"convert":3}}}}`)...)
+	if err := os.WriteFile(filepath.Join(dir, FileName), body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	st, err := Open(dir)
+	if err != nil {
+		t.Fatalf("Open with UTF-8 BOM: %v", err)
+	}
+	if got := st.days["2026-11-22"]; got == nil || got.Rakko.Convert != 3 {
+		t.Fatalf("day after BOM open = %+v, want Rakko.Convert=3", got)
+	}
+}

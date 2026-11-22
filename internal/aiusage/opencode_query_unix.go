@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -16,7 +17,7 @@ const sqlite3Path = "/usr/bin/sqlite3"
 
 // opencodeDBPath is where opencode keeps its database on this platform.
 func opencodeDBPath(home string) string {
-	return joinHome(home, ".local", "share", "opencode", "opencode.db")
+	return filepath.Join(xdgDataHome(home), "opencode", "opencode.db")
 }
 
 // queryOpencode runs the read-only query against a copy and returns one row

@@ -71,11 +71,13 @@ func hermesRowCost(row hermesRow) (cost float64, priced bool) {
 }
 
 func readHermesDB(ctx context.Context, dbPath, cacheDir string, pool map[string]*string, old *fileState) ([]rec, map[string]cumSnapshot, error) {
-	if err := requireSQLiteTable(ctx, "hermes", dbPath, cacheDir, "session_model_usage"); err != nil {
-		return nil, nil, err
-	}
 	var rows []hermesRow
-	if err := readSQLiteJSON(ctx, "hermes", dbPath, cacheDir, hermesQuery, &rows); err != nil {
+	if err := withSQLiteCopy(ctx, "hermes", dbPath, cacheDir, func(db sqliteCopy) error {
+		if err := db.requireTable(ctx, "session_model_usage"); err != nil {
+			return err
+		}
+		return db.queryJSON(ctx, hermesQuery, &rows)
+	}); err != nil {
 		return nil, nil, err
 	}
 	out, nextSnap := applyHermesRows(rows, pool, old, time.Now().UnixMilli())

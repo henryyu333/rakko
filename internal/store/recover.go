@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -37,6 +38,7 @@ const corruptTimeLayout = "20060102-150405"
 // newer Rakko wrote must be refused as newer, not silently trimmed.
 func parseState(data []byte) (stateFile, error) {
 	var sf stateFile
+	data = bytes.TrimPrefix(data, []byte{0xEF, 0xBB, 0xBF})
 	if err := json.Unmarshal(data, &sf); err != nil {
 		return sf, fmt.Errorf("%w: parsing %s: %v", ErrStateUnreadable, stateFileName, err)
 	}

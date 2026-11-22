@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"rakko/internal/atomicfile"
 	"rakko/internal/platform"
 )
 
@@ -891,35 +892,7 @@ func writeAtomic(path string, data []byte, mode os.FileMode) error {
 		}
 		path = target
 	}
-	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".rakko-*")
-	if err != nil {
-		return err
-	}
-	name := tmp.Name()
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		os.Remove(name)
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		os.Remove(name)
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		os.Remove(name)
-		return err
-	}
-	if err := os.Chmod(name, mode); err != nil {
-		os.Remove(name)
-		return err
-	}
-	if err := os.Rename(name, path); err != nil {
-		os.Remove(name)
-		return err
-	}
-	return nil
+	return atomicfile.WriteFile(filepath.Dir(path), filepath.Base(path), data, mode)
 }
 
 // backupOnce copies the file next to itself before the first change Rakko
