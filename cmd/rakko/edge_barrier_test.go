@@ -92,3 +92,74 @@ func TestShelfBarrierRegionFollowMainPinnedAndStyles(t *testing.T) {
 		t.Fatalf("unplugged upper display kept barrier armed: %+v", g)
 	}
 }
+
+func TestHoverAndDropBandUseCachedBarrier(t *testing.T) {
+	newStackedDualDisplayRig(t, true)
+
+	var displayCalls, resolverCalls int
+	origDisplays := screenDisplays
+	origResolver := resolveUpperSegment
+	t.Cleanup(func() {
+		screenDisplays = origDisplays
+		resolveUpperSegment = origResolver
+	})
+	screenDisplays = func() []mygo.Display {
+		displayCalls++
+		return origDisplays()
+	}
+	resolveUpperSegment = func(ds []mygo.Display, target mygo.Display, segX, segY, segW int) (int, int, int, bool) {
+		resolverCalls++
+		return origResolver(ds, target, segX, segY, segW)
+	}
+
+	a := &shelf{
+		dataDir:  t.TempDir(),
+		settings: settings.Settings{Display: settings.DisplayFollow, ShellStyle: settings.ShellStyleIsland},
+	}
+	a.placeAt(mygo.Point{X: 735, Y: 400})
+	if displayCalls != 1 || resolverCalls != 1 {
+		t.Fatalf("placeAt called display/resolver (%d, %d) times; want (1, 1)", displayCalls, resolverCalls)
+	}
+
+	r := a.islandRect()
+	mid := mygo.Point{X: r.X + r.Width/2, Y: 0}
+	now := time.Now()
+	for i := 0; i < 50; i++ {
+		if !a.overHoverAnchor(mid, now) {
+			t.Fatalf("hover %d missed top-edge island barrier", i)
+		}
+		if !a.dropBandX(mid) {
+			t.Fatalf("dropBandX %d missed top-edge island barrier", i)
+		}
+		if !a.dropBand(mid) {
+			t.Fatalf("dropBand %d missed top-edge island barrier", i)
+		}
+		g := a.dragGuardRegion()
+		if !g.BarrierEnabled || g.BarrierX != r.X || g.BarrierWidth != r.Width {
+			t.Fatalf("cached dragGuardRegion %d mismatch: %+v", i, g)
+		}
+	}
+	if displayCalls != 1 || resolverCalls != 1 {
+		t.Fatalf("hover/drop-band/dragGuardRegion re-queried displays: displayCalls=%d resolverCalls=%d, want (1, 1)", displayCalls, resolverCalls)
+	}
+
+	// Headless style change refreshes cached segment once.
+	a.setShellStyle(settings.ShellStyleNotch)
+	if resolverCalls != 2 || displayCalls != 1 {
+		t.Fatalf("setShellStyle(Notch) expected 1 resolver refresh and 0 extra display calls; got (%d, %d)", resolverCalls, displayCalls)
+	}
+	if !a.barrier.enabled || a.barrier.width != 180 {
+		t.Fatalf("after style switch barrier = %+v, want width 180", a.barrier)
+	}
+
+	// Switch back to Island, then move off default row: BarrierEnabled clears without extra resolver calls.
+	a.setShellStyle(settings.ShellStyleIsland)
+	if resolverCalls != 3 || !a.barrier.enabled {
+		t.Fatalf("setShellStyle(Island) expected resolverCalls=3 enabled=true, got (%d, %v)", resolverCalls, a.barrier.enabled)
+	}
+	a.islandDY = 32
+	g := a.dragGuardRegion()
+	if g.BarrierEnabled || resolverCalls != 3 {
+		t.Fatalf("moved island expected BarrierEnabled=false and resolverCalls=3, got enabled=%v resolverCalls=%d", g.BarrierEnabled, resolverCalls)
+	}
+}

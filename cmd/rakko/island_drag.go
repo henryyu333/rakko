@@ -158,6 +158,7 @@ func (a *shelf) moveIslandTo(centre, top int) {
 	}
 	a.islandDX, a.islandDY = dx, dy
 	a.y = a.dispBounds.Y + dy
+	a.refreshBarrier()
 	// The held envelope was measured around the old row; it must not span
 	// both places after the panel lands at this one.
 	a.frameHold = mygo.Rectangle{}

@@ -93,6 +93,7 @@ func (a *shelf) placeAt(p mygo.Point) {
 	// showing, folding and a display change all replay it instead of the
 	// default row.
 	a.placeIslandAxis()
+	a.refreshBarrier()
 	// A held envelope was measured around the previous anchor; the caller
 	// takes a fresh one for the new row (show, holdSurface).
 	a.frameHold = mygo.Rectangle{}

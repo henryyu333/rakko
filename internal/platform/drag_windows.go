@@ -15,6 +15,13 @@ package platform
 // on the source's thread for the duration of DoDragDrop, whose class is
 // CLIPBRDWNDCLASS. A held left button plus that capture is a drag, for
 // Explorer, browsers and every other OLE source alike.
+//
+// The formats and file paths of that drag are not readable from outside
+// the source before the cursor reaches Rakko's window. DragTypes and
+// DragFiles therefore stay empty; once the drag enters a Rakko window,
+// mygo's OLE drop target reads CF_HDROP paths without reading file contents
+// and delivers them through ui.DataDragOver's transfer.Offer.Files, and the
+// drop itself delivers the full transfer data.
 
 import (
 	"sync"
@@ -49,8 +56,9 @@ type guiThreadInfo struct {
 	rcCaret       [4]int32
 }
 
-// oleDragCaptureClass is ole32's hidden clipboard/drag window class shared by
-// every OLE drag source during DoDragDrop.
+// oleDragCaptureClass (dragCapture) is the capture window OLE's drag loop
+// holds. The class is ole32's hidden clipboard/drag window, shared by every
+// OLE drag source.
 const oleDragCaptureClass = "CLIPBRDWNDCLASS"
 
 func windowClass(h uintptr) string {
@@ -62,8 +70,10 @@ func windowClass(h uintptr) string {
 	return windows.UTF16ToString(buf[:n])
 }
 
-// isOLEDragActive reports whether the foreground thread currently holds an
-// OLE drag capture window (and is not a window move/size loop).
+// isOLEDragActive reports whether the foreground thread's capture window
+// belongs to OLE's drag loop (and not a window move/size loop).
+// GetGUIThreadInfo with a zero thread id answers for the thread that owns
+// the active window, exactly where DoDragDrop runs.
 func isOLEDragActive() bool {
 	var gti guiThreadInfo
 	gti.cbSize = uint32(unsafe.Sizeof(gti))
@@ -76,6 +86,10 @@ func isOLEDragActive() bool {
 	return windowClass(gti.hwndCapture) == oleDragCaptureClass
 }
 
+// dragSession tracks the OLE drag in flight. Only one drag can be active
+// at a time, so the state lives on the package; serial increments once per
+// drag generation, which is what the shelf uses to tell a new drag from
+// the one it is already tracking.
 var dragSession struct {
 	mu     sync.Mutex
 	active bool
@@ -95,10 +109,25 @@ func DragState() (active bool, serial int64) {
 	return dragSession.active, dragSession.serial
 }
 
-func DragTypes() []string   { return nil }
-func DragFiles() []string   { return nil }
+// DragTypes returns the drag session's declared formats. Windows keeps the
+// data object inside the source process, so no format list is readable
+// here; the drop target of the window under the pointer still negotiates
+// them for the drop itself.
+func DragTypes() []string { return nil }
+
+// DragFiles returns the file paths of the drag session in flight. Outside
+// Rakko's window the source's OLE data object is unreachable, so this
+// returns nil; hover paths arrive via transfer.Offer.Files once OLE
+// DragEnter reaches a Rakko window.
+func DragFiles() []string { return nil }
+
+// DragFilesChange is the serial that marks the drag board's last rewrite.
+// Windows exposes no global drag pasteboard serial outside the target
+// window, so this stays 0.
 func DragFilesChange() int64 { return 0 }
 
+// winDragFileTypes are the Windows clipboard formats that declare whole
+// files on a drag.
 var winDragFileTypes = []string{
 	"CF_HDROP",
 	"FileGroupDescriptorW",
@@ -107,6 +136,7 @@ var winDragFileTypes = []string{
 	"application/x-mygo-file-list",
 }
 
+// DragHasFiles reports whether the drag declares whole files.
 func DragHasFiles(types []string) bool {
 	for _, t := range types {
 		if slicesContains(winDragFileTypes, t) {
@@ -116,10 +146,15 @@ func DragHasFiles(types []string) bool {
 	return false
 }
 
+// DragHasFilePromise reports whether the drag promises files it writes on
+// drop. Windows drag sources hand real files over, so this never fires.
 func DragHasFilePromise(types []string) bool { return false }
 
+// winDragImageTypes are the formats that carry image data on a Windows
+// drag.
 var winDragImageTypes = []string{"PNG", "image/png", "CF_DIB", "CF_DIBV5"}
 
+// DragHasImages reports whether the drag carries image data.
 func DragHasImages(types []string) bool {
 	for _, t := range types {
 		if slicesContains(winDragImageTypes, t) {
@@ -129,6 +164,9 @@ func DragHasImages(types []string) bool {
 	return false
 }
 
+// slicesContains is a small local helper: the platform files avoid
+// importing slices into the drag code so the type lists above stay next to
+// the functions that read them.
 func slicesContains(list []string, v string) bool {
 	for _, s := range list {
 		if s == v {

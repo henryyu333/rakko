@@ -92,6 +92,7 @@ func (a *shelf) setShellStyle(style settings.ShellStyle) {
 		// Headless: the style still decides whether this display carries a
 		// saved place at all.
 		a.placeIslandAxis()
+		a.refreshBarrier()
 	}
 	a.syncIdleIslands()
 }

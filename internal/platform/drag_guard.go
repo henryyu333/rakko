@@ -75,7 +75,10 @@ var (
 	dragGuardOnce                 sync.Once
 	dragGuardErr                  error
 	dragGuardArmed                atomic.Pointer[dragGuardState]
-	// dragGuardParked makes the armed filter pass events through untouched.
+	// dragGuardParked makes the armed filter pass drag events through
+	// untouched. The app's own island gesture parks it: the corridor's clamp
+	// would push that swipe — and the capsule under the pointer — down onto
+	// its landing row, which the user never asked for.
 	dragGuardParked       atomic.Bool
 	dragGuardCallbackOnce sync.Once
 	dragGuardCallback     uintptr
@@ -166,6 +169,10 @@ func CanSendInput() bool {
 }
 
 // RequestAccessibility is the user-initiated path to grant the permission.
+// macOS ties an ad-hoc signed app's grant to its exact build, so an update
+// leaves a stale, switched-on entry that no longer applies and suppresses the
+// system prompt. When untrusted, the app's own entry is cleared first (it
+// grants nothing to this build) and macOS is then asked to prompt again.
 func RequestAccessibility() bool {
 	if err := loadDragGuard(); err != nil {
 		return false
@@ -174,6 +181,8 @@ func RequestAccessibility() bool {
 		return true
 	}
 	if id := bundleIdentifier(); id != "" {
+		// Fails harmlessly when there is no record yet (first grant);
+		// the prompt below covers that case.
 		_ = exec.Command("/usr/bin/tccutil", "reset", "Accessibility", id).Run()
 	}
 	trusted := false
@@ -186,6 +195,8 @@ func RequestAccessibility() bool {
 	return trusted
 }
 
+// bundleIdentifier is empty when running outside an app bundle (go run/test),
+// which keeps development runs from touching any permission record.
 func bundleIdentifier() string {
 	var out string
 	withPool(func() {
@@ -288,7 +299,8 @@ func tapUpdateFileDrag(leftDown bool) bool {
 	return tapDragFile
 }
 
-// A single trampoline serves every event; purego callbacks cannot be freed.
+// A single trampoline serves every drag; purego callbacks cannot be freed.
+// It runs on the filter's own thread and only compares and rewrites points.
 func dragGuardCallbackAddr() uintptr {
 	dragGuardCallbackOnce.Do(func() {
 		dragGuardCallback = purego.NewCallback(func(_ uintptr, typ uint32, event uintptr, _ uintptr) uintptr {
@@ -322,6 +334,9 @@ func dragGuardCallbackAddr() uintptr {
 				if event != 0 {
 					p := cgEventGetLocation(event)
 					if q, changed := evalMacEdgeGuard(p, s.region, parked, leftDown, fileDrag); changed {
+						// Rewrite the event and the hardware cursor:
+						// WindowServer's Spaces edge reads the cursor, not
+						// only the dragged-event location.
 						cgEventSetLocation(event, q)
 						warpCursor(q)
 					}
@@ -331,11 +346,15 @@ func dragGuardCallbackAddr() uintptr {
 				if event != 0 {
 					p := cgEventGetLocation(event)
 					if q, changed := evalMacEdgeGuard(p, s.region, parked, true, fileDrag); changed {
+						// Rewrite the event and the hardware cursor:
+						// WindowServer's Spaces edge reads the cursor, not
+						// only the dragged-event location.
 						cgEventSetLocation(event, q)
 						warpCursor(q)
 					}
 				}
 			case cgEventTapDisabledByTimeout, cgEventTapDisabledByUserInput:
+				// The event argument is NOT the tap's mach port.
 				cgEventTapEnable(s.port, true)
 			}
 			return event
@@ -344,9 +363,11 @@ func dragGuardCallbackAddr() uintptr {
 	return dragGuardCallback
 }
 
-// StartDragGuard installs an active mouse filter on a dedicated thread.
-// Missing Accessibility trust or setup failure returns an error without
-// prompting the user. Main thread only.
+// StartDragGuard installs an active mouse-drag and top-edge barrier filter on a
+// dedicated thread, so a busy UI thread can neither delay drag events nor get
+// the filter disabled by the system for being slow. It never requests a
+// permission. Missing trust or native setup failure is returned to the caller.
+// Only one guard may be active; start/stop are called on the AppKit main thread.
 func StartDragGuard(region DragGuardRegion) (func(), error) {
 	if region.Width <= 0 || region.Height <= 0 {
 		return nil, errors.New("notch drag guard region is invalid")
@@ -369,7 +390,7 @@ func StartDragGuard(region DragGuardRegion) (func(), error) {
 	}
 	var (
 		stopping atomic.Bool
-		ready    = make(chan uintptr, 1)
+		ready    = make(chan uintptr, 1) // filter thread's run loop, 0 on failure
 		done     = make(chan struct{})
 		failure  error
 	)
@@ -377,6 +398,9 @@ func StartDragGuard(region DragGuardRegion) (func(), error) {
 		runtime.LockOSThread()
 		defer runtime.UnlockOSThread()
 		defer close(done)
+		// HID-level first: WindowServer's edge gesture reads the cursor
+		// before a session tap can rewrite it. Fall back to a session tap
+		// when the process is trusted but the HID tap is refused.
 		const dragMask = 1<<kCGEventLeftMouseDown |
 			1<<kCGEventLeftMouseUp |
 			1<<kCGEventMouseMoved |
@@ -434,7 +458,8 @@ func StartDragGuard(region DragGuardRegion) (func(), error) {
 	}, nil
 }
 
-// SetDragGuardRegion updates the armed region without tearing the tap down.
+// SetDragGuardRegion updates the armed corridor and upper-display barrier
+// without tearing the tap down. No-op when no guard is running.
 func SetDragGuardRegion(region DragGuardRegion) {
 	s := dragGuardArmed.Load()
 	if s == nil || region.Width <= 0 || region.Height <= 0 {
@@ -448,20 +473,35 @@ func SetDragGuardRegion(region DragGuardRegion) {
 	dragGuardArmed.Store(&dragGuardState{region: region, port: s.port})
 }
 
-// ParkDragGuard parks or unparks the armed filter.
+// ParkDragGuard parks or unparks the armed filter, if any: a parked filter
+// clamps nothing and rewrites no event, and it keeps its corridor for the
+// unpark. The tap deliberately stays installed — the app parks it for its own
+// island gesture, which must never be pushed by the notch corridor, and a
+// teardown there would cost a new tap (and a new permission check) on every
+// click. Unlike the region, parking is independent of whether a tap exists,
+// so the caller may set it at any time. Main thread only, like StartDragGuard.
 func ParkDragGuard(parked bool) {
 	dragGuardParked.Store(parked)
 }
 
 var pin struct {
 	region atomic.Pointer[DragGuardRegion]
-	armed  atomic.Bool
-	stop   chan struct{}
-	done   chan struct{}
+	// armed is set by each SetDragPin(active) call — made only while
+	// DragState sees the button held — and cleared by the pin itself on
+	// button release, so a click right after a drop is never moved.
+	armed atomic.Bool
+	stop  chan struct{} // non-nil while the pin goroutine runs; main thread only
+	done  chan struct{}
 }
 
-// SetDragPin keeps the cursor out of the legacy drop corridor during drags when
-// no Accessibility event tap is handling upper-display barriers. Main thread only.
+// SetDragPin keeps the cursor out of region while a file drag is active,
+// independently of the event filter: it needs no permission and catches the
+// cursor even when no drag event reaches the filter. When an upper-display
+// barrier is actively enforced by the event tap, the pin stands down so
+// 4 ms polling never interferes with the 80 pt push-through threshold; when
+// untrusted or on a single display, behavior stays identical to the legacy
+// corridor clamp. It polls the cursor on its own goroutine every pinInterval
+// and only runs during drags. Main thread only.
 func SetDragPin(region DragGuardRegion, active bool) {
 	if s := dragGuardArmed.Load(); s != nil && s.region.BarrierEnabled {
 		active = false

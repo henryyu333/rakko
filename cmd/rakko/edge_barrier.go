@@ -6,6 +6,28 @@ import (
 	"rakko/internal/platform"
 )
 
+type barrierCacheKey struct {
+	dispID     int64
+	dispBounds mygo.Rectangle
+	notchX     int
+	notchW     int
+	notchH     int
+	island     bool
+	islandTop  int
+	islandDX   int
+	islandDY   int
+	displayCnt int
+}
+
+type shelfBarrier struct {
+	valid   bool
+	key     barrierCacheKey
+	enabled bool
+	x       int
+	y       int
+	width   int
+}
+
 // upperDisplayTouchesSegment reports whether another display's bottom edge
 // sits flush against top-edge segment [segX, segX+segW) along segY on target,
 // returning the horizontally clipped touching interval [bx, bx+bw) at by=segY.
@@ -52,9 +74,29 @@ func upperDisplayTouchesSegment(ds []mygo.Display, target mygo.Display, segX, se
 // mixed-DPI monitors, and replaced by upperDisplayTouchesSegment in headless rigs.
 var resolveUpperSegment = platformUpperSegment
 
-func (a *shelf) barrierSegment() (bx, by, bw int, ok bool) {
+func (a *shelf) currentBarrierKey() barrierCacheKey {
+	return barrierCacheKey{
+		dispID:     a.dispID,
+		dispBounds: a.dispBounds,
+		notchX:     a.notchX,
+		notchW:     a.notchW,
+		notchH:     a.notchH,
+		island:     a.island,
+		islandTop:  a.islandTop,
+		islandDX:   a.islandDX,
+		islandDY:   a.islandDY,
+		displayCnt: len(a.displays),
+	}
+}
+
+// refreshBarrier recomputes and caches the top-edge anchor barrier on the shelf
+// when placement, display layout, shell style, or island row changes. Hover and
+// drop-band hit tests read the cached result without re-enumerating monitors.
+func (a *shelf) refreshBarrier() {
+	key := a.currentBarrierKey()
 	if !a.notchGuardOn() || a.notchW <= 0 || a.notchH <= 0 || len(a.displays) < 2 {
-		return 0, 0, 0, false
+		a.barrier = shelfBarrier{valid: true, key: key}
+		return
 	}
 	segX, segW := a.notchX, a.notchW
 	if a.island {
@@ -62,20 +104,34 @@ func (a *shelf) barrierSegment() (bx, by, bw int, ok bool) {
 		segX, segW = r.X, r.Width
 	}
 	target := mygo.Display{ID: a.dispID, Bounds: a.dispBounds}
-	return resolveUpperSegment(a.displays, target, segX, a.dispBounds.Y, segW)
+	bx, by, bw, ok := resolveUpperSegment(a.displays, target, segX, a.dispBounds.Y, segW)
+	a.barrier = shelfBarrier{
+		valid:   true,
+		key:     key,
+		enabled: ok,
+		x:       bx,
+		y:       by,
+		width:   bw,
+	}
+}
+
+func (a *shelf) ensureBarrier() {
+	if !a.barrier.valid || a.barrier.key != a.currentBarrierKey() {
+		a.refreshBarrier()
+	}
 }
 
 func (a *shelf) upperBarrierActive() bool {
-	_, _, _, ok := a.barrierSegment()
-	return ok
+	return a.barrier.enabled
 }
 
 func applyBarrierSegment(reg platform.DragGuardRegion, a *shelf) platform.DragGuardRegion {
-	if bx, by, bw, ok := a.barrierSegment(); ok {
+	a.ensureBarrier()
+	if a.barrier.enabled {
 		reg.BarrierEnabled = true
-		reg.BarrierX = bx
-		reg.BarrierY = by
-		reg.BarrierWidth = bw
+		reg.BarrierX = a.barrier.x
+		reg.BarrierY = a.barrier.y
+		reg.BarrierWidth = a.barrier.width
 		reg.BarrierPushPt = platform.EdgeBarrierPushPt
 	}
 	return reg
