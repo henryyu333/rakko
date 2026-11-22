@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.18.4
+
+- **多显示器选择与拖拽防误穿**：「设置 → 显示在」新增「跟随鼠标」「主显示器」以及固定到指定显示器的选项（标注与主显示器的相对方位）；当所在屏幕上方还接了一块显示器时，从下方拖入文件会在屏幕顶边先停住让你松手投放，继续用力上推才跨到上方屏幕。
+- **AI 用量 API Key 存储调整**：不再将 AI 用量的 API Key 写入 macOS 登录钥匙圈，改为保存在数据目录的仅本人可读写（`0600`）文件中（首次读取自动从旧钥匙圈迁移），避免版本更新后反复弹出钥匙圈授权提示。
+- **拖拽投放与动效修复**：将拖入路径分类与扫描移出主线程，并修复拖拽离开后托盘「松开放入」提示状态卡住或被裁剪的问题；修复收起探头胶囊在弹性回缩到位前提前中断动画保持的问题；更新弹窗勾选框图标适配 16×16 框尺寸；修复音乐卡片固定到桌面并隐藏主面板后音量条停止轮询同步的问题。
+- **AI 用量与 Agent 接入修复**：AI 用量扫描遵循 `$XDG_DATA_HOME` 读取 `opencode` 数据、修复指定 `CLAUDE_CONFIG_DIR` 时的 Claude Code 凭据探测，并避免单次扫描重复复制 SQLite 数据库；Hermes 接入支持配置首次备份、正确处理 YAML 行尾注释与引号，且在配置文件损坏时停止改写；修复 `dsh` 带缩进空数组解析位置与 Windows 命名管道并发竞态。
+- **数据兼容与 Windows 优化**：读取本地 JSON 配置与历史文件时自动兼容 UTF-8 BOM；Windows 下 PDF 文字提取对全角与兼容字符做归一化处理，图片与截图落盘统一使用原子写。
+
+### English
+
+- **Display selection and stacked-display edge barrier**: Settings → Display On lets you keep the shelf Following Mouse, pin it to the Primary Display, or pin it to a specific monitor (with relative position labels); when another display sits above Rakko's screen, dragging files up stops briefly at the top edge so you can drop them before pushing through to the upper monitor.
+- **API key storage**: AI usage API keys now live in a mode-`0600` file inside Rakko's data directory instead of the macOS login keychain (existing keychain entries migrate automatically on first read), avoiding repeated keychain prompts after app updates.
+- **Drag-and-drop and animation fixes**: moved dropped-path inspection off the UI thread and fixed stale hover state keeping the drop pill stuck or clipped; kept the closed peek overshoot animation settling cleanly; sized the update window checkmark icon to its 16×16 frame; kept the volume slider polling when the music card is pinned to the desktop with the main panel hidden.
+- **AI usage and Agent hook fixes**: honor `$XDG_DATA_HOME` for `opencode` usage lookup, align Claude Code keychain lookup with `CLAUDE_CONFIG_DIR`, and copy each SQLite usage database at most once per scan; back up Hermes configs once before editing, preserve/handle YAML trailing comments and quotes safely, refuse edits when `hooks.json` is damaged, fix indented empty flow sequences in `dsh`, and close a concurrency race in Windows named pipe deadlines/closure.
+- **Data compatibility & Windows polish**: strip UTF-8 BOMs when loading local JSON files; normalize compatibility characters (NFKC) in Windows PDF text extraction and use atomic writes for Windows screenshots and converted images.
+
 ## 1.18.3
 
 - 托盘：放在 U 盘、移动硬盘或网络盘上的文件，拔盘后重启 Rakko 不再消失，会显示为灰色，插回后自动恢复。
