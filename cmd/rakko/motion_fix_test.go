@@ -480,3 +480,56 @@ func TestHoldFadedReleasesSessionEnvelopeWithPersistentSysmonWings(t *testing.T)
 		t.Fatal("holdFaded() = true while peekK is mid-flight")
 	}
 }
+
+// TestHoldFadedPreservesLiveWingsEnvelopeAcrossRetract verifies that settled
+// live wings holding only their own desiredFrame (including openOvershoot)
+// do not release frameHold before folding back, avoiding an intermediate shrink
+// on the first retract frame when the live notice expires.
+func TestHoldFadedPreservesLiveWingsEnvelopeAcrossRetract(t *testing.T) {
+	now := time.Now()
+	a := &shelf{
+		notchW:     180,
+		notchH:     32,
+		dispBounds: mygo.Rectangle{X: 0, Y: 0, Width: 1440, Height: 900},
+		dispWork:   mygo.Rectangle{X: 0, Y: 0, Width: 1440, Height: 860},
+	}
+	a.settings.LiveActivities.Charging = true
+	a.live = liveQueue{
+		shown: true,
+		cur:   liveEvent{kind: liveCharging, label: "正在充电", pct: 80},
+		until: now.Add(500 * time.Millisecond),
+	}
+	a.fx.peek = true
+	a.fx.peekK = 1
+	a.fx.w, a.fx.h = a.liveShape(a.live.cur)
+	overshotFrame := a.desiredFrame()
+	a.frameHold = overshotFrame
+
+	if a.holdFaded() {
+		t.Fatal("holdFaded() = true while frameHold already equals settled live wings desiredFrame")
+	}
+	if got := a.targetFrame(); got != overshotFrame || a.frameHold != overshotFrame {
+		t.Fatalf("targetFrame() = %+v (hold=%+v), want preserved %+v", got, a.frameHold, overshotFrame)
+	}
+
+	// Expire the live notice so closedPeekOut becomes false while the retract
+	// spring is still holding peekK == 1 on its starting frame.
+	a.live.shown = false
+	a.live.cur = liveEvent{}
+	if a.holdFaded() {
+		t.Fatal("holdFaded() = true when live notice expired while peekK == 1")
+	}
+	if got := a.targetFrame(); got != overshotFrame {
+		t.Fatalf("targetFrame() on retract start = %+v, want held envelope %+v", got, overshotFrame)
+	}
+
+	// Once peekK finishes folding to zero, the hold releases to the idle strip.
+	a.fx.peek = false
+	a.fx.peekK = 0
+	if !a.holdFaded() {
+		t.Fatal("holdFaded() = false once peekK folded to 0")
+	}
+	if got, want := a.targetFrame(), a.desiredFrame(); got != want || a.frameHold != (mygo.Rectangle{}) {
+		t.Fatalf("settled retract targetFrame() = %+v (hold=%+v), want %+v with cleared hold", got, a.frameHold, want)
+	}
+}

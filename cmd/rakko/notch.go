@@ -570,7 +570,13 @@ func (a *shelf) holdFaded() bool {
 	if a.fx.peekK <= 0.002 {
 		return true
 	}
-	return a.fx.peekK >= 0.998 && !a.fb.retracting && a.closedPeekOut(time.Now())
+	if a.fx.peekK >= 0.998 && !a.fb.retracting && a.closedPeekOut(time.Now()) {
+		// Only release when holding an envelope larger than the settled
+		// closed peek (e.g. a folded open panel); keeping the closed peek's
+		// own overshoot envelope avoids a resize when it begins folding back.
+		return a.frameHold != (mygo.Rectangle{}) && a.frameHold != a.desiredFrame()
+	}
+	return false
 }
 
 // targetFrame is the frame the window maps. While a hold is up it is the
