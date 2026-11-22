@@ -52,8 +52,10 @@ func stableDisplay(d mygo.Display) mygo.Display {
 	return d
 }
 
-// screenDisplays lists every display with its stable identity.
-func screenDisplays() []mygo.Display {
+// screenDisplays lists every display with its stable identity. Tests replace
+// it alongside displayNearest and notchRect to drive multi-display layouts
+// without physical monitors.
+var screenDisplays = func() []mygo.Display {
 	ds := mygo.Screen.Displays()
 	for i := range ds {
 		ds[i] = stableDisplay(ds[i])
