@@ -361,9 +361,14 @@ func TestIslandLiveSmokeShots(t *testing.T) {
 	a := redesignShelf(t)
 	islandStyle(t, a, settings.ShellStyleIsland)
 	newIslandArena(t, islandArena(a))
+	var prevLive settings.LiveActivitySettings
 	onMain(func() {
-		a.settings.LiveActivities = settings.LiveActivitySettings{Charging: true, Headphones: true, Downloads: true}
+		prevLive = a.settings.LiveActivities
+		a.settings.LiveActivities.Charging = true
+		a.settings.LiveActivities.Headphones = true
+		a.settings.LiveActivities.Downloads = true
 	})
+	t.Cleanup(func() { onMain(func() { a.settings.LiveActivities = prevLive }) })
 	onMain(func() {
 		a.pushLive(liveEvent{kind: liveCharging, label: "正在充电", pct: 80}, 6*time.Second, time.Now())
 	})

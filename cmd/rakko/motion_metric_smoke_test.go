@@ -440,7 +440,10 @@ func motionScenarios(a *shelf, m *motionMeter) []motionScenario {
 			m.mark("")
 			motionClosed(a)
 			settle(a, 220*time.Millisecond)
-			onMain(func() { fakeTrack(a, true) })
+			onMain(func() {
+				a.settings.LiveActivities.NowPlaying = true
+				fakeTrack(a, true)
+			})
 			m.mark("peek")
 			onMain(func() { a.setPeek(true) })
 			settle(a, 420*time.Millisecond)
@@ -500,7 +503,9 @@ func motionScenarios(a *shelf, m *motionMeter) []motionScenario {
 			m.mark("")
 			motionClosed(a)
 			onMain(func() {
-				a.settings.LiveActivities = settings.LiveActivitySettings{Charging: true, Headphones: true, Downloads: true}
+				a.settings.LiveActivities.Charging = true
+				a.settings.LiveActivities.Headphones = true
+				a.settings.LiveActivities.Downloads = true
 			})
 			settle(a, 220*time.Millisecond)
 			m.mark("live")
@@ -575,7 +580,12 @@ func TestMotionMetricSmoke(t *testing.T) {
 		{"notch", false},
 		{"island", true},
 	}
-	restoreStyle := func() { setMotionStyle(a, false) }
+	var prevLive settings.LiveActivitySettings
+	onMain(func() { prevLive = a.settings.LiveActivities })
+	restoreStyle := func() {
+		setMotionStyle(a, false)
+		onMain(func() { a.settings.LiveActivities = prevLive })
+	}
 	t.Cleanup(restoreStyle)
 
 	var stats []motionStats

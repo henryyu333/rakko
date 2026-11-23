@@ -52,7 +52,10 @@ func TestNowPlayingPeekSmokeScreenshot(t *testing.T) {
 		}
 	}
 	mod := &nowPlayingModule{}
+	var prevNP bool
 	onMain(func() {
+		prevNP = a.settings.LiveActivities.NowPlaying
+		a.settings.LiveActivities.NowPlaying = true
 		a.np = mod
 		mod.host = a
 		mod.rememberArt(art, false) // same path as decodeArt: bitmap + glow
@@ -68,6 +71,13 @@ func TestNowPlayingPeekSmokeScreenshot(t *testing.T) {
 		a.syncMousePassThrough()
 		a.win.ShowInactive()
 		a.win.Invalidate()
+	})
+	t.Cleanup(func() {
+		onMain(func() {
+			a.settings.LiveActivities.NowPlaying = prevNP
+			a.np = nil
+			a.peeking = false
+		})
 	})
 	// No controls to find anymore: the draw is verified by the
 	// screenshot below. One extra invalidate lets a frame settle.
