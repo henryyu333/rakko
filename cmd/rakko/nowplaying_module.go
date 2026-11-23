@@ -23,8 +23,9 @@ import (
 //
 // The state comes from platform.NowPlayingHost, which reads MediaRemote
 // through an Apple-signed perl host (macOS 15.4 and later deny
-// Apple-unsigned readers). The host runs for the life of the app: the
-// now-playing wings, the home player and the panel card are always on.
+// Apple-unsigned readers). The host starts lazily while
+// LiveActivities.NowPlaying is on and stops immediately when turned off,
+// so a disabled switch costs no process at all.
 //
 // Artwork arrives in its own MediaRemote notification, often a moment
 // after the title. The helper therefore waits a short grace window before
@@ -128,9 +129,19 @@ func npSnapOf(st platform.NowPlayingState, have, panelVisible bool, now time.Tim
 // again after a failed attempt (perl missing, bundle unreadable).
 const npRetryDelay = 30 * time.Second
 
-// tick keeps the helper alive and folds new helper lines into the
-// displayed state.
+// enabled reports whether the user wants Now Playing active across every
+// surface (wings, home player, panel chip, tools card and playback keys).
+func (m *nowPlayingModule) enabled() bool {
+	return m != nil && m.host != nil && m.host.settings.LiveActivities.NowPlaying
+}
+
+// tick keeps the helper alive according to the setting and folds new
+// helper lines into the displayed state.
 func (m *nowPlayingModule) tick(now time.Time) {
+	if !m.enabled() {
+		m.stop()
+		return
+	}
 	if !m.started {
 		if !m.retryAt.IsZero() && now.Before(m.retryAt) {
 			return
@@ -218,6 +229,9 @@ func (m *nowPlayingModule) nextPosition(now time.Time) time.Time {
 // clock; a running helper with nothing on screen has no deadline (new
 // lines and its exit wake the loop themselves).
 func (m *nowPlayingModule) nextTick(now time.Time) time.Time {
+	if !m.enabled() {
+		return time.Time{}
+	}
 	if !m.started {
 		if m.retryAt.IsZero() {
 			return now
@@ -282,7 +296,7 @@ func (m *nowPlayingModule) refresh(now time.Time) {
 	if have {
 		m.decodeArt(st)
 	}
-	next := npSnapOf(st, have, m.host.visible, now)
+	next := npSnapOf(st, have, m.host != nil && m.host.visible, now)
 	if have {
 		next.art = m.artState()
 	}
@@ -296,8 +310,11 @@ func (m *nowPlayingModule) invalidate(next npSnap) {
 		return
 	}
 	m.snap = next
-	if m.host.win != nil {
-		m.host.win.Invalidate()
+	if m.host != nil {
+		if m.host.win != nil {
+			m.host.win.Invalidate()
+		}
+		m.host.invalidatePlayingPins()
 	}
 }
 
@@ -402,13 +419,18 @@ func (m *nowPlayingModule) stop() {
 	m.forgetArt()
 	m.artDone, m.iconFor = "", ""
 	m.optUntil = time.Time{}
+	m.posNext = time.Time{}
+	if m.host != nil {
+		m.host.music.seek.drag = false
+	}
 	m.invalidate(npSnap{})
 }
 
-// track returns the current state while it names something the card can
-// show, playing or paused (the controls are most useful while paused).
+// track returns the current state while the feature is enabled and it
+// names something the card can show, playing or paused (the controls are
+// most useful while paused).
 func (m *nowPlayingModule) track() (platform.NowPlayingState, bool) {
-	if !m.have || m.last.Title == "" {
+	if !m.enabled() || !m.have || m.last.Title == "" {
 		return platform.NowPlayingState{}, false
 	}
 	return m.last, true
@@ -423,14 +445,14 @@ func (m *nowPlayingModule) hasTrack() bool {
 
 // playing reports whether something is playing right now.
 func (m *nowPlayingModule) playing() bool {
-	return m.have && m.last.Playing
+	return m.enabled() && m.have && m.last.Playing
 }
 
 // seekTo jumps to seconds in the current track. The widget shows the
 // dragged position at once; the helper's next reported position is the
 // truth (the plan: 松手发一次命令，之后以助手回报为准).
 func (m *nowPlayingModule) seekTo(seconds float64) {
-	if m.np == nil {
+	if !m.enabled() || m.np == nil {
 		return
 	}
 	if seconds < 0 || seconds != seconds {
@@ -454,7 +476,7 @@ func (m *nowPlayingModule) seekTo(seconds float64) {
 // for a moment after a command) reconciles it with the truth, so a slow or
 // missing source notification cannot leave the button on the old glyph.
 func (m *nowPlayingModule) send(command platform.NowPlayingCommand) {
-	if m.np == nil {
+	if !m.enabled() || m.np == nil {
 		return
 	}
 	m.np.Send(command)

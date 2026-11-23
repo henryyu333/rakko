@@ -72,9 +72,9 @@ type Settings struct {
 	// AIUsage is the AI 用量 page: off by default; each source (quota and
 	// local usage) can be switched separately.
 	AIUsage AIUsageSettings `json:"aiUsage"`
-	// LiveActivities is the 实时活动 group: the charging, headphone and
-	// download notices on the notch. Every switch is on for a fresh
-	// install; a settings.json without the object keeps all three.
+	// LiveActivities is the 实时活动 group: the charging, headphone, download
+	// and now-playing switches on the notch. Every switch is on for a fresh
+	// install; a settings.json without the object keeps all four.
 	LiveActivities LiveActivitySettings `json:"liveActivities"`
 	// AgentNotify is the 设置 → AI group that announces a finished
 	// agent turn on the notch. Off by default: while it is on, Rakko's hook
@@ -258,13 +258,14 @@ type IslandPos struct {
 	Y int `json:"y"`
 }
 
-// LiveActivitySettings switches the three realtime activities. A missing
+// LiveActivitySettings switches the realtime activities. A missing
 // key keeps the default (on), so an older settings.json shows all of them
 // after the update.
 type LiveActivitySettings struct {
 	Charging   bool `json:"charging"`
 	Headphones bool `json:"headphones"`
 	Downloads  bool `json:"downloads"`
+	NowPlaying bool `json:"nowPlaying"`
 }
 
 // AgentNotifySettings is the agentNotify object in settings.json. Enabled
@@ -660,6 +661,7 @@ func Default() Settings {
 			Charging:   true,
 			Headphones: true,
 			Downloads:  true,
+			NowPlaying: true,
 		},
 		AIUsage: AIUsageSettings{
 			Enabled:     false,

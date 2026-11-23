@@ -93,7 +93,7 @@ func toolCatalog() []toolCardDef {
 		defs = append(defs, toolCardDef{id: "airdrop", kind: cardAction, title: "隔空投送", icon: shareSymbol, span: 1, accepts: anyClass, available: always})
 	}
 	return append(defs,
-		toolCardDef{id: "playing", kind: cardWidget, title: "音乐", icon: musicSymbol, span: 2, rows: 2, accepts: never, available: always},
+		toolCardDef{id: "playing", kind: cardWidget, title: "音乐", icon: musicSymbol, span: 2, rows: 2, accepts: never, available: playingAvailable},
 		toolCardDef{id: "awake", kind: cardWidget, title: "保持唤醒", icon: cupSymbol, span: 1, variableSpan: true, accepts: never, available: always},
 		toolCardDef{id: "recent", kind: cardWidget, title: "最近文件", icon: recentSymbol, span: 2, accepts: never, available: always},
 		toolCardDef{id: "clip", kind: cardWidget, title: "剪贴板最新", icon: clipNavSymbol, span: 2, accepts: never, available: always},
@@ -110,8 +110,9 @@ func toolCatalog() []toolCardDef {
 // action could run on. zip and AirDrop take every non-empty class —
 // folders, pictures, PDFs and mixes alike.
 var (
-	always         = func(*shelf) bool { return true }
-	usageAvailable = func(a *shelf) bool { return a.settings.AIUsage.Enabled }
+	always           = func(*shelf) bool { return true }
+	playingAvailable = func(a *shelf) bool { return a.settings.LiveActivities.NowPlaying }
+	usageAvailable   = func(a *shelf) bool { return a.settings.AIUsage.Enabled }
 	imagesOnly     = func(class dropClass) bool { return class == classImages }
 	imagesOrPDFs   = func(class dropClass) bool { return class == classImages || class == classPDFs }
 	archivesOnly   = func(class dropClass) bool { return class == classArchives }

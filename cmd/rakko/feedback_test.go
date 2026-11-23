@@ -15,12 +15,14 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"rakko/internal/platform"
+	"rakko/internal/settings"
 )
 
 // motionShelf is a closed, empty shelf without a native window: state
 // tests never reach the window.
 func motionShelf() *shelf {
 	return &shelf{
+		settings:     settings.Default(),
 		level:        2,
 		notchX:       600,
 		notchY:       0,

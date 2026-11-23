@@ -1080,7 +1080,7 @@ func TestPinChildControlsKeepContextMenu(t *testing.T) {
 		{"awake", "30 分"}, {"playing", "暂停"}, {"recent", "menu-thumb.png"},
 	} {
 		t.Run(tc.id, func(t *testing.T) {
-			a := &shelf{store: mustStore(t), dataDir: t.TempDir()}
+			a := &shelf{store: mustStore(t), dataDir: t.TempDir(), settings: settings.Default()}
 			power := newFakePower()
 			a.awake = &awakeModule{host: a, create: power.create, release: power.release}
 			a.np = &nowPlayingModule{host: a, np: &platform.NowPlayingHost{}, have: true,

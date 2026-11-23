@@ -118,11 +118,11 @@ func (a *shelf) shortcutRun(k shortcutKind) func() {
 	case shortcutOpenTray:
 		return func() { a.togglePageShortcut(pageTray, a.openTray) }
 	case shortcutPlayPause:
-		return func() { playerShortcut(a, platform.NPPlayPause) }
+		return a.runPlayerShortcut(platform.NPPlayPause)
 	case shortcutPrevious:
-		return func() { playerShortcut(a, platform.NPPrevious) }
+		return a.runPlayerShortcut(platform.NPPrevious)
 	case shortcutNext:
-		return func() { playerShortcut(a, platform.NPNext) }
+		return a.runPlayerShortcut(platform.NPNext)
 	case shortcutTools:
 		return func() { a.togglePageShortcut(pageTools, func() { a.showPage(pageTools) }) }
 	case shortcutUsage:
@@ -151,10 +151,20 @@ func (a *shelf) togglePageShortcut(p pageID, open func()) {
 	open()
 }
 
+// runPlayerShortcut returns a global shortcut callback that forwards cmd only
+// while LiveActivities.NowPlaying is enabled.
+func (a *shelf) runPlayerShortcut(cmd platform.NowPlayingCommand) func() {
+	return func() {
+		if a.settings.LiveActivities.NowPlaying {
+			playerShortcut(a, cmd)
+		}
+	}
+}
+
 // playerShortcut forwards a transport command to the now-playing app; a
 // seam, so a test sees the command without a helper host.
 var playerShortcut = func(a *shelf, cmd platform.NowPlayingCommand) {
-	if a.np != nil {
+	if a.np != nil && a.settings.LiveActivities.NowPlaying {
 		a.np.send(cmd)
 	}
 }

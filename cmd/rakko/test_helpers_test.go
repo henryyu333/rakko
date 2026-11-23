@@ -61,7 +61,7 @@ func musicShelf(t *testing.T) (*shelf, *ui.Tester) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	a := &shelf{store: s, dataDir: t.TempDir()}
+	a := &shelf{store: s, dataDir: t.TempDir(), settings: settings.Default()}
 	flushToolsLayoutOnCleanup(t, a)
 	a.vol = &fakeVolume{v: 0.4, ok: true}
 	a.np = &nowPlayingModule{

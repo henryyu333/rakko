@@ -192,6 +192,9 @@ func main() {
 		if a.agent != nil {
 			a.agent.stop()
 		}
+		if a.np != nil {
+			a.np.stop()
+		}
 		close(a.stop)
 		a.stopDragGuard()
 		a.endSnapSession(true)

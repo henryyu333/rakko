@@ -54,7 +54,7 @@ func newStubNowPlaying(t *testing.T) *stubNowPlaying {
 		return cmdW, lineR, wait, nil
 	})
 	s.mod = &nowPlayingModule{
-		host: &shelf{},
+		host: &shelf{settings: settings.Default()},
 	}
 	s.mod.np = host
 	if err := host.Start(); err != nil {
@@ -175,7 +175,7 @@ func TestNowPlayingClearsOnEmptyStateAndRedecodesSameTrack(t *testing.T) {
 func TestNowPlayingChipDrawsTrackAndToggle(t *testing.T) {
 	s := newStubNowPlaying(t)
 	s.feed(t, `{"ok":true,"isPlaying":true,"appState":1,"title":"夜曲","artist":"周杰伦","duration":100,"elapsed":5}`)
-	a := &shelf{settings: settings.Settings{}}
+	a := &shelf{settings: settings.Default()}
 	a.modules = []module{s.mod, &retentionModule{host: a}}
 	view := ui.NewTester(a.view, sheetW, panelTestH)
 	// The chip is a 22pt capsule: cover, bars and play/pause, named by the
@@ -219,7 +219,7 @@ func TestHomeDropsThePlayerChip(t *testing.T) {
 	s := newStubNowPlaying(t)
 	s.feed(t, `{"ok":true,"isPlaying":true,"appState":1,"title":"夜曲","artist":"周杰伦","duration":100,"elapsed":5}`)
 	job := &convertJob{target: toJPEG, started: time.Now().Add(-time.Second)}
-	a := &shelf{settings: settings.Settings{}, level: 2, tab: pageHome}
+	a := &shelf{settings: settings.Default(), level: 2, tab: pageHome}
 	a.modules = []module{s.mod, &converter{host: a, job: job}}
 	acts := a.liveActivities()
 	if len(acts) != 1 {
@@ -243,7 +243,7 @@ func TestHomeDropsThePlayerChip(t *testing.T) {
 }
 
 func TestPeekGrowsIntoTheWingsForATrack(t *testing.T) {
-	a := &shelf{settings: settings.Settings{}, notchW: 180, notchH: 32}
+	a := &shelf{settings: settings.Default(), notchW: 180, notchH: 32}
 	if w, h := a.peekSize(); w != 220 || h != 32+peekBody {
 		t.Fatalf("idle peek = %.0fx%.0f, want 220x%d (notch +40/+%d)", w, h, 32+peekBody, peekBody)
 	}
@@ -310,7 +310,7 @@ func TestPeekWingsShowCoverAndBarsOnly(t *testing.T) {
 	s := newStubNowPlaying(t)
 	s.feed(t, `{"ok":true,"isPlaying":true,"appState":1,"title":"夜曲","artist":"周杰伦","duration":100,"elapsed":5}`)
 	a := &shelf{
-		settings:     settings.Settings{},
+		settings:     settings.Default(),
 		notchX:       500,
 		notchW:       180,
 		notchH:       32,
@@ -379,7 +379,7 @@ func TestExpandingWithMusicNeverOpensThePlayer(t *testing.T) {
 	s := newStubNowPlaying(t)
 	s.feed(t, `{"ok":true,"isPlaying":true,"appState":1,"title":"夜曲","artist":"周杰伦","duration":100,"elapsed":5}`)
 	a := &shelf{
-		settings:     settings.Settings{},
+		settings:     settings.Default(),
 		notchX:       500,
 		notchW:       180,
 		notchH:       32,
@@ -419,7 +419,7 @@ func TestExpandingWithMusicNeverOpensThePlayer(t *testing.T) {
 // automation surface still reads 「展开 Rakko」.
 func TestPeekWingsLabelWithoutATitle(t *testing.T) {
 	a := &shelf{
-		settings:     settings.Settings{},
+		settings:     settings.Default(),
 		notchW:       180,
 		notchH:       32,
 		peeking:      true,
@@ -439,7 +439,7 @@ func TestPeekPressExpandsAndSendsNoCommand(t *testing.T) {
 	s := newStubNowPlaying(t)
 	s.feed(t, `{"ok":true,"isPlaying":true,"appState":1,"title":"T","artist":"A","duration":100,"elapsed":5}`)
 	a := &shelf{
-		settings:     settings.Settings{},
+		settings:     settings.Default(),
 		notchX:       500,
 		notchW:       180,
 		notchH:       32,
@@ -649,7 +649,7 @@ func TestNowPlayingStopsWhenHelperDies(t *testing.T) {
 }
 
 func TestNowPlayingStartFailureIsRetriedLater(t *testing.T) {
-	m := &nowPlayingModule{host: &shelf{settings: settings.Settings{}}}
+	m := &nowPlayingModule{host: &shelf{settings: settings.Default()}}
 	m.newHost = func() *platform.NowPlayingHost {
 		return platform.NewNowPlayingHostWithSource(func(context.Context) (io.WriteCloser, io.ReadCloser, func() error, error) {
 			return nil, nil, nil, errors.New("no helper here")

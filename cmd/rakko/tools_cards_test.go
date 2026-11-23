@@ -236,7 +236,7 @@ func musicCardShelf(t *testing.T) (*shelf, *ui.Tester, *fakeVolume, *stubNowPlay
 	s := newStubNowPlaying(t)
 	s.feed(t, `{"ok":true,"isPlaying":true,"appState":1,"title":"夜曲","artist":"周杰伦","duration":200,"elapsed":20}`)
 	a := &shelf{
-		store: mustStore(t), dataDir: t.TempDir(), tab: pageTools, visible: true, level: 2,
+		store: mustStore(t), dataDir: t.TempDir(), settings: settings.Default(), tab: pageTools, visible: true, level: 2,
 		thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{}, appNames: map[string]string{},
 	}
 	vol := &fakeVolume{v: 0.4, ok: true}
@@ -386,7 +386,7 @@ func TestPinnedMusicCardShowsTheFullPlayer(t *testing.T) {
 	s := newStubNowPlaying(t)
 	s.feed(t, `{"ok":true,"isPlaying":true,"appState":1,"title":"夜曲","artist":"周杰伦","duration":200,"elapsed":20}`)
 	vol := &fakeVolume{v: 0.3, ok: true}
-	a := &shelf{dataDir: t.TempDir()}
+	a := &shelf{dataDir: t.TempDir(), settings: settings.Default()}
 	a.vol = vol
 	s.mod.host = a
 	a.np = s.mod

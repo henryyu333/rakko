@@ -236,7 +236,7 @@ func TestSettingsViewShowsSections(t *testing.T) {
 		texts []string
 	}{
 		{"通用", []string{"开机时自动启动", "默认搜索模式"}},
-		{"外形与提示", []string{"外形", "刘海", "灵动岛", "充电提示", "耳机连接提示", "下载进度", "拖窗口到刘海分屏"}},
+		{"外形与提示", []string{"外形", "刘海", "灵动岛", "充电提示", "耳机连接提示", "下载进度", "正在播放", "拖窗口到刘海分屏"}},
 		{"托盘", []string{"自动清理旧内容", "置顶的不清理", "拖出后从托盘移除", "置顶的保留"}},
 		{"剪贴板", []string{"保留条数", "不记录这些应用"}},
 		{"AI", []string{"在刘海里显示 AI 用量", "额度显示", "套餐额度", "本机用量只读本机日志，不联网、不上传。"}},
@@ -753,23 +753,24 @@ func TestSettingsWindowSmoke(t *testing.T) {
 	t.Logf("settings shot=%s box=%v dark=%d light=%d", shot, box, dark, light)
 }
 
-// The three 实时活动 switches save through applySettings like every other
+// The four 实时活动 switches save through applySettings like every other
 // preference, and a fresh install has all of them on.
 func TestSettingsViewLiveTogglesSave(t *testing.T) {
 	stubSettingsSeams(t, false, nil, nil)
 	a, view := newSettingsShelf(t)
-	if !a.settings.LiveActivities.Charging || !a.settings.LiveActivities.Headphones || !a.settings.LiveActivities.Downloads {
+	if !a.settings.LiveActivities.Charging || !a.settings.LiveActivities.Headphones || !a.settings.LiveActivities.Downloads || !a.settings.LiveActivities.NowPlaying {
 		t.Fatalf("live activities must default on: %+v", a.settings.LiveActivities)
 	}
 	openSettingsPage(t, view, "外形与提示")
 	clickVisible(t, view, "充电提示")
 	clickVisible(t, view, "耳机连接提示")
 	clickVisible(t, view, "下载进度")
+	clickVisible(t, view, "正在播放")
 	saved, err := settings.Load(a.dataDir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if saved.LiveActivities.Charging || saved.LiveActivities.Headphones || saved.LiveActivities.Downloads {
+	if saved.LiveActivities.Charging || saved.LiveActivities.Headphones || saved.LiveActivities.Downloads || saved.LiveActivities.NowPlaying {
 		t.Fatalf("the switches did not reach settings.json: %+v", saved.LiveActivities)
 	}
 }
@@ -846,14 +847,17 @@ func TestSettingsPetGroupFollowsTheArtwork(t *testing.T) {
 	}
 }
 
-// The now-playing switch and its tray item are gone: both surfaces are
-// always on, and no old row may come back by accident.
+// The legacy 「刘海显示正在播放」 row and tray menu item stay removed; the
+// new toggle lives in 实时活动 as 「正在播放」.
 func TestNowPlayingHasNoVisibilitySetting(t *testing.T) {
 	stubSettingsSeams(t, false, nil, nil)
 	a, view := newSettingsShelf(t)
 	openSettingsPage(t, view, "外形与提示")
 	if view.HasText("刘海显示正在播放") {
 		t.Fatal("外形与提示 still offers the removed now-playing switch")
+	}
+	if !view.HasText("正在播放") {
+		t.Fatal("外形与提示 → 实时活动 is missing the 正在播放 switch")
 	}
 	for _, it := range a.trayMenu().Items() {
 		if it.Label == "正在播放" {

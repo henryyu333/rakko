@@ -15,6 +15,7 @@ import (
 
 	"rakko/internal/layout"
 	"rakko/internal/platform"
+	"rakko/internal/settings"
 	"rakko/internal/store"
 )
 
@@ -562,7 +563,7 @@ func TestToolsExactFitGridDoesNotScroll(t *testing.T) {
 func TestToolsEditBadgeIsVisibleAndClickableAtGridEdges(t *testing.T) {
 	for _, edge := range []string{"top", "left"} {
 		t.Run(edge, func(t *testing.T) {
-			a := &shelf{tab: pageTools, visible: true, store: mustStore(t)}
+			a := &shelf{tab: pageTools, visible: true, store: mustStore(t), settings: settings.Default()}
 			p := a.toolsPage()
 			// Size the surface after the state that sets the shell.
 			p.editing = true
@@ -607,7 +608,7 @@ func TestToolsEditBadgeIsVisibleAndClickableAtGridEdges(t *testing.T) {
 // contrast: the old per-row blur (sigma 2.9 at the edge) left the cut strip
 // a fraction as sharp.
 func TestToolsGridDrawsNoEdgeBlur(t *testing.T) {
-	a := &shelf{tab: pageTools, visible: true, level: 2, store: mustStore(t), dataDir: t.TempDir(),
+	a := &shelf{tab: pageTools, visible: true, level: 2, store: mustStore(t), dataDir: t.TempDir(), settings: settings.Default(),
 		thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{}, appNames: map[string]string{}}
 	a.np = &nowPlayingModule{host: a, have: true, last: platform.NowPlayingState{
 		Title: "夜曲", Artist: "周杰伦", Duration: 200, Elapsed: 20, Rate: 1, Received: time.Now(),

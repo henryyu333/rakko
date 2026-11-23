@@ -17,6 +17,7 @@ import (
 
 	"rakko/internal/lyrics"
 	"rakko/internal/platform"
+	"rakko/internal/settings"
 	"rakko/internal/store"
 )
 
@@ -58,7 +59,7 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
-	smokeShelf = &shelf{store: s, dataDir: dir, stop: make(chan struct{}), thumbnails: make(map[string]*ui.Bitmap), thumbPending: map[string]bool{}}
+	smokeShelf = &shelf{store: s, dataDir: dir, settings: settings.Default(), stop: make(chan struct{}), thumbnails: make(map[string]*ui.Bitmap), thumbPending: map[string]bool{}}
 	mygo.App.SetName(appName)
 	mygo.App.SetActivationPolicy(mygo.ActivationPolicyAccessory)
 	mygo.App.OnWindowAllClosed(func() {})

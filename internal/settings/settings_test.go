@@ -66,8 +66,8 @@ func TestSnapWindowsLoad(t *testing.T) {
 }
 
 // A legacy islandNowPlaying key (and the removed battery/volume keys) is
-// ignored, and the load keeps every current default: the wings and the home
-// player are always on.
+// ignored, and the load keeps every current default: the new liveActivities.nowPlaying
+// switch stays on even when islandNowPlaying was false.
 func TestLegacyIslandKeysAreIgnored(t *testing.T) {
 	dir := t.TempDir()
 	legacy := `{"islandNowPlaying": false, "islandBattery": false, "islandVolume": false}`
@@ -80,6 +80,35 @@ func TestLegacyIslandKeysAreIgnored(t *testing.T) {
 	}
 	if !reflect.DeepEqual(s, Default()) {
 		t.Fatalf("legacy keys changed the settings: %+v", s)
+	}
+	if !s.LiveActivities.NowPlaying {
+		t.Fatal("legacy islandNowPlaying:false turned off liveActivities.nowPlaying")
+	}
+}
+
+func TestLiveActivityNowPlayingLoad(t *testing.T) {
+	dir := t.TempDir()
+	// Existing liveActivities object without nowPlaying keeps nowPlaying on.
+	if err := os.WriteFile(filepath.Join(dir, FileName), []byte(`{"liveActivities": {"charging": false}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.LiveActivities.Charging || !s.LiveActivities.Headphones || !s.LiveActivities.Downloads || !s.LiveActivities.NowPlaying {
+		t.Fatalf("partial liveActivities = %+v", s.LiveActivities)
+	}
+	// Explicit false is honoured without disturbing the rest.
+	if err := os.WriteFile(filepath.Join(dir, FileName), []byte(`{"liveActivities": {"nowPlaying": false}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err = Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.LiveActivities.NowPlaying || !s.LiveActivities.Charging || !s.LiveActivities.Headphones || !s.LiveActivities.Downloads {
+		t.Fatalf("explicit nowPlaying:false = %+v", s.LiveActivities)
 	}
 }
 

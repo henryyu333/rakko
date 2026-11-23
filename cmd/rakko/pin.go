@@ -719,6 +719,17 @@ func (it *pinItem) invalidate() {
 	}
 }
 
+func (a *shelf) invalidatePlayingPins() {
+	if a == nil {
+		return
+	}
+	for _, it := range a.pins {
+		if it.cardID == "playing" {
+			it.invalidate()
+		}
+	}
+}
+
 // pinRelease settles a moved card on its final position: back to the
 // tools page on the notch, docked to an edge, or floating where it
 // landed. The verdict and the landing come from the release point

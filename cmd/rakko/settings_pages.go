@@ -133,6 +133,9 @@ func (a *shelf) settingsNotchPage(c *ui.Context) {
 		settingsSep(c, "live-headphones")
 		settingsToggleRow(c, "live-downloads", l.SettingsLiveDownloads(), "", a.settings.LiveActivities.Downloads,
 			func(on bool) { a.setLiveActivity(func(s *settings.Settings) { s.LiveActivities.Downloads = on }) })
+		settingsSep(c, "live-downloads")
+		settingsToggleRow(c, "live-nowplaying", l.NowPlaying(), "", a.settings.LiveActivities.NowPlaying,
+			func(on bool) { a.setLiveActivity(func(s *settings.Settings) { s.LiveActivities.NowPlaying = on }) })
 	})
 
 	settingsGroupRows(c, "window", l.SettingsWindowGroup(), "", a.settingsBroken, func() {
@@ -254,9 +257,18 @@ func settingsShapeTile(c *ui.Context, key, label string, island, selected bool, 
 }
 
 func (a *shelf) setLiveActivity(mutate func(*settings.Settings)) {
+	wasNowPlaying := a.settings.LiveActivities.NowPlaying
 	next := a.settings
 	mutate(&next)
-	a.applySettings(next)
+	if !a.applySettings(next) {
+		return
+	}
+	if wasNowPlaying && !next.LiveActivities.NowPlaying && a.np != nil {
+		a.np.stop()
+	}
+	if wasNowPlaying != next.LiveActivities.NowPlaying {
+		a.invalidatePlayingPins()
+	}
 }
 
 // settingsTrayPage: 整理 (auto-clean retention and remove-after-drag).
