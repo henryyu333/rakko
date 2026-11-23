@@ -4,7 +4,8 @@ go 1.27.4
 
 require (
 	github.com/ebitengine/purego v0.11.1
-	github.com/egoist/mygo v0.9.1
+	github.com/egoist/mygo v0.10.0
+	github.com/klauspost/compress v1.18.6
 	github.com/ledongthuc/pdf v0.0.0-20261020125853-5e46805f718e
 	golang.org/x/image v0.46.0
 	golang.org/x/net v0.59.0
@@ -19,7 +20,6 @@ require (
 	github.com/dustin/go-humanize v1.1.0 // indirect
 	github.com/go-text/typesetting v0.3.5 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/klauspost/compress v1.18.6 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/ncruces/go-strftime v1.1.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
@@ -34,4 +34,4 @@ require (
 tool github.com/egoist/mygo/cmd/mygo
 
 // 等 egoist/mygo 合并发版后删掉
-replace github.com/egoist/mygo => github.com/henryyu333/mygo v0.9.2-0.20261115201012-104c76999fc2
+replace github.com/egoist/mygo => github.com/henryyu333/mygo v0.9.2-0.20261123062456-a1fd83789054
