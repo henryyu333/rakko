@@ -272,8 +272,11 @@ func (m *nowPlayingModule) refresh(now time.Time) {
 	}
 	if have && st.ArtID != m.last.ArtID {
 		// A new track starts without last track's picture: the card must
-		// not keep showing stale art while the new one is being read.
+		// not keep showing stale art while the new one is being read. Clear
+		// the artwork markers too so returning to the same track after an
+		// idle gap decodes its cover again.
 		m.forgetArt()
+		m.artDone, m.iconFor = "", ""
 	}
 	m.last, m.have = st, have
 	if have {

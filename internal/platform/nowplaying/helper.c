@@ -255,13 +255,17 @@ static NPRequest *request(void) {
   return r;
 }
 
-// waitRequest returns true when the request was answered before its 3 s
-// timeout. On a timeout the request is abandoned to a background reaper
-// that waits for the late completion — the completion still touches the
-// request, so it must not be freed early.
+#ifndef NP_READ_TIMEOUT_NS
+#define NP_READ_TIMEOUT_NS (3LL * NSEC_PER_SEC)
+#endif
+
+// waitRequest returns true when the request was answered before its timeout.
+// On a timeout the request is abandoned to a background reaper that waits for
+// the late completion — the completion still touches the request, so it must
+// not be freed early.
 static int waitRequest(NPRequest *r) {
   if (dispatch_semaphore_wait(
-          r->done, dispatch_time(DISPATCH_TIME_NOW, 3LL * NSEC_PER_SEC)) == 0)
+          r->done, dispatch_time(DISPATCH_TIME_NOW, NP_READ_TIMEOUT_NS)) == 0)
     return 1;
   // A late completion still writes into the request, so it cannot be freed
   // here. The reaper waits for that answer — but at most a fixed number of
@@ -322,20 +326,22 @@ static char *readClientBundle(void) {
   return text;
 }
 
-// readInfo fetches the current Now Playing dictionary. Returns NULL when
-// nothing is playing or the read timed out.
-static CFDictionaryRef readInfo(void) {
+// readInfo fetches the current Now Playing dictionary into *out. Returns 1 when
+// MediaRemote answered before the timeout (*out is NULL when nothing is playing)
+// and 0 when the read timed out or could not be allocated.
+static int readInfo(CFDictionaryRef *out) {
+  *out = NULL;
   NPRequest *r = request();
-  if (!r) return NULL;
+  if (!r) return 0;
   MRGetInfo(workQ, ^(CFDictionaryRef info) {
     if (info) r->info = CFRetain(info);
     dispatch_semaphore_signal(r->done);
   });
-  if (!waitRequest(r)) return NULL; // abandoned; the reaper owns it now
-  CFDictionaryRef info = r->info;
+  if (!waitRequest(r)) return 0; // abandoned; the reaper owns it now
+  *out = r->info;
   r->info = NULL;
   freeRequest(r);
-  return info;
+  return 1;
 }
 
 static int readIsPlaying(void) {
@@ -402,16 +408,24 @@ static char *base64Copy(const unsigned char *data, long n) {
 }
 
 // snapshot copies the current system state into s, freeing whatever s
-// already held. It reports false when the metadata read failed and s is
+// already held. It reports false when the metadata read timed out and s is
 // untouched: the caller must not publish that frame, because the leftover
 // pending (empty after the last publish) would look like a track change and
-// flash the empty state on one bad read.
+// flash the empty state on one bad read. When MediaRemote answers NULL
+// (nothing is playing / player exited), snapshot zeroes s and reports true so
+// publish clears any previous card.
 static int snapshot(Snapshot *s) {
-  CFDictionaryRef info = readInfo();
-  if (!info) return 0;
+  CFDictionaryRef info = NULL;
+  if (!readInfo(&info)) return 0;
   freeSnap(s);
   memset(s, 0, sizeof *s);
   s->at = nowUnix();
+  if (!info) {
+    setStr(&sentArtID, NULL);
+    setStr(&seenArtID, NULL);
+    seenArtAt = 0;
+    return 1;
+  }
   // The two truth signals go out raw; the reader reconciles them. They
   // can disagree briefly — IsPlaying lags some apps' pauses — so neither
   // is folded into a verdict here.

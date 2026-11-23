@@ -136,6 +136,42 @@ func TestNowPlayingTrackWhilePlayingAndPaused(t *testing.T) {
 	}
 }
 
+func TestNowPlayingClearsOnEmptyStateAndRedecodesSameTrack(t *testing.T) {
+	s := newStubNowPlaying(t)
+	artB64 := base64.StdEncoding.EncodeToString(testPNG(t))
+	songLine := `{"ok":true,"isPlaying":true,"appState":1,"title":"夜曲","artist":"周杰伦","duration":227,"elapsed":10,"artID":"track-a","art":"` + artB64 + `"}`
+	emptyLine := `{"ok":true,"isPlaying":false,"appState":0,"title":"","artist":"","album":"","duration":0,"elapsed":0,"app":"","artID":""}`
+
+	s.feed(t, songLine)
+	if !s.mod.hasTrack() {
+		t.Fatal("expected active track after song line")
+	}
+	if s.mod.art == nil {
+		t.Fatal("expected decoded cover art after song line")
+	}
+
+	// Player quits -> helper sends empty snapshot -> track and artwork must clear.
+	s.feed(t, emptyLine)
+	if s.mod.hasTrack() || s.mod.playing() {
+		t.Fatalf("empty snapshot must clear track; have=%v last=%+v", s.mod.have, s.mod.last)
+	}
+	if _, ok := s.mod.track(); ok {
+		t.Fatal("track() must return false after empty snapshot")
+	}
+	if s.mod.art != nil {
+		t.Fatal("artwork bitmap must be cleared when no player is playing")
+	}
+
+	// Same song returns after an idle gap -> artwork must decode again.
+	s.feed(t, songLine)
+	if !s.mod.hasTrack() {
+		t.Fatal("expected track to return after replay")
+	}
+	if s.mod.art == nil {
+		t.Fatal("cover art was not re-decoded when the same track returned after idle")
+	}
+}
+
 func TestNowPlayingChipDrawsTrackAndToggle(t *testing.T) {
 	s := newStubNowPlaying(t)
 	s.feed(t, `{"ok":true,"isPlaying":true,"appState":1,"title":"夜曲","artist":"周杰伦","duration":100,"elapsed":5}`)

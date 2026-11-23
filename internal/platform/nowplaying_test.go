@@ -608,9 +608,9 @@ func TestDecodeIsPlayingTimeout(t *testing.T) {
 	}
 }
 
-// 播放中一次读失败不能发空帧：helper 的 snapshot 失败时 publish 必须整轮
-// 跳过，否则留下的空 pending 和上一帧一对比就成了「换歌」，读者会闪一下
-// 空卡片。用 stub 顶掉 MediaRemote 的调用，驱动真实的 poll/publish。
+// 播放中一次读超时不能发空帧：helper 的 snapshot 超时返回 false 时 publish
+// 必须整轮跳过，否则留下的空 pending 和上一帧一对比就成了「换歌」，读者会
+// 闪一下空卡片。用永不回调的 stub 触发真实超时，区别于「无播放器时的 NULL」。
 func TestHelperPublishesNothingWhenTheReadFails(t *testing.T) {
 	clang, err := exec.LookPath("clang")
 	if err != nil {
@@ -619,6 +619,7 @@ func TestHelperPublishesNothingWhenTheReadFails(t *testing.T) {
 	dir := t.TempDir()
 	harness := filepath.Join(dir, "harness.c")
 	const src = `
+#define NP_READ_TIMEOUT_NS (50LL * 1000000LL)
 #include "helper.c"
 
 static void stubInfo(dispatch_queue_t q, void (^cb)(CFDictionaryRef)) {
@@ -628,8 +629,9 @@ static void stubInfo(dispatch_queue_t q, void (^cb)(CFDictionaryRef)) {
   dispatch_sync(q, ^{ cb(d); });
   CFRelease(d);
 }
-static void stubNoInfo(dispatch_queue_t q, void (^cb)(CFDictionaryRef)) {
-  dispatch_sync(q, ^{ cb(NULL); });
+static void stubTimeoutInfo(dispatch_queue_t q, void (^cb)(CFDictionaryRef)) {
+  (void)q;
+  (void)cb; // never signals: readInfo times out
 }
 static void stubPlaying(dispatch_queue_t q, void (^cb)(Boolean)) {
   dispatch_sync(q, ^{ cb(1); });
@@ -649,8 +651,8 @@ int main(void) {
   MRGetAppState = stubState;
   MRGetClient = stubClient;
   poll(); // one good frame
-  MRGetInfo = stubNoInfo;
-  poll(); // metadata read fails: nothing may be published
+  MRGetInfo = stubTimeoutInfo;
+  poll(); // metadata read times out: nothing may be published
   poll();
   return 0;
 }
@@ -674,5 +676,123 @@ int main(void) {
 	}
 	if !strings.Contains(lines[0], `"title":"Song"`) || !strings.Contains(lines[0], `"isPlaying":true`) {
 		t.Fatalf("the good frame is missing its state: %s", lines[0])
+	}
+}
+
+// 播放器退出后（MRGetInfo 回调传 NULL，而非超时）helper 必须发出空快照清卡，
+// 启动时若无播放器也应发首条空行，且再次播放同一首歌（相同 artID）时封面要重发。
+func TestHelperClearsWhenNothingIsPlaying(t *testing.T) {
+	clang, err := exec.LookPath("clang")
+	if err != nil {
+		t.Skipf("clang not available: %v", err)
+	}
+	dir := t.TempDir()
+	harness := filepath.Join(dir, "harness.c")
+	const src = `
+#include "helper.c"
+
+static const unsigned char kArt[] = {1, 2, 3, 4};
+
+static void stubSongWithArt(dispatch_queue_t q, void (^cb)(CFDictionaryRef)) {
+  CFMutableDictionaryRef d = CFDictionaryCreateMutable(NULL, 0,
+      &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+  CFDictionarySetValue(d, KeyTitle, CFSTR("Song"));
+  CFDictionarySetValue(d, KeyArtist, CFSTR("Artist"));
+  CFDictionarySetValue(d, KeyItemID, CFSTR("track-a"));
+  CFDataRef art = CFDataCreate(NULL, kArt, sizeof kArt);
+  CFDictionarySetValue(d, KeyArtwork, art);
+  dispatch_sync(q, ^{ cb(d); });
+  CFRelease(art);
+  CFRelease(d);
+}
+static void stubIdle(dispatch_queue_t q, void (^cb)(CFDictionaryRef)) {
+  dispatch_sync(q, ^{ cb(NULL); });
+}
+static Boolean gPlaying = 0;
+static int gAppState = 0;
+static void stubPlaying(dispatch_queue_t q, void (^cb)(Boolean)) {
+  dispatch_sync(q, ^{ cb(gPlaying); });
+}
+static void stubState(dispatch_queue_t q, void (^cb)(int)) {
+  dispatch_sync(q, ^{ cb(gAppState); });
+}
+static void stubClient(dispatch_queue_t q, void (^cb)(id)) {
+  dispatch_sync(q, ^{ cb(nil); });
+}
+
+int main(void) {
+  workQ = dispatch_queue_create("rakko-harness", NULL);
+  loadMediaRemote();
+  MRGetIsPlaying = stubPlaying;
+  MRGetAppState = stubState;
+  MRGetClient = stubClient;
+
+  // 1) Startup with nothing playing emits initial empty snapshot.
+  MRGetInfo = stubIdle;
+  poll();
+
+  // 2) Player starts playing Song A with artwork.
+  gPlaying = 1;
+  gAppState = 1;
+  MRGetInfo = stubSongWithArt;
+  poll();
+
+  // 3) Player quits -> MRGetInfo calls cb(NULL) -> must emit empty snapshot.
+  gPlaying = 0;
+  gAppState = 0;
+  MRGetInfo = stubIdle;
+  poll();
+  poll(); // repeated idle poll stays silent
+
+  // 4) Player reopens playing the same Song A -> artwork must be emitted again.
+  gPlaying = 1;
+  gAppState = 1;
+  MRGetInfo = stubSongWithArt;
+  poll();
+  return 0;
+}
+`
+	if err := os.WriteFile(harness, []byte(src), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	exe := filepath.Join(dir, "harness")
+	build := exec.Command(clang, "-fblocks", "-I", "nowplaying", "-o", exe, harness,
+		"-framework", "CoreFoundation", "-framework", "Foundation")
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("compile helper harness: %v\n%s", err, out)
+	}
+	out, err := exec.Command(exe).Output()
+	if err != nil {
+		t.Fatalf("run helper harness: %v", err)
+	}
+	raw := strings.TrimSpace(string(out))
+	if raw == "" {
+		t.Fatalf("helper emitted no lines at all")
+	}
+	lines := strings.Split(raw, "\n")
+	if len(lines) != 4 {
+		t.Fatalf("got %d lines, want 4 (startup idle, song, cleared idle, replay song):\n%s", len(lines), out)
+	}
+	for i, want := range []struct {
+		title   string
+		playing bool
+		hasArt  bool
+	}{
+		{"", false, false},
+		{"Song", true, true},
+		{"", false, false},
+		{"Song", true, true},
+	} {
+		u, ok := decodeNPLine(lines[i])
+		if !ok {
+			t.Fatalf("line %d failed to decode: %s", i, lines[i])
+		}
+		if u.state.Title != want.title || u.state.Playing != want.playing {
+			t.Fatalf("line %d state = {Title:%q Playing:%v}, want {Title:%q Playing:%v}; raw=%s",
+				i, u.state.Title, u.state.Playing, want.title, want.playing, lines[i])
+		}
+		if (len(u.state.Art) > 0) != want.hasArt {
+			t.Fatalf("line %d hasArt=%v, want %v; raw=%s", i, len(u.state.Art) > 0, want.hasArt, lines[i])
+		}
 	}
 }
