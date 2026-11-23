@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.18.5
+
+- **「正在播放」开关**：「设置 → 外形与提示 → 实时活动」新增「正在播放」。关掉后，刘海两翼、首页播放器、工具页音乐卡和播放快捷键都不再出现，后台也不再读取播放状态；打开刘海就是首页。默认开启，随时切换，无需重启。
+- **音乐卡残留修复**：播放器退出后，刘海和首页的音乐卡会随之消失，不再一直停在上一首。
+- **AI 用量**：DeepSeek 余额卡改为显示 DeepSeek 标志，不再是一个空圆环加「余额」二字。
+- **底层升级与整理**：界面框架 MyGo 升级到 0.10.0；合并了各处重复的内部实现（浮层窗口、Agent 提醒与审批、AI 用量读取、Mac 与 Windows 共用部分），功能与外观保持不变。
+
+### English
+
+- **Now Playing switch**: Settings → Appearance → Live Activities has a new Now Playing switch. Turned off, the notch wings, the home player, the music card on the tools page and the playback shortcuts all go away and Rakko stops reading playback state, so opening the notch shows the home page. On by default; changes apply at once, no restart.
+- **Stale music card**: when the player quits, the music card on the notch and the home page now goes away instead of staying on the last track.
+- **AI usage**: the DeepSeek balance card shows the DeepSeek logo instead of an empty ring labelled "Balance".
+- **Under the hood**: the MyGo UI framework is updated to 0.10.0, and duplicated internals (floating windows, agent notifications and approvals, AI usage readers, code shared by Mac and Windows) are merged into one each, with no change to features or looks.
+
 ## 1.18.4
 
 - **多显示器选择与拖拽防误穿**：「设置 → 显示在」新增「跟随鼠标」「主显示器」以及固定到指定显示器的选项（标注与主显示器的相对方位）；当所在屏幕上方还接了一块显示器时，从下方拖入文件会在屏幕顶边先停住让你松手投放，继续用力上推才跨到上方屏幕。
