@@ -90,7 +90,7 @@ func TestNoteSmokeWindowAndCards(t *testing.T) {
 	if a.visible {
 		t.Fatal("the panel stayed visible after opening the note")
 	}
-	want := "# 周五发版前\n\n– 改 README 顶栏描述\n\n– 补 v1.13 截图\n\n– 问 Codex 额度为什么 5 小时窗口跳\n\n– [ ] 桌宠姿态验收"
+	want := "# 周五发版前\n\n– 改 README 顶栏描述\n\n– 补 v1.13 截图\n\n– 问 Codex 额度为什么 5 小时窗口跳\n\n- [ ] 桌宠姿态验收"
 	onMain(func() {
 		a.note.setDraft(want)
 		a.note.invalidate()
