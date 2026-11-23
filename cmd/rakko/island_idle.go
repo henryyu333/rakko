@@ -61,18 +61,10 @@ func (a *shelf) mainIdleCapsuleView(c *ui.Context) {
 // It takes no clicks: the global press observer still maps a press on it to
 // the island move or the app entry, exactly like the panel's idle frame.
 func (a *shelf) openMainIdleCapsule(f mygo.Rectangle) *mainIdleCapsule {
-	w := mygo.NewWindow(mygo.WindowOptions{
-		Title: a.appLoc().WindowIsland(), Width: f.Width, Height: f.Height,
-		X: f.X, Y: f.Y,
-		Hidden: true, Frameless: true, Transparent: true, DisableShadow: true,
-		AlwaysOnTop: true, SkipTaskbar: true, Panel: true,
-		DisableMove: disableMoveOverlay, DisableResize: true, DisableMinimize: true, DisableMaximize: true, DisableFullScreen: true,
-		Content: ui.View(a.mainIdleCapsuleView),
-	})
+	w := newOverlayWindow(a.appLoc().WindowIsland(), f, 0, a.mainIdleCapsuleView)
 	if w == nil {
 		return nil
 	}
-	w.SetVisibleOnAllWorkspaces(true)
 	h := w.NativeHandle()
 	platform.ConfigureIdleCapsuleWindow(h)
 	// One level below the panel's resting level, so the opening shell and
@@ -244,18 +236,10 @@ func (a *shelf) syncIdleIslands() {
 // openIdleIsland creates one display-only capsule window for pl.
 func (a *shelf) openIdleIsland(pl idlePlacement) *idleIslandWindow {
 	f := pl.Frame
-	w := mygo.NewWindow(mygo.WindowOptions{
-		Title: a.appLoc().WindowIsland(), Width: f.Width, Height: f.Height,
-		X: f.X, Y: f.Y,
-		Hidden: true, Frameless: true, Transparent: true, DisableShadow: true,
-		AlwaysOnTop: true, SkipTaskbar: true, Panel: true,
-		DisableMove: disableMoveOverlay, DisableResize: true, DisableMinimize: true, DisableMaximize: true, DisableFullScreen: true,
-		Content: ui.View(idleIslandView),
-	})
+	w := newOverlayWindow(a.appLoc().WindowIsland(), f, 0, idleIslandView)
 	if w == nil {
 		return nil
 	}
-	w.SetVisibleOnAllWorkspaces(true)
 	h := w.NativeHandle()
 	platform.ConfigureIdleCapsuleWindow(h)
 	// The capsule is a picture: the resident window handles the pointer

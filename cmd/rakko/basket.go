@@ -80,16 +80,8 @@ func (a *shelf) showBasket(p mygo.Point) {
 	d := mygo.Screen.DisplayNearestPoint(p)
 	a.basket.frame = basketFrame(d.WorkArea, p)
 	a.basket = basketState{shown: true, frame: a.basket.frame}
-	w := mygo.NewWindow(mygo.WindowOptions{
-		Title: a.appLoc().WindowBasket(), Width: basketWidth, Height: basketHeight,
-		X: a.basket.frame.X, Y: a.basket.frame.Y,
-		Hidden: true, Frameless: true, Transparent: true, DisableShadow: true,
-		AlwaysOnTop: true, SkipTaskbar: true, Panel: true,
-		DisableMove: disableMoveOverlay, DisableResize: true, DisableMinimize: true, DisableMaximize: true, DisableFullScreen: true,
-		Content: ui.View(a.basketView),
-	})
+	w := newOverlayWindow(a.appLoc().WindowBasket(), a.basket.frame, 0, a.basketView)
 	a.basket.win = w
-	w.SetVisibleOnAllWorkspaces(true)
 	platform.ConfigureOverlayWindow(w.NativeHandle())
 	platform.SetWindowFrame(w.NativeHandle(), a.basket.frame.X, a.basket.frame.Y, a.basket.frame.Width, a.basket.frame.Height)
 	w.OnClose(func(e *mygo.CloseEvent) {

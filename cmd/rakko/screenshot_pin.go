@@ -52,19 +52,11 @@ func (a *shelf) openShotPin(png []byte, frame mygo.Rectangle, scale float64) {
 		zoom = float64(frame.Width) / baseW
 	}
 	p := &shotPin{a: a, png: png, bitmap: bm, pixW: w, pixH: h, scale: scale, frame: frame, zoom: zoom}
-	win := mygo.NewWindow(mygo.WindowOptions{
-		Title: a.appLoc().ShotPinTitle(), Width: frame.Width, Height: frame.Height,
-		X: frame.X, Y: frame.Y,
-		Hidden: true, Frameless: true, Transparent: true, DisableShadow: true,
-		AlwaysOnTop: true, SkipTaskbar: true, Panel: true,
-		DisableMove: disableMoveOverlay, DisableResize: true, DisableMinimize: true, DisableMaximize: true, DisableFullScreen: true,
-		Content: ui.View(p.view),
-	})
+	win := newOverlayWindow(a.appLoc().ShotPinTitle(), frame, 0, p.view)
 	if win == nil {
 		return
 	}
 	p.win = win
-	win.SetVisibleOnAllWorkspaces(true)
 	hnd := win.NativeHandle()
 	// The overlay policy gives a key-capable nonactivating panel; the
 	// floating level keeps it over ordinary windows, under the menu bar.

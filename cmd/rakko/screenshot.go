@@ -404,18 +404,10 @@ func shotSizeMatches(img *image.RGBA, t shotTarget) bool {
 func (s *shotSession) openWindow(di int) {
 	d := s.displays[di]
 	b := d.Bounds
-	w := mygo.NewWindow(mygo.WindowOptions{
-		Title: s.a.appLoc().ShotPinTitle(), Width: b.Width, Height: b.Height,
-		X: b.X, Y: b.Y,
-		Hidden: true, Frameless: true, Transparent: true, DisableShadow: true,
-		AlwaysOnTop: true, SkipTaskbar: true, Panel: true,
-		DisableMove: disableMoveOverlay, DisableResize: true, DisableMinimize: true, DisableMaximize: true, DisableFullScreen: true,
-		Content: ui.View(func(c *ui.Context) { s.overlayView(c, di) }),
-	})
+	w := newOverlayWindow(s.a.appLoc().ShotPinTitle(), b, 0, func(c *ui.Context) { s.overlayView(c, di) })
 	if w == nil {
 		return
 	}
-	w.SetVisibleOnAllWorkspaces(true)
 	h := w.NativeHandle()
 	platform.ConfigureCaptureWindow(h)
 	platform.SetWindowFrame(h, b.X, b.Y, b.Width, b.Height)

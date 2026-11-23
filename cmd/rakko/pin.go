@@ -461,16 +461,8 @@ func (it *pinItem) openWindow(preview bool) { it.openWindowState(preview, true, 
 
 func (it *pinItem) openWindowState(preview, show bool, opacity float64) {
 	f := it.frame
-	w := mygo.NewWindow(mygo.WindowOptions{
-		Title: it.owner.appLoc().WindowPins(), Width: f.Width, Height: f.Height,
-		X: f.X, Y: f.Y, Opacity: opacity,
-		Hidden: true, Frameless: true, Transparent: true, DisableShadow: true,
-		AlwaysOnTop: true, SkipTaskbar: true, Panel: true,
-		DisableMove: disableMoveOverlay, DisableResize: true, DisableMinimize: true, DisableMaximize: true, DisableFullScreen: true,
-		Content: ui.View(func(c *ui.Context) { it.view(c) }),
-	})
+	w := newOverlayWindow(it.owner.appLoc().WindowPins(), f, opacity, func(c *ui.Context) { it.view(c) })
 	it.win = w
-	w.SetVisibleOnAllWorkspaces(true)
 	if preview {
 		platform.ConfigureDragPreviewAbove(w.NativeHandle(), it.owner.windowLevel())
 	} else {

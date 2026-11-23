@@ -301,20 +301,9 @@ func (a *shelf) openPetWindow() {
 	if pet.slideAt.IsZero() {
 		f = pet.frame
 	}
-	w := mygo.NewWindow(mygo.WindowOptions{
-		Title:  a.appLoc().WindowPet(),
-		Width:  f.Width,
-		Height: f.Height,
-		X:      f.X,
-		Y:      f.Y,
-		Hidden: true, Frameless: true, Transparent: true, DisableShadow: true,
-		AlwaysOnTop: true, SkipTaskbar: true, Panel: true,
-		DisableMove: disableMoveOverlay, DisableResize: true, DisableMinimize: true, DisableMaximize: true, DisableFullScreen: true,
-		Content: ui.View(pet.view),
-	})
+	w := newOverlayWindow(a.appLoc().WindowPet(), f, 0, pet.view)
 	pet.win = w
 	pet.shownAt = time.Now()
-	w.SetVisibleOnAllWorkspaces(true)
 	platform.ConfigurePetWindow(w.NativeHandle())
 	platform.SetWindowFrame(w.NativeHandle(), f.X, f.Y, f.Width, f.Height)
 	w.ShowInactive()

@@ -623,19 +623,31 @@ func (a *shelf) displaysChanged() {
 	a.petDisplaysChanged()
 }
 
+// newOverlayWindow creates one transparent, frameless, non-activating
+// always-on-top panel shared by the shelf's floating overlays. Callers apply
+// their own platform.Configure*Window policy and window-specific hooks.
+func newOverlayWindow(title string, frame mygo.Rectangle, opacity float64, view func(*ui.Context)) *mygo.Window {
+	w := mygo.NewWindow(mygo.WindowOptions{
+		Title: title, Width: frame.Width, Height: frame.Height,
+		X: frame.X, Y: frame.Y, Opacity: opacity,
+		Hidden: true, Frameless: true, Transparent: true, DisableShadow: true,
+		AlwaysOnTop: true, SkipTaskbar: true, Panel: true,
+		DisableMove: disableMoveOverlay, DisableResize: true, DisableMinimize: true, DisableMaximize: true, DisableFullScreen: true,
+		Content: ui.View(view),
+	})
+	if w == nil {
+		return nil
+	}
+	w.SetVisibleOnAllWorkspaces(true)
+	return w
+}
+
 // newNotchWindow creates the persistent notch window: one transparent,
 // frameless, non-activating panel that the three states redraw. The smoke
 // test builds the same window, so the ⌃⌥V focus behaviour is checked
 // against what production shows.
 func (a *shelf) newNotchWindow() {
-	a.win = mygo.NewWindow(mygo.WindowOptions{
-		Title: appName, Width: sheetW, Height: sheetH,
-		Hidden: true, Frameless: true, Transparent: true, DisableShadow: true,
-		AlwaysOnTop: true, SkipTaskbar: true, Panel: true,
-		DisableMove: disableMoveOverlay, DisableResize: true, DisableMinimize: true, DisableMaximize: true, DisableFullScreen: true,
-		Content: ui.View(a.view),
-	})
-	a.win.SetVisibleOnAllWorkspaces(true)
+	a.win = newOverlayWindow(appName, mygo.Rectangle{Width: sheetW, Height: sheetH}, 0, a.view)
 	a.winH = a.win.NativeHandle()
 	platform.ConfigureNotchWindow(a.winH)
 	// The panel is topmost, and a system popup menu opened from it is not:

@@ -727,16 +727,8 @@ func (a *shelf) advanceGhost(now time.Time) {
 // openGhostWindow creates the preview's native window at its target.
 func (a *shelf) openGhostWindow(g *snapGhost) {
 	f := g.frame
-	w := mygo.NewWindow(mygo.WindowOptions{
-		Title: a.appLoc().WindowSnap(), Width: f.Width, Height: f.Height,
-		X: f.X, Y: f.Y,
-		Hidden: true, Frameless: true, Transparent: true, DisableShadow: true,
-		AlwaysOnTop: true, SkipTaskbar: true, Panel: true,
-		DisableMove: disableMoveOverlay, DisableResize: true, DisableMinimize: true, DisableMaximize: true, DisableFullScreen: true,
-		Content: ui.View(snapGhostView),
-	})
+	w := newOverlayWindow(a.appLoc().WindowSnap(), f, 0, snapGhostView)
 	g.win = w
-	w.SetVisibleOnAllWorkspaces(true)
 	platform.ConfigureDragPreview(w.NativeHandle(), a.windowLevel())
 	platform.SetWindowFrame(w.NativeHandle(), f.X, f.Y, f.Width, f.Height)
 	w.ShowInactive()
