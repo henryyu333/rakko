@@ -45,6 +45,8 @@ var (
 	boardHandSymbol    = symbol(`<path d="M18 11V6a2 2 0 0 0-4 0v1M14 10V4a2 2 0 0 0-4 0v2M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>`)
 	boardHiliteSymbol  = symbol(`<path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/>`)
 	boardEraserSymbol  = symbol(`<path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7M5 11l9 9"/>`)
+	boardArrowSymbol   = symbol(`<path d="M7 17 17 7M7 7h10v10"/>`)
+	boardLineSymbol    = symbol(`<path d="M5 19 19 5"/>`)
 	boardFrameSymbol   = symbol(`<path d="M6 3v18M18 3v18M3 6h18M3 18h18"/>`)
 
 	// Seams around app/OS-level calls so headless tests can drive boardUI

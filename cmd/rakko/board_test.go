@@ -870,3 +870,215 @@ func TestBoardSeg3SelectionSnapLabelsAndScreenshots(t *testing.T) {
 		b.ed.PointerUp(rb2.Center().X+2, mb.Center().Y, editor.Mods{}, 6.2)
 	}
 }
+
+func saveBoardSeg4Shot(t *testing.T, name string, img *image.RGBA) {
+	t.Helper()
+	dir := os.Getenv("RAKKO_SEG4_SHOTS")
+	if dir == "" {
+		return
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Create(filepath.Join(dir, name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if err := png.Encode(f, img); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestBoardSeg4ArrowsLinesVerticesSmartDrawAndScreenshots(t *testing.T) {
+	a, b := boardTestShelf(t)
+	l := locales.In("zh-Hans")
+	view := ui.NewTester(a.boardView, 1040, 680)
+	view.SetLocale("zh-Hans")
+	view.Frame()
+	view.Frame()
+
+	// 1. Toolbar & shortcuts A (Arrow) and L (Line).
+	if err := view.Click(l.BoardToolArrow()); err != nil {
+		t.Fatalf("click Arrow tool: %v", err)
+	}
+	view.Frame()
+	if b.ed.Tool != editor.ToolArrow {
+		t.Fatalf("tool after Arrow click = %s, want arrow", b.ed.Tool)
+	}
+	view.Key(0, ui.KeyL)
+	view.Frame()
+	if b.ed.Tool != editor.ToolLine {
+		t.Fatalf("L shortcut tool = %s, want line", b.ed.Tool)
+	}
+
+	// 2. Create 2 boxes, connect with an arrow via UI mouse drag, move boxB, verify arrow follows.
+	b.ed.SetGeoTool("rounded-rect")
+	b.ed.Next.Stroke = "#60A5FA"
+	b.ed.Next.Fill = "semi"
+	b.ed.Next.FillColor = "#60A5FA"
+	b.ed.PointerDown(100, 100, 0, 1, editor.Mods{}, 0.1)
+	b.ed.PointerMove(230, 170, editor.Mods{}, 0.2)
+	b.ed.PointerUp(230, 170, editor.Mods{}, 0.3)
+	boxA := b.ed.Selection()[0]
+
+	b.ed.SetGeoTool("diamond")
+	b.ed.Next.Stroke = "#34D399"
+	b.ed.Next.FillColor = "#34D399"
+	b.ed.PointerDown(420, 95, 0, 1, editor.Mods{}, 0.4)
+	b.ed.PointerMove(560, 175, editor.Mods{}, 0.5)
+	b.ed.PointerUp(560, 175, editor.Mods{}, 0.6)
+	boxB := b.ed.Selection()[0]
+
+	view.Key(0, ui.KeyA)
+	view.Frame()
+	view.Press(165, 165)
+	view.Move(490, 165)
+	view.Frame()
+	view.Release(490, 165)
+	view.Frame()
+	if len(b.ed.Selection()) != 1 {
+		t.Fatalf("expected arrow selected after draw, got %v", b.ed.Selection())
+	}
+	boundArrow := b.ed.Selection()[0]
+	if len(b.ed.BindingsTo(boxA)) != 1 || len(b.ed.BindingsTo(boxB)) != 1 {
+		t.Fatalf("expected bindings on boxA and boxB")
+	}
+
+	// Move boxB down and verify arrow follows.
+	b.ed.Select(boxB)
+	b.ed.Nudge(0, 90)
+	infoMoved := b.ed.Arrow(b.ed.Doc.Shapes[boundArrow])
+	endPage := b.ed.PageMat(boundArrow).Apply(infoMoved.End)
+	if endPage.Y < 190 {
+		t.Fatalf("bound arrow End page Y = %v after moving boxB down", endPage.Y)
+	}
+
+	if os.Getenv("RAKKO_SEG4_SHOTS") != "" {
+		// Showcase A: Bound following arrow (curved with label), elbow arrow, 8 arrowhead gallery, cubic spline line.
+		b.ed.Next.Fill = "none"
+		// Bend the bound arrow (boxA -> boxB) into an upward arc and add label.
+		b.ed.Select(boundArrow)
+		midPage := b.ed.PageMat(boundArrow).Apply(infoMoved.Mid)
+		b.ed.PointerDown(midPage.X, midPage.Y, 0, 1, editor.Mods{}, 1.0)
+		b.ed.PointerMove(midPage.X, midPage.Y-70, editor.Mods{}, 1.1)
+		b.ed.PointerUp(midPage.X, midPage.Y-70, editor.Mods{}, 1.2)
+		b.ed.StartEditing(boundArrow)
+		b.ed.EditText = "curved + bound"
+		b.ed.EditChanged()
+		b.ed.StopEditing()
+
+		// Add an elbow arrow from boxA bottom to a third shape boxC.
+		b.ed.SetGeoTool("cylinder")
+		b.ed.Next.Stroke = "#FBBF24"
+		b.ed.Next.Fill = "semi"
+		b.ed.Next.FillColor = "#FBBF24"
+		b.ed.PointerDown(320, 340, 0, 1, editor.Mods{}, 1.3)
+		b.ed.PointerMove(440, 420, editor.Mods{}, 1.4)
+		b.ed.PointerUp(440, 420, editor.Mods{}, 1.5)
+		boxC := b.ed.Selection()[0]
+
+		b.ed.Next.ArrowKind = "elbow"
+		b.ed.Next.Stroke = "#FBBF24"
+		b.ed.SetTool(editor.ToolArrow)
+		b.ed.PointerDown(165, 135, 0, 1, editor.Mods{}, 1.6)
+		b.ed.PointerMove(380, 380, editor.Mods{}, 1.7)
+		b.ed.PointerUp(380, 380, editor.Mods{}, 1.8)
+		elbowID := b.ed.Selection()[0]
+		b.ed.StartEditing(elbowID)
+		b.ed.EditText = "elbow"
+		b.ed.EditChanged()
+		b.ed.StopEditing()
+
+		// Add a cubic spline line from boxC to boxB and pull its midpoint into a smooth curve.
+		b.ed.Next.Spline = "cubic"
+		b.ed.Next.Stroke = "#A78BFA"
+		b.ed.SetTool(editor.ToolLine)
+		b.ed.PointerDown(380, 380, 0, 1, editor.Mods{}, 1.9)
+		b.ed.PointerMove(490, 225, editor.Mods{}, 2.0)
+		b.ed.PointerUp(490, 225, editor.Mods{}, 2.1)
+		lineID := b.ed.Selection()[0]
+		var lineVirt geo.Vec
+		for _, h := range b.ed.Handles() {
+			if h.Kind == editor.HandleLinePoint && h.Virtual {
+				lineVirt = h.Point
+				break
+			}
+		}
+		b.ed.PointerDown(lineVirt.X, lineVirt.Y, 0, 1, editor.Mods{}, 2.2)
+		b.ed.PointerMove(lineVirt.X+80, lineVirt.Y+30, editor.Mods{}, 2.3)
+		b.ed.PointerUp(lineVirt.X+80, lineVirt.Y+30, editor.Mods{}, 2.4)
+		_ = boxC
+		_ = lineID
+
+		// Right-side gallery: all 8 arrowhead styles (HeadStart + HeadEnd) + 3 routes.
+		b.ed.Next.ArrowKind = "arc"
+		for i, head := range editor.ArrowHeads {
+			y := 90.0 + float64(i)*64.0
+			b.ed.Next.HeadStart = head
+			b.ed.Next.HeadEnd = head
+			b.ed.Next.Stroke = "#E8E8EA"
+			b.ed.SetTool(editor.ToolArrow)
+			b.ed.PointerDown(650, y, 0, 1, editor.Mods{Cmd: true}, 3.0+float64(i)*0.1)
+			b.ed.PointerMove(880, y, editor.Mods{Cmd: true}, 3.02+float64(i)*0.1)
+			b.ed.PointerUp(880, y, editor.Mods{Cmd: true}, 3.04+float64(i)*0.1)
+			aid := b.ed.Selection()[0]
+			b.ed.StartEditing(aid)
+			b.ed.EditText = head
+			b.ed.EditChanged()
+			b.ed.StopEditing()
+		}
+		b.ed.Select(boundArrow)
+		view.Frame()
+		view.Frame()
+		saveBoardSeg4Shot(t, "board-arrows-routes-heads.png", view.Image())
+
+		// Showcase B: Polygon & Curve vertex editing + smart recognized shapes.
+		a2, b2 := boardTestShelf(t)
+		v2 := ui.NewTester(a2.boardView, 1040, 680)
+		v2.SetLocale("zh-Hans")
+		b2.ed.SetGeoTool("curve")
+		b2.ed.Next.Stroke = "#22D3EE"
+		b2.ed.PointerDown(100, 140, 0, 1, editor.Mods{}, 0.1)
+		b2.ed.PointerMove(420, 320, editor.Mods{}, 0.2)
+		b2.ed.PointerUp(420, 320, editor.Mods{}, 0.3)
+		curveID := b2.ed.Selection()[0]
+
+		b2.ed.SetGeoTool("polygon")
+		b2.ed.Next.Stroke = "#F472B6"
+		b2.ed.Next.Fill = "semi"
+		b2.ed.Next.FillColor = "#F472B6"
+		b2.ed.PointerDown(540, 120, 0, 1, editor.Mods{}, 0.4)
+		b2.ed.PointerMove(760, 340, editor.Mods{}, 0.5)
+		b2.ed.PointerUp(760, 340, editor.Mods{}, 0.6)
+		polyID := b2.ed.Selection()[0]
+
+		// Smart dwell-recognized circle at bottom left preserving thick PenWidth=5.
+		b2.ed.SetTool(editor.ToolDraw)
+		b2.ed.Next.PenWidth = 5
+		b2.ed.Next.Stroke = "#4ADE80"
+		b2.ed.PointerDown(280, 460, 0, 1, editor.Mods{}, 1.0)
+		for i := 1; i <= 24; i++ {
+			ang := 2 * math.Pi * float64(i) / 24
+			b2.ed.PointerMove(210+70*math.Cos(ang), 460+70*math.Sin(ang), editor.Mods{}, 1.0+float64(i)*0.02)
+		}
+		b2.ed.PointerMove(280, 460, editor.Mods{Shift: true}, 2.0)
+		b2.ed.PointerUp(280, 460, editor.Mods{Shift: true}, 2.05)
+
+		b2.ed.EditVertices(polyID)
+		var polyVirt geo.Vec
+		for _, h := range b2.ed.Handles() {
+			if h.Kind == editor.HandleGeoVertex && h.Virtual {
+				polyVirt = h.Point
+				break
+			}
+		}
+		b2.ed.PointerDown(polyVirt.X, polyVirt.Y, 0, 1, editor.Mods{}, 2.2)
+		b2.ed.PointerMove(polyVirt.X+40, polyVirt.Y-35, editor.Mods{}, 2.3)
+		b2.ed.PointerUp(polyVirt.X+40, polyVirt.Y-35, editor.Mods{}, 2.4)
+		_ = curveID
+		v2.Frame()
+		v2.Frame()
+		saveBoardSeg4Shot(t, "board-vertex-editing-smartdraw.png", v2.Image())
+	}
+}

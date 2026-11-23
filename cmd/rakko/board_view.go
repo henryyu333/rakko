@@ -155,6 +155,10 @@ func (a *shelf) boardStage(c *ui.Context, l locales.Messages, pal *editor.Palett
 			})
 		return
 	}
+	if b.ed.InGesture() && b.ed.Tool == editor.ToolDraw {
+		b.ed.CheckDwell(b.seconds(c.Now()))
+		c.AnimationFrame()
+	}
 	stage := ui.Box(c.Key("board-stage")).FillWidth().Grow(1).MinHeight(0).Clip()
 	stage.Children(func() {
 		canvas := ui.Box(c.Key("board-canvas")).Fill().Focusable().FocusRing(false).Label(b.currentTitle(l))
@@ -597,6 +601,12 @@ func (a *shelf) boardPillTab(c *ui.Context, pal *editor.Palette, key, label stri
 	return btn
 }
 
+func (b *boardUI) chooseTool(t editor.Tool) {
+	b.ed.SetTool(t)
+	b.canvasFocus = false
+	b.invalidate()
+}
+
 func (a *shelf) boardToolbar(c *ui.Context, l locales.Messages, pal *editor.Palette) {
 	b := a.board
 	wrap := ui.Row(c.Key("board-tools-wrap")).Absolute().Left(0).Right(0).Bottom(16).Justify(ui.Center).PassThrough()
@@ -606,31 +616,25 @@ func (a *shelf) boardToolbar(c *ui.Context, l locales.Messages, pal *editor.Pale
 			Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, 0.28))
 		bar.Children(func() {
 			if a.boardToolBtn(c, pal, "tool-select", boardSelectSymbol, l.BoardToolSelect(), b.ed.Tool == editor.ToolSelect).Clicked() {
-				b.ed.SetTool(editor.ToolSelect)
-				b.invalidate()
+				b.chooseTool(editor.ToolSelect)
 			}
 			if a.boardToolBtn(c, pal, "tool-lasso", boardLassoSymbol, l.BoardToolLasso(), b.ed.Tool == editor.ToolLasso).Clicked() {
-				b.ed.SetTool(editor.ToolLasso)
-				b.invalidate()
+				b.chooseTool(editor.ToolLasso)
 			}
 			if a.boardToolBtn(c, pal, "tool-hand", boardHandSymbol, l.BoardToolHand(), b.ed.Tool == editor.ToolHand).Clicked() {
-				b.ed.SetTool(editor.ToolHand)
-				b.invalidate()
+				b.chooseTool(editor.ToolHand)
 			}
 
 			ui.Box(c).Width(1).Height(24).Margin(0, 4, 0, 4).Background(boardColor(pal.Sep))
 
 			if a.boardToolBtn(c, pal, "tool-draw", pencilSymbol, l.BoardToolDraw(), b.ed.Tool == editor.ToolDraw).Clicked() {
-				b.ed.SetTool(editor.ToolDraw)
-				b.invalidate()
+				b.chooseTool(editor.ToolDraw)
 			}
 			if a.boardToolBtn(c, pal, "tool-hilite", boardHiliteSymbol, l.BoardToolHighlight(), b.ed.Tool == editor.ToolHighlight).Clicked() {
-				b.ed.SetTool(editor.ToolHighlight)
-				b.invalidate()
+				b.chooseTool(editor.ToolHighlight)
 			}
 			if a.boardToolBtn(c, pal, "tool-eraser", boardEraserSymbol, l.BoardToolEraser(), b.ed.Tool == editor.ToolEraser).Clicked() {
-				b.ed.SetTool(editor.ToolEraser)
-				b.invalidate()
+				b.chooseTool(editor.ToolEraser)
 			}
 
 			ui.Box(c).Width(1).Height(24).Margin(0, 4, 0, 4).Background(boardColor(pal.Sep))
@@ -674,6 +678,7 @@ func (a *shelf) boardToolbar(c *ui.Context, l locales.Messages, pal *editor.Pale
 									if cell.Clicked() {
 										b.ed.SetGeoTool(kind)
 										b.shapeMenu = false
+										b.canvasFocus = false
 										b.invalidate()
 									}
 								}
@@ -683,17 +688,20 @@ func (a *shelf) boardToolbar(c *ui.Context, l locales.Messages, pal *editor.Pale
 				})
 			})
 
+			if a.boardToolBtn(c, pal, "tool-arrow", boardArrowSymbol, l.BoardToolArrow(), b.ed.Tool == editor.ToolArrow).Clicked() {
+				b.chooseTool(editor.ToolArrow)
+			}
+			if a.boardToolBtn(c, pal, "tool-line", boardLineSymbol, l.BoardToolLine(), b.ed.Tool == editor.ToolLine).Clicked() {
+				b.chooseTool(editor.ToolLine)
+			}
 			if a.boardToolBtn(c, pal, "tool-frame", boardFrameSymbol, l.BoardToolFrame(), b.ed.Tool == editor.ToolFrame).Clicked() {
-				b.ed.SetTool(editor.ToolFrame)
-				b.invalidate()
+				b.chooseTool(editor.ToolFrame)
 			}
 			if a.boardToolBtn(c, pal, "tool-text", textSymbol, l.BoardToolText(), b.ed.Tool == editor.ToolText).Clicked() {
-				b.ed.SetTool(editor.ToolText)
-				b.invalidate()
+				b.chooseTool(editor.ToolText)
 			}
 			if a.boardToolBtn(c, pal, "tool-note", noteSymbol, l.BoardToolNote(), b.ed.Tool == editor.ToolNote).Clicked() {
-				b.ed.SetTool(editor.ToolNote)
-				b.invalidate()
+				b.chooseTool(editor.ToolNote)
 			}
 			if a.boardToolBtn(c, pal, "tool-image", imgSymbol, l.BoardToolImage(), false).Clicked() {
 				b.pickImage()
@@ -812,6 +820,9 @@ func (b *boardUI) handleCanvasInput(c *ui.Context, ev ui.InputEvent) bool {
 	case ui.InputPointerDown:
 		if !b.locked || ev.Button == 2 || b.ed.SpaceHeld() || b.ed.Tool == editor.ToolHand {
 			b.ed.PointerDownPressure(float64(ev.X), float64(ev.Y), ev.Button, ev.Clicks, float64(ev.Pressure), ev.Pointer == ui.PointerPen, mods, t)
+			if b.ed.Editing == "" {
+				b.canvasFocus = false
+			}
 			b.invalidate()
 			return true
 		}
@@ -963,6 +974,14 @@ func (b *boardUI) handleCanvasInput(c *ui.Context, ev ui.InputEvent) bool {
 			return true
 		case ui.KeyP:
 			b.ed.SetGeoTool("polygon")
+			b.invalidate()
+			return true
+		case ui.KeyA:
+			b.ed.SetTool(editor.ToolArrow)
+			b.invalidate()
+			return true
+		case ui.KeyL:
+			b.ed.SetTool(editor.ToolLine)
 			b.invalidate()
 			return true
 		case ui.KeyF:

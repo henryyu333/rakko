@@ -90,6 +90,10 @@ type Style struct {
 	PenKind    string
 	PenWidth   float64
 	EraserMode EraserMode
+	ArrowKind  string
+	HeadStart  string
+	HeadEnd    string
+	Spline     string
 }
 
 // DefaultStyle returns the default drawing style.
@@ -110,6 +114,10 @@ func DefaultStyle() Style {
 		PenKind:    "normal",
 		PenWidth:   2.5,
 		EraserMode: EraserObject,
+		ArrowKind:  "arc",
+		HeadStart:  "none",
+		HeadEnd:    "arrow",
+		Spline:     "line",
 	}
 }
 
@@ -203,6 +211,8 @@ func (e *Editor) SelectionBox() (geo.Box, bool) {
 func (e *Editor) SetTool(t Tool) {
 	e.StopEditing()
 	e.cancelGesture()
+	e.EditingVertices = ""
+	e.Hint = nil
 	e.Tool = t
 	if t != ToolSelect {
 		e.Hovered = ""
@@ -260,6 +270,8 @@ func (e *Editor) CursorNow() Cursor {
 		return resizeCursor(g.handle.Which, g.rotation)
 	case *rotateGesture:
 		return CursorRotate
+	case *arrowEndDragGesture, *arrowBendDragGesture, *linePointDragGesture, *geoVertexDragGesture:
+		return CursorPointer
 	}
 	if e.spaceHeld || e.Tool == ToolHand {
 		return CursorGrab
@@ -267,7 +279,7 @@ func (e *Editor) CursorNow() Cursor {
 	switch e.Tool {
 	case ToolText:
 		return CursorText
-	case ToolLasso, ToolDraw, ToolHighlight, ToolEraser, ToolGeo, ToolFrame, ToolNote:
+	case ToolLasso, ToolDraw, ToolHighlight, ToolEraser, ToolGeo, ToolFrame, ToolNote, ToolArrow, ToolLine:
 		return CursorCross
 	}
 	h := e.HandleAt(e.pointer.Screen)
@@ -277,6 +289,8 @@ func (e *Editor) CursorNow() Cursor {
 		return resizeCursor(h.Which, r)
 	case HandleRotate:
 		return CursorRotate
+	case HandleArrowEnd, HandleArrowBend, HandleLinePoint, HandleGeoVertex:
+		return CursorPointer
 	}
 	return CursorDefault
 }
@@ -288,6 +302,8 @@ func (e *Editor) Cancel() {
 		e.cancelGesture()
 	case e.Editing != "":
 		e.StopEditing()
+	case e.EditingVertices != "":
+		e.EditingVertices = ""
 	case e.FocusedGroup != "":
 		id := e.FocusedGroup
 		e.FocusedGroup = ""
@@ -306,6 +322,7 @@ func (e *Editor) cancelGesture() {
 		e.Brush = nil
 		e.Lasso = nil
 		e.Snaps = nil
+		e.Hint = nil
 		e.DropOn = ""
 		e.Erasing = nil
 		e.PartialPreview = nil
@@ -368,6 +385,10 @@ func (e *Editor) PointerDownPressure(x, y float64, button, clicks int, pressure 
 		e.gesture = newEraserGesture(e)
 	case ToolGeo, ToolFrame:
 		e.gesture = &createBoxGesture{}
+	case ToolArrow:
+		e.gesture = newArrowCreateGesture(e)
+	case ToolLine:
+		e.gesture = newLineCreateGesture(e)
 	case ToolText:
 		e.gesture = &clickCreateGesture{kind: doc.TypeText}
 	case ToolNote:
@@ -544,6 +565,20 @@ func (e *Editor) applyNextStyle(s *doc.Shape) {
 	s.Opacity = n.Opacity
 	s.PenKind = n.PenKind
 	s.PenWidth = n.PenWidth
+	if s.Type == doc.TypeArrow {
+		if n.ArrowKind != "" {
+			s.Kind = n.ArrowKind
+		}
+		if n.HeadStart != "" {
+			s.HeadStart = n.HeadStart
+		}
+		if n.HeadEnd != "" {
+			s.HeadEnd = n.HeadEnd
+		}
+	}
+	if s.Type == doc.TypeLine && n.Spline != "" {
+		s.Spline = n.Spline
+	}
 }
 
 func (e *Editor) placeAt(s *doc.Shape, pagePt geo.Vec) {
@@ -679,8 +714,12 @@ func (e *Editor) InsertImage(asset *doc.Asset, pagePt geo.Vec) doc.ID {
 // --- freehand draw & highlight ---
 
 type freehandGesture struct {
-	id   doc.ID
-	last geo.Vec
+	id           doc.ID
+	typ          string
+	last         geo.Vec
+	dwellAnchor  geo.Vec
+	lastMoveTime float64
+	snapped      doc.ID
 }
 
 func newFreehandGesture(e *Editor) *freehandGesture {
@@ -706,13 +745,31 @@ func newFreehandGesture(e *Editor) *freehandGesture {
 	s.Seed = geo.Hash(string(id))
 	e.placeAt(s, p)
 	e.put(s)
-	return &freehandGesture{id: id, last: p}
+	return &freehandGesture{
+		id:           id,
+		typ:          typ,
+		last:         p,
+		dwellAnchor:  p,
+		lastMoveTime: e.Now,
+	}
 }
 
 func (g *freehandGesture) move(e *Editor) {
+	if g.snapped != "" {
+		return
+	}
 	p := e.pointer.Page
 	zCam := e.Cam().Z
-	if p.Dist(g.last) < 0.8/zCam && !e.pointer.Mods.Shift {
+	if p.Dist(g.dwellAnchor) >= 6/zCam {
+		g.dwellAnchor = p
+		g.lastMoveTime = e.Now
+	} else if g.typ == doc.TypeDraw && e.Now-g.lastMoveTime >= shapeDwellSeconds {
+		if nid, ok := e.RecognizeStroke(g.id, e.pointer.Mods.Shift); ok {
+			g.snapped = nid
+			return
+		}
+	}
+	if p.Dist(g.last) < 0.8/zCam {
 		return
 	}
 	s := e.Doc.Shapes[g.id]
@@ -751,10 +808,30 @@ func (g *freehandGesture) move(e *Editor) {
 }
 
 func (g *freehandGesture) up(e *Editor) {
+	if g.snapped != "" {
+		e.Select(g.snapped)
+		e.commit()
+		return
+	}
 	s := e.Doc.Shapes[g.id]
 	if s == nil {
 		e.rollback()
 		return
+	}
+	if g.typ == doc.TypeDraw {
+		// 1. Scribble-to-erase: dense back-and-forth zig-zag overlapping shapes erases them.
+		if e.tryScribbleErase(g.id) {
+			e.commit()
+			return
+		}
+		// 2. Dwell snap on pointer release if user paused at the end of the stroke.
+		if e.Now-g.lastMoveTime >= shapeDwellSeconds {
+			if nid, ok := e.RecognizeStroke(g.id, e.pointer.Mods.Shift); ok {
+				e.Select(nid)
+				e.commit()
+				return
+			}
+		}
 	}
 	e.update(g.id, func(c *doc.Shape) {
 		c.IsComplete = true

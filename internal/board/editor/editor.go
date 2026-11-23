@@ -63,23 +63,25 @@ type Editor struct {
 	VH   float64
 
 	// Interactive tool, style, selection, and transient overlay state.
-	Tool           Tool
-	ToolLocked     bool
-	Next           Style
-	Hovered        doc.ID
-	FocusedGroup   doc.ID
-	Editing        doc.ID
-	EditText       string
-	Snap           bool // Always-on smart alignment guides (Cmd/Ctrl temporarily inverts)
-	Grid           bool // Snap to grid (Cmd+')
-	Snaps          []SnapLine
-	Lasso          []geo.Vec
-	Brush          *geo.Box
-	DropOn         doc.ID
-	Erasing        map[doc.ID]bool
-	PartialPreview map[doc.ID][][]geo.Vec
-	Trails         []*Trail
-	Now            float64
+	Tool            Tool
+	ToolLocked      bool
+	Next            Style
+	Hovered         doc.ID
+	FocusedGroup    doc.ID
+	Editing         doc.ID
+	EditingVertices doc.ID
+	EditText        string
+	Snap            bool // Always-on smart alignment guides (Cmd/Ctrl temporarily inverts)
+	Grid            bool // Snap to grid (Cmd+')
+	Snaps           []SnapLine
+	Hint            map[doc.ID]bool // Target highlight when binding arrows/lines
+	Lasso           []geo.Vec
+	Brush           *geo.Box
+	DropOn          doc.ID
+	Erasing         map[doc.ID]bool
+	PartialPreview  map[doc.ID][][]geo.Vec
+	Trails          []*Trail
+	Now             float64
 
 	sel       []doc.ID
 	pointer   Pointer
@@ -92,6 +94,7 @@ type Editor struct {
 	kids     map[doc.ID][]doc.ID
 	bindFrom map[doc.ID][]*doc.Binding
 	bindTo   map[doc.ID][]*doc.Binding
+	arrows   map[doc.ID]*arrowMemo
 }
 
 // New creates an Editor for d with optional text measurer measure.
@@ -126,10 +129,10 @@ func (e *Editor) Replace(d *doc.Drawing) {
 	d.Normalize(d.ID, d.Name)
 	e.Doc = d
 	e.undo, e.redo, e.tx = nil, nil, nil
-	e.kids, e.bindFrom, e.bindTo = nil, nil, nil
+	e.kids, e.bindFrom, e.bindTo, e.arrows = nil, nil, nil, nil
 	e.sel = nil
-	e.Hovered, e.FocusedGroup, e.Editing, e.EditText = "", "", "", ""
-	e.Snaps, e.Lasso, e.Brush, e.DropOn = nil, nil, nil, ""
+	e.Hovered, e.FocusedGroup, e.Editing, e.EditingVertices, e.EditText = "", "", "", "", ""
+	e.Snaps, e.Hint, e.Lasso, e.Brush, e.DropOn = nil, nil, nil, nil, ""
 	e.cams = make(map[doc.ID]Camera, len(d.Pages))
 	e.loadPageCameras()
 	e.Page = d.ActivePage
@@ -270,6 +273,7 @@ func (e *Editor) SwitchPage(id doc.ID) bool {
 	e.cancelGesture()
 	e.SelectNone()
 	e.FocusedGroup = ""
+	e.EditingVertices = ""
 	e.Page = id
 	e.Doc.ActivePage = id
 	e.emitChange()

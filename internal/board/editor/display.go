@@ -2,6 +2,7 @@ package editor
 
 import (
 	"math"
+	"slices"
 	"sort"
 
 	"rakko/internal/board/doc"
@@ -76,6 +77,22 @@ func (e *Editor) Display(s *doc.Shape, pal *Palette) []Prim {
 	}
 	li := lookIndex(e.Look())
 	c := cacheOf(s)
+	switch s.Type {
+	case doc.TypeArrow:
+		info := e.Arrow(s)
+		if c.arrowInfo != info {
+			c.arrowInfo = info
+			c.geom = nil
+			c.ok = [2][3]bool{}
+		}
+	case doc.TypeLine:
+		pts := e.linePoints(s)
+		if !slices.Equal(c.linePts, pts) {
+			c.linePts = pts
+			c.geom = nil
+			c.ok = [2][3]bool{}
+		}
+	}
 	if !c.ok[di][li] {
 		c.display[di][li] = e.buildPrims(s, pal)
 		c.ok[di][li] = true
@@ -93,6 +110,8 @@ func (e *Editor) buildPrims(s *doc.Shape, pal *Palette) []Prim {
 		return e.highlightPrims(s, pal)
 	case doc.TypeArrow:
 		return e.arrowPrims(s, pal)
+	case doc.TypeLine:
+		return e.linePrims(s, pal)
 	case doc.TypeText:
 		return e.textPrims(s, pal)
 	case doc.TypeNote:

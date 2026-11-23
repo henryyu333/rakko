@@ -528,7 +528,12 @@ func (s *boardScene) renderOverlays() {
 		s.outlineShape(hov, 1.5, boardColor(s.pal.Selection.Alpha(0.45)))
 	}
 
-	// Selection bounding box, 8 rotated handles, and size badge.
+	// Target bind highlight (arrows/lines) and Frame drop highlight.
+	for id := range s.b.ed.Hint {
+		s.outlineShape(id, 2.5, selCol)
+	}
+
+	// Selection bounding box, 8 rotated handles, linear/vertex handles, and size badge.
 	ids := s.b.ed.Selection()
 	if len(ids) > 0 && s.b.ed.Editing == "" {
 		if len(ids) > 1 && !gesturing {
@@ -563,8 +568,26 @@ func (s *boardScene) renderOverlays() {
 					s.renderSelectionBadge(screen, selCol)
 				}
 			}
-		} else if len(ids) == 1 {
-			s.outlineShape(ids[0], 1.5, selCol)
+		} else {
+			if len(ids) == 1 {
+				s.outlineShape(ids[0], 1.5, selCol)
+			}
+			fill := boardColor(s.pal.Background)
+			for _, h := range s.b.ed.Handles() {
+				switch h.Kind {
+				case editor.HandleArrowEnd, editor.HandleArrowBend, editor.HandleLinePoint, editor.HandleGeoVertex:
+					pt := cm.Apply(h.Point)
+					r := float32(4.5)
+					alpha := float32(1)
+					if h.Virtual || h.Kind == editor.HandleArrowBend {
+						r = 3.5
+						alpha = 0.78
+					}
+					cPath := (&ui.Path{}).Circle(float32(pt.X), float32(pt.Y), r)
+					s.p.FillPath(cPath, fill.Alpha(alpha))
+					s.p.StrokePath(cPath, 1.5, selCol.Alpha(alpha))
+				}
+			}
 		}
 	}
 

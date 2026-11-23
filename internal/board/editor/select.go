@@ -15,13 +15,20 @@ const (
 	HandleNone HandleKind = iota
 	HandleResize
 	HandleRotate
+	HandleArrowEnd
+	HandleArrowBend
+	HandleLinePoint
+	HandleGeoVertex
 )
 
 // Handle describes a draggable handle on the active selection.
 type Handle struct {
-	Kind  HandleKind
-	Which geo.Vec // normalized coordinates in [0, 1]^2 on the selection box
-	Point geo.Vec // page coordinates
+	Kind    HandleKind
+	Which   geo.Vec // normalized coordinates in [0, 1]^2 on the selection box
+	Point   geo.Vec // page coordinates
+	Term    string  // "start" or "end" for HandleArrowEnd
+	Index   int     // vertex index for HandleLinePoint / HandleGeoVertex / elbow
+	Virtual bool    // true for midpoint insertion handles
 }
 
 func (e *Editor) topSelected() []doc.ID {
@@ -128,7 +135,7 @@ func (e *Editor) SelectionSize() (w, h float64, ok bool) {
 
 // ShowsBox reports whether the selection displays a bounding box and 8 handles.
 func (e *Editor) ShowsBox() bool {
-	return len(e.sel) > 0 && e.singleLinear() == nil && e.Editing == ""
+	return len(e.sel) > 0 && e.singleLinear() == nil && e.Editing == "" && e.EditingVertices == ""
 }
 
 // IsResizing reports whether a resize drag is currently active.
@@ -150,9 +157,23 @@ func (e *Editor) RotateAngle() (float64, bool) {
 	return deg, true
 }
 
-// Handles returns the interactive resize and rotate handles for the selection.
+// Handles returns the interactive handles for the selection.
 func (e *Editor) Handles() []Handle {
-	if !e.ShowsBox() || e.allLocked() {
+	if len(e.sel) == 0 || e.Editing != "" || e.allLocked() {
+		return nil
+	}
+	if e.EditingVertices != "" {
+		if s := e.Doc.Shapes[e.EditingVertices]; s != nil && !s.Locked {
+			return e.geoVertexHandles(s)
+		}
+	}
+	if s := e.singleLinear(); s != nil {
+		if s.Locked {
+			return nil
+		}
+		return e.linearHandles(s)
+	}
+	if !e.ShowsBox() {
 		return nil
 	}
 	box, r, ok := e.SelectionFrame()
@@ -180,10 +201,101 @@ func (e *Editor) Handles() []Handle {
 	return hs
 }
 
+func (e *Editor) linearHandles(s *doc.Shape) []Handle {
+	m := e.PageMat(s.ID)
+	var hs []Handle
+	if s.Type == doc.TypeArrow {
+		info := e.Arrow(s)
+		hs = append(hs,
+			Handle{Kind: HandleArrowEnd, Term: "start", Point: m.Apply(info.Start)},
+			Handle{Kind: HandleArrowEnd, Term: "end", Point: m.Apply(info.End)},
+		)
+		if s.Kind == "elbow" {
+			if len(s.Points) > 0 {
+				for i, wp := range s.Points {
+					hs = append(hs, Handle{Kind: HandleArrowBend, Index: i, Point: m.Apply(geo.V(wp.X, wp.Y))})
+				}
+			} else if len(info.Elbow) == 4 {
+				hs = append(hs,
+					Handle{Kind: HandleArrowBend, Index: 0, Point: m.Apply(geo.Med(info.Elbow[1], info.Elbow[2]))},
+					Handle{Kind: HandleArrowBend, Index: 0, Virtual: true, Point: m.Apply(geo.Med(info.Elbow[0], info.Elbow[1]))},
+					Handle{Kind: HandleArrowBend, Index: 1, Virtual: true, Point: m.Apply(geo.Med(info.Elbow[2], info.Elbow[3]))},
+				)
+			}
+		} else {
+			hs = append(hs, Handle{Kind: HandleArrowBend, Point: m.Apply(info.Mid)})
+		}
+		return hs
+	}
+	pts := e.linePoints(s)
+	for i, p := range pts {
+		hs = append(hs, Handle{Kind: HandleLinePoint, Index: i, Point: m.Apply(p)})
+	}
+	for i := 1; i < len(pts); i++ {
+		hs = append(hs, Handle{
+			Kind: HandleLinePoint, Index: i, Virtual: true,
+			Point: m.Apply(geo.Med(pts[i-1], pts[i])),
+		})
+	}
+	return hs
+}
+
+func (e *Editor) geoVertexHandles(s *doc.Shape) []Handle {
+	pts := materializeGeoPoints(s)
+	if len(pts) < 2 {
+		return nil
+	}
+	m := e.PageMat(s.ID)
+	w, h := math.Max(s.W, 1), math.Max(s.H, 1)
+	localOf := func(lp doc.LinePoint) geo.Vec {
+		lx, ly := lp.X*w, lp.Y*h
+		if s.FlipX {
+			lx = w - lx
+		}
+		if s.FlipY {
+			ly = h - ly
+		}
+		return m.Apply(geo.V(lx, ly))
+	}
+	var hs []Handle
+	pagePts := make([]geo.Vec, len(pts))
+	for i, lp := range pts {
+		pagePts[i] = localOf(lp)
+		hs = append(hs, Handle{Kind: HandleGeoVertex, Index: i, Point: pagePts[i]})
+	}
+	edgeCount := len(pagePts) - 1
+	if normalizeGeoKind(s.Geo) == "polygon" {
+		edgeCount = len(pagePts)
+	}
+	for i := 0; i < edgeCount; i++ {
+		a := pagePts[i]
+		b := pagePts[(i+1)%len(pagePts)]
+		hs = append(hs, Handle{
+			Kind: HandleGeoVertex, Index: i + 1, Virtual: true,
+			Point: geo.Med(a, b),
+		})
+	}
+	return hs
+}
+
 // HandleAt returns the selection handle under screen coordinates, if any.
 func (e *Editor) HandleAt(screen geo.Vec) Handle {
 	hs := e.Handles()
 	if len(hs) == 0 {
+		return Handle{}
+	}
+	if e.EditingVertices != "" || e.singleLinear() != nil {
+		// Prefer real vertices/endpoints over virtual midpoints.
+		for _, h := range hs {
+			if !h.Virtual && e.ToScreen(h.Point).Dist(screen) <= 10 {
+				return h
+			}
+		}
+		for _, h := range hs {
+			if h.Virtual && e.ToScreen(h.Point).Dist(screen) <= 10 {
+				return h
+			}
+		}
 		return Handle{}
 	}
 	box, r, ok := e.SelectionFrame()
@@ -259,9 +371,18 @@ func (e *Editor) selectDown(clicks int) {
 			e.gesture = newResizeGesture(e, h)
 		case HandleRotate:
 			e.gesture = newRotateGesture(e)
+		case HandleArrowEnd:
+			e.gesture = newArrowEndDragGesture(e, h.Term)
+		case HandleArrowBend:
+			e.gesture = newArrowBendDragGesture(e, h)
+		case HandleLinePoint:
+			e.gesture = newLinePointDragGesture(e, h)
+		case HandleGeoVertex:
+			e.gesture = newGeoVertexDragGesture(e, h)
 		}
 		return
 	}
+	e.EditingVertices = ""
 
 	p := e.pointer.Page
 	r := e.Hit(p, e.margin(), false)
@@ -318,6 +439,17 @@ func (e *Editor) doubleClick() bool {
 			e.StartEditing(inner)
 		}
 		return true
+	}
+	if s.Type == doc.TypeGeo && normalizeGeoKind(s.Geo) == "curve" && !s.Locked {
+		e.EditVertices(target)
+		return true
+	}
+	if s.Type == doc.TypeGeo && normalizeGeoKind(s.Geo) == "polygon" && !s.Locked {
+		q := e.PageMat(target).Invert().Apply(p)
+		if geo.DistToPolyline(q, e.Geometry(s).Outline, true) <= e.margin()*1.5 {
+			e.EditVertices(target)
+			return true
+		}
 	}
 	if textEditable(s) {
 		e.Select(target)
@@ -685,7 +817,20 @@ func (g *translateGesture) up(e *Editor) {
 	target := g.dropTarget(e)
 	e.DropOn = ""
 	e.Snaps = nil
-	e.reparentMoved(g.moving(), target)
+	moving := g.moving()
+	e.reparentMoved(moving, target)
+	// Arrows or bound lines moved without their bound target unbind in place.
+	for _, id := range moving {
+		s := e.Doc.Shapes[id]
+		if s == nil || (s.Type != doc.TypeArrow && s.Type != doc.TypeLine) {
+			continue
+		}
+		for _, term := range []string{"start", "end"} {
+			if b := e.bindingOf(id, term); b != nil && !slices.Contains(moving, b.To) {
+				e.unbind(id, term)
+			}
+		}
+	}
 	e.commit()
 }
 
@@ -1082,6 +1227,21 @@ func (e *Editor) applyResizeItem(it resizeItem, sx, sy float64, anchor geo.Vec, 
 	case doc.TypeDraw, doc.TypeHighlight:
 		c.ScaleX = orOne(init.ScaleX) * lx
 		c.ScaleY = orOne(init.ScaleY) * ly
+	case doc.TypeLine:
+		pts := make([]doc.LinePoint, len(init.Points))
+		for i, lp := range init.Points {
+			lp.X *= lx
+			lp.Y *= ly
+			pts[i] = lp
+		}
+		c.Points = pts
+	case doc.TypeArrow:
+		c.Start = geo.V(init.Start.X*lx, init.Start.Y*ly)
+		c.End = geo.V(init.End.X*lx, init.End.Y*ly)
+		c.Bend = init.Bend * math.Sqrt(math.Abs(lx*ly))
+		if lx*ly < 0 {
+			c.Bend = -c.Bend
+		}
 	default:
 		c.W = math.Max(math.Abs(init.W*lx), 1)
 		c.H = math.Max(math.Abs(init.H*ly), 1)
@@ -1156,6 +1316,20 @@ func (e *Editor) cloneShapes(ids []doc.ID, offset geo.Vec) []doc.ID {
 				})
 			}
 			roots = append(roots, nid)
+		}
+	}
+	// Remap bindings when both arrow/line and target were cloned together.
+	for oldFrom, newFrom := range idMap {
+		for _, term := range []string{"start", "end"} {
+			if b := e.bindingOf(oldFrom, term); b != nil {
+				if newTo, ok := idMap[b.To]; ok {
+					nb := *b
+					nb.ID = doc.NewRecordID("binding")
+					nb.From = newFrom
+					nb.To = newTo
+					e.putBinding(&nb)
+				}
+			}
 		}
 	}
 	return roots

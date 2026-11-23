@@ -1033,6 +1033,8 @@
   "boardToolHighlight": "荧光笔",
   "boardToolEraser": "橡皮",
   "boardToolShape": "形状",
+  "boardToolArrow": "箭头",
+  "boardToolLine": "直线",
   "boardToolFrame": "框容器",
   "boardToolText": "文字",
   "boardToolNote": "便签",

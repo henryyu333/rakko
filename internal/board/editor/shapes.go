@@ -68,9 +68,11 @@ type Geometry struct {
 }
 
 type shapeCache struct {
-	geom    *Geometry
-	display [2][3][]Prim
-	ok      [2][3]bool
+	geom      *Geometry
+	display   [2][3][]Prim
+	ok        [2][3]bool
+	arrowInfo *ArrowInfo
+	linePts   []geo.Vec
 }
 
 func cacheOf(s *doc.Shape) *shapeCache {
@@ -88,6 +90,22 @@ func (e *Editor) Geometry(s *doc.Shape) *Geometry {
 		return e.groupGeometry(s)
 	}
 	c := cacheOf(s)
+	switch s.Type {
+	case doc.TypeArrow:
+		info := e.Arrow(s)
+		if c.arrowInfo != info {
+			c.arrowInfo = info
+			c.geom = nil
+			c.ok = [2][3]bool{}
+		}
+	case doc.TypeLine:
+		pts := e.linePoints(s)
+		if !slices.Equal(c.linePts, pts) {
+			c.linePts = pts
+			c.geom = nil
+			c.ok = [2][3]bool{}
+		}
+	}
 	if c.geom == nil {
 		c.geom = e.computeGeometry(s)
 	}
@@ -183,6 +201,9 @@ func (e *Editor) computeGeometry(s *doc.Shape) *Geometry {
 
 	case doc.TypeArrow:
 		return e.arrowGeometry(s)
+
+	case doc.TypeLine:
+		return e.lineGeometry(s)
 
 	case doc.TypeFrame:
 		w, h := math.Max(s.W, 1), math.Max(s.H, 1)

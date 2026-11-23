@@ -10489,6 +10489,26 @@ func (msgs Messages) BoardToolShape() string {
 	return Catalog.Format(msgs.locale, "boardToolShape", nil)
 }
 
+// BoardToolArrow says "箭头"
+// in the language the app shows.
+func BoardToolArrow() string { return In(i18n.Locale()).BoardToolArrow() }
+
+// BoardToolArrow says "箭头"
+// in the language of msgs.
+func (msgs Messages) BoardToolArrow() string {
+	return Catalog.Format(msgs.locale, "boardToolArrow", nil)
+}
+
+// BoardToolLine says "直线"
+// in the language the app shows.
+func BoardToolLine() string { return In(i18n.Locale()).BoardToolLine() }
+
+// BoardToolLine says "直线"
+// in the language of msgs.
+func (msgs Messages) BoardToolLine() string {
+	return Catalog.Format(msgs.locale, "boardToolLine", nil)
+}
+
 // BoardToolFrame says "框容器"
 // in the language the app shows.
 func BoardToolFrame() string { return In(i18n.Locale()).BoardToolFrame() }

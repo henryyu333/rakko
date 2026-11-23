@@ -1033,6 +1033,8 @@
   "boardToolHighlight": "Highlighter",
   "boardToolEraser": "Eraser",
   "boardToolShape": "Shape",
+  "boardToolArrow": "Arrow",
+  "boardToolLine": "Line",
   "boardToolFrame": "Frame",
   "boardToolText": "Text",
   "boardToolNote": "Note",

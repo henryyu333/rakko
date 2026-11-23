@@ -188,7 +188,7 @@ func (e *Editor) EditBox() (box geo.Box, size float64, font, align string, bold,
 		ok = true
 	case doc.TypeArrow:
 		size = labelFontSize(s)
-		box = *e.arrowLabelBox(s, size)
+		box = *e.arrowLabelBox(s)
 		box.W = math.Max(box.W, 120)
 		box.X = box.Center().X - box.W/2
 		box.H = math.Max(box.H, size*1.3)
@@ -208,80 +208,4 @@ func (e *Editor) EditBox() (box geo.Box, size float64, font, align string, bold,
 		ok = true
 	}
 	return
-}
-
-// --- basic arrow geometry & label support (extended in Segment 4) ---
-
-func arrowEndpoints(s *doc.Shape) (geo.Vec, geo.Vec) {
-	a, b := s.Start, s.End
-	if a == b {
-		b = geo.V(120, 0)
-	}
-	return a, b
-}
-
-func (e *Editor) arrowLabelBox(s *doc.Shape, size float64) *geo.Box {
-	a, b := arrowEndpoints(s)
-	t := s.LabelPosition
-	if t <= 0 || t >= 1 {
-		t = 0.5
-	}
-	mid := a.Lerp(b, t)
-	text := s.Text
-	if text == "" {
-		text = " "
-	}
-	blk := e.measure(text, s.Font, size, 0)
-	w := math.Max(blk.W, 24)
-	h := math.Max(blk.H, size*1.3)
-	box := geo.Box{X: mid.X - w/2, Y: mid.Y - h/2, W: w, H: h}
-	return &box
-}
-
-func (e *Editor) arrowGeometry(s *doc.Shape) *Geometry {
-	a, b := arrowEndpoints(s)
-	pts := []geo.Vec{a, b}
-	box := geo.BoxOf(pts)
-	var lbl *geo.Box
-	if s.Text != "" {
-		lbl = e.arrowLabelBox(s, labelFontSize(s))
-		box = box.Union(*lbl)
-	}
-	return &Geometry{
-		Bounds:  box,
-		Outline: pts,
-		Closed:  false,
-		Label:   lbl,
-	}
-}
-
-func (e *Editor) arrowPrims(s *doc.Shape, pal *Palette) []Prim {
-	a, b := arrowEndpoints(s)
-	c := ResolveColor(s.Color, pal.Dark, e.Look())
-	w := strokeWidthOf(s)
-	path := (&geo.Path{}).Move(a).Line(b)
-	var out []Prim
-	pr := strokeWith(path, w, c)
-	pr.Dash = dashPattern(s.Dash, w)
-	out = append(out, pr)
-
-	if s.HeadEnd != "none" {
-		ang := a.Angle(b)
-		L := 10 + w*2
-		hp := (&geo.Path{}).
-			Move(geo.V(b.X-L*math.Cos(ang-0.45), b.Y-L*math.Sin(ang-0.45))).
-			Line(b).
-			Line(geo.V(b.X-L*math.Cos(ang+0.45), b.Y-L*math.Sin(ang+0.45)))
-		out = append(out, strokeWith(hp, w, c))
-	}
-	if s.Text != "" {
-		g := e.Geometry(s)
-		if g.Label != nil {
-			pad := g.Label.Expand(4)
-			cs := pad.Corners()
-			out = append(out, fillWith(geo.RoundedPoly(cs[:], 4), pal.Background))
-			out = append(out, e.labelPrim(s, g.Label, labelFontSize(s), c))
-		}
-	}
-	return out
 }

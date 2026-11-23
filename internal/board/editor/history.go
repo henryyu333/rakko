@@ -143,7 +143,7 @@ func (e *Editor) applyHistory(x *historyEntry, back bool) {
 		}
 	}
 	e.kids = nil
-	e.bindFrom, e.bindTo = nil, nil
+	e.bindFrom, e.bindTo, e.arrows = nil, nil, nil
 	if back {
 		e.sel = slices.Clone(x.selBefore)
 		e.Page = x.pageBefore
@@ -156,6 +156,9 @@ func (e *Editor) applyHistory(x *historyEntry, back bool) {
 	}
 	e.Doc.ActivePage = e.Page
 	e.sel = slices.DeleteFunc(e.sel, func(id doc.ID) bool { return e.Doc.Shapes[id] == nil })
+	if e.EditingVertices != "" && e.Doc.Shapes[e.EditingVertices] == nil {
+		e.EditingVertices = ""
+	}
 }
 
 // CanUndo reports whether there is a committed edit to undo.
@@ -244,6 +247,18 @@ func (e *Editor) putAsset(a *doc.Asset) {
 	e.Doc.Assets[a.ID] = a
 }
 
+func (e *Editor) putBinding(b *doc.Binding) {
+	e.begin()
+	before := e.Doc.Bindings[b.ID]
+	if c, ok := e.tx.bindings[b.ID]; ok {
+		e.tx.bindings[b.ID] = change[doc.Binding]{before: c.before, after: b}
+	} else {
+		e.tx.bindings[b.ID] = change[doc.Binding]{before: before, after: b}
+	}
+	e.Doc.Bindings[b.ID] = b
+	e.bindFrom, e.bindTo = nil, nil
+}
+
 func (e *Editor) removeBinding(id doc.ID) {
 	e.begin()
 	before := e.Doc.Bindings[id]
@@ -263,10 +278,21 @@ func (e *Editor) deleteTree(id doc.ID) {
 	for _, kid := range slices.Clone(e.Children(id)) {
 		e.deleteTree(kid)
 	}
+	// Collect bindings referencing id first to avoid mutating map during iteration.
+	var fromIDs []doc.ID
+	var toBindings []*doc.Binding
 	for bid, b := range e.Doc.Bindings {
-		if b.From == id || b.To == id {
-			e.removeBinding(bid)
+		if b.From == id {
+			fromIDs = append(fromIDs, bid)
+		} else if b.To == id {
+			toBindings = append(toBindings, b)
 		}
+	}
+	for _, b := range toBindings {
+		e.unbind(b.From, b.Terminal)
+	}
+	for _, bid := range fromIDs {
+		e.removeBinding(bid)
 	}
 	e.removeShape(id)
 }
