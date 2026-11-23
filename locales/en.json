@@ -1171,5 +1171,15 @@
   "boardCtxLock": "Lock",
   "boardCtxUnlock": "Unlock",
   "boardCtxUnlockAll": "Unlock All",
-  "boardCtxSelectAll": "Select All"
+  "boardCtxSelectAll": "Select All",
+  "boardToolLaser": "Laser Pointer",
+  "boardCtxCopyAs": "Copy As",
+  "boardCtxExportAs": "Export As",
+  "boardExportPNG": "PNG Image…",
+  "boardExportSVG": "SVG Vector…",
+  "boardExportBoard": "Export Board File…",
+  "boardImportBoard": "Import Board File…",
+  "boardDragPNG": "Drag PNG or Click to Save",
+  "boardCtxResetCrop": "Reset Crop",
+  "boardRadialPalette": "Color Wheel"
 }

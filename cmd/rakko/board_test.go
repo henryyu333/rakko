@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/board/doc"
@@ -1459,6 +1460,238 @@ func TestBoardSeg6ActionsNavPagesFocusAndScreenshots(t *testing.T) {
 	if !b.ed.ToolLocked {
 		t.Fatal("expected Q shortcut to lock tool")
 	}
+}
+
+func saveBoardSeg7Shot(t *testing.T, name string, img image.Image) {
+	t.Helper()
+	dir := filepath.Join("/tmp/Rakko-v1186-canvas", "seg7")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, name)
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if err := png.Encode(f, img); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestBoardSeg7ExportClipboardDragCropLaserRadialNarrow(t *testing.T) {
+	a, b := boardTestShelf(t)
+	l := locales.In("zh-Hans")
+	view := ui.NewTester(a.boardView, 1040, 680)
+	view.SetLocale("zh-Hans")
+	view.Frame()
+	view.Frame()
+
+	// 1. Wide multi-tile scene (> 1024px PNG export width) testing seamless 1024px tile stitching.
+	b.ed.SetGeoTool("rectangle")
+	b.ed.Next.Stroke = "#38BDF8"
+	b.ed.Next.Fill = "solid"
+	b.ed.Next.FillColor = "#38BDF8"
+	b.ed.PointerDown(40, 80, 0, 1, editor.Mods{}, 0.1)
+	b.ed.PointerMove(1240, 260, editor.Mods{}, 0.12)
+	b.ed.PointerUp(1240, 260, editor.Mods{}, 0.14)
+	barID := b.ed.Selection()[0]
+
+	b.ed.SetGeoTool("diamond")
+	b.ed.Next.Stroke = "#F472B6"
+	b.ed.Next.Fill = "pattern"
+	b.ed.Next.FillColor = "#F472B6"
+	b.ed.PointerDown(600, 320, 0, 1, editor.Mods{}, 0.2)
+	b.ed.PointerMove(820, 620, editor.Mods{}, 0.22)
+	b.ed.PointerUp(820, 620, editor.Mods{}, 0.24)
+
+	pngBytes, pw, ph, tiles, err := b.renderTiledPNG(nil)
+	if err != nil {
+		t.Fatalf("renderTiledPNG: %v", err)
+	}
+	if tiles < 4 || pw <= 1024 {
+		t.Fatalf("expected multi-tile >=4 and pw>1024, got tiles=%d (%dx%d)", tiles, pw, ph)
+	}
+	decoded, err := png.Decode(bytes.NewReader(pngBytes))
+	if err != nil {
+		t.Fatalf("decode tiled PNG: %v", err)
+	}
+	if decoded.Bounds().Dx() != pw || decoded.Bounds().Dy() != ph {
+		t.Fatalf("decoded bounds = %v, want %dx%d", decoded.Bounds(), pw, ph)
+	}
+	// Verify pixels right across the 1024px vertical tile boundary match seamlessly inside the solid bar.
+	cLeft := decoded.At(1023, 200)
+	cRight := decoded.At(1024, 200)
+	if cLeft != cRight {
+		t.Fatalf("tile seam mismatch at x=1023..1024: %v vs %v", cLeft, cRight)
+	}
+
+	// Verify 8192px cap on giant board export.
+	b.ed.SetGeoTool("rectangle")
+	b.ed.PointerDown(5500, 100, 0, 1, editor.Mods{}, 0.3)
+	b.ed.PointerMove(5700, 300, editor.Mods{}, 0.32)
+	b.ed.PointerUp(5700, 300, editor.Mods{}, 0.34)
+	giantID := b.ed.Selection()[0]
+	_, gw, gh, _, err := b.renderTiledPNG(nil)
+	if err != nil {
+		t.Fatalf("giant export: %v", err)
+	}
+	if gw > boardExportMaxDim || gh > boardExportMaxDim {
+		t.Fatalf("export exceeded %d cap: %dx%d", boardExportMaxDim, gw, gh)
+	}
+	b.ed.Select(giantID)
+	b.ed.DeleteSelected()
+
+	// 2. Dialog Export (PNG, SVG, .rakkoboard.json) & Import (.rakkoboard.json).
+	outDir := t.TempDir()
+	origSave := boardSaveFileDialog
+	origOpen := boardOpenBoardDialog
+	t.Cleanup(func() {
+		boardSaveFileDialog = origSave
+		boardOpenBoardDialog = origOpen
+	})
+	boardSaveFileDialog = func(_ *mygo.Window, name string, _ string, _ []string) (string, error) {
+		return filepath.Join(outDir, name), nil
+	}
+	b.exportPNGFile(nil)
+	b.exportSVGFile(nil)
+	b.exportBoardFile()
+
+	savedName := b.safeFileBaseName()
+	for _, ext := range []string{".png", ".svg", ".rakkoboard.json"} {
+		if st, err := os.Stat(filepath.Join(outDir, savedName+ext)); err != nil || st.Size() == 0 {
+			t.Fatalf("expected exported file %s: %v", savedName+ext, err)
+		}
+	}
+	pkgPath := filepath.Join(outDir, savedName+".rakkoboard.json")
+	boardOpenBoardDialog = func(_ *mygo.Window) ([]string, error) {
+		return []string{pkgPath}, nil
+	}
+	boardsBefore := len(b.boards)
+	prevID := b.store.ID()
+	b.importBoardFile()
+	if len(b.boards) != boardsBefore+1 || b.store.ID() == prevID {
+		t.Fatalf("importBoardFile did not add and select imported board: len=%d id=%q", len(b.boards), b.store.ID())
+	}
+	_ = b.selectBoard(prevID)
+	view.Frame()
+
+	// 3. Clipboard Copy PNG / SVG with Concealed write + restore.
+	var lastClip transfer.Data
+	var lastConcealed bool
+	origClipWrite := boardWriteClipboardData
+	t.Cleanup(func() { boardWriteClipboardData = origClipWrite })
+	boardWriteClipboardData = func(d transfer.Data, concealed bool) error {
+		lastClip = d
+		lastConcealed = concealed
+		return nil
+	}
+	if err := b.copyAsPNG([]doc.ID{barID}, true); err != nil {
+		t.Fatalf("copyAsPNG: %v", err)
+	}
+	if !lastConcealed || len(lastClip.Items()) == 0 {
+		t.Fatalf("expected concealed clipboard PNG item, got %+v concealed=%v", lastClip, lastConcealed)
+	}
+	if err := b.copyAsSVG([]doc.ID{barID}, true); err != nil {
+		t.Fatalf("copyAsSVG: %v", err)
+	}
+	if txt, err := lastClip.Items()[0].Read(transfer.Text); err != nil || !strings.Contains(string(txt), "<svg") {
+		t.Fatalf("expected SVG text in clipboard item: err=%v", err)
+	}
+
+	// 4. Drag PNG temporary file helper produces readable PNG and cleans on close.
+	dragPath, dragData, err := b.writeDragPNGTemp([]doc.ID{barID}, t.TempDir())
+	if err != nil {
+		t.Fatalf("writeDragPNGTemp: %v", err)
+	}
+	if _, err := os.Stat(dragPath); err != nil || len(dragData.Items()) == 0 {
+		t.Fatalf("expected valid drag temp PNG and transfer.Data: err=%v", err)
+	}
+
+	// 5. Image interactive Crop + Reset Crop screenshot.
+	b.ed.Select(barID)
+	b.ed.DeleteSelected()
+	b.ed.SetCam(editor.Camera{Z: 1})
+	imgBytes := makeTestPNG(t, 240, 160)
+	if !b.insertImageBytes(imgBytes, "png", "crop-test.png", geo.V(280, 220)) {
+		t.Fatal("insertImageBytes failed")
+	}
+	imgID := b.ed.Selection()[0]
+	b.ed.EnterCrop(imgID)
+	view.Frame()
+	var leftHandle editor.Handle
+	for _, h := range b.ed.Handles() {
+		if h.Kind == editor.HandleCrop && h.Which.X == 0 && h.Which.Y == 0.5 {
+			leftHandle = h
+			break
+		}
+	}
+	lsp := b.ed.ToScreen(leftHandle.Point)
+	view.Press(float32(lsp.X), float32(lsp.Y)+boardBarH)
+	view.Move(float32(lsp.X)+60, float32(lsp.Y)+boardBarH)
+	view.Release(float32(lsp.X)+60, float32(lsp.Y)+boardBarH)
+	view.Frame()
+	view.Frame()
+	if b.ed.Doc.Shapes[imgID].Crop == nil {
+		t.Fatal("expected image Crop after dragging HandleCrop")
+	}
+	saveBoardSeg7Shot(t, "01-image-crop.png", view.Image())
+	if err := view.Click(l.BoardCtxResetCrop()); err != nil {
+		t.Fatalf("click Reset Crop: %v", err)
+	}
+	view.Frame()
+	if b.ed.Doc.Shapes[imgID].Crop != nil {
+		t.Fatal("expected Crop cleared after Reset Crop click")
+	}
+
+	// 6. Laser pointer tool (K) + fading trail screenshot.
+	b.ed.ExitCrop()
+	b.ed.SelectNone()
+	view.Frame()
+	view.Key(0, ui.KeyK)
+	view.Frame()
+	if b.ed.Tool != editor.ToolLaser {
+		t.Fatalf("expected K shortcut to switch to ToolLaser, got %s", b.ed.Tool)
+	}
+	view.Press(200, 320)
+	view.Move(340, 260)
+	view.Move(500, 360)
+	view.Move(660, 280)
+	view.Frame()
+	saveBoardSeg7Shot(t, "02-laser-trail.png", view.Image())
+	view.Release(660, 280)
+
+	// 7. Radial color palette (C) + swatch selection screenshot.
+	b.ed.SetTool(editor.ToolDraw)
+	view.Frame()
+	view.Key(0, ui.KeyC)
+	view.Frame()
+	view.Frame()
+	if !b.radialOn {
+		t.Fatal("expected C key to open Radial Palette")
+	}
+	saveBoardSeg7Shot(t, "03-radial-palette.png", view.Image())
+	if err := view.Click(l.BoardRadialPalette() + " #4ADE80"); err != nil {
+		t.Fatalf("click radial swatch #4ADE80: %v", err)
+	}
+	view.Frame()
+	if b.radialOn || b.ed.Next.Stroke != "#4ADE80" {
+		t.Fatalf("radial click mismatch: radialOn=%v stroke=%s", b.radialOn, b.ed.Next.Stroke)
+	}
+
+	// 8. Narrow (<640) & Tiny (<540) responsive layouts with shape selected.
+	b.ed.Select(imgID)
+	narrow := ui.NewTester(a.boardView, 580, 600)
+	narrow.SetLocale("zh-Hans")
+	narrow.Frame()
+	narrow.Frame()
+	saveBoardSeg7Shot(t, "04-narrow-580.png", narrow.Image())
+
+	tiny := ui.NewTester(a.boardView, 460, 600)
+	tiny.SetLocale("zh-Hans")
+	tiny.Frame()
+	tiny.Frame()
+	saveBoardSeg7Shot(t, "05-tiny-460.png", tiny.Image())
 }
 
 func TestBoardHighDensityMaskAtlasGuard(t *testing.T) {

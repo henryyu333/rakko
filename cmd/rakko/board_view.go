@@ -5,6 +5,7 @@ import (
 	"math"
 	"unicode/utf8"
 
+	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/board/doc"
@@ -81,6 +82,18 @@ func (a *shelf) boardBar(c *ui.Context, l locales.Messages, pal *editor.Palette)
 		}
 		a.boardPageSwitcherButton(c, l, pal)
 		ui.Box(c).Grow(1).FillHeight().DragWindow()
+		dragBtn := a.boardBarButton(c, pal, "board-drag-png", boardExportSymbol, l.BoardDragPNG(), false, func() {
+			b.exportPNGFile(b.ed.Selection())
+		})
+		if b.ed != nil && b.ed.ItemCount() > 0 {
+			dragBtn.DragDataFrom(func() transfer.Data {
+				_, td, err := b.writeDragPNGTemp(b.ed.Selection(), "")
+				if err != nil {
+					return transfer.Data{}
+				}
+				return td
+			}, transfer.DragOptions{Operations: transfer.Copy})
+		}
 		a.boardBarButton(c, pal, "board-reveal", revealSymbol, osText(l.BoardReveal(), l.BoardRevealWin()), false, func() {
 			if b.win != nil {
 				b.frame = b.win.Bounds()
@@ -138,7 +151,7 @@ func (a *shelf) boardSwitcherButton(c *ui.Context, l locales.Messages, pal *edit
 	}, b.popoverButtonOpts(pal, ui.AnchorBottomStart, ui.AnchorTopStart, &b.titleMenu))
 }
 
-func (a *shelf) boardBarButton(c *ui.Context, pal *editor.Palette, key string, icon *ui.SVG, label string, on bool, act func()) {
+func (a *shelf) boardBarButton(c *ui.Context, pal *editor.Palette, key string, icon *ui.SVG, label string, on bool, act func()) ui.Element {
 	btn := ui.Row(c.Key(key)).Size(22, 22).Radius(6).Center().Label(label).Tooltip(label)
 	switch {
 	case on:
@@ -156,6 +169,7 @@ func (a *shelf) boardBarButton(c *ui.Context, pal *editor.Palette, key string, i
 	if btn.Clicked() && act != nil {
 		act()
 	}
+	return btn
 }
 
 func (a *shelf) boardStage(c *ui.Context, l locales.Messages, pal *editor.Palette) {
@@ -170,6 +184,11 @@ func (a *shelf) boardStage(c *ui.Context, l locales.Messages, pal *editor.Palett
 	if b.ed.InGesture() && b.ed.Tool == editor.ToolDraw {
 		b.ed.CheckDwell(b.seconds(c.Now()))
 		c.AnimationFrame()
+	}
+	if len(b.ed.Trails) > 0 {
+		if b.ed.AgeTrails(b.seconds(c.Now())) {
+			c.AnimationFrame()
+		}
 	}
 	stage := ui.Box(c.Key("board-stage")).FillWidth().Grow(1).MinHeight(0).Clip()
 	stage.Children(func() {
@@ -237,6 +256,7 @@ func (a *shelf) boardStage(c *ui.Context, l locales.Messages, pal *editor.Palett
 			a.boardSubBar(c, l, pal)
 			a.boardToolbar(c, l, pal)
 			a.boardPropPanel(c, l, pal)
+			a.boardRadialPalette(c, l, pal)
 		}
 	})
 }
@@ -329,6 +349,7 @@ func (a *shelf) boardTextEditor(c *ui.Context, pal *editor.Palette) {
 func (a *shelf) boardNavBar(c *ui.Context, l locales.Messages, pal *editor.Palette) {
 	b := a.board
 	pct := int(math.Round(b.ed.Cam().Z * 100))
+	narrow := b.stageRect.W > 0 && b.stageRect.W < 640
 	nav := ui.Row(c.Key("board-nav")).Absolute().Left(12).Bottom(16).Height(38).
 		Padding(0, 5, 0, 5).Gap(1).Radius(11).Clip().AlignItems(ui.Center).
 		Background(boardColor(pal.Bar)).Border(0.5, boardColor(pal.Edge)).
@@ -354,10 +375,12 @@ func (a *shelf) boardNavBar(c *ui.Context, l locales.Messages, pal *editor.Palet
 
 		ui.Box(c).Width(1).Height(18).Margin(0, 2, 0, 2).Background(boardColor(pal.Sep))
 
-		zout := a.boardNavIconBtn(c, pal, "board-zout", minusSymbol, l.BoardZoomOut(), false)
-		if zout.Clicked() {
-			b.ed.ZoomOut()
-			b.invalidate()
+		if !narrow {
+			zout := a.boardNavIconBtn(c, pal, "board-zout", minusSymbol, l.BoardZoomOut(), false)
+			if zout.Clicked() {
+				b.ed.ZoomOut()
+				b.invalidate()
+			}
 		}
 
 		zbtn := ui.Row(c.Key("board-zoom-pct")).Height(26).MinWidth(38).Padding(0, 4, 0, 4).Radius(6).Center().
@@ -401,22 +424,24 @@ func (a *shelf) boardNavBar(c *ui.Context, l locales.Messages, pal *editor.Palet
 			}
 		}, b.popoverButtonOpts(pal, ui.AnchorTopStart, ui.AnchorBottomStart, &b.zoomMenu))
 
-		zin := a.boardNavIconBtn(c, pal, "board-zin", plusSymbol, l.BoardZoomIn(), false)
-		if zin.Clicked() {
-			b.ed.ZoomIn()
-			b.invalidate()
-		}
+		if !narrow {
+			zin := a.boardNavIconBtn(c, pal, "board-zin", plusSymbol, l.BoardZoomIn(), false)
+			if zin.Clicked() {
+				b.ed.ZoomIn()
+				b.invalidate()
+			}
 
-		fitBtn := a.boardNavIconBtn(c, pal, "board-fit", boardFitSymbol, l.BoardZoomFit(), false)
-		if fitBtn.Clicked() {
-			b.ed.ZoomToFit()
-			b.invalidate()
-		}
+			fitBtn := a.boardNavIconBtn(c, pal, "board-fit", boardFitSymbol, l.BoardZoomFit(), false)
+			if fitBtn.Clicked() {
+				b.ed.ZoomToFit()
+				b.invalidate()
+			}
 
-		miniBtn := a.boardNavIconBtn(c, pal, "board-mini", boardMinimapSymbol, l.BoardMinimapLabel(), b.minimap)
-		if miniBtn.Clicked() {
-			b.minimap = !b.minimap
-			b.invalidate()
+			miniBtn := a.boardNavIconBtn(c, pal, "board-mini", boardMinimapSymbol, l.BoardMinimapLabel(), b.minimap)
+			if miniBtn.Clicked() {
+				b.minimap = !b.minimap
+				b.invalidate()
+			}
 		}
 
 		ui.Box(c).Width(1).Height(18).Margin(0, 2, 0, 2).Background(boardColor(pal.Sep))
@@ -485,6 +510,23 @@ func (a *shelf) boardNavBar(c *ui.Context, l locales.Messages, pal *editor.Palet
 			if m.Item(l.BoardSnapGrid()).Checked(b.ed.Grid).Shortcut(ui.Cmd, ui.KeyQuote).Chosen() {
 				b.ed.ToggleGrid()
 				b.invalidate()
+			}
+			m.Separator()
+			if m.Item(l.BoardRadialPalette()).Shortcut(0, ui.KeyC).Checked(b.radialOn).Chosen() {
+				b.openRadialPalette(b.hoverScreenPt)
+			}
+			m.Separator()
+			if m.Item(l.BoardExportPNG()).Chosen() {
+				b.exportPNGFile(nil)
+			}
+			if m.Item(l.BoardExportSVG()).Chosen() {
+				b.exportSVGFile(nil)
+			}
+			if m.Item(l.BoardExportBoard()).Chosen() {
+				b.exportBoardFile()
+			}
+			if m.Item(l.BoardImportBoard()).Disabled(b.locked).Chosen() {
+				b.importBoardFile()
 			}
 		}, b.popoverButtonOpts(pal, ui.AnchorTopStart, ui.AnchorBottomStart, &b.moreMenu))
 	})
@@ -689,7 +731,14 @@ func (b *boardUI) chooseTool(t editor.Tool) {
 
 func (a *shelf) boardToolbar(c *ui.Context, l locales.Messages, pal *editor.Palette) {
 	b := a.board
-	wrap := ui.Row(c.Key("board-tools-wrap")).Absolute().Left(0).Right(0).Bottom(16).Justify(ui.Center).PassThrough()
+	narrow := b.stageRect.W > 0 && b.stageRect.W < 640
+	tiny := b.stageRect.W > 0 && b.stageRect.W < 600
+	wrap := ui.Row(c.Key("board-tools-wrap")).Absolute().Left(0).Right(0).Bottom(16).PassThrough()
+	if narrow {
+		wrap.Justify(ui.End).Padding(0, 12, 0, 0)
+	} else {
+		wrap.Justify(ui.Center)
+	}
 	wrap.Children(func() {
 		bar := ui.Row(c.Key("board-tools")).Height(44).Padding(0, 5, 0, 5).Gap(1).Radius(13).Clip().AlignItems(ui.Center).
 			Background(boardColor(pal.Bar)).Border(0.5, boardColor(pal.Edge)).
@@ -698,7 +747,7 @@ func (a *shelf) boardToolbar(c *ui.Context, l locales.Messages, pal *editor.Pale
 			if a.boardToolBtn(c, pal, "tool-select", boardSelectSymbol, l.BoardToolSelect(), b.ed.Tool == editor.ToolSelect).Clicked() {
 				b.chooseTool(editor.ToolSelect)
 			}
-			if a.boardToolBtn(c, pal, "tool-lasso", boardLassoSymbol, l.BoardToolLasso(), b.ed.Tool == editor.ToolLasso).Clicked() {
+			if !tiny && a.boardToolBtn(c, pal, "tool-lasso", boardLassoSymbol, l.BoardToolLasso(), b.ed.Tool == editor.ToolLasso).Clicked() {
 				b.chooseTool(editor.ToolLasso)
 			}
 			if a.boardToolBtn(c, pal, "tool-hand", boardHandSymbol, l.BoardToolHand(), b.ed.Tool == editor.ToolHand).Clicked() {
@@ -715,6 +764,9 @@ func (a *shelf) boardToolbar(c *ui.Context, l locales.Messages, pal *editor.Pale
 			}
 			if a.boardToolBtn(c, pal, "tool-eraser", boardEraserSymbol, l.BoardToolEraser(), b.ed.Tool == editor.ToolEraser).Clicked() {
 				b.chooseTool(editor.ToolEraser)
+			}
+			if a.boardToolBtn(c, pal, "tool-laser", boardLaserSymbol, l.BoardToolLaser(), b.ed.Tool == editor.ToolLaser).Clicked() {
+				b.chooseTool(editor.ToolLaser)
 			}
 
 			ui.Box(c).Width(1).Height(22).Margin(0, 3, 0, 3).Background(boardColor(pal.Sep))
@@ -771,32 +823,40 @@ func (a *shelf) boardToolbar(c *ui.Context, l locales.Messages, pal *editor.Pale
 			if a.boardToolBtn(c, pal, "tool-arrow", boardArrowSymbol, l.BoardToolArrow(), b.ed.Tool == editor.ToolArrow).Clicked() {
 				b.chooseTool(editor.ToolArrow)
 			}
-			if a.boardToolBtn(c, pal, "tool-line", boardLineSymbol, l.BoardToolLine(), b.ed.Tool == editor.ToolLine).Clicked() {
+			if !tiny && a.boardToolBtn(c, pal, "tool-line", boardLineSymbol, l.BoardToolLine(), b.ed.Tool == editor.ToolLine).Clicked() {
 				b.chooseTool(editor.ToolLine)
 			}
-			if a.boardToolBtn(c, pal, "tool-frame", boardFrameSymbol, l.BoardToolFrame(), b.ed.Tool == editor.ToolFrame).Clicked() {
+			if !tiny && a.boardToolBtn(c, pal, "tool-frame", boardFrameSymbol, l.BoardToolFrame(), b.ed.Tool == editor.ToolFrame).Clicked() {
 				b.chooseTool(editor.ToolFrame)
 			}
 			if a.boardToolBtn(c, pal, "tool-text", textSymbol, l.BoardToolText(), b.ed.Tool == editor.ToolText).Clicked() {
 				b.chooseTool(editor.ToolText)
 			}
-			if a.boardToolBtn(c, pal, "tool-note", noteSymbol, l.BoardToolNote(), b.ed.Tool == editor.ToolNote).Clicked() {
+			if !tiny && a.boardToolBtn(c, pal, "tool-note", noteSymbol, l.BoardToolNote(), b.ed.Tool == editor.ToolNote).Clicked() {
 				b.chooseTool(editor.ToolNote)
 			}
 			if a.boardToolBtn(c, pal, "tool-image", imgSymbol, l.BoardToolImage(), false).Clicked() {
 				b.pickImage()
 			}
-			ui.Box(c).Width(1).Height(22).Margin(0, 3, 0, 3).Background(boardColor(pal.Sep))
-			if a.boardToolBtn(c, pal, "tool-lock", boardToolLockSymbol, l.BoardKeepTool(), b.ed.ToolLocked).Clicked() {
-				b.ed.ToggleToolLock()
-				b.invalidate()
+			if !tiny {
+				ui.Box(c).Width(1).Height(22).Margin(0, 3, 0, 3).Background(boardColor(pal.Sep))
+				if a.boardToolBtn(c, pal, "tool-lock", boardToolLockSymbol, l.BoardKeepTool(), b.ed.ToolLocked).Clicked() {
+					b.ed.ToggleToolLock()
+					b.invalidate()
+				}
 			}
 		})
 	})
 }
 
 func (a *shelf) boardToolBtn(c *ui.Context, pal *editor.Palette, key string, icon *ui.SVG, label string, active bool) ui.Element {
-	btn := ui.Row(c.Key(key)).Size(30, 30).Radius(7).Center().Label(label).Tooltip(label)
+	sz := float32(30)
+	isz := float32(17)
+	if b := a.board; b != nil && b.stageRect.W > 0 && b.stageRect.W < 640 {
+		sz = 26
+		isz = 15
+	}
+	btn := ui.Row(c.Key(key)).Size(sz, sz).Radius(7).Center().Label(label).Tooltip(label)
 	switch {
 	case active:
 		btn.Background(boardColor(pal.AccentFill))
@@ -808,7 +868,7 @@ func (a *shelf) boardToolBtn(c *ui.Context, pal *editor.Palette, key string, ico
 		if active {
 			col = pal.Accent
 		}
-		ui.Icon(c, icon).Size(17, 17).TextColor(boardColor(col))
+		ui.Icon(c, icon).Size(isz, isz).TextColor(boardColor(col))
 	})
 	return btn
 }
@@ -903,6 +963,10 @@ func (b *boardUI) handleCanvasInput(c *ui.Context, ev ui.InputEvent) bool {
 		b.invalidate()
 		return true
 	case ui.InputPointerDown:
+		if b.radialOn && ev.Button == 0 {
+			b.radialOn = false
+			b.invalidate()
+		}
 		if ev.Button == 1 {
 			b.ctxPt = pt
 			if !b.locked {
@@ -920,6 +984,7 @@ func (b *boardUI) handleCanvasInput(c *ui.Context, ev ui.InputEvent) bool {
 			return true
 		}
 	case ui.InputPointerMove:
+		b.hoverScreenPt = pt
 		b.ed.PointerMovePressure(float64(ev.X), float64(ev.Y), float64(ev.Pressure), ev.Pointer == ui.PointerPen, mods, t)
 		b.invalidate()
 		return true
@@ -964,7 +1029,9 @@ func (b *boardUI) handleCanvasInput(c *ui.Context, ev ui.InputEvent) bool {
 				b.invalidate()
 				return true
 			case ui.KeyC:
-				if ev.Mods&ui.Alt != 0 {
+				if ev.Mods&ui.Shift != 0 {
+					_ = b.copyAsPNG(b.ed.Selection(), false)
+				} else if ev.Mods&ui.Alt != 0 {
 					b.ed.CopyStyle()
 				} else {
 					b.ed.Copy()
@@ -1147,7 +1214,12 @@ func (b *boardUI) handleCanvasInput(c *ui.Context, ev ui.InputEvent) bool {
 		}
 		switch ev.Key {
 		case ui.KeyEscape:
-			hadState := b.ed.InGesture() || len(b.ed.Selection()) > 0 || b.ed.Editing != "" || b.ed.EditingVertices != ""
+			if b.radialOn {
+				b.radialOn = false
+				b.invalidate()
+				return true
+			}
+			hadState := b.ed.InGesture() || len(b.ed.Selection()) > 0 || b.ed.Editing != "" || b.ed.EditingVertices != "" || b.ed.Cropping != ""
 			b.ed.Cancel()
 			if !hadState && b.focusMode {
 				b.focusMode = false
@@ -1156,6 +1228,20 @@ func (b *boardUI) handleCanvasInput(c *ui.Context, ev ui.InputEvent) bool {
 			return true
 		case ui.KeyQ:
 			b.ed.ToggleToolLock()
+			b.invalidate()
+			return true
+		case ui.KeyC:
+			if !b.locked && ev.Mods == 0 {
+				if b.radialOn {
+					b.radialOn = false
+				} else {
+					b.openRadialPalette(b.hoverScreenPt)
+				}
+				b.invalidate()
+				return true
+			}
+		case ui.KeyK:
+			b.ed.SetTool(editor.ToolLaser)
 			b.invalidate()
 			return true
 		case ui.KeyEnter:

@@ -11878,3 +11878,103 @@ func BoardCtxSelectAll() string { return In(i18n.Locale()).BoardCtxSelectAll() }
 func (msgs Messages) BoardCtxSelectAll() string {
 	return Catalog.Format(msgs.locale, "boardCtxSelectAll", nil)
 }
+
+// BoardToolLaser says "激光笔"
+// in the language the app shows.
+func BoardToolLaser() string { return In(i18n.Locale()).BoardToolLaser() }
+
+// BoardToolLaser says "激光笔"
+// in the language of msgs.
+func (msgs Messages) BoardToolLaser() string {
+	return Catalog.Format(msgs.locale, "boardToolLaser", nil)
+}
+
+// BoardCtxCopyAs says "拷贝为"
+// in the language the app shows.
+func BoardCtxCopyAs() string { return In(i18n.Locale()).BoardCtxCopyAs() }
+
+// BoardCtxCopyAs says "拷贝为"
+// in the language of msgs.
+func (msgs Messages) BoardCtxCopyAs() string {
+	return Catalog.Format(msgs.locale, "boardCtxCopyAs", nil)
+}
+
+// BoardCtxExportAs says "导出为"
+// in the language the app shows.
+func BoardCtxExportAs() string { return In(i18n.Locale()).BoardCtxExportAs() }
+
+// BoardCtxExportAs says "导出为"
+// in the language of msgs.
+func (msgs Messages) BoardCtxExportAs() string {
+	return Catalog.Format(msgs.locale, "boardCtxExportAs", nil)
+}
+
+// BoardExportPNG says "PNG 图片…"
+// in the language the app shows.
+func BoardExportPNG() string { return In(i18n.Locale()).BoardExportPNG() }
+
+// BoardExportPNG says "PNG 图片…"
+// in the language of msgs.
+func (msgs Messages) BoardExportPNG() string {
+	return Catalog.Format(msgs.locale, "boardExportPNG", nil)
+}
+
+// BoardExportSVG says "SVG 矢量…"
+// in the language the app shows.
+func BoardExportSVG() string { return In(i18n.Locale()).BoardExportSVG() }
+
+// BoardExportSVG says "SVG 矢量…"
+// in the language of msgs.
+func (msgs Messages) BoardExportSVG() string {
+	return Catalog.Format(msgs.locale, "boardExportSVG", nil)
+}
+
+// BoardExportBoard says "导出白板文件…"
+// in the language the app shows.
+func BoardExportBoard() string { return In(i18n.Locale()).BoardExportBoard() }
+
+// BoardExportBoard says "导出白板文件…"
+// in the language of msgs.
+func (msgs Messages) BoardExportBoard() string {
+	return Catalog.Format(msgs.locale, "boardExportBoard", nil)
+}
+
+// BoardImportBoard says "导入白板文件…"
+// in the language the app shows.
+func BoardImportBoard() string { return In(i18n.Locale()).BoardImportBoard() }
+
+// BoardImportBoard says "导入白板文件…"
+// in the language of msgs.
+func (msgs Messages) BoardImportBoard() string {
+	return Catalog.Format(msgs.locale, "boardImportBoard", nil)
+}
+
+// BoardDragPNG says "拖出 PNG 或点击保存"
+// in the language the app shows.
+func BoardDragPNG() string { return In(i18n.Locale()).BoardDragPNG() }
+
+// BoardDragPNG says "拖出 PNG 或点击保存"
+// in the language of msgs.
+func (msgs Messages) BoardDragPNG() string {
+	return Catalog.Format(msgs.locale, "boardDragPNG", nil)
+}
+
+// BoardCtxResetCrop says "重置裁切"
+// in the language the app shows.
+func BoardCtxResetCrop() string { return In(i18n.Locale()).BoardCtxResetCrop() }
+
+// BoardCtxResetCrop says "重置裁切"
+// in the language of msgs.
+func (msgs Messages) BoardCtxResetCrop() string {
+	return Catalog.Format(msgs.locale, "boardCtxResetCrop", nil)
+}
+
+// BoardRadialPalette says "圆盘调色板"
+// in the language the app shows.
+func BoardRadialPalette() string { return In(i18n.Locale()).BoardRadialPalette() }
+
+// BoardRadialPalette says "圆盘调色板"
+// in the language of msgs.
+func (msgs Messages) BoardRadialPalette() string {
+	return Catalog.Format(msgs.locale, "boardRadialPalette", nil)
+}

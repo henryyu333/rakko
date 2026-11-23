@@ -1171,5 +1171,15 @@
   "boardCtxLock": "锁定",
   "boardCtxUnlock": "解锁",
   "boardCtxUnlockAll": "全部解锁",
-  "boardCtxSelectAll": "全选"
+  "boardCtxSelectAll": "全选",
+  "boardToolLaser": "激光笔",
+  "boardCtxCopyAs": "拷贝为",
+  "boardCtxExportAs": "导出为",
+  "boardExportPNG": "PNG 图片…",
+  "boardExportSVG": "SVG 矢量…",
+  "boardExportBoard": "导出白板文件…",
+  "boardImportBoard": "导入白板文件…",
+  "boardDragPNG": "拖出 PNG 或点击保存",
+  "boardCtxResetCrop": "重置裁切",
+  "boardRadialPalette": "圆盘调色板"
 }

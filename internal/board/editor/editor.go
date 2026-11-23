@@ -70,6 +70,7 @@ type Editor struct {
 	FocusedGroup    doc.ID
 	Editing         doc.ID
 	EditingVertices doc.ID
+	Cropping        doc.ID
 	EditText        string
 	Snap            bool // Always-on smart alignment guides (Cmd/Ctrl temporarily inverts)
 	Grid            bool // Snap to grid (Cmd+')
@@ -134,7 +135,7 @@ func (e *Editor) Replace(d *doc.Drawing) {
 	e.undo, e.redo, e.tx = nil, nil, nil
 	e.kids, e.bindFrom, e.bindTo, e.arrows = nil, nil, nil, nil
 	e.sel = nil
-	e.Hovered, e.FocusedGroup, e.Editing, e.EditingVertices, e.EditText = "", "", "", "", ""
+	e.Hovered, e.FocusedGroup, e.Editing, e.EditingVertices, e.Cropping, e.EditText = "", "", "", "", "", ""
 	e.Snaps, e.Hint, e.Lasso, e.Brush, e.DropOn = nil, nil, nil, nil, ""
 	e.cams = make(map[doc.ID]Camera, len(d.Pages))
 	e.loadPageCameras()
@@ -277,6 +278,7 @@ func (e *Editor) SwitchPage(id doc.ID) bool {
 	e.SelectNone()
 	e.FocusedGroup = ""
 	e.EditingVertices = ""
+	e.Cropping = ""
 	e.Page = id
 	e.Doc.ActivePage = id
 	e.emitChange()

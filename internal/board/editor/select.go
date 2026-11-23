@@ -19,6 +19,7 @@ const (
 	HandleArrowBend
 	HandleLinePoint
 	HandleGeoVertex
+	HandleCrop
 )
 
 // Handle describes a draggable handle on the active selection.
@@ -167,6 +168,11 @@ func (e *Editor) Handles() []Handle {
 			return e.geoVertexHandles(s)
 		}
 	}
+	if e.Cropping != "" {
+		if s := e.Doc.Shapes[e.Cropping]; s != nil && s.Type == doc.TypeImage && !s.Locked {
+			return e.cropHandles(s)
+		}
+	}
 	if s := e.singleLinear(); s != nil {
 		if s.Locked {
 			return nil
@@ -309,7 +315,7 @@ func (e *Editor) HandleAt(screen geo.Vec) Handle {
 
 	const near = 7.0
 	for _, h := range hs {
-		if h.Kind != HandleResize {
+		if h.Kind != HandleResize && h.Kind != HandleCrop {
 			continue
 		}
 		cx, cy := box.X+box.W*h.Which.X, box.Y+box.H*h.Which.Y
@@ -379,10 +385,13 @@ func (e *Editor) selectDown(clicks int) {
 			e.gesture = newLinePointDragGesture(e, h)
 		case HandleGeoVertex:
 			e.gesture = newGeoVertexDragGesture(e, h)
+		case HandleCrop:
+			e.gesture = newCropGesture(e, h)
 		}
 		return
 	}
 	e.EditingVertices = ""
+	e.Cropping = ""
 
 	p := e.pointer.Page
 	r := e.Hit(p, e.margin(), false)
@@ -450,6 +459,9 @@ func (e *Editor) doubleClick() bool {
 			e.EditVertices(target)
 			return true
 		}
+	}
+	if s.Type == doc.TypeImage && !s.Locked {
+		return e.EnterCrop(target)
 	}
 	if textEditable(s) {
 		e.Select(target)

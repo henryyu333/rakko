@@ -566,6 +566,21 @@ func (s *boardScene) renderOverlays() {
 		}
 		if s.b.ed.ShowsBox() {
 			if corners, ok := s.b.ed.SelectionCorners(); ok {
+				if s.b.ed.Cropping != "" {
+					if cs := s.b.ed.Doc.Shapes[s.b.ed.Cropping]; cs != nil {
+						if full, ok := editor.UncroppedFrame(cs); ok {
+							fm := cm.Mul(s.b.ed.PageMat(cs.ID))
+							fcs := full.Corners()
+							sc := make([]geo.Vec, 4)
+							for i, pt := range fcs {
+								sc[i] = fm.Apply(pt)
+							}
+							fp := s.buildPath((&geo.Path{}).Poly(sc, true), geo.Identity)
+							fp.Dash(0, 4, 4)
+							s.p.StrokePath(fp, 1, boardColor(s.pal.Ink3.Alpha(0.45)))
+						}
+					}
+				}
 				screen := make([]geo.Vec, 4)
 				for i, pt := range corners {
 					screen[i] = cm.Apply(pt)
@@ -574,13 +589,15 @@ func (s *boardScene) renderOverlays() {
 				s.p.StrokePath(path.Cap(ui.ButtCap).Join(ui.MiterJoin), 1.5, selCol)
 
 				_, rot, _ := s.b.ed.SelectionFrame()
-				if !gesturing || s.b.ed.IsResizing() {
+				if !gesturing || s.b.ed.IsResizing() || s.b.ed.Cropping != "" {
 					fill := boardColor(s.pal.Background)
 					for _, h := range s.b.ed.Handles() {
-						if h.Kind != editor.HandleResize {
-							continue
+						switch h.Kind {
+						case editor.HandleResize:
+							s.drawHandleSquare(cm.Apply(h.Point), rot, fill, selCol)
+						case editor.HandleCrop:
+							s.drawHandleSquare(cm.Apply(h.Point), rot, selCol, fill)
 						}
-						s.drawHandleSquare(cm.Apply(h.Point), rot, fill, selCol)
 					}
 				}
 				if !gesturing || s.b.ed.IsResizing() {
@@ -645,9 +662,33 @@ func (s *boardScene) renderOverlays() {
 		}
 	}
 
-	// Active eraser / laser trails.
+	// Active eraser / fading laser trails.
+	now := s.b.ed.Now
 	for _, tr := range s.b.ed.Trails {
 		if len(tr.Points) < 2 {
+			continue
+		}
+		if tr.Laser {
+			for i := 1; i < len(tr.Points); i++ {
+				a := cm.Apply(tr.Points[i-1].P)
+				b := cm.Apply(tr.Points[i].P)
+				age := math.Max(0, now-tr.Points[i].T)
+				fade := geo.Clamp(1.0-age/1.0, 0, 1)
+				if fade <= 0.02 {
+					continue
+				}
+				w := float32(1.8 + 3.4*fade)
+				s.p.StrokePolyline([][2]float32{
+					{float32(a.X), float32(a.Y)},
+					{float32(b.X), float32(b.Y)},
+				}, w, boardColor(s.pal.Laser.Alpha(fade)))
+			}
+			last := tr.Points[len(tr.Points)-1]
+			if now-last.T < 1.0 {
+				tip := cm.Apply(last.P)
+				s.p.FillPath((&ui.Path{}).Circle(float32(tip.X), float32(tip.Y), 5), boardColor(s.pal.Laser.Alpha(0.35)))
+				s.p.FillPath((&ui.Path{}).Circle(float32(tip.X), float32(tip.Y), 2.5), boardColor(s.pal.Laser))
+			}
 			continue
 		}
 		pts := make([][2]float32, len(tr.Points))
@@ -655,11 +696,7 @@ func (s *boardScene) renderOverlays() {
 			v := cm.Apply(tp.P)
 			pts[i] = [2]float32{float32(v.X), float32(v.Y)}
 		}
-		col := boardColor(s.pal.Ink3.Alpha(0.5))
-		if tr.Laser {
-			col = boardColor(s.pal.Laser)
-		}
-		s.p.StrokePolyline(pts, 3, col)
+		s.p.StrokePolyline(pts, 3, boardColor(s.pal.Ink3.Alpha(0.5)))
 	}
 }
 

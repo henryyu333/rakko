@@ -239,6 +239,93 @@ func (a *shelf) boardMinimap(c *ui.Context, l locales.Messages, pal *editor.Pale
 	})
 }
 
+func (b *boardUI) openRadialPalette(at geo.Vec) {
+	if b.ed == nil {
+		return
+	}
+	w := float64(b.stageRect.W)
+	if w <= 0 {
+		w = b.ed.VW
+	}
+	h := float64(b.stageRect.H)
+	if h <= 0 {
+		h = b.ed.VH
+	}
+	if at.X <= 0 && at.Y <= 0 {
+		at = geo.V(w/2, h/2)
+	}
+	at.X = geo.Clamp(at.X, 112, math.Max(112, w-112))
+	at.Y = geo.Clamp(at.Y, 112, math.Max(112, h-112))
+	b.radialPt = at
+	b.radialOn = true
+	b.invalidate()
+}
+
+func (a *shelf) boardRadialPalette(c *ui.Context, l locales.Messages, pal *editor.Palette) {
+	b := a.board
+	if !b.radialOn || b.ed == nil {
+		return
+	}
+	const size = float32(204)
+	cx, cy := float32(102), float32(102)
+	ringR := 72.0
+
+	wheel := ui.Box(c.Key("board-radial-palette")).Absolute().
+		Left(float32(b.radialPt.X)-cx).Top(float32(b.radialPt.Y)-cy).
+		Size(size, size).Radius(cx).Clip().
+		Background(boardColor(pal.Bar)).
+		Border(0.5, boardColor(pal.Edge)).
+		Shadow(0, 12, 32, 0, ui.RGBA(0, 0, 0, 0.42)).
+		Label(l.BoardRadialPalette())
+
+	activeHex := b.ed.PanelState().Color
+	wheel.Children(func() {
+		for i, hex := range editor.Swatches {
+			hex := hex
+			ang := -math.Pi/2 + 2*math.Pi*float64(i)/float64(len(editor.Swatches))
+			sx := float32(float64(cx)+math.Cos(ang)*ringR) - 12
+			sy := float32(float64(cy)+math.Sin(ang)*ringR) - 12
+			col := editor.ResolveColor(hex, pal.Dark, doc.LookClean)
+			isActive := hex == activeHex
+			cell := ui.Row(c.Key("radial-sw-"+hex)).Absolute().Left(sx).Top(sy).Size(24, 24).
+				Radius(12).Center().Label(l.BoardRadialPalette() + " " + hex).Tooltip(hex)
+			if isActive {
+				cell.Border(2, boardColor(pal.Accent))
+			} else if cell.Hovered() {
+				cell.Border(1.5, boardColor(pal.Ink2))
+			}
+			cell.Children(func() {
+				dot := ui.Box(c).Size(17, 17).Radius(9).Background(boardColor(col))
+				if !pal.Dark && hex == "#E8E8EA" {
+					dot.Border(0.5, boardColor(pal.Edge))
+				}
+			})
+			if cell.Clicked() {
+				b.ed.SetPropStroke(hex)
+				b.radialOn = false
+				b.canvasFocus = false
+				b.invalidate()
+			}
+		}
+
+		// Center live preview dot showing active color; clicking closes wheel.
+		curCol := editor.ResolveColor(activeHex, pal.Dark, b.ed.Look())
+		centerBtn := ui.Row(c.Key("radial-center")).Absolute().
+			Left(cx-24).Top(cy-24).Size(48, 48).Radius(24).Center().
+			Background(boardColor(pal.Background.Alpha(0.45))).
+			Border(0.5, boardColor(pal.Edge)).
+			Label(l.BoardRadialPalette())
+		centerBtn.Children(func() {
+			ui.Box(c).Size(22, 22).Radius(11).Background(boardColor(curCol))
+		})
+		if centerBtn.Clicked() {
+			b.radialOn = false
+			b.canvasFocus = false
+			b.invalidate()
+		}
+	})
+}
+
 func (b *boardUI) buildContextMenu(l locales.Messages, m *ui.Menu) {
 	if b.locked || b.ed == nil {
 		return
@@ -249,6 +336,23 @@ func (b *boardUI) buildContextMenu(l locales.Messages, m *ui.Menu) {
 			b.ed.Paste()
 			b.invalidate()
 		}
+		m.Separator()
+		m.Submenu(l.BoardCtxCopyAs(), func(sm *ui.Menu) {
+			if sm.Item("PNG").Shortcut(ui.Cmd|ui.Shift, ui.KeyC).Chosen() {
+				_ = b.copyAsPNG(nil, false)
+			}
+			if sm.Item("SVG").Chosen() {
+				_ = b.copyAsSVG(nil, false)
+			}
+		})
+		m.Submenu(l.BoardCtxExportAs(), func(sm *ui.Menu) {
+			if sm.Item(l.BoardExportPNG()).Chosen() {
+				b.exportPNGFile(nil)
+			}
+			if sm.Item(l.BoardExportSVG()).Chosen() {
+				b.exportSVGFile(nil)
+			}
+		})
 		m.Separator()
 		if m.Item(l.BoardCtxSelectAll()).Shortcut(ui.Cmd, ui.KeyA).Chosen() {
 			b.ed.SelectAll()
@@ -436,8 +540,14 @@ func (b *boardUI) buildContextMenu(l locales.Messages, m *ui.Menu) {
 	isImage := n == 1 && single != nil && single.Type == doc.TypeImage
 	if isImage {
 		if m.Item(l.BoardCtxCropImage()).Chosen() {
-			b.croppingID = sel[0]
+			b.ed.EnterCrop(sel[0])
 			b.invalidate()
+		}
+		if b.ed.CanResetCrop() {
+			if m.Item(l.BoardCtxResetCrop()).Chosen() {
+				b.ed.ResetCrop(sel[0])
+				b.invalidate()
+			}
 		}
 	}
 	lockLabel := l.BoardCtxLock()
@@ -448,6 +558,23 @@ func (b *boardUI) buildContextMenu(l locales.Messages, m *ui.Menu) {
 		b.ed.ToggleLockSelected()
 		b.invalidate()
 	}
+	m.Separator()
+	m.Submenu(l.BoardCtxCopyAs(), func(sm *ui.Menu) {
+		if sm.Item("PNG").Shortcut(ui.Cmd|ui.Shift, ui.KeyC).Chosen() {
+			_ = b.copyAsPNG(sel, false)
+		}
+		if sm.Item("SVG").Chosen() {
+			_ = b.copyAsSVG(sel, false)
+		}
+	})
+	m.Submenu(l.BoardCtxExportAs(), func(sm *ui.Menu) {
+		if sm.Item(l.BoardExportPNG()).Chosen() {
+			b.exportPNGFile(sel)
+		}
+		if sm.Item(l.BoardExportSVG()).Chosen() {
+			b.exportSVGFile(sel)
+		}
+	})
 	m.Separator()
 
 	if m.Item(l.BoardZoomFitSel()).Shortcut(ui.Shift, ui.Key2).Chosen() {

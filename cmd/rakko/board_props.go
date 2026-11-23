@@ -31,9 +31,18 @@ func (a *shelf) boardPropPanel(c *ui.Context, l locales.Messages, pal *editor.Pa
 	if b.stageRect.H > 160 {
 		maxH = max(float32(b.stageRect.H)-96, 220)
 	}
+	narrow := b.stageRect.W > 0 && b.stageRect.W < 640
+	pw := float32(216)
+	inset := float32(16)
+	gap := float32(8)
+	if narrow {
+		pw = 180
+		inset = 10
+		gap = 6
+	}
 
 	card := ui.Column(c.Key("board-prop-panel")).
-		Absolute().Top(16).Right(16).Width(216).
+		Absolute().Top(inset).Right(inset).Width(pw).
 		Radius(12).Clip().
 		Background(boardColor(pal.Bar)).
 		Border(0.5, boardColor(pal.Edge)).
@@ -41,7 +50,7 @@ func (a *shelf) boardPropPanel(c *ui.Context, l locales.Messages, pal *editor.Pa
 
 	card.Children(func() {
 		ui.Scroll(c.Key("board-prop-scroll")).FillWidth().MaxHeight(maxH).TrackScroll(&b.propScroll).Children(func() {
-			ui.Column(c.Key("board-prop-body")).FillWidth().Padding(10, 10, 10, 10).Gap(8).Children(func() {
+			ui.Column(c.Key("board-prop-body")).FillWidth().Padding(10, 10, 10, 10).Gap(gap).Children(func() {
 				if ps.ShowColor {
 					a.boardPropColorSection(c, l, pal, ps)
 				}
@@ -136,6 +145,22 @@ func (a *shelf) boardPropPanel(c *ui.Context, l locales.Messages, pal *editor.Pa
 				}
 				if ps.ShowFont {
 					a.boardPropFontSection(c, l, pal, ps)
+				}
+				if b.ed.CanResetCrop() {
+					btn := ui.Row(c.Key("prop-reset-crop")).FillWidth().Height(26).Radius(7).Center().
+						Background(boardColor(pal.Background.Alpha(0.32))).
+						Border(0.5, boardColor(pal.Edge)).Label(l.BoardCtxResetCrop())
+					if btn.Hovered() {
+						btn.Background(boardColor(pal.BarHover))
+					}
+					btn.Children(func() {
+						ui.Text(c, l.BoardCtxResetCrop()).SingleLine().FontSize(11).FontWeight(500).TextColor(boardColor(pal.Ink2))
+					})
+					if btn.Clicked() {
+						b.ed.ResetCrop()
+						b.canvasFocus = false
+						b.invalidate()
+					}
 				}
 				if ps.ShowOpacity {
 					opID := boardOpacityID(ps.Opacity)
@@ -246,6 +271,7 @@ func (a *shelf) boardPropColorSection(c *ui.Context, l locales.Messages, pal *ed
 							} else {
 								b.ed.SetPropStroke(hex)
 							}
+							b.canvasFocus = false
 							b.invalidate()
 						}
 					}
@@ -279,6 +305,7 @@ func (a *shelf) boardPropSegmented(c *ui.Context, pal *editor.Palette, title, ke
 					ui.Text(c, opt.label).SingleLine().FontSize(10.5).FontWeight(500).TextColor(boardColor(col))
 				})
 				if btn.Clicked() && onPick != nil {
+					a.board.canvasFocus = false
 					onPick(opt.id)
 				}
 			}
@@ -477,6 +504,7 @@ func (a *shelf) boardPropFontSection(c *ui.Context, l locales.Messages, pal *edi
 					}
 				})
 				if btn.Clicked() {
+					b.canvasFocus = false
 					tg.act()
 				}
 			}
@@ -507,6 +535,7 @@ func (a *shelf) boardPropFontSection(c *ui.Context, l locales.Messages, pal *edi
 					})
 					if btn.Clicked() {
 						b.ed.SetPropAlign(al.id)
+						b.canvasFocus = false
 						b.invalidate()
 					}
 				}

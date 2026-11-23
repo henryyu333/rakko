@@ -136,16 +136,24 @@ func (s *Store) Read() (*Drawing, error) {
 
 // Write atomically persists d to the active board file.
 func (s *Store) Write(d *Drawing) error {
+	return s.WriteFor(s.id, d)
+}
+
+// WriteFor atomically persists d to the board file for id without switching active board.
+func (s *Store) WriteFor(id string, d *Drawing) error {
+	if !validBoardID(id) {
+		return fmt.Errorf("board: %q is not a valid board id", id)
+	}
 	if d == nil {
 		return errors.New("board: nil drawing")
 	}
 	data, err := json.MarshalIndent(d, "", "  ")
 	if err != nil {
-		return fmt.Errorf("board: encoding %s: %w", filepath.Base(s.Path()), err)
+		return fmt.Errorf("board: encoding %s: %w", id+FileExt, err)
 	}
 	data = append(data, '\n')
-	if err := atomicfile.WriteFile(s.dir, s.id+FileExt, data, 0o600); err != nil {
-		return fmt.Errorf("board: writing %s: %w", filepath.Base(s.Path()), err)
+	if err := atomicfile.WriteFile(s.dir, id+FileExt, data, 0o600); err != nil {
+		return fmt.Errorf("board: writing %s: %w", id+FileExt, err)
 	}
 	return nil
 }

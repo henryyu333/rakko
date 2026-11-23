@@ -163,6 +163,9 @@ func (e *Editor) IsSelected(id doc.ID) bool {
 
 // Select replaces the selection with ids (filtering missing shapes).
 func (e *Editor) Select(ids ...doc.ID) {
+	if len(ids) != 1 || ids[0] != e.Cropping {
+		e.Cropping = ""
+	}
 	e.sel = e.sel[:0]
 	for _, id := range ids {
 		if s := e.Doc.Shapes[id]; s != nil && !slices.Contains(e.sel, id) {
@@ -173,6 +176,7 @@ func (e *Editor) Select(ids ...doc.ID) {
 
 // SelectNone clears the current selection.
 func (e *Editor) SelectNone() {
+	e.Cropping = ""
 	e.sel = nil
 }
 
@@ -213,6 +217,7 @@ func (e *Editor) SetTool(t Tool) {
 	e.StopEditing()
 	e.cancelGesture()
 	e.EditingVertices = ""
+	e.Cropping = ""
 	e.Hint = nil
 	e.Tool = t
 	if t != ToolSelect {
@@ -280,12 +285,12 @@ func (e *Editor) CursorNow() Cursor {
 	switch e.Tool {
 	case ToolText:
 		return CursorText
-	case ToolLasso, ToolDraw, ToolHighlight, ToolEraser, ToolGeo, ToolFrame, ToolNote, ToolArrow, ToolLine:
+	case ToolLasso, ToolDraw, ToolHighlight, ToolEraser, ToolLaser, ToolGeo, ToolFrame, ToolNote, ToolArrow, ToolLine:
 		return CursorCross
 	}
 	h := e.HandleAt(e.pointer.Screen)
 	switch h.Kind {
-	case HandleResize:
+	case HandleResize, HandleCrop:
 		_, r, _ := e.SelectionFrame()
 		return resizeCursor(h.Which, r)
 	case HandleRotate:
@@ -303,6 +308,8 @@ func (e *Editor) Cancel() {
 		e.cancelGesture()
 	case e.Editing != "":
 		e.StopEditing()
+	case e.Cropping != "":
+		e.Cropping = ""
 	case e.EditingVertices != "":
 		e.EditingVertices = ""
 	case e.FocusedGroup != "":
@@ -394,6 +401,45 @@ func (e *Editor) PointerDownPressure(x, y float64, button, clicks int, pressure 
 		e.gesture = &clickCreateGesture{kind: doc.TypeText}
 	case ToolNote:
 		e.gesture = &clickCreateGesture{kind: doc.TypeNote}
+	case ToolLaser:
+		e.gesture = newLaserGesture(e)
+	}
+}
+
+type laserGesture struct {
+	trail *Trail
+}
+
+func newLaserGesture(e *Editor) *laserGesture {
+	tr := &Trail{
+		Points: []TrailPoint{{P: e.pointer.Page, T: e.pointer.Time}},
+		Laser:  true,
+		Live:   true,
+	}
+	e.Trails = append(e.Trails, tr)
+	return &laserGesture{trail: tr}
+}
+
+func (g *laserGesture) move(e *Editor) {
+	if g == nil || g.trail == nil {
+		return
+	}
+	p := e.pointer.Page
+	pts := g.trail.Points
+	if len(pts) == 0 || pts[len(pts)-1].P.Dist(p) >= 2/e.Cam().Z {
+		g.trail.Points = append(pts, TrailPoint{P: p, T: e.pointer.Time})
+	}
+}
+
+func (g *laserGesture) up(*Editor) {
+	if g != nil && g.trail != nil {
+		g.trail.Live = false
+	}
+}
+
+func (g *laserGesture) cancel(*Editor) {
+	if g != nil && g.trail != nil {
+		g.trail.Live = false
 	}
 }
 

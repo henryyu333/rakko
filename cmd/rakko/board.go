@@ -53,6 +53,9 @@ var (
 	boardMinimapSymbol  = symbol(`<rect x="3" y="4" width="18" height="16" rx="2"/><rect x="11" y="10" width="7" height="6" rx="1"/>`)
 	boardToolLockSymbol = symbol(`<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>`)
 	boardFocusSymbol    = symbol(`<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"/><circle cx="12" cy="12" r="2.5"/>`)
+	boardLaserSymbol    = symbol(`<path d="M9 15 4 20"/><circle cx="15" cy="9" r="3"/><path d="M15 2v2M15 14v2M22 9h-2M10 9H8"/>`)
+	boardExportSymbol   = symbol(`<path d="M12 15V3M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5"/>`)
+	boardWheelSymbol    = symbol(`<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/>`)
 
 	// Seams around app/OS-level calls so headless tests can drive boardUI
 	// without a window server or touching the real OS Trash/dialogs/clipboard.
@@ -128,7 +131,10 @@ type boardUI struct {
 	renamePageDraft   string
 	renamePageBoot    bool
 	ctxPt             geo.Vec
-	croppingID        doc.ID
+	hoverScreenPt     geo.Vec
+	radialOn          bool
+	radialPt          geo.Vec
+	dragTempFiles     []string
 	wasMenuOpen       bool
 	canvasFocus       bool
 	editKey      int
@@ -690,6 +696,10 @@ func (b *boardUI) onClose(*mygo.CloseEvent) {
 	b.confirmDelete = false
 	b.spaceHeld = false
 	b.panDrag = false
+	for _, p := range b.dragTempFiles {
+		_ = os.Remove(p)
+	}
+	b.dragTempFiles = nil
 	if a.quitting {
 		return
 	}
