@@ -113,7 +113,7 @@ func parseFlexJSONLLine(prefix string, line []byte, pool map[string]*string, fre
 	if at == 0 && !freeCost {
 		at = parseMillis(e.Time)
 	}
-	if at == 0 {
+	if at == 0 && freeCost {
 		at = parseMillis(e.Created)
 	}
 	if at == 0 {

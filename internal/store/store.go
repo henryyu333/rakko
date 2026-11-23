@@ -606,6 +606,9 @@ func (s *Store) addConverted(paths []string, allowDirs bool) ([]string, error) {
 		}
 		fi, err := os.Stat(abs)
 		if err != nil {
+			if allowDirs {
+				return nil, fmt.Errorf("store: converted folder %q: %w", p, err)
+			}
 			return nil, fmt.Errorf("store: converted file %q: %w", p, err)
 		}
 		if allowDirs {
