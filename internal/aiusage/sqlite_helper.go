@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -121,10 +122,31 @@ func copySQLiteDB(ctx context.Context, tag, dbPath, cacheDir string) (string, fu
 				return "", nil, fmt.Errorf("%s: reading %s: %w", tag, src, err)
 			}
 		}
-		if err := copyFile(src, dst+suf); err != nil {
+		if err := copyFile(tag, src, dst+suf); err != nil {
 			cleanup()
 			return "", nil, err
 		}
 	}
 	return dst, cleanup, nil
+}
+
+// copyFile copies src to dst with the owner's read/write mode.
+func copyFile(tag, src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("%s: reading %s: %w", tag, src, err)
+	}
+	defer in.Close()
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
+		return fmt.Errorf("%s: writing the read copy: %w", tag, err)
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		return fmt.Errorf("%s: copying %s: %w", tag, src, err)
+	}
+	if err := out.Close(); err != nil {
+		return fmt.Errorf("%s: copying %s: %w", tag, src, err)
+	}
+	return nil
 }

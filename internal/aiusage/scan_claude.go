@@ -23,15 +23,10 @@ type claudeEntryJSON struct {
 	Type      string          `json:"type"`
 	UUID      string          `json:"uuid"`
 	Timestamp json.RawMessage `json:"timestamp"`
-	Message   struct {
-		ID    string `json:"id"`
-		Model string `json:"model"`
-		Usage *struct {
-			InputTokens         int64 `json:"input_tokens"`
-			OutputTokens        int64 `json:"output_tokens"`
-			CacheCreationTokens int64 `json:"cache_creation_input_tokens"`
-			CacheReadTokens     int64 `json:"cache_read_input_tokens"`
-		} `json:"usage"`
+	Message struct {
+		ID    string         `json:"id"`
+		Model string         `json:"model"`
+		Usage *flexUsageJSON `json:"usage"`
 	} `json:"message"`
 }
 

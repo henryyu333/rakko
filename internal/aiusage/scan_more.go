@@ -8,9 +8,9 @@ import (
 	"strings"
 )
 
-// Shared flexible usage block for JSONL-based tools (Droid, Kimi, Junie,
-// Copilot OTEL, Kiro) whose assistant/turn lines carry model, timestamp, and
-// a usage object using either snake_case or camelCase keys.
+// Shared flexible usage block for JSONL/SQLite/OTEL tools (Droid, Kimi, Junie,
+// Copilot OTEL, Kiro, Claude, Devin, Antigravity, LM Studio) whose entries carry
+// token counts under either snake_case or camelCase keys.
 type flexUsageJSON struct {
 	InputTokens         int64 `json:"input_tokens"`
 	OutputTokens        int64 `json:"output_tokens"`
@@ -18,6 +18,7 @@ type flexUsageJSON struct {
 	CacheCreationTokens int64 `json:"cache_creation_input_tokens"`
 	CacheReadAlt        int64 `json:"cache_read_tokens"`
 	CacheWriteAlt       int64 `json:"cache_write_tokens"`
+	CacheCreationAlt    int64 `json:"cache_creation_tokens"`
 	PromptTokens        int64 `json:"prompt_tokens"`
 	CompletionTokens    int64 `json:"completion_tokens"`
 	InputCamel          int64 `json:"inputTokens"`
@@ -31,14 +32,15 @@ func (u *flexUsageJSON) toCounts() (in, out, cr, cw int64) {
 	in = max(u.InputTokens, u.PromptTokens, u.InputCamel)
 	out = max(u.OutputTokens, u.CompletionTokens, u.OutputCamel)
 	cr = max(u.CacheReadTokens, u.CacheReadAlt, u.CacheReadCamel, u.CachedTokens)
-	cw = max(u.CacheCreationTokens, u.CacheWriteAlt, u.CacheWriteCamel)
+	cw = max(u.CacheCreationTokens, u.CacheWriteAlt, u.CacheCreationAlt, u.CacheWriteCamel)
 	return in, out, cr, cw
 }
 
 // parseFlexJSONLLine parses one JSONL line for tools like Droid, Kimi, Junie,
-// Kiro CLI, and Copilot OTEL logs.
-func parseFlexJSONLLine(prefix, path string, line []byte, pool map[string]*string) (r rec, key string, ok bool) {
-	if !bytes.Contains(line, []byte(`"usage"`)) && !bytes.Contains(line, []byte(`"tokens"`)) {
+// Kiro CLI, Cline JSONL, and LM Studio server logs. When freeCost is true, local
+// inference records $0 cost (priced=true) regardless of any cost field.
+func parseFlexJSONLLine(prefix string, line []byte, pool map[string]*string, freeCost bool) (r rec, key string, ok bool) {
+	if !bytes.Contains(line, []byte(`"usage"`)) && (freeCost || !bytes.Contains(line, []byte(`"tokens"`))) {
 		return r, "", false
 	}
 	var e struct {
@@ -52,6 +54,7 @@ func parseFlexJSONLLine(prefix, path string, line []byte, pool map[string]*strin
 		Timestamp json.RawMessage `json:"timestamp"`
 		CreatedAt json.RawMessage `json:"created_at"`
 		Time      json.RawMessage `json:"time"`
+		Created   json.RawMessage `json:"created"`
 		Cost      *float64        `json:"cost"`
 		Usage     *flexUsageJSON  `json:"usage"`
 		Tokens    *flexUsageJSON  `json:"tokens"`
@@ -66,32 +69,34 @@ func parseFlexJSONLLine(prefix, path string, line []byte, pool map[string]*strin
 		return r, "", false
 	}
 	u := e.Usage
-	if u == nil && e.Tokens != nil {
-		u = e.Tokens
-	}
 	model := e.Model
 	msgID := e.ID
-	if msgID == "" {
-		msgID = e.UUID
-	}
-	if msgID == "" {
-		msgID = e.MessageID
-	}
-	if msgID == "" {
-		msgID = e.RequestID
-	}
-	if msgID == "" {
-		msgID = e.EventID
-	}
-	if e.Message != nil {
-		if u == nil {
-			u = e.Message.Usage
-		}
-		if model == "" {
-			model = e.Message.Model
+	if !freeCost {
+		if u == nil && e.Tokens != nil {
+			u = e.Tokens
 		}
 		if msgID == "" {
-			msgID = e.Message.ID
+			msgID = e.UUID
+		}
+		if msgID == "" {
+			msgID = e.MessageID
+		}
+		if msgID == "" {
+			msgID = e.RequestID
+		}
+		if msgID == "" {
+			msgID = e.EventID
+		}
+		if e.Message != nil {
+			if u == nil {
+				u = e.Message.Usage
+			}
+			if model == "" {
+				model = e.Message.Model
+			}
+			if msgID == "" {
+				msgID = e.Message.ID
+			}
 		}
 	}
 	if u == nil {
@@ -102,11 +107,14 @@ func parseFlexJSONLLine(prefix, path string, line []byte, pool map[string]*strin
 		return r, "", false
 	}
 	at := parseMillis(e.Timestamp)
-	if at == 0 {
+	if at == 0 && !freeCost {
 		at = parseMillis(e.CreatedAt)
 	}
-	if at == 0 {
+	if at == 0 && !freeCost {
 		at = parseMillis(e.Time)
+	}
+	if at == 0 {
+		at = parseMillis(e.Created)
 	}
 	if at == 0 {
 		return r, "", false
@@ -119,54 +127,13 @@ func parseFlexJSONLLine(prefix, path string, line []byte, pool map[string]*strin
 		cr:    cr,
 		cw:    cw,
 	}
-	if e.Cost != nil {
+	if freeCost {
+		r.cost, r.priced = 0, true
+	} else if e.Cost != nil {
 		r.cost, r.priced = *e.Cost, true
 	}
 	if msgID != "" {
 		key = prefix + ":" + msgID
-	}
-	return r, key, true
-}
-
-// parseLMStudioLine parses LM Studio server-logs JSONL lines. Local inference
-// has $0 cost (priced=true).
-func parseLMStudioLine(line []byte, pool map[string]*string) (r rec, key string, ok bool) {
-	if !bytes.Contains(line, []byte(`"usage"`)) {
-		return r, "", false
-	}
-	var e struct {
-		ID        string          `json:"id"`
-		Model     string          `json:"model"`
-		Timestamp json.RawMessage `json:"timestamp"`
-		Created   json.RawMessage `json:"created"`
-		Usage     *flexUsageJSON  `json:"usage"`
-	}
-	if json.Unmarshal(line, &e) != nil || e.Usage == nil {
-		return r, "", false
-	}
-	in, out, cr, cw := e.Usage.toCounts()
-	if in == 0 && out == 0 && cr == 0 && cw == 0 {
-		return r, "", false
-	}
-	at := parseMillis(e.Timestamp)
-	if at == 0 {
-		at = parseMillis(e.Created)
-	}
-	if at == 0 {
-		return r, "", false
-	}
-	r = rec{
-		at:     at,
-		model:  intern(pool, e.Model),
-		in:     in,
-		out:    out,
-		cr:     cr,
-		cw:     cw,
-		cost:   0,
-		priced: true,
-	}
-	if e.ID != "" {
-		key = "lmstudio:" + e.ID
 	}
 	return r, key, true
 }

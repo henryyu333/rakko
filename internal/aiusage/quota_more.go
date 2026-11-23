@@ -26,6 +26,71 @@ func finishMoreStatus(q *Quota, res httpResult, err error) bool {
 	return finishStatus(q, res, err)
 }
 
+func failQuota(q Quota, msg string) Quota {
+	q.Status = QuotaFailed
+	q.Err = msg
+	return q
+}
+
+func finishWindowQuota(q Quota) Quota {
+	if len(q.Windows) == 0 {
+		// No window the answer named could be understood — a healthy card here
+		// would freeze the last good numbers and hide that anything changed.
+		return failQuota(q, "no usage windows")
+	}
+	q.Status = QuotaOK
+	return q
+}
+
+func resolveBaseURL(override, fallback string) string {
+	if override != "" {
+		return strings.TrimRight(override, "/")
+	}
+	return fallback
+}
+
+func bearerAuth(key string) string {
+	if key == "" {
+		return ""
+	}
+	return "Bearer " + key
+}
+
+func fetchMoreQuota(ctx context.Context, env Env, tool Tool, dst any, prepare func(*Quota) (url, auth string, body []byte)) (Quota, bool) {
+	q := Quota{Tool: tool, FetchedAt: env.now()}
+	if err := ctx.Err(); err != nil {
+		return failQuota(q, shortErr(err)), false
+	}
+	url, auth, body := prepare(&q)
+	if auth == "" {
+		q.Status = QuotaNotLoggedIn
+		return q, false
+	}
+	if err := ctx.Err(); err != nil {
+		return failQuota(q, shortErr(err)), false
+	}
+	headers := [][2]string{{"Authorization", auth}}
+	var (
+		res httpResult
+		err error
+	)
+	if body != nil {
+		headers = append(headers, [2]string{"Content-Type", "application/json"}, [2]string{"Accept", "application/json"})
+		res, err = env.post(ctx, url, headers, body)
+	} else {
+		headers = append(headers, [2]string{"Accept", "application/json"})
+		res, err = env.get(ctx, url, headers)
+	}
+	q.FetchedAt = env.now()
+	if finishMoreStatus(&q, res, err) {
+		return q, false
+	}
+	if err := decodeJSON(res.body, dst); err != nil {
+		return failQuota(q, shortErr(err)), false
+	}
+	return q, true
+}
+
 func jsonNumber(v any) (float64, bool) {
 	switch x := v.(type) {
 	case float64:
@@ -92,39 +157,6 @@ func epochTime(v float64) time.Time {
 // FetchGLM reads GLM Coding Plan's 5-hour and weekly quota windows.
 // Zhipu takes the bare API key in Authorization without a Bearer prefix.
 func FetchGLM(ctx context.Context, env Env) Quota {
-	q := Quota{Tool: ToolGLM, FetchedAt: env.now()}
-	if err := ctx.Err(); err != nil {
-		q.Status = QuotaFailed
-		q.Err = shortErr(err)
-		return q
-	}
-	key, base, ok := readGLMKey(env)
-	if !ok {
-		key = secretFor(env, ToolGLM)
-		base = "https://open.bigmodel.cn"
-	}
-	if env.GLMBaseURL != "" {
-		base = strings.TrimRight(env.GLMBaseURL, "/")
-	}
-	if key == "" {
-		q.Status = QuotaNotLoggedIn
-		return q
-	}
-	if err := ctx.Err(); err != nil {
-		q.Status = QuotaFailed
-		q.Err = shortErr(err)
-		return q
-	}
-
-	res, err := env.get(ctx, base+"/api/monitor/usage/quota/limit", [][2]string{
-		{"Authorization", key},
-		{"Accept", "application/json"},
-	})
-	q.FetchedAt = env.now()
-	if finishMoreStatus(&q, res, err) {
-		return q
-	}
-
 	var reply struct {
 		Success *bool  `json:"success"`
 		Code    int    `json:"code"`
@@ -144,9 +176,16 @@ func FetchGLM(ctx context.Context, env Env) Quota {
 			} `json:"limits"`
 		} `json:"data"`
 	}
-	if err := decodeJSON(res.body, &reply); err != nil {
-		q.Status = QuotaFailed
-		q.Err = shortErr(err)
+	q, ok := fetchMoreQuota(ctx, env, ToolGLM, &reply, func(*Quota) (string, string, []byte) {
+		key, base, ok := readGLMKey(env)
+		if !ok {
+			key = secretFor(env, ToolGLM)
+			base = "https://open.bigmodel.cn"
+		}
+		base = resolveBaseURL(env.GLMBaseURL, base)
+		return base + "/api/monitor/usage/quota/limit", key, nil
+	})
+	if !ok {
 		return q
 	}
 	code := reply.Code
@@ -170,13 +209,10 @@ func FetchGLM(ctx context.Context, env Env) Quota {
 		return q
 	}
 	if (reply.Success != nil && !*reply.Success) || reply.Data == nil {
-		q.Status = QuotaFailed
 		if code != 0 {
-			q.Err = fmt.Sprintf("error %d", code)
-		} else {
-			q.Err = "request failed"
+			return failQuota(q, fmt.Sprintf("error %d", code))
 		}
-		return q
+		return failQuota(q, "request failed")
 	}
 
 	q.Plan = prettyPlan(reply.Data.Level)
@@ -216,57 +252,12 @@ func FetchGLM(ctx context.Context, env Env) Quota {
 			})
 		}
 	}
-	if len(q.Windows) == 0 {
-		// No window the answer named could be understood — the same
-		// protection Kimi and the others have: a healthy card here would
-		// freeze the last good numbers and hide that anything changed.
-		q.Status = QuotaFailed
-		q.Err = "no usage windows"
-		return q
-	}
-	q.Status = QuotaOK
-	return q
+	return finishWindowQuota(q)
 }
 
 // FetchKimi reads Kimi Code's /usages endpoint (supporting both kimi-cli and
 // kimi-code response shapes).
 func FetchKimi(ctx context.Context, env Env) Quota {
-	q := Quota{Tool: ToolKimi, FetchedAt: env.now()}
-	if err := ctx.Err(); err != nil {
-		q.Status = QuotaFailed
-		q.Err = shortErr(err)
-		return q
-	}
-	key, base, ok := readKimiKey(env)
-	if !ok {
-		key = secretFor(env, ToolKimi)
-		base = "https://api.kimi.com/coding/v1"
-	}
-	if env.KimiBaseURL != "" {
-		base = strings.TrimRight(env.KimiBaseURL, "/")
-	}
-	if key == "" {
-		q.Status = QuotaNotLoggedIn
-		return q
-	}
-	if strings.HasSuffix(base, "/coding") {
-		base += "/v1"
-	}
-	if err := ctx.Err(); err != nil {
-		q.Status = QuotaFailed
-		q.Err = shortErr(err)
-		return q
-	}
-
-	res, err := env.get(ctx, base+"/usages", [][2]string{
-		{"Authorization", "Bearer " + key},
-		{"Accept", "application/json"},
-	})
-	q.FetchedAt = env.now()
-	if finishMoreStatus(&q, res, err) {
-		return q
-	}
-
 	type row map[string]any
 	var reply struct {
 		Usage  row            `json:"usage"`
@@ -276,9 +267,19 @@ func FetchKimi(ctx context.Context, env Env) Quota {
 			Detail row `json:"detail"`
 		} `json:"limits"`
 	}
-	if err := decodeJSON(res.body, &reply); err != nil {
-		q.Status = QuotaFailed
-		q.Err = shortErr(err)
+	q, ok := fetchMoreQuota(ctx, env, ToolKimi, &reply, func(*Quota) (string, string, []byte) {
+		key, base, ok := readKimiKey(env)
+		if !ok {
+			key = secretFor(env, ToolKimi)
+			base = "https://api.kimi.com/coding/v1"
+		}
+		base = resolveBaseURL(env.KimiBaseURL, base)
+		if strings.HasSuffix(base, "/coding") {
+			base += "/v1"
+		}
+		return base + "/usages", bearerAuth(key), nil
+	})
+	if !ok {
 		return q
 	}
 
@@ -377,50 +378,11 @@ func FetchKimi(ctx context.Context, env Env) Quota {
 	if month != nil {
 		q.Windows = append(q.Windows, *month)
 	}
-	if len(q.Windows) == 0 {
-		q.Status = QuotaFailed
-		q.Err = "no usage windows"
-		return q
-	}
-	q.Status = QuotaOK
-	return q
+	return finishWindowQuota(q)
 }
 
 // FetchOpenCodeGo reads OpenCode Go's rolling (5h) and weekly/monthly windows.
 func FetchOpenCodeGo(ctx context.Context, env Env) Quota {
-	q := Quota{Tool: ToolOpencode, FetchedAt: env.now()}
-	if err := ctx.Err(); err != nil {
-		q.Status = QuotaFailed
-		q.Err = shortErr(err)
-		return q
-	}
-	key, ok := readOpenCodeGoKey(env)
-	if !ok {
-		key = secretFor(env, ToolOpencode)
-	}
-	if key == "" {
-		q.Status = QuotaNotLoggedIn
-		return q
-	}
-	url := "https://opencode.ai/zen/go/v1/usage"
-	if env.OpenCodeGoURL != "" {
-		url = env.OpenCodeGoURL
-	}
-	if err := ctx.Err(); err != nil {
-		q.Status = QuotaFailed
-		q.Err = shortErr(err)
-		return q
-	}
-
-	res, err := env.get(ctx, url, [][2]string{
-		{"Authorization", "Bearer " + key},
-		{"Accept", "application/json"},
-	})
-	q.FetchedAt = env.now()
-	if finishMoreStatus(&q, res, err) {
-		return q
-	}
-
 	type wireWin struct {
 		Status   string   `json:"status"`
 		Percent  *float64 `json:"percent"`
@@ -429,9 +391,18 @@ func FetchOpenCodeGo(ctx context.Context, env Env) Quota {
 	var reply struct {
 		Usage map[string]wireWin `json:"usage"`
 	}
-	if err := decodeJSON(res.body, &reply); err != nil {
-		q.Status = QuotaFailed
-		q.Err = shortErr(err)
+	q, ok := fetchMoreQuota(ctx, env, ToolOpencode, &reply, func(*Quota) (string, string, []byte) {
+		key, ok := readOpenCodeGoKey(env)
+		if !ok {
+			key = secretFor(env, ToolOpencode)
+		}
+		url := "https://opencode.ai/zen/go/v1/usage"
+		if env.OpenCodeGoURL != "" {
+			url = env.OpenCodeGoURL
+		}
+		return url, bearerAuth(key), nil
+	})
+	if !ok {
 		return q
 	}
 	for _, spec := range []struct {
@@ -458,50 +429,11 @@ func FetchOpenCodeGo(ctx context.Context, env Env) Quota {
 		}
 		q.Windows = append(q.Windows, win)
 	}
-	if len(q.Windows) == 0 {
-		q.Status = QuotaFailed
-		q.Err = "no usage windows"
-		return q
-	}
-	q.Status = QuotaOK
-	return q
+	return finishWindowQuota(q)
 }
 
 // FetchCommandCode reads Command Code's /alpha/billing/credits windows.
 func FetchCommandCode(ctx context.Context, env Env) Quota {
-	q := Quota{Tool: ToolCommandCode, FetchedAt: env.now()}
-	if err := ctx.Err(); err != nil {
-		q.Status = QuotaFailed
-		q.Err = shortErr(err)
-		return q
-	}
-	key, ok := readCommandCodeKey(env)
-	if !ok {
-		key = secretFor(env, ToolCommandCode)
-	}
-	if key == "" {
-		q.Status = QuotaNotLoggedIn
-		return q
-	}
-	base := "https://api.commandcode.ai"
-	if env.CommandCodeBaseURL != "" {
-		base = strings.TrimRight(env.CommandCodeBaseURL, "/")
-	}
-	if err := ctx.Err(); err != nil {
-		q.Status = QuotaFailed
-		q.Err = shortErr(err)
-		return q
-	}
-
-	res, err := env.get(ctx, base+"/alpha/billing/credits", [][2]string{
-		{"Authorization", "Bearer " + key},
-		{"Accept", "application/json"},
-	})
-	q.FetchedAt = env.now()
-	if finishMoreStatus(&q, res, err) {
-		return q
-	}
-
 	type cmdWin struct {
 		Used    any `json:"used"`
 		Cap     any `json:"cap"`
@@ -516,9 +448,15 @@ func FetchCommandCode(ctx context.Context, env Env) Quota {
 			Weekly   *cmdWin `json:"weekly"`
 		} `json:"windowLimits"`
 	}
-	if err := decodeJSON(res.body, &reply); err != nil {
-		q.Status = QuotaFailed
-		q.Err = shortErr(err)
+	q, ok := fetchMoreQuota(ctx, env, ToolCommandCode, &reply, func(*Quota) (string, string, []byte) {
+		key, ok := readCommandCodeKey(env)
+		if !ok {
+			key = secretFor(env, ToolCommandCode)
+		}
+		base := resolveBaseURL(env.CommandCodeBaseURL, "https://api.commandcode.ai")
+		return base + "/alpha/billing/credits", bearerAuth(key), nil
+	})
+	if !ok {
 		return q
 	}
 	q.Plan = prettyCommandCodePlan(reply.Credits.PlanID)
@@ -547,13 +485,7 @@ func FetchCommandCode(ctx context.Context, env Env) Quota {
 			})
 		}
 	}
-	if len(q.Windows) == 0 {
-		q.Status = QuotaFailed
-		q.Err = "no usage windows"
-		return q
-	}
-	q.Status = QuotaOK
-	return q
+	return finishWindowQuota(q)
 }
 
 func prettyCommandCodePlan(id string) string {
@@ -578,39 +510,6 @@ func prettyCommandCodePlan(id string) string {
 
 // FetchDeepSeek reads DeepSeek's API account balance (/user/balance).
 func FetchDeepSeek(ctx context.Context, env Env) Quota {
-	q := Quota{Tool: ToolDeepSeek, Plan: "API", FetchedAt: env.now()}
-	if err := ctx.Err(); err != nil {
-		q.Status = QuotaFailed
-		q.Err = shortErr(err)
-		return q
-	}
-	key, ok := readDeepSeekKey(env)
-	if !ok {
-		key = secretFor(env, ToolDeepSeek)
-	}
-	if key == "" {
-		q.Status = QuotaNotLoggedIn
-		return q
-	}
-	base := "https://api.deepseek.com"
-	if env.DeepSeekBaseURL != "" {
-		base = strings.TrimRight(env.DeepSeekBaseURL, "/")
-	}
-	if err := ctx.Err(); err != nil {
-		q.Status = QuotaFailed
-		q.Err = shortErr(err)
-		return q
-	}
-
-	res, err := env.get(ctx, base+"/user/balance", [][2]string{
-		{"Authorization", "Bearer " + key},
-		{"Accept", "application/json"},
-	})
-	q.FetchedAt = env.now()
-	if finishMoreStatus(&q, res, err) {
-		return q
-	}
-
 	var reply struct {
 		IsAvailable  bool `json:"is_available"`
 		BalanceInfos []struct {
@@ -620,15 +519,20 @@ func FetchDeepSeek(ctx context.Context, env Env) Quota {
 			ToppedUpBalance any    `json:"topped_up_balance"`
 		} `json:"balance_infos"`
 	}
-	if err := decodeJSON(res.body, &reply); err != nil {
-		q.Status = QuotaFailed
-		q.Err = shortErr(err)
+	q, ok := fetchMoreQuota(ctx, env, ToolDeepSeek, &reply, func(q *Quota) (string, string, []byte) {
+		q.Plan = "API"
+		key, ok := readDeepSeekKey(env)
+		if !ok {
+			key = secretFor(env, ToolDeepSeek)
+		}
+		base := resolveBaseURL(env.DeepSeekBaseURL, "https://api.deepseek.com")
+		return base + "/user/balance", bearerAuth(key), nil
+	})
+	if !ok {
 		return q
 	}
 	if len(reply.BalanceInfos) == 0 {
-		q.Status = QuotaFailed
-		q.Err = "no balance info"
-		return q
+		return failQuota(q, "no balance info")
 	}
 	chosen := reply.BalanceInfos[0]
 	for _, b := range reply.BalanceInfos {
@@ -639,9 +543,7 @@ func FetchDeepSeek(ctx context.Context, env Env) Quota {
 	}
 	total, okTotal := jsonNumber(chosen.TotalBalance)
 	if !okTotal {
-		q.Status = QuotaFailed
-		q.Err = "invalid balance"
-		return q
+		return failQuota(q, "invalid balance")
 	}
 	sign := "¥"
 	if strings.EqualFold(chosen.Currency, "USD") {
@@ -673,41 +575,6 @@ func trimBalanceDecimal(v float64) string {
 
 // FetchCursor reads Cursor's current billing-period usage via ConnectRPC JSON.
 func FetchCursor(ctx context.Context, env Env) Quota {
-	q := Quota{Tool: ToolCursor, FetchedAt: env.now()}
-	if err := ctx.Err(); err != nil {
-		q.Status = QuotaFailed
-		q.Err = shortErr(err)
-		return q
-	}
-	tok, plan, ok := readCursorCreds(ctx, env)
-	if !ok {
-		tok = secretFor(env, ToolCursor)
-	}
-	if tok == "" {
-		q.Status = QuotaNotLoggedIn
-		return q
-	}
-	q.Plan = plan
-	base := "https://api2.cursor.sh"
-	if env.CursorBaseURL != "" {
-		base = strings.TrimRight(env.CursorBaseURL, "/")
-	}
-	if err := ctx.Err(); err != nil {
-		q.Status = QuotaFailed
-		q.Err = shortErr(err)
-		return q
-	}
-
-	res, err := env.post(ctx, base+"/aiserver.v1.DashboardService/GetCurrentPeriodUsage", [][2]string{
-		{"Authorization", "Bearer " + tok},
-		{"Content-Type", "application/json"},
-		{"Accept", "application/json"},
-	}, []byte("{}"))
-	q.FetchedAt = env.now()
-	if finishMoreStatus(&q, res, err) {
-		return q
-	}
-
 	var reply struct {
 		Enabled         bool `json:"enabled"`
 		BillingCycleEnd any  `json:"billingCycleEnd"`
@@ -719,15 +586,22 @@ func FetchCursor(ctx context.Context, env Env) Quota {
 			Limit            *float64 `json:"limit"`
 		} `json:"planUsage"`
 	}
-	if err := decodeJSON(res.body, &reply); err != nil {
-		q.Status = QuotaFailed
-		q.Err = shortErr(err)
+	q, ok := fetchMoreQuota(ctx, env, ToolCursor, &reply, func(q *Quota) (string, string, []byte) {
+		tok, plan, ok := readCursorCreds(ctx, env)
+		if !ok {
+			tok = secretFor(env, ToolCursor)
+		}
+		if tok != "" {
+			q.Plan = plan
+		}
+		base := resolveBaseURL(env.CursorBaseURL, "https://api2.cursor.sh")
+		return base + "/aiserver.v1.DashboardService/GetCurrentPeriodUsage", bearerAuth(tok), []byte("{}")
+	})
+	if !ok {
 		return q
 	}
 	if reply.PlanUsage == nil {
-		q.Status = QuotaFailed
-		q.Err = "no plan usage"
-		return q
+		return failQuota(q, "no plan usage")
 	}
 	resets := parseFlexibleTime(reply.BillingCycleEnd)
 	var used float64
@@ -741,9 +615,7 @@ func FetchCursor(ctx context.Context, env Env) Quota {
 		used, haveUsed = *reply.PlanUsage.AutoPercentUsed, true
 	}
 	if !haveUsed {
-		q.Status = QuotaFailed
-		q.Err = "no usage percent"
-		return q
+		return failQuota(q, "no usage percent")
 	}
 	q.Windows = append(q.Windows, Window{
 		Name:     "Month",

@@ -26,13 +26,11 @@ import (
 // deduplicated by <conv>:<step_index>.
 
 type agyLineJSON struct {
-	StepIndex       *int64          `json:"step_index"`
-	Type            string          `json:"type"`
-	Model           string          `json:"model"`
-	InputTokens     int64           `json:"input_tokens"`
-	CacheReadTokens int64           `json:"cache_read_tokens"`
-	OutputTokens    int64           `json:"output_tokens"`
-	CreatedAt       json.RawMessage `json:"created_at"`
+	StepIndex *int64          `json:"step_index"`
+	Type      string          `json:"type"`
+	Model     string          `json:"model"`
+	CreatedAt json.RawMessage `json:"created_at"`
+	flexUsageJSON
 }
 
 func parseAntigravityLine(path string, line []byte, pool map[string]*string) (r rec, key string, ok bool) {
@@ -51,7 +49,7 @@ func parseAntigravityLine(path string, line []byte, pool map[string]*string) (r 
 	r.model = intern(pool, e.Model)
 	r.in = e.InputTokens
 	r.out = e.OutputTokens
-	r.cr = e.CacheReadTokens
+	r.cr = e.CacheReadAlt
 	if e.StepIndex != nil {
 		conv := agyConvID(path)
 		key = conv + ":" + strconv.FormatInt(*e.StepIndex, 10)

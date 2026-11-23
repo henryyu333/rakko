@@ -424,8 +424,8 @@ var registry = []toolEntry{
 				{dir: joinHome(home, ".factory", "projects"), match: "*.jsonl"},
 			}
 		},
-		parseLine: func(path string, line []byte, pool map[string]*string, _ *fileState) (rec, string, bool) {
-			return parseFlexJSONLLine("droid", path, line, pool)
+		parseLine: func(_ string, line []byte, pool map[string]*string, _ *fileState) (rec, string, bool) {
+			return parseFlexJSONLLine("droid", line, pool, false)
 		},
 	},
 	{
@@ -508,8 +508,8 @@ var registry = []toolEntry{
 		roots: func(home string) []rootSpec {
 			return []rootSpec{{dir: joinHome(home, ".kiro", "sessions", "cli"), match: "*.jsonl"}}
 		},
-		parseLine: func(path string, line []byte, pool map[string]*string, _ *fileState) (rec, string, bool) {
-			return parseFlexJSONLLine("kiro", path, line, pool)
+		parseLine: func(_ string, line []byte, pool map[string]*string, _ *fileState) (rec, string, bool) {
+			return parseFlexJSONLLine("kiro", line, pool, false)
 		},
 	},
 	{
@@ -533,8 +533,8 @@ var registry = []toolEntry{
 		parseWhole: func(path string, data []byte, pool map[string]*string) ([]rec, error) {
 			return parseClineUIMessagesFile("cline", path, data, pool)
 		},
-		parseLine: func(path string, line []byte, pool map[string]*string, _ *fileState) (rec, string, bool) {
-			return parseFlexJSONLLine("cline", path, line, pool)
+		parseLine: func(_ string, line []byte, pool map[string]*string, _ *fileState) (rec, string, bool) {
+			return parseFlexJSONLLine("cline", line, pool, false)
 		},
 	},
 	{
@@ -623,8 +623,8 @@ var registry = []toolEntry{
 				{dir: joinHome(home, ".kimi-code", "sessions"), match: "*.jsonl"},
 			}
 		},
-		parseLine: func(path string, line []byte, pool map[string]*string, _ *fileState) (rec, string, bool) {
-			return parseFlexJSONLLine("kimi", path, line, pool)
+		parseLine: func(_ string, line []byte, pool map[string]*string, _ *fileState) (rec, string, bool) {
+			return parseFlexJSONLLine("kimi", line, pool, false)
 		},
 	},
 	{
@@ -640,8 +640,8 @@ var registry = []toolEntry{
 		roots: func(home string) []rootSpec {
 			return []rootSpec{{dir: joinHome(home, ".junie", "sessions"), match: "events.jsonl"}}
 		},
-		parseLine: func(path string, line []byte, pool map[string]*string, _ *fileState) (rec, string, bool) {
-			return parseFlexJSONLLine("junie", path, line, pool)
+		parseLine: func(_ string, line []byte, pool map[string]*string, _ *fileState) (rec, string, bool) {
+			return parseFlexJSONLLine("junie", line, pool, false)
 		},
 	},
 	{
@@ -689,7 +689,7 @@ var registry = []toolEntry{
 			return []rootSpec{{dir: filepath.Join(base, "server-logs"), match: "*.log"}}
 		},
 		parseLine: func(_ string, line []byte, pool map[string]*string, _ *fileState) (rec, string, bool) {
-			return parseLMStudioLine(line, pool)
+			return parseFlexJSONLLine("lmstudio", line, pool, true)
 		},
 	},
 	// --- Installed-but-unreadable (API / RPC / sync-only) tools ---

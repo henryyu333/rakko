@@ -15,17 +15,7 @@ package aiusage
 // projection of ~4k messages is under 1 MB) and avoids missing a message
 // whose tokens were finalized after its row was created.
 
-import (
-	"context"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"io"
-	"io/fs"
-	"os"
-	"path/filepath"
-	"time"
-)
+import "context"
 
 const opencodeQuery = `
 SELECT time_created,
@@ -79,50 +69,15 @@ func derefStr(p *string) string {
 // afterwards; only SELECT runs against it.
 func readOpencode(ctx context.Context, dbPath, cacheDir string, pool map[string]*string) ([]rec, error) {
 	// opencode may be writing while the files are copied, and a copy taken
-	// mid-checkpoint can fail to open. A fresh copy a moment later is
-	// consistent again; a few tries keep one busy second from blanking the
-	// whole tool's usage.
-	var err error
-	for range 3 {
-		var out []rec
-		if out, err = readOpencodeOnce(ctx, dbPath, cacheDir, pool); err == nil || ctx.Err() != nil || errors.Is(err, errUnsupportedDBSchema) {
-			return out, err
+	// mid-checkpoint can fail to open. withSQLiteCopy retries on transient
+	// opens and cleans up the private copy directory after reading.
+	var rows []opencodeRow
+	if err := withSQLiteCopy(ctx, "opencode", dbPath, cacheDir, func(db sqliteCopy) error {
+		if err := db.requireTable(ctx, "message"); err != nil {
+			return err
 		}
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-time.After(150 * time.Millisecond):
-		}
-	}
-	return nil, err
-}
-
-func readOpencodeOnce(ctx context.Context, dbPath, cacheDir string, pool map[string]*string) ([]rec, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	copyPath, cleanup, err := copyOpencodeDB(ctx, dbPath, cacheDir)
-	if err != nil {
-		return nil, err
-	}
-	defer cleanup()
-	rawTables, err := querySQLiteJSON(ctx, "opencode", copyPath, "SELECT name FROM sqlite_master WHERE type='table' AND name='message'")
-	if err != nil {
-		return nil, err
-	}
-	var tables []struct {
-		Name string `json:"name"`
-	}
-	if len(rawTables) > 0 {
-		if err := json.Unmarshal(rawTables, &tables); err != nil {
-			return nil, fmt.Errorf("opencode: decoding table check: %w", err)
-		}
-	}
-	if len(tables) == 0 {
-		return nil, errUnsupportedDBSchema
-	}
-	rows, err := queryOpencode(ctx, copyPath)
-	if err != nil {
+		return db.queryJSON(ctx, opencodeQuery, &rows)
+	}); err != nil {
 		return nil, err
 	}
 	out := make([]rec, 0, len(rows))
@@ -145,67 +100,4 @@ func readOpencodeOnce(ctx context.Context, dbPath, cacheDir string, pool map[str
 		out = append(out, r)
 	}
 	return out, nil
-}
-
-// copyOpencodeDB copies the database and an existing WAL into a private
-// directory under cacheDir (the system temporary directory when the shell
-// has no cache directory) and returns the database path there. cleanup
-// removes the whole directory: the database, its WAL and the -shm/-wal
-// SQLite created for the copy.
-func copyOpencodeDB(ctx context.Context, dbPath, cacheDir string) (string, func(), error) {
-	if cacheDir != "" {
-		// The first scan of a new install runs before the scan cache has
-		// created this directory.
-		if err := os.MkdirAll(cacheDir, 0o700); err != nil {
-			return "", nil, fmt.Errorf("opencode: making the read copy: %w", err)
-		}
-	}
-	dir, err := os.MkdirTemp(cacheDir, "opencode-")
-	if err != nil {
-		return "", nil, fmt.Errorf("opencode: making the read copy: %w", err)
-	}
-	cleanup := func() { _ = os.RemoveAll(dir) }
-	dst := filepath.Join(dir, "opencode.db")
-	for _, name := range []string{"", "-wal"} {
-		if err := ctx.Err(); err != nil {
-			cleanup()
-			return "", nil, err
-		}
-		src := dbPath + name
-		if name != "" {
-			if _, err := os.Stat(src); err != nil {
-				if errors.Is(err, fs.ErrNotExist) {
-					continue
-				}
-				cleanup()
-				return "", nil, fmt.Errorf("opencode: reading %s: %w", src, err)
-			}
-		}
-		if err := copyFile(src, dst+name); err != nil {
-			cleanup()
-			return "", nil, err
-		}
-	}
-	return dst, cleanup, nil
-}
-
-// copyFile copies src to dst with the owner's read/write mode.
-func copyFile(src, dst string) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return fmt.Errorf("opencode: reading %s: %w", src, err)
-	}
-	defer in.Close()
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
-	if err != nil {
-		return fmt.Errorf("opencode: writing the read copy: %w", err)
-	}
-	if _, err := io.Copy(out, in); err != nil {
-		out.Close()
-		return fmt.Errorf("opencode: copying %s: %w", src, err)
-	}
-	if err := out.Close(); err != nil {
-		return fmt.Errorf("opencode: copying %s: %w", src, err)
-	}
-	return nil
 }

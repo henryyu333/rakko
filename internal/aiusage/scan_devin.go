@@ -35,13 +35,8 @@ type devinChatMsg struct {
 	Role     string `json:"role"`
 	Metadata *struct {
 		CreatedAt json.RawMessage `json:"created_at"`
-		Model     string          `json:"model"`
-		Metrics   *struct {
-			InputTokens         int64 `json:"input_tokens"`
-			OutputTokens        int64 `json:"output_tokens"`
-			CacheReadTokens     int64 `json:"cache_read_tokens"`
-			CacheCreationTokens int64 `json:"cache_creation_tokens"`
-		} `json:"metrics"`
+		Model     string         `json:"model"`
+		Metrics   *flexUsageJSON `json:"metrics"`
 	} `json:"metadata"`
 }
 
@@ -62,7 +57,8 @@ func readDevinDB(ctx context.Context, dbPath, cacheDir string, pool map[string]*
 			continue
 		}
 		met := msg.Metadata.Metrics
-		if met.InputTokens == 0 && met.OutputTokens == 0 && met.CacheReadTokens == 0 && met.CacheCreationTokens == 0 {
+		in, outTok, cr, cw := met.toCounts()
+		if in == 0 && outTok == 0 && cr == 0 && cw == 0 {
 			continue
 		}
 		at := parseMillis(msg.Metadata.CreatedAt)
@@ -79,10 +75,10 @@ func readDevinDB(ctx context.Context, dbPath, cacheDir string, pool map[string]*
 		out = append(out, rec{
 			at:    at,
 			model: intern(pool, model),
-			in:    met.InputTokens,
-			out:   met.OutputTokens,
-			cr:    met.CacheReadTokens,
-			cw:    met.CacheCreationTokens,
+			in:    in,
+			out:   outTok,
+			cr:    cr,
+			cw:    cw,
 			key:   fmt.Sprintf("devin:%s:%d", row.SessionID, row.NodeID),
 		})
 	}
