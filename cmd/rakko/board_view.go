@@ -216,6 +216,7 @@ func (a *shelf) boardStage(c *ui.Context, l locales.Messages, pal *editor.Palett
 		a.boardNavBar(c, l, pal)
 		a.boardSubBar(c, l, pal)
 		a.boardToolbar(c, l, pal)
+		a.boardPropPanel(c, l, pal)
 	})
 }
 
@@ -386,6 +387,23 @@ func (a *shelf) boardNavBar(c *ui.Context, l locales.Messages, pal *editor.Palet
 				p := p
 				if m.Item(l.BoardPaperSection() + " · " + p.label).Checked(curPaper == p.id).Chosen() {
 					b.ed.SetPaper(p.id)
+					b.invalidate()
+				}
+			}
+			m.Separator()
+			curLook := b.ed.Look()
+			looks := []struct {
+				id    string
+				label string
+			}{
+				{doc.LookSketch, l.BoardLookSketch()},
+				{doc.LookClean, l.BoardLookClean()},
+				{doc.LookMono, l.BoardLookMono()},
+			}
+			for _, lk := range looks {
+				lk := lk
+				if m.Item(l.BoardLookSection() + " · " + lk.label).Checked(curLook == lk.id).Chosen() {
+					b.ed.SetLook(lk.id)
 					b.invalidate()
 				}
 			}

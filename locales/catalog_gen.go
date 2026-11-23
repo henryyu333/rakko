@@ -10868,3 +10868,483 @@ func BoardShapeCurve() string { return In(i18n.Locale()).BoardShapeCurve() }
 func (msgs Messages) BoardShapeCurve() string {
 	return Catalog.Format(msgs.locale, "boardShapeCurve", nil)
 }
+
+// BoardLookSection says "风格"
+// in the language the app shows.
+func BoardLookSection() string { return In(i18n.Locale()).BoardLookSection() }
+
+// BoardLookSection says "风格"
+// in the language of msgs.
+func (msgs Messages) BoardLookSection() string {
+	return Catalog.Format(msgs.locale, "boardLookSection", nil)
+}
+
+// BoardLookSketch says "手绘"
+// in the language the app shows.
+func BoardLookSketch() string { return In(i18n.Locale()).BoardLookSketch() }
+
+// BoardLookSketch says "手绘"
+// in the language of msgs.
+func (msgs Messages) BoardLookSketch() string {
+	return Catalog.Format(msgs.locale, "boardLookSketch", nil)
+}
+
+// BoardLookClean says "干净"
+// in the language the app shows.
+func BoardLookClean() string { return In(i18n.Locale()).BoardLookClean() }
+
+// BoardLookClean says "干净"
+// in the language of msgs.
+func (msgs Messages) BoardLookClean() string {
+	return Catalog.Format(msgs.locale, "boardLookClean", nil)
+}
+
+// BoardLookMono says "单色"
+// in the language the app shows.
+func BoardLookMono() string { return In(i18n.Locale()).BoardLookMono() }
+
+// BoardLookMono says "单色"
+// in the language of msgs.
+func (msgs Messages) BoardLookMono() string {
+	return Catalog.Format(msgs.locale, "boardLookMono", nil)
+}
+
+// BoardPropStrokeTab says "描边"
+// in the language the app shows.
+func BoardPropStrokeTab() string { return In(i18n.Locale()).BoardPropStrokeTab() }
+
+// BoardPropStrokeTab says "描边"
+// in the language of msgs.
+func (msgs Messages) BoardPropStrokeTab() string {
+	return Catalog.Format(msgs.locale, "boardPropStrokeTab", nil)
+}
+
+// BoardPropFillTab says "填充"
+// in the language the app shows.
+func BoardPropFillTab() string { return In(i18n.Locale()).BoardPropFillTab() }
+
+// BoardPropFillTab says "填充"
+// in the language of msgs.
+func (msgs Messages) BoardPropFillTab() string {
+	return Catalog.Format(msgs.locale, "boardPropFillTab", nil)
+}
+
+// BoardPropColor says "颜色"
+// in the language the app shows.
+func BoardPropColor() string { return In(i18n.Locale()).BoardPropColor() }
+
+// BoardPropColor says "颜色"
+// in the language of msgs.
+func (msgs Messages) BoardPropColor() string {
+	return Catalog.Format(msgs.locale, "boardPropColor", nil)
+}
+
+// BoardPropFill says "填充样式"
+// in the language the app shows.
+func BoardPropFill() string { return In(i18n.Locale()).BoardPropFill() }
+
+// BoardPropFill says "填充样式"
+// in the language of msgs.
+func (msgs Messages) BoardPropFill() string {
+	return Catalog.Format(msgs.locale, "boardPropFill", nil)
+}
+
+// BoardPropFillNone says "无"
+// in the language the app shows.
+func BoardPropFillNone() string { return In(i18n.Locale()).BoardPropFillNone() }
+
+// BoardPropFillNone says "无"
+// in the language of msgs.
+func (msgs Messages) BoardPropFillNone() string {
+	return Catalog.Format(msgs.locale, "boardPropFillNone", nil)
+}
+
+// BoardPropFillSemi says "半透"
+// in the language the app shows.
+func BoardPropFillSemi() string { return In(i18n.Locale()).BoardPropFillSemi() }
+
+// BoardPropFillSemi says "半透"
+// in the language of msgs.
+func (msgs Messages) BoardPropFillSemi() string {
+	return Catalog.Format(msgs.locale, "boardPropFillSemi", nil)
+}
+
+// BoardPropFillSolid says "实心"
+// in the language the app shows.
+func BoardPropFillSolid() string { return In(i18n.Locale()).BoardPropFillSolid() }
+
+// BoardPropFillSolid says "实心"
+// in the language of msgs.
+func (msgs Messages) BoardPropFillSolid() string {
+	return Catalog.Format(msgs.locale, "boardPropFillSolid", nil)
+}
+
+// BoardPropFillPattern says "斜线"
+// in the language the app shows.
+func BoardPropFillPattern() string { return In(i18n.Locale()).BoardPropFillPattern() }
+
+// BoardPropFillPattern says "斜线"
+// in the language of msgs.
+func (msgs Messages) BoardPropFillPattern() string {
+	return Catalog.Format(msgs.locale, "boardPropFillPattern", nil)
+}
+
+// BoardPropWidth says "粗细"
+// in the language the app shows.
+func BoardPropWidth() string { return In(i18n.Locale()).BoardPropWidth() }
+
+// BoardPropWidth says "粗细"
+// in the language of msgs.
+func (msgs Messages) BoardPropWidth() string {
+	return Catalog.Format(msgs.locale, "boardPropWidth", nil)
+}
+
+// BoardPropDash says "线型"
+// in the language the app shows.
+func BoardPropDash() string { return In(i18n.Locale()).BoardPropDash() }
+
+// BoardPropDash says "线型"
+// in the language of msgs.
+func (msgs Messages) BoardPropDash() string {
+	return Catalog.Format(msgs.locale, "boardPropDash", nil)
+}
+
+// BoardPropDashSolid says "实线"
+// in the language the app shows.
+func BoardPropDashSolid() string { return In(i18n.Locale()).BoardPropDashSolid() }
+
+// BoardPropDashSolid says "实线"
+// in the language of msgs.
+func (msgs Messages) BoardPropDashSolid() string {
+	return Catalog.Format(msgs.locale, "boardPropDashSolid", nil)
+}
+
+// BoardPropDashDashed says "虚线"
+// in the language the app shows.
+func BoardPropDashDashed() string { return In(i18n.Locale()).BoardPropDashDashed() }
+
+// BoardPropDashDashed says "虚线"
+// in the language of msgs.
+func (msgs Messages) BoardPropDashDashed() string {
+	return Catalog.Format(msgs.locale, "boardPropDashDashed", nil)
+}
+
+// BoardPropDashDotted says "点线"
+// in the language the app shows.
+func BoardPropDashDotted() string { return In(i18n.Locale()).BoardPropDashDotted() }
+
+// BoardPropDashDotted says "点线"
+// in the language of msgs.
+func (msgs Messages) BoardPropDashDotted() string {
+	return Catalog.Format(msgs.locale, "boardPropDashDotted", nil)
+}
+
+// BoardPropOpacity says "不透明度"
+// in the language the app shows.
+func BoardPropOpacity() string { return In(i18n.Locale()).BoardPropOpacity() }
+
+// BoardPropOpacity says "不透明度"
+// in the language of msgs.
+func (msgs Messages) BoardPropOpacity() string {
+	return Catalog.Format(msgs.locale, "boardPropOpacity", nil)
+}
+
+// BoardPropFont says "字体"
+// in the language the app shows.
+func BoardPropFont() string { return In(i18n.Locale()).BoardPropFont() }
+
+// BoardPropFont says "字体"
+// in the language of msgs.
+func (msgs Messages) BoardPropFont() string {
+	return Catalog.Format(msgs.locale, "boardPropFont", nil)
+}
+
+// BoardPropFontSketch says "手写"
+// in the language the app shows.
+func BoardPropFontSketch() string { return In(i18n.Locale()).BoardPropFontSketch() }
+
+// BoardPropFontSketch says "手写"
+// in the language of msgs.
+func (msgs Messages) BoardPropFontSketch() string {
+	return Catalog.Format(msgs.locale, "boardPropFontSketch", nil)
+}
+
+// BoardPropFontSans says "无衬线"
+// in the language the app shows.
+func BoardPropFontSans() string { return In(i18n.Locale()).BoardPropFontSans() }
+
+// BoardPropFontSans says "无衬线"
+// in the language of msgs.
+func (msgs Messages) BoardPropFontSans() string {
+	return Catalog.Format(msgs.locale, "boardPropFontSans", nil)
+}
+
+// BoardPropFontSerif says "衬线"
+// in the language the app shows.
+func BoardPropFontSerif() string { return In(i18n.Locale()).BoardPropFontSerif() }
+
+// BoardPropFontSerif says "衬线"
+// in the language of msgs.
+func (msgs Messages) BoardPropFontSerif() string {
+	return Catalog.Format(msgs.locale, "boardPropFontSerif", nil)
+}
+
+// BoardPropFontMono says "等宽"
+// in the language the app shows.
+func BoardPropFontMono() string { return In(i18n.Locale()).BoardPropFontMono() }
+
+// BoardPropFontMono says "等宽"
+// in the language of msgs.
+func (msgs Messages) BoardPropFontMono() string {
+	return Catalog.Format(msgs.locale, "boardPropFontMono", nil)
+}
+
+// BoardPropFontSize says "字号"
+// in the language the app shows.
+func BoardPropFontSize() string { return In(i18n.Locale()).BoardPropFontSize() }
+
+// BoardPropFontSize says "字号"
+// in the language of msgs.
+func (msgs Messages) BoardPropFontSize() string {
+	return Catalog.Format(msgs.locale, "boardPropFontSize", nil)
+}
+
+// BoardPropText says "文字"
+// in the language the app shows.
+func BoardPropText() string { return In(i18n.Locale()).BoardPropText() }
+
+// BoardPropText says "文字"
+// in the language of msgs.
+func (msgs Messages) BoardPropText() string {
+	return Catalog.Format(msgs.locale, "boardPropText", nil)
+}
+
+// BoardPropLabelPos says "标签对齐"
+// in the language the app shows.
+func BoardPropLabelPos() string { return In(i18n.Locale()).BoardPropLabelPos() }
+
+// BoardPropLabelPos says "标签对齐"
+// in the language of msgs.
+func (msgs Messages) BoardPropLabelPos() string {
+	return Catalog.Format(msgs.locale, "boardPropLabelPos", nil)
+}
+
+// BoardPropShape says "形状"
+// in the language the app shows.
+func BoardPropShape() string { return In(i18n.Locale()).BoardPropShape() }
+
+// BoardPropShape says "形状"
+// in the language of msgs.
+func (msgs Messages) BoardPropShape() string {
+	return Catalog.Format(msgs.locale, "boardPropShape", nil)
+}
+
+// BoardPropHeads says "箭头头部"
+// in the language the app shows.
+func BoardPropHeads() string { return In(i18n.Locale()).BoardPropHeads() }
+
+// BoardPropHeads says "箭头头部"
+// in the language of msgs.
+func (msgs Messages) BoardPropHeads() string {
+	return Catalog.Format(msgs.locale, "boardPropHeads", nil)
+}
+
+// BoardPropHeadStart says "起点"
+// in the language the app shows.
+func BoardPropHeadStart() string { return In(i18n.Locale()).BoardPropHeadStart() }
+
+// BoardPropHeadStart says "起点"
+// in the language of msgs.
+func (msgs Messages) BoardPropHeadStart() string {
+	return Catalog.Format(msgs.locale, "boardPropHeadStart", nil)
+}
+
+// BoardPropHeadEnd says "终点"
+// in the language the app shows.
+func BoardPropHeadEnd() string { return In(i18n.Locale()).BoardPropHeadEnd() }
+
+// BoardPropHeadEnd says "终点"
+// in the language of msgs.
+func (msgs Messages) BoardPropHeadEnd() string {
+	return Catalog.Format(msgs.locale, "boardPropHeadEnd", nil)
+}
+
+// BoardPropRoute says "走线"
+// in the language the app shows.
+func BoardPropRoute() string { return In(i18n.Locale()).BoardPropRoute() }
+
+// BoardPropRoute says "走线"
+// in the language of msgs.
+func (msgs Messages) BoardPropRoute() string {
+	return Catalog.Format(msgs.locale, "boardPropRoute", nil)
+}
+
+// BoardPropRouteStraight says "直线"
+// in the language the app shows.
+func BoardPropRouteStraight() string { return In(i18n.Locale()).BoardPropRouteStraight() }
+
+// BoardPropRouteStraight says "直线"
+// in the language of msgs.
+func (msgs Messages) BoardPropRouteStraight() string {
+	return Catalog.Format(msgs.locale, "boardPropRouteStraight", nil)
+}
+
+// BoardPropRouteCurve says "弧线"
+// in the language the app shows.
+func BoardPropRouteCurve() string { return In(i18n.Locale()).BoardPropRouteCurve() }
+
+// BoardPropRouteCurve says "弧线"
+// in the language of msgs.
+func (msgs Messages) BoardPropRouteCurve() string {
+	return Catalog.Format(msgs.locale, "boardPropRouteCurve", nil)
+}
+
+// BoardPropRouteElbow says "折线"
+// in the language the app shows.
+func BoardPropRouteElbow() string { return In(i18n.Locale()).BoardPropRouteElbow() }
+
+// BoardPropRouteElbow says "折线"
+// in the language of msgs.
+func (msgs Messages) BoardPropRouteElbow() string {
+	return Catalog.Format(msgs.locale, "boardPropRouteElbow", nil)
+}
+
+// BoardPropSpline says "平滑"
+// in the language the app shows.
+func BoardPropSpline() string { return In(i18n.Locale()).BoardPropSpline() }
+
+// BoardPropSpline says "平滑"
+// in the language of msgs.
+func (msgs Messages) BoardPropSpline() string {
+	return Catalog.Format(msgs.locale, "boardPropSpline", nil)
+}
+
+// BoardPropSplineStraight says "折线"
+// in the language the app shows.
+func BoardPropSplineStraight() string { return In(i18n.Locale()).BoardPropSplineStraight() }
+
+// BoardPropSplineStraight says "折线"
+// in the language of msgs.
+func (msgs Messages) BoardPropSplineStraight() string {
+	return Catalog.Format(msgs.locale, "boardPropSplineStraight", nil)
+}
+
+// BoardPropSplineCubic says "曲线"
+// in the language the app shows.
+func BoardPropSplineCubic() string { return In(i18n.Locale()).BoardPropSplineCubic() }
+
+// BoardPropSplineCubic says "曲线"
+// in the language of msgs.
+func (msgs Messages) BoardPropSplineCubic() string {
+	return Catalog.Format(msgs.locale, "boardPropSplineCubic", nil)
+}
+
+// BoardPropPen says "笔触"
+// in the language the app shows.
+func BoardPropPen() string { return In(i18n.Locale()).BoardPropPen() }
+
+// BoardPropPen says "笔触"
+// in the language of msgs.
+func (msgs Messages) BoardPropPen() string {
+	return Catalog.Format(msgs.locale, "boardPropPen", nil)
+}
+
+// BoardPropPenSize says "笔号"
+// in the language the app shows.
+func BoardPropPenSize() string { return In(i18n.Locale()).BoardPropPenSize() }
+
+// BoardPropPenSize says "笔号"
+// in the language of msgs.
+func (msgs Messages) BoardPropPenSize() string {
+	return Catalog.Format(msgs.locale, "boardPropPenSize", nil)
+}
+
+// BoardPropEraserMode says "橡皮模式"
+// in the language the app shows.
+func BoardPropEraserMode() string { return In(i18n.Locale()).BoardPropEraserMode() }
+
+// BoardPropEraserMode says "橡皮模式"
+// in the language of msgs.
+func (msgs Messages) BoardPropEraserMode() string {
+	return Catalog.Format(msgs.locale, "boardPropEraserMode", nil)
+}
+
+// BoardHeadNone says "无"
+// in the language the app shows.
+func BoardHeadNone() string { return In(i18n.Locale()).BoardHeadNone() }
+
+// BoardHeadNone says "无"
+// in the language of msgs.
+func (msgs Messages) BoardHeadNone() string {
+	return Catalog.Format(msgs.locale, "boardHeadNone", nil)
+}
+
+// BoardHeadArrow says "箭头"
+// in the language the app shows.
+func BoardHeadArrow() string { return In(i18n.Locale()).BoardHeadArrow() }
+
+// BoardHeadArrow says "箭头"
+// in the language of msgs.
+func (msgs Messages) BoardHeadArrow() string {
+	return Catalog.Format(msgs.locale, "boardHeadArrow", nil)
+}
+
+// BoardHeadTriangle says "三角"
+// in the language the app shows.
+func BoardHeadTriangle() string { return In(i18n.Locale()).BoardHeadTriangle() }
+
+// BoardHeadTriangle says "三角"
+// in the language of msgs.
+func (msgs Messages) BoardHeadTriangle() string {
+	return Catalog.Format(msgs.locale, "boardHeadTriangle", nil)
+}
+
+// BoardHeadSquare says "方块"
+// in the language the app shows.
+func BoardHeadSquare() string { return In(i18n.Locale()).BoardHeadSquare() }
+
+// BoardHeadSquare says "方块"
+// in the language of msgs.
+func (msgs Messages) BoardHeadSquare() string {
+	return Catalog.Format(msgs.locale, "boardHeadSquare", nil)
+}
+
+// BoardHeadDot says "圆点"
+// in the language the app shows.
+func BoardHeadDot() string { return In(i18n.Locale()).BoardHeadDot() }
+
+// BoardHeadDot says "圆点"
+// in the language of msgs.
+func (msgs Messages) BoardHeadDot() string {
+	return Catalog.Format(msgs.locale, "boardHeadDot", nil)
+}
+
+// BoardHeadDiamond says "菱形"
+// in the language the app shows.
+func BoardHeadDiamond() string { return In(i18n.Locale()).BoardHeadDiamond() }
+
+// BoardHeadDiamond says "菱形"
+// in the language of msgs.
+func (msgs Messages) BoardHeadDiamond() string {
+	return Catalog.Format(msgs.locale, "boardHeadDiamond", nil)
+}
+
+// BoardHeadInverted says "反三角"
+// in the language the app shows.
+func BoardHeadInverted() string { return In(i18n.Locale()).BoardHeadInverted() }
+
+// BoardHeadInverted says "反三角"
+// in the language of msgs.
+func (msgs Messages) BoardHeadInverted() string {
+	return Catalog.Format(msgs.locale, "boardHeadInverted", nil)
+}
+
+// BoardHeadBar says "竖线"
+// in the language the app shows.
+func BoardHeadBar() string { return In(i18n.Locale()).BoardHeadBar() }
+
+// BoardHeadBar says "竖线"
+// in the language of msgs.
+func (msgs Messages) BoardHeadBar() string {
+	return Catalog.Format(msgs.locale, "boardHeadBar", nil)
+}

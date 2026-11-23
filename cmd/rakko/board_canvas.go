@@ -79,6 +79,7 @@ func (b *boardUI) paintStage(p *ui.Painter, r ui.Rect) {
 	p.Clip(r, 0, func() {
 		b.paintPaper(p, r, pal)
 		s.lightInk = s.estimateMaskArea(b.ed.Page) > boardAtlasBudget
+		b.lastLightInk = s.lightInk
 		s.renderChildren(b.ed.Page)
 		s.renderOverlays()
 	})
@@ -278,12 +279,27 @@ func (s *boardScene) renderPartialPreview(sh *doc.Shape, pieces [][]geo.Vec, m g
 func (s *boardScene) renderPrim(pr editor.Prim, m geo.Mat, o float64, sh *doc.Shape) {
 	switch pr.Kind {
 	case editor.PrimFill:
-		if s.lightInk && pr.Ink != nil && pr.Color.A*o >= 0.99 {
+		if s.lightInk && pr.Ink != nil {
 			s.renderInkFallback(pr, m, o)
 			return
 		}
 		s.p.FillPath(s.buildPath(pr.Path, m), boardColor(pr.Color.Alpha(o)))
 	case editor.PrimStroke:
+		if s.lightInk && len(pr.Dash) == 0 && len(pr.Path.Segs) > 0 {
+			flat, closed := pr.Path.Points(4)
+			if len(flat) >= 2 {
+				pts := make([][2]float32, 0, len(flat)+1)
+				for _, pt := range flat {
+					v := m.Apply(pt)
+					pts = append(pts, [2]float32{float32(v.X), float32(v.Y)})
+				}
+				if closed {
+					pts = append(pts, pts[0])
+				}
+				s.p.StrokePolyline(pts, float32(math.Max(pr.Width*s.cam.Z, 0.75)), boardColor(pr.Color.Alpha(o)))
+				return
+			}
+		}
 		if pr.Butt && len(pr.Dash) == 0 && len(pr.Path.Segs) > 0 && isLineSegmentsOnly(pr.Path) {
 			// Hatching and straight wireframe segments can draw without mask atlas pressure.
 			s.strokeLineSegments(pr.Path, m, float32(math.Max(pr.Width*s.cam.Z, 1)), boardColor(pr.Color.Alpha(o)))
@@ -343,10 +359,15 @@ func (s *boardScene) renderInkFallback(pr editor.Prim, m geo.Mat, o float64) {
 		v := m.Apply(pt)
 		pts[i] = [2]float32{float32(v.X), float32(v.Y)}
 	}
-	w := float32(2.5 * s.cam.Z)
+	baseW := 2.5
 	if len(pr.Ink.W) > 0 {
-		w = float32(pr.Ink.W[0] * s.cam.Z)
+		sum := 0.0
+		for _, wi := range pr.Ink.W {
+			sum += wi
+		}
+		baseW = sum / float64(len(pr.Ink.W))
 	}
+	w := float32(baseW * s.cam.Z)
 	s.p.StrokePolyline(pts, max(w, 0.75), boardColor(pr.Color.Alpha(o)))
 }
 

@@ -19,6 +19,7 @@ import (
 
 	"rakko/internal/board/doc"
 	"rakko/internal/board/editor"
+	"rakko/internal/board/fonts"
 	"rakko/internal/board/geo"
 	"rakko/internal/layout"
 	"rakko/internal/platform"
@@ -106,10 +107,16 @@ type boardUI struct {
 	titleMenu    bool
 	zoomMenu     bool
 	moreMenu     bool
-	shapeMenu    bool
-	eraserMenu   bool
-	drawMenu     bool
-	canvasFocus  bool
+	shapeMenu         bool
+	eraserMenu        bool
+	drawMenu          bool
+	propFillTab       bool
+	propGeoMenu       bool
+	propHeadStartMenu bool
+	propHeadEndMenu   bool
+	propScroll        ui.ScrollState
+	lastLightInk      bool
+	canvasFocus       bool
 	editKey      int
 	lastEditing  doc.ID
 	t0           time.Time
@@ -127,15 +134,16 @@ var (
 )
 
 func boardFontFamily(font string) string {
+	fonts.Register()
 	switch font {
 	case "sketch", "draw":
-		return "Chalkboard SE, Kaiti SC, PingFang SC, cursive"
+		return "Shantell Sans, Yozai, cursive"
 	case "serif":
-		return "Georgia, serif"
+		return "Georgia, Yozai, serif"
 	case "mono":
-		return "monospace"
+		return "monospace, Yozai"
 	}
-	return "system-ui"
+	return "system-ui, Yozai"
 }
 
 func boardMeasure(text, font string, size, width float64) editor.TextBlock {

@@ -1082,3 +1082,261 @@ func TestBoardSeg4ArrowsLinesVerticesSmartDrawAndScreenshots(t *testing.T) {
 		saveBoardSeg4Shot(t, "board-vertex-editing-smartdraw.png", v2.Image())
 	}
 }
+
+func saveBoardSeg5Shot(t *testing.T, name string, img image.Image) {
+	t.Helper()
+	dir := filepath.Join("/tmp/Rakko-v1186-canvas", "seg5")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, name)
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if err := png.Encode(f, img); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestBoardSeg5PropertyPanelLooksFontsAndScreenshots(t *testing.T) {
+	a, b := boardTestShelf(t)
+	l := locales.In("zh-Hans")
+	view := ui.NewTester(a.boardView, 1040, 680)
+	view.SetLocale("zh-Hans")
+	view.Frame()
+	view.Frame()
+
+	// Build a showcase canvas covering shapes (hatch/dashed/solid), bound curved arrow,
+	// fountain pen stroke, and 4 fonts with EN+CN mixed strings.
+	b.ed.SetLook(doc.LookSketch)
+
+	// 1. Geo diamond with diagonal pattern hatch + dashed border + EN/CN label.
+	b.ed.SetGeoTool("diamond")
+	b.ed.PointerDown(80, 90, 0, 1, editor.Mods{}, 0.1)
+	b.ed.PointerMove(260, 230, editor.Mods{}, 0.2)
+	b.ed.PointerUp(260, 230, editor.Mods{}, 0.3)
+	diamondID := b.ed.Selection()[0]
+	b.ed.StartEditing(diamondID)
+	b.ed.EditText = "Hello 世界"
+	b.ed.EditChanged()
+	b.ed.StopEditing()
+
+	b.ed.Select(diamondID)
+	view.Frame()
+	// Drive Shape Property Panel controls via UI clicks: switch color swatch, Fill tab, Fill=pattern, Dash=dash, Width=L.
+	if err := view.Click("#38BDF8"); err != nil {
+		t.Fatalf("click swatch #38BDF8: %v", err)
+	}
+	if err := view.Click(l.BoardPropFillTab()); err != nil {
+		t.Fatalf("click Fill tab: %v", err)
+	}
+	view.Frame()
+	if err := view.Click("#4ADE80"); err != nil {
+		t.Fatalf("click fill swatch #4ADE80: %v", err)
+	}
+	if err := view.Click(l.BoardPropFillPattern()); err != nil {
+		t.Fatalf("click Fill=pattern: %v", err)
+	}
+	if err := view.Click(l.BoardPropDashDashed()); err != nil {
+		t.Fatalf("click Dash=dash: %v", err)
+	}
+	if err := view.Click("L"); err != nil {
+		t.Fatalf("click Width=L: %v", err)
+	}
+	view.Frame()
+	if sh := b.ed.Doc.Shapes[diamondID]; sh.Color != "#38BDF8" || sh.FillColor != "#4ADE80" || sh.Fill != "pattern" || sh.Dash != "dash" || sh.Size != "l" {
+		t.Fatalf("UI property panel clicks mismatch shape state: %+v", sh)
+	}
+
+	// Second sketch rounded-rect for arrow target & contrast.
+	b.ed.SetGeoTool("rounded-rect")
+	b.ed.Next.Fill = "semi"
+	b.ed.Next.Stroke = "#F472B6"
+	b.ed.Next.FillColor = "#F472B6"
+	b.ed.Next.Dash = "solid"
+	b.ed.Next.Size = "m"
+	b.ed.PointerDown(420, 100, 0, 1, editor.Mods{}, 0.4)
+	b.ed.PointerMove(640, 220, editor.Mods{}, 0.5)
+	b.ed.PointerUp(640, 220, editor.Mods{}, 0.6)
+	targetRect := b.ed.Selection()[0]
+	b.ed.StartEditing(targetRect)
+	b.ed.EditText = "Rakko 白板 · Sketch"
+	b.ed.EditChanged()
+	b.ed.StopEditing()
+
+	// Add 4 font comparison text items at bottom-left.
+	fontLabels := []struct {
+		font string
+		text string
+		y    float64
+	}{
+		{"sketch", "Sketch 手写: Shantell + 悠哉 Yozai", 310},
+		{"sans", "Sans 无衬线: System UI · 混合排版", 355},
+		{"serif", "Serif 衬线: Georgia · 经典衬线体", 400},
+		{"mono", "Mono 等宽: Code 123 · 编程等宽", 445},
+	}
+	var textIDs []doc.ID
+	for i, fl := range fontLabels {
+		b.ed.SetTool(editor.ToolText)
+		b.ed.Next.Stroke = "#E8E8EA"
+		b.ed.Next.Font = fl.font
+		b.ed.Next.FontSize = 20
+		b.ed.PointerDown(80, fl.y, 0, 1, editor.Mods{}, 0.7+float64(i)*0.05)
+		b.ed.PointerUp(80, fl.y, editor.Mods{}, 0.71+float64(i)*0.05)
+		tid := b.ed.Editing
+		b.ed.EditText = fl.text
+		b.ed.EditChanged()
+		b.ed.StopEditing()
+		textIDs = append(textIDs, tid)
+	}
+
+	// Capture 1: Geo shape selected -> Shape Property Panel.
+	b.ed.Select(diamondID)
+	b.propFillTab = false
+	view.Frame()
+	view.Frame()
+	saveBoardSeg5Shot(t, "01-prop-shape-sketch.png", view.Image())
+
+	// Capture 2: Arrow bound between diamond & rounded-rect -> Arrow Property Panel.
+	b.ed.Next.Font = "sketch"
+	b.ed.SetTool(editor.ToolArrow)
+	b.ed.Next.Stroke = "#FBBF24"
+	b.ed.PointerDown(250, 160, 0, 1, editor.Mods{}, 1.0)
+	b.ed.PointerMove(430, 160, editor.Mods{}, 1.05)
+	b.ed.PointerUp(430, 160, editor.Mods{}, 1.1)
+	arrowID := b.ed.Selection()[0]
+	view.Frame()
+	if err := view.Click(l.BoardPropRouteCurve()); err != nil {
+		t.Fatalf("click Curve route: %v", err)
+	}
+	view.Frame()
+	if b.ed.Doc.Shapes[arrowID].Bend == 0 {
+		t.Fatalf("expected Curve click to set Bend")
+	}
+	view.Frame()
+	saveBoardSeg5Shot(t, "02-prop-arrow-curve.png", view.Image())
+
+	// Capture 3: Fountain Pen freehand stroke -> Draw Property Panel.
+	b.ed.SetTool(editor.ToolDraw)
+	b.ed.Next.PenKind = "pen"
+	b.ed.Next.PenWidth = 5
+	b.ed.Next.Stroke = "#22D3EE"
+	b.ed.PointerDown(470, 320, 0, 1, editor.Mods{}, 1.2)
+	for i := 1; i <= 14; i++ {
+		tStep := float64(i) / 14.0
+		b.ed.PointerMove(470+tStep*220, 320+32*math.Sin(tStep*math.Pi*2), editor.Mods{}, 1.2+float64(i)*0.02)
+	}
+	b.ed.PointerUp(690, 320, editor.Mods{}, 1.5)
+	kids := b.ed.Children(b.ed.Page)
+	drawID := kids[len(kids)-1]
+	b.ed.SetTool(editor.ToolSelect)
+	b.ed.Select(drawID)
+	view.Frame()
+	if err := view.Click("8"); err != nil {
+		t.Fatalf("click PenWidth 8: %v", err)
+	}
+	view.Frame()
+	if b.ed.Doc.Shapes[drawID].PenWidth != 8 {
+		t.Fatalf("expected PenWidth 8 after UI click, got %v", b.ed.Doc.Shapes[drawID].PenWidth)
+	}
+	saveBoardSeg5Shot(t, "03-prop-draw-pen.png", view.Image())
+
+	// Capture 4: 4 Fonts + Text Property Panel.
+	b.ed.Select(textIDs[0])
+	view.Frame()
+	if err := view.Click("B"); err != nil {
+		t.Fatalf("click Bold toggle: %v", err)
+	}
+	view.Frame()
+	if !b.ed.Doc.Shapes[textIDs[0]].Bold {
+		t.Fatalf("expected Bold=true after UI click")
+	}
+	saveBoardSeg5Shot(t, "04-prop-text-fonts.png", view.Image())
+
+	// Capture 5: Eraser tool -> Eraser Property Panel + Object/Partial toggle.
+	if err := view.Click(l.BoardToolEraser()); err != nil {
+		t.Fatalf("click Eraser tool: %v", err)
+	}
+	view.Frame()
+	if err := view.Click(l.BoardEraserPartial()); err != nil {
+		t.Fatalf("click Partial eraser toggle: %v", err)
+	}
+	view.Frame()
+	if b.ed.Next.EraserMode != editor.EraserPartial {
+		t.Fatalf("EraserMode = %q, want partial", b.ed.Next.EraserMode)
+	}
+	saveBoardSeg5Shot(t, "05-prop-eraser.png", view.Image())
+
+	// Capture 6 & 7: Switch to Clean and Mono looks via More menu.
+	b.ed.SetTool(editor.ToolSelect)
+	b.ed.SelectNone()
+	view.Frame()
+	for _, lk := range []struct {
+		item string
+		want string
+		file string
+	}{
+		{l.BoardLookSection() + " · " + l.BoardLookClean(), doc.LookClean, "06-look-clean.png"},
+		{l.BoardLookSection() + " · " + l.BoardLookMono(), doc.LookMono, "07-look-mono.png"},
+	} {
+		if err := view.Click(l.BoardMore()); err != nil {
+			t.Fatalf("open More menu: %v", err)
+		}
+		view.Frame()
+		if err := view.Click(lk.item); err != nil {
+			t.Fatalf("click Look %s: %v", lk.item, err)
+		}
+		view.Frame()
+		view.Frame()
+		if b.ed.Look() != lk.want {
+			t.Fatalf("Look() = %q, want %q", b.ed.Look(), lk.want)
+		}
+		saveBoardSeg5Shot(t, lk.file, view.Image())
+	}
+}
+
+func TestBoardHighDensityMaskAtlasGuard(t *testing.T) {
+	a, b := boardTestShelf(t)
+	l := locales.In("zh-Hans")
+	view := ui.NewTester(a.boardView, 1040, 680)
+	view.SetLocale("zh-Hans")
+
+	// Insert 1550 visible fountain-pen strokes so mask area budget (6_000_000) overflows
+	// and verify graceful Polyline degradation keeps all items & toolbar intact.
+	const count = 1550
+	b.ed.SetTool(editor.ToolDraw)
+	b.ed.Next.PenKind = "pen"
+	b.ed.Next.PenWidth = 3
+	for i := 0; i < count; i++ {
+		col := float64(i%31)*28 + 60
+		row := float64(i/31)*11 + 40
+		b.ed.Next.Stroke = editor.Swatches[i%len(editor.Swatches)]
+		b.ed.PointerDown(col, row, 0, 1, editor.Mods{}, float64(i)*0.01)
+		b.ed.PointerMove(col+180, row+24, editor.Mods{}, float64(i)*0.01+0.002)
+		b.ed.PointerMove(col+240, row+48, editor.Mods{}, float64(i)*0.01+0.004)
+		b.ed.PointerUp(col+240, row+48, editor.Mods{}, float64(i)*0.01+0.006)
+	}
+	b.ed.SetTool(editor.ToolSelect)
+	b.ed.SelectNone()
+
+	view.Frame()
+	view.Frame()
+
+	if !b.lastLightInk {
+		t.Fatalf("expected high-density board (%d strokes) to trigger mask atlas budget lightInk guard", count)
+	}
+	if b.ed.ItemCount() != count {
+		t.Fatalf("ItemCount = %d, want %d", b.ed.ItemCount(), count)
+	}
+	// Verify bottom toolbar still renders & responds cleanly under high density.
+	if err := view.Click(l.BoardToolArrow()); err != nil {
+		t.Fatalf("toolbar Arrow button unusable under high density: %v", err)
+	}
+	view.Frame()
+	if b.ed.Tool != editor.ToolArrow {
+		t.Fatalf("expected Arrow tool active after click under high density, got %s", b.ed.Tool)
+	}
+	saveBoardSeg5Shot(t, "08-high-density-1550.png", view.Image())
+}

@@ -91,6 +91,7 @@ type Style struct {
 	PenWidth   float64
 	EraserMode EraserMode
 	ArrowKind  string
+	ArrowBend  float64
 	HeadStart  string
 	HeadEnd    string
 	Spline     string
@@ -568,6 +569,9 @@ func (e *Editor) applyNextStyle(s *doc.Shape) {
 	if s.Type == doc.TypeArrow {
 		if n.ArrowKind != "" {
 			s.Kind = n.ArrowKind
+		}
+		if n.ArrowBend != 0 {
+			s.Bend = n.ArrowBend
 		}
 		if n.HeadStart != "" {
 			s.HeadStart = n.HeadStart

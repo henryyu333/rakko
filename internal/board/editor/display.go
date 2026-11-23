@@ -298,27 +298,101 @@ func outlinePrims(look, dash string, base *geo.Path, flat []geo.Vec, closed bool
 		pr.Dash = d
 		return []Prim{pr}
 	}
-	if look == doc.LookSketch && len(flat) >= 2 {
-		// Deterministic double-pass subtle hand-drawn wobble.
-		r := geo.NewRng(seed)
-		amp := math.Min(1.8, 0.4+w*0.25)
-		var out []Prim
-		for pass := 0; pass < 2; pass++ {
-			sub := resamplePolyline(flat, closed, 32)
-			jittered := make([]geo.Vec, len(sub))
-			for i, pt := range sub {
-				jittered[i] = geo.V(pt.X+r.Next()*amp, pt.Y+r.Next()*amp)
-			}
-			p := (&geo.Path{}).Smooth(jittered, closed)
-			alpha := 1.0
-			if pass == 1 {
-				alpha = 0.55
-			}
-			out = append(out, strokeWith(p, w, c.Alpha(alpha)))
+	if look == doc.LookSketch && len(flat) >= 2 && w >= 0.6 {
+		if prims := sketchOutlinePrims(flat, closed, w, c, seed); len(prims) > 0 {
+			return prims
 		}
-		return out
 	}
 	return []Prim{strokeWith(base, w, c)}
+}
+
+func sketchOutlinePrims(flat []geo.Vec, closed bool, w float64, c Color, seed string) []Prim {
+	// Adaptive step keeps sample count bounded while staying smooth on long contours.
+	totalRaw := geo.PolyLength(flat)
+	if closed {
+		totalRaw += flat[len(flat)-1].Dist(flat[0])
+	}
+	if totalRaw < 1 {
+		return nil
+	}
+	step := math.Max(4.0, totalRaw/180.0)
+	sub := resamplePolyline(flat, closed, step)
+	if len(sub) < 2 {
+		return nil
+	}
+	if closed {
+		sub = append(sub, sub[0])
+	}
+
+	h := geo.Hash(seed)
+	p1 := float64(h&0xFFFF) / 65535.0 * 2 * math.Pi
+	p2 := float64((h>>16)&0xFFFF) / 65535.0 * 2 * math.Pi
+
+	cum := make([]float64, len(sub))
+	for i := 1; i < len(sub); i++ {
+		cum[i] = cum[i-1] + sub[i-1].Dist(sub[i])
+	}
+	totalLen := math.Max(cum[len(sub)-1], 1e-6)
+	amp := math.Min(1.25, 0.25+w*0.18)
+
+	sp := make([]geo.StrokePoint, len(sub))
+	centerPts := make([]geo.Vec, len(sub))
+	accentPts := make([]geo.Vec, len(sub))
+	ws := make([]float64, len(sub))
+	for i, pt := range sub {
+		var dir geo.Vec
+		switch {
+		case closed && len(sub) > 2:
+			prev := sub[(i-1+len(sub)-1)%(len(sub)-1)]
+			next := sub[(i+1)%(len(sub)-1)]
+			dir = next.Sub(prev)
+		case i == 0:
+			dir = sub[1].Sub(sub[0])
+		case i == len(sub)-1:
+			dir = sub[i].Sub(sub[i-1])
+		default:
+			dir = sub[i+1].Sub(sub[i-1])
+		}
+		u := dir.Unit()
+		if u.LenSq() == 0 {
+			u = geo.V(1, 0)
+		}
+		perp := u.Perp()
+		t := cum[i] / totalLen
+		var wander, accentWander float64
+		if closed {
+			ang := 2 * math.Pi * t
+			wander = (math.Sin(ang*3+p1)*0.6 + math.Sin(ang*7+p2)*0.4) * amp
+			accentWander = (math.Cos(ang*4+p2)*0.6 - math.Sin(ang*6+p1)*0.4) * amp * 0.85
+		} else {
+			fade := math.Sin(math.Pi * t)
+			wander = (math.Sin(cum[i]*0.045+p1)*0.65 + math.Sin(cum[i]*0.11+p2)*0.35) * amp * fade
+			accentWander = (math.Cos(cum[i]*0.055+p2)*0.6 - math.Sin(cum[i]*0.12+p1)*0.4) * amp * 0.85 * fade
+		}
+		p := pt.Add(perp.Mul(wander))
+		z := 0.56 + 0.14*math.Sin(cum[i]*0.06+p2) + 0.08*math.Cos(cum[i]*0.15+p1)
+		if !closed {
+			z = geo.Clamp(z, 0.3, 0.85)
+		} else {
+			z = geo.Clamp(z, 0.38, 0.82)
+		}
+		centerPts[i] = p
+		accentPts[i] = pt.Add(perp.Mul(accentWander))
+		ws[i] = w
+		sp[i] = geo.StrokePoint{X: p.X, Y: p.Y, Z: z}
+	}
+	rib := geo.RibbonOutline(sp, w*1.12, false)
+	if len(rib) < 3 {
+		return nil
+	}
+	mainPrim := Prim{
+		Kind:  PrimFill,
+		Path:  (&geo.Path{}).Smooth(rib, true),
+		Color: c,
+		Ink:   &Ink{Pts: centerPts, W: ws},
+	}
+	accent := strokeWith((&geo.Path{}).Smooth(accentPts, closed), math.Max(w*0.48, 0.8), c.Alpha(0.32))
+	return []Prim{mainPrim, accent}
 }
 
 func resamplePolyline(pts []geo.Vec, closed bool, step float64) []geo.Vec {
