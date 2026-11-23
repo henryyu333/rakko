@@ -952,7 +952,15 @@ func (b *boardUI) handleCanvasInput(c *ui.Context, ev ui.InputEvent) bool {
 	switch ev.Kind {
 	case ui.InputScroll:
 		if ev.Mods&(ui.Cmd|ui.Ctrl) != 0 {
-			b.ed.ZoomAt(pt, math.Exp(-float64(ev.DY)*0.01))
+			if !ev.Precise {
+				if ev.DY < 0 {
+					b.ed.ZoomAt(pt, 1.2)
+				} else if ev.DY > 0 {
+					b.ed.ZoomAt(pt, 1/1.2)
+				}
+			} else {
+				b.ed.ZoomAt(pt, math.Exp(-float64(ev.DY)*0.01))
+			}
 		} else {
 			b.ed.Pan(float64(ev.DX), float64(ev.DY))
 		}
