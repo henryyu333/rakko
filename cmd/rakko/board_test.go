@@ -1297,6 +1297,170 @@ func TestBoardSeg5PropertyPanelLooksFontsAndScreenshots(t *testing.T) {
 	}
 }
 
+func saveBoardSeg6Shot(t *testing.T, name string, img image.Image) {
+	t.Helper()
+	dir := filepath.Join("/tmp/Rakko-v1186-canvas", "seg6")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, name)
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if err := png.Encode(f, img); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestBoardSeg6ActionsNavPagesFocusAndScreenshots(t *testing.T) {
+	a, b := boardTestShelf(t)
+	l := locales.In("zh-Hans")
+	view := ui.NewTester(a.boardView, 1040, 680)
+	view.SetLocale("zh-Hans")
+	view.Frame()
+	view.Frame()
+
+	// Seed 2 pages and 3 shapes on page 1 so Context Menu, Zoom Menu, Minimap,
+	// Back-to-Content, Page Switcher, Tool Lock, and Focus Mode are all exercised.
+	b.ed.AddPage("第二页")
+	p1 := b.ed.Pages()[0].ID
+	b.ed.SwitchPage(p1)
+
+	b.ed.SetGeoTool("rounded-rect")
+	b.ed.Next.Stroke = "#38BDF8"
+	b.ed.Next.Fill = "semi"
+	b.ed.Next.FillColor = "#38BDF8"
+	b.ed.PointerDown(160, 130, 0, 1, editor.Mods{}, 0.1)
+	b.ed.PointerMove(320, 220, editor.Mods{}, 0.12)
+	b.ed.PointerUp(320, 220, editor.Mods{}, 0.14)
+	r1 := b.ed.Selection()[0]
+	b.ed.StartEditing(r1)
+	b.ed.EditText = "节点 A"
+	b.ed.EditChanged()
+	b.ed.StopEditing()
+
+	b.ed.SetGeoTool("diamond")
+	b.ed.Next.Stroke = "#F472B6"
+	b.ed.Next.Fill = "pattern"
+	b.ed.Next.FillColor = "#F472B6"
+	b.ed.PointerDown(440, 130, 0, 1, editor.Mods{}, 0.2)
+	b.ed.PointerMove(600, 230, editor.Mods{}, 0.22)
+	b.ed.PointerUp(600, 230, editor.Mods{}, 0.24)
+
+	b.ed.SetTool(editor.ToolArrow)
+	b.ed.Next.Stroke = "#FACC15"
+	b.ed.PointerDown(310, 175, 0, 1, editor.Mods{}, 0.3)
+	b.ed.PointerMove(450, 180, editor.Mods{}, 0.32)
+	b.ed.PointerUp(450, 180, editor.Mods{}, 0.34)
+	b.ed.SetTool(editor.ToolSelect)
+	b.ed.Select(r1)
+	view.Frame()
+
+	// 1. Selection Right-Click Context Menu screenshot + verify commands exist.
+	view.RightClickAt(240, 200)
+	view.Frame()
+	menuItems := view.Menu()
+	for _, want := range []string{l.BoardCtxCut(), l.BoardCtxCopy(), l.BoardCtxArrange(), l.BoardCtxOrder(), l.BoardCtxTransform(), l.BoardPageMoveTo(), l.BoardZoomFitSel()} {
+		if !slices.Contains(menuItems, want) {
+			t.Fatalf("missing context menu item %q in %v", want, menuItems)
+		}
+	}
+	saveBoardSeg6Shot(t, "01-context-menu-selection.png", view.Image())
+	view.Key(0, ui.KeyEscape)
+	view.Frame()
+
+	// 2. Blank Canvas Right-Click Context Menu.
+	view.RightClickAt(80, 420)
+	view.Frame()
+	blankItems := view.Menu()
+	if !slices.Contains(blankItems, l.BoardCtxUnlockAll()) || !slices.Contains(blankItems, l.BoardFocusMode()) {
+		t.Fatalf("missing blank context menu items in %v", blankItems)
+	}
+	saveBoardSeg6Shot(t, "02-context-menu-blank.png", view.Image())
+	view.Key(0, ui.KeyEscape)
+	view.Frame()
+
+	// 3. Zoom % Popover Menu in Nav Capsule.
+	if err := view.Click("100%"); err != nil {
+		t.Fatalf("click zoom percentage menu: %v", err)
+	}
+	view.Frame()
+	saveBoardSeg6Shot(t, "03-zoom-menu.png", view.Image())
+
+	// Toggle Minimap from Zoom menu & capture Minimap screenshot + test drag pan.
+	if err := view.Click(l.BoardMinimapShow()); err != nil {
+		t.Fatalf("click Show Minimap: %v", err)
+	}
+	view.Frame()
+	view.Frame()
+	if !b.minimap {
+		t.Fatal("expected minimap enabled")
+	}
+	saveBoardSeg6Shot(t, "04-minimap-open.png", view.Image())
+
+	// Drag inside Minimap (bottom-left at x~90, y~540 inside stage height ~650 -> stage top 30) pans camera.
+	camBefore := b.ed.Cam()
+	view.Press(40, 560)
+	view.Move(140, 520)
+	view.Release(140, 520)
+	view.Frame()
+	if b.ed.Cam() == camBefore {
+		t.Fatalf("expected minimap click/drag to pan camera")
+	}
+
+	// 4. Pan far away -> Back-to-Content pill appears -> click restores content.
+	b.ed.SetCam(editor.Camera{X: -4000, Y: -3000, Z: 1})
+	view.Frame()
+	view.Frame()
+	if b.ed.ContentVisible() {
+		t.Fatal("expected ContentVisible=false when panned away")
+	}
+	saveBoardSeg6Shot(t, "05-back-to-content.png", view.Image())
+	if err := view.Click(l.BoardBackToContent()); err != nil {
+		t.Fatalf("click Back-to-Content pill: %v", err)
+	}
+	view.Frame()
+	if !b.ed.ContentVisible() {
+		t.Fatal("expected ContentVisible=true after clicking Back-to-Content")
+	}
+
+	// 5. Page Switcher popover in top title bar.
+	b.minimap = false
+	pgName := b.ed.ActivePageInfo().Name
+	if err := view.Click(pgName); err != nil {
+		t.Fatalf("open Page Switcher: %v", err)
+	}
+	view.Frame()
+	saveBoardSeg6Shot(t, "07-pages-menu.png", view.Image())
+	view.Key(0, ui.KeyEscape)
+	view.Frame()
+
+	// 6. Focus Mode (⌘. / menu) hides floating chrome and shows subtle Exit Focus pill.
+	view.Key(ui.Cmd, ui.KeyPeriod)
+	view.Frame()
+	view.Frame()
+	if !b.focusMode {
+		t.Fatal("expected FocusMode=true on Cmd+.")
+	}
+	saveBoardSeg6Shot(t, "06-focus-mode.png", view.Image())
+	if err := view.Click(l.BoardFocusExit()); err != nil {
+		t.Fatalf("click Exit Focus pill: %v", err)
+	}
+	view.Frame()
+	if b.focusMode {
+		t.Fatal("expected FocusMode=false after clicking Exit Focus")
+	}
+
+	// 7. Keyboard Q toggles Tool Lock.
+	view.Key(0, ui.KeyQ)
+	view.Frame()
+	if !b.ed.ToolLocked {
+		t.Fatal("expected Q shortcut to lock tool")
+	}
+}
+
 func TestBoardHighDensityMaskAtlasGuard(t *testing.T) {
 	a, b := boardTestShelf(t)
 	l := locales.In("zh-Hans")

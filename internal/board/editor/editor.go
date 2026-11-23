@@ -91,6 +91,9 @@ type Editor struct {
 	undo, redo []*historyEntry
 	tx         *historyEntry
 
+	clip      *boardClip
+	styleClip *styleSnapshot
+
 	kids     map[doc.ID][]doc.ID
 	bindFrom map[doc.ID][]*doc.Binding
 	bindTo   map[doc.ID][]*doc.Binding

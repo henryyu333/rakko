@@ -11348,3 +11348,533 @@ func BoardHeadBar() string { return In(i18n.Locale()).BoardHeadBar() }
 func (msgs Messages) BoardHeadBar() string {
 	return Catalog.Format(msgs.locale, "boardHeadBar", nil)
 }
+
+// BoardZoomFit says "缩放到全部内容"
+// in the language the app shows.
+func BoardZoomFit() string { return In(i18n.Locale()).BoardZoomFit() }
+
+// BoardZoomFit says "缩放到全部内容"
+// in the language of msgs.
+func (msgs Messages) BoardZoomFit() string {
+	return Catalog.Format(msgs.locale, "boardZoomFit", nil)
+}
+
+// BoardZoomFitSel says "缩放到选中"
+// in the language the app shows.
+func BoardZoomFitSel() string { return In(i18n.Locale()).BoardZoomFitSel() }
+
+// BoardZoomFitSel says "缩放到选中"
+// in the language of msgs.
+func (msgs Messages) BoardZoomFitSel() string {
+	return Catalog.Format(msgs.locale, "boardZoomFitSel", nil)
+}
+
+// BoardMinimapShow says "显示小地图"
+// in the language the app shows.
+func BoardMinimapShow() string { return In(i18n.Locale()).BoardMinimapShow() }
+
+// BoardMinimapShow says "显示小地图"
+// in the language of msgs.
+func (msgs Messages) BoardMinimapShow() string {
+	return Catalog.Format(msgs.locale, "boardMinimapShow", nil)
+}
+
+// BoardMinimapHide says "隐藏小地图"
+// in the language the app shows.
+func BoardMinimapHide() string { return In(i18n.Locale()).BoardMinimapHide() }
+
+// BoardMinimapHide says "隐藏小地图"
+// in the language of msgs.
+func (msgs Messages) BoardMinimapHide() string {
+	return Catalog.Format(msgs.locale, "boardMinimapHide", nil)
+}
+
+// BoardMinimapLabel says "小地图"
+// in the language the app shows.
+func BoardMinimapLabel() string { return In(i18n.Locale()).BoardMinimapLabel() }
+
+// BoardMinimapLabel says "小地图"
+// in the language of msgs.
+func (msgs Messages) BoardMinimapLabel() string {
+	return Catalog.Format(msgs.locale, "boardMinimapLabel", nil)
+}
+
+// BoardBackToContent says "回到内容"
+// in the language the app shows.
+func BoardBackToContent() string { return In(i18n.Locale()).BoardBackToContent() }
+
+// BoardBackToContent says "回到内容"
+// in the language of msgs.
+func (msgs Messages) BoardBackToContent() string {
+	return Catalog.Format(msgs.locale, "boardBackToContent", nil)
+}
+
+// BoardFocusMode says "焦点演示模式"
+// in the language the app shows.
+func BoardFocusMode() string { return In(i18n.Locale()).BoardFocusMode() }
+
+// BoardFocusMode says "焦点演示模式"
+// in the language of msgs.
+func (msgs Messages) BoardFocusMode() string {
+	return Catalog.Format(msgs.locale, "boardFocusMode", nil)
+}
+
+// BoardFocusExit says "退出焦点"
+// in the language the app shows.
+func BoardFocusExit() string { return In(i18n.Locale()).BoardFocusExit() }
+
+// BoardFocusExit says "退出焦点"
+// in the language of msgs.
+func (msgs Messages) BoardFocusExit() string {
+	return Catalog.Format(msgs.locale, "boardFocusExit", nil)
+}
+
+// BoardKeepTool says "画完保持当前工具"
+// in the language the app shows.
+func BoardKeepTool() string { return In(i18n.Locale()).BoardKeepTool() }
+
+// BoardKeepTool says "画完保持当前工具"
+// in the language of msgs.
+func (msgs Messages) BoardKeepTool() string {
+	return Catalog.Format(msgs.locale, "boardKeepTool", nil)
+}
+
+// BoardPageAdd says "新建页面"
+// in the language the app shows.
+func BoardPageAdd() string { return In(i18n.Locale()).BoardPageAdd() }
+
+// BoardPageAdd says "新建页面"
+// in the language of msgs.
+func (msgs Messages) BoardPageAdd() string {
+	return Catalog.Format(msgs.locale, "boardPageAdd", nil)
+}
+
+// BoardPageRename says "重命名当前页…"
+// in the language the app shows.
+func BoardPageRename() string { return In(i18n.Locale()).BoardPageRename() }
+
+// BoardPageRename says "重命名当前页…"
+// in the language of msgs.
+func (msgs Messages) BoardPageRename() string {
+	return Catalog.Format(msgs.locale, "boardPageRename", nil)
+}
+
+// BoardPageDelete says "删除当前页"
+// in the language the app shows.
+func BoardPageDelete() string { return In(i18n.Locale()).BoardPageDelete() }
+
+// BoardPageDelete says "删除当前页"
+// in the language of msgs.
+func (msgs Messages) BoardPageDelete() string {
+	return Catalog.Format(msgs.locale, "boardPageDelete", nil)
+}
+
+// BoardPageMoveTo says "移至页面"
+// in the language the app shows.
+func BoardPageMoveTo() string { return In(i18n.Locale()).BoardPageMoveTo() }
+
+// BoardPageMoveTo says "移至页面"
+// in the language of msgs.
+func (msgs Messages) BoardPageMoveTo() string {
+	return Catalog.Format(msgs.locale, "boardPageMoveTo", nil)
+}
+
+// BoardPageCount says "{n, number, ::group-off} 页"
+// in the language the app shows.
+func BoardPageCount(n int) string { return In(i18n.Locale()).BoardPageCount(n) }
+
+// BoardPageCount says "{n, number, ::group-off} 页"
+// in the language of msgs.
+func (msgs Messages) BoardPageCount(n int) string {
+	return Catalog.Format(msgs.locale, "boardPageCount", map[string]any{"n": n})
+}
+
+// BoardCtxCut says "剪切"
+// in the language the app shows.
+func BoardCtxCut() string { return In(i18n.Locale()).BoardCtxCut() }
+
+// BoardCtxCut says "剪切"
+// in the language of msgs.
+func (msgs Messages) BoardCtxCut() string {
+	return Catalog.Format(msgs.locale, "boardCtxCut", nil)
+}
+
+// BoardCtxCopy says "拷贝"
+// in the language the app shows.
+func BoardCtxCopy() string { return In(i18n.Locale()).BoardCtxCopy() }
+
+// BoardCtxCopy says "拷贝"
+// in the language of msgs.
+func (msgs Messages) BoardCtxCopy() string {
+	return Catalog.Format(msgs.locale, "boardCtxCopy", nil)
+}
+
+// BoardCtxPaste says "粘贴"
+// in the language the app shows.
+func BoardCtxPaste() string { return In(i18n.Locale()).BoardCtxPaste() }
+
+// BoardCtxPaste says "粘贴"
+// in the language of msgs.
+func (msgs Messages) BoardCtxPaste() string {
+	return Catalog.Format(msgs.locale, "boardCtxPaste", nil)
+}
+
+// BoardCtxDuplicate says "复制一份"
+// in the language the app shows.
+func BoardCtxDuplicate() string { return In(i18n.Locale()).BoardCtxDuplicate() }
+
+// BoardCtxDuplicate says "复制一份"
+// in the language of msgs.
+func (msgs Messages) BoardCtxDuplicate() string {
+	return Catalog.Format(msgs.locale, "boardCtxDuplicate", nil)
+}
+
+// BoardCtxDelete says "删除"
+// in the language the app shows.
+func BoardCtxDelete() string { return In(i18n.Locale()).BoardCtxDelete() }
+
+// BoardCtxDelete says "删除"
+// in the language of msgs.
+func (msgs Messages) BoardCtxDelete() string {
+	return Catalog.Format(msgs.locale, "boardCtxDelete", nil)
+}
+
+// BoardCtxCopyStyle says "拷贝样式"
+// in the language the app shows.
+func BoardCtxCopyStyle() string { return In(i18n.Locale()).BoardCtxCopyStyle() }
+
+// BoardCtxCopyStyle says "拷贝样式"
+// in the language of msgs.
+func (msgs Messages) BoardCtxCopyStyle() string {
+	return Catalog.Format(msgs.locale, "boardCtxCopyStyle", nil)
+}
+
+// BoardCtxPasteStyle says "粘贴样式"
+// in the language the app shows.
+func BoardCtxPasteStyle() string { return In(i18n.Locale()).BoardCtxPasteStyle() }
+
+// BoardCtxPasteStyle says "粘贴样式"
+// in the language of msgs.
+func (msgs Messages) BoardCtxPasteStyle() string {
+	return Catalog.Format(msgs.locale, "boardCtxPasteStyle", nil)
+}
+
+// BoardCtxArrange says "排列"
+// in the language the app shows.
+func BoardCtxArrange() string { return In(i18n.Locale()).BoardCtxArrange() }
+
+// BoardCtxArrange says "排列"
+// in the language of msgs.
+func (msgs Messages) BoardCtxArrange() string {
+	return Catalog.Format(msgs.locale, "boardCtxArrange", nil)
+}
+
+// BoardCtxAlignLeft says "左对齐"
+// in the language the app shows.
+func BoardCtxAlignLeft() string { return In(i18n.Locale()).BoardCtxAlignLeft() }
+
+// BoardCtxAlignLeft says "左对齐"
+// in the language of msgs.
+func (msgs Messages) BoardCtxAlignLeft() string {
+	return Catalog.Format(msgs.locale, "boardCtxAlignLeft", nil)
+}
+
+// BoardCtxAlignCenter says "水平居中"
+// in the language the app shows.
+func BoardCtxAlignCenter() string { return In(i18n.Locale()).BoardCtxAlignCenter() }
+
+// BoardCtxAlignCenter says "水平居中"
+// in the language of msgs.
+func (msgs Messages) BoardCtxAlignCenter() string {
+	return Catalog.Format(msgs.locale, "boardCtxAlignCenter", nil)
+}
+
+// BoardCtxAlignRight says "右对齐"
+// in the language the app shows.
+func BoardCtxAlignRight() string { return In(i18n.Locale()).BoardCtxAlignRight() }
+
+// BoardCtxAlignRight says "右对齐"
+// in the language of msgs.
+func (msgs Messages) BoardCtxAlignRight() string {
+	return Catalog.Format(msgs.locale, "boardCtxAlignRight", nil)
+}
+
+// BoardCtxAlignTop says "顶对齐"
+// in the language the app shows.
+func BoardCtxAlignTop() string { return In(i18n.Locale()).BoardCtxAlignTop() }
+
+// BoardCtxAlignTop says "顶对齐"
+// in the language of msgs.
+func (msgs Messages) BoardCtxAlignTop() string {
+	return Catalog.Format(msgs.locale, "boardCtxAlignTop", nil)
+}
+
+// BoardCtxAlignMiddle says "垂直居中"
+// in the language the app shows.
+func BoardCtxAlignMiddle() string { return In(i18n.Locale()).BoardCtxAlignMiddle() }
+
+// BoardCtxAlignMiddle says "垂直居中"
+// in the language of msgs.
+func (msgs Messages) BoardCtxAlignMiddle() string {
+	return Catalog.Format(msgs.locale, "boardCtxAlignMiddle", nil)
+}
+
+// BoardCtxAlignBottom says "底对齐"
+// in the language the app shows.
+func BoardCtxAlignBottom() string { return In(i18n.Locale()).BoardCtxAlignBottom() }
+
+// BoardCtxAlignBottom says "底对齐"
+// in the language of msgs.
+func (msgs Messages) BoardCtxAlignBottom() string {
+	return Catalog.Format(msgs.locale, "boardCtxAlignBottom", nil)
+}
+
+// BoardCtxDistH says "水平等距分布"
+// in the language the app shows.
+func BoardCtxDistH() string { return In(i18n.Locale()).BoardCtxDistH() }
+
+// BoardCtxDistH says "水平等距分布"
+// in the language of msgs.
+func (msgs Messages) BoardCtxDistH() string {
+	return Catalog.Format(msgs.locale, "boardCtxDistH", nil)
+}
+
+// BoardCtxDistV says "垂直等距分布"
+// in the language the app shows.
+func BoardCtxDistV() string { return In(i18n.Locale()).BoardCtxDistV() }
+
+// BoardCtxDistV says "垂直等距分布"
+// in the language of msgs.
+func (msgs Messages) BoardCtxDistV() string {
+	return Catalog.Format(msgs.locale, "boardCtxDistV", nil)
+}
+
+// BoardCtxStackH says "水平堆叠"
+// in the language the app shows.
+func BoardCtxStackH() string { return In(i18n.Locale()).BoardCtxStackH() }
+
+// BoardCtxStackH says "水平堆叠"
+// in the language of msgs.
+func (msgs Messages) BoardCtxStackH() string {
+	return Catalog.Format(msgs.locale, "boardCtxStackH", nil)
+}
+
+// BoardCtxStackV says "垂直堆叠"
+// in the language the app shows.
+func BoardCtxStackV() string { return In(i18n.Locale()).BoardCtxStackV() }
+
+// BoardCtxStackV says "垂直堆叠"
+// in the language of msgs.
+func (msgs Messages) BoardCtxStackV() string {
+	return Catalog.Format(msgs.locale, "boardCtxStackV", nil)
+}
+
+// BoardCtxPack says "紧凑排列"
+// in the language the app shows.
+func BoardCtxPack() string { return In(i18n.Locale()).BoardCtxPack() }
+
+// BoardCtxPack says "紧凑排列"
+// in the language of msgs.
+func (msgs Messages) BoardCtxPack() string {
+	return Catalog.Format(msgs.locale, "boardCtxPack", nil)
+}
+
+// BoardCtxStretchW says "拉伸到同宽"
+// in the language the app shows.
+func BoardCtxStretchW() string { return In(i18n.Locale()).BoardCtxStretchW() }
+
+// BoardCtxStretchW says "拉伸到同宽"
+// in the language of msgs.
+func (msgs Messages) BoardCtxStretchW() string {
+	return Catalog.Format(msgs.locale, "boardCtxStretchW", nil)
+}
+
+// BoardCtxStretchH says "拉伸到同高"
+// in the language the app shows.
+func BoardCtxStretchH() string { return In(i18n.Locale()).BoardCtxStretchH() }
+
+// BoardCtxStretchH says "拉伸到同高"
+// in the language of msgs.
+func (msgs Messages) BoardCtxStretchH() string {
+	return Catalog.Format(msgs.locale, "boardCtxStretchH", nil)
+}
+
+// BoardCtxOrder says "层级"
+// in the language the app shows.
+func BoardCtxOrder() string { return In(i18n.Locale()).BoardCtxOrder() }
+
+// BoardCtxOrder says "层级"
+// in the language of msgs.
+func (msgs Messages) BoardCtxOrder() string {
+	return Catalog.Format(msgs.locale, "boardCtxOrder", nil)
+}
+
+// BoardCtxBringFront says "移到最前"
+// in the language the app shows.
+func BoardCtxBringFront() string { return In(i18n.Locale()).BoardCtxBringFront() }
+
+// BoardCtxBringFront says "移到最前"
+// in the language of msgs.
+func (msgs Messages) BoardCtxBringFront() string {
+	return Catalog.Format(msgs.locale, "boardCtxBringFront", nil)
+}
+
+// BoardCtxBringForward says "前移一层"
+// in the language the app shows.
+func BoardCtxBringForward() string { return In(i18n.Locale()).BoardCtxBringForward() }
+
+// BoardCtxBringForward says "前移一层"
+// in the language of msgs.
+func (msgs Messages) BoardCtxBringForward() string {
+	return Catalog.Format(msgs.locale, "boardCtxBringForward", nil)
+}
+
+// BoardCtxSendBackward says "后移一层"
+// in the language the app shows.
+func BoardCtxSendBackward() string { return In(i18n.Locale()).BoardCtxSendBackward() }
+
+// BoardCtxSendBackward says "后移一层"
+// in the language of msgs.
+func (msgs Messages) BoardCtxSendBackward() string {
+	return Catalog.Format(msgs.locale, "boardCtxSendBackward", nil)
+}
+
+// BoardCtxSendBack says "移到最后"
+// in the language the app shows.
+func BoardCtxSendBack() string { return In(i18n.Locale()).BoardCtxSendBack() }
+
+// BoardCtxSendBack says "移到最后"
+// in the language of msgs.
+func (msgs Messages) BoardCtxSendBack() string {
+	return Catalog.Format(msgs.locale, "boardCtxSendBack", nil)
+}
+
+// BoardCtxTransform says "变换"
+// in the language the app shows.
+func BoardCtxTransform() string { return In(i18n.Locale()).BoardCtxTransform() }
+
+// BoardCtxTransform says "变换"
+// in the language of msgs.
+func (msgs Messages) BoardCtxTransform() string {
+	return Catalog.Format(msgs.locale, "boardCtxTransform", nil)
+}
+
+// BoardCtxRotateCW says "顺时针旋转 90°"
+// in the language the app shows.
+func BoardCtxRotateCW() string { return In(i18n.Locale()).BoardCtxRotateCW() }
+
+// BoardCtxRotateCW says "顺时针旋转 90°"
+// in the language of msgs.
+func (msgs Messages) BoardCtxRotateCW() string {
+	return Catalog.Format(msgs.locale, "boardCtxRotateCW", nil)
+}
+
+// BoardCtxRotateCCW says "逆时针旋转 90°"
+// in the language the app shows.
+func BoardCtxRotateCCW() string { return In(i18n.Locale()).BoardCtxRotateCCW() }
+
+// BoardCtxRotateCCW says "逆时针旋转 90°"
+// in the language of msgs.
+func (msgs Messages) BoardCtxRotateCCW() string {
+	return Catalog.Format(msgs.locale, "boardCtxRotateCCW", nil)
+}
+
+// BoardCtxFlipH says "水平翻转"
+// in the language the app shows.
+func BoardCtxFlipH() string { return In(i18n.Locale()).BoardCtxFlipH() }
+
+// BoardCtxFlipH says "水平翻转"
+// in the language of msgs.
+func (msgs Messages) BoardCtxFlipH() string {
+	return Catalog.Format(msgs.locale, "boardCtxFlipH", nil)
+}
+
+// BoardCtxFlipV says "垂直翻转"
+// in the language the app shows.
+func BoardCtxFlipV() string { return In(i18n.Locale()).BoardCtxFlipV() }
+
+// BoardCtxFlipV says "垂直翻转"
+// in the language of msgs.
+func (msgs Messages) BoardCtxFlipV() string {
+	return Catalog.Format(msgs.locale, "boardCtxFlipV", nil)
+}
+
+// BoardCtxGroup says "编组"
+// in the language the app shows.
+func BoardCtxGroup() string { return In(i18n.Locale()).BoardCtxGroup() }
+
+// BoardCtxGroup says "编组"
+// in the language of msgs.
+func (msgs Messages) BoardCtxGroup() string {
+	return Catalog.Format(msgs.locale, "boardCtxGroup", nil)
+}
+
+// BoardCtxUngroup says "取消编组"
+// in the language the app shows.
+func BoardCtxUngroup() string { return In(i18n.Locale()).BoardCtxUngroup() }
+
+// BoardCtxUngroup says "取消编组"
+// in the language of msgs.
+func (msgs Messages) BoardCtxUngroup() string {
+	return Catalog.Format(msgs.locale, "boardCtxUngroup", nil)
+}
+
+// BoardCtxEditText says "编辑文字"
+// in the language the app shows.
+func BoardCtxEditText() string { return In(i18n.Locale()).BoardCtxEditText() }
+
+// BoardCtxEditText says "编辑文字"
+// in the language of msgs.
+func (msgs Messages) BoardCtxEditText() string {
+	return Catalog.Format(msgs.locale, "boardCtxEditText", nil)
+}
+
+// BoardCtxCropImage says "裁切图片"
+// in the language the app shows.
+func BoardCtxCropImage() string { return In(i18n.Locale()).BoardCtxCropImage() }
+
+// BoardCtxCropImage says "裁切图片"
+// in the language of msgs.
+func (msgs Messages) BoardCtxCropImage() string {
+	return Catalog.Format(msgs.locale, "boardCtxCropImage", nil)
+}
+
+// BoardCtxLock says "锁定"
+// in the language the app shows.
+func BoardCtxLock() string { return In(i18n.Locale()).BoardCtxLock() }
+
+// BoardCtxLock says "锁定"
+// in the language of msgs.
+func (msgs Messages) BoardCtxLock() string {
+	return Catalog.Format(msgs.locale, "boardCtxLock", nil)
+}
+
+// BoardCtxUnlock says "解锁"
+// in the language the app shows.
+func BoardCtxUnlock() string { return In(i18n.Locale()).BoardCtxUnlock() }
+
+// BoardCtxUnlock says "解锁"
+// in the language of msgs.
+func (msgs Messages) BoardCtxUnlock() string {
+	return Catalog.Format(msgs.locale, "boardCtxUnlock", nil)
+}
+
+// BoardCtxUnlockAll says "全部解锁"
+// in the language the app shows.
+func BoardCtxUnlockAll() string { return In(i18n.Locale()).BoardCtxUnlockAll() }
+
+// BoardCtxUnlockAll says "全部解锁"
+// in the language of msgs.
+func (msgs Messages) BoardCtxUnlockAll() string {
+	return Catalog.Format(msgs.locale, "boardCtxUnlockAll", nil)
+}
+
+// BoardCtxSelectAll says "全选"
+// in the language the app shows.
+func BoardCtxSelectAll() string { return In(i18n.Locale()).BoardCtxSelectAll() }
+
+// BoardCtxSelectAll says "全选"
+// in the language of msgs.
+func (msgs Messages) BoardCtxSelectAll() string {
+	return Catalog.Format(msgs.locale, "boardCtxSelectAll", nil)
+}

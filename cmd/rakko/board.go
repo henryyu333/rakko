@@ -47,8 +47,12 @@ var (
 	boardHiliteSymbol  = symbol(`<path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/>`)
 	boardEraserSymbol  = symbol(`<path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7M5 11l9 9"/>`)
 	boardArrowSymbol   = symbol(`<path d="M7 17 17 7M7 7h10v10"/>`)
-	boardLineSymbol    = symbol(`<path d="M5 19 19 5"/>`)
-	boardFrameSymbol   = symbol(`<path d="M6 3v18M18 3v18M3 6h18M3 18h18"/>`)
+	boardLineSymbol     = symbol(`<path d="M5 19 19 5"/>`)
+	boardFrameSymbol    = symbol(`<path d="M6 3v18M18 3v18M3 6h18M3 18h18"/>`)
+	boardFitSymbol      = symbol(`<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>`)
+	boardMinimapSymbol  = symbol(`<rect x="3" y="4" width="18" height="16" rx="2"/><rect x="11" y="10" width="7" height="6" rx="1"/>`)
+	boardToolLockSymbol = symbol(`<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>`)
+	boardFocusSymbol    = symbol(`<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"/><circle cx="12" cy="12" r="2.5"/>`)
 
 	// Seams around app/OS-level calls so headless tests can drive boardUI
 	// without a window server or touching the real OS Trash/dialogs/clipboard.
@@ -104,9 +108,10 @@ type boardUI struct {
 	panLastX     float32
 	panLastY     float32
 	stageRect    ui.Rect
-	titleMenu    bool
-	zoomMenu     bool
-	moreMenu     bool
+	titleMenu         bool
+	pageMenu          bool
+	zoomMenu          bool
+	moreMenu          bool
 	shapeMenu         bool
 	eraserMenu        bool
 	drawMenu          bool
@@ -116,6 +121,15 @@ type boardUI struct {
 	propHeadEndMenu   bool
 	propScroll        ui.ScrollState
 	lastLightInk      bool
+	focusMode         bool
+	minimap           bool
+	miniDrag          bool
+	renamingPage      bool
+	renamePageDraft   string
+	renamePageBoot    bool
+	ctxPt             geo.Vec
+	croppingID        doc.ID
+	wasMenuOpen       bool
 	canvasFocus       bool
 	editKey      int
 	lastEditing  doc.ID
@@ -450,6 +464,54 @@ func (b *boardUI) commitRename() {
 func (b *boardUI) cancelRename() {
 	b.renaming = false
 	b.renameBoot = false
+	b.invalidate()
+}
+
+func (b *boardUI) startPageRename() {
+	if b.locked || b.ed == nil {
+		return
+	}
+	pg := b.ed.ActivePageInfo()
+	if pg == nil {
+		return
+	}
+	b.renamingPage = true
+	b.renamePageDraft = pg.Name
+	b.renamePageBoot = false
+	b.invalidate()
+}
+
+func (b *boardUI) commitPageRename() {
+	if !b.renamingPage {
+		return
+	}
+	name := strings.TrimSpace(b.renamePageDraft)
+	b.renamingPage = false
+	b.renamePageBoot = false
+	if name != "" && b.ed != nil {
+		b.ed.RenamePage(b.ed.Page, name)
+	}
+	b.invalidate()
+}
+
+func (b *boardUI) cancelPageRename() {
+	b.renamingPage = false
+	b.renamePageBoot = false
+	b.invalidate()
+}
+
+func (b *boardUI) anyMenuOpen() bool {
+	return b.titleMenu || b.pageMenu || b.zoomMenu || b.moreMenu ||
+		b.shapeMenu || b.propGeoMenu || b.propHeadStartMenu || b.propHeadEndMenu
+}
+
+func (b *boardUI) toggleFocusMode() {
+	b.focusMode = !b.focusMode
+	if b.focusMode {
+		b.ed.StopEditing()
+	} else {
+		b.canvasFocus = false
+	}
 	b.invalidate()
 }
 

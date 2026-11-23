@@ -27,11 +27,22 @@ func (a *shelf) boardView(c *ui.Context) {
 	} else {
 		c.SetTheme(ui.LightTheme())
 	}
+	c.SetMenuPresentation(ui.PopoverMenus)
+	if c.Shortcut(ui.Cmd, ui.KeyPeriod) || c.Shortcut(ui.Ctrl, ui.KeyPeriod) {
+		b.toggleFocusMode()
+	}
+	menuNow := b.anyMenuOpen()
+	if b.wasMenuOpen && !menuNow {
+		b.canvasFocus = false
+	}
+	b.wasMenuOpen = menuNow
 	l := loc(c)
 	pal := b.ed.Palette()
 	c.Root().Background(boardColor(pal.Background))
 	ui.Column(c.Key("board-root")).Fill().Children(func() {
-		a.boardBar(c, l, pal)
+		if !b.focusMode {
+			a.boardBar(c, l, pal)
+		}
 		a.boardStage(c, l, pal)
 	})
 	if b.confirmDelete {
@@ -68,6 +79,7 @@ func (a *shelf) boardBar(c *ui.Context, l locales.Messages, pal *editor.Palette)
 		} else {
 			a.boardSwitcherButton(c, l, pal)
 		}
+		a.boardPageSwitcherButton(c, l, pal)
 		ui.Box(c).Grow(1).FillHeight().DragWindow()
 		a.boardBarButton(c, pal, "board-reveal", revealSymbol, osText(l.BoardReveal(), l.BoardRevealWin()), false, func() {
 			if b.win != nil {
@@ -162,7 +174,7 @@ func (a *shelf) boardStage(c *ui.Context, l locales.Messages, pal *editor.Palett
 	stage := ui.Box(c.Key("board-stage")).FillWidth().Grow(1).MinHeight(0).Clip()
 	stage.Children(func() {
 		canvas := ui.Box(c.Key("board-canvas")).Fill().Focusable().FocusRing(false).Label(b.currentTitle(l))
-		if !b.canvasFocus && !b.renaming && !b.confirmDelete && b.ed.Editing == "" {
+		if !b.canvasFocus && !b.renaming && !b.renamingPage && !b.confirmDelete && b.ed.Editing == "" && !b.anyMenuOpen() {
 			canvas.Focus()
 			b.canvasFocus = true
 		}
@@ -204,19 +216,28 @@ func (a *shelf) boardStage(c *ui.Context, l locales.Messages, pal *editor.Palett
 		canvas.HandleInput(func(ev ui.InputEvent) bool {
 			return b.handleCanvasInput(c, ev)
 		})
+		canvas.ContextMenu(func(m *ui.Menu) {
+			b.buildContextMenu(l, m)
+		})
 
 		a.boardTextEditor(c, pal)
 
-		if b.ed.ItemCount() == 0 {
+		if b.ed.ItemCount() == 0 && !b.focusMode {
 			ui.Column(c.Key("board-hint")).Absolute().Top(0).Left(0).Fill().Center().IgnoreInput(true).Children(func() {
 				ui.Text(c, osText(l.BoardHint(), l.BoardHintWin())).FontSize(13).TextColor(boardColor(pal.Ink3))
 			})
 		}
 
-		a.boardNavBar(c, l, pal)
-		a.boardSubBar(c, l, pal)
-		a.boardToolbar(c, l, pal)
-		a.boardPropPanel(c, l, pal)
+		if b.focusMode {
+			a.boardFocusExitPill(c, l, pal)
+		} else {
+			a.boardNavBar(c, l, pal)
+			a.boardMinimap(c, l, pal)
+			a.boardBackPill(c, l, pal)
+			a.boardSubBar(c, l, pal)
+			a.boardToolbar(c, l, pal)
+			a.boardPropPanel(c, l, pal)
+		}
 	})
 }
 
@@ -308,8 +329,8 @@ func (a *shelf) boardTextEditor(c *ui.Context, pal *editor.Palette) {
 func (a *shelf) boardNavBar(c *ui.Context, l locales.Messages, pal *editor.Palette) {
 	b := a.board
 	pct := int(math.Round(b.ed.Cam().Z * 100))
-	nav := ui.Row(c.Key("board-nav")).Absolute().Left(16).Bottom(16).Height(40).
-		Padding(0, 6, 0, 6).Gap(2).Radius(12).Clip().AlignItems(ui.Center).
+	nav := ui.Row(c.Key("board-nav")).Absolute().Left(12).Bottom(16).Height(38).
+		Padding(0, 5, 0, 5).Gap(1).Radius(11).Clip().AlignItems(ui.Center).
 		Background(boardColor(pal.Bar)).Border(0.5, boardColor(pal.Edge)).
 		Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, 0.28))
 	nav.Children(func() {
@@ -331,7 +352,7 @@ func (a *shelf) boardNavBar(c *ui.Context, l locales.Messages, pal *editor.Palet
 			b.invalidate()
 		}
 
-		ui.Box(c).Width(1).Height(20).Margin(0, 4, 0, 4).Background(boardColor(pal.Sep))
+		ui.Box(c).Width(1).Height(18).Margin(0, 2, 0, 2).Background(boardColor(pal.Sep))
 
 		zout := a.boardNavIconBtn(c, pal, "board-zout", minusSymbol, l.BoardZoomOut(), false)
 		if zout.Clicked() {
@@ -339,13 +360,13 @@ func (a *shelf) boardNavBar(c *ui.Context, l locales.Messages, pal *editor.Palet
 			b.invalidate()
 		}
 
-		zbtn := ui.Row(c.Key("board-zoom-pct")).Height(28).MinWidth(44).Padding(0, 6, 0, 6).Radius(7).Center().
+		zbtn := ui.Row(c.Key("board-zoom-pct")).Height(26).MinWidth(38).Padding(0, 4, 0, 4).Radius(6).Center().
 			Label(l.BoardZoomLabel()).Tooltip(l.BoardZoomLabel())
 		if zbtn.Hovered() || b.zoomMenu {
 			zbtn.Background(boardColor(pal.BarHover))
 		}
 		zbtn.Children(func() {
-			ui.Text(c, fmt.Sprintf("%d%%", pct)).SingleLine().FontSize(11.5).FontWeight(500).TextColor(boardColor(pal.Ink2))
+			ui.Text(c, fmt.Sprintf("%d%%", pct)).SingleLine().FontSize(11).FontWeight(500).TextColor(boardColor(pal.Ink2))
 		})
 		zbtn.PopoverMenuButton(func(m *ui.Menu) {
 			if m.Item(l.BoardZoomIn()).Shortcut(ui.Cmd, ui.KeyEqual).Chosen() {
@@ -361,6 +382,23 @@ func (a *shelf) boardNavBar(c *ui.Context, l locales.Messages, pal *editor.Palet
 				b.ed.ResetZoom()
 				b.invalidate()
 			}
+			if m.Item(l.BoardZoomFit()).Shortcut(ui.Shift, ui.Key1).Chosen() {
+				b.ed.ZoomToFit()
+				b.invalidate()
+			}
+			if m.Item(l.BoardZoomFitSel()).Shortcut(ui.Shift, ui.Key2).Disabled(len(b.ed.Selection()) == 0).Chosen() {
+				b.ed.ZoomToSelection()
+				b.invalidate()
+			}
+			m.Separator()
+			miniLabel := l.BoardMinimapShow()
+			if b.minimap {
+				miniLabel = l.BoardMinimapHide()
+			}
+			if m.Item(miniLabel).Checked(b.minimap).Chosen() {
+				b.minimap = !b.minimap
+				b.invalidate()
+			}
 		}, b.popoverButtonOpts(pal, ui.AnchorTopStart, ui.AnchorBottomStart, &b.zoomMenu))
 
 		zin := a.boardNavIconBtn(c, pal, "board-zin", plusSymbol, l.BoardZoomIn(), false)
@@ -369,10 +407,26 @@ func (a *shelf) boardNavBar(c *ui.Context, l locales.Messages, pal *editor.Palet
 			b.invalidate()
 		}
 
-		ui.Box(c).Width(1).Height(20).Margin(0, 4, 0, 4).Background(boardColor(pal.Sep))
+		fitBtn := a.boardNavIconBtn(c, pal, "board-fit", boardFitSymbol, l.BoardZoomFit(), false)
+		if fitBtn.Clicked() {
+			b.ed.ZoomToFit()
+			b.invalidate()
+		}
+
+		miniBtn := a.boardNavIconBtn(c, pal, "board-mini", boardMinimapSymbol, l.BoardMinimapLabel(), b.minimap)
+		if miniBtn.Clicked() {
+			b.minimap = !b.minimap
+			b.invalidate()
+		}
+
+		ui.Box(c).Width(1).Height(18).Margin(0, 2, 0, 2).Background(boardColor(pal.Sep))
 
 		more := a.boardNavIconBtn(c, pal, "board-more", boardMoreSymbol, l.BoardMore(), b.moreMenu)
 		more.PopoverMenuButton(func(m *ui.Menu) {
+			if m.Item(l.BoardToolImage()).Shortcut(ui.Cmd, ui.KeyU).Disabled(b.locked).Chosen() {
+				b.pickImage()
+			}
+			m.Separator()
 			curPaper := b.ed.Paper()
 			papers := []struct {
 				id    string
@@ -416,6 +470,14 @@ func (a *shelf) boardNavBar(c *ui.Context, l locales.Messages, pal *editor.Palet
 				b.setDarkMode(false)
 			}
 			m.Separator()
+			if m.Item(l.BoardFocusMode()).Shortcut(ui.Cmd, ui.KeyPeriod).Checked(b.focusMode).Chosen() {
+				b.toggleFocusMode()
+			}
+			if m.Item(l.BoardKeepTool()).Shortcut(0, ui.KeyQ).Checked(b.ed.ToolLocked).Chosen() {
+				b.ed.ToggleToolLock()
+				b.invalidate()
+			}
+			m.Separator()
 			if m.Item(l.BoardSnapAlways()).Checked(b.ed.Snap).Chosen() {
 				b.ed.ToggleSnap()
 				b.invalidate()
@@ -429,7 +491,7 @@ func (a *shelf) boardNavBar(c *ui.Context, l locales.Messages, pal *editor.Palet
 }
 
 func (a *shelf) boardNavIconBtn(c *ui.Context, pal *editor.Palette, key string, icon *ui.SVG, label string, active bool) ui.Element {
-	btn := ui.Row(c.Key(key)).Size(28, 28).Radius(8).Center().Label(label).Tooltip(label)
+	btn := ui.Row(c.Key(key)).Size(25, 25).Radius(7).Center().Label(label).Tooltip(label)
 	switch {
 	case active:
 		btn.Background(boardColor(pal.AccentFill))
@@ -629,7 +691,7 @@ func (a *shelf) boardToolbar(c *ui.Context, l locales.Messages, pal *editor.Pale
 	b := a.board
 	wrap := ui.Row(c.Key("board-tools-wrap")).Absolute().Left(0).Right(0).Bottom(16).Justify(ui.Center).PassThrough()
 	wrap.Children(func() {
-		bar := ui.Row(c.Key("board-tools")).Height(48).Padding(0, 6, 0, 6).Gap(2).Radius(14).Clip().AlignItems(ui.Center).
+		bar := ui.Row(c.Key("board-tools")).Height(44).Padding(0, 5, 0, 5).Gap(1).Radius(13).Clip().AlignItems(ui.Center).
 			Background(boardColor(pal.Bar)).Border(0.5, boardColor(pal.Edge)).
 			Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, 0.28))
 		bar.Children(func() {
@@ -643,7 +705,7 @@ func (a *shelf) boardToolbar(c *ui.Context, l locales.Messages, pal *editor.Pale
 				b.chooseTool(editor.ToolHand)
 			}
 
-			ui.Box(c).Width(1).Height(24).Margin(0, 4, 0, 4).Background(boardColor(pal.Sep))
+			ui.Box(c).Width(1).Height(22).Margin(0, 3, 0, 3).Background(boardColor(pal.Sep))
 
 			if a.boardToolBtn(c, pal, "tool-draw", pencilSymbol, l.BoardToolDraw(), b.ed.Tool == editor.ToolDraw).Clicked() {
 				b.chooseTool(editor.ToolDraw)
@@ -655,7 +717,7 @@ func (a *shelf) boardToolbar(c *ui.Context, l locales.Messages, pal *editor.Pale
 				b.chooseTool(editor.ToolEraser)
 			}
 
-			ui.Box(c).Width(1).Height(24).Margin(0, 4, 0, 4).Background(boardColor(pal.Sep))
+			ui.Box(c).Width(1).Height(22).Margin(0, 3, 0, 3).Background(boardColor(pal.Sep))
 
 			shapeBtn := a.boardToolBtn(c, pal, "tool-shape", shotRectSymbol, l.BoardToolShape(), b.ed.Tool == editor.ToolGeo || b.shapeMenu)
 			if shapeBtn.Clicked() {
@@ -724,12 +786,17 @@ func (a *shelf) boardToolbar(c *ui.Context, l locales.Messages, pal *editor.Pale
 			if a.boardToolBtn(c, pal, "tool-image", imgSymbol, l.BoardToolImage(), false).Clicked() {
 				b.pickImage()
 			}
+			ui.Box(c).Width(1).Height(22).Margin(0, 3, 0, 3).Background(boardColor(pal.Sep))
+			if a.boardToolBtn(c, pal, "tool-lock", boardToolLockSymbol, l.BoardKeepTool(), b.ed.ToolLocked).Clicked() {
+				b.ed.ToggleToolLock()
+				b.invalidate()
+			}
 		})
 	})
 }
 
 func (a *shelf) boardToolBtn(c *ui.Context, pal *editor.Palette, key string, icon *ui.SVG, label string, active bool) ui.Element {
-	btn := ui.Row(c.Key(key)).Size(34, 34).Radius(8).Center().Label(label).Tooltip(label)
+	btn := ui.Row(c.Key(key)).Size(30, 30).Radius(7).Center().Label(label).Tooltip(label)
 	switch {
 	case active:
 		btn.Background(boardColor(pal.AccentFill))
@@ -836,6 +903,14 @@ func (b *boardUI) handleCanvasInput(c *ui.Context, ev ui.InputEvent) bool {
 		b.invalidate()
 		return true
 	case ui.InputPointerDown:
+		if ev.Button == 1 {
+			b.ctxPt = pt
+			if !b.locked {
+				b.ed.RightClickAt(pt)
+				b.invalidate()
+			}
+			return false
+		}
 		if !b.locked || ev.Button == 2 || b.ed.SpaceHeld() || b.ed.Tool == editor.ToolHand {
 			b.ed.PointerDownPressure(float64(ev.X), float64(ev.Y), ev.Button, ev.Clicks, float64(ev.Pressure), ev.Pointer == ui.PointerPen, mods, t)
 			if b.ed.Editing == "" {
@@ -849,6 +924,9 @@ func (b *boardUI) handleCanvasInput(c *ui.Context, ev ui.InputEvent) bool {
 		b.invalidate()
 		return true
 	case ui.InputPointerUp:
+		if ev.Button == 1 {
+			return false
+		}
 		if ev.Canceled {
 			b.ed.Cancel()
 		} else {
@@ -885,13 +963,79 @@ func (b *boardUI) handleCanvasInput(c *ui.Context, ev ui.InputEvent) bool {
 				b.ed.SelectAll()
 				b.invalidate()
 				return true
+			case ui.KeyC:
+				if ev.Mods&ui.Alt != 0 {
+					b.ed.CopyStyle()
+				} else {
+					b.ed.Copy()
+				}
+				b.invalidate()
+				return true
+			case ui.KeyX:
+				if !b.locked {
+					b.ed.Cut()
+					b.invalidate()
+				}
+				return true
 			case ui.KeyU:
 				b.pickImage()
 				return true
 			case ui.KeyV:
+				if ev.Mods&ui.Alt != 0 {
+					if !b.locked {
+						b.ed.PasteStyle()
+						b.invalidate()
+					}
+					return true
+				}
 				if b.pasteImage() {
 					return true
 				}
+				if !b.locked && b.ed.Paste() {
+					b.invalidate()
+					return true
+				}
+			case ui.KeyD:
+				if !b.locked && b.ed.Duplicate() {
+					b.invalidate()
+					return true
+				}
+			case ui.KeyG:
+				if !b.locked {
+					if ev.Mods&ui.Shift != 0 {
+						b.ed.UngroupSelected()
+					} else {
+						b.ed.GroupSelected()
+					}
+					b.invalidate()
+				}
+				return true
+			case ui.KeyL:
+				if !b.locked && ev.Mods&ui.Shift != 0 {
+					b.ed.ToggleLockSelected()
+					b.invalidate()
+					return true
+				}
+			case ui.KeyBracketRight:
+				if !b.locked {
+					if ev.Mods&ui.Shift != 0 {
+						b.ed.BringToFront()
+					} else {
+						b.ed.BringForward()
+					}
+					b.invalidate()
+				}
+				return true
+			case ui.KeyBracketLeft:
+				if !b.locked {
+					if ev.Mods&ui.Shift != 0 {
+						b.ed.SendToBack()
+					} else {
+						b.ed.SendBackward()
+					}
+					b.invalidate()
+				}
+				return true
 			case ui.KeyEqual:
 				b.ed.ZoomIn()
 				b.invalidate()
@@ -921,9 +1065,97 @@ func (b *boardUI) handleCanvasInput(c *ui.Context, ev ui.InputEvent) bool {
 				return true
 			}
 		}
+		if ev.Mods&ui.Alt != 0 && ev.Mods&(ui.Cmd|ui.Ctrl) == 0 && !b.locked {
+			switch ev.Key {
+			case ui.KeyA:
+				if b.ed.AlignSelected("left") {
+					b.invalidate()
+					return true
+				}
+			case ui.KeyH:
+				if ev.Mods&ui.Shift != 0 {
+					if b.ed.DistributeSelected("x") {
+						b.invalidate()
+						return true
+					}
+				} else if b.ed.AlignSelected("center") {
+					b.invalidate()
+					return true
+				}
+			case ui.KeyD:
+				if b.ed.AlignSelected("right") {
+					b.invalidate()
+					return true
+				}
+			case ui.KeyW:
+				if b.ed.AlignSelected("top") {
+					b.invalidate()
+					return true
+				}
+			case ui.KeyV:
+				if ev.Mods&ui.Shift != 0 {
+					if b.ed.DistributeSelected("y") {
+						b.invalidate()
+						return true
+					}
+				} else if b.ed.AlignSelected("middle") {
+					b.invalidate()
+					return true
+				}
+			case ui.KeyS:
+				if b.ed.AlignSelected("bottom") {
+					b.invalidate()
+					return true
+				}
+			}
+		}
+		if ev.Mods&ui.Shift != 0 && ev.Mods&(ui.Cmd|ui.Ctrl|ui.Alt) == 0 {
+			switch ev.Key {
+			case ui.Key0:
+				b.ed.ResetZoom()
+				b.invalidate()
+				return true
+			case ui.Key1:
+				b.ed.ZoomToFit()
+				b.invalidate()
+				return true
+			case ui.Key2:
+				b.ed.ZoomToSelection()
+				b.invalidate()
+				return true
+			case ui.KeyH:
+				if !b.locked && b.ed.FlipSelected("x") {
+					b.invalidate()
+					return true
+				}
+			case ui.KeyV:
+				if !b.locked && b.ed.FlipSelected("y") {
+					b.invalidate()
+					return true
+				}
+			case ui.KeyPeriod:
+				if !b.locked && b.ed.RotateSelected90(1) {
+					b.invalidate()
+					return true
+				}
+			case ui.KeyComma:
+				if !b.locked && b.ed.RotateSelected90(-1) {
+					b.invalidate()
+					return true
+				}
+			}
+		}
 		switch ev.Key {
 		case ui.KeyEscape:
+			hadState := b.ed.InGesture() || len(b.ed.Selection()) > 0 || b.ed.Editing != "" || b.ed.EditingVertices != ""
 			b.ed.Cancel()
+			if !hadState && b.focusMode {
+				b.focusMode = false
+			}
+			b.invalidate()
+			return true
+		case ui.KeyQ:
+			b.ed.ToggleToolLock()
 			b.invalidate()
 			return true
 		case ui.KeyEnter:
