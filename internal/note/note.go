@@ -304,13 +304,14 @@ func Search(docs []Doc, q string) []Hit {
 }
 
 // split returns the heading and the non-blank lines after it, each with
-// the whitespace around it trimmed.
+// the whitespace around it trimmed and Markdown image tokens stripped so the
+// card shows clean prose beside its thumbnail.
 func split(text string) (string, []string) {
 	var title string
 	var lines []string
 	first := true
 	for _, raw := range strings.Split(text, "\n") {
-		line := strings.TrimSpace(raw)
+		line := strings.TrimSpace(stripInlineImages(raw))
 		if line == "" {
 			continue
 		}

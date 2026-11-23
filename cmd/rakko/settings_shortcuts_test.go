@@ -1005,7 +1005,7 @@ func TestNewNoteShortcutStartsANote(t *testing.T) {
 	if err != nil || len(docs) != 2 {
 		t.Fatalf("notes after the shortcut = %d, %v", len(docs), err)
 	}
-	if a.note.text != "" || a.note.draft != "" {
+	if a.note.text != "" || a.note.draftText() != "" {
 		t.Fatalf("the new note is not empty: %q", a.note.text)
 	}
 }

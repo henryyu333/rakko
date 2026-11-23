@@ -48,17 +48,20 @@ func TestNoteWindowTypesAndCloses(t *testing.T) {
 	}
 
 	// The area took the keyboard on the first draw: typing reaches it.
-	view.Type("# 周五发版前")
-	view.Type("\n– 改 README")
+	view.Type("#")
+	view.Type(" ")
+	view.Type("周五发版前")
+	view.Key(0, ui.KeyEnter)
+	view.Type("– 改 README")
 	view.Frame()
-	if n.draft != "# 周五发版前\n– 改 README" {
-		t.Fatalf("draft = %q after typing", n.draft)
+	if got := n.draftText(); got != "# 周五发版前\n\n– 改 README" {
+		t.Fatalf("draft = %q after typing", got)
 	}
 	if n.tick(time.Now()) {
 		t.Fatal("saved on the first tick")
 	}
 	n.flush()
-	if got := fileText(t, n); got != "# 周五发版前\n– 改 README" {
+	if got := fileText(t, n); got != "# 周五发版前\n\n– 改 README" {
 		t.Fatalf("file = %q", got)
 	}
 
@@ -71,11 +74,11 @@ func TestNoteWindowTypesAndCloses(t *testing.T) {
 	// Escape closes the window, landing what was unsaved. There is no
 	// native window in this test, so the close reaches the session and its
 	// file; the text stays in memory for the next open.
-	n.draft += "\n– 刚打的最后一句"
+	n.doc.InsertText("\n– 刚打的最后一句")
 	view.Frame()
 	view.Key(0, ui.KeyEscape)
 	view.Frame()
-	if got := fileText(t, n); got != "# 周五发版前\n– 改 README\n– 刚打的最后一句" {
+	if got := fileText(t, n); got != "# 周五发版前\n\n– 改 README\n\n– 刚打的最后一句" {
 		t.Fatalf("Escape left %q on disk", got)
 	}
 	if n.dirty() {
@@ -97,7 +100,7 @@ func TestNoteReopensWithTheFile(t *testing.T) {
 			n.watch = nil
 		}
 	}()
-	n.draft = "# 关窗前的最后一句\n"
+	n.setDraft("# 关窗前的最后一句")
 	n.flush()
 
 	// A fresh session over the same folder, as the next launch has it.
@@ -109,7 +112,7 @@ func TestNoteReopensWithTheFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if text != "# 关窗前的最后一句\n" {
+	if text != "# 关窗前的最后一句" {
 		t.Fatalf("reopened note = %q", text)
 	}
 	if again.ID() != n.store.ID() {

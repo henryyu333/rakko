@@ -1,10 +1,19 @@
 package main
 
 import (
+	"bytes"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/richtext"
 
 	"rakko/internal/layout"
 	"rakko/internal/note"
@@ -26,6 +35,7 @@ const (
 	noteMinW      = 240
 	noteMinH      = 200
 	notePreviewN  = 3         // the 2 × 1 card's preview lines
+	noteThumbSize = 56        // the 2 × 1 / pinned card's left thumbnail square
 	noteBg        = "#1C1C1E" // surfaceRaise, the window's fill before the view paints
 )
 
@@ -43,6 +53,8 @@ var (
 	noteFocus     = func(w *mygo.Window) { w.Focus() }
 	noteClose     = func(w *mygo.Window) { w.Close() }
 	noteNewWindow = func(opts mygo.WindowOptions) *mygo.Window { return mygo.NewWindow(opts) }
+	// noteReadClipboardImage reads an image from the system clipboard; overridable in tests.
+	noteReadClipboardImage = func() []byte { return mygo.Clipboard.ReadImage() }
 	// notePinRedraw repaints the note's desktop card, whose window only
 	// exists with a window server.
 	notePinRedraw = func(it *pinItem) {
@@ -54,8 +66,8 @@ var (
 
 // noteUI is the note behind the 便利贴 card and, while it is open, its
 // window. text is the file as the last read, save or outside change left
-// it — what the card draws; draft is the editor's text and equals text
-// while nothing is unsaved.
+// it — what the card draws; doc holds the rich-text editor's state and
+// matches text while doc.Version() == baseVer.
 type noteUI struct {
 	host  *shelf
 	store *note.Store
@@ -66,14 +78,19 @@ type noteUI struct {
 	prevPID int
 	frame   mygo.Rectangle // last frame, so a reopen keeps the spot this launch
 
-	text  string
-	draft string
-	seen  string    // draft as of the last tick, for the save delay
-	since time.Time // when the draft last changed
+	text     string
+	doc      *richtext.Document
+	baseVer  uint64    // Document.Version() when loaded/saved/adopted
+	seenVer  uint64    // Document.Version() as of the last tick, for the save delay
+	boundVer uint64    // Document.Version() whose image attachments are bound
+	since    time.Time // when the document last changed
 	// locked is set while the file could not be read: an empty editor over
 	// a note nobody has seen would overwrite it, so the window shows the
 	// failure instead of an editable copy and nothing is written back.
 	locked bool
+
+	assets       map[string]*ui.Bitmap // relative asset path -> decoded bitmap
+	thumbPending map[string]bool       // relative asset paths decoding in background
 
 	watch *note.Watch
 }
@@ -120,8 +137,52 @@ func (n *noteUI) rewatch() {
 	}
 }
 
-// load reads the note into text and draft. A note that cannot be read stays
-// locked: text and draft keep whatever they had, and no save may run until a
+// ensureDoc lazily initializes the rich-text document from text.
+func (n *noteUI) ensureDoc() *richtext.Document {
+	if n.doc == nil {
+		t := n.bindTextAttachments(richtext.ParseMarkdown(n.text))
+		n.doc = richtext.NewDocument(t)
+		n.baseVer = n.doc.Version()
+		n.seenVer = n.baseVer
+		n.boundVer = n.baseVer
+	}
+	return n.doc
+}
+
+// resetText loads text cleanly into the editor document without marking it dirty.
+func (n *noteUI) resetText(text string) {
+	n.text = text
+	t := n.bindTextAttachments(richtext.ParseMarkdown(text))
+	if n.doc == nil {
+		n.doc = richtext.NewDocument(t)
+	} else {
+		n.doc.SetText(t)
+	}
+	n.baseVer = n.doc.Version()
+	n.seenVer = n.baseVer
+	n.boundVer = n.baseVer
+	n.since = time.Time{}
+}
+
+// setDraft replaces the document content as an unsaved edit (advancing Version).
+func (n *noteUI) setDraft(md string) {
+	d := n.ensureDoc()
+	t := n.bindTextAttachments(richtext.ParseMarkdown(md))
+	d.SetText(t)
+	n.boundVer = d.Version()
+}
+
+// draftText returns text verbatim when the document has never been edited, or
+// the normalized Markdown from the live document once edited.
+func (n *noteUI) draftText() string {
+	if !n.dirty() {
+		return n.text
+	}
+	return n.doc.Text().Markdown()
+}
+
+// load reads the note into text and doc. A note that cannot be read stays
+// locked: text and doc keep whatever they had, and no save may run until a
 // read succeeds.
 func (n *noteUI) load() error {
 	text, err := n.store.Read()
@@ -130,7 +191,7 @@ func (n *noteUI) load() error {
 		return err
 	}
 	n.locked = false
-	n.text, n.draft, n.seen = text, text, text
+	n.resetText(text)
 	return nil
 }
 
@@ -183,8 +244,10 @@ func (n *noteUI) newNote() error {
 	return nil
 }
 
-// dirty reports unsaved text in the editor.
-func (n *noteUI) dirty() bool { return n.draft != n.text }
+// dirty reports unsaved edits in the rich-text document.
+// Unedited notes ALWAYS keep doc.Version() == baseVer so opening and closing
+// never re-serializes or touches the underlying plain-text file on disk.
+func (n *noteUI) dirty() bool { return n.doc != nil && n.doc.Version() != n.baseVer }
 
 // tick writes the draft once it has been still for noteSaveDelay and
 // reports whether it wrote: the debounce the design asks for, driven by
@@ -195,11 +258,14 @@ func (n *noteUI) tick(now time.Time) bool {
 	}
 	if !n.dirty() {
 		n.since = time.Time{}
-		n.seen = n.draft
+		if n.doc != nil {
+			n.seenVer = n.doc.Version()
+		}
 		return false
 	}
-	if n.draft != n.seen {
-		n.seen, n.since = n.draft, now
+	ver := n.doc.Version()
+	if ver != n.seenVer {
+		n.seenVer, n.since = ver, now
 	}
 	if n.since.IsZero() || now.Sub(n.since) < noteSaveDelay {
 		return false
@@ -216,10 +282,17 @@ func (n *noteUI) flush() error {
 	if n.locked || !n.dirty() {
 		return nil
 	}
-	if err := n.store.Write(n.draft); err != nil {
+	md := n.doc.Text().Markdown()
+	ver := n.doc.Version()
+	if md == n.text {
+		n.baseVer, n.seenVer, n.since = ver, ver, time.Time{}
+		return nil
+	}
+	if err := n.store.Write(md); err != nil {
 		return err
 	}
-	n.text, n.seen, n.since = n.draft, n.draft, time.Time{}
+	n.text = md
+	n.baseVer, n.seenVer, n.since = ver, ver, time.Time{}
 	n.host.noteStale() // the search's index has older text
 	n.invalidate()     // the card's heading and preview follow the file
 	return nil
@@ -232,7 +305,7 @@ func (n *noteUI) adopt(text string) bool {
 	if n.dirty() || text == n.text {
 		return false
 	}
-	n.text, n.draft, n.seen = text, text, text
+	n.resetText(text)
 	return true
 }
 
@@ -273,7 +346,7 @@ func (a *shelf) noteOutside() {
 		// The file is readable again (an editor's save replaced it, or the
 		// permissions came back): the window returns to editing it.
 		n.locked = false
-		n.text, n.draft, n.seen = text, text, text
+		n.resetText(text)
 		n.invalidate()
 		return
 	}
@@ -542,7 +615,11 @@ func (a *shelf) noteView(c *ui.Context) {
 // the first line is typed.
 func (a *shelf) noteBar(c *ui.Context, l locales.Messages) {
 	n := a.note
-	title := note.Title(n.draft)
+	titleSrc := n.text
+	if n.dirty() {
+		titleSrc = n.doc.Text().Markdown()
+	}
+	title := note.Title(titleSrc)
 	if title == "" {
 		title = l.CardNote()
 	}
@@ -591,8 +668,8 @@ func (a *shelf) noteButton(c *ui.Context, key string, icon *ui.SVG, label string
 	}
 }
 
-// noteArea is the note itself: Markdown source at 13pt, 1.55 line
-// height, the caret in it on the window's first draw. Esc closes.
+// noteArea is the note itself: rich Markdown at 13pt, 1.55 line height,
+// embedded images, paste & drop, the caret in it on the window's first draw. Esc closes.
 func (a *shelf) noteArea(c *ui.Context, l locales.Messages) {
 	n := a.note
 	if n.locked {
@@ -602,20 +679,205 @@ func (a *shelf) noteArea(c *ui.Context, l locales.Messages) {
 			})
 		return
 	}
-	area := ui.TextAreaBase(c.Key("note-area"), &n.draft).Fill().Grow(1).MinHeight(0).
-		FontSize(typeBody).LineHeight(1.55).TextColor(ink).
-		Padding(0, 12, 12, 12).Label(l.CardNote())
+	doc := n.ensureDoc()
+	if ver := doc.Version(); ver != n.boundVer {
+		n.bindTextAttachments(doc.Text())
+		n.boundVer = ver
+	}
+	area := richtext.EditorBase(c.Key("note-area"), doc, richtext.EditorOptions{
+		Label: l.CardNote(),
+		Font:  ui.Font{Size: typeBody, LineHeight: 1.55},
+		Theme: &richtext.Theme{
+			Text:     ink,
+			Muted:    ink3,
+			Link:     accent,
+			Caret:    accent,
+			Checkbox: accent,
+		},
+		OnCommand: func(name string) bool {
+			if name == "paste" {
+				return n.pasteImage()
+			}
+			return false
+		},
+		OnKey: func(key ui.Key, _ ui.Modifiers) bool {
+			if key == ui.KeyEscape {
+				n.close()
+				return true
+			}
+			return false
+		},
+	}).Fill().Grow(1).MinHeight(0).Padding(0, 12, 12, 12).Label(l.CardNote())
+	if files := area.DroppedFiles(); len(files) > 0 {
+		for _, p := range files {
+			n.insertImageFile(p)
+		}
+	}
 	if !n.booted {
 		area.Focus()
 		n.booted = true
 	}
-	area.OnTextKey(func(k ui.TextKey) bool {
-		if k.Key == ui.KeyEscape {
-			n.close()
-			return true
+}
+
+func (n *noteUI) pasteImage() bool {
+	if n.locked {
+		return false
+	}
+	data := noteReadClipboardImage()
+	if len(data) == 0 {
+		return false
+	}
+	return n.insertImageBytes(data, "png", "clipboard")
+}
+
+func (n *noteUI) insertImageFile(path string) bool {
+	if n.locked || !note.IsSupportedImageExt(filepath.Ext(path)) {
+		return false
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(path)), ".")
+	return n.insertImageBytesWithPath(path, data, ext, filepath.Base(path))
+}
+
+func (n *noteUI) insertImageBytes(data []byte, ext, name string) bool {
+	return n.insertImageBytesWithPath("", data, ext, name)
+}
+
+func (n *noteUI) insertImageBytesWithPath(srcPath string, data []byte, ext, name string) bool {
+	if n.locked || n.store == nil || len(data) == 0 {
+		return false
+	}
+	img, format, err := noteDecodeImage(srcPath, data)
+	if err != nil || img == nil {
+		return false
+	}
+	if ext == "" {
+		ext = format
+	}
+	rel, err := n.store.SaveAsset(data, ext)
+	if err != nil {
+		if n.host != nil {
+			n.host.report(err)
 		}
 		return false
+	}
+	bmp := ui.NewBitmap(img)
+	n.cacheBitmap(rel, bmp)
+	doc := n.ensureDoc()
+	doc.InsertAttachment(&richtext.Attachment{
+		Name:  name,
+		URL:   rel,
+		Image: bmp,
 	})
+	n.boundVer = doc.Version()
+	n.invalidate()
+	return true
+}
+
+func (n *noteUI) bindTextAttachments(t richtext.Text) richtext.Text {
+	if n.store == nil {
+		return t
+	}
+	for _, p := range t.Paragraphs() {
+		for _, r := range p.Runs {
+			if at := r.Attributes.Attachment; at != nil && at.Image == nil && at.URL != "" {
+				if bmp := n.loadAttachmentBitmap(at.URL); bmp != nil {
+					at.Image = bmp
+				}
+			}
+		}
+	}
+	return t
+}
+
+func (n *noteUI) loadAttachmentBitmap(rel string) *ui.Bitmap {
+	if n.store == nil || rel == "" {
+		return nil
+	}
+	if bmp, ok := n.assets[rel]; ok && bmp != nil {
+		return bmp
+	}
+	full, err := n.store.AssetPath(rel)
+	if err != nil {
+		return nil
+	}
+	img, err := noteDecodeImageFile(full)
+	if err != nil || img == nil {
+		return nil
+	}
+	bmp := ui.NewBitmap(img)
+	n.cacheBitmap(rel, bmp)
+	return bmp
+}
+
+func (n *noteUI) cardThumbnail(rel string) *ui.Bitmap {
+	if n.store == nil || rel == "" {
+		return nil
+	}
+	if bmp, ok := n.assets[rel]; ok && bmp != nil {
+		return bmp
+	}
+	full, err := n.store.AssetPath(rel)
+	if err != nil {
+		return nil
+	}
+	if n.host == nil || n.host.win == nil {
+		return n.loadAttachmentBitmap(rel)
+	}
+	if n.thumbPending == nil {
+		n.thumbPending = map[string]bool{}
+	}
+	if n.thumbPending[rel] {
+		return nil
+	}
+	n.thumbPending[rel] = true
+	win := n.host.win
+	go func() {
+		img, err := noteDecodeImageFile(full)
+		win.Update(func() {
+			delete(n.thumbPending, rel)
+			if err == nil && img != nil {
+				n.cacheBitmap(rel, ui.NewBitmap(img))
+				n.invalidate()
+			}
+		})
+	}()
+	return nil
+}
+
+func (n *noteUI) cacheBitmap(rel string, bmp *ui.Bitmap) {
+	if bmp == nil || rel == "" {
+		return
+	}
+	if n.assets == nil {
+		n.assets = map[string]*ui.Bitmap{}
+	}
+	n.assets[rel] = bmp
+}
+
+func noteDecodeImageFile(path string) (image.Image, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	img, _, err := noteDecodeImage(path, data)
+	return img, err
+}
+
+func noteDecodeImage(path string, data []byte) (image.Image, string, error) {
+	if img, format, err := image.Decode(bytes.NewReader(data)); err == nil && img != nil {
+		return img, format, nil
+	}
+	if path != "" {
+		if thumb, err := platform.Thumbnail(path, 1600); err == nil && thumb != nil {
+			ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(path)), ".")
+			return thumb, ext, nil
+		}
+	}
+	return nil, "", image.ErrFormat
 }
 
 // noteLabel is the card's accessible name: the note's heading, or 便利贴
@@ -654,7 +916,19 @@ func (a *shelf) noteBody(c *ui.Context, card ui.Element, span int, surf toolCard
 			return
 		}
 		w := cardW(layout.Card{ID: "note", Span: span}, surf)
-		top := ui.Row(c.Key("note-head")).Absolute().Left(cardPad).Right(cardPad).
+		var thumb *ui.Bitmap
+		if n != nil {
+			if imgRel := note.FirstImage(n.text); imgRel != "" {
+				thumb = n.cardThumbnail(imgRel)
+			}
+		}
+		textLeft := float32(cardPad)
+		if thumb != nil {
+			ui.Image(c.Key("note-thumb"), thumb).Absolute().Left(cardPad).Top(14).
+				Size(noteThumbSize, noteThumbSize).Radius(6).Fit(ui.Cover)
+			textLeft = cardPad + noteThumbSize + 10
+		}
+		top := ui.Row(c.Key("note-head")).Absolute().Left(textLeft).Right(cardPad).
 			Top(cardPad).Height(18).AlignItems(ui.Center).Gap(6)
 		top.Children(func() {
 			ui.Icon(c, def.icon).Size(16, 16).TextColor(ink2)
@@ -662,9 +936,9 @@ func (a *shelf) noteBody(c *ui.Context, card ui.Element, span int, surf toolCard
 			if name == "" {
 				name = def.name(loc(c))
 			}
-			fitText(c, name, 12, 600, w-2*cardPad-22).TextColor(ink).Label(name)
+			fitText(c, name, 12, 600, w-textLeft-cardPad-22).TextColor(ink).Label(name)
 		})
-		ui.Column(c.Key("note-lines")).Absolute().Left(12).Right(12).Top(34).Gap(1).Children(func() {
+		ui.Column(c.Key("note-lines")).Absolute().Left(textLeft).Right(cardPad).Top(34).Gap(1).Children(func() {
 			for i, line := range lines {
 				ui.Text(c.Key("note-line-"+string(rune('a'+i))), line).SingleLine().
 					FontSize(11).LineHeight(1.45).TextColor(ink2).Label(line)

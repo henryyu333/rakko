@@ -199,8 +199,8 @@ func TestEnterOpensTheNoteRow(t *testing.T) {
 	if got := a.note.store.ID(); got != other {
 		t.Fatalf("the card edits %q, want the note the row named %q", got, other)
 	}
-	if !strings.Contains(a.note.draft, "关键词") || a.note.dirty() {
-		t.Fatalf("the note's text was not loaded: %q (dirty %v)", a.note.draft, a.note.dirty())
+	if !strings.Contains(a.note.draftText(), "关键词") || a.note.dirty() {
+		t.Fatalf("the note's text was not loaded: %q (dirty %v)", a.note.draftText(), a.note.dirty())
 	}
 }
 

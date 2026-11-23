@@ -253,8 +253,7 @@ func TestSmokeNoteCardAndWindow(t *testing.T) {
 		t.Fatal("the note card did not open its window")
 	}
 	onMain(func() {
-		a.note.draft = "# 周五发版前\n– 改 README 顶栏描述\n– 补 v1.13 截图\n– 问 Codex 额度为什么 5 小时窗口跳\n– [ ] 桌宠姿态验收"
-		a.note.text = a.note.draft
+		a.note.resetText("# 周五发版前\n– 改 README 顶栏描述\n– 补 v1.13 截图\n– 问 Codex 额度为什么 5 小时窗口跳\n– [ ] 桌宠姿态验收")
 		a.note.invalidate()
 	})
 	petShot(t, a.note.win, "note-window")
