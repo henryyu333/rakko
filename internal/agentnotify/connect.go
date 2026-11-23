@@ -124,10 +124,7 @@ func statusFor(home, dataDir string, tool Tool, kind hookKind) (State, string) {
 	approve := kind == hookApproval
 	_, path := s.at(home)
 	if !approve {
-		if _, existed, _, err := readConfig(path); err != nil && s.kind != KindHermes && s.kind != KindModule && s.kind != KindPatch && s.kind != KindNamed {
-			return StateError, err.Error()
-		} else if err != nil && (s.kind == KindHermes || s.kind == KindModule || s.kind == KindPatch || s.kind == KindNamed) {
-			_ = existed
+		if _, _, _, err := readConfig(path); err != nil {
 			return StateError, err.Error()
 		}
 	}
