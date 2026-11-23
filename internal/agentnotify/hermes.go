@@ -488,8 +488,15 @@ func disconnectHermesApprove(s spec, home, dataDir string) error {
 	return nil
 }
 
-// statusHermes reports whether the completion half is installed.
-func statusHermes(home string) (State, string) {
+// statusHermesFor reports whether Hermes' completion (approve=false) or
+// approval (approve=true) half is installed.
+func statusHermesFor(home string, approve bool) (State, string) {
+	if approve {
+		s, _ := specFor(ToolHermes)
+		if s.approve == nil {
+			return StateUnsupported, ""
+		}
+	}
 	raw, existed, _, err := readConfig(hermesInitPath(home))
 	if err != nil {
 		return StateError, err.Error()
@@ -504,7 +511,11 @@ func statusHermes(home string) (State, string) {
 	if err != nil {
 		return StateError, err.Error()
 	}
-	if !st.Completion {
+	enabled := st.Completion
+	if approve {
+		enabled = st.Approval
+	}
+	if !enabled {
 		return StateNotInjected, ""
 	}
 	cfg, present, _, err := readConfig(hermesConfigPath(home))
@@ -521,52 +532,14 @@ func statusHermes(home string) (State, string) {
 	if !ok {
 		return StateNotInjected, ""
 	}
-	return StateInjected, ""
-}
-
-// statusHermesApprove reports whether the approval half is installed.
-func statusHermesApprove(home string) (State, string) {
-	s, _ := specFor(ToolHermes)
-	if s.approve == nil {
-		return StateUnsupported, ""
-	}
-	raw, existed, _, err := readConfig(hermesInitPath(home))
-	if err != nil {
-		return StateError, err.Error()
-	}
-	if !existed {
-		return StateNotInjected, ""
-	}
-	if !ownsModule(raw, ToolHermes, "") {
-		return StateError, hermesInitPath(home) + " was not written by Rakko"
-	}
-	st, err := readHermesState(home)
-	if err != nil {
-		return StateError, err.Error()
-	}
-	if !st.Approval {
-		return StateNotInjected, ""
-	}
-	cfg, present, _, err := readConfig(hermesConfigPath(home))
-	if err != nil {
-		return StateError, err.Error()
-	}
-	if !present {
-		return StateError, hermesConfigPath(home) + " is missing"
-	}
-	ok, err := hermesHasEnabled(cfg, hermesPluginName)
-	if err != nil {
-		return StateError, err.Error()
-	}
-	if !ok {
-		return StateNotInjected, ""
-	}
-	ok, err = hermesHasTransport(cfg)
-	if err != nil {
-		return StateError, err.Error()
-	}
-	if !ok {
-		return StateNotInjected, ""
+	if approve {
+		ok, err = hermesHasTransport(cfg)
+		if err != nil {
+			return StateError, err.Error()
+		}
+		if !ok {
+			return StateNotInjected, ""
+		}
 	}
 	return StateInjected, ""
 }

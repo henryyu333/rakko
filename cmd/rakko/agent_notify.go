@@ -76,6 +76,104 @@ type agentRun struct {
 // page's AGENT section.
 const agentFinishedWindow = 30 * time.Minute
 
+// agentSettingRows caches per-tool hook state and last action failure for the
+// Agent Notify and Approval settings groups.
+type agentSettingRows struct {
+	mu        sync.Mutex
+	states    map[agentnotify.Tool]agentnotify.State
+	notes     map[agentnotify.Tool]string
+	failed    map[agentnotify.Tool]string
+	refreshed time.Time
+}
+
+func newAgentSettingRows() agentSettingRows {
+	return agentSettingRows{
+		states: map[agentnotify.Tool]agentnotify.State{},
+		notes:  map[agentnotify.Tool]string{},
+		failed: map[agentnotify.Tool]string{},
+	}
+}
+
+func (r *agentSettingRows) detected(home string, approvableOnly bool) []agentnotify.Tool {
+	var out []agentnotify.Tool
+	for _, tool := range agentnotify.Tools() {
+		if approvableOnly && !tool.Approvable() {
+			continue
+		}
+		if agentnotify.Installed(home, tool) {
+			out = append(out, tool)
+		}
+	}
+	return out
+}
+
+func (r *agentSettingRows) setFailed(failed map[agentnotify.Tool]string) {
+	r.mu.Lock()
+	r.failed = failed
+	r.mu.Unlock()
+}
+
+func (r *agentSettingRows) recordTool(tool agentnotify.Tool, err error) {
+	r.mu.Lock()
+	if err != nil {
+		r.failed[tool] = err.Error()
+	} else {
+		delete(r.failed, tool)
+	}
+	r.mu.Unlock()
+}
+
+func (r *agentSettingRows) refresh(home, dataDir string, enabled, approvableOnly bool, status func(home, dir string, tool agentnotify.Tool) (agentnotify.State, string)) {
+	stable := agentStableExe() != ""
+	states := map[agentnotify.Tool]agentnotify.State{}
+	notes := map[agentnotify.Tool]string{}
+	r.mu.Lock()
+	failed := make(map[agentnotify.Tool]string, len(r.failed))
+	for tool, why := range r.failed {
+		failed[tool] = why
+	}
+	r.mu.Unlock()
+	for _, tool := range r.detected(home, approvableOnly) {
+		st, note := agentnotify.StateNotInjected, ""
+		if enabled {
+			st, note = status(home, dataDir, tool)
+			if st != agentnotify.StateInjected && !stable {
+				// The switch is on but this build cannot own a hook entry.
+				st, note = agentnotify.StateError, agentNeedsAppNote
+			}
+		}
+		if why, bad := failed[tool]; bad {
+			// The last explicit action on this tool did not work; that says
+			// more than the file's state, which the action was meant to
+			// change.
+			st, note = agentnotify.StateError, why
+		}
+		states[tool] = st
+		if note != "" {
+			notes[tool] = note
+		}
+	}
+	r.mu.Lock()
+	r.states, r.notes, r.refreshed = states, notes, time.Now()
+	r.mu.Unlock()
+}
+
+func (r *agentSettingRows) refreshIfStale(refresh func()) {
+	r.mu.Lock()
+	stale := r.states == nil || time.Since(r.refreshed) > time.Second
+	r.mu.Unlock()
+	if stale {
+		refresh()
+	}
+}
+
+func (r *agentSettingRows) row(tool agentnotify.Tool) (agentnotify.State, string, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	st, ok := r.states[tool]
+	return st, r.notes[tool], ok
+}
+
 // agentNotifyFeature holds the socket, the per-session task names and the
 // settings rows' last known state.
 type agentNotifyFeature struct {
@@ -88,13 +186,7 @@ type agentNotifyFeature struct {
 	tasks    map[string]agentTask // running: prompt seen, no completion yet
 	finished map[string]agentTask // completed, kept for the home page
 	posted   map[string]time.Time
-	// states and notes are the settings rows' last computed answer.
-	states    map[agentnotify.Tool]agentnotify.State
-	notes     map[agentnotify.Tool]string
-	refreshed time.Time
-	// failed is why the last connect or disconnect of a tool did not work:
-	// its row says so instead of showing a state that is no longer true.
-	failed map[agentnotify.Tool]string
+	rows     agentSettingRows
 	// node is the whole-group failure: the binary is not an installed app.
 	node string
 }
@@ -105,8 +197,7 @@ func newAgentNotifyFeature(a *shelf) *agentNotifyFeature {
 		host: a, home: home, dir: a.dataDir,
 		tasks: map[string]agentTask{}, finished: map[string]agentTask{},
 		posted: map[string]time.Time{},
-		states: map[agentnotify.Tool]agentnotify.State{}, notes: map[agentnotify.Tool]string{},
-		failed: map[agentnotify.Tool]string{},
+		rows:   newAgentSettingRows(),
 	}
 }
 
@@ -349,15 +440,11 @@ func (a *shelf) agentApply(on bool) {
 				failed[tool] = err.Error()
 			}
 		}
-		f.mu.Lock()
-		f.failed = failed
-		f.mu.Unlock()
+		f.rows.setFailed(failed)
 		f.refresh()
 		return
 	}
-	f.mu.Lock()
-	f.failed = map[agentnotify.Tool]string{}
-	f.mu.Unlock()
+	f.rows.setFailed(map[agentnotify.Tool]string{})
 	f.start()
 	exe := agentStableExe()
 	failed := map[agentnotify.Tool]string{}
@@ -379,9 +466,7 @@ func (a *shelf) agentApply(on bool) {
 			}
 		}
 	}
-	f.mu.Lock()
-	f.failed = failed
-	f.mu.Unlock()
+	f.rows.setFailed(failed)
 	f.refresh()
 }
 
@@ -410,13 +495,7 @@ func (a *shelf) agentApplyTool(tool agentnotify.Tool, on bool) {
 	} else {
 		err = agentnotify.Disconnect(f.home, f.dir, tool)
 	}
-	f.mu.Lock()
-	if err != nil {
-		f.failed[tool] = err.Error()
-	} else {
-		delete(f.failed, tool)
-	}
-	f.mu.Unlock()
+	f.rows.recordTool(tool, err)
 	f.refresh()
 }
 
@@ -436,72 +515,23 @@ func (a *shelf) agentStartEnabled() {
 // switch off every row is simply 未注入 and none of the tools' files are
 // opened.
 func (f *agentNotifyFeature) refresh() {
-	stable := agentStableExe() != ""
-	states := map[agentnotify.Tool]agentnotify.State{}
-	notes := map[agentnotify.Tool]string{}
-	on := f.host.settings.AgentNotify.Enabled
-	f.mu.Lock()
-	failed := make(map[agentnotify.Tool]string, len(f.failed))
-	for tool, why := range f.failed {
-		failed[tool] = why
-	}
-	f.mu.Unlock()
-	for _, tool := range agentnotify.Tools() {
-		if !agentnotify.Installed(f.home, tool) {
-			continue
-		}
-		st, note := agentnotify.StateNotInjected, ""
-		if on {
-			st, note = agentnotify.Status(f.home, f.dir, tool)
-			if st != agentnotify.StateInjected && !stable {
-				// The switch is on but this build cannot own a hook entry.
-				st, note = agentnotify.StateError, agentNeedsAppNote
-			}
-		}
-		if why, bad := failed[tool]; bad {
-			// The last explicit action on this tool did not work; that says
-			// more than the file's state, which the action was meant to
-			// change.
-			st, note = agentnotify.StateError, why
-		}
-		states[tool] = st
-		if note != "" {
-			notes[tool] = note
-		}
-	}
-	f.mu.Lock()
-	f.states, f.notes, f.refreshed = states, notes, time.Now()
-	f.mu.Unlock()
+	f.rows.refresh(f.home, f.dir, f.host.settings.AgentNotify.Enabled, false, agentnotify.Status)
 }
 
 // refreshIfStale recomputes the rows at most once a second while the
 // settings page redraws.
 func (f *agentNotifyFeature) refreshIfStale() {
-	f.mu.Lock()
-	stale := f.states == nil || time.Since(f.refreshed) > time.Second
-	f.mu.Unlock()
-	if stale {
-		f.refresh()
-	}
+	f.rows.refreshIfStale(f.refresh)
 }
 
 // settingRow is one detected tool's row: its state and the reason.
 func (f *agentNotifyFeature) settingRow(tool agentnotify.Tool) (agentnotify.State, string, bool) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	st, ok := f.states[tool]
-	return st, f.notes[tool], ok
+	return f.rows.row(tool)
 }
 
 // detected lists the installed tools in settings order.
 func (f *agentNotifyFeature) detected() []agentnotify.Tool {
-	var out []agentnotify.Tool
-	for _, tool := range agentnotify.Tools() {
-		if agentnotify.Installed(f.home, tool) {
-			out = append(out, tool)
-		}
-	}
-	return out
+	return f.rows.detected(f.home, false)
 }
 
 // agentTaskName is the task line: the prompt's first line, whitespace

@@ -14,7 +14,6 @@ import (
 	"encoding/json"
 	"io"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -95,16 +94,10 @@ func RunApproveCLI(args []string, stdin io.Reader, stdout io.Writer) (handled bo
 		io.WriteString(stdout, fallback)
 		return true
 	}
-	if dataDir == "" {
-		dataDir = os.Getenv("RAKKO_DATA_DIR")
-	}
-	if dataDir == "" {
-		dir, derr := os.UserConfigDir()
-		if derr != nil {
-			io.WriteString(stdout, fallback)
-			return true
-		}
-		dataDir = filepath.Join(dir, "Rakko")
+	dataDir, derr := resolveHookDataDir(dataDir)
+	if derr != nil {
+		io.WriteString(stdout, fallback)
+		return true
 	}
 	d, ok := askRakko(context.Background(), dataDir, a)
 	if !ok {
@@ -118,33 +111,7 @@ func RunApproveCLI(args []string, stdin io.Reader, stdout io.Writer) (handled bo
 // parseApproveArgs reads the approval mode's arguments without the flag
 // package, so the app can start as fast as the completion forwarder does.
 func parseApproveArgs(args []string) (tool Tool, dataDir string, ok bool) {
-	for i := 0; i < len(args); i++ {
-		a := args[i]
-		name, value, hasValue := strings.Cut(a, "=")
-		next := func() string {
-			if hasValue {
-				return value
-			}
-			if i+1 < len(args) {
-				i++
-				return args[i]
-			}
-			return ""
-		}
-		switch name {
-		case "--agent-approve":
-			ok = true
-			if hasValue {
-				tool = Tool(value)
-			}
-		case "--tool":
-			tool = Tool(next())
-		case "--data-dir":
-			dataDir = next()
-		case "--event":
-			_ = next() // diagnostic only; the app does not trust it
-		}
-	}
+	tool, dataDir, _, ok = parseCLIArgs(args, "--agent-approve")
 	return tool, dataDir, ok
 }
 

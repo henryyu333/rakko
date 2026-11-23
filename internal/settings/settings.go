@@ -268,21 +268,15 @@ type LiveActivitySettings struct {
 	NowPlaying bool `json:"nowPlaying"`
 }
 
-// AgentNotifySettings is the agentNotify object in settings.json. Enabled
-// is off for a fresh install: turning it on writes Rakko's hook entries
-// into the agents' own configuration files, and turning it off removes them
-// again.
-//
-// Off lists the tools whose own switch the user turned off while the group
-// switch stays on. Empty, or a missing key, means every detected tool is on
-// — the behaviour settings.json had before the per-tool switches existed.
-type AgentNotifySettings struct {
+// ToolSwitches stores a feature-group master switch alongside the list of
+// detected tools the user individually turned off.
+type ToolSwitches struct {
 	Enabled bool     `json:"enabled"`
 	Off     []string `json:"off,omitempty"`
 }
 
 // ToolOff reports whether the user switched one tool off on its own row.
-func (s AgentNotifySettings) ToolOff(id string) bool {
+func (s ToolSwitches) ToolOff(id string) bool {
 	for _, off := range s.Off {
 		if off == id {
 			return true
@@ -294,7 +288,7 @@ func (s AgentNotifySettings) ToolOff(id string) bool {
 // SetToolOn stores one tool's own switch: on drops the tool from Off, off
 // adds it. The slice is rebuilt, never edited in place, so the settings
 // value a caller copied earlier keeps its meaning.
-func (s *AgentNotifySettings) SetToolOn(id string, on bool) {
+func (s *ToolSwitches) SetToolOn(id string, on bool) {
 	off := make([]string, 0, len(s.Off)+1)
 	for _, v := range s.Off {
 		if v != id {
@@ -310,14 +304,13 @@ func (s *AgentNotifySettings) SetToolOn(id string, on bool) {
 	s.Off = off
 }
 
-// pruneOff drops IDs of tools Rakko does not know and repeats, so a
-// hand-edited settings.json cannot keep a phantom tool switched off
-// forever.
-func (s *AgentNotifySettings) pruneOff() {
+// pruneOff drops repeated IDs and tools that fail keep, so a hand-edited
+// settings.json cannot keep a phantom tool switched off forever.
+func (s *ToolSwitches) pruneOff(keep func(agentnotify.Tool) bool) {
 	off := make([]string, 0, len(s.Off))
 	seen := make(map[string]bool, len(s.Off))
 	for _, id := range s.Off {
-		if seen[id] || !agentnotify.Tool(id).Valid() {
+		if seen[id] || !keep(agentnotify.Tool(id)) {
 			continue
 		}
 		seen[id] = true
@@ -328,59 +321,31 @@ func (s *AgentNotifySettings) pruneOff() {
 	}
 	s.Off = off
 }
+
+// AgentNotifySettings is the agentNotify object in settings.json. Enabled
+// is off for a fresh install: turning it on writes Rakko's hook entries
+// into the agents' own configuration files, and turning it off removes them
+// again.
+//
+// Off lists the tools whose own switch the user turned off while the group
+// switch stays on. Empty, or a missing key, means every detected tool is on
+// — the behaviour settings.json had before the per-tool switches existed.
+type AgentNotifySettings struct {
+	ToolSwitches
+}
+
+func (s *AgentNotifySettings) pruneOff() { s.ToolSwitches.pruneOff(agentnotify.Tool.Valid) }
 
 // ApprovalSettings is the approval object in settings.json. Enabled is off
 // for a fresh install. Off lists the tools whose approval row the user
 // switched off while the group switch stays on; empty means every detected
 // tool is on.
 type ApprovalSettings struct {
-	Enabled bool     `json:"enabled"`
-	Off     []string `json:"off,omitempty"`
+	ToolSwitches
 }
 
-// ToolOff reports whether the user switched one tool off on its own row.
-func (s ApprovalSettings) ToolOff(id string) bool {
-	for _, off := range s.Off {
-		if off == id {
-			return true
-		}
-	}
-	return false
-}
-
-// SetToolOn stores one tool's own approval switch.
-func (s *ApprovalSettings) SetToolOn(id string, on bool) {
-	off := make([]string, 0, len(s.Off)+1)
-	for _, v := range s.Off {
-		if v != id {
-			off = append(off, v)
-		}
-	}
-	if !on {
-		off = append(off, id)
-	}
-	if len(off) == 0 {
-		off = nil
-	}
-	s.Off = off
-}
-
-// pruneOff drops unknown and repeated tool ids, like AgentNotify's.
 func (s *ApprovalSettings) pruneOff() {
-	off := make([]string, 0, len(s.Off))
-	seen := make(map[string]bool, len(s.Off))
-	for _, id := range s.Off {
-		t := agentnotify.Tool(id)
-		if seen[id] || !t.Valid() || !t.Approvable() {
-			continue
-		}
-		seen[id] = true
-		off = append(off, id)
-	}
-	if len(off) == 0 {
-		off = nil
-	}
-	s.Off = off
+	s.ToolSwitches.pruneOff(func(t agentnotify.Tool) bool { return t.Valid() && t.Approvable() })
 }
 
 // LyricsSettings is the lyrics object in settings.json: whether the home
@@ -668,8 +633,8 @@ func Default() Settings {
 			QuotaCodex:  true,
 			QuotaClaude: true,
 		},
-		AgentNotify: AgentNotifySettings{Enabled: false},
-		Approval:    ApprovalSettings{Enabled: false},
+		AgentNotify: AgentNotifySettings{},
+		Approval:    ApprovalSettings{},
 		Pet:         PetSettings{Shown: true, Size: PetSizeMedium},
 		Weekly:      WeeklySettings{AppStats: false},
 		SysMon: SysMonSettings{

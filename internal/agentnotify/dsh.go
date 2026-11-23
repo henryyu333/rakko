@@ -243,28 +243,13 @@ func dshOnlyComments(text []byte) bool {
 // --- install / remove ---
 
 func writePatchModule(path, tmpl string, tool Tool, exe, dataDir string, approve bool) error {
-	owns := func(raw []byte, tool Tool) bool { return ownsModule(raw, tool, dataDir) }
+	kind := hookCompletion
+	body := renderModule(tmpl, tool, exe, dataDir)
 	if approve {
-		owns = func(raw []byte, tool Tool) bool { return ownsApprove(raw, tool, dataDir) }
+		kind = hookApproval
+		body = renderApproveModule(tmpl, tool, exe, dataDir)
 	}
-	return updateFile(path, func(raw []byte, existed bool, _ os.FileMode) (filePlan, error) {
-		if existed && !owns(raw, tool) {
-			return filePlan{}, fmt.Errorf("agentnotify: %s exists and was not written by Rakko; left alone", path)
-		}
-		var body string
-		if approve {
-			body = renderApproveModule(tmpl, tool, exe, dataDir)
-		} else {
-			body = renderModule(tmpl, tool, exe, dataDir)
-		}
-		return filePlan{data: []byte(body), mode: 0o644, changed: true, before: func() error {
-			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-				return err
-			}
-			recordOrigin(dataDir, path, originRecord{Created: true})
-			return nil
-		}}, nil
-	})
+	return writeModuleFile(path, body, kind, tool, dataDir)
 }
 
 // connectDSHPatch writes one module and its insertion entry. The layer is
@@ -359,19 +344,11 @@ func disconnectDSHPatch(s spec, home, dataDir, entry, path string, approve bool)
 	if err != nil {
 		return err
 	}
-	owns := func(raw []byte, tool Tool) bool { return ownsModule(raw, tool, dataDir) }
+	kind := hookCompletion
 	if approve {
-		owns = func(raw []byte, tool Tool) bool { return ownsApprove(raw, tool, dataDir) }
+		kind = hookApproval
 	}
-	err = updateFile(path, func(raw []byte, existed bool, _ os.FileMode) (filePlan, error) {
-		if !existed {
-			return filePlan{after: func() { forgetOrigin(dataDir, path) }}, nil
-		}
-		if !owns(raw, s.tool) {
-			return filePlan{}, nil
-		}
-		return filePlan{remove: true, changed: true, after: func() { forgetOrigin(dataDir, path) }}, nil
-	})
+	err = removeModuleFile(path, kind, s.tool, dataDir)
 	if err == nil {
 		// The directory is Rakko's own; remove it when this was its last
 		// file, and leave it when the other surface still lives there.

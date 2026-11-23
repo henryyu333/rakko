@@ -48,6 +48,12 @@ func RunHookCLI(args []string, stdin io.Reader) (handled bool) {
 // parseHookArgs reads the forwarder's arguments without the flag package,
 // so nothing allocates more than needed on the hot path.
 func parseHookArgs(args []string) (tool Tool, dataDir, event string, ok bool) {
+	return parseCLIArgs(args, "--agent-hook")
+}
+
+// parseCLIArgs reads the --agent-hook / --agent-approve flag sets without
+// pulling in the flag package on the CLI hot path.
+func parseCLIArgs(args []string, modeFlag string) (tool Tool, dataDir, event string, ok bool) {
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		name, value, hasValue := strings.Cut(a, "=")
@@ -62,11 +68,10 @@ func parseHookArgs(args []string) (tool Tool, dataDir, event string, ok bool) {
 			return ""
 		}
 		switch name {
-		case "--agent-hook":
+		case modeFlag:
 			ok = true
-			// `--agent-hook=<tool>` names the tool in one word; a bare
-			// --agent-hook takes no value and must not swallow the next
-			// flag.
+			// `--flag=<tool>` names the tool in one word; a bare flag takes
+			// no value and must not swallow the next argument.
 			if hasValue {
 				tool = Tool(value)
 			}
@@ -79,6 +84,22 @@ func parseHookArgs(args []string) (tool Tool, dataDir, event string, ok bool) {
 		}
 	}
 	return tool, dataDir, event, ok
+}
+
+// resolveHookDataDir resolves an explicit --data-dir, RAKKO_DATA_DIR, or the
+// default per-user Rakko support directory.
+func resolveHookDataDir(dataDir string) (string, error) {
+	if dataDir == "" {
+		dataDir = os.Getenv("RAKKO_DATA_DIR")
+	}
+	if dataDir != "" {
+		return dataDir, nil
+	}
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "Rakko"), nil
 }
 
 // forward sends one event, then returns. Every failure is silent.
@@ -109,15 +130,9 @@ func forward(tool Tool, dataDir, event string, stdin io.Reader) {
 	if req.Event == "" {
 		req.Event = event
 	}
-	if dataDir == "" {
-		dataDir = os.Getenv("RAKKO_DATA_DIR")
-	}
-	if dataDir == "" {
-		dir, derr := os.UserConfigDir()
-		if derr != nil {
-			return
-		}
-		dataDir = filepath.Join(dir, "Rakko")
+	dataDir, err = resolveHookDataDir(dataDir)
+	if err != nil {
+		return
 	}
 	send(dataDir, req)
 }

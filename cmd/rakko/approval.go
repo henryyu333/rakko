@@ -102,13 +102,10 @@ type approvalFeature struct {
 	host *shelf
 	home string
 
-	mu        sync.Mutex
-	pending   []*approval
-	ids       map[string]*approval
-	states    map[agentnotify.Tool]agentnotify.State
-	notes     map[agentnotify.Tool]string
-	failed    map[agentnotify.Tool]string
-	refreshed time.Time
+	mu      sync.Mutex
+	pending []*approval
+	ids     map[string]*approval
+	rows    agentSettingRows
 
 	enabled atomic.Bool
 	// keyHeld is the card's ⌘↩ registration; main thread only.
@@ -119,10 +116,8 @@ func newApprovalFeature(a *shelf) *approvalFeature {
 	home, _ := agentNotifyHome()
 	f := &approvalFeature{
 		host: a, home: home,
-		ids:    map[string]*approval{},
-		states: map[agentnotify.Tool]agentnotify.State{},
-		notes:  map[agentnotify.Tool]string{},
-		failed: map[agentnotify.Tool]string{},
+		ids:  map[string]*approval{},
+		rows: newAgentSettingRows(),
 	}
 	f.enabled.Store(a.settings.Approval.Enabled)
 	return f
@@ -578,13 +573,7 @@ func (a *shelf) setApprovalTool(tool agentnotify.Tool, on bool) {
 	} else {
 		err = agentnotify.DisconnectApprove(f.home, f.host.dataDir, tool)
 	}
-	f.mu.Lock()
-	if err != nil {
-		f.failed[tool] = err.Error()
-	} else {
-		delete(f.failed, tool)
-	}
-	f.mu.Unlock()
+	f.rows.recordTool(tool, err)
 	f.refresh()
 }
 
@@ -602,9 +591,7 @@ func (a *shelf) approvalApply(on bool) {
 				failed[tool] = err.Error()
 			}
 		}
-		f.mu.Lock()
-		f.failed = failed
-		f.mu.Unlock()
+		f.rows.setFailed(failed)
 		f.failPending(time.Now())
 		if !a.settings.AgentNotify.Enabled {
 			a.agentFeature().stop()
@@ -628,9 +615,7 @@ func (a *shelf) approvalApply(on bool) {
 			}
 		}
 	}
-	f.mu.Lock()
-	f.failed = failed
-	f.mu.Unlock()
+	f.rows.setFailed(failed)
 	f.refresh()
 }
 
@@ -648,64 +633,24 @@ func (a *shelf) approvalStartEnabled() {
 
 // refresh recomputes the settings rows' states.
 func (f *approvalFeature) refresh() {
-	stable := agentStableExe() != ""
-	on := f.host.settings.Approval.Enabled
-	states := map[agentnotify.Tool]agentnotify.State{}
-	notes := map[agentnotify.Tool]string{}
-	f.mu.Lock()
-	failed := make(map[agentnotify.Tool]string, len(f.failed))
-	for tool, why := range f.failed {
-		failed[tool] = why
-	}
-	f.mu.Unlock()
-	for _, tool := range f.detected() {
-		st, note := agentnotify.StateNotInjected, ""
-		if on {
-			st, note = agentnotify.StatusApprove(f.home, f.host.dataDir, tool)
-			if st != agentnotify.StateInjected && !stable {
-				st, note = agentnotify.StateError, agentNeedsAppNote
-			}
-		}
-		if why, bad := failed[tool]; bad {
-			st, note = agentnotify.StateError, why
-		}
-		states[tool] = st
-		if note != "" {
-			notes[tool] = note
-		}
-	}
-	f.mu.Lock()
-	f.states, f.notes, f.refreshed = states, notes, time.Now()
-	f.mu.Unlock()
+	f.rows.refresh(f.home, f.host.dataDir, f.host.settings.Approval.Enabled, true, agentnotify.StatusApprove)
 }
 
 // refreshIfStale recomputes the rows at most once a second while the
 // settings page redraws.
 func (f *approvalFeature) refreshIfStale() {
-	f.mu.Lock()
-	stale := f.states == nil || time.Since(f.refreshed) > time.Second
-	f.mu.Unlock()
-	if stale {
-		f.refresh()
-	}
+	f.rows.refreshIfStale(f.refresh)
 }
 
 // settingRow is one detected tool's row state and note.
 func (f *approvalFeature) settingRow(tool agentnotify.Tool) (agentnotify.State, string) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.states[tool], f.notes[tool]
+	st, note, _ := f.rows.row(tool)
+	return st, note
 }
 
 // detected lists installed, approvable tools in settings order.
 func (f *approvalFeature) detected() []agentnotify.Tool {
-	var out []agentnotify.Tool
-	for _, tool := range agentnotify.Tools() {
-		if tool.Approvable() && agentnotify.Installed(f.home, tool) {
-			out = append(out, tool)
-		}
-	}
-	return out
+	return f.rows.detected(f.home, true)
 }
 
 // cleanReason compresses a typed deny reason to one line of at most 500

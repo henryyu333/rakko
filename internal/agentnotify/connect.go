@@ -113,27 +113,54 @@ func shellQuote(s string) string {
 // Status reports whether Rakko's entry is installed for tool. The detail is
 // a short reason when the state is StateError.
 func Status(home, dataDir string, tool Tool) (State, string) {
+	return statusFor(home, dataDir, tool, hookCompletion)
+}
+
+func statusFor(home, dataDir string, tool Tool, kind hookKind) (State, string) {
 	s, ok := specFor(tool)
-	if !ok {
+	if !ok || (kind == hookApproval && s.approve == nil) {
 		return StateUnsupported, ""
 	}
-	s, path := s.at(home)
-	raw, existed, _, err := readConfig(path)
-	if err != nil {
-		return StateError, err.Error()
+	approve := kind == hookApproval
+	_, path := s.at(home)
+	if !approve {
+		if _, existed, _, err := readConfig(path); err != nil && s.kind != KindHermes && s.kind != KindModule && s.kind != KindPatch && s.kind != KindNamed {
+			return StateError, err.Error()
+		} else if err != nil && (s.kind == KindHermes || s.kind == KindModule || s.kind == KindPatch || s.kind == KindNamed) {
+			_ = existed
+			return StateError, err.Error()
+		}
 	}
 	switch s.kind {
 	case KindHermes:
-		return statusHermes(home)
+		return statusHermesFor(home, approve)
 	case KindModule:
+		modPath := s.config(home)
+		if approve {
+			modPath = ApproveConfigPath(home, tool)
+		}
+		raw, existed, _, err := readConfig(modPath)
+		if err != nil {
+			return StateError, err.Error()
+		}
 		if !existed {
 			return StateNotInjected, ""
 		}
-		if ownsModule(raw, tool, dataDir) {
+		if ownsHookModule(kind, raw, tool, dataDir) {
 			return StateInjected, ""
 		}
-		return StateError, path + " was not written by Rakko"
+		return StateError, modPath + " was not written by Rakko"
+	case KindPatch:
+		if approve {
+			return statusDSHPatch(s, home, dshEntryApproval, ApproveConfigPath(home, tool))
+		}
+		return statusDSHPatch(s, home, dshEntryCompletion, s.config(home))
 	case KindNamed:
+		cfgPath := s.config(home)
+		raw, existed, _, err := readConfig(cfgPath)
+		if err != nil {
+			return StateError, err.Error()
+		}
 		if !existed {
 			return StateNotInjected, ""
 		}
@@ -141,20 +168,26 @@ func Status(home, dataDir string, tool Tool) (State, string) {
 		if derr != nil {
 			return StateError, derr.Error()
 		}
-		if member, _ := doc.root.lookup(namedHook); member != nil {
+		memberName := namedHook
+		if approve {
+			memberName = s.approve.member
+		}
+		if member, _ := doc.root.lookup(memberName); member != nil {
 			return StateInjected, ""
 		}
 		return StateNotInjected, ""
-	case KindPatch:
-		return statusDSHPatch(s, home, dshEntryCompletion, s.config(home))
 	default:
+		raw, existed, _, err := readConfig(path)
+		if err != nil {
+			return StateError, err.Error()
+		}
 		if !existed {
 			return StateNotInjected, ""
 		}
 		if _, derr := newJSONDoc(raw); derr != nil {
 			return StateError, derr.Error()
 		}
-		if carriesKind(raw, tool, hookCompletion, dataDir) {
+		if carriesKind(raw, tool, kind, dataDir) {
 			return StateInjected, ""
 		}
 		return StateNotInjected, ""
@@ -208,13 +241,13 @@ func Disconnect(home, dataDir string, tool Tool) error {
 	case KindHermes:
 		err = disconnectHermes(s, home, dataDir)
 	case KindModule:
-		err = removeModule(s, home, dataDir)
+		err = removeModuleFile(s.config(home), hookCompletion, s.tool, dataDir)
 	case KindNamed:
 		err = disconnectNamed(s, home, dataDir)
 	case KindPatch:
 		err = disconnectDSHPatch(s, home, dataDir, dshEntryCompletion, s.config(home), false)
 	default:
-		err = disconnectHooks(s, home, dataDir)
+		err = disconnectHooks(s, home, dataDir, hookCompletion)
 	}
 	if err != nil {
 		// The tool's configuration still names the shim; leave it in place
@@ -259,36 +292,40 @@ func connectHooks(s spec, home, dataDir, exe string) error {
 		if !changed {
 			return filePlan{}, nil
 		}
-		m := os.FileMode(0o600)
-		if existed {
-			m = mode.Perm()
-		}
-		return filePlan{data: doc.bytes(), mode: m, changed: true, before: func() error {
-			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-				return err
-			}
-			backed, err := backupOnce(path, existed)
-			if err != nil {
-				return err
-			}
-			recordOrigin(dataDir, path, originRecord{
-				Created:  !existed,
-				Blank:    existed && len(bytes.TrimSpace(raw)) == 0,
-				BackedUp: backed,
-			})
-			return nil
-		}}, nil
+		return hookFilePlan(path, dataDir, raw, doc.bytes(), existed, mode), nil
 	})
+}
+
+func hookFilePlan(path, dataDir string, raw, out []byte, existed bool, mode os.FileMode) filePlan {
+	m := os.FileMode(0o600)
+	if existed {
+		m = mode.Perm()
+	}
+	return filePlan{data: out, mode: m, changed: true, before: func() error {
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			return err
+		}
+		backed, err := backupOnce(path, existed)
+		if err != nil {
+			return err
+		}
+		recordOrigin(dataDir, path, originRecord{
+			Created:  !existed,
+			Blank:    existed && len(bytes.TrimSpace(raw)) == 0,
+			BackedUp: backed,
+		})
+		return nil
+	}}
 }
 
 // disconnectHooks removes Rakko's entries from every file the tool may have
 // been given one in, and the containers it emptied.
-func disconnectHooks(s spec, home, dataDir string) error {
+func disconnectHooks(s spec, home, dataDir string, kind hookKind) error {
 	var first error
 	for _, path := range s.candidates(home) {
 		r := s
 		r.bare = s.bareName != "" && filepath.Base(path) == s.bareName
-		if err := disconnectHooksAt(r, path, dataDir, hookCompletion); err != nil && first == nil {
+		if err := disconnectHooksAt(r, path, dataDir, kind); err != nil && first == nil {
 			first = err
 		}
 	}
@@ -327,14 +364,20 @@ func disconnectHooksAt(s spec, path, dataDir string, kind hookKind) error {
 // per-hook file), as opposed to a shared settings document.
 func isDedicated(tool Tool) bool { return tool == ToolGrok }
 
-// writeModule writes the plugin/extension file for a module tool.
-func writeModule(s spec, home, dataDir, exe string) error {
-	path := s.config(home)
+func ownsHookModule(kind hookKind, raw []byte, tool Tool, dataDir string) bool {
+	if kind == hookApproval {
+		return ownsApprove(raw, tool, dataDir)
+	}
+	return ownsModule(raw, tool, dataDir)
+}
+
+// writeModuleFile writes a standalone Rakko hook/plugin file after verifying
+// ownership when it already exists.
+func writeModuleFile(path, body string, kind hookKind, tool Tool, dataDir string) error {
 	return updateFile(path, func(raw []byte, existed bool, _ os.FileMode) (filePlan, error) {
-		if existed && !ownsModule(raw, s.tool, dataDir) {
+		if existed && !ownsHookModule(kind, raw, tool, dataDir) {
 			return filePlan{}, fmt.Errorf("agentnotify: %s exists and was not written by Rakko; left alone", path)
 		}
-		body := renderModule(moduleSource(s, hookCompletion), s.tool, exe, dataDir)
 		return filePlan{data: []byte(body), mode: 0o644, changed: true, before: func() error {
 			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 				return err
@@ -345,18 +388,23 @@ func writeModule(s spec, home, dataDir, exe string) error {
 	})
 }
 
-// removeModule deletes Rakko's module file and nothing else.
-func removeModule(s spec, home, dataDir string) error {
-	path := s.config(home)
+// removeModuleFile deletes a Rakko-owned hook/plugin file and nothing else.
+func removeModuleFile(path string, kind hookKind, tool Tool, dataDir string) error {
 	return updateFile(path, func(raw []byte, existed bool, _ os.FileMode) (filePlan, error) {
 		if !existed {
 			return filePlan{after: func() { forgetOrigin(dataDir, path) }}, nil
 		}
-		if !ownsModule(raw, s.tool, dataDir) {
+		if !ownsHookModule(kind, raw, tool, dataDir) {
 			return filePlan{}, nil
 		}
 		return filePlan{remove: true, changed: true, after: func() { forgetOrigin(dataDir, path) }}, nil
 	})
+}
+
+// writeModule writes the plugin/extension file for a module tool.
+func writeModule(s spec, home, dataDir, exe string) error {
+	body := renderModule(moduleSource(s, hookCompletion), s.tool, exe, dataDir)
+	return writeModuleFile(s.config(home), body, hookCompletion, s.tool, dataDir)
 }
 
 // onlyVersion reports whether a document holds nothing but the "version"
