@@ -760,6 +760,8 @@ func (a *shelf) settingsShortcutsPage(c *ui.Context) {
 		a.settingsShortcutRow(c, shortcutAwake, l.SettingsShortcutAwake(), "")
 		settingsSep(c, "sc-awake")
 		a.settingsShortcutRow(c, shortcutNote, l.SettingsShortcutNewNote(), "")
+		settingsSep(c, "sc-board")
+		a.settingsShortcutRow(c, shortcutBoard, l.SettingsShortcutNewBoard(), "")
 		settingsSep(c, "sc-note")
 		a.settingsShortcutRow(c, shortcutPet, l.SettingsShortcutPet(), "")
 		settingsSep(c, "sc-pet")

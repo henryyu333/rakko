@@ -237,6 +237,8 @@ type shelf struct {
 	// note 是便利贴卡片背后的那个 Markdown 文件，以及打开时的窗口
 	// （note.go）；首次画到卡片或点开时才建立文件与监听。
 	note *noteUI
+	// board 是白板卡片背后的当前白板文件、编辑状态与打开时的窗口（board.go）。
+	board *boardUI
 	// noteIdx 是搜索「便利贴」组用的便签文本（notesearch.go）：只在保存、
 	// 外部改动或搜索框重新拿到键盘时重扫，敲键时只查内存。
 	noteIdx noteIndex

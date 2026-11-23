@@ -178,6 +178,7 @@ func TestWindowsSettingsScrolledShortcutsTopRowStartsRecording(t *testing.T) {
 		{shortcutUsage, l.SettingsShortcutUsage()},
 		{shortcutAwake, l.SettingsShortcutAwake()},
 		{shortcutNote, l.SettingsShortcutNewNote()},
+		{shortcutBoard, l.SettingsShortcutNewBoard()},
 		{shortcutPet, l.SettingsShortcutPet()},
 		{shortcutAppSwitch, l.SettingsShortcutAppSwitch()},
 	}

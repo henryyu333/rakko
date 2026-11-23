@@ -98,6 +98,7 @@ func toolCatalog() []toolCardDef {
 		toolCardDef{id: "recent", kind: cardWidget, title: "最近文件", icon: recentSymbol, span: 2, accepts: never, available: always},
 		toolCardDef{id: "clip", kind: cardWidget, title: "剪贴板最新", icon: clipNavSymbol, span: 2, accepts: never, available: always},
 		toolCardDef{id: "note", kind: cardWidget, title: "便利贴", icon: noteSymbol, span: 1, variableSpan: true, accepts: never, available: always},
+		toolCardDef{id: "board", kind: cardWidget, title: "白板", icon: boardSymbol, span: 1, variableSpan: true, accepts: never, available: always},
 		toolCardDef{id: "usage", kind: cardWidget, title: "AI 用量", icon: gaugeSymbol, span: 1, accepts: never, available: usageAvailable},
 		toolCardDef{id: "timer", kind: cardWidget, title: "倒计时", icon: timerGlyph, span: 2, variableSpan: true, accepts: never, available: always},
 		toolCardDef{id: "stopwatch", kind: cardWidget, title: "秒表", icon: watchGlyph, span: 1, variableSpan: true, accepts: never, available: always},
@@ -171,6 +172,8 @@ func (d *toolCardDef) name(l locales.Messages) string {
 		return l.LatestClip()
 	case "note":
 		return l.CardNote()
+	case "board":
+		return l.CardBoard()
 	case "usage":
 		return l.AiUsage()
 	case "timer":
@@ -223,6 +226,9 @@ func (a *shelf) toolCard(c *ui.Context, spec layout.Card, surf toolCardSurface, 
 	}
 	if def != nil && def.id == "note" {
 		title = a.noteLabel(loc(c))
+	}
+	if def != nil && def.id == "board" {
+		title = a.boardLabel(loc(c))
 	}
 	if def != nil && def.id == "timer" {
 		title = a.clock.timerCardTitle(loc(c))
@@ -392,6 +398,8 @@ func (a *shelf) toolCardBody(c *ui.Context, card ui.Element, def *toolCardDef, p
 		a.toolClipBody(c, card, span, surf)
 	case "note":
 		a.noteBody(c, card, span, surf)
+	case "board":
+		a.boardBody(c, card, span, surf)
 	case "usage":
 		a.toolUsageBody(c, card, span, surf)
 	case "timer":
@@ -574,6 +582,8 @@ func (a *shelf) runToolCard(id string) bool {
 		return false
 	case "note":
 		return a.toggleNote()
+	case "board":
+		return a.toggleBoard()
 	case "usage":
 		if a.usage != nil {
 			a.setTab(pageUsage)

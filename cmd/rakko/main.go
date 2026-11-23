@@ -181,9 +181,10 @@ func main() {
 	mygo.App.SetActivationPolicy(mygo.ActivationPolicyAccessory)
 	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) { a.quitting = true })
 	mygo.App.OnWillQuit(func(*mygo.QuitEvent) {
-		// Quitting never drops what was typed into the 便利贴 window; the
+		// Quitting never drops what was typed into the 便利贴 or 白板 window; the
 		// file watch goes with the process.
 		a.noteFlush()
+		a.boardFlush()
 		if a.note != nil && a.note.watch != nil {
 			a.note.watch.Close()
 			a.note.watch = nil
@@ -446,7 +447,7 @@ func (a *shelf) ready(show bool) {
 	})
 	a.registerShortcuts()
 	a.applyClipboardHistory()
-	a.modules = append(a.modules, &retentionModule{host: a}, noteModule{host: a})
+	a.modules = append(a.modules, &retentionModule{host: a}, noteModule{host: a}, boardModule{host: a})
 	a.np = &nowPlayingModule{host: a}
 	a.modules = append(a.modules, a.np)
 	a.conv = &converter{host: a}

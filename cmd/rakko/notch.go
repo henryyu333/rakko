@@ -2076,10 +2076,10 @@ func (a *shelf) leaveFocusMode() {
 // instead of flashing the default one; finishClose retires it.
 func (a *shelf) hide(exit hideExit) {
 	a.endAppSwitch() // 收起同样结束应用切换(保险路径; 通常已经不在)
-	// The note window outlives the panel: land what it holds even when the
-	// panel was already folded (opening the note folds it), so a second
-	// hide cannot skip the draft. Idempotent when there is nothing to land.
+	// The note/board windows outlive the panel: land what they hold even when the
+	// panel was already folded, so a second hide cannot skip unsaved edits.
 	a.noteFlush()
+	a.boardFlush()
 	if !a.visible && !a.peeking {
 		return
 	}

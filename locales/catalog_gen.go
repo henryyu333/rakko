@@ -10028,3 +10028,353 @@ func SettingsDisplayUnknown() string { return In(i18n.Locale()).SettingsDisplayU
 func (msgs Messages) SettingsDisplayUnknown() string {
 	return Catalog.Format(msgs.locale, "settingsDisplayUnknown", nil)
 }
+
+// CardBoard says "白板"
+// in the language the app shows.
+func CardBoard() string { return In(i18n.Locale()).CardBoard() }
+
+// CardBoard says "白板"
+// in the language of msgs.
+func (msgs Messages) CardBoard() string {
+	return Catalog.Format(msgs.locale, "cardBoard", nil)
+}
+
+// BoardDefaultName says "白板 1"
+// in the language the app shows.
+func BoardDefaultName() string { return In(i18n.Locale()).BoardDefaultName() }
+
+// BoardDefaultName says "白板 1"
+// in the language of msgs.
+func (msgs Messages) BoardDefaultName() string {
+	return Catalog.Format(msgs.locale, "boardDefaultName", nil)
+}
+
+// BoardNewName says "白板 {n, number, ::group-off}"
+// in the language the app shows.
+func BoardNewName(n int) string { return In(i18n.Locale()).BoardNewName(n) }
+
+// BoardNewName says "白板 {n, number, ::group-off}"
+// in the language of msgs.
+func (msgs Messages) BoardNewName(n int) string {
+	return Catalog.Format(msgs.locale, "boardNewName", map[string]any{"n": n})
+}
+
+// BoardNew says "新建白板"
+// in the language the app shows.
+func BoardNew() string { return In(i18n.Locale()).BoardNew() }
+
+// BoardNew says "新建白板"
+// in the language of msgs.
+func (msgs Messages) BoardNew() string {
+	return Catalog.Format(msgs.locale, "boardNew", nil)
+}
+
+// BoardRename says "重命名…"
+// in the language the app shows.
+func BoardRename() string { return In(i18n.Locale()).BoardRename() }
+
+// BoardRename says "重命名…"
+// in the language of msgs.
+func (msgs Messages) BoardRename() string {
+	return Catalog.Format(msgs.locale, "boardRename", nil)
+}
+
+// BoardDelete says "删除「{name}」…"
+// in the language the app shows.
+func BoardDelete(name string) string { return In(i18n.Locale()).BoardDelete(name) }
+
+// BoardDelete says "删除「{name}」…"
+// in the language of msgs.
+func (msgs Messages) BoardDelete(name string) string {
+	return Catalog.Format(msgs.locale, "boardDelete", map[string]any{"name": name})
+}
+
+// BoardDeleteConfirm says "删除白板「{name}」？文件将移到废纸篓。"
+// in the language the app shows.
+func BoardDeleteConfirm(name string) string { return In(i18n.Locale()).BoardDeleteConfirm(name) }
+
+// BoardDeleteConfirm says "删除白板「{name}」？文件将移到废纸篓。"
+// in the language of msgs.
+func (msgs Messages) BoardDeleteConfirm(name string) string {
+	return Catalog.Format(msgs.locale, "boardDeleteConfirm", map[string]any{"name": name})
+}
+
+// BoardDeleteConfirmWin says "删除白板「{name}」？文件将移到回收站。"
+// in the language the app shows.
+func BoardDeleteConfirmWin(name string) string { return In(i18n.Locale()).BoardDeleteConfirmWin(name) }
+
+// BoardDeleteConfirmWin says "删除白板「{name}」？文件将移到回收站。"
+// in the language of msgs.
+func (msgs Messages) BoardDeleteConfirmWin(name string) string {
+	return Catalog.Format(msgs.locale, "boardDeleteConfirmWin", map[string]any{"name": name})
+}
+
+// BoardMoveToTrash says "移到废纸篓"
+// in the language the app shows.
+func BoardMoveToTrash() string { return In(i18n.Locale()).BoardMoveToTrash() }
+
+// BoardMoveToTrash says "移到废纸篓"
+// in the language of msgs.
+func (msgs Messages) BoardMoveToTrash() string {
+	return Catalog.Format(msgs.locale, "boardMoveToTrash", nil)
+}
+
+// BoardMoveToTrashWin says "移到回收站"
+// in the language the app shows.
+func BoardMoveToTrashWin() string { return In(i18n.Locale()).BoardMoveToTrashWin() }
+
+// BoardMoveToTrashWin says "移到回收站"
+// in the language of msgs.
+func (msgs Messages) BoardMoveToTrashWin() string {
+	return Catalog.Format(msgs.locale, "boardMoveToTrashWin", nil)
+}
+
+// BoardCancel says "取消"
+// in the language the app shows.
+func BoardCancel() string { return In(i18n.Locale()).BoardCancel() }
+
+// BoardCancel says "取消"
+// in the language of msgs.
+func (msgs Messages) BoardCancel() string {
+	return Catalog.Format(msgs.locale, "boardCancel", nil)
+}
+
+// BoardReveal says "在访达中显示"
+// in the language the app shows.
+func BoardReveal() string { return In(i18n.Locale()).BoardReveal() }
+
+// BoardReveal says "在访达中显示"
+// in the language of msgs.
+func (msgs Messages) BoardReveal() string {
+	return Catalog.Format(msgs.locale, "boardReveal", nil)
+}
+
+// BoardRevealWin says "在文件资源管理器中显示"
+// in the language the app shows.
+func BoardRevealWin() string { return In(i18n.Locale()).BoardRevealWin() }
+
+// BoardRevealWin says "在文件资源管理器中显示"
+// in the language of msgs.
+func (msgs Messages) BoardRevealWin() string {
+	return Catalog.Format(msgs.locale, "boardRevealWin", nil)
+}
+
+// BoardKeepOnTop says "置顶"
+// in the language the app shows.
+func BoardKeepOnTop() string { return In(i18n.Locale()).BoardKeepOnTop() }
+
+// BoardKeepOnTop says "置顶"
+// in the language of msgs.
+func (msgs Messages) BoardKeepOnTop() string {
+	return Catalog.Format(msgs.locale, "boardKeepOnTop", nil)
+}
+
+// BoardClose says "关闭"
+// in the language the app shows.
+func BoardClose() string { return In(i18n.Locale()).BoardClose() }
+
+// BoardClose says "关闭"
+// in the language of msgs.
+func (msgs Messages) BoardClose() string {
+	return Catalog.Format(msgs.locale, "boardClose", nil)
+}
+
+// BoardUnreadable says "白板文件无法读取，已暂停自动保存，请检查磁盘或文件权限。"
+// in the language the app shows.
+func BoardUnreadable() string { return In(i18n.Locale()).BoardUnreadable() }
+
+// BoardUnreadable says "白板文件无法读取，已暂停自动保存，请检查磁盘或文件权限。"
+// in the language of msgs.
+func (msgs Messages) BoardUnreadable() string {
+	return Catalog.Format(msgs.locale, "boardUnreadable", nil)
+}
+
+// BoardEmpty says "空"
+// in the language the app shows.
+func BoardEmpty() string { return In(i18n.Locale()).BoardEmpty() }
+
+// BoardEmpty says "空"
+// in the language of msgs.
+func (msgs Messages) BoardEmpty() string {
+	return Catalog.Format(msgs.locale, "boardEmpty", nil)
+}
+
+// BoardItemCount says "{n, number, ::group-off} 项"
+// in the language the app shows.
+func BoardItemCount(n int) string { return In(i18n.Locale()).BoardItemCount(n) }
+
+// BoardItemCount says "{n, number, ::group-off} 项"
+// in the language of msgs.
+func (msgs Messages) BoardItemCount(n int) string {
+	return Catalog.Format(msgs.locale, "boardItemCount", map[string]any{"n": n})
+}
+
+// BoardZoomIn says "放大"
+// in the language the app shows.
+func BoardZoomIn() string { return In(i18n.Locale()).BoardZoomIn() }
+
+// BoardZoomIn says "放大"
+// in the language of msgs.
+func (msgs Messages) BoardZoomIn() string {
+	return Catalog.Format(msgs.locale, "boardZoomIn", nil)
+}
+
+// BoardZoomOut says "缩小"
+// in the language the app shows.
+func BoardZoomOut() string { return In(i18n.Locale()).BoardZoomOut() }
+
+// BoardZoomOut says "缩小"
+// in the language of msgs.
+func (msgs Messages) BoardZoomOut() string {
+	return Catalog.Format(msgs.locale, "boardZoomOut", nil)
+}
+
+// BoardZoomReset says "缩放到 100%"
+// in the language the app shows.
+func BoardZoomReset() string { return In(i18n.Locale()).BoardZoomReset() }
+
+// BoardZoomReset says "缩放到 100%"
+// in the language of msgs.
+func (msgs Messages) BoardZoomReset() string {
+	return Catalog.Format(msgs.locale, "boardZoomReset", nil)
+}
+
+// BoardZoomLabel says "缩放"
+// in the language the app shows.
+func BoardZoomLabel() string { return In(i18n.Locale()).BoardZoomLabel() }
+
+// BoardZoomLabel says "缩放"
+// in the language of msgs.
+func (msgs Messages) BoardZoomLabel() string {
+	return Catalog.Format(msgs.locale, "boardZoomLabel", nil)
+}
+
+// BoardMore says "更多"
+// in the language the app shows.
+func BoardMore() string { return In(i18n.Locale()).BoardMore() }
+
+// BoardMore says "更多"
+// in the language of msgs.
+func (msgs Messages) BoardMore() string {
+	return Catalog.Format(msgs.locale, "boardMore", nil)
+}
+
+// BoardPaperSection says "纸面"
+// in the language the app shows.
+func BoardPaperSection() string { return In(i18n.Locale()).BoardPaperSection() }
+
+// BoardPaperSection says "纸面"
+// in the language of msgs.
+func (msgs Messages) BoardPaperSection() string {
+	return Catalog.Format(msgs.locale, "boardPaperSection", nil)
+}
+
+// BoardPaperDots says "点阵"
+// in the language the app shows.
+func BoardPaperDots() string { return In(i18n.Locale()).BoardPaperDots() }
+
+// BoardPaperDots says "点阵"
+// in the language of msgs.
+func (msgs Messages) BoardPaperDots() string {
+	return Catalog.Format(msgs.locale, "boardPaperDots", nil)
+}
+
+// BoardPaperGrid says "方格"
+// in the language the app shows.
+func BoardPaperGrid() string { return In(i18n.Locale()).BoardPaperGrid() }
+
+// BoardPaperGrid says "方格"
+// in the language of msgs.
+func (msgs Messages) BoardPaperGrid() string {
+	return Catalog.Format(msgs.locale, "boardPaperGrid", nil)
+}
+
+// BoardPaperLines says "横线"
+// in the language the app shows.
+func BoardPaperLines() string { return In(i18n.Locale()).BoardPaperLines() }
+
+// BoardPaperLines says "横线"
+// in the language of msgs.
+func (msgs Messages) BoardPaperLines() string {
+	return Catalog.Format(msgs.locale, "boardPaperLines", nil)
+}
+
+// BoardPaperBlank says "空白"
+// in the language the app shows.
+func BoardPaperBlank() string { return In(i18n.Locale()).BoardPaperBlank() }
+
+// BoardPaperBlank says "空白"
+// in the language of msgs.
+func (msgs Messages) BoardPaperBlank() string {
+	return Catalog.Format(msgs.locale, "boardPaperBlank", nil)
+}
+
+// BoardThemeSection says "外观主题"
+// in the language the app shows.
+func BoardThemeSection() string { return In(i18n.Locale()).BoardThemeSection() }
+
+// BoardThemeSection says "外观主题"
+// in the language of msgs.
+func (msgs Messages) BoardThemeSection() string {
+	return Catalog.Format(msgs.locale, "boardThemeSection", nil)
+}
+
+// BoardThemeDark says "深色"
+// in the language the app shows.
+func BoardThemeDark() string { return In(i18n.Locale()).BoardThemeDark() }
+
+// BoardThemeDark says "深色"
+// in the language of msgs.
+func (msgs Messages) BoardThemeDark() string {
+	return Catalog.Format(msgs.locale, "boardThemeDark", nil)
+}
+
+// BoardThemeLight says "浅色"
+// in the language the app shows.
+func BoardThemeLight() string { return In(i18n.Locale()).BoardThemeLight() }
+
+// BoardThemeLight says "浅色"
+// in the language of msgs.
+func (msgs Messages) BoardThemeLight() string {
+	return Catalog.Format(msgs.locale, "boardThemeLight", nil)
+}
+
+// BoardHint says "拖动画布平移，双指捏合或按住 ⌘ 滚动缩放"
+// in the language the app shows.
+func BoardHint() string { return In(i18n.Locale()).BoardHint() }
+
+// BoardHint says "拖动画布平移，双指捏合或按住 ⌘ 滚动缩放"
+// in the language of msgs.
+func (msgs Messages) BoardHint() string {
+	return Catalog.Format(msgs.locale, "boardHint", nil)
+}
+
+// BoardHintWin says "拖动画布平移，双指捏合或按住 Ctrl 滚动缩放"
+// in the language the app shows.
+func BoardHintWin() string { return In(i18n.Locale()).BoardHintWin() }
+
+// BoardHintWin says "拖动画布平移，双指捏合或按住 Ctrl 滚动缩放"
+// in the language of msgs.
+func (msgs Messages) BoardHintWin() string {
+	return Catalog.Format(msgs.locale, "boardHintWin", nil)
+}
+
+// SettingsShortcutNewBoard says "新建白板"
+// in the language the app shows.
+func SettingsShortcutNewBoard() string { return In(i18n.Locale()).SettingsShortcutNewBoard() }
+
+// SettingsShortcutNewBoard says "新建白板"
+// in the language of msgs.
+func (msgs Messages) SettingsShortcutNewBoard() string {
+	return Catalog.Format(msgs.locale, "settingsShortcutNewBoard", nil)
+}
+
+// HomeActionNewBoard says "新建白板"
+// in the language the app shows.
+func HomeActionNewBoard() string { return In(i18n.Locale()).HomeActionNewBoard() }
+
+// HomeActionNewBoard says "新建白板"
+// in the language of msgs.
+func (msgs Messages) HomeActionNewBoard() string {
+	return Catalog.Format(msgs.locale, "homeActionNewBoard", nil)
+}

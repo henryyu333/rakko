@@ -203,6 +203,7 @@ func (a *shelf) computeHomeHits() []homeHit {
 			run  func()
 		}{
 			{l.CardOcr(), ocrSymbol, func() { a.hide(hideExplicit); a.startScreenOCR() }},
+			{l.HomeActionNewBoard(), boardSymbol, func() { a.hide(hideExplicit); a.newBoard() }},
 			{l.PanelSettings(), gearSymbol, func() { a.hide(hideExplicit); a.openSettings() }},
 		} {
 			if strings.Contains(strings.ToLower(act.name), q) {

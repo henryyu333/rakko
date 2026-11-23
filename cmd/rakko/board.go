@@ -1,0 +1,572 @@
+package main
+
+import (
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
+
+	"rakko/internal/board/doc"
+	"rakko/internal/board/editor"
+	"rakko/internal/layout"
+	"rakko/internal/platform"
+	"rakko/locales"
+)
+
+const (
+	boardSaveDelay = 400 * time.Millisecond
+	boardW         = 1040
+	boardH         = 680
+	boardBarH      = 30
+	boardMinW      = 480
+	boardMinH      = 360
+	boardDarkBg    = "#1C1C1E"
+	boardLightBg   = "#F9FAFB"
+)
+
+var (
+	boardSymbol        = symbol(`<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4M7 10.5l3-2.5 3 2.5 4-3.5"/>`)
+	boardChevronSymbol = symbol(`<path d="m6 9 6 6 6-6"/>`)
+	boardMoreSymbol    = symbol(`<circle cx="5" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="19" cy="12" r="1.4" fill="currentColor"/>`)
+
+	// Seams around app/OS-level calls so headless tests can drive boardUI
+	// without a window server or touching the real OS Trash.
+	boardActivate        = platform.ActivateSelf
+	boardReveal          = platform.RevealInFileManager
+	boardTrash           = platform.TrashFile
+	boardShow            = func(w *mygo.Window) { w.Show() }
+	boardFocus           = func(w *mygo.Window) { w.Focus() }
+	boardClose           = func(w *mygo.Window) { w.Close() }
+	boardNewWindow       = func(opts mygo.WindowOptions) *mygo.Window { return mygo.NewWindow(opts) }
+	boardConfigureWindow = platform.ConfigureFramedWindow
+	boardPinRedraw       = func(it *pinItem) {
+		if it.win != nil {
+			it.win.Invalidate()
+		}
+	}
+)
+
+// boardUI holds the active whiteboard store, headless editor state, and the
+// floating framed window while it is open.
+type boardUI struct {
+	host  *shelf
+	store *doc.Store
+	ed    *editor.Editor
+
+	win     *mygo.Window
+	top     bool
+	prevPID int
+	frame   mygo.Rectangle
+
+	rev       uint64
+	seenRev   uint64
+	since     time.Time
+	dirtyFlag bool
+	locked    bool
+
+	boards        []doc.BoardInfo
+	renaming      bool
+	renameDraft   string
+	renameBoot    bool
+	confirmDelete bool
+
+	spaceHeld    bool
+	panDrag      bool
+	panLastX     float32
+	panLastY     float32
+	stageRect    ui.Rect
+	titleMenu    bool
+	zoomMenu     bool
+	moreMenu     bool
+	canvasFocus  bool
+}
+
+// boardSession lazily initializes the whiteboard store and editor under dataDir.
+func (a *shelf) boardSession() *boardUI {
+	if a.board != nil {
+		return a.board
+	}
+	if a.dataDir == "" {
+		return nil
+	}
+	l := a.appLoc()
+	st, err := doc.Open(a.dataDir, l.BoardDefaultName())
+	if err != nil {
+		a.report(err)
+		return nil
+	}
+	b := &boardUI{host: a, store: st}
+	if err := b.load(); err != nil {
+		a.report(err)
+	}
+	b.refreshBoards()
+	a.board = b
+	return b
+}
+
+func (b *boardUI) load() error {
+	d, err := b.store.Read()
+	if err != nil {
+		b.locked = true
+		if b.ed == nil {
+			b.ed = editor.New(doc.NewDrawing(b.store.ID(), b.host.appLoc().BoardDefaultName()), nil)
+		}
+		b.dirtyFlag = false
+		return err
+	}
+	b.locked = false
+	if b.ed == nil {
+		b.ed = editor.New(d, nil)
+	} else {
+		b.ed.Replace(d)
+	}
+	b.ed.OnChange = func(*doc.Drawing) {
+		b.markDirty()
+	}
+	b.dirtyFlag = false
+	b.rev++
+	b.seenRev = b.rev
+	b.since = time.Time{}
+	b.syncWindowTheme()
+	return nil
+}
+
+func (b *boardUI) refreshBoards() {
+	if b.store == nil {
+		return
+	}
+	list, err := b.store.List()
+	if err != nil {
+		return
+	}
+	b.boards = list
+}
+
+func (b *boardUI) markDirty() {
+	b.rev++
+	b.dirtyFlag = true
+	b.invalidate()
+}
+
+func (b *boardUI) dirty() bool { return b.dirtyFlag }
+
+// tick persists dirty board changes after boardSaveDelay of inactivity.
+func (b *boardUI) tick(now time.Time) bool {
+	if b.locked || !b.dirtyFlag {
+		b.since = time.Time{}
+		b.seenRev = b.rev
+		return false
+	}
+	if b.rev != b.seenRev {
+		b.seenRev, b.since = b.rev, now
+	}
+	if b.since.IsZero() || now.Sub(b.since) < boardSaveDelay {
+		return false
+	}
+	if err := b.flush(); err != nil {
+		b.host.report(err)
+		return false
+	}
+	return true
+}
+
+// flush writes any pending board changes atomically right away.
+func (b *boardUI) flush() error {
+	if b.locked || !b.dirtyFlag || b.ed == nil || b.store == nil {
+		return nil
+	}
+	if err := b.store.Write(b.ed.Doc); err != nil {
+		return err
+	}
+	b.dirtyFlag = false
+	b.seenRev = b.rev
+	b.since = time.Time{}
+	b.refreshBoards()
+	b.invalidate()
+	return nil
+}
+
+func (b *boardUI) selectBoard(id string) error {
+	if b.store == nil || id == b.store.ID() {
+		return nil
+	}
+	if err := b.flush(); err != nil {
+		return err
+	}
+	if err := b.store.Select(id); err != nil {
+		return err
+	}
+	err := b.load()
+	b.refreshBoards()
+	b.renaming = false
+	b.confirmDelete = false
+	b.invalidate()
+	return err
+}
+
+func (b *boardUI) newBoardDoc() error {
+	if b.store == nil {
+		return nil
+	}
+	if err := b.flush(); err != nil {
+		return err
+	}
+	b.refreshBoards()
+	l := b.host.appLoc()
+	name := b.nextBoardName(l)
+	if _, err := b.store.New(name); err != nil {
+		return err
+	}
+	err := b.load()
+	b.refreshBoards()
+	b.renaming = false
+	b.confirmDelete = false
+	b.invalidate()
+	return err
+}
+
+func (b *boardUI) nextBoardName(l locales.Messages) string {
+	used := make(map[string]bool, len(b.boards))
+	for _, info := range b.boards {
+		used[info.Name] = true
+	}
+	for n := len(b.boards) + 1; ; n++ {
+		cand := l.BoardNewName(n)
+		if !used[cand] {
+			return cand
+		}
+	}
+}
+
+func (b *boardUI) startRename() {
+	if b.locked || b.ed == nil {
+		return
+	}
+	b.renaming = true
+	b.renameDraft = b.ed.Doc.Name
+	b.renameBoot = false
+	b.invalidate()
+}
+
+func (b *boardUI) commitRename() {
+	if !b.renaming {
+		return
+	}
+	name := strings.TrimSpace(b.renameDraft)
+	b.renaming = false
+	b.renameBoot = false
+	if name != "" && b.ed != nil && name != b.ed.Doc.Name {
+		b.ed.SetName(name)
+		_ = b.flush()
+	}
+	b.invalidate()
+}
+
+func (b *boardUI) cancelRename() {
+	b.renaming = false
+	b.renameBoot = false
+	b.invalidate()
+}
+
+func (b *boardUI) trashCurrent() error {
+	if b.store == nil {
+		return nil
+	}
+	b.confirmDelete = false
+	if err := b.flush(); err != nil {
+		return err
+	}
+	if err := b.store.Trash(b.store.ID(), doc.TrashFunc(boardTrash)); err != nil {
+		return err
+	}
+	err := b.load()
+	b.refreshBoards()
+	b.invalidate()
+	return err
+}
+
+func (b *boardUI) invalidate() {
+	if b.win != nil {
+		if b.ed != nil {
+			b.win.SetTitle(b.currentTitle(b.host.appLoc()))
+		}
+		b.win.Invalidate()
+	}
+	if b.host.win != nil {
+		b.host.win.Invalidate()
+	}
+	for _, it := range b.host.pins {
+		if it.cardID == "board" {
+			boardPinRedraw(it)
+		}
+	}
+}
+
+func (b *boardUI) syncWindowTheme() {
+	if b.win == nil || b.ed == nil {
+		return
+	}
+	dark := b.ed.DarkMode()
+	bg := boardLightBg
+	if dark {
+		bg = boardDarkBg
+	}
+	_ = b.win.SetBackgroundColor(bg)
+	boardConfigureWindow(b.win.NativeHandle(), dark)
+}
+
+func (b *boardUI) setDarkMode(dark bool) {
+	if b.ed == nil || b.ed.DarkMode() == dark {
+		return
+	}
+	b.ed.SetDarkMode(dark)
+	b.syncWindowTheme()
+	b.invalidate()
+}
+
+func (b *boardUI) setTop(on bool) {
+	b.top = on
+	if b.win != nil {
+		b.win.SetAlwaysOnTop(on)
+	}
+	b.invalidate()
+}
+
+func (b *boardUI) currentTitle(l locales.Messages) string {
+	if b != nil && b.ed != nil && strings.TrimSpace(b.ed.Doc.Name) != "" {
+		return b.ed.Doc.Name
+	}
+	return l.CardBoard()
+}
+
+// toggleBoard opens the whiteboard window or closes it when already open.
+func (a *shelf) toggleBoard() bool {
+	b := a.boardSession()
+	if b == nil {
+		return false
+	}
+	if b.win != nil {
+		b.close()
+		return true
+	}
+	return b.open()
+}
+
+// newBoard creates a fresh board and brings the whiteboard window to the front.
+func (a *shelf) newBoard() {
+	b := a.boardSession()
+	if b == nil {
+		return
+	}
+	if err := b.newBoardDoc(); err != nil {
+		a.report(err)
+		return
+	}
+	a.hide(hideExplicit)
+	b.showFront()
+}
+
+func (b *boardUI) open() bool {
+	a := b.host
+	a.releaseKeys()
+	if b.locked {
+		if err := b.load(); err != nil {
+			a.report(err)
+		}
+	}
+	frame := b.frame
+	if b.win == nil {
+		b.prevPID = 0
+		if pid := frontmostPID(); pid > 0 && pid != ownPID() {
+			b.prevPID = pid
+		}
+		if frame.Width == 0 || frame.Height == 0 {
+			frame = a.freshBoardFrame()
+		}
+		a.hide(hideExplicit)
+		dark := b.ed == nil || b.ed.DarkMode()
+		bg := boardDarkBg
+		if !dark {
+			bg = boardLightBg
+		}
+		w := boardNewWindow(mygo.WindowOptions{
+			Title: b.currentTitle(a.appLoc()), Width: frame.Width, Height: frame.Height,
+			X: frame.X, Y: frame.Y,
+			Hidden: true, BackgroundColor: bg, AlwaysOnTop: b.top,
+			TitleBarStyle:     mygo.TitleBarHidden,
+			HideWindowButtons: true,
+			MinWidth:          boardMinW, MinHeight: boardMinH,
+			Content: ui.View(a.boardView),
+		})
+		w.OnClose(b.onClose)
+		w.OnBlur(b.onBlur)
+		w.OnResize(func() { b.frame = w.Bounds() })
+		w.OnMove(func() { b.frame = w.Bounds() })
+		boardConfigureWindow(w.NativeHandle(), dark)
+		b.win = w
+		b.canvasFocus = false
+	}
+	b.frame = b.win.Bounds()
+	boardShow(b.win)
+	boardActivate()
+	boardFocus(b.win)
+	b.invalidate()
+	return true
+}
+
+func (b *boardUI) showFront() bool {
+	if b.win == nil {
+		return b.open()
+	}
+	b.host.hide(hideExplicit)
+	boardShow(b.win)
+	boardActivate()
+	boardFocus(b.win)
+	b.invalidate()
+	return true
+}
+
+func (b *boardUI) close() {
+	if err := b.flush(); err != nil {
+		b.host.report(err)
+	}
+	if b.win != nil {
+		boardClose(b.win)
+	}
+}
+
+func (b *boardUI) onClose(*mygo.CloseEvent) {
+	a := b.host
+	_ = b.flush()
+	b.win = nil
+	b.renaming = false
+	b.confirmDelete = false
+	b.spaceHeld = false
+	b.panDrag = false
+	if a.quitting {
+		return
+	}
+	prev := b.prevPID
+	b.prevPID = 0
+	switch a.settingsKeyboardExit() {
+	case settingsToPanel:
+		if a.win != nil {
+			a.win.Focus()
+		}
+		return
+	case settingsToShelf:
+		a.holdKeys()
+	}
+	a.handBackApp(prev)
+}
+
+func (b *boardUI) onBlur() {
+	if b.renaming {
+		b.commitRename()
+	}
+	_ = b.flush()
+}
+
+func (a *shelf) freshBoardFrame() mygo.Rectangle {
+	anchor := a.frame
+	for _, it := range a.pins {
+		if it.cardID == "board" && it.win != nil {
+			anchor = it.frame
+			break
+		}
+	}
+	area := mygo.Screen.DisplayNearestPoint(mygo.Point{
+		X: anchor.X + anchor.Width/2,
+		Y: anchor.Y + anchor.Height/2,
+	}).WorkArea
+	w := min(boardW, max(boardMinW, area.Width-48))
+	h := min(boardH, max(boardMinH, area.Height-48))
+	return a.noteClearShell(centeredFrame(w, h, area), area)
+}
+
+type boardModule struct{ host *shelf }
+
+func (boardModule) live() bool { return false }
+
+func (m boardModule) tick(now time.Time) {
+	b := m.host.board
+	if b == nil {
+		return
+	}
+	if b.win != nil {
+		m.host.releaseKeys()
+	}
+	b.tick(now)
+}
+
+func (m boardModule) nextTick(now time.Time) time.Time {
+	b := m.host.board
+	if b == nil || b.locked || !b.dirtyFlag {
+		return time.Time{}
+	}
+	if b.since.IsZero() {
+		return now
+	}
+	return b.since.Add(boardSaveDelay)
+}
+
+func (a *shelf) boardFlush() {
+	if a.board == nil {
+		return
+	}
+	if err := a.board.flush(); err != nil {
+		a.report(err)
+	}
+}
+
+func (a *shelf) boardLabel(l locales.Messages) string {
+	b := a.boardSession()
+	if b != nil && b.ed != nil && strings.TrimSpace(b.ed.Doc.Name) != "" {
+		return b.ed.Doc.Name
+	}
+	return l.CardBoard()
+}
+
+func (a *shelf) boardBody(c *ui.Context, card ui.Element, span int, surf toolCardSurface) {
+	card.Children(func() {
+		l := loc(c)
+		def := toolCardDefFor("board")
+		wide := span > 1 || surf == cardDesktop
+		b := a.boardSession()
+		name := def.name(l)
+		sub := l.BoardEmpty()
+		if b != nil && b.ed != nil {
+			if strings.TrimSpace(b.ed.Doc.Name) != "" {
+				name = b.ed.Doc.Name
+			}
+			if n := b.ed.ItemCount(); n > 0 {
+				sub = l.BoardItemCount(n)
+			}
+		}
+		if !wide {
+			a.cardGlyphLead(c, card, "board-lead", def.icon, 20, 20, ink2).
+				Absolute().Left(cardPad).Top(cardPad)
+			fitText(c, def.name(l), 12, 600, toolColW(1)-2*cardPad).TextColor(ink).
+				Absolute().Left(cardPad).Bottom(cardPad)
+			return
+		}
+		w := cardW(layout.Card{ID: "board", Span: span}, surf)
+		top := ui.Row(c.Key("board-head")).Absolute().Left(cardPad).Right(cardPad).
+			Top(cardPad).Height(18).AlignItems(ui.Center).Gap(6)
+		top.Children(func() {
+			ui.Icon(c, def.icon).Size(16, 16).TextColor(ink2)
+			fitText(c, name, 12, 600, w-2*cardPad-22).TextColor(ink).Label(name)
+		})
+		ui.Text(c, sub).SingleLine().FontSize(11).TextColor(ink3).
+			Absolute().Left(cardPad).Right(cardPad).Bottom(cardPad).Label(sub)
+	})
+}
+
+func boardCountText(l locales.Messages, n int) string {
+	if n == 0 {
+		return l.BoardEmpty()
+	}
+	return fmt.Sprintf("%s", l.BoardItemCount(n))
+}
