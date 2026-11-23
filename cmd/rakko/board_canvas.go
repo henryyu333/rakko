@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"image"
 	_ "image/gif"
 	_ "image/jpeg"
@@ -8,6 +9,7 @@ import (
 	"math"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/egoist/mygo/ui"
 
@@ -184,33 +186,55 @@ func (s *boardScene) renderFrame(sh *doc.Shape) {
 		s.renderPrim(prims[0], m, o, sh)
 	}
 
-	// Clip children strictly to the Frame's interior rectangle.
+	// Clip children strictly to the Frame's interior rectangle (rotated if needed).
 	tl := m.Apply(geo.V(0, 0))
-	br := m.Apply(geo.V(sh.W, sh.H))
 	clipRect := ui.Rect{
-		X: float32(math.Min(tl.X, br.X)),
-		Y: float32(math.Min(tl.Y, br.Y)),
-		W: float32(math.Abs(br.X - tl.X)),
-		H: float32(math.Abs(br.Y - tl.Y)),
+		X: float32(tl.X),
+		Y: float32(tl.Y),
+		W: float32(sh.W * s.cam.Z),
+		H: float32(sh.H * s.cam.Z),
 	}
-	s.p.Clip(clipRect, 0, func() {
-		s.renderChildren(sh.ID)
-	})
+	rot := m.Rotation()
+	if math.Abs(rot) < 1e-4 {
+		s.p.Clip(clipRect, 0, func() {
+			s.renderChildren(sh.ID)
+		})
+	} else {
+		deg := float32(rot * 180 / math.Pi)
+		s.p.Transform(ui.Rotation(deg), clipRect.X, clipRect.Y, func() {
+			s.p.Clip(clipRect, 0, func() {
+				s.p.Transform(ui.Rotation(-deg), clipRect.X, clipRect.Y, func() {
+					s.renderChildren(sh.ID)
+				})
+			})
+		})
+	}
 
 	for i := 1; i < len(prims); i++ {
 		s.renderPrim(prims[i], m, o, sh)
 	}
 
-	// Frame title tab above the top-left corner.
-	title := strings.TrimSpace(sh.Name)
-	if title == "" {
-		title = "Frame"
+	if sh.ID != s.b.ed.Editing {
+		// Frame title tab above the top-left corner.
+		title := strings.TrimSpace(sh.Name)
+		if title == "" {
+			title = "Frame"
+		}
+		labelSize := float32(11.5)
+		drawTitle := func() {
+			s.p.RichText(float32(tl.X+2), float32(tl.Y)-labelSize-5, float32(max(sh.W*s.cam.Z, 80)), ui.Span{
+				Text: title, Size: labelSize, Color: boardColor(s.pal.Ink2.Alpha(o)),
+			})
+		}
+		if math.Abs(rot) < 1e-4 {
+			drawTitle()
+		} else {
+			s.p.Transform(ui.Rotation(float32(rot*180/math.Pi)), float32(tl.X), float32(tl.Y), drawTitle)
+		}
 	}
-	labelSize := float32(11.5)
-	s.p.Text(float32(tl.X+2), float32(tl.Y)-labelSize-5, title, labelSize, boardColor(s.pal.Ink2.Alpha(o)))
 
 	if s.b.ed.DropOn == sh.ID {
-		s.p.Stroke(clipRect, boardColor(s.pal.Accent), 0, 2)
+		s.outlineShape(sh.ID, 2.5, boardColor(s.pal.Accent))
 	}
 }
 
@@ -221,6 +245,9 @@ func (s *boardScene) renderShape(sh *doc.Shape) {
 	m := s.camMat().Mul(s.b.ed.PageMat(sh.ID))
 	o := s.opacityOf(sh)
 	for _, pr := range s.b.ed.Display(sh, s.pal) {
+		if pr.Label && sh.ID == s.b.ed.Editing {
+			continue
+		}
 		s.renderPrim(pr, m, o, sh)
 	}
 	if pieces, ok := s.b.ed.PartialPreview[sh.ID]; ok {
@@ -323,6 +350,23 @@ func (s *boardScene) renderInkFallback(pr editor.Prim, m geo.Mat, o float64) {
 	s.p.StrokePolyline(pts, max(w, 0.75), boardColor(pr.Color.Alpha(o)))
 }
 
+var boardNatHeights sync.Map
+
+func boardNaturalHeight(font string) float32 {
+	if v, ok := boardNatHeights.Load(font); ok {
+		return v.(float32)
+	}
+	const probe = 100
+	l := ui.ShapeText("Hg", ui.Font{Family: boardFontFamily(font), Size: probe}, 0)
+	_, h := l.Size()
+	v := h / probe
+	if v <= 0 {
+		v = 1.2
+	}
+	boardNatHeights.Store(font, v)
+	return v
+}
+
 func (s *boardScene) renderTextPrim(pr editor.Prim, m geo.Mat, o float64) {
 	if pr.Block == nil {
 		return
@@ -332,70 +376,196 @@ func (s *boardScene) renderTextPrim(pr editor.Prim, m geo.Mat, o float64) {
 	if size < 2 {
 		return
 	}
-	for _, line := range pr.Block.Lines {
-		if line.Text == "" {
-			continue
-		}
-		pos := m.Apply(geo.V(pr.X+line.X, pr.Y+line.Y))
-		s.p.Text(float32(pos.X), float32(pos.Y), line.Text, size, col)
-		if pr.Underline {
-			uw := float32(line.W * s.cam.Z)
-			s.p.Fill(ui.Rect{X: float32(pos.X), Y: float32(pos.Y) + size*1.05, W: uw, H: max(1, size/14)}, col, 0)
-		}
+	family := boardFontFamily(pr.Font)
+	weight := 400
+	if pr.Bold {
+		weight = 700
 	}
+	nat := boardNaturalHeight(pr.Font) * size
+	drop := (float32(pr.Block.Line*s.cam.Z) - nat) / 2
+	drawLine := func(pos geo.Vec, text string) {
+		s.p.RichText(float32(pos.X), float32(pos.Y)+drop, 0, ui.Span{
+			Text:      text,
+			Font:      family,
+			Size:      size,
+			Weight:    weight,
+			Italic:    pr.Italic,
+			Underline: pr.Underline,
+			Color:     col,
+		})
+	}
+	rot := m.Rotation()
+	if math.Abs(rot) < 1e-4 {
+		for _, line := range pr.Block.Lines {
+			if line.Text == "" {
+				continue
+			}
+			drawLine(m.Apply(geo.V(pr.X+line.X, pr.Y+line.Y)), line.Text)
+		}
+		return
+	}
+	origin := m.Apply(geo.V(pr.X, pr.Y))
+	deg := float32(rot * 180 / math.Pi)
+	z := s.cam.Z
+	s.p.Transform(ui.Rotation(deg), float32(origin.X), float32(origin.Y), func() {
+		for _, line := range pr.Block.Lines {
+			if line.Text == "" {
+				continue
+			}
+			drawLine(origin.Add(geo.V(line.X*z, line.Y*z)), line.Text)
+		}
+	})
 }
 
 func (s *boardScene) renderImagePrim(pr editor.Prim, m geo.Mat, o float64) {
 	bmp := s.b.bitmapForAsset(pr.Asset)
-	tl := m.Apply(geo.V(pr.Box.X, pr.Box.Y))
-	br := m.Apply(geo.V(pr.Box.MaxX(), pr.Box.MaxY()))
+	origin := m.Apply(geo.V(pr.Box.X, pr.Box.Y))
 	dst := ui.Rect{
-		X: float32(math.Min(tl.X, br.X)),
-		Y: float32(math.Min(tl.Y, br.Y)),
-		W: float32(math.Abs(br.X - tl.X)),
-		H: float32(math.Abs(br.Y - tl.Y)),
+		X: float32(origin.X),
+		Y: float32(origin.Y),
+		W: float32(pr.Box.W * s.cam.Z),
+		H: float32(pr.Box.H * s.cam.Z),
 	}
-	if bmp == nil {
-		s.p.Fill(dst, boardColor(s.pal.BarActive.Alpha(o)), 4)
+	draw := func() {
+		if bmp == nil {
+			s.p.Fill(dst, boardColor(s.pal.BarActive.Alpha(o)), 4)
+			return
+		}
+		var src ui.Rect
+		if pr.Crop != nil {
+			iw, ih := bmp.Size()
+			src = ui.Rect{
+				X: float32(pr.Crop.TopLeft.X) * float32(iw),
+				Y: float32(pr.Crop.TopLeft.Y) * float32(ih),
+				W: float32(pr.Crop.BottomRight.X-pr.Crop.TopLeft.X) * float32(iw),
+				H: float32(pr.Crop.BottomRight.Y-pr.Crop.TopLeft.Y) * float32(ih),
+			}
+		}
+		tint := ui.RGBA(255, 255, 255, float32(o))
+		s.p.ImageRegion(bmp, src, dst, ui.ImageOptions{
+			FlipX: pr.FlipX,
+			FlipY: pr.FlipY,
+			Tint:  tint,
+		})
+	}
+	rot := m.Rotation()
+	if math.Abs(rot) < 1e-4 {
+		draw()
 		return
 	}
-	var src ui.Rect
-	if pr.Crop != nil {
-		iw, ih := bmp.Size()
-		src = ui.Rect{
-			X: float32(pr.Crop.TopLeft.X) * float32(iw),
-			Y: float32(pr.Crop.TopLeft.Y) * float32(ih),
-			W: float32(pr.Crop.BottomRight.X-pr.Crop.TopLeft.X) * float32(iw),
-			H: float32(pr.Crop.BottomRight.Y-pr.Crop.TopLeft.Y) * float32(ih),
+	s.p.Transform(ui.Rotation(float32(rot*180/math.Pi)), dst.X, dst.Y, draw)
+}
+
+func (s *boardScene) outlineShape(id doc.ID, width float32, c ui.Color) {
+	sh := s.b.ed.Doc.Shapes[id]
+	if sh == nil {
+		return
+	}
+	if sh.Type == doc.TypeGroup {
+		for _, k := range s.b.ed.Children(id) {
+			s.outlineShape(k, width, c)
+		}
+		return
+	}
+	g := s.b.ed.Geometry(sh)
+	m := s.camMat().Mul(s.b.ed.PageMat(id))
+	var pts []geo.Vec
+	if sh.Type == doc.TypeArrow || sh.Type == doc.TypeLine || sh.Type == doc.TypeDraw || sh.Type == doc.TypeHighlight {
+		pts = g.Outline
+	} else {
+		cs := g.Bounds.Corners()
+		pts = cs[:]
+	}
+	s.p.StrokePath(s.buildPath((&geo.Path{}).Poly(pts, sh.Type != doc.TypeArrow), m), width, c)
+}
+
+func (s *boardScene) drawHandleSquare(p geo.Vec, rot float64, fill, line ui.Color) {
+	const d = 4.5
+	cs := [4]geo.Vec{{X: -d, Y: -d}, {X: d, Y: -d}, {X: d, Y: d}, {X: -d, Y: d}}
+	m := geo.Translate(p.X, p.Y).Mul(geo.Rotate(rot))
+	pts := make([]geo.Vec, 4)
+	for i := range cs {
+		pts[i] = m.Apply(cs[i])
+	}
+	path := s.buildPath((&geo.Path{}).Poly(pts, true), geo.Identity)
+	s.p.FillPath(path, fill)
+	s.p.StrokePath(path.Join(ui.MiterJoin), 1.5, line)
+}
+
+func (s *boardScene) renderSelectionBadge(corners []geo.Vec, c ui.Color) {
+	w, h, ok := s.b.ed.SelectionSize()
+	if !ok {
+		return
+	}
+	label := fmt.Sprintf("%.0f × %.0f", w, h)
+	if deg, rotating := s.b.ed.RotateAngle(); rotating {
+		label = fmt.Sprintf("%.0f°", deg)
+	}
+	bottom := corners[0]
+	for _, p := range corners {
+		if p.Y > bottom.Y {
+			bottom = p
 		}
 	}
-	tint := ui.RGBA(255, 255, 255, float32(o))
-	s.p.ImageRegion(bmp, src, dst, ui.ImageOptions{
-		FlipX: pr.FlipX,
-		FlipY: pr.FlipY,
-		Tint:  tint,
-	})
+	mid := geo.Med(corners[2], corners[3])
+	if mid.Y < bottom.Y {
+		mid.Y = bottom.Y
+	}
+	span := ui.Span{Text: label, Size: 11, Weight: 500, Color: ui.RGBA(255, 255, 255, 1)}
+	tw, th := s.p.MeasureText(0, span)
+	r := ui.Rect{X: float32(mid.X) - tw/2 - 6, Y: float32(mid.Y) + 10, W: tw + 12, H: th + 4}
+	s.p.Fill(r, c, 4)
+	s.p.RichText(r.X+6, r.Y+2, 0, span)
 }
 
 func (s *boardScene) renderOverlays() {
 	cm := s.camMat()
+	selCol := boardColor(s.pal.Selection)
+	gesturing := s.b.ed.InGesture()
+
 	// Hovered shape outline.
-	if hov := s.b.ed.Hovered; hov != "" && !s.b.ed.IsSelected(hov) {
-		box := s.b.ed.PageBounds(hov)
-		tl, br := cm.Apply(geo.V(box.X, box.Y)), cm.Apply(geo.V(box.MaxX(), box.MaxY()))
-		s.p.Stroke(ui.Rect{
-			X: float32(tl.X), Y: float32(tl.Y),
-			W: float32(br.X - tl.X), H: float32(br.Y - tl.Y),
-		}, boardColor(s.pal.Selection.Alpha(0.45)), 0, 1.5)
+	if hov := s.b.ed.Hovered; hov != "" && !s.b.ed.IsSelected(hov) && !gesturing {
+		s.outlineShape(hov, 1.5, boardColor(s.pal.Selection.Alpha(0.45)))
 	}
 
-	// Selection bounding box.
-	if box, ok := s.b.ed.SelectionBox(); ok {
-		tl, br := cm.Apply(geo.V(box.X, box.Y)), cm.Apply(geo.V(box.MaxX(), box.MaxY()))
-		s.p.Stroke(ui.Rect{
-			X: float32(tl.X), Y: float32(tl.Y),
-			W: float32(br.X - tl.X), H: float32(br.Y - tl.Y),
-		}, boardColor(s.pal.Selection), 0, 1.5)
+	// Selection bounding box, 8 rotated handles, and size badge.
+	ids := s.b.ed.Selection()
+	if len(ids) > 0 && s.b.ed.Editing == "" {
+		if len(ids) > 1 && !gesturing {
+			for _, id := range ids {
+				if sh := s.b.ed.Doc.Shapes[id]; sh != nil && !s.culled(sh) {
+					s.outlineShape(id, 1, boardColor(s.pal.Selection.Alpha(0.55)))
+				}
+			}
+		}
+		if s.b.ed.ShowsBox() {
+			if corners, ok := s.b.ed.SelectionCorners(); ok {
+				screen := make([]geo.Vec, 4)
+				for i, pt := range corners {
+					screen[i] = cm.Apply(pt)
+				}
+				path := s.buildPath((&geo.Path{}).Poly(screen, true), geo.Identity)
+				s.p.StrokePath(path.Cap(ui.ButtCap).Join(ui.MiterJoin), 1.5, selCol)
+
+				_, rot, _ := s.b.ed.SelectionFrame()
+				if !gesturing || s.b.ed.IsResizing() {
+					fill := boardColor(s.pal.Background)
+					for _, h := range s.b.ed.Handles() {
+						if h.Kind != editor.HandleResize {
+							continue
+						}
+						s.drawHandleSquare(cm.Apply(h.Point), rot, fill, selCol)
+					}
+				}
+				if !gesturing || s.b.ed.IsResizing() {
+					s.renderSelectionBadge(screen, selCol)
+				} else if _, rotating := s.b.ed.RotateAngle(); rotating {
+					s.renderSelectionBadge(screen, selCol)
+				}
+			}
+		} else if len(ids) == 1 {
+			s.outlineShape(ids[0], 1.5, selCol)
+		}
 	}
 
 	// Marquee selection box.
@@ -410,7 +580,28 @@ func (s *boardScene) renderOverlays() {
 		s.p.Stroke(r, boardColor(s.pal.BrushLine), 0, 1)
 	}
 
-	// Active eraser trail.
+	// Freehand lasso polygon.
+	if len(s.b.ed.Lasso) >= 2 {
+		pts := make([]geo.Vec, len(s.b.ed.Lasso))
+		for i, pt := range s.b.ed.Lasso {
+			pts[i] = cm.Apply(pt)
+		}
+		if len(pts) >= 3 {
+			s.p.FillPath(s.buildPath((&geo.Path{}).Poly(pts, true), geo.Identity), boardColor(s.pal.BrushFill))
+		}
+		s.p.StrokePath(s.buildPath((&geo.Path{}).Poly(pts, len(pts) >= 3), geo.Identity), 1.5, boardColor(s.pal.BrushLine))
+	}
+
+	// Smart alignment guide lines.
+	if len(s.b.ed.Snaps) > 0 {
+		snapCol := boardColor(s.pal.Snap)
+		for _, ln := range s.b.ed.Snaps {
+			a, b := cm.Apply(ln.A), cm.Apply(ln.B)
+			s.p.Line(float32(a.X), float32(a.Y), float32(b.X), float32(b.Y), 1, snapCol)
+		}
+	}
+
+	// Active eraser / laser trails.
 	for _, tr := range s.b.ed.Trails {
 		if len(tr.Points) < 2 {
 			continue

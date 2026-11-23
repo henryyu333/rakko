@@ -258,6 +258,12 @@ func TestTextNoteImageAndHandTools(t *testing.T) {
 	if len(e.Selection()) != 1 || e.Doc.Shapes[e.Selection()[0]].Type != doc.TypeText {
 		t.Fatalf("Text tool failed: sel=%v", e.Selection())
 	}
+	if e.Editing != e.Selection()[0] {
+		t.Fatalf("Text tool did not enter inline editing: Editing=%s", e.Editing)
+	}
+	e.EditText = "Hello"
+	e.EditChanged()
+	e.StopEditing()
 
 	// Note tool.
 	e.SetTool(ToolNote)
@@ -266,6 +272,9 @@ func TestTextNoteImageAndHandTools(t *testing.T) {
 	if len(e.Selection()) != 1 || e.Doc.Shapes[e.Selection()[0]].Type != doc.TypeNote {
 		t.Fatalf("Note tool failed: sel=%v", e.Selection())
 	}
+	e.EditText = "Sticky"
+	e.EditChanged()
+	e.StopEditing()
 
 	// InsertImage scales wide images to <= 480px.
 	imgID := e.InsertImage(&doc.Asset{

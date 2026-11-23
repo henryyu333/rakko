@@ -137,6 +137,32 @@ func BoxHitsPolyline(b Box, pts []Vec, closed bool) bool {
 	return false
 }
 
+// PolygonHitsPolyline reports whether closed polygon poly overlaps or intersects pts.
+func PolygonHitsPolyline(poly, pts []Vec, closed bool) bool {
+	if len(poly) < 3 || len(pts) == 0 {
+		return false
+	}
+	for _, p := range pts {
+		if PointInPolygon(p, poly) {
+			return true
+		}
+	}
+	if closed && len(pts) >= 3 {
+		for _, p := range poly {
+			if PointInPolygon(p, pts) {
+				return true
+			}
+		}
+	}
+	for i := 0; i < len(poly); i++ {
+		a, b := poly[i], poly[(i+1)%len(poly)]
+		if SegmentHitsPolyline(a, b, pts, closed, 0) {
+			return true
+		}
+	}
+	return false
+}
+
 // CircleFrom3Points returns the circumcenter, radius, and true if a, b, c are non-collinear.
 func CircleFrom3Points(a, b, c Vec) (center Vec, radius float64, ok bool) {
 	d := 2 * (a.X*(b.Y-c.Y) + b.X*(c.Y-a.Y) + c.X*(a.Y-b.Y))

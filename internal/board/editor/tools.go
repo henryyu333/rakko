@@ -13,6 +13,7 @@ type Tool string
 
 const (
 	ToolSelect    Tool = "select"
+	ToolLasso     Tool = "lasso"
 	ToolHand      Tool = "hand"
 	ToolDraw      Tool = "draw"
 	ToolHighlight Tool = "highlight"
@@ -45,6 +46,11 @@ const (
 	CursorGrabbing
 	CursorPointer
 	CursorMove
+	CursorEW
+	CursorNS
+	CursorNESW
+	CursorNWSE
+	CursorRotate
 )
 
 // Mods holds keyboard modifier flags for pointer/tool interactions.
@@ -193,14 +199,14 @@ func (e *Editor) SelectionBox() (geo.Box, bool) {
 	return box, !first
 }
 
-// SetTool activates tool t, canceling any active gesture.
+// SetTool activates tool t, canceling any active gesture or edit.
 func (e *Editor) SetTool(t Tool) {
+	e.StopEditing()
 	e.cancelGesture()
-	e.Editing = ""
 	e.Tool = t
 	if t != ToolSelect {
 		e.Hovered = ""
-		if t != ToolHand && t != ToolLaser {
+		if t != ToolHand && t != ToolLaser && t != ToolLasso {
 			e.SelectNone()
 		}
 	}
@@ -242,10 +248,18 @@ func (e *Editor) SetSpace(down bool) { e.spaceHeld = down }
 // SpaceHeld reports whether Space is held.
 func (e *Editor) SpaceHeld() bool { return e.spaceHeld }
 
+// InGesture reports whether a pointer gesture is currently active.
+func (e *Editor) InGesture() bool { return e.gesture != nil }
+
 // CursorNow returns the semantic cursor for the current tool/gesture.
 func (e *Editor) CursorNow() Cursor {
-	if _, ok := e.gesture.(*panGesture); ok {
+	switch g := e.gesture.(type) {
+	case *panGesture:
 		return CursorGrabbing
+	case *resizeGesture:
+		return resizeCursor(g.handle.Which, g.rotation)
+	case *rotateGesture:
+		return CursorRotate
 	}
 	if e.spaceHeld || e.Tool == ToolHand {
 		return CursorGrab
@@ -253,8 +267,16 @@ func (e *Editor) CursorNow() Cursor {
 	switch e.Tool {
 	case ToolText:
 		return CursorText
-	case ToolDraw, ToolHighlight, ToolEraser, ToolGeo, ToolFrame, ToolNote:
+	case ToolLasso, ToolDraw, ToolHighlight, ToolEraser, ToolGeo, ToolFrame, ToolNote:
 		return CursorCross
+	}
+	h := e.HandleAt(e.pointer.Screen)
+	switch h.Kind {
+	case HandleResize:
+		_, r, _ := e.SelectionFrame()
+		return resizeCursor(h.Which, r)
+	case HandleRotate:
+		return CursorRotate
 	}
 	return CursorDefault
 }
@@ -265,7 +287,11 @@ func (e *Editor) Cancel() {
 	case e.gesture != nil:
 		e.cancelGesture()
 	case e.Editing != "":
-		e.Editing = ""
+		e.StopEditing()
+	case e.FocusedGroup != "":
+		id := e.FocusedGroup
+		e.FocusedGroup = ""
+		e.Select(id)
 	case len(e.sel) > 0:
 		e.SelectNone()
 	case e.Tool != ToolSelect:
@@ -278,6 +304,8 @@ func (e *Editor) cancelGesture() {
 		e.gesture = nil
 		g.cancel(e)
 		e.Brush = nil
+		e.Lasso = nil
+		e.Snaps = nil
 		e.DropOn = ""
 		e.Erasing = nil
 		e.PartialPreview = nil
@@ -310,6 +338,9 @@ func (e *Editor) PointerDown(x, y float64, button, clicks int, mods Mods, t floa
 
 // PointerDownPressure handles pointer press with optional pen pressure.
 func (e *Editor) PointerDownPressure(x, y float64, button, clicks int, pressure float64, isPen bool, mods Mods, t float64) {
+	if e.Editing != "" {
+		e.StopEditing()
+	}
 	screen := geo.V(x, y)
 	page := e.ToPage(screen)
 	e.pointer = Pointer{
@@ -328,7 +359,9 @@ func (e *Editor) PointerDownPressure(x, y float64, button, clicks int, pressure 
 	}
 	switch e.Tool {
 	case ToolSelect:
-		e.selectDown()
+		e.selectDown(clicks)
+	case ToolLasso:
+		e.gesture = newLassoGesture(e)
 	case ToolDraw, ToolHighlight:
 		e.gesture = newFreehandGesture(e)
 	case ToolEraser:
@@ -392,7 +425,11 @@ func (e *Editor) ModsChanged(mods Mods) {
 }
 
 func (e *Editor) updateHover() {
-	if e.Tool != ToolSelect {
+	if e.Tool != ToolSelect || e.Editing != "" {
+		e.Hovered = ""
+		return
+	}
+	if h := e.HandleAt(e.pointer.Screen); h.Kind != HandleNone {
 		e.Hovered = ""
 		return
 	}
@@ -422,216 +459,6 @@ func (g *panGesture) move(e *Editor) {
 func (g *panGesture) up(*Editor)     {}
 func (g *panGesture) cancel(*Editor) {}
 
-// --- select, marquee, translate, and frame reparenting ---
-
-func (e *Editor) selectDown() {
-	p := e.pointer.Page
-	r := e.Hit(p, e.margin(), false)
-	if r.ID == "" || r.Hollow {
-		// Check if pointer clicked inside existing selection bounding box to drag it.
-		if box, ok := e.SelectionBox(); ok && box.Contains(p) {
-			e.gesture = newTranslateGesture(e)
-			return
-		}
-		if !e.pointer.Mods.Shift {
-			e.SelectNone()
-		}
-		e.gesture = &marqueeGesture{hollow: r.ID}
-		return
-	}
-	target := e.outermostSelectable(r.ID)
-	if e.pointer.Mods.Shift {
-		if e.IsSelected(target) {
-			e.sel = slices.DeleteFunc(e.sel, func(id doc.ID) bool { return id == target })
-			return
-		}
-		e.sel = append(e.sel, target)
-	} else if !e.IsSelected(target) {
-		e.Select(target)
-	}
-	e.gesture = newTranslateGesture(e)
-}
-
-type marqueeGesture struct {
-	hollow doc.ID
-}
-
-func (g *marqueeGesture) move(e *Editor) {
-	if !e.dragged() {
-		return
-	}
-	b := geo.BoxFrom(e.pointer.DownPage, e.pointer.Page)
-	e.Brush = &b
-}
-
-func (g *marqueeGesture) up(e *Editor) {
-	if e.Brush != nil {
-		box := *e.Brush
-		e.Brush = nil
-		var hits []doc.ID
-		var walk func(parent doc.ID)
-		walk = func(parent doc.ID) {
-			for _, id := range e.Children(parent) {
-				s := e.Doc.Shapes[id]
-				if s == nil || s.Locked {
-					continue
-				}
-				if s.Type == doc.TypeGroup {
-					walk(id)
-					continue
-				}
-				if box.Overlaps(e.PageBounds(id)) {
-					top := e.outermostSelectable(id)
-					if !slices.Contains(hits, top) {
-						hits = append(hits, top)
-					}
-				}
-			}
-		}
-		walk(e.Page)
-		if e.pointer.Mods.Shift {
-			for _, id := range hits {
-				if !e.IsSelected(id) {
-					e.sel = append(e.sel, id)
-				}
-			}
-		} else {
-			e.Select(hits...)
-		}
-		return
-	}
-	if g.hollow != "" && !e.pointer.Mods.Shift {
-		e.Select(e.outermostSelectable(g.hollow))
-	}
-}
-
-func (g *marqueeGesture) cancel(e *Editor) {
-	e.Brush = nil
-}
-
-type translateGesture struct {
-	ids     []doc.ID
-	initial map[doc.ID]*doc.Shape
-	moved   bool
-}
-
-func newTranslateGesture(e *Editor) *translateGesture {
-	e.begin()
-	g := &translateGesture{initial: map[doc.ID]*doc.Shape{}}
-	for _, id := range e.sel {
-		if s := e.Doc.Shapes[id]; s != nil && !s.Locked {
-			g.ids = append(g.ids, id)
-			g.initial[id] = s
-		}
-	}
-	return g
-}
-
-func (g *translateGesture) move(e *Editor) {
-	if !g.moved && !e.dragged() {
-		return
-	}
-	g.moved = true
-	d := e.pointer.Page.Sub(e.pointer.DownPage)
-	if e.pointer.Mods.Shift {
-		if math.Abs(d.X) > math.Abs(d.Y) {
-			d.Y = 0
-		} else {
-			d.X = 0
-		}
-	}
-	for _, id := range g.ids {
-		init := g.initial[id]
-		if init == nil {
-			continue
-		}
-		pm := e.parentMat(init.Parent).Invert()
-		local := pm.ApplyDir(d)
-		c := init.Moved()
-		c.X = init.X + local.X
-		c.Y = init.Y + local.Y
-		e.put(c)
-	}
-	e.DropOn = g.dropTarget(e)
-}
-
-func (g *translateGesture) dropTarget(e *Editor) doc.ID {
-	skip := make(map[doc.ID]bool, len(g.ids)*2)
-	for _, id := range g.ids {
-		skip[id] = true
-		for _, k := range e.Descendants(id) {
-			skip[k] = true
-		}
-	}
-	return e.frameAt(e.pointer.Page, skip)
-}
-
-func (g *translateGesture) up(e *Editor) {
-	if !g.moved {
-		e.DropOn = ""
-		e.rollback()
-		return
-	}
-	target := g.dropTarget(e)
-	e.DropOn = ""
-	e.reparentMoved(g.ids, target)
-	e.commit()
-}
-
-func (g *translateGesture) cancel(e *Editor) {
-	e.DropOn = ""
-	e.rollback()
-}
-
-func (e *Editor) reparentMoved(ids []doc.ID, target doc.ID) {
-	dest := target
-	if dest == "" {
-		dest = e.Page
-	}
-	for _, id := range ids {
-		s := e.Doc.Shapes[id]
-		if s == nil {
-			continue
-		}
-		if p := e.Doc.Shapes[s.Parent]; p != nil && p.Type == doc.TypeGroup {
-			continue
-		}
-		if s.Parent == dest {
-			continue
-		}
-		e.reparent(id, dest)
-	}
-}
-
-func (e *Editor) reparent(id, parent doc.ID) {
-	s := e.Doc.Shapes[id]
-	if s == nil || id == parent || e.isAncestor(id, parent) {
-		return
-	}
-	m := e.parentMat(parent).Invert().Mul(e.PageMat(id))
-	c := s.Moved()
-	c.Parent = parent
-	c.Index = e.topIndex(parent)
-	o := m.Apply(geo.Vec{})
-	c.X, c.Y = o.X, o.Y
-	c.Rotation = m.Rotation()
-	e.put(c)
-}
-
-func (e *Editor) isAncestor(a, id doc.ID) bool {
-	for cur := id; cur != "" && !doc.IsPageID(cur); {
-		s := e.Doc.Shapes[cur]
-		if s == nil {
-			return false
-		}
-		if s.Parent == a {
-			return true
-		}
-		cur = s.Parent
-	}
-	return false
-}
-
 // --- creating geo shapes & frames ---
 
 type createBoxGesture struct {
@@ -645,10 +472,10 @@ func (g *createBoxGesture) move(e *Editor) {
 			return
 		}
 		e.begin()
-		g.origin = e.pointer.DownPage
+		g.origin = e.snapPoint(e.pointer.DownPage)
 		g.id = e.newBoxShape(g.origin, 1, 1)
 	}
-	p := e.pointer.Page
+	p := e.snapPoint(e.pointer.Page)
 	a, b := g.origin, p
 	if e.pointer.Mods.Alt {
 		a = g.origin.Sub(p.Sub(g.origin))
@@ -774,9 +601,9 @@ type clickCreateGesture struct{ kind string }
 func (g *clickCreateGesture) move(*Editor) {}
 func (g *clickCreateGesture) up(e *Editor) {
 	if g.kind == doc.TypeText {
-		e.CreateText(e.pointer.Page, "Text")
+		e.createTextAndEdit(e.pointer.Page)
 	} else {
-		e.CreateNote(e.pointer.Page, "Note")
+		e.createNoteAndEdit(e.pointer.Page)
 	}
 	e.finishTool()
 }
@@ -1155,6 +982,7 @@ func (g *eraserGesture) commitPartial(e *Editor) {
 				ns.Index = indices[i]
 				ns.IsClosed = false
 				ns.IsComplete = true
+				ns.ScaleX, ns.ScaleY = 1, 1
 				ns.Seed = geo.Hash(string(nid))
 				// Re-anchor each split piece to its own starting point so (X, Y) is tight.
 				originLocal := poly[0]

@@ -10339,6 +10339,26 @@ func (msgs Messages) BoardThemeLight() string {
 	return Catalog.Format(msgs.locale, "boardThemeLight", nil)
 }
 
+// BoardSnapAlways says "始终吸附"
+// in the language the app shows.
+func BoardSnapAlways() string { return In(i18n.Locale()).BoardSnapAlways() }
+
+// BoardSnapAlways says "始终吸附"
+// in the language of msgs.
+func (msgs Messages) BoardSnapAlways() string {
+	return Catalog.Format(msgs.locale, "boardSnapAlways", nil)
+}
+
+// BoardSnapGrid says "网格吸附"
+// in the language the app shows.
+func BoardSnapGrid() string { return In(i18n.Locale()).BoardSnapGrid() }
+
+// BoardSnapGrid says "网格吸附"
+// in the language of msgs.
+func (msgs Messages) BoardSnapGrid() string {
+	return Catalog.Format(msgs.locale, "boardSnapGrid", nil)
+}
+
 // BoardHint says "拖动画布平移，双指捏合或按住 ⌘ 滚动缩放"
 // in the language the app shows.
 func BoardHint() string { return In(i18n.Locale()).BoardHint() }
@@ -10407,6 +10427,16 @@ func BoardToolSelect() string { return In(i18n.Locale()).BoardToolSelect() }
 // in the language of msgs.
 func (msgs Messages) BoardToolSelect() string {
 	return Catalog.Format(msgs.locale, "boardToolSelect", nil)
+}
+
+// BoardToolLasso says "套索"
+// in the language the app shows.
+func BoardToolLasso() string { return In(i18n.Locale()).BoardToolLasso() }
+
+// BoardToolLasso says "套索"
+// in the language of msgs.
+func (msgs Messages) BoardToolLasso() string {
+	return Catalog.Format(msgs.locale, "boardToolLasso", nil)
 }
 
 // BoardToolHand says "抓手"

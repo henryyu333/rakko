@@ -91,10 +91,12 @@ type Shape struct {
 	Opacity  float64 `json:"opacity"`
 	Locked   bool    `json:"locked,omitempty"`
 
-	W     float64 `json:"w,omitempty"`
-	H     float64 `json:"h,omitempty"`
-	GrowY float64 `json:"growY,omitempty"`
-	Scale float64 `json:"scale,omitempty"`
+	W      float64 `json:"w,omitempty"`
+	H      float64 `json:"h,omitempty"`
+	GrowY  float64 `json:"growY,omitempty"`
+	Scale  float64 `json:"scale,omitempty"`
+	ScaleX float64 `json:"scaleX,omitempty"`
+	ScaleY float64 `json:"scaleY,omitempty"`
 
 	// Visual style.
 	Geo        string `json:"geo,omitempty"`

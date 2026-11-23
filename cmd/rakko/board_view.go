@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math"
+	"unicode/utf8"
 
 	"github.com/egoist/mygo/ui"
 
@@ -156,8 +157,8 @@ func (a *shelf) boardStage(c *ui.Context, l locales.Messages, pal *editor.Palett
 	}
 	stage := ui.Box(c.Key("board-stage")).FillWidth().Grow(1).MinHeight(0).Clip()
 	stage.Children(func() {
-		canvas := ui.Box(c.Key("board-canvas")).Fill().Focusable().Label(b.currentTitle(l))
-		if !b.canvasFocus && !b.renaming && !b.confirmDelete {
+		canvas := ui.Box(c.Key("board-canvas")).Fill().Focusable().FocusRing(false).Label(b.currentTitle(l))
+		if !b.canvasFocus && !b.renaming && !b.confirmDelete && b.ed.Editing == "" {
 			canvas.Focus()
 			b.canvasFocus = true
 		}
@@ -177,10 +178,18 @@ func (a *shelf) boardStage(c *ui.Context, l locales.Messages, pal *editor.Palett
 			canvas.Cursor(ui.CursorCrosshair)
 		case editor.CursorText:
 			canvas.Cursor(ui.CursorText)
-		case editor.CursorMove:
+		case editor.CursorMove, editor.CursorRotate:
 			canvas.Cursor(ui.CursorMove)
 		case editor.CursorPointer:
 			canvas.Cursor(ui.CursorPointer)
+		case editor.CursorEW:
+			canvas.Cursor(ui.CursorResizeEW)
+		case editor.CursorNS:
+			canvas.Cursor(ui.CursorResizeNS)
+		case editor.CursorNESW:
+			canvas.Cursor(ui.CursorResizeNESW)
+		case editor.CursorNWSE:
+			canvas.Cursor(ui.CursorResizeNWSE)
 		default:
 			canvas.Cursor(ui.CursorDefault)
 		}
@@ -192,6 +201,8 @@ func (a *shelf) boardStage(c *ui.Context, l locales.Messages, pal *editor.Palett
 			return b.handleCanvasInput(c, ev)
 		})
 
+		a.boardTextEditor(c, pal)
+
 		if b.ed.ItemCount() == 0 {
 			ui.Column(c.Key("board-hint")).Absolute().Top(0).Left(0).Fill().Center().IgnoreInput(true).Children(func() {
 				ui.Text(c, osText(l.BoardHint(), l.BoardHintWin())).FontSize(13).TextColor(boardColor(pal.Ink3))
@@ -201,6 +212,91 @@ func (a *shelf) boardStage(c *ui.Context, l locales.Messages, pal *editor.Palett
 		a.boardNavBar(c, l, pal)
 		a.boardSubBar(c, l, pal)
 		a.boardToolbar(c, l, pal)
+	})
+}
+
+func (a *shelf) boardTextEditor(c *ui.Context, pal *editor.Palette) {
+	b := a.board
+	if b.ed.Editing == "" {
+		b.lastEditing = ""
+		return
+	}
+	justOpened := false
+	if b.lastEditing != b.ed.Editing {
+		b.lastEditing = b.ed.Editing
+		b.editKey++
+		justOpened = true
+	}
+	box, size, font, align, bold, italic, underline, col, ok := b.ed.EditBox()
+	if !ok || size <= 0 {
+		return
+	}
+	cam := b.ed.Cam()
+	m := b.ed.PageMat(b.ed.Editing)
+	sh := b.ed.Doc.Shapes[b.ed.Editing]
+	if sh != nil && sh.Type == doc.TypeText && sh.AutoSize {
+		switch align {
+		case "center", "middle":
+			box.X -= size / 2
+		case "right", "end":
+			box.X -= size
+		}
+		box.W += size
+	}
+	box.H += 4 / cam.Z
+	center := b.ed.ToScreen(m.Apply(box.Center()))
+	sw, shPx := max(box.W*cam.Z, 40), max(box.H*cam.Z, size*cam.Z*1.4)
+
+	input := ui.TextAreaBase(c.Key(fmt.Sprintf("board-edit-%d", b.editKey)), &b.ed.EditText).
+		Absolute().
+		Left(float32(center.X - sw/2)).Top(float32(center.Y - shPx/2)).
+		Size(float32(sw), float32(shPx)).
+		Font(boardFontFamily(font)).
+		FontSize(float32(size * cam.Z)).
+		LineHeight(1.3).
+		TextColor(boardColor(col)).
+		Background(ui.Transparent).
+		Padding(0).
+		Border(1, boardColor(pal.Accent.Alpha(0.55))).Radius(3).
+		FocusRing(false).
+		Label("Text")
+	if bold {
+		input.FontWeight(700)
+	}
+	if italic {
+		input.Italic()
+	}
+	_ = underline
+	switch align {
+	case "center", "middle":
+		input.TextAlign(ui.Center)
+	case "right", "end":
+		input.TextAlign(ui.End)
+	default:
+		input.TextAlign(ui.Start)
+	}
+	if deg := m.Rotation() * 180 / math.Pi; math.Abs(deg) > 0.01 {
+		input.Rotate(float32(deg))
+	}
+	if justOpened {
+		n := utf8.RuneCountInString(b.ed.EditText)
+		input.Focus().SetTextSelection(n, n)
+	}
+	input.OnChange(func() {
+		b.ed.EditChanged()
+		b.invalidate()
+	})
+	input.OnTextKey(func(k ui.TextKey) bool {
+		isFrame := sh != nil && sh.Type == doc.TypeFrame
+		if k.Key == ui.KeyEscape || (k.Key == ui.KeyEnter && (isFrame || k.Mods&(ui.Cmd|ui.Ctrl) != 0)) {
+			b.ed.EditText = k.Text()
+			b.ed.EditChanged()
+			b.ed.StopEditing()
+			b.canvasFocus = false
+			b.invalidate()
+			return true
+		}
+		return false
 	})
 }
 
@@ -296,6 +392,15 @@ func (a *shelf) boardNavBar(c *ui.Context, l locales.Messages, pal *editor.Palet
 			}
 			if m.Item(l.BoardThemeSection() + " · " + l.BoardThemeLight()).Checked(!dark).Chosen() {
 				b.setDarkMode(false)
+			}
+			m.Separator()
+			if m.Item(l.BoardSnapAlways()).Checked(b.ed.Snap).Chosen() {
+				b.ed.ToggleSnap()
+				b.invalidate()
+			}
+			if m.Item(l.BoardSnapGrid()).Checked(b.ed.Grid).Shortcut(ui.Cmd, ui.KeyQuote).Chosen() {
+				b.ed.ToggleGrid()
+				b.invalidate()
 			}
 		}, b.popoverButtonOpts(pal, ui.AnchorTopStart, ui.AnchorBottomStart, &b.moreMenu))
 	})
@@ -502,6 +607,10 @@ func (a *shelf) boardToolbar(c *ui.Context, l locales.Messages, pal *editor.Pale
 		bar.Children(func() {
 			if a.boardToolBtn(c, pal, "tool-select", boardSelectSymbol, l.BoardToolSelect(), b.ed.Tool == editor.ToolSelect).Clicked() {
 				b.ed.SetTool(editor.ToolSelect)
+				b.invalidate()
+			}
+			if a.boardToolBtn(c, pal, "tool-lasso", boardLassoSymbol, l.BoardToolLasso(), b.ed.Tool == editor.ToolLasso).Clicked() {
+				b.ed.SetTool(editor.ToolLasso)
 				b.invalidate()
 			}
 			if a.boardToolBtn(c, pal, "tool-hand", boardHandSymbol, l.BoardToolHand(), b.ed.Tool == editor.ToolHand).Clicked() {
@@ -777,6 +886,10 @@ func (b *boardUI) handleCanvasInput(c *ui.Context, ev ui.InputEvent) bool {
 			case ui.KeyW:
 				b.close()
 				return true
+			case ui.KeyQuote:
+				b.ed.ToggleGrid()
+				b.invalidate()
+				return true
 			}
 		}
 		switch ev.Key {
@@ -784,6 +897,32 @@ func (b *boardUI) handleCanvasInput(c *ui.Context, ev ui.InputEvent) bool {
 			b.ed.Cancel()
 			b.invalidate()
 			return true
+		case ui.KeyEnter:
+			if !b.locked && b.ed.EnterEdit() {
+				b.invalidate()
+				return true
+			}
+		case ui.KeyLeft, ui.KeyRight, ui.KeyUp, ui.KeyDown:
+			if !b.locked && len(b.ed.Selection()) > 0 {
+				step := 1.0
+				if ev.Mods&ui.Shift != 0 {
+					step = 10.0
+				}
+				var dx, dy float64
+				switch ev.Key {
+				case ui.KeyLeft:
+					dx = -step
+				case ui.KeyRight:
+					dx = step
+				case ui.KeyUp:
+					dy = -step
+				case ui.KeyDown:
+					dy = step
+				}
+				b.ed.Nudge(dx, dy)
+				b.invalidate()
+				return true
+			}
 		case ui.KeyBackspace, ui.KeyDelete:
 			if !b.locked {
 				b.ed.DeleteSelected()
@@ -792,6 +931,10 @@ func (b *boardUI) handleCanvasInput(c *ui.Context, ev ui.InputEvent) bool {
 			return true
 		case ui.KeyV:
 			b.ed.SetTool(editor.ToolSelect)
+			b.invalidate()
+			return true
+		case ui.KeyS:
+			b.ed.SetTool(editor.ToolLasso)
 			b.invalidate()
 			return true
 		case ui.KeyH:

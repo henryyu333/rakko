@@ -700,3 +700,173 @@ func TestBoardSeg2ToolsUndoImageAndScreenshots(t *testing.T) {
 		saveBoardSeg2Shot(t, "board-brushes-partial-erase.png", v3.Image())
 	}
 }
+
+func saveBoardSeg3Shot(t *testing.T, name string, img *image.RGBA) {
+	t.Helper()
+	dir := os.Getenv("RAKKO_SEG3_SHOTS")
+	if dir == "" {
+		return
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Create(filepath.Join(dir, name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if err := png.Encode(f, img); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestBoardSeg3SelectionSnapLabelsAndScreenshots(t *testing.T) {
+	a, b := boardTestShelf(t)
+	l := locales.In("zh-Hans")
+	view := ui.NewTester(a.boardView, 1040, 680)
+	view.SetLocale("zh-Hans")
+	view.Frame()
+	view.Frame()
+
+	// 1. Create two rectangles, click Lasso button & verify S shortcut, select via Lasso.
+	b.ed.SetGeoTool("rectangle")
+	b.ed.PointerDown(120, 140, 0, 1, editor.Mods{}, 0.1)
+	b.ed.PointerMove(260, 230, editor.Mods{}, 0.2)
+	b.ed.PointerUp(260, 230, editor.Mods{}, 0.3)
+	rectA := b.ed.Selection()[0]
+
+	b.ed.SetGeoTool("arrow-right")
+	b.ed.PointerDown(420, 140, 0, 1, editor.Mods{}, 0.4)
+	b.ed.PointerMove(540, 230, editor.Mods{}, 0.5)
+	b.ed.PointerUp(540, 230, editor.Mods{}, 0.6)
+	arrowShape := b.ed.Selection()[0]
+
+	view.Key(0, ui.KeyS)
+	view.Frame()
+	if b.ed.Tool != editor.ToolLasso {
+		t.Fatalf("S shortcut tool = %s, want lasso", b.ed.Tool)
+	}
+
+	// Sweep lasso around arrowShape while capturing mid-drag lasso screenshot.
+	view.Press(400, 120)
+	view.Move(560, 120)
+	view.Move(560, 250)
+	view.Move(400, 250)
+	view.Frame()
+	saveBoardSeg3Shot(t, "board-lasso.png", view.Image())
+	view.Release(400, 250)
+	view.Frame()
+	if !b.ed.IsSelected(arrowShape) || b.ed.Tool != editor.ToolSelect {
+		t.Fatalf("after lasso sel=%v tool=%s", b.ed.Selection(), b.ed.Tool)
+	}
+
+	// 2. Press Enter to edit arrowShape label inline via TextAreaBase, type text, commit with Cmd+Enter.
+	view.Key(0, ui.KeyEnter)
+	view.Frame()
+	view.Frame()
+	if b.ed.Editing != arrowShape {
+		t.Fatalf("Enter did not start editing arrowShape: Editing=%s", b.ed.Editing)
+	}
+	view.Type("Flow Step")
+	view.Frame()
+	saveBoardSeg3Shot(t, "board-inline-edit.png", view.Image())
+	view.Key(ui.Cmd, ui.KeyEnter)
+	view.Frame()
+	if b.ed.Editing != "" || b.ed.Doc.Shapes[arrowShape].Text != "Flow Step" {
+		t.Fatalf("Cmd+Enter did not commit edit: Editing=%q Text=%q", b.ed.Editing, b.ed.Doc.Shapes[arrowShape].Text)
+	}
+
+	// 3. Arrow key nudge (1px and Shift 10px) + Escape layered exit.
+	x0, y0 := b.ed.Doc.Shapes[arrowShape].X, b.ed.Doc.Shapes[arrowShape].Y
+	view.Key(ui.Shift, ui.KeyRight)
+	view.Key(0, ui.KeyDown)
+	view.Frame()
+	if b.ed.Doc.Shapes[arrowShape].X != x0+10 || b.ed.Doc.Shapes[arrowShape].Y != y0+1 {
+		t.Fatalf("Arrow nudge pos = (%v,%v), want (%v,%v)", b.ed.Doc.Shapes[arrowShape].X, b.ed.Doc.Shapes[arrowShape].Y, x0+10, y0+1)
+	}
+	view.Key(0, ui.KeyEscape)
+	view.Frame()
+	if len(b.ed.Selection()) != 0 {
+		t.Fatalf("Escape did not clear selection: %v", b.ed.Selection())
+	}
+
+	// 4. Cmd+' toggles Grid snap and More menu shows Always Snap / Snap to Grid.
+	view.Key(ui.Cmd, ui.KeyQuote)
+	view.Frame()
+	if !b.ed.Grid {
+		t.Fatal("Cmd+' did not toggle Grid snap on")
+	}
+	if err := view.Click(l.BoardMore()); err != nil {
+		t.Fatalf("open More menu: %v", err)
+	}
+	view.Frame()
+	if !view.HasText(l.BoardSnapAlways()) || !view.HasText(l.BoardSnapGrid()) {
+		t.Fatalf("More menu missing snap items: %v", view.Menu())
+	}
+	view.CloseMenu()
+	view.Key(ui.Cmd, ui.KeyQuote)
+	view.Frame()
+
+	// 5. Render showcase screenshots for Selection+Handles+Badge+Flip+GrowY and Smart Guides.
+	if os.Getenv("RAKKO_SEG3_SHOTS") != "" {
+		// Showcase A: Selected rotated shape (8 handles + size badge) + flipped arrow-right + GrowY geo/note + Frame title.
+		b.ed.Select(rectA)
+		b.ed.StartEditing(rectA)
+		b.ed.EditText = "Auto Grow\nLine 2\nLine 3\nLine 4\nLine 5"
+		b.ed.EditChanged()
+		b.ed.StopEditing()
+
+		// Flip arrowShape horizontally via negative resize and rotate rectA 18 deg.
+		b.ed.Select(arrowShape)
+		ab := b.ed.PageBounds(arrowShape)
+		b.ed.PointerDown(ab.MaxX(), ab.Center().Y, 0, 1, editor.Mods{}, 2.0)
+		b.ed.PointerMove(ab.X-ab.W, ab.Center().Y, editor.Mods{}, 2.1)
+		b.ed.PointerUp(ab.X-ab.W, ab.Center().Y, editor.Mods{}, 2.2)
+
+		// Frame with custom name and sticky note with GrowY.
+		b.ed.SetTool(editor.ToolFrame)
+		b.ed.PointerDown(560, 100, 0, 1, editor.Mods{}, 3.0)
+		b.ed.PointerMove(900, 360, editor.Mods{}, 3.1)
+		b.ed.PointerUp(900, 360, editor.Mods{}, 3.2)
+		frameID := b.ed.Selection()[0]
+		b.ed.StartEditing(frameID)
+		b.ed.EditText = "Labeled Frame"
+		b.ed.EditChanged()
+		b.ed.StopEditing()
+
+		noteID := b.ed.CreateNote(geo.V(730, 240), "")
+		b.ed.StartEditing(noteID)
+		b.ed.EditText = "Sticky Note\nAuto GrowY\nLine 3\nLine 4\nLine 5\nLine 6\nLine 7"
+		b.ed.EditChanged()
+		b.ed.StopEditing()
+
+		// Select rectA and rotate it 15 deg so screenshot shows rotated box, 8 rotated handles, and WxH badge.
+		b.ed.Select(rectA)
+		rb := b.ed.PageBounds(rectA)
+		b.ed.PointerDown(rb.MaxX()+10, rb.Y-10, 0, 1, editor.Mods{}, 4.0)
+		b.ed.PointerMove(rb.Center().X+80, rb.Center().Y-20, editor.Mods{Shift: true}, 4.1)
+		b.ed.PointerUp(rb.Center().X+80, rb.Center().Y-20, editor.Mods{Shift: true}, 4.2)
+		b.ed.Hovered = ""
+
+		view.Frame()
+		view.Frame()
+		saveBoardSeg3Shot(t, "board-selection-handles-badge.png", view.Image())
+
+		// Showcase B: Active drag with smart alignment guides (Snap=true).
+		b.ed.Snap = true
+		b.ed.SetGeoTool("rounded-rect")
+		b.ed.PointerDown(160, 360, 0, 1, editor.Mods{}, 5.0)
+		b.ed.PointerMove(300, 440, editor.Mods{}, 5.1)
+		b.ed.PointerUp(300, 440, editor.Mods{}, 5.2)
+		mover := b.ed.Selection()[0]
+		b.ed.Select(mover)
+		// Drag mover so its left edge aligns with rectA's left edge (or arrowShape's).
+		mb := b.ed.PageBounds(mover)
+		rb2 := b.ed.PageBounds(arrowShape)
+		b.ed.PointerDown(mb.Center().X, mb.Center().Y, 0, 1, editor.Mods{}, 6.0)
+		b.ed.PointerMove(rb2.Center().X+2, mb.Center().Y, editor.Mods{}, 6.1)
+		view.Frame()
+		saveBoardSeg3Shot(t, "board-smart-guides.png", view.Image())
+		b.ed.PointerUp(rb2.Center().X+2, mb.Center().Y, editor.Mods{}, 6.2)
+	}
+}

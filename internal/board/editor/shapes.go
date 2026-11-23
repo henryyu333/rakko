@@ -120,6 +120,9 @@ func (e *Editor) computeGeometry(s *doc.Shape) *Geometry {
 		w, h := math.Max(s.W, 1), math.Max(s.H+s.GrowY, 1)
 		kind := normalizeGeoKind(s.Geo)
 		pts, closed := geoOutline(s, kind, w, h)
+		if s.FlipX || s.FlipY {
+			pts = flipPoints(pts, w, h, s.FlipX, s.FlipY)
+		}
 		open := kind == "bracket" || kind == "brace" || kind == "curve"
 		filled := !open && s.Fill != "none" && s.Fill != ""
 		g := &Geometry{
@@ -157,24 +160,29 @@ func (e *Editor) computeGeometry(s *doc.Shape) *Geometry {
 		if text == "" {
 			text = " "
 		}
+		scale := orOne(s.Scale)
 		var b TextBlock
 		if s.AutoSize || s.W <= 0 {
 			b = e.measure(text, s.Font, size, 0)
 		} else {
-			b = e.measure(text, s.Font, size, s.W)
-			b.W = s.W
+			wrapW := math.Max(s.W*scale, 8)
+			b = e.measure(text, s.Font, size, wrapW)
+			b.W = wrapW
 		}
 		box := geo.Box{W: math.Max(b.W, 12), H: math.Max(b.H, size*1.3)}
 		cs := box.Corners()
 		return &Geometry{Bounds: box, Outline: cs[:], Closed: true, Filled: true, Label: &box}
 
 	case doc.TypeNote:
-		w, h := math.Max(s.W, 180), math.Max(s.H+s.GrowY, 140)
+		w, h := math.Max(s.W, 80), math.Max(s.H+s.GrowY, 60)
 		box := geo.Box{W: w, H: h}
 		cs := box.Corners()
 		g := &Geometry{Bounds: box, Outline: cs[:], Closed: true, Filled: true}
 		g.Label = e.labelBox(s, w, h, labelFontSize(s))
 		return g
+
+	case doc.TypeArrow:
+		return e.arrowGeometry(s)
 
 	case doc.TypeFrame:
 		w, h := math.Max(s.W, 1), math.Max(s.H, 1)
@@ -227,11 +235,8 @@ func fallbackMeasure(text string, size, width float64) TextBlock {
 			if r > 0x7f {
 				rw = size
 			}
-			if r == ' ' {
-				lastSpace = len(cur)
-			}
 			if curW+rw > width && len(cur) > 0 {
-				if lastSpace > 0 {
+				if lastSpace > 0 && lastSpace < len(cur) {
 					lineStr := string(cur[:lastSpace])
 					lw := measureLineFallback(cur[:lastSpace], size, cw)
 					lines = append(lines, TextLine{Text: lineStr, Y: float64(len(lines)) * lineH, W: lw})
@@ -251,6 +256,12 @@ func fallbackMeasure(text string, size, width float64) TextBlock {
 					curW = 0
 					lastSpace = -1
 				}
+				if r == ' ' && len(cur) == 0 {
+					continue
+				}
+			}
+			if r == ' ' {
+				lastSpace = len(cur)
 			}
 			cur = append(cur, r)
 			curW += rw
@@ -308,7 +319,29 @@ func (e *Editor) labelBox(s *doc.Shape, w, h, size float64) *geo.Box {
 	return &box
 }
 
+func orOne(v float64) float64 {
+	if v == 0 {
+		return 1
+	}
+	return v
+}
+
+func flipPoints(pts []geo.Vec, w, h float64, fx, fy bool) []geo.Vec {
+	out := make([]geo.Vec, len(pts))
+	for i, p := range pts {
+		if fx {
+			p.X = w - p.X
+		}
+		if fy {
+			p.Y = h - p.Y
+		}
+		out[i] = p
+	}
+	return out
+}
+
 func strokePoints(s *doc.Shape) []geo.Vec {
+	sx, sy := orOne(s.ScaleX), orOne(s.ScaleY)
 	n := 0
 	for _, seg := range s.Segments {
 		n += len(seg.Points)
@@ -316,7 +349,7 @@ func strokePoints(s *doc.Shape) []geo.Vec {
 	pts := make([]geo.Vec, 0, n)
 	for _, seg := range s.Segments {
 		for _, p := range seg.Points {
-			pts = append(pts, geo.V(p.X, p.Y))
+			pts = append(pts, geo.V(p.X*sx, p.Y*sy))
 		}
 	}
 	return pts
@@ -338,10 +371,11 @@ func strokeWidthOf(s *doc.Shape) float64 {
 }
 
 func textFontSize(s *doc.Shape) float64 {
+	base := 18.0
 	if s.FontSize > 0 {
-		return float64(s.FontSize)
+		base = float64(s.FontSize)
 	}
-	return 18
+	return base * orOne(s.Scale)
 }
 
 func labelFontSize(s *doc.Shape) float64 {

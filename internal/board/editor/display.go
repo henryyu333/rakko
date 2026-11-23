@@ -91,6 +91,8 @@ func (e *Editor) buildPrims(s *doc.Shape, pal *Palette) []Prim {
 		return e.drawPrims(s, pal)
 	case doc.TypeHighlight:
 		return e.highlightPrims(s, pal)
+	case doc.TypeArrow:
+		return e.arrowPrims(s, pal)
 	case doc.TypeText:
 		return e.textPrims(s, pal)
 	case doc.TypeNote:
@@ -364,6 +366,7 @@ func (e *Editor) drawPrims(s *doc.Shape, pal *Palette) []Prim {
 	}
 
 	// Render each segment (freehand smoothed ribbon vs Shift straight segment).
+	sx, sy := orOne(s.ScaleX), orOne(s.ScaleY)
 	for _, seg := range s.Segments {
 		if len(seg.Points) == 0 {
 			continue
@@ -371,7 +374,7 @@ func (e *Editor) drawPrims(s *doc.Shape, pal *Palette) []Prim {
 		if seg.Type == "straight" {
 			pts := make([]geo.Vec, len(seg.Points))
 			for i, p := range seg.Points {
-				pts[i] = geo.V(p.X, p.Y)
+				pts[i] = geo.V(p.X*sx, p.Y*sy)
 			}
 			p := (&geo.Path{}).Poly(pts, false)
 			out = append(out, strokeWith(p, baseW, c))
@@ -383,10 +386,11 @@ func (e *Editor) drawPrims(s *doc.Shape, pal *Palette) []Prim {
 }
 
 func freehandSegmentPrims(s *doc.Shape, seg doc.Segment, baseW float64, c Color, look string) []Prim {
+	sx, sy := orOne(s.ScaleX), orOne(s.ScaleY)
 	pts := make([]geo.Vec, len(seg.Points))
 	press := make([]float64, len(seg.Points))
 	for i, p := range seg.Points {
-		pts[i] = geo.V(p.X, p.Y)
+		pts[i] = geo.V(p.X*sx, p.Y*sy)
 		press[i] = p.Z
 	}
 	if len(pts) == 1 {
@@ -492,11 +496,12 @@ func alignBlock(b TextBlock, width float64, align string) TextBlock {
 func (e *Editor) textPrims(s *doc.Shape, pal *Palette) []Prim {
 	size := textFontSize(s)
 	g := e.Geometry(s)
+	scale := orOne(s.Scale)
 	var b TextBlock
 	if s.AutoSize || s.W <= 0 {
 		b = e.measure(s.Text, s.Font, size, 0)
 	} else {
-		b = e.measure(s.Text, s.Font, size, g.Bounds.W)
+		b = e.measure(s.Text, s.Font, size, math.Max(s.W*scale, 8))
 	}
 	align := s.TextAlign
 	if align == "" {

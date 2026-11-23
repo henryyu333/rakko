@@ -10,7 +10,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
+	"unicode/utf16"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -39,6 +41,7 @@ var (
 	boardChevronSymbol = symbol(`<path d="m6 9 6 6 6-6"/>`)
 	boardMoreSymbol    = symbol(`<circle cx="5" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="19" cy="12" r="1.4" fill="currentColor"/>`)
 	boardSelectSymbol  = symbol(`<path d="M4.5 4.5l6.2 15 2.4-5.7 5.7-2.4z"/>`)
+	boardLassoSymbol   = symbol(`<path d="M7 22a5 5 0 0 1-2-4"/><path d="M3.3 14A6.8 6.8 0 0 1 2 10c0-4.4 4.5-8 10-8s10 3.6 10 8-4.5 8-10 8a12 12 0 0 1-5-1"/><circle cx="5" cy="16" r="2"/>`)
 	boardHandSymbol    = symbol(`<path d="M18 11V6a2 2 0 0 0-4 0v1M14 10V4a2 2 0 0 0-4 0v2M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>`)
 	boardHiliteSymbol  = symbol(`<path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/>`)
 	boardEraserSymbol  = symbol(`<path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7M5 11l9 9"/>`)
@@ -105,8 +108,79 @@ type boardUI struct {
 	eraserMenu   bool
 	drawMenu     bool
 	canvasFocus  bool
+	editKey      int
+	lastEditing  doc.ID
 	t0           time.Time
 	bitmaps      map[doc.ID]*ui.Bitmap
+}
+
+type boardMeasureKey struct {
+	text, font  string
+	size, width float32
+}
+
+var (
+	boardMeasureMu    sync.Mutex
+	boardMeasureCache = map[boardMeasureKey]editor.TextBlock{}
+)
+
+func boardFontFamily(font string) string {
+	switch font {
+	case "sketch", "draw":
+		return "Chalkboard SE, Kaiti SC, PingFang SC, cursive"
+	case "serif":
+		return "Georgia, serif"
+	case "mono":
+		return "monospace"
+	}
+	return "system-ui"
+}
+
+func boardMeasure(text, font string, size, width float64) editor.TextBlock {
+	k := boardMeasureKey{text: text, font: font, size: float32(size), width: float32(width)}
+	boardMeasureMu.Lock()
+	if b, ok := boardMeasureCache[k]; ok {
+		boardMeasureMu.Unlock()
+		return b
+	}
+	boardMeasureMu.Unlock()
+
+	const lineMult = 1.3
+	f := ui.Font{Family: boardFontFamily(font), Size: float32(size), LineHeight: lineMult}
+	tl := ui.ShapeText(text, f, float32(width))
+	lineH := size * lineMult
+	units := utf16.Encode([]rune(text))
+	lines := tl.Lines()
+	out := editor.TextBlock{Line: lineH}
+	for i, ln := range lines {
+		end := min(ln.End, len(units))
+		start := min(ln.Start, end)
+		s := string(utf16.Decode(units[start:end]))
+		trimmed := strings.TrimRight(s, " \t\r\n")
+		w := float64(ln.Rect.W)
+		if trimmed != s {
+			c := tl.Caret(start + len(utf16.Encode([]rune(trimmed))))
+			w = float64(c.X - ln.Rect.X)
+		}
+		out.Lines = append(out.Lines, editor.TextLine{Text: trimmed, Y: float64(i) * lineH, W: w})
+		if float64(ln.Rect.W) > out.W {
+			out.W = float64(ln.Rect.W)
+		}
+	}
+	if len(out.Lines) == 0 || (strings.HasSuffix(text, "\n") && (len(lines) == 0 || lines[len(lines)-1].End <= len(units))) {
+		if len(out.Lines) == 0 || out.Lines[len(out.Lines)-1].Text != "" || strings.HasSuffix(text, "\n\n") || text == "\n" {
+			out.Lines = append(out.Lines, editor.TextLine{Y: float64(len(out.Lines)) * lineH})
+		}
+	}
+	out.H = float64(len(out.Lines)) * lineH
+
+	boardMeasureMu.Lock()
+	if len(boardMeasureCache) > 4096 {
+		clear(boardMeasureCache)
+	}
+	boardMeasureCache[k] = out
+	boardMeasureMu.Unlock()
+	return out
 }
 
 // boardSession lazily initializes the whiteboard store and editor under dataDir.
@@ -210,14 +284,14 @@ func (b *boardUI) load() error {
 	if err != nil {
 		b.locked = true
 		if b.ed == nil {
-			b.ed = editor.New(doc.NewDrawing(b.store.ID(), b.host.appLoc().BoardDefaultName()), nil)
+			b.ed = editor.New(doc.NewDrawing(b.store.ID(), b.host.appLoc().BoardDefaultName()), boardMeasure)
 		}
 		b.dirtyFlag = false
 		return err
 	}
 	b.locked = false
 	if b.ed == nil {
-		b.ed = editor.New(d, nil)
+		b.ed = editor.New(d, boardMeasure)
 	} else {
 		b.ed.Replace(d)
 	}

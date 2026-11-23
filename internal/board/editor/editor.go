@@ -44,6 +44,11 @@ type TextBlock struct {
 // MeasureFunc lays out text wrapping at width (0 wraps only at explicit newlines).
 type MeasureFunc func(text, font string, size, width float64) TextBlock
 
+// SnapLine is an alignment guide in page coordinates shown during dragging.
+type SnapLine struct {
+	A, B geo.Vec
+}
+
 // Editor owns an open whiteboard document and its interactive viewport state.
 type Editor struct {
 	Doc     *doc.Drawing
@@ -64,6 +69,11 @@ type Editor struct {
 	Hovered        doc.ID
 	FocusedGroup   doc.ID
 	Editing        doc.ID
+	EditText       string
+	Snap           bool // Always-on smart alignment guides (Cmd/Ctrl temporarily inverts)
+	Grid           bool // Snap to grid (Cmd+')
+	Snaps          []SnapLine
+	Lasso          []geo.Vec
 	Brush          *geo.Box
 	DropOn         doc.ID
 	Erasing        map[doc.ID]bool
@@ -118,7 +128,8 @@ func (e *Editor) Replace(d *doc.Drawing) {
 	e.undo, e.redo, e.tx = nil, nil, nil
 	e.kids, e.bindFrom, e.bindTo = nil, nil, nil
 	e.sel = nil
-	e.Hovered, e.FocusedGroup, e.Editing = "", "", ""
+	e.Hovered, e.FocusedGroup, e.Editing, e.EditText = "", "", "", ""
+	e.Snaps, e.Lasso, e.Brush, e.DropOn = nil, nil, nil, ""
 	e.cams = make(map[doc.ID]Camera, len(d.Pages))
 	e.loadPageCameras()
 	e.Page = d.ActivePage
@@ -255,8 +266,10 @@ func (e *Editor) SwitchPage(id doc.ID) bool {
 	if e.Page == id {
 		return true
 	}
+	e.StopEditing()
 	e.cancelGesture()
 	e.SelectNone()
+	e.FocusedGroup = ""
 	e.Page = id
 	e.Doc.ActivePage = id
 	e.emitChange()
@@ -342,6 +355,18 @@ func (e *Editor) GridStep() float64 {
 		return e.Doc.GridSize
 	}
 	return DefaultGridStep
+}
+
+// ToggleSnap toggles always-on smart alignment guides.
+func (e *Editor) ToggleSnap() bool {
+	e.Snap = !e.Snap
+	return e.Snap
+}
+
+// ToggleGrid toggles snap-to-grid mode.
+func (e *Editor) ToggleGrid() bool {
+	e.Grid = !e.Grid
+	return e.Grid
 }
 
 // ItemCount returns the number of shapes in the drawing.
