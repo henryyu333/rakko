@@ -6,9 +6,6 @@ package platform
 // app names and paths, and the icon bytes the cards show.
 
 import (
-	"bytes"
-	"image"
-	"image/png"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,20 +13,8 @@ import (
 	"unsafe"
 
 	"github.com/egoist/mygo"
-	"golang.org/x/image/draw"
 	"golang.org/x/sys/windows"
 )
-
-// RunningApp is one entry of the app switcher's snapshot.
-type RunningApp struct {
-	// AppID is the stable identity: an AppUserModelID for a packaged app,
-	// the executable's path for a desktop one.
-	AppID string
-	// Name is the app's display name.
-	Name string
-	// PID is valid for this snapshot only.
-	PID int
-}
 
 // OwnPID returns this process's identifier.
 func OwnPID() int { return ownProcessID() }
@@ -523,66 +508,7 @@ func iconPNG(hicon uintptr, size int) []byte {
 	if ii.hbmColor == 0 {
 		return nil
 	}
-	var bm winBitmap
-	if r, _, _ := procGetObject.Call(ii.hbmColor, unsafe.Sizeof(bm), uintptr(unsafe.Pointer(&bm))); r == 0 {
-		return nil
-	}
-	w, h := int(bm.bmWidth), int(bm.bmHeight)
-	if w <= 0 || h <= 0 {
-		return nil
-	}
-	dc, _, _ := procCreateCompatibleDC.Call(0)
-	if dc == 0 {
-		return nil
-	}
-	defer procDeleteDC.Call(dc)
-	old, _, _ := procSelectObject.Call(dc, ii.hbmColor)
-	defer procSelectObject.Call(dc, old)
-
-	bi := bitmapInfoHeader{
-		biSize:        uint32(unsafe.Sizeof(bitmapInfoHeader{})),
-		biWidth:       int32(w),
-		biHeight:      -int32(h), // top-down rows
-		biPlanes:      1,
-		biBitCount:    32,
-		biCompression: 0, // BI_RGB
-	}
-	buf := make([]byte, w*h*4)
-	if r, _, _ := procGetDIBits.Call(dc, ii.hbmColor, 0, uintptr(h),
-		uintptr(unsafe.Pointer(&buf[0])), uintptr(unsafe.Pointer(&bi)), 0); r == 0 {
-		return nil
-	}
-	// BGRA → RGBA. An icon whose alpha channel is entirely zero came from
-	// a 24-bit source, where the alpha byte is unused.
-	anyAlpha := false
-	for i := 3; i < len(buf); i += 4 {
-		if buf[i] != 0 {
-			anyAlpha = true
-			break
-		}
-	}
-	img := image.NewNRGBA(image.Rect(0, 0, w, h))
-	for i := range w * h {
-		b, g, r, a := buf[i*4], buf[i*4+1], buf[i*4+2], buf[i*4+3]
-		if !anyAlpha {
-			a = 0xff
-		}
-		img.Pix[i*4] = r
-		img.Pix[i*4+1] = g
-		img.Pix[i*4+2] = b
-		img.Pix[i*4+3] = a
-	}
-	var out image.Image = img
-	if w != size || h != size {
-		dst := image.NewNRGBA(image.Rect(0, 0, size, size))
-		draw.CatmullRom.Scale(dst, dst.Bounds(), img, img.Bounds(), draw.Over, nil)
-		out = dst
-	}
-	var enc bytes.Buffer
-	if err := png.Encode(&enc, out); err != nil {
-		return nil
-	}
-	return enc.Bytes()
+	return hbitmapPNG(ii.hbmColor, size)
 }
 
 // ObserveActiveApp reports every foreground-app change. The recorder needs

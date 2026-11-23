@@ -170,7 +170,7 @@ func Analyze(tool Tool, toolName string, input json.RawMessage) (Analysis, bool)
 	a := Analysis{ToolName: toolName, Detail: Detail{Kind: DetailCommand}}
 
 	if d := descriptionOf(m); d != "" {
-		a.Description = clipDisplay(d, 120)
+		a.Description = ClipDisplay(d, 120)
 	}
 	kind, arg := sentenceClass(toolName)
 
@@ -393,13 +393,17 @@ func mcpServer(name string) (string, bool) {
 	return rest, true
 }
 
-// clipDisplay shortens s to limit display columns (a wide rune counts two)
+// IsWideRune reports whether r takes two display columns in CJK-aware width
+// calculations (CJK blocks and full-width punctuation).
+func IsWideRune(r rune) bool { return r > 0x2E80 }
+
+// ClipDisplay shortens s to limit display columns (a wide rune counts two)
 // and marks the cut with an ellipsis.
-func clipDisplay(s string, limit int) string {
+func ClipDisplay(s string, limit int) string {
 	units := 0
 	for i, r := range s {
 		w := 1
-		if r > 0x2E80 {
+		if IsWideRune(r) {
 			w = 2
 		}
 		if units+w > limit {

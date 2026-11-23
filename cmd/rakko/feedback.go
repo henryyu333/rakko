@@ -291,16 +291,7 @@ func (f *feedback) measure(c *ui.Context) float32 {
 // measureFallback keeps the capsule sane before any frame has measured the
 // text, and in tests that build a shelf without a view.
 func measureFallback(text string) float32 {
-	var w float32
-	for _, r := range text {
-		switch {
-		case r > 0x2E80: // CJK and full-width punctuation
-			w += 12
-		default:
-			w += 6.5
-		}
-	}
-	return w
+	return cjkTextWidth(text, 12, 6.5)
 }
 
 // shake is the capsule's horizontal offset now: one decaying left-right

@@ -714,8 +714,8 @@ func TestPDFPageLines(t *testing.T) {
 		{"\u0085a", []string{"a"}},   // NEL is a break; empty first line is edge-dropped
 		{"\u0085 a", []string{" a"}}, // leading space is content (only trailing trimmed)
 	} {
-		if got := pdfPageLines(tc.raw); !slices.Equal(got, tc.want) {
-			t.Fatalf("pdfPageLines(%q) = %q, want %q", tc.raw, got, tc.want)
+		if got := pdfLines(tc.raw); !slices.Equal(got, tc.want) {
+			t.Fatalf("pdfLines(%q) = %q, want %q", tc.raw, got, tc.want)
 		}
 	}
 }

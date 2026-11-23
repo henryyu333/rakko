@@ -4,16 +4,6 @@ package platform
 
 import "strings"
 
-// HeadphonePart is which part of a headset an icon stands for.
-type HeadphonePart int
-
-const (
-	HeadphoneWhole HeadphonePart = iota
-	HeadphoneLeft
-	HeadphoneRight
-	HeadphoneCase
-)
-
 // HeadphoneIcon returns a PNG template icon for the named device part:
 // the whole headset, one pod, or the charging case. An unknown model gets
 // the generic headphones symbol; a missing image for the specific symbol

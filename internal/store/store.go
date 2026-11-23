@@ -574,6 +574,17 @@ func (s *Store) ConvertedDir() string { return filepath.Join(s.Root, convertedDi
 // rolled back and the files are left for the caller. Returns the new
 // item IDs in the same order as paths.
 func (s *Store) AddConverted(paths []string) ([]string, error) {
+	return s.addConverted(paths, false)
+}
+
+// AddConvertedDirs registers extracted directories Rakko produced inside
+// <root>/converted, enforcing the same containment, ordering, Converted flag,
+// atomic persistence, and rollback contract as AddConverted.
+func (s *Store) AddConvertedDirs(paths []string) ([]string, error) {
+	return s.addConverted(paths, true)
+}
+
+func (s *Store) addConverted(paths []string, allowDirs bool) ([]string, error) {
 	if len(paths) == 0 {
 		return nil, nil
 	}
@@ -597,7 +608,11 @@ func (s *Store) AddConverted(paths []string) ([]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("store: converted file %q: %w", p, err)
 		}
-		if !fi.Mode().IsRegular() {
+		if allowDirs {
+			if !fi.IsDir() {
+				return nil, fmt.Errorf("store: converted path %q is not a folder", p)
+			}
+		} else if !fi.Mode().IsRegular() {
 			return nil, fmt.Errorf("store: converted path %q is not a regular file", p)
 		}
 		resolved[i] = abs

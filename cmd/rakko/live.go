@@ -529,19 +529,24 @@ func liveCapsuleWidth(l locales.Messages, ev liveEvent, baseW float32) float32 {
 	return min(w, fbMaxW)
 }
 
-// liveTextWidth estimates a capsule line at the shell's 12pt weight; the
-// layout then fits the real font inside the width this reserved.
-func liveTextWidth(s string, size float32) float32 {
+// cjkTextWidth estimates display width using caller-supplied wide (CJK) and
+// narrow (Latin) per-rune widths, sharing agentnotify.IsWideRune.
+func cjkTextWidth(s string, wide, narrow float32) float32 {
 	var w float32
 	for _, r := range s {
-		switch {
-		case r > 0x2E80: // CJK and full-width punctuation
-			w += size
-		default:
-			w += size * 0.56
+		if agentnotify.IsWideRune(r) {
+			w += wide
+		} else {
+			w += narrow
 		}
 	}
 	return w
+}
+
+// liveTextWidth estimates a capsule line at the shell's 12pt weight; the
+// layout then fits the real font inside the width this reserved.
+func liveTextWidth(s string, size float32) float32 {
+	return cjkTextWidth(s, size, size*0.56)
 }
 
 // liveIconWidth is the leading glyph's width in the capsule. A headset

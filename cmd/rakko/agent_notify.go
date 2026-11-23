@@ -553,20 +553,7 @@ func truncateAgentTask(s string) string {
 	return clipUnits(s, 40)
 }
 
-// clipUnits shortens s to units display columns, a wide (CJK) rune
-// counting two, and marks the cut with an ellipsis. The caller decides how
-// many columns fit.
+// clipUnits shortens s to limit display columns via agentnotify.ClipDisplay.
 func clipUnits(s string, limit int) string {
-	units := 0
-	for i, r := range s {
-		w := 1
-		if r > 0x2E80 {
-			w = 2
-		}
-		if units+w > limit {
-			return strings.TrimSpace(s[:i]) + "…"
-		}
-		units += w
-	}
-	return s
+	return agentnotify.ClipDisplay(s, limit)
 }

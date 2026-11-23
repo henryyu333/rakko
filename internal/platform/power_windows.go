@@ -11,16 +11,6 @@ import (
 	"github.com/egoist/mygo"
 )
 
-// BatteryStatus is what the system's battery reports now.
-type BatteryStatus struct {
-	// Percent is 0–100.
-	Percent int
-	// Charging is true while the battery charges.
-	Charging bool
-	// External is true while the machine runs from the adapter.
-	External bool
-}
-
 // Battery returns the system battery's state. ok is false on a desktop
 // without a battery.
 func Battery() (BatteryStatus, bool) {
@@ -46,21 +36,6 @@ func Battery() (BatteryStatus, bool) {
 		External: s.ACLineStatus == 1,
 	}, true
 }
-
-// PowerAssertionKind names the behaviour an assertion holds.
-type PowerAssertionKind int
-
-const (
-	// PowerAssertSystemSleep blocks system idle sleep; the display may
-	// still turn off.
-	PowerAssertSystemSleep PowerAssertionKind = iota
-	// PowerAssertDisplaySleep also keeps the display on.
-	PowerAssertDisplaySleep
-)
-
-// PowerAssertionID is the handle an assertion creation returns; zero means
-// no assertion.
-type PowerAssertionID uintptr
 
 var (
 	assertMu    sync.Mutex

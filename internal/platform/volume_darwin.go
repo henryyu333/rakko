@@ -335,15 +335,3 @@ func VolumeSupported() bool {
 	_, ok := OutputVolume()
 	return ok
 }
-
-// clampVolume keeps a volume inside CoreAudio's 0..1 scalar range. NaN
-// becomes 0 so a calculation slip cannot mute the system by accident.
-func clampVolume(v float32) float32 {
-	if v != v || v < 0 {
-		return 0
-	}
-	if v > 1 {
-		return 1
-	}
-	return v
-}

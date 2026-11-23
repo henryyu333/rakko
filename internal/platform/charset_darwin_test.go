@@ -7,9 +7,6 @@ import "testing"
 // Windows-made zips carry non-UTF-8 names; GB18030 decoding recovers them
 // (and reports failure for bytes that are not GB18030 at all).
 func TestDecodeGB18030(t *testing.T) {
-	if err := loadCharset(); err != nil {
-		t.Skip(err)
-	}
 	if s, ok := DecodeGB18030([]byte("\xb1\xa8\xb1\xed.txt")); !ok || s != "报表.txt" {
 		t.Fatalf("decode = %q, %v; want 报表.txt", s, ok)
 	}

@@ -1082,6 +1082,63 @@ func TestAddConvertedSaveFailureRollsBack(t *testing.T) {
 	}
 }
 
+// AddConvertedDirs registers extracted directories inside <root>/converted in
+// the given order with Converted=true, rejecting files or paths outside
+// converted/ and rolling back on Save failure.
+func TestAddConvertedDirs(t *testing.T) {
+	s, root := newStore(t)
+	if err := s.AddText("keep"); err != nil {
+		t.Fatalf("AddText: %v", err)
+	}
+	d1 := filepath.Join(s.ConvertedDir(), "arc1")
+	d2 := filepath.Join(s.ConvertedDir(), "arc2")
+	for _, d := range []string{d1, d2} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	outside := filepath.Join(t.TempDir(), "outside")
+	if err := os.MkdirAll(outside, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	linkOut := filepath.Join(s.ConvertedDir(), "escape")
+	if err := os.Symlink(outside, linkOut); err != nil {
+		t.Fatal(err)
+	}
+	regFile := convertedFile(t, s, "plain.txt", "x")
+
+	for name, bad := range map[string][]string{
+		"outside":     {outside},
+		"symlink out": {linkOut},
+		"regular":     {regFile},
+		"converted":   {s.ConvertedDir()},
+	} {
+		if ids, err := s.AddConvertedDirs(bad); err == nil || ids != nil {
+			t.Fatalf("%s: AddConvertedDirs(%v) = ids %v, err %v", name, bad, ids, err)
+		}
+	}
+
+	ids, err := s.AddConvertedDirs([]string{d1, d2})
+	if err != nil || len(ids) != 2 {
+		t.Fatalf("AddConvertedDirs = %v, %v", ids, err)
+	}
+	if s.Items[0].ID != ids[0] || !s.Items[0].Converted || s.Items[1].ID != ids[1] || !s.Items[1].Converted {
+		t.Fatalf("registered items = %+v", s.Items[:2])
+	}
+
+	if err := os.Chmod(root, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(root, 0o755) })
+	d3 := filepath.Join(s.ConvertedDir(), "arc3")
+	if err := os.Chmod(s.ConvertedDir(), 0o755); err == nil {
+		_ = os.MkdirAll(d3, 0o755)
+	}
+	if ids, err := s.AddConvertedDirs([]string{d3}); err == nil || ids != nil {
+		t.Fatalf("expected save failure rollback, got %v, %v", ids, err)
+	}
+}
+
 // Remove 删除被移除转换项的文件；其余条目与用户文件不受影响。
 func TestRemoveDeletesConvertedFolder(t *testing.T) {
 	s, _ := newStore(t)

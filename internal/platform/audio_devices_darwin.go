@@ -19,16 +19,6 @@ import (
 //
 // Main thread only, like the volume calls next door.
 
-// AudioOutput is one device that can play sound.
-type AudioOutput struct {
-	// Name is kAudioObjectPropertyName, e.g. 「AirPods Pro」.
-	Name string
-	// UID is kAudioDevicePropertyDeviceUID: stable across reconnects.
-	UID string
-	// Bluetooth is true for the Bluetooth and Bluetooth LE transports.
-	Bluetooth bool
-}
-
 const (
 	selectorDevices    = 'd'<<24 | 'e'<<16 | 'v'<<8 | '#' // 'dev#'
 	selectorTransport  = 't'<<24 | 'r'<<16 | 'a'<<8 | 'n' // 'tran'

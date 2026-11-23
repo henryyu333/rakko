@@ -20,17 +20,6 @@ import (
 //
 // Main thread only, like the other ObjC-backed calls.
 
-// BatteryStatus is what one battery reports now.
-type BatteryStatus struct {
-	// Percent is 0–100, rounded from current/max capacity.
-	Percent int
-	// Charging is kIOPSIsChargingKey.
-	Charging bool
-	// External is true while the Mac runs from a power adapter
-	// (kIOPSPowerSourceStateKey == kIOPSACPowerValue).
-	External bool
-}
-
 var (
 	batteryOnce    sync.Once
 	batteryLoadErr error

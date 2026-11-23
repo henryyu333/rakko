@@ -60,38 +60,6 @@ func pdfPageText(r *pdf.Reader, num int, out *string) (err error) {
 	return nil
 }
 
-// pdfLines splits extracted text into lines the way the Mac build presents
-// it: every line-break form counts, trailing whitespace is trimmed, and
-// blank lines at the page's edges are dropped while inner ones survive.
-func pdfLines(raw string) []string {
-	if raw == "" {
-		return nil
-	}
-	s := strings.ReplaceAll(raw, "\r\n", "\n")
-	s = strings.Map(func(r rune) rune {
-		switch r {
-		case '\r', '\v', '\f', '\u0085', '\u2028', '\u2029':
-			return '\n'
-		}
-		return r
-	}, s)
-	lines := strings.Split(s, "\n")
-	for i := range lines {
-		lines[i] = strings.TrimRight(lines[i], " \t\u00a0")
-	}
-	lo, hi := 0, len(lines)
-	for lo < hi && lines[lo] == "" {
-		lo++
-	}
-	for hi > lo && lines[hi-1] == "" {
-		hi--
-	}
-	if lo >= hi {
-		return nil
-	}
-	return lines[lo:hi]
-}
-
 // pdfImageQuality is the JPEG quality of an exported page's picture.
 const pdfImageQuality = 90
 

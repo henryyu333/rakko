@@ -21,15 +21,6 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// ScreenWindow is one ordinary on-screen window: its handle as the number,
-// its owner's process, and its bounds in public DIP coordinates, front to
-// back.
-type ScreenWindow struct {
-	Number int
-	PID    int
-	Bounds Rect
-}
-
 // NotchRect returns the top-centre anchor for the display whose id is
 // displayID, in the public DIP coordinates. A display with a simulated
 // housing reports hasNotch; otherwise the caller gets the 180×32 island

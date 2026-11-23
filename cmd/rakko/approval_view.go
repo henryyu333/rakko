@@ -100,14 +100,7 @@ func (ap *approval) riskRows(w float32) int {
 		rows, used := 1, float32(0)
 		for _, r := range ap.analysis.Risks {
 			label := r.Label(l)
-			cw := float32(16) // the chip's 8 pt padding per side
-			for _, ch := range label {
-				if ch > 0x2E80 {
-					cw += 11
-				} else {
-					cw += 6.2
-				}
-			}
+			cw := float32(16) + cjkTextWidth(label, 11, 6.2) // 8 pt padding per side
 			if used > 0 && used+4+cw > avail {
 				rows++
 				used = 0
@@ -132,7 +125,7 @@ func approvalSentenceLines(text string, width float32) int {
 	var used float32
 	for _, r := range text {
 		w := float32(7.2)
-		if r > 0x2E80 {
+		if agentnotify.IsWideRune(r) {
 			w = 13
 		}
 		if used+w > width {

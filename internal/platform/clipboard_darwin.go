@@ -4,18 +4,6 @@ package platform
 
 import "slices"
 
-// ClipboardKind is what one clipboard change should become. Not-ready is
-// distinct from skip: the contents are still being published and the caller
-// must wait, while a skipped change will never be recorded.
-type ClipboardKind int
-
-const (
-	ClipboardNotReady ClipboardKind = iota // no type declared yet
-	ClipboardSkip                          // private, files, or nothing usable
-	ClipboardText
-	ClipboardImage
-)
-
 // privateClipTypes are the markers password managers and similar sources
 // set to ask clipboard history tools not to record a copy.
 var privateClipTypes = []string{
@@ -41,28 +29,8 @@ var (
 // pages), the representation the source lists first wins, so a spreadsheet
 // copy is kept as text and a copied picture as an image.
 func ClassifyClipboard(types []string) ClipboardKind {
-	if len(types) == 0 {
-		return ClipboardNotReady
-	}
-	for _, t := range types {
-		if slices.Contains(privateClipTypes, t) {
-			return ClipboardSkip
-		}
-	}
-	for _, t := range types {
-		if slices.Contains(clipFileTypes, t) {
-			return ClipboardSkip
-		}
-	}
-	for _, t := range types {
-		switch {
-		case slices.Contains(clipTextTypes, t):
-			return ClipboardText
-		case slices.Contains(clipImageTypes, t):
-			return ClipboardImage
-		}
-	}
-	return ClipboardSkip
+	return classifyClipboard(types, func(t string, set []string) bool { return slices.Contains(set, t) },
+		privateClipTypes, clipFileTypes, clipTextTypes, clipImageTypes)
 }
 
 // DragHasFiles reports whether the drag declares whole files.

@@ -34,17 +34,7 @@ const (
 // when the environment names one, else ~/.dsh. dsh's own home-path
 // resolver reads the same variable.
 func dshHome(home string) string {
-	dir := os.Getenv("DSH_HOME")
-	if dir == "" {
-		return join(home, ".dsh")
-	}
-	if dir == "~" {
-		return home
-	}
-	if strings.HasPrefix(dir, "~/") {
-		return join(home, dir[2:])
-	}
-	return dir
+	return envHome("DSH_HOME", home, ".dsh")
 }
 
 // dshPatchPath is the home-level patch layer applied to every dsh profile.

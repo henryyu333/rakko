@@ -24,32 +24,6 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// AudioOutput is one device that can play sound.
-type AudioOutput struct {
-	// Name is the device's friendly name, e.g. 「扬声器 (Realtek Audio)」.
-	Name string
-	// UID is the endpoint id string, stable across reconnects.
-	UID string
-	// Bluetooth is true for a Bluetooth endpoint.
-	Bluetooth bool
-}
-
-// HeadphonePart is which part of a headset an icon stands for.
-type HeadphonePart int
-
-const (
-	HeadphoneWhole HeadphonePart = iota
-	HeadphoneLeft
-	HeadphoneRight
-	HeadphoneCase
-)
-
-// BatteryLevel is one charge percentage a headset reports.
-type BatteryLevel struct {
-	Part HeadphonePart
-	Pct  int
-}
-
 // --- COM plumbing -----------------------------------------------------------
 
 const (
@@ -310,18 +284,6 @@ func VolumeSupported() bool {
 }
 
 var errAudioVolume = errors.New("windows: the default output device has no writable volume")
-
-// clampVolume keeps a volume inside the endpoint's 0..1 scalar range. NaN
-// becomes 0 so a calculation slip cannot mute the system by accident.
-func clampVolume(v float32) float32 {
-	if v != v || v < 0 {
-		return 0
-	}
-	if v > 1 {
-		return 1
-	}
-	return v
-}
 
 // HeadphoneBatteries returns the charge Windows read from the named
 // headset over the Hands-Free Profile. Windows reports one battery level

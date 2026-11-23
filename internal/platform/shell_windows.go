@@ -20,9 +20,6 @@ import (
 
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
-	"golang.org/x/text/encoding/simplifiedchinese"
-	"golang.org/x/text/transform"
-	"golang.org/x/text/unicode/norm"
 )
 
 // SessionActive reports whether the user is at an unlocked console
@@ -647,22 +644,6 @@ func PlayAlertSound() bool {
 func StopAlertSound() {
 	procPlaySound.Call(0, 0, 0)
 }
-
-// DecodeGB18030 decodes b as GB18030, reporting whether every byte
-// decoded.
-func DecodeGB18030(b []byte) (s string, ok bool) {
-	out, _, err := transform.String(simplifiedchinese.GB18030.NewDecoder(), string(b))
-	if err != nil && !errors.Is(err, transform.ErrShortSrc) {
-		return "", false
-	}
-	if strings.ContainsRune(out, '\uFFFD') {
-		return "", false
-	}
-	return out, true
-}
-
-// NormalizeText applies Unicode compatibility composition (NFKC).
-func NormalizeText(s string) string { return norm.NFKC.String(s) }
 
 // ReduceTransparency reports whether Windows' transparency effects are
 // switched off.

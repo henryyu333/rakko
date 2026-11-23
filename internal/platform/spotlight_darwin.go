@@ -24,39 +24,6 @@ import (
 	"github.com/ebitengine/purego/objc"
 )
 
-// SearchHit is one result of a Spotlight query.
-type SearchHit struct {
-	Path       string
-	Name       string
-	App        bool
-	Folder     bool
-	LastUsed   time.Time
-	TargetPath string // resolved disk path for Windows apps whose Path is shell:AppsFolder\...
-	StoreApp   bool   // true for Microsoft Store / UWP packaged apps on Windows
-}
-
-// SearchScope is what a Spotlight search looks at.
-type SearchScope int
-
-const (
-	ScopeAll   SearchScope = iota // names and text content, everything
-	ScopeApps                     // application bundles, by name only
-	ScopeFiles                    // names and text content, bundles left out
-)
-
-// wants reports whether a hit belongs to the scope's results. The sheet
-// shows the groups its scope names, so a hit of another kind would only
-// take a row from one that belongs.
-func (s SearchScope) wants(h SearchHit) bool {
-	switch s {
-	case ScopeApps:
-		return h.App
-	case ScopeFiles:
-		return !h.App
-	}
-	return true
-}
-
 // SearchQueries builds the MDQuery expressions for term: one asks the
 // name index (case- and diacritic-insensitive), the other the text
 // content index. They run side by side because the text index answers

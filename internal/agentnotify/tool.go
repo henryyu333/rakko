@@ -171,13 +171,12 @@ func paths(home string, rel ...string) []string {
 	return out
 }
 
-// codexHome is the directory Codex keeps its sessions and configuration
-// in: $CODEX_HOME when the environment names one (a leading "~/" expands
-// against home), else the default ~/.codex.
-func codexHome(home string) string {
-	dir := os.Getenv("CODEX_HOME")
+// envHome resolves an optional overriding environment variable (expanding a
+// leading "~/") or falls back to join(home, rel...).
+func envHome(envVar, home string, rel ...string) string {
+	dir := os.Getenv(envVar)
 	if dir == "" {
-		return join(home, ".codex")
+		return join(home, rel...)
 	}
 	if dir == "~" {
 		return home
@@ -186,6 +185,13 @@ func codexHome(home string) string {
 		return join(home, dir[2:])
 	}
 	return dir
+}
+
+// codexHome is the directory Codex keeps its sessions and configuration
+// in: $CODEX_HOME when the environment names one (a leading "~/" expands
+// against home), else the default ~/.codex.
+func codexHome(home string) string {
+	return envHome("CODEX_HOME", home, ".codex")
 }
 
 // specs lists every supported tool. Order is the order the settings rows

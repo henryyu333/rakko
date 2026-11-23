@@ -680,7 +680,7 @@ func (a *shelf) finishConvert(job *convertJob, outs []convertOut) {
 		var ids []string
 		var err error
 		if job.target == toExtract {
-			ids, err = addExtracted(a.store, paths)
+			ids, err = a.store.AddConvertedDirs(paths)
 		} else {
 			ids, err = a.store.AddConverted(paths)
 		}

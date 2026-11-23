@@ -156,12 +156,6 @@ func writeDataAtomic(dst string, data []byte) (err error) {
 	return nil
 }
 
-// fitQuality is the lowest quality 「压缩到」tries before shrinking pixels.
-const fitQuality = 0.4
-
-// fitMinPx is the smallest longer side a fitted image shrinks to.
-const fitMinPx = 640
-
 // FitImage writes src to dst in format, upright, at most limit bytes.
 // JPEG/HEIC binary-search quality down to fitQuality at each size, then
 // shrink the longer side 0.85× per step down to fitMinPx; PNG skips
@@ -178,7 +172,6 @@ func FitImage(src, dst string, format ImageFormat, limit int64) (over bool, err 
 	if err != nil {
 		return false, err
 	}
-	lossy := format != FormatPNG
 	var best []byte
 	withPool(func() {
 		isrc, e := imageSource(src)
@@ -206,14 +199,12 @@ func FitImage(src, dst string, format ImageFormat, limit int64) (over bool, err 
 			w, h = cgImgGetWidth(img), cgImgGetHeight(img)
 			cfRelease(img)
 		}
-		maxPx := max(w, h)
-		if maxPx < 1 {
+		orig := max(w, h)
+		if orig < 1 {
 			err = fmt.Errorf("mac: cannot decode image %s", src)
 			return
 		}
-		orig := maxPx
-		var smallest []byte // smallest encode so far, kept for when nothing fits
-		for {
+		best, err = fitImageData(orig, format != FormatPNG, limit, func(maxPx int) (any, func(), error) {
 			var img uintptr
 			if maxPx == orig {
 				img = uprightImage(isrc) // full size, orientation baked
@@ -221,64 +212,12 @@ func FitImage(src, dst string, format ImageFormat, limit int64) (over bool, err 
 				img = scaledImage(isrc, maxPx)
 			}
 			if img == 0 {
-				err = fmt.Errorf("mac: cannot decode image %s", src)
-				return
+				return nil, nil, fmt.Errorf("mac: cannot decode image %s", src)
 			}
-			fit := false
-			if lossy {
-				// Highest quality that fits, binary-searched: a fitting q
-				// raises the floor, an over one lowers the ceiling.
-				lo, hi := fitQuality, 1.0
-				for range 7 {
-					q := (lo + hi) / 2
-					data, e := encodeImageData(img, uti, format, q)
-					if e != nil {
-						cfRelease(img)
-						err = e
-						return
-					}
-					if len(smallest) == 0 || len(data) < len(smallest) {
-						smallest = data
-					}
-					if len(data) <= int(limit) {
-						best, fit = data, true
-						lo = q
-					} else {
-						hi = q
-					}
-					if hi-lo < 0.02 {
-						break
-					}
-				}
-			} else {
-				data, e := encodeImageData(img, uti, format, 0)
-				if e != nil {
-					cfRelease(img)
-					err = e
-					return
-				}
-				if len(smallest) == 0 || len(data) < len(smallest) {
-					smallest = data
-				}
-				fit = len(data) <= int(limit)
-				best = data
-			}
-			cfRelease(img)
-			if fit || maxPx <= fitMinPx {
-				break
-			}
-			next := int(float64(maxPx) * 0.85)
-			if next < fitMinPx {
-				next = fitMinPx
-			}
-			if next >= maxPx {
-				break
-			}
-			maxPx = next
-		}
-		if len(best) == 0 {
-			best = smallest
-		}
+			return img, func() { cfRelease(img) }, nil
+		}, func(frame any, q float64) ([]byte, error) {
+			return encodeImageData(frame.(uintptr), uti, format, q)
+		})
 	})
 	if err != nil {
 		return false, err

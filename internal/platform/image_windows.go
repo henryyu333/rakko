@@ -17,18 +17,6 @@ import (
 	"rakko/internal/atomicfile"
 )
 
-// ImageFormat selects the encoding a conversion writes.
-type ImageFormat int
-
-const (
-	// FormatJPEG encodes JPEG.
-	FormatJPEG ImageFormat = iota
-	// FormatPNG encodes lossless PNG.
-	FormatPNG
-	// FormatHEIC encodes HEIC.
-	FormatHEIC
-)
-
 // ConvertImage writes src to dst in format. The output's pixels are the
 // visually upright image: any EXIF orientation is baked in and the result
 // carries no orientation flag. The write is atomic and src is never
@@ -58,67 +46,20 @@ func FitImage(src, dst string, format ImageFormat, limit int64) (over bool, err 
 		if e != nil {
 			return e
 		}
-		long := max(img.Rect.Dx(), img.Rect.Dy())
-		if long < 1 {
+		orig := max(img.Rect.Dx(), img.Rect.Dy())
+		if orig < 1 {
 			return errNoPixels
 		}
-		lossy := format != FormatPNG
-		orig := long
-		var best, smallest []byte
-		for {
-			frame := img
-			if long != orig {
-				frame = scaleImage(img, long)
+		best, e := fitImageData(orig, format != FormatPNG, limit, func(maxPx int) (any, func(), error) {
+			if maxPx == orig {
+				return img, nil, nil
 			}
-			fit := false
-			if lossy {
-				// Highest quality that fits, binary-searched: a fitting q
-				// raises the floor, an over one lowers the ceiling.
-				lo, hi := fitQuality, 1.0
-				for range 7 {
-					q := (lo + hi) / 2
-					data, e := encodeImageData(frame, format, q)
-					if e != nil {
-						return e
-					}
-					if len(smallest) == 0 || len(data) < len(smallest) {
-						smallest = data
-					}
-					if int64(len(data)) <= limit {
-						best, fit = data, true
-						lo = q
-					} else {
-						hi = q
-					}
-					if hi-lo < 0.02 {
-						break
-					}
-				}
-			} else {
-				data, e := encodeImageData(frame, format, 0)
-				if e != nil {
-					return e
-				}
-				if len(smallest) == 0 || len(data) < len(smallest) {
-					smallest = data
-				}
-				fit = int64(len(data)) <= limit
-				best = data
-			}
-			if fit || long <= fitMinPx {
-				break
-			}
-			next := int(float64(long) * 0.85)
-			if next < fitMinPx {
-				next = fitMinPx
-			}
-			if next >= long {
-				break
-			}
-			long = next
-		}
-		if len(best) == 0 {
-			best = smallest
+			return scaleImage(img, maxPx), nil, nil
+		}, func(frame any, q float64) ([]byte, error) {
+			return encodeImageData(frame.(*image.RGBA), format, q)
+		})
+		if e != nil {
+			return e
 		}
 		if len(best) == 0 {
 			return fmt.Errorf("windows: cannot encode image %s", src)
@@ -223,9 +164,3 @@ func Thumbnail(src string, maxPx int) (thumb *image.RGBA, err error) {
 	})
 	return thumb, err
 }
-
-// fitQuality is the lowest quality 「压缩到」tries before shrinking pixels.
-const fitQuality = 0.4
-
-// fitMinPx is the smallest longer side a fitted image shrinks to.
-const fitMinPx = 640

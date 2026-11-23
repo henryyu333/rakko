@@ -16,22 +16,6 @@ import (
 // turn off; the display's idle sleep implies it. Releasing the id (or the
 // process dying) ends the hold. Main thread only.
 
-// PowerAssertionKind names the behaviour an assertion holds.
-type PowerAssertionKind int
-
-const (
-	// PowerAssertSystemSleep (kIOPMAssertionTypeNoIdleSleep) blocks system
-	// idle sleep; the display still sleeps.
-	PowerAssertSystemSleep PowerAssertionKind = iota
-	// PowerAssertDisplaySleep (kIOPMAssertionTypeNoDisplaySleep) also keeps
-	// the screen awake.
-	PowerAssertDisplaySleep
-)
-
-// PowerAssertionID is the opaque handle an assertion creation writes; zero
-// means no handle. Release it with ReleasePowerAssertion.
-type PowerAssertionID uintptr
-
 // The assertion-type constants are CFSTR literals, not exported symbols:
 // dlsym cannot find them, so the strings are passed by name.
 var powerAssertionTypes = map[PowerAssertionKind]string{

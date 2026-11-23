@@ -27,37 +27,6 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// SearchScope is what a search looks at.
-type SearchScope int
-
-const (
-	ScopeAll   SearchScope = iota // names and text content, everything
-	ScopeApps                     // application entries, by name only
-	ScopeFiles                    // names and text content, bundles left out
-)
-
-// wants reports whether a hit belongs to the scope's results.
-func (s SearchScope) wants(h SearchHit) bool {
-	switch s {
-	case ScopeApps:
-		return h.App
-	case ScopeFiles:
-		return !h.App
-	}
-	return true
-}
-
-// SearchHit is one result.
-type SearchHit struct {
-	Path       string
-	Name       string
-	App        bool
-	Folder     bool
-	LastUsed   time.Time
-	TargetPath string // resolved disk path for apps whose Path is shell:AppsFolder\...
-	StoreApp   bool   // true for Microsoft Store / UWP packaged apps
-}
-
 // SearchRun is one term's queries.
 type SearchRun struct {
 	canceled atomic.Bool

@@ -8,13 +8,9 @@ package platform
 // exact size and encoding checks, and hands the rest here).
 
 import (
-	"bytes"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
-	"time"
 )
 
 // systemTar is the extractor Windows ships. Resolving it under the system
@@ -39,37 +35,5 @@ func ExtractWithSystemTool(args []string, canceled func() bool) ([]byte, error) 
 	if _, err := os.Stat(tar); err != nil {
 		return nil, errors.New("Windows 的 tar.exe 不可用: " + err.Error())
 	}
-	cmd := exec.Command(tar, args...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	if err := cmd.Start(); err != nil {
-		return nil, err
-	}
-	done := make(chan struct{})
-	if canceled != nil {
-		go func() {
-			tick := time.NewTicker(50 * time.Millisecond)
-			defer tick.Stop()
-			for {
-				select {
-				case <-done:
-					return
-				case <-tick.C:
-					if canceled() {
-						_ = cmd.Process.Kill()
-					}
-				}
-			}
-		}()
-	}
-	err := cmd.Wait()
-	close(done)
-	if err != nil {
-		msg := strings.TrimSpace(stderr.String())
-		if msg == "" {
-			msg = err.Error()
-		}
-		return stdout.Bytes(), errors.New(msg)
-	}
-	return stdout.Bytes(), nil
+	return extractWithTool(tar, args, canceled)
 }

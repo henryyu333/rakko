@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
-	"strings"
 	"sync"
 	"unsafe"
 
@@ -23,18 +22,6 @@ import (
 // driven through ImageIO/CoreGraphics/Vision with purego. Unlike the rest
 // of the package these entry points are safe on any goroutine: they touch
 // no AppKit state and every call runs inside its own autorelease pool.
-
-// ImageFormat selects the encoding ConvertImage writes.
-type ImageFormat int
-
-const (
-	// FormatJPEG encodes JPEG at quality 0.85.
-	FormatJPEG ImageFormat = iota
-	// FormatPNG encodes lossless PNG.
-	FormatPNG
-	// FormatHEIC encodes HEIC.
-	FormatHEIC
-)
 
 // CGAffineTransform mirrors CoreGraphics' 3×2 affine matrix.
 type CGAffineTransform struct {
@@ -872,66 +859,6 @@ func PDFPageCount(src string) (n int, err error) {
 
 // NormalizeText applies Unicode compatibility composition (NFKC) to s —
 // the same mapping NSString's precomposedStringWithCompatibilityMapping
-// performs — so CJK compatibility and Kangxi radical code points
-// (U+2F00–U+2FDF, U+2E80–U+2FFF) become the ordinary unified ideographs.
-// Returns s unchanged when the frameworks cannot be loaded.
-func NormalizeText(s string) string {
-	if s == "" || loadConvert() != nil {
-		return s
-	}
-	var out string
-	withPool(func() {
-		ns := nsString(s)
-		if ns == 0 {
-			return
-		}
-		norm := send(ns, "precomposedStringWithCompatibilityMapping")
-		if norm == 0 {
-			norm = ns
-		}
-		out = goString(norm)
-	})
-	if out == "" && s != "" {
-		return s
-	}
-	return out
-}
-
-// pdfPageLines splits a page's extracted text into lines: \r\n, \r,
-// \v and \f all count as breaks; trailing whitespace is trimmed per line;
-// empty lines at the page's start and end are dropped while inner empty
-// lines survive as "". Returns nil when the page carries no text.
-func pdfPageLines(raw string) []string {
-	if raw == "" {
-		return nil
-	}
-	// Normalize every break sequence to \n first (\r\n collapses to one),
-	// then Split so inner empty lines survive (FieldsFunc would drop them).
-	s := strings.ReplaceAll(raw, "\r\n", "\n")
-	s = strings.Map(func(r rune) rune {
-		switch r {
-		case '\r', '\v', '\f', '\u0085', '\u2028', '\u2029':
-			return '\n'
-		}
-		return r
-	}, s)
-	rawLines := strings.Split(s, "\n")
-	for i := range rawLines {
-		rawLines[i] = strings.TrimRight(rawLines[i], " \t ")
-	}
-	lo, hi := 0, len(rawLines)
-	for lo < hi && rawLines[lo] == "" {
-		lo++
-	}
-	for hi > lo && rawLines[hi-1] == "" {
-		hi--
-	}
-	if lo >= hi {
-		return nil
-	}
-	return rawLines[lo:hi]
-}
-
 // PDFText returns the text of every page of the PDF at src (index =
 // page-1), each page's string split into lines (trailing spaces trimmed,
 // empty lines at page start/end dropped, inner empty lines kept as "").
@@ -963,11 +890,7 @@ func PDFText(src string) (pages [][]string, err error) {
 			if raw == 0 {
 				continue
 			}
-			norm := send(raw, "precomposedStringWithCompatibilityMapping")
-			if norm == 0 {
-				norm = raw
-			}
-			pages[i] = pdfPageLines(goString(norm))
+			pages[i] = pdfLines(NormalizeText(goString(raw)))
 		}
 	})
 	return pages, err

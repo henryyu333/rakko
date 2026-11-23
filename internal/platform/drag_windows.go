@@ -25,6 +25,7 @@ package platform
 // drop itself delivers the full transfer data.
 
 import (
+	"slices"
 	"sync"
 	"sync/atomic"
 	"unsafe"
@@ -140,7 +141,7 @@ var winDragFileTypes = []string{
 // DragHasFiles reports whether the drag declares whole files.
 func DragHasFiles(types []string) bool {
 	for _, t := range types {
-		if slicesContains(winDragFileTypes, t) {
+		if slices.Contains(winDragFileTypes, t) {
 			return true
 		}
 	}
@@ -151,26 +152,10 @@ func DragHasFiles(types []string) bool {
 // drop. Windows drag sources hand real files over, so this never fires.
 func DragHasFilePromise(types []string) bool { return false }
 
-// winDragImageTypes are the formats that carry image data on a Windows
-// drag.
-var winDragImageTypes = []string{"PNG", "image/png", "CF_DIB", "CF_DIBV5"}
-
 // DragHasImages reports whether the drag carries image data.
 func DragHasImages(types []string) bool {
 	for _, t := range types {
-		if slicesContains(winDragImageTypes, t) {
-			return true
-		}
-	}
-	return false
-}
-
-// slicesContains is a small local helper: the platform files avoid
-// importing slices into the drag code so the type lists above stay next to
-// the functions that read them.
-func slicesContains(list []string, v string) bool {
-	for _, s := range list {
-		if s == v {
+		if slices.Contains(clipImageTypes, t) {
 			return true
 		}
 	}

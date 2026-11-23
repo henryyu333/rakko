@@ -55,16 +55,6 @@ $run->();
 `
 )
 
-// NowPlayingCommand is a remote command sent to the now-playing app.
-// The values are the MediaRemote command numbers.
-type NowPlayingCommand int
-
-const (
-	NPPlayPause NowPlayingCommand = iota + 1
-	NPNext
-	NPPrevious
-)
-
 // commandName maps a command to the helper's stdin word.
 func commandName(c NowPlayingCommand) string {
 	switch c {
@@ -76,69 +66,6 @@ func commandName(c NowPlayingCommand) string {
 		return "prev"
 	}
 	return ""
-}
-
-// NowPlayingState is the latest snapshot the helper reported, reconciled.
-// A new state is only published once a full line parsed.
-type NowPlayingState struct {
-	// Playing is reconciled from MediaRemote's two truth signals — the
-	// app's playback state and its IsPlaying flag — never from the info
-	// dict's rate, which some apps (NetEase) leave at 0 while playing.
-	Playing bool
-	Title   string
-	Artist  string
-	Album   string
-	// Duration is the track length in seconds; 0 when unknown (a live
-	// stream or a source that does not report one).
-	Duration float64
-	// Elapsed is the playback position the publisher's info dict last
-	// named, and InfoAt the wall-clock time that position referred to
-	// (the dict's own Timestamp). InfoAt is zero when the dict carries
-	// none; then Received — the local time the line arrived — anchors
-	// the extrapolation instead.
-	Elapsed  float64
-	InfoAt   time.Time
-	Received time.Time
-	// Rate is the effective playback rate for extrapolating Position:
-	// the reported rate while playing, 0 while paused, and 1 when a
-	// playing source publishes no rate (or a frozen 0).
-	Rate float64
-	// App is the bundle id of the app that is playing, when known.
-	App string
-	// ArtID identifies the current track's artwork; Art is its PNG
-	// bytes, sent once per track. ArtMissing marks a track whose artwork
-	// will not arrive.
-	ArtID      string
-	Art        []byte
-	ArtMissing bool
-}
-
-// Position extrapolates the playback position at now: frozen while
-// paused, advancing at Rate while playing. It anchors at the info
-// dict's own timestamp (InfoAt) so a publisher that only rewrites its
-// dict on state changes still shows a moving clock; without one the
-// line's arrival time is the anchor. It never goes negative or past
-// Duration (when known).
-func (s NowPlayingState) Position(now time.Time) float64 {
-	p := s.Elapsed
-	anchor := s.InfoAt
-	if anchor.IsZero() {
-		anchor = s.Received
-	}
-	// Without an anchor the position stays frozen: extrapolating from
-	// the zero time would pin the bar at the track's end.
-	if s.Playing && s.Rate != 0 && !anchor.IsZero() {
-		if d := now.Sub(anchor).Seconds(); d > 0 {
-			p += d * s.Rate
-		}
-	}
-	if p < 0 {
-		p = 0
-	}
-	if s.Duration > 0 && p > s.Duration {
-		p = s.Duration
-	}
-	return p
 }
 
 // npUpdate is one decoded helper line.
@@ -423,11 +350,6 @@ func (h *NowPlayingHost) Send(command NowPlayingCommand) {
 	}
 	_, _ = io.WriteString(h.cmd, name+"\n")
 }
-
-// maxSeekSeconds bounds a seek position. Twenty-four hours is far beyond
-// any track, so a larger value is a caller's arithmetic slip rather than
-// a position worth sending to the playing app.
-const maxSeekSeconds = 24 * 60 * 60
 
 // Seek asks the playing app to jump to seconds into the current track.
 // A position the UI cannot mean — NaN, ±Inf, negative, or beyond

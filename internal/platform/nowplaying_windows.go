@@ -23,62 +23,6 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// NowPlayingState is one snapshot of the playing track.
-type NowPlayingState struct {
-	Playing    bool
-	Title      string
-	Artist     string
-	Album      string
-	Duration   float64
-	Elapsed    float64
-	InfoAt     time.Time
-	Received   time.Time
-	Rate       float64
-	App        string
-	ArtID      string
-	Art        []byte
-	ArtMissing bool
-}
-
-// Position extrapolates the playback position at now: frozen while paused,
-// advancing at Rate while playing, clamped to the track.
-func (s NowPlayingState) Position(now time.Time) float64 {
-	pos := s.Elapsed
-	if s.Playing {
-		anchor := s.InfoAt
-		if anchor.IsZero() {
-			anchor = s.Received
-		}
-		if !anchor.IsZero() {
-			rate := s.Rate
-			if rate <= 0 {
-				rate = 1
-			}
-			pos += now.Sub(anchor).Seconds() * rate
-		}
-	}
-	if pos < 0 {
-		pos = 0
-	}
-	if s.Duration > 0 && pos > s.Duration {
-		pos = s.Duration
-	}
-	return pos
-}
-
-// NowPlayingCommand is a remote command sent to the playing app.
-type NowPlayingCommand int
-
-const (
-	NPPlayPause NowPlayingCommand = iota + 1
-	NPNext
-	NPPrevious
-)
-
-// maxSeekSeconds bounds a seek position; far beyond any track, so a
-// larger value is a caller's arithmetic slip rather than a real position.
-const maxSeekSeconds = 24 * 60 * 60
-
 // npPoll is how often the session snapshot is read. SMTC has no event
 // source without a delegate, and a third of a second keeps the card's
 // clock and buttons feeling live while costing one COM read.

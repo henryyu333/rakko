@@ -11,12 +11,6 @@ import (
 	"time"
 )
 
-// BatteryLevel is one charge percentage a headset reports.
-type BatteryLevel struct {
-	Part HeadphonePart
-	Pct  int
-}
-
 // HeadphoneBatteries asks the system's own Bluetooth report for the
 // connected device whose name matches name, and returns the percentages it
 // names in 左 / 右 / 盒 order. An over-ear headset often reports one main

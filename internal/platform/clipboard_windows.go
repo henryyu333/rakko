@@ -17,16 +17,6 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// ClipboardKind is what one clipboard change should become.
-type ClipboardKind int
-
-const (
-	ClipboardNotReady ClipboardKind = iota // no type declared yet
-	ClipboardSkip                          // private, files, or nothing usable
-	ClipboardText
-	ClipboardImage
-)
-
 // Win32's predefined clipboard formats that the classifier names itself.
 const (
 	cfText        = 1
@@ -95,28 +85,7 @@ func clipFormatIs(name string, set []string) bool {
 // ClassifyClipboard decides what a clipboard change should add, from the
 // declared formats in the source's order of preference.
 func ClassifyClipboard(types []string) ClipboardKind {
-	if len(types) == 0 {
-		return ClipboardNotReady
-	}
-	for _, t := range types {
-		if clipFormatIs(t, privateClipTypes) {
-			return ClipboardSkip
-		}
-	}
-	for _, t := range types {
-		if clipFormatIs(t, clipFileTypes) {
-			return ClipboardSkip
-		}
-	}
-	for _, t := range types {
-		switch {
-		case clipFormatIs(t, clipTextTypes):
-			return ClipboardText
-		case clipFormatIs(t, clipImageTypes):
-			return ClipboardImage
-		}
-	}
-	return ClipboardSkip
+	return classifyClipboard(types, clipFormatIs, privateClipTypes, clipFileTypes, clipTextTypes, clipImageTypes)
 }
 
 // ClipboardChangeCount is the sequence number that increments for every

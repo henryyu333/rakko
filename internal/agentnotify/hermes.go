@@ -35,17 +35,7 @@ const hermesReloadTimeout = 5 * time.Second
 // hermesHome is the profile directory Hermes keeps its files in. $HERMES_HOME
 // is Hermes's own override; a leading "~/" expands against home.
 func hermesHome(home string) string {
-	dir := os.Getenv("HERMES_HOME")
-	if dir == "" {
-		return join(home, ".hermes")
-	}
-	if dir == "~" {
-		return home
-	}
-	if strings.HasPrefix(dir, "~/") {
-		return join(home, dir[2:])
-	}
-	return dir
+	return envHome("HERMES_HOME", home, ".hermes")
 }
 
 // hermesConfigPath is the profile's config.yaml.

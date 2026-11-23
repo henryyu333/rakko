@@ -13,31 +13,15 @@ import "github.com/ebitengine/purego/objc"
 // unchanged. Install and stop on the AppKit main thread.
 func ObserveMouseDown(window uintptr, clicked func(inside bool, button int)) (stop func()) {
 	const mask = 1<<1 | 1<<3 | 1<<25
-	globalBlock := objc.NewBlock(func(_ objc.Block, event id) {
-		clicked(false, sendInt(event, "buttonNumber"))
-	})
-	defer globalBlock.Release()
-	localBlock := objc.NewBlock(func(_ objc.Block, event id) id {
-		if uintptr(send(event, "window")) == window {
-			clicked(true, sendInt(event, "buttonNumber"))
-		}
-		return event
-	})
-	defer localBlock.Release()
-	global := send(send(class("NSEvent"), "addGlobalMonitorForEventsMatchingMask:handler:", mask, uintptr(globalBlock)), "retain")
-	local := send(send(class("NSEvent"), "addLocalMonitorForEventsMatchingMask:handler:", mask, uintptr(localBlock)), "retain")
-	return func() {
-		if global != 0 {
-			send(class("NSEvent"), "removeMonitor:", uintptr(global))
-			send(global, "release")
-			global = 0
-		}
-		if local != 0 {
-			send(class("NSEvent"), "removeMonitor:", uintptr(local))
-			send(local, "release")
-			local = 0
-		}
-	}
+	return installMouseMonitors(mask,
+		func(event id) { clicked(false, sendInt(event, "buttonNumber")) },
+		func(event id) id {
+			if uintptr(send(event, "window")) == window {
+				clicked(true, sendInt(event, "buttonNumber"))
+			}
+			return event
+		},
+	)
 }
 
 // ObserveLeftMouseDragged sees file drags in other apps (Finder included)
@@ -46,15 +30,22 @@ func ObserveMouseDown(window uintptr, clicked func(inside bool, button int)) (st
 // the top edge. Install and stop on the AppKit main thread.
 func ObserveLeftMouseDragged(moved func()) (stop func()) {
 	const mask = 1 << 6 // NSEventTypeLeftMouseDragged
-	globalBlock := objc.NewBlock(func(_ objc.Block, _ id) { moved() })
+	return installMouseMonitors(mask,
+		func(id) { moved() },
+		func(event id) id {
+			moved()
+			return event
+		},
+	)
+}
+
+func installMouseMonitors(mask uint64, onGlobal func(id), onLocal func(id) id) (stop func()) {
+	globalBlock := objc.NewBlock(func(_ objc.Block, event id) { onGlobal(event) })
 	defer globalBlock.Release()
-	localBlock := objc.NewBlock(func(_ objc.Block, event id) id {
-		moved()
-		return event
-	})
+	localBlock := objc.NewBlock(func(_ objc.Block, event id) id { return onLocal(event) })
 	defer localBlock.Release()
-	global := send(send(class("NSEvent"), "addGlobalMonitorForEventsMatchingMask:handler:", mask, uintptr(globalBlock)), "retain")
-	local := send(send(class("NSEvent"), "addLocalMonitorForEventsMatchingMask:handler:", mask, uintptr(localBlock)), "retain")
+	global := send(send(class("NSEvent"), "addGlobalMonitorForEventsMatchingMask:handler:", uintptr(mask), uintptr(globalBlock)), "retain")
+	local := send(send(class("NSEvent"), "addLocalMonitorForEventsMatchingMask:handler:", uintptr(mask), uintptr(localBlock)), "retain")
 	return func() {
 		if global != 0 {
 			send(class("NSEvent"), "removeMonitor:", uintptr(global))

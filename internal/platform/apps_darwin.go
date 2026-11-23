@@ -215,18 +215,6 @@ func ReopenApp(bundleID string) bool {
 	return ok
 }
 
-// RunningApp is one entry of the app switcher's snapshot: a regular GUI
-// application NSWorkspace reports as running.
-type RunningApp struct {
-	// AppID is the stable identity: activation is by pid, but pinning and
-	// re-launching resolve the app id again.
-	AppID string
-	// Name is the app's localized name, "" when the system reports none.
-	Name string
-	// PID is valid for this snapshot only; the process may exit any time.
-	PID int
-}
-
 // nsWorkspaceLaunchDefault is AppKit's NSWorkspaceLaunchDefault, which its
 // header aliases to NSWorkspaceLaunchAsync (1<<16) — an asynchronous,
 // Dock-equivalent open. The raw constant: purego has no enum table.

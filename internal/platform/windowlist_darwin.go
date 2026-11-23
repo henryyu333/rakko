@@ -130,16 +130,6 @@ func WindowScreenRect(num int) (r Rect, ok bool) {
 	return r, ok
 }
 
-// ScreenWindow is one ordinary on-screen window as WindowServer reports
-// it: the window's CGWindowID, its owner's process, and its bounds in MyGo
-// top-left screen coordinates. The list NormalWindows returns is in the
-// front-to-back order WindowServer hit-tests in.
-type ScreenWindow struct {
-	Number int
-	PID    int
-	Bounds Rect
-}
-
 // NormalWindows lists the ordinary on-screen windows (layer 0) of other
 // processes, frontmost first. The screenshot overlay uses it to highlight
 // and pick the window under the pointer. Read-only; needs no permission
