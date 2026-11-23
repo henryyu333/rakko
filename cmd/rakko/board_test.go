@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"image"
+	"image/color"
 	"image/png"
 	"math"
 	"os"
@@ -16,6 +17,8 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/board/doc"
+	"rakko/internal/board/editor"
+	"rakko/internal/board/geo"
 	"rakko/internal/layout"
 	"rakko/internal/settings"
 	"rakko/internal/store"
@@ -442,4 +445,258 @@ func TestBoardRakkoEntriesAndShortcut(t *testing.T) {
 	}
 	_ = createdOpts
 	_ = strings.Contains
+}
+
+func saveBoardSeg2Shot(t *testing.T, name string, img *image.RGBA) {
+	t.Helper()
+	dir := os.Getenv("RAKKO_SEG2_SHOTS")
+	if dir == "" {
+		return
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Create(filepath.Join(dir, name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if err := png.Encode(f, img); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func makeTestPNG(t *testing.T, w, h int) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			c := color.RGBA{R: 59, G: 130, B: 246, A: 255}
+			if (x/16+y/16)%2 == 0 {
+				c = color.RGBA{R: 96, G: 165, B: 250, A: 255}
+			}
+			img.SetRGBA(x, y, c)
+		}
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+func TestBoardSeg2ToolsUndoImageAndScreenshots(t *testing.T) {
+	a, b := boardTestShelf(t)
+	l := locales.In("zh-Hans")
+	view := ui.NewTester(a.boardView, 1040, 680)
+	view.SetLocale("zh-Hans")
+	view.Frame()
+	view.Frame()
+
+	// 1. Click Draw toolbar button, switch pen kind in sub-bar, and draw a stroke.
+	if err := view.Click(l.BoardToolDraw()); err != nil {
+		t.Fatalf("click Draw tool: %v", err)
+	}
+	view.Frame()
+	if b.ed.Tool != editor.ToolDraw {
+		t.Fatalf("tool after Draw click = %s", b.ed.Tool)
+	}
+	if err := view.Click(l.BoardPenFountain()); err != nil {
+		t.Fatalf("click PenFountain: %v", err)
+	}
+	view.Frame()
+	if b.ed.Next.PenKind != "pen" {
+		t.Fatalf("PenKind = %q, want pen", b.ed.Next.PenKind)
+	}
+	view.Press(200, 260)
+	view.Move(300, 260)
+	view.Move(420, 260)
+	view.Release(420, 260)
+	view.Frame()
+	if b.ed.ItemCount() != 1 {
+		t.Fatalf("ItemCount after stroke = %d, want 1", b.ed.ItemCount())
+	}
+
+	// Capture Draw sub-bar screenshot while visible before undo/erase test.
+	saveBoardSeg2Shot(t, "board-tools-draw-subbar.png", view.Image())
+
+	// 2. Eraser Partial mode splits the horizontal stroke in two, Undo/Redo restores/re-applies.
+	if err := view.Click(l.BoardToolEraser()); err != nil {
+		t.Fatalf("click Eraser tool: %v", err)
+	}
+	view.Frame()
+	if err := view.Click(l.BoardEraserPartial()); err != nil {
+		t.Fatalf("click Partial eraser: %v", err)
+	}
+	view.Frame()
+	view.Press(310, 220)
+	view.Move(310, 300)
+	view.Release(310, 300)
+	view.Frame()
+	if b.ed.ItemCount() != 2 {
+		t.Fatalf("ItemCount after partial erase split = %d, want 2", b.ed.ItemCount())
+	}
+	if err := view.Click(l.BoardUndo()); err != nil {
+		t.Fatalf("click Undo: %v", err)
+	}
+	view.Frame()
+	if b.ed.ItemCount() != 1 {
+		t.Fatalf("ItemCount after Undo button = %d, want 1", b.ed.ItemCount())
+	}
+	if err := view.Click(l.BoardRedo()); err != nil {
+		t.Fatalf("click Redo: %v", err)
+	}
+	view.Frame()
+	if b.ed.ItemCount() != 2 {
+		t.Fatalf("ItemCount after Redo button = %d, want 2", b.ed.ItemCount())
+	}
+
+	// 3. Shape picker popover lists and chooses among all 27 geometry shapes.
+	if err := view.Click(l.BoardToolShape()); err != nil {
+		t.Fatalf("open Shape popover: %v", err)
+	}
+	view.Frame()
+	if !b.shapeMenu {
+		t.Fatal("expected shapeMenu popover to open")
+	}
+	saveBoardSeg2Shot(t, "board-tools-shape-menu.png", view.Image())
+	if err := view.Click(l.BoardShapeDiamond()); err != nil {
+		t.Fatalf("choose Diamond: %v", err)
+	}
+	view.Frame()
+	if b.ed.Tool != editor.ToolGeo || b.ed.Next.Geo != "diamond" {
+		t.Fatalf("tool=%s geo=%s after picking diamond", b.ed.Tool, b.ed.Next.Geo)
+	}
+	view.Press(520, 200)
+	view.Move(640, 300)
+	view.Release(640, 300)
+	view.Frame()
+	if b.ed.ItemCount() != 3 {
+		t.Fatalf("ItemCount after creating diamond = %d, want 3", b.ed.ItemCount())
+	}
+
+	// 4. Keyboard shortcuts (Shift+D highlight, R rect, Cmd+Z undo, Cmd+V image paste, Cmd+U file dialog).
+	view.Key(ui.Shift, ui.KeyD)
+	view.Frame()
+	if b.ed.Tool != editor.ToolHighlight {
+		t.Fatalf("Shift+D tool = %s, want highlight", b.ed.Tool)
+	}
+
+	pngBytes := makeTestPNG(t, 128, 96)
+	origClip := boardReadClipboardImage
+	boardReadClipboardImage = func() []byte { return pngBytes }
+	t.Cleanup(func() { boardReadClipboardImage = origClip })
+	view.Key(ui.Cmd, ui.KeyV)
+	view.Frame()
+	if b.ed.ItemCount() != 4 {
+		t.Fatalf("ItemCount after Cmd+V image paste = %d, want 4", b.ed.ItemCount())
+	}
+
+	tmpImg := filepath.Join(t.TempDir(), "sample.png")
+	if err := os.WriteFile(tmpImg, pngBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	origPick := boardOpenImageDialog
+	boardOpenImageDialog = func(*mygo.Window) ([]string, error) { return []string{tmpImg}, nil }
+	t.Cleanup(func() { boardOpenImageDialog = origPick })
+	view.Key(ui.Cmd, ui.KeyU)
+	view.Frame()
+	if b.ed.ItemCount() != 5 {
+		t.Fatalf("ItemCount after Cmd+U image insert = %d, want 5", b.ed.ItemCount())
+	}
+	if len(b.ed.Doc.Assets) != 1 {
+		t.Fatalf("identical pasted & opened image should deduplicate to 1 asset, got %d", len(b.ed.Doc.Assets))
+	}
+
+	// 5. Render Seg 2 showcase screenshots if requested.
+	if os.Getenv("RAKKO_SEG2_SHOTS") != "" {
+		// Showcase A: All 27 geometry shapes laid out cleanly in a 7x4 grid.
+		a2, b2 := boardTestShelf(t)
+		v2 := ui.NewTester(a2.boardView, 1040, 680)
+		v2.SetLocale("zh-Hans")
+		const cols = 7
+		const cellW, cellH = 128.0, 122.0
+		const padX, padY = 66.0, 56.0
+		fills := []string{"semi", "solid", "pattern", "none"}
+		strokes := []string{"#60A5FA", "#34D399", "#F59E0B", "#EC4899", "#A78BFA"}
+		for i, kind := range editor.GeoKinds {
+			col := i % cols
+			row := i / cols
+			x := padX + float64(col)*cellW
+			y := padY + float64(row)*cellH
+			b2.ed.SetGeoTool(kind)
+			b2.ed.Next.Fill = fills[i%len(fills)]
+			b2.ed.Next.FillColor = strokes[i%len(strokes)]
+			b2.ed.Next.Stroke = strokes[i%len(strokes)]
+			b2.ed.Next.Size = "m"
+			b2.ed.PointerDown(x, y, 0, 1, editor.Mods{}, float64(i)*0.1)
+			b2.ed.PointerMove(x+96, y+68, editor.Mods{}, float64(i)*0.1+0.02)
+			b2.ed.PointerUp(x+96, y+68, editor.Mods{}, float64(i)*0.1+0.04)
+		}
+		b2.ed.SelectNone()
+		b2.ed.SetTool(editor.ToolSelect)
+		v2.Frame()
+		v2.Frame()
+		saveBoardSeg2Shot(t, "board-all-27-shapes.png", v2.Image())
+
+		// Showcase B: Brushes, highlight layer order, partial erase split, frame clip, sticky note, text, image.
+		a3, b3 := boardTestShelf(t)
+		v3 := ui.NewTester(a3.boardView, 1040, 680)
+		v3.SetLocale("zh-Hans")
+
+		// Frame with overflowing clipped child.
+		b3.ed.SetTool(editor.ToolFrame)
+		b3.ed.PointerDown(60, 70, 0, 1, editor.Mods{}, 0.1)
+		b3.ed.PointerMove(390, 290, editor.Mods{}, 0.2)
+		b3.ed.PointerUp(390, 290, editor.Mods{}, 0.3)
+
+		b3.ed.SetGeoTool("rounded-rect")
+		b3.ed.Next.Fill = "semi"
+		b3.ed.PointerDown(250, 130, 0, 1, editor.Mods{}, 0.4)
+		b3.ed.PointerMove(440, 240, editor.Mods{}, 0.5)
+		b3.ed.PointerUp(440, 240, editor.Mods{}, 0.6)
+
+		// Inserted image inside Frame.
+		b3.insertImageBytes(pngBytes, "png", "badge.png", geo.V(160, 175))
+
+		// Highlight under a star shape.
+		b3.ed.Next.Fill = "solid"
+		b3.ed.SetGeoTool("star")
+		b3.ed.PointerDown(520, 100, 0, 1, editor.Mods{}, 0.7)
+		b3.ed.PointerMove(640, 220, editor.Mods{}, 0.8)
+		b3.ed.PointerUp(640, 220, editor.Mods{}, 0.9)
+
+		b3.ed.SetTool(editor.ToolHighlight)
+		b3.ed.PointerDown(490, 160, 0, 1, editor.Mods{}, 1.0)
+		b3.ed.PointerMove(670, 160, editor.Mods{}, 1.1)
+		b3.ed.PointerUp(670, 160, editor.Mods{}, 1.2)
+
+		// Sticky Note + Text.
+		b3.ed.CreateNote(geo.V(820, 165), "Frame & Highlight & Partial Erase")
+		b3.ed.CreateText(geo.V(720, 320), "Rakko v1186 Canvas")
+
+		// 3 Pen kinds + Shift straight polyline + auto-closed loop.
+		pens := []string{"normal", "pen", "marker"}
+		for pi, pk := range pens {
+			y0 := 370.0 + float64(pi)*55.0
+			b3.ed.SetTool(editor.ToolDraw)
+			b3.ed.SetPenKind(pk)
+			b3.ed.PointerDownPressure(90, y0, 0, 1, 0.3, true, editor.Mods{}, 2.0+float64(pi))
+			b3.ed.PointerMovePressure(220, y0-18, 0.9, true, editor.Mods{}, 2.1+float64(pi))
+			b3.ed.PointerMovePressure(360, y0+14, 0.5, true, editor.Mods{}, 2.2+float64(pi))
+			b3.ed.PointerUp(360, y0+14, editor.Mods{}, 2.3+float64(pi))
+		}
+		// Partial erase splits the marker & pen strokes vertically.
+		b3.ed.SetTool(editor.ToolEraser)
+		b3.ed.SetEraserMode(editor.EraserPartial)
+		b3.ed.PointerDown(225, 340, 0, 1, editor.Mods{}, 5.0)
+		b3.ed.PointerMove(225, 510, editor.Mods{}, 5.1)
+		b3.ed.PointerUp(225, 510, editor.Mods{}, 5.2)
+
+		b3.ed.SetTool(editor.ToolSelect)
+		b3.ed.AgeTrails(6.0)
+		v3.Frame()
+		v3.Frame()
+		saveBoardSeg2Shot(t, "board-brushes-partial-erase.png", v3.Image())
+	}
 }

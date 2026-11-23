@@ -64,6 +64,10 @@ type Palette struct {
 	PaperLine     Color
 	Selection     Color
 	SelectionFill Color
+	BrushFill     Color
+	BrushLine     Color
+	FrameStroke   Color
+	FrameFill     Color
 	Snap          Color
 	Laser         Color
 	MonoInk       Color
@@ -90,6 +94,10 @@ var DarkPalette = &Palette{
 	PaperLine:     Color{R: 255, G: 255, B: 255, A: 0.065},
 	Selection:     Hex("#0A84FF"),
 	SelectionFill: Color{R: 10, G: 132, B: 255, A: 0.10},
+	BrushFill:     Color{R: 10, G: 132, B: 255, A: 0.10},
+	BrushLine:     Color{R: 10, G: 132, B: 255, A: 0.70},
+	FrameStroke:   Color{R: 255, G: 255, B: 255, A: 0.24},
+	FrameFill:     Color{R: 255, G: 255, B: 255, A: 0.03},
 	Snap:          Hex("#FF453A"),
 	Laser:         Hex("#FF453A"),
 	MonoInk:       Hex("#E8E8EA"),
@@ -116,6 +124,10 @@ var LightPalette = &Palette{
 	PaperLine:     Color{R: 28, G: 30, B: 33, A: 0.075},
 	Selection:     Hex("#0A84FF"),
 	SelectionFill: Color{R: 10, G: 132, B: 255, A: 0.10},
+	BrushFill:     Color{R: 10, G: 132, B: 255, A: 0.10},
+	BrushLine:     Color{R: 10, G: 132, B: 255, A: 0.70},
+	FrameStroke:   Color{R: 28, G: 30, B: 33, A: 0.24},
+	FrameFill:     Color{R: 255, G: 255, B: 255, A: 0.65},
 	Snap:          Hex("#E03131"),
 	Laser:         Hex("#E03131"),
 	MonoInk:       Hex("#1C1E21"),
@@ -145,6 +157,24 @@ func ResolveColor(hex string, dark bool, look string) Color {
 			return DarkPalette.Ink
 		}
 		return LightPalette.Ink
+	}
+	return Hex(u)
+}
+
+// HighlightColor returns the highlighter color for hex.
+func (p *Palette) HighlightColor(hex string) Color {
+	u := strings.ToUpper(strings.TrimSpace(hex))
+	if u == "" || u == "#E8E8EA" || u == "#1C1E21" {
+		return Hex("#FACC15")
+	}
+	return Hex(u)
+}
+
+// NoteFillColor returns the sticky note background color for hex.
+func (p *Palette) NoteFillColor(hex string) Color {
+	u := strings.ToUpper(strings.TrimSpace(hex))
+	if u == "" || u == "#E8E8EA" || u == "#1C1E21" {
+		return p.NoteDefault
 	}
 	return Hex(u)
 }

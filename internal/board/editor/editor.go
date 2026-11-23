@@ -1,7 +1,7 @@
 // Package editor implements the headless whiteboard state machine: camera,
-// coordinate transforms, paper/theme/look preferences, and (in subsequent
-// segments) tools, gestures, selection, and display lists. It has zero UI
-// toolkit dependencies so all logic can be unit-tested headlessly.
+// coordinate transforms, paper/theme/look preferences, tools, gestures,
+// transactional undo/redo, and display primitives. It has zero UI toolkit
+// dependencies so all logic can be unit-tested headlessly.
 package editor
 
 import (
@@ -56,6 +56,32 @@ type Editor struct {
 	cams map[doc.ID]Camera
 	VW   float64
 	VH   float64
+
+	// Interactive tool, style, selection, and transient overlay state.
+	Tool           Tool
+	ToolLocked     bool
+	Next           Style
+	Hovered        doc.ID
+	FocusedGroup   doc.ID
+	Editing        doc.ID
+	Brush          *geo.Box
+	DropOn         doc.ID
+	Erasing        map[doc.ID]bool
+	PartialPreview map[doc.ID][][]geo.Vec
+	Trails         []*Trail
+	Now            float64
+
+	sel       []doc.ID
+	pointer   Pointer
+	gesture   gesture
+	spaceHeld bool
+
+	undo, redo []*historyEntry
+	tx         *historyEntry
+
+	kids     map[doc.ID][]doc.ID
+	bindFrom map[doc.ID][]*doc.Binding
+	bindTo   map[doc.ID][]*doc.Binding
 }
 
 // New creates an Editor for d with optional text measurer measure.
@@ -70,6 +96,8 @@ func New(d *doc.Drawing, measure MeasureFunc) *Editor {
 		cams:    make(map[doc.ID]Camera, len(d.Pages)),
 		VW:      960,
 		VH:      640,
+		Tool:    ToolSelect,
+		Next:    DefaultStyle(),
 	}
 	e.loadPageCameras()
 	e.Page = d.ActivePage
@@ -81,11 +109,16 @@ func New(d *doc.Drawing, measure MeasureFunc) *Editor {
 
 // Replace swaps the open drawing cleanly (e.g. switching boards).
 func (e *Editor) Replace(d *doc.Drawing) {
+	e.cancelGesture()
 	if d == nil {
 		d = doc.NewDrawing("", "Board 1")
 	}
 	d.Normalize(d.ID, d.Name)
 	e.Doc = d
+	e.undo, e.redo, e.tx = nil, nil, nil
+	e.kids, e.bindFrom, e.bindTo = nil, nil, nil
+	e.sel = nil
+	e.Hovered, e.FocusedGroup, e.Editing = "", "", ""
 	e.cams = make(map[doc.ID]Camera, len(d.Pages))
 	e.loadPageCameras()
 	e.Page = d.ActivePage
@@ -222,6 +255,8 @@ func (e *Editor) SwitchPage(id doc.ID) bool {
 	if e.Page == id {
 		return true
 	}
+	e.cancelGesture()
+	e.SelectNone()
 	e.Page = id
 	e.Doc.ActivePage = id
 	e.emitChange()

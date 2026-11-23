@@ -1,7 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -10,6 +17,7 @@ import (
 
 	"rakko/internal/board/doc"
 	"rakko/internal/board/editor"
+	"rakko/internal/board/geo"
 	"rakko/internal/layout"
 	"rakko/internal/platform"
 	"rakko/locales"
@@ -30,18 +38,31 @@ var (
 	boardSymbol        = symbol(`<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4M7 10.5l3-2.5 3 2.5 4-3.5"/>`)
 	boardChevronSymbol = symbol(`<path d="m6 9 6 6 6-6"/>`)
 	boardMoreSymbol    = symbol(`<circle cx="5" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="19" cy="12" r="1.4" fill="currentColor"/>`)
+	boardSelectSymbol  = symbol(`<path d="M4.5 4.5l6.2 15 2.4-5.7 5.7-2.4z"/>`)
+	boardHandSymbol    = symbol(`<path d="M18 11V6a2 2 0 0 0-4 0v1M14 10V4a2 2 0 0 0-4 0v2M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>`)
+	boardHiliteSymbol  = symbol(`<path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/>`)
+	boardEraserSymbol  = symbol(`<path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7M5 11l9 9"/>`)
+	boardFrameSymbol   = symbol(`<path d="M6 3v18M18 3v18M3 6h18M3 18h18"/>`)
 
 	// Seams around app/OS-level calls so headless tests can drive boardUI
-	// without a window server or touching the real OS Trash.
-	boardActivate        = platform.ActivateSelf
-	boardReveal          = platform.RevealInFileManager
-	boardTrash           = platform.TrashFile
-	boardShow            = func(w *mygo.Window) { w.Show() }
-	boardFocus           = func(w *mygo.Window) { w.Focus() }
-	boardClose           = func(w *mygo.Window) { w.Close() }
-	boardNewWindow       = func(opts mygo.WindowOptions) *mygo.Window { return mygo.NewWindow(opts) }
-	boardConfigureWindow = platform.ConfigureFramedWindow
-	boardPinRedraw       = func(it *pinItem) {
+	// without a window server or touching the real OS Trash/dialogs/clipboard.
+	boardActivate           = platform.ActivateSelf
+	boardReveal             = platform.RevealInFileManager
+	boardTrash              = platform.TrashFile
+	boardOpenImageDialog    = func(w *mygo.Window) ([]string, error) {
+		return mygo.Dialog.Open(mygo.OpenDialogOptions{
+			Parent:   w,
+			Multiple: true,
+			Filters:  []mygo.FileFilter{{Name: "Images", Extensions: []string{"png", "jpg", "jpeg", "gif", "webp"}}},
+		})
+	}
+	boardReadClipboardImage = func() []byte { return mygo.Clipboard.ReadImage() }
+	boardShow               = func(w *mygo.Window) { w.Show() }
+	boardFocus              = func(w *mygo.Window) { w.Focus() }
+	boardClose              = func(w *mygo.Window) { w.Close() }
+	boardNewWindow          = func(opts mygo.WindowOptions) *mygo.Window { return mygo.NewWindow(opts) }
+	boardConfigureWindow    = platform.ConfigureFramedWindow
+	boardPinRedraw          = func(it *pinItem) {
 		if it.win != nil {
 			it.win.Invalidate()
 		}
@@ -80,7 +101,12 @@ type boardUI struct {
 	titleMenu    bool
 	zoomMenu     bool
 	moreMenu     bool
+	shapeMenu    bool
+	eraserMenu   bool
+	drawMenu     bool
 	canvasFocus  bool
+	t0           time.Time
+	bitmaps      map[doc.ID]*ui.Bitmap
 }
 
 // boardSession lazily initializes the whiteboard store and editor under dataDir.
@@ -97,13 +123,86 @@ func (a *shelf) boardSession() *boardUI {
 		a.report(err)
 		return nil
 	}
-	b := &boardUI{host: a, store: st}
+	b := &boardUI{host: a, store: st, t0: time.Now(), bitmaps: map[doc.ID]*ui.Bitmap{}}
 	if err := b.load(); err != nil {
 		a.report(err)
 	}
 	b.refreshBoards()
 	a.board = b
 	return b
+}
+
+func (b *boardUI) seconds(t time.Time) float64 {
+	if t.IsZero() {
+		return time.Since(b.t0).Seconds()
+	}
+	return t.Sub(b.t0).Seconds()
+}
+
+func (b *boardUI) pickImage() {
+	if b.locked {
+		return
+	}
+	paths, err := boardOpenImageDialog(b.win)
+	if err != nil || len(paths) == 0 {
+		return
+	}
+	at := b.ed.ToPage(geo.V(b.ed.VW/2, b.ed.VH/2))
+	for i, p := range paths {
+		offset := float64(i * 24)
+		b.insertImageFile(p, geo.V(at.X+offset, at.Y+offset))
+	}
+}
+
+func (b *boardUI) pasteImage() bool {
+	if b.locked {
+		return false
+	}
+	data := boardReadClipboardImage()
+	if len(data) == 0 {
+		return false
+	}
+	at := b.ed.ToPage(geo.V(b.ed.VW/2, b.ed.VH/2))
+	return b.insertImageBytes(data, "png", "clipboard.png", at)
+}
+
+func (b *boardUI) insertImageFile(path string, pagePt geo.Vec) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(path)), ".")
+	return b.insertImageBytes(data, ext, filepath.Base(path), pagePt)
+}
+
+func (b *boardUI) insertImageBytes(data []byte, ext, name string, pagePt geo.Vec) bool {
+	if b.store == nil || b.ed == nil || len(data) == 0 {
+		return false
+	}
+	img, format, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return false
+	}
+	if ext == "" {
+		ext = format
+	}
+	bounds := img.Bounds()
+	w, h := float64(bounds.Dx()), float64(bounds.Dy())
+	if w <= 0 || h <= 0 {
+		return false
+	}
+	asset, err := b.store.SaveAsset(data, ext, name, "image/"+ext, w, h)
+	if err != nil {
+		b.host.report(err)
+		return false
+	}
+	if b.bitmaps == nil {
+		b.bitmaps = map[doc.ID]*ui.Bitmap{}
+	}
+	b.bitmaps[asset.ID] = ui.NewBitmap(img)
+	b.ed.InsertImage(asset, pagePt)
+	b.invalidate()
+	return true
 }
 
 func (b *boardUI) load() error {

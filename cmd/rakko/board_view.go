@@ -161,10 +161,28 @@ func (a *shelf) boardStage(c *ui.Context, l locales.Messages, pal *editor.Palett
 			canvas.Focus()
 			b.canvasFocus = true
 		}
-		if b.panDrag {
+		if files := canvas.DroppedFiles(); len(files) > 0 && !b.locked {
+			at := b.ed.ToPage(geo.V(b.ed.VW/2, b.ed.VH/2))
+			for i, path := range files {
+				offset := float64(i * 24)
+				b.insertImageFile(path, geo.V(at.X+offset, at.Y+offset))
+			}
+		}
+		switch b.ed.CursorNow() {
+		case editor.CursorGrabbing:
 			canvas.Cursor(ui.CursorGrabbing)
-		} else if b.spaceHeld {
+		case editor.CursorGrab:
 			canvas.Cursor(ui.CursorGrab)
+		case editor.CursorCross:
+			canvas.Cursor(ui.CursorCrosshair)
+		case editor.CursorText:
+			canvas.Cursor(ui.CursorText)
+		case editor.CursorMove:
+			canvas.Cursor(ui.CursorMove)
+		case editor.CursorPointer:
+			canvas.Cursor(ui.CursorPointer)
+		default:
+			canvas.Cursor(ui.CursorDefault)
 		}
 		canvas.Draw(func(p *ui.Painter, r ui.Rect) {
 			b.stageRect = r
@@ -181,6 +199,8 @@ func (a *shelf) boardStage(c *ui.Context, l locales.Messages, pal *editor.Palett
 		}
 
 		a.boardNavBar(c, l, pal)
+		a.boardSubBar(c, l, pal)
+		a.boardToolbar(c, l, pal)
 	})
 }
 
@@ -192,6 +212,26 @@ func (a *shelf) boardNavBar(c *ui.Context, l locales.Messages, pal *editor.Palet
 		Background(boardColor(pal.Bar)).Border(0.5, boardColor(pal.Edge)).
 		Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, 0.28))
 	nav.Children(func() {
+		undoBtn := a.boardNavIconBtn(c, pal, "board-undo", shotUndoSymbol, l.BoardUndo(), false)
+		if !b.ed.CanUndo() {
+			undoBtn.Disabled(true).Opacity(0.35)
+		}
+		if undoBtn.Clicked() && b.ed.CanUndo() {
+			b.ed.Undo()
+			b.invalidate()
+		}
+
+		redoBtn := a.boardNavIconBtn(c, pal, "board-redo", shotRedoSymbol, l.BoardRedo(), false)
+		if !b.ed.CanRedo() {
+			redoBtn.Disabled(true).Opacity(0.35)
+		}
+		if redoBtn.Clicked() && b.ed.CanRedo() {
+			b.ed.Redo()
+			b.invalidate()
+		}
+
+		ui.Box(c).Width(1).Height(20).Margin(0, 4, 0, 4).Background(boardColor(pal.Sep))
+
 		zout := a.boardNavIconBtn(c, pal, "board-zout", minusSymbol, l.BoardZoomOut(), false)
 		if zout.Clicked() {
 			b.ed.ZoomOut()
@@ -334,15 +374,6 @@ func (a *shelf) boardDeleteModal(c *ui.Context, l locales.Messages, pal *editor.
 	})
 }
 
-func (b *boardUI) paintStage(p *ui.Painter, r ui.Rect) {
-	b.ed.SetViewport(float64(r.W), float64(r.H))
-	pal := b.ed.Palette()
-	p.Fill(r, boardColor(pal.Background), 0)
-	p.Clip(r, 0, func() {
-		b.paintPaper(p, r, pal)
-	})
-}
-
 func (b *boardUI) paintPaper(p *ui.Painter, r ui.Rect, pal *editor.Palette) {
 	paper := b.ed.Paper()
 	if paper == doc.PaperBlank {
@@ -394,11 +425,268 @@ func (b *boardUI) paintPaper(p *ui.Painter, r ui.Rect, pal *editor.Palette) {
 	}
 }
 
+func (a *shelf) boardSubBar(c *ui.Context, l locales.Messages, pal *editor.Palette) {
+	b := a.board
+	switch b.ed.Tool {
+	case editor.ToolDraw, editor.ToolEraser:
+	default:
+		return
+	}
+	wrap := ui.Row(c.Key("board-subbar-wrap")).Absolute().Left(0).Right(0).Bottom(70).Justify(ui.Center).PassThrough()
+	wrap.Children(func() {
+		sub := ui.Row(c.Key("board-subbar")).Height(34).Padding(0, 6, 0, 6).Gap(2).Radius(10).Clip().AlignItems(ui.Center).
+			Background(boardColor(pal.Bar)).Border(0.5, boardColor(pal.Edge)).
+			Shadow(0, 6, 18, 0, ui.RGBA(0, 0, 0, 0.24))
+		sub.Children(func() {
+			if b.ed.Tool == editor.ToolDraw {
+				pens := []struct {
+					id    string
+					label string
+				}{
+					{"normal", l.BoardPenNormal()},
+					{"pen", l.BoardPenFountain()},
+					{"marker", l.BoardPenMarker()},
+				}
+				for _, pk := range pens {
+					btn := a.boardPillTab(c, pal, "board-pen-"+pk.id, pk.label, b.ed.Next.PenKind == pk.id)
+					if btn.Clicked() {
+						b.ed.SetPenKind(pk.id)
+						b.invalidate()
+					}
+				}
+				return
+			}
+			modes := []struct {
+				mode  editor.EraserMode
+				label string
+			}{
+				{editor.EraserObject, l.BoardEraserObject()},
+				{editor.EraserPartial, l.BoardEraserPartial()},
+			}
+			for _, em := range modes {
+				btn := a.boardPillTab(c, pal, "board-eraser-"+string(em.mode), em.label, b.ed.Next.EraserMode == em.mode)
+				if btn.Clicked() {
+					b.ed.SetEraserMode(em.mode)
+					b.invalidate()
+				}
+			}
+		})
+	})
+}
+
+func (a *shelf) boardPillTab(c *ui.Context, pal *editor.Palette, key, label string, active bool) ui.Element {
+	btn := ui.Row(c.Key(key)).Height(24).Padding(0, 9, 0, 9).Radius(7).Center().Label(label)
+	switch {
+	case active:
+		btn.Background(boardColor(pal.AccentFill))
+	case btn.Hovered():
+		btn.Background(boardColor(pal.BarHover))
+	}
+	btn.Children(func() {
+		col := pal.Ink2
+		if active {
+			col = pal.Accent
+		}
+		ui.Text(c, label).SingleLine().FontSize(11.5).FontWeight(500).TextColor(boardColor(col))
+	})
+	return btn
+}
+
+func (a *shelf) boardToolbar(c *ui.Context, l locales.Messages, pal *editor.Palette) {
+	b := a.board
+	wrap := ui.Row(c.Key("board-tools-wrap")).Absolute().Left(0).Right(0).Bottom(16).Justify(ui.Center).PassThrough()
+	wrap.Children(func() {
+		bar := ui.Row(c.Key("board-tools")).Height(48).Padding(0, 6, 0, 6).Gap(2).Radius(14).Clip().AlignItems(ui.Center).
+			Background(boardColor(pal.Bar)).Border(0.5, boardColor(pal.Edge)).
+			Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, 0.28))
+		bar.Children(func() {
+			if a.boardToolBtn(c, pal, "tool-select", boardSelectSymbol, l.BoardToolSelect(), b.ed.Tool == editor.ToolSelect).Clicked() {
+				b.ed.SetTool(editor.ToolSelect)
+				b.invalidate()
+			}
+			if a.boardToolBtn(c, pal, "tool-hand", boardHandSymbol, l.BoardToolHand(), b.ed.Tool == editor.ToolHand).Clicked() {
+				b.ed.SetTool(editor.ToolHand)
+				b.invalidate()
+			}
+
+			ui.Box(c).Width(1).Height(24).Margin(0, 4, 0, 4).Background(boardColor(pal.Sep))
+
+			if a.boardToolBtn(c, pal, "tool-draw", pencilSymbol, l.BoardToolDraw(), b.ed.Tool == editor.ToolDraw).Clicked() {
+				b.ed.SetTool(editor.ToolDraw)
+				b.invalidate()
+			}
+			if a.boardToolBtn(c, pal, "tool-hilite", boardHiliteSymbol, l.BoardToolHighlight(), b.ed.Tool == editor.ToolHighlight).Clicked() {
+				b.ed.SetTool(editor.ToolHighlight)
+				b.invalidate()
+			}
+			if a.boardToolBtn(c, pal, "tool-eraser", boardEraserSymbol, l.BoardToolEraser(), b.ed.Tool == editor.ToolEraser).Clicked() {
+				b.ed.SetTool(editor.ToolEraser)
+				b.invalidate()
+			}
+
+			ui.Box(c).Width(1).Height(24).Margin(0, 4, 0, 4).Background(boardColor(pal.Sep))
+
+			shapeBtn := a.boardToolBtn(c, pal, "tool-shape", shotRectSymbol, l.BoardToolShape(), b.ed.Tool == editor.ToolGeo || b.shapeMenu)
+			if shapeBtn.Clicked() {
+				b.shapeMenu = !b.shapeMenu
+				b.invalidate()
+			}
+			ui.PopoverBase(c, shapeBtn, &b.shapeMenu, func(panel ui.Element) {
+				panel.AttachTo(shapeBtn, ui.AnchorTop, ui.AnchorBottom).Margin(0, 0, 8, 0).
+					Padding(10).Radius(12).Clip().Background(boardColor(pal.Bar)).
+					Border(0.5, boardColor(pal.Edge)).
+					Shadow(0, 14, 36, 0, ui.RGBA(0, 0, 0, 0.38))
+				panel.Children(func() {
+					const cols = 4
+					ui.Column(c.Key("shape-grid")).Gap(4).Children(func() {
+						for row := 0; row < len(editor.GeoKinds); row += cols {
+							end := min(row+cols, len(editor.GeoKinds))
+							ui.Row(c).Gap(4).Children(func() {
+								for _, kind := range editor.GeoKinds[row:end] {
+									kind := kind
+									label := boardShapeName(l, kind)
+									active := b.ed.Tool == editor.ToolGeo && b.ed.Next.Geo == kind
+									cell := ui.Row(c.Key("shape-"+kind)).Width(112).Height(28).
+										Padding(0, 8, 0, 8).Radius(7).AlignItems(ui.Center).
+										Label(label).Tooltip(label)
+									switch {
+									case active:
+										cell.Background(boardColor(pal.AccentFill))
+									case cell.Hovered():
+										cell.Background(boardColor(pal.BarHover))
+									}
+									cell.Children(func() {
+										col := pal.Ink2
+										if active {
+											col = pal.Accent
+										}
+										ui.Text(c, label).SingleLine().FontSize(11.5).FontWeight(500).TextColor(boardColor(col))
+									})
+									if cell.Clicked() {
+										b.ed.SetGeoTool(kind)
+										b.shapeMenu = false
+										b.invalidate()
+									}
+								}
+							})
+						}
+					})
+				})
+			})
+
+			if a.boardToolBtn(c, pal, "tool-frame", boardFrameSymbol, l.BoardToolFrame(), b.ed.Tool == editor.ToolFrame).Clicked() {
+				b.ed.SetTool(editor.ToolFrame)
+				b.invalidate()
+			}
+			if a.boardToolBtn(c, pal, "tool-text", textSymbol, l.BoardToolText(), b.ed.Tool == editor.ToolText).Clicked() {
+				b.ed.SetTool(editor.ToolText)
+				b.invalidate()
+			}
+			if a.boardToolBtn(c, pal, "tool-note", noteSymbol, l.BoardToolNote(), b.ed.Tool == editor.ToolNote).Clicked() {
+				b.ed.SetTool(editor.ToolNote)
+				b.invalidate()
+			}
+			if a.boardToolBtn(c, pal, "tool-image", imgSymbol, l.BoardToolImage(), false).Clicked() {
+				b.pickImage()
+			}
+		})
+	})
+}
+
+func (a *shelf) boardToolBtn(c *ui.Context, pal *editor.Palette, key string, icon *ui.SVG, label string, active bool) ui.Element {
+	btn := ui.Row(c.Key(key)).Size(34, 34).Radius(8).Center().Label(label).Tooltip(label)
+	switch {
+	case active:
+		btn.Background(boardColor(pal.AccentFill))
+	case btn.Hovered():
+		btn.Background(boardColor(pal.BarHover))
+	}
+	btn.Children(func() {
+		col := pal.Ink2
+		if active {
+			col = pal.Accent
+		}
+		ui.Icon(c, icon).Size(17, 17).TextColor(boardColor(col))
+	})
+	return btn
+}
+
+func boardShapeName(l locales.Messages, kind string) string {
+	switch kind {
+	case "rectangle":
+		return l.BoardShapeRectangle()
+	case "rounded-rect":
+		return l.BoardShapeRoundedRect()
+	case "ellipse":
+		return l.BoardShapeEllipse()
+	case "diamond":
+		return l.BoardShapeDiamond()
+	case "triangle":
+		return l.BoardShapeTriangle()
+	case "pentagon":
+		return l.BoardShapePentagon()
+	case "hexagon":
+		return l.BoardShapeHexagon()
+	case "octagon":
+		return l.BoardShapeOctagon()
+	case "parallelogram":
+		return l.BoardShapeParallelogram()
+	case "parallelogram-2":
+		return l.BoardShapeParallelogram2()
+	case "trapezoid":
+		return l.BoardShapeTrapezoid()
+	case "star":
+		return l.BoardShapeStar()
+	case "cylinder":
+		return l.BoardShapeCylinder()
+	case "pill":
+		return l.BoardShapePill()
+	case "bracket":
+		return l.BoardShapeBracket()
+	case "brace":
+		return l.BoardShapeBrace()
+	case "arrow-right":
+		return l.BoardShapeArrowRight()
+	case "arrow-left":
+		return l.BoardShapeArrowLeft()
+	case "arrow-up":
+		return l.BoardShapeArrowUp()
+	case "arrow-down":
+		return l.BoardShapeArrowDown()
+	case "x-box":
+		return l.BoardShapeXBox()
+	case "check-box":
+		return l.BoardShapeCheckBox()
+	case "cloud":
+		return l.BoardShapeCloud()
+	case "heart":
+		return l.BoardShapeHeart()
+	case "callout":
+		return l.BoardShapeCallout()
+	case "polygon":
+		return l.BoardShapePolygon()
+	case "curve":
+		return l.BoardShapeCurve()
+	}
+	return kind
+}
+
+func boardMods(m ui.Modifiers) editor.Mods {
+	return editor.Mods{
+		Shift: m&ui.Shift != 0,
+		Alt:   m&ui.Alt != 0,
+		Cmd:   m&ui.Cmd != 0,
+		Ctrl:  m&ui.Ctrl != 0,
+	}
+}
+
 func (b *boardUI) handleCanvasInput(c *ui.Context, ev ui.InputEvent) bool {
 	if b.ed == nil {
 		return false
 	}
 	pt := geo.V(float64(ev.X), float64(ev.Y))
+	mods := boardMods(ev.Mods)
+	t := b.seconds(ev.Time)
 	switch ev.Kind {
 	case ui.InputScroll:
 		if ev.Mods&(ui.Cmd|ui.Ctrl) != 0 {
@@ -413,35 +701,59 @@ func (b *boardUI) handleCanvasInput(c *ui.Context, ev ui.InputEvent) bool {
 		b.invalidate()
 		return true
 	case ui.InputPointerDown:
-		if ev.Button == 2 || (ev.Button == 0 && b.spaceHeld) {
-			b.panDrag = true
-			b.panLastX = ev.X
-			b.panLastY = ev.Y
+		if !b.locked || ev.Button == 2 || b.ed.SpaceHeld() || b.ed.Tool == editor.ToolHand {
+			b.ed.PointerDownPressure(float64(ev.X), float64(ev.Y), ev.Button, ev.Clicks, float64(ev.Pressure), ev.Pointer == ui.PointerPen, mods, t)
+			b.invalidate()
 			return true
 		}
 	case ui.InputPointerMove:
-		if b.panDrag {
-			dx := float64(ev.X - b.panLastX)
-			dy := float64(ev.Y - b.panLastY)
-			b.panLastX = ev.X
-			b.panLastY = ev.Y
-			b.ed.Pan(-dx, -dy)
-			b.invalidate()
-			return true
-		}
+		b.ed.PointerMovePressure(float64(ev.X), float64(ev.Y), float64(ev.Pressure), ev.Pointer == ui.PointerPen, mods, t)
+		b.invalidate()
+		return true
 	case ui.InputPointerUp:
-		if b.panDrag {
-			b.panDrag = false
-			b.invalidate()
-			return true
+		if ev.Canceled {
+			b.ed.Cancel()
+		} else {
+			b.ed.PointerUp(float64(ev.X), float64(ev.Y), mods, t)
 		}
+		b.invalidate()
+		return true
 	case ui.InputKeyDown:
+		b.ed.ModsChanged(mods)
 		if ev.Key == ui.KeySpace {
-			b.spaceHeld = true
+			b.ed.SetSpace(true)
+			b.invalidate()
 			return true
 		}
 		if ev.Mods&(ui.Cmd|ui.Ctrl) != 0 {
 			switch ev.Key {
+			case ui.KeyZ:
+				if !b.locked {
+					if ev.Mods&ui.Shift != 0 {
+						b.ed.Redo()
+					} else {
+						b.ed.Undo()
+					}
+					b.invalidate()
+				}
+				return true
+			case ui.KeyY:
+				if !b.locked {
+					b.ed.Redo()
+					b.invalidate()
+				}
+				return true
+			case ui.KeyA:
+				b.ed.SelectAll()
+				b.invalidate()
+				return true
+			case ui.KeyU:
+				b.pickImage()
+				return true
+			case ui.KeyV:
+				if b.pasteImage() {
+					return true
+				}
 			case ui.KeyEqual:
 				b.ed.ZoomIn()
 				b.invalidate()
@@ -467,14 +779,73 @@ func (b *boardUI) handleCanvasInput(c *ui.Context, ev ui.InputEvent) bool {
 				return true
 			}
 		}
-		if ev.Mods&ui.Shift != 0 && ev.Key == ui.Key0 {
-			b.ed.ResetZoom()
+		switch ev.Key {
+		case ui.KeyEscape:
+			b.ed.Cancel()
 			b.invalidate()
 			return true
+		case ui.KeyBackspace, ui.KeyDelete:
+			if !b.locked {
+				b.ed.DeleteSelected()
+				b.invalidate()
+			}
+			return true
+		case ui.KeyV:
+			b.ed.SetTool(editor.ToolSelect)
+			b.invalidate()
+			return true
+		case ui.KeyH:
+			b.ed.SetTool(editor.ToolHand)
+			b.invalidate()
+			return true
+		case ui.KeyD:
+			if ev.Mods&ui.Shift != 0 {
+				b.ed.SetTool(editor.ToolHighlight)
+			} else {
+				b.ed.SetTool(editor.ToolDraw)
+			}
+			b.invalidate()
+			return true
+		case ui.KeyE:
+			b.ed.SetTool(editor.ToolEraser)
+			b.invalidate()
+			return true
+		case ui.KeyR:
+			b.ed.SetGeoTool("rectangle")
+			b.invalidate()
+			return true
+		case ui.KeyO:
+			b.ed.SetGeoTool("ellipse")
+			b.invalidate()
+			return true
+		case ui.KeyP:
+			b.ed.SetGeoTool("polygon")
+			b.invalidate()
+			return true
+		case ui.KeyF:
+			b.ed.SetTool(editor.ToolFrame)
+			b.invalidate()
+			return true
+		case ui.KeyT:
+			b.ed.SetTool(editor.ToolText)
+			b.invalidate()
+			return true
+		case ui.KeyN:
+			b.ed.SetTool(editor.ToolNote)
+			b.invalidate()
+			return true
+		case ui.Key0:
+			if ev.Mods&ui.Shift != 0 {
+				b.ed.ResetZoom()
+				b.invalidate()
+				return true
+			}
 		}
 	case ui.InputKeyUp:
+		b.ed.ModsChanged(mods)
 		if ev.Key == ui.KeySpace {
-			b.spaceHeld = false
+			b.ed.SetSpace(false)
+			b.invalidate()
 			return true
 		}
 	}
