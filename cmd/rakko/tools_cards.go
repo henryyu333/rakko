@@ -113,11 +113,11 @@ var (
 	always           = func(*shelf) bool { return true }
 	playingAvailable = func(a *shelf) bool { return a.settings.LiveActivities.NowPlaying }
 	usageAvailable   = func(a *shelf) bool { return a.settings.AIUsage.Enabled }
-	imagesOnly     = func(class dropClass) bool { return class == classImages }
-	imagesOrPDFs   = func(class dropClass) bool { return class == classImages || class == classPDFs }
-	archivesOnly   = func(class dropClass) bool { return class == classArchives }
-	anyClass       = func(class dropClass) bool { return true }
-	never          = func(class dropClass) bool { return false }
+	imagesOnly       = func(class dropClass) bool { return class == classImages }
+	imagesOrPDFs     = func(class dropClass) bool { return class == classImages || class == classPDFs }
+	archivesOnly     = func(class dropClass) bool { return class == classArchives }
+	anyClass         = func(class dropClass) bool { return true }
+	never            = func(class dropClass) bool { return false }
 )
 
 // toolCardDef answers the catalog entry for id, or nil: a layout file

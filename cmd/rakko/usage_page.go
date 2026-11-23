@@ -980,20 +980,10 @@ func (f *usageFeature) quotaRing(c *ui.Context, tool aiusage.Tool, q aiusage.Quo
 
 func (f *usageFeature) quotaRingSized(c *ui.Context, tool aiusage.Tool, q aiusage.Quota, stale bool, ring float32) {
 	if tool == aiusage.ToolDeepSeek || q.Balance != nil {
-		e := ui.Box(c.Key("ring")).Size(ring, ring).Center()
-		lw := 5 * ring / usageRingSize
-		e.Draw(func(p *ui.Painter, r ui.Rect) {
-			cx, cy := r.X+r.W/2, r.Y+r.H/2
-			strokeRingTrack(p, cx, cy, ring/2-lw/2, lw)
-		})
-		e.Children(func() {
-			if ring < 40 {
-				logo, col, size := toolLogo(tool)
-				k := ring / 64
-				ui.Icon(c, logo).Size(size*k, size*k).TextColor(col)
-				return
-			}
-			panelLabel(c, nil, tloc(c).UsageBalanceLabel(), 10, 0).TextColor(ink2)
+		logo, col, _ := toolLogo(tool)
+		logoSize := 30 * ring / usageRingSize
+		ui.Box(c.Key("ring")).Size(ring, ring).Center().Children(func() {
+			ui.Icon(c, logo).Size(logoSize, logoSize).TextColor(col)
 		})
 		return
 	}
