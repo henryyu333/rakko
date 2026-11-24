@@ -123,6 +123,7 @@ func (a *shelf) noteSession() *noteUI {
 		a.report(err)
 		return nil
 	}
+	_, _ = store.CleanAssets(time.Now(), 7*24*time.Hour)
 	n := &noteUI{host: a, store: store}
 	n.rewatch()
 	a.note = n
@@ -180,26 +181,6 @@ func (n *noteUI) resetText(text string) {
 	n.seenVer = n.baseVer
 	n.boundVer = n.baseVer
 	n.since = time.Time{}
-}
-
-// setDraft replaces the document content as an unsaved edit (advancing Version).
-func (n *noteUI) setDraft(md string) {
-	d := n.ensureDoc()
-	t := n.bindTextAttachments(richtext.ParseMarkdown(md))
-	d.SetText(t)
-	n.boundVer = d.Version()
-}
-
-// draftText returns text verbatim when the document has never been edited, or
-// the normalized Markdown from the live document once edited.
-func (n *noteUI) draftText() string {
-	if !n.dirty() {
-		return n.text
-	}
-	if md, ok := n.layout.commit(n.doc.Text()); ok {
-		return md
-	}
-	return n.doc.Text().Markdown()
 }
 
 // headingText returns the title bar's heading, recomputed only when the
@@ -907,7 +888,13 @@ func (n *noteUI) cardThumbnail(rel string) *ui.Bitmap {
 	n.thumbPending[rel] = true
 	win := n.host.win
 	go func() {
-		img, err := noteDecodeImageFile(full)
+		var img image.Image
+		thumb, err := platform.Thumbnail(full, noteThumbSize*2)
+		if err == nil && thumb != nil {
+			img = thumb
+		} else {
+			img, err = noteDecodeImageFile(full)
+		}
 		win.Update(func() {
 			delete(n.thumbPending, rel)
 			if err == nil && img != nil {

@@ -9,7 +9,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/egoist/mygo"
-	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/store"
 )
@@ -387,17 +386,6 @@ func ocrSnippet(text, query string) (before, hit, after string, ok bool) {
 // space, edges trimmed.
 func ocrFold(s string) string {
 	return strings.Join(strings.Fields(s), " ")
-}
-
-// ocrSnippetLine draws the 「图中文字：…」 line of a clipboard row whose
-// recognized text matched the search: context dim, the hit in ink.
-func ocrSnippetLine(c *ui.Context, before, hit, after string) ui.Element {
-	return ui.RichText(c,
-		ui.Span{Text: loc(c).OcrSnippetPrefix(), Color: ink2},
-		ui.Span{Text: before, Color: ink2},
-		ui.Span{Text: hit, Color: ink, Weight: 600},
-		ui.Span{Text: after, Color: ink2},
-	).SingleLine().FontSize(11)
 }
 
 // nextTick reports when the background pass has work to do. An in-flight

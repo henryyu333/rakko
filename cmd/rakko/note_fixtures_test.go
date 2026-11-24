@@ -2,9 +2,6 @@ package main
 
 import (
 	"image/color"
-	"image/png"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -119,25 +116,6 @@ func TestNotePasteTextBeatsImage(t *testing.T) {
 	}
 }
 
-func saveReworkShot(t *testing.T, view *ui.Tester, name string) {
-	t.Helper()
-	dir := os.Getenv("RAKKO_REWORK_SEG2_SHOTS")
-	if dir == "" {
-		return
-	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	f, err := os.Create(filepath.Join(dir, name))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-	if err := png.Encode(f, view.Image()); err != nil {
-		t.Fatal(err)
-	}
-}
-
 // TestNoteLinesRenderAsLinesAndPadded screenshots an old line-based note and a
 // note with an inline image so the line breaks and 12pt side padding are
 // visible.
@@ -159,7 +137,7 @@ func TestNoteLinesRenderAsLinesAndPadded(t *testing.T) {
 	if got := n.doc.Text().ParagraphCount(); got != 3 {
 		t.Fatalf("paragraphs = %d, want 3 separate lines", got)
 	}
-	saveReworkShot(t, view, "01-note-lines.png")
+	saveTestShot(t, "seg2", "01-note-lines.png", view.Image())
 
 	pngBytes := makeNoteTestPNG(480, 200, color.RGBA{R: 56, G: 132, B: 244, A: 255}, color.RGBA{R: 138, G: 72, B: 230, A: 255})
 	if !n.insertImageBytes(pngBytes, "png", "示意图") {
@@ -167,7 +145,7 @@ func TestNoteLinesRenderAsLinesAndPadded(t *testing.T) {
 	}
 	view.Frame()
 	view.Frame()
-	saveReworkShot(t, view, "02-note-image-padding.png")
+	saveTestShot(t, "seg2", "02-note-image-padding.png", view.Image())
 }
 
 // TestNoteHeadingCachedByVersion: the bar's heading is recomputed only when the

@@ -98,21 +98,6 @@ func (a *shelf) invalidateThumbnail(id string) {
 	}
 }
 
-// clearThumbnails 丢弃全部缓存缩略图；仍在解码的在途结果标记为完成回调
-// 中丢弃而不写回缓存。清空后缩略图不会再被旧解码结果填回：完成回调里
-// thumbDiscard 命中直接丢弃，未命中的也要求该项仍是 store 成员才写回。
-// 同一项在旧解码在途时重新加入，thumbDiscard 也会丢弃过期结果，由随后的
-// 重绘按并发上限重新解码。
-func (a *shelf) clearThumbnails() {
-	clear(a.thumbnails)
-	for id := range a.thumbPending {
-		if a.thumbDiscard == nil {
-			a.thumbDiscard = make(map[string]bool)
-		}
-		a.thumbDiscard[id] = true
-	}
-}
-
 // dropStaleThumbnails discards cached thumbnails of items no longer
 // stored; a decode still in flight for such an item is marked stale too,
 // so its result is dropped by the completion callback instead of writing

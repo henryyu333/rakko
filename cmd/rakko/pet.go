@@ -59,15 +59,6 @@ const (
 	otterHappyFor    = 1600 * time.Millisecond
 )
 
-// otterHappy makes the otter happy for a moment after something good: a
-// drop it caught, a fresh conversion finished, a copy captured.
-func (a *shelf) otterHappy(now time.Time) {
-	a.happyUntil = now.Add(otterHappyFor)
-	if a.pet != nil {
-		a.pet.invalidate()
-	}
-}
-
 // petWindow is the desktop otter: its place, its press session, and the
 // move in flight. frame is the logical place — where the otter is, and
 // where a release leaves it; a slide only changes where the window is

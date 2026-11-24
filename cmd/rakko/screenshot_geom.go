@@ -42,11 +42,6 @@ func shotLocalRect(r mygo.Rectangle, t shotTarget) mygo.Rectangle {
 	return mygo.Rectangle{X: r.X - t.Bounds.X, Y: r.Y - t.Bounds.Y, Width: r.Width, Height: r.Height}
 }
 
-// shotGlobalRect is shotLocalRect's inverse.
-func shotGlobalRect(r mygo.Rectangle, t shotTarget) mygo.Rectangle {
-	return mygo.Rectangle{X: r.X + t.Bounds.X, Y: r.Y + t.Bounds.Y, Width: r.Width, Height: r.Height}
-}
-
 // shotNormalizeRect builds the rectangle between two corners, whatever
 // order they were dragged in.
 func shotNormalizeRect(a, b mygo.Point) mygo.Rectangle {

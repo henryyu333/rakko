@@ -1258,27 +1258,6 @@ func (a *shelf) tabPages() []panelPage {
 	return out
 }
 
-// tabIcon is one page icon in the band: ink when active, ink2 with a
-// fill1 hover otherwise; the page's name is its tooltip and accessible
-// label.
-func (a *shelf) tabIcon(c *ui.Context, p panelPage, size, glyph float32, on bool) ui.Element {
-	name := pageLabel(c, p)
-	b := ui.ButtonBase(c.Key("page-"+string(p.id()))).Size(size, size).Radius(size / 2).Center().
-		Label(name).Tooltip(name)
-	if !on && b.Hovered() {
-		b.Background(fill1)
-	}
-	b.Children(func() {
-		g := p.icon(c, on || b.Hovered()).Size(glyph, glyph)
-		if on || b.Hovered() {
-			g.TextColor(ink)
-		} else {
-			g.TextColor(ink2)
-		}
-	})
-	return b
-}
-
 // pageLabel is the page icon's tooltip and accessible name in the
 // language of c's window; a page that names itself only through label
 // (no pageText) keeps its own wording.

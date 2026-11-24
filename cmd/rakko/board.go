@@ -25,19 +25,23 @@ import (
 	"rakko/internal/board/fonts"
 	"rakko/internal/board/geo"
 	"rakko/internal/layout"
+	"rakko/internal/note"
 	"rakko/internal/platform"
 	"rakko/locales"
 )
 
 const (
-	boardSaveDelay = 400 * time.Millisecond
-	boardW         = 1040
-	boardH         = 680
-	boardBarH      = 30
-	boardMinW      = 480
-	boardMinH      = 360
-	boardDarkBg    = "#1C1C1E"
-	boardLightBg   = "#F9FAFB"
+	boardSaveDelay    = 400 * time.Millisecond
+	boardImageMaxByte = 32 << 20
+	boardImageMaxPx   = 100_000_000
+	boardImageDisplay = 2048
+	boardW            = 1040
+	boardH            = 680
+	boardBarH         = 30
+	boardMinW         = 480
+	boardMinH         = 360
+	boardDarkBg       = "#1C1C1E"
+	boardLightBg      = "#F9FAFB"
 )
 
 var (
@@ -92,6 +96,14 @@ var (
 	}
 )
 
+// boardSaveJob is one snapshot handed to the save worker. A nil drawing is a
+// barrier that lets flush wait for everything queued before it.
+type boardSaveJob struct {
+	id   string
+	d    *doc.Drawing
+	done chan error
+}
+
 // boardUI holds the active whiteboard store, headless editor state, and the
 // floating framed window while it is open.
 type boardUI struct {
@@ -109,6 +121,10 @@ type boardUI struct {
 	since     time.Time
 	dirtyFlag bool
 	locked    bool
+
+	saveCh  chan boardSaveJob
+	saveMu  sync.Mutex
+	saveErr error
 
 	clipStamp         string
 	boards            []doc.BoardInfo
@@ -157,6 +173,8 @@ type boardUI struct {
 type boardMeasureKey struct {
 	text, font  string
 	size, width float32
+	weight      int
+	italic      bool
 }
 
 var (
@@ -177,8 +195,8 @@ func boardFontFamily(font string) string {
 	return "system-ui, Yozai"
 }
 
-func boardMeasure(text, font string, size, width float64) editor.TextBlock {
-	k := boardMeasureKey{text: text, font: font, size: float32(size), width: float32(width)}
+func boardMeasure(text, font string, size, width float64, weight int, italic bool) editor.TextBlock {
+	k := boardMeasureKey{text: text, font: font, size: float32(size), width: float32(width), weight: weight, italic: italic}
 	boardMeasureMu.Lock()
 	if b, ok := boardMeasureCache[k]; ok {
 		boardMeasureMu.Unlock()
@@ -187,7 +205,7 @@ func boardMeasure(text, font string, size, width float64) editor.TextBlock {
 	boardMeasureMu.Unlock()
 
 	const lineMult = 1.3
-	f := ui.Font{Family: boardFontFamily(font), Size: float32(size), LineHeight: lineMult}
+	f := ui.Font{Family: boardFontFamily(font), Size: float32(size), Weight: weight, Italic: italic, LineHeight: lineMult}
 	tl := ui.ShapeText(text, f, float32(width))
 	lineH := size * lineMult
 	units := utf16.Encode([]rune(text))
@@ -239,7 +257,9 @@ func (a *shelf) boardSession() *boardUI {
 		return nil
 	}
 	cleanBoardDragTemps(boardDragTempDir, time.Now(), 24*time.Hour)
+	_, _ = st.CleanAssets(time.Now(), 7*24*time.Hour)
 	b := &boardUI{host: a, store: st, t0: time.Now(), bitmaps: map[doc.ID]*ui.Bitmap{}}
+	b.ensureSaver()
 	if err := b.load(); err != nil {
 		a.report(err)
 	}
@@ -283,22 +303,42 @@ func (b *boardUI) pasteImage(formats []transfer.Format) bool {
 }
 
 func (b *boardUI) insertImageFile(path string, pagePt geo.Vec) bool {
+	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(path)), ".")
+	if !note.IsSupportedImageExt(ext) {
+		return false
+	}
+	info, err := os.Stat(path)
+	if err != nil || info.Size() > boardImageMaxByte {
+		return false
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return false
 	}
-	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(path)), ".")
-	return b.insertImageBytes(data, ext, filepath.Base(path), pagePt)
+	img, format, err := noteDecodeImage(path, data)
+	if err != nil || img == nil {
+		return false
+	}
+	return b.insertDecodedImage(img, data, ext, format, filepath.Base(path), pagePt)
 }
 
 func (b *boardUI) insertImageBytes(data []byte, ext, name string, pagePt geo.Vec) bool {
-	if b.store == nil || b.ed == nil || len(data) == 0 {
+	if b.store == nil || b.ed == nil || len(data) == 0 || len(data) > boardImageMaxByte {
 		return false
 	}
-	img, format, err := image.Decode(bytes.NewReader(data))
-	if err != nil {
+	if cfg, _, err := image.DecodeConfig(bytes.NewReader(data)); err == nil {
+		if cfg.Width <= 0 || cfg.Height <= 0 || cfg.Width*cfg.Height > boardImageMaxPx {
+			return false
+		}
+	}
+	img, format, err := noteDecodeImage("", data)
+	if err != nil || img == nil {
 		return false
 	}
+	return b.insertDecodedImage(img, data, ext, format, name, pagePt)
+}
+
+func (b *boardUI) insertDecodedImage(img image.Image, data []byte, ext, format, name string, pagePt geo.Vec) bool {
 	if ext == "" {
 		ext = format
 	}
@@ -315,7 +355,7 @@ func (b *boardUI) insertImageBytes(data []byte, ext, name string, pagePt geo.Vec
 	if b.bitmaps == nil {
 		b.bitmaps = map[doc.ID]*ui.Bitmap{}
 	}
-	b.bitmaps[asset.ID] = ui.NewBitmap(img)
+	b.bitmaps[asset.ID] = ui.NewBitmap(downsampleImage(img, boardImageDisplay))
 	b.ed.InsertImage(asset, pagePt)
 	b.invalidate()
 	return true
@@ -357,6 +397,7 @@ func (b *boardUI) load() error {
 	b.seenRev = b.rev
 	b.since = time.Time{}
 	b.syncWindowTheme()
+	b.refreshChrome()
 	return nil
 }
 
@@ -377,10 +418,13 @@ func (b *boardUI) markDirty() {
 	b.invalidate()
 }
 
-func (b *boardUI) dirty() bool { return b.dirtyFlag }
-
 // tick persists dirty board changes after boardSaveDelay of inactivity.
 func (b *boardUI) tick(now time.Time) bool {
+	if err := b.takeSaveErr(); err != nil {
+		b.host.report(err)
+		b.dirtyFlag = true
+		return false
+	}
 	if b.locked || !b.dirtyFlag {
 		b.since = time.Time{}
 		b.seenRev = b.rev
@@ -396,33 +440,98 @@ func (b *boardUI) tick(now time.Time) bool {
 		b.host.report(err)
 		return false
 	}
+	b.refreshChrome()
 	return true
 }
 
-// save writes the current document state without ending an in-progress inline
-// edit; EditChanged already mirrors the text into the document.
+// save queues the current document state for the background encoder without
+// ending an in-progress inline edit. The main thread only takes a Snapshot.
 func (b *boardUI) save() error {
 	if b.locked || !b.dirtyFlag || b.ed == nil || b.store == nil {
 		return nil
 	}
-	if err := b.store.Write(b.ed.Doc); err != nil {
-		return err
+	b.ensureSaver()
+	job := boardSaveJob{id: b.store.ID(), d: b.ed.Doc.Snapshot()}
+	select {
+	case b.saveCh <- job:
+		b.dirtyFlag = false
+		b.seenRev = b.rev
+		b.since = time.Time{}
+	default:
+		// The worker is still busy with an older snapshot; keep dirty and try on
+		// the next tick rather than queueing a backlog.
 	}
-	b.dirtyFlag = false
-	b.seenRev = b.rev
-	b.since = time.Time{}
-	b.refreshBoards()
-	b.invalidate()
 	return nil
 }
 
-// flush commits any open inline edit, then writes pending board changes atomically.
-// Quit, close, blur, board switching, and import all go through this path.
+// flush commits any open inline edit, then waits for every queued snapshot to
+// reach disk. Quit, close, blur, board switching, and import all use it.
 func (b *boardUI) flush() error {
 	if b.ed != nil {
 		b.ed.StopEditing()
 	}
-	return b.save()
+	if b.locked || b.ed == nil || b.store == nil {
+		return nil
+	}
+	if b.dirtyFlag {
+		b.ensureSaver()
+		job := boardSaveJob{id: b.store.ID(), d: b.ed.Doc.Snapshot(), done: make(chan error, 1)}
+		b.saveCh <- job
+		if err := <-job.done; err != nil {
+			return err
+		}
+		b.dirtyFlag = false
+		b.seenRev = b.rev
+		b.since = time.Time{}
+		b.refreshChrome()
+	}
+	return b.waitSaves()
+}
+
+// waitSaves waits for snapshots queued before it and reports any background
+// write failure.
+func (b *boardUI) waitSaves() error {
+	if b.saveCh == nil {
+		return b.takeSaveErr()
+	}
+	done := make(chan error, 1)
+	b.saveCh <- boardSaveJob{done: done}
+	if err := <-done; err != nil {
+		return err
+	}
+	return b.takeSaveErr()
+}
+
+func (b *boardUI) ensureSaver() {
+	if b.saveCh != nil || b.store == nil {
+		return
+	}
+	b.saveCh = make(chan boardSaveJob, 1)
+	go b.saveLoop()
+}
+
+func (b *boardUI) saveLoop() {
+	for job := range b.saveCh {
+		var err error
+		if job.d != nil {
+			err = b.store.WriteFor(job.id, job.d)
+		}
+		if job.done != nil {
+			job.done <- err
+		} else if err != nil {
+			b.saveMu.Lock()
+			b.saveErr = err
+			b.saveMu.Unlock()
+		}
+	}
+}
+
+func (b *boardUI) takeSaveErr() error {
+	b.saveMu.Lock()
+	err := b.saveErr
+	b.saveErr = nil
+	b.saveMu.Unlock()
+	return err
 }
 
 func (b *boardUI) selectBoard(id string) error {
@@ -500,7 +609,7 @@ func (b *boardUI) commitRename() {
 		b.ed.SetName(name)
 		_ = b.flush()
 	}
-	b.invalidate()
+	b.refreshChrome()
 }
 
 func (b *boardUI) cancelRename() {
@@ -607,7 +716,17 @@ func (b *boardUI) trashCurrent() error {
 	return err
 }
 
+// invalidate repaints only the board window: pointer moves and canvas edits
+// must not repaint the panel and every pinned card.
 func (b *boardUI) invalidate() {
+	if b.win != nil {
+		b.win.Invalidate()
+	}
+}
+
+// refreshChrome updates the parts that follow a commit or a rename: the window
+// title, the panel, and the board's pinned card.
+func (b *boardUI) refreshChrome() {
 	if b.win != nil {
 		if b.ed != nil {
 			b.win.SetTitle(b.currentTitle(b.host.appLoc()))
@@ -761,6 +880,7 @@ func (b *boardUI) onClose(*mygo.CloseEvent) {
 	a := b.host
 	_ = b.flush()
 	b.win = nil
+	b.bitmaps = map[doc.ID]*ui.Bitmap{}
 	b.renaming = false
 	b.confirmDelete = false
 	b.confirmPageDelete = false
@@ -858,16 +978,21 @@ func (a *shelf) boardBody(c *ui.Context, card ui.Element, span int, surf toolCar
 		l := loc(c)
 		def := toolCardDefFor("board")
 		wide := span > 1 || surf == cardDesktop
-		b := a.boardSession()
 		name := def.name(l)
 		sub := l.BoardEmpty()
-		if b != nil && b.ed != nil {
+		count := 0
+		if b := a.board; b != nil && b.ed != nil {
 			if strings.TrimSpace(b.ed.Doc.Name) != "" {
 				name = b.ed.Doc.Name
 			}
-			if n := b.ed.ItemCount(); n > 0 {
-				sub = l.BoardItemCount(n)
-			}
+			count = b.ed.ItemCount()
+		} else if a.dataDir != "" {
+			// The card's first frame reads the metadata cache; opening the whole
+			// board here would parse it just to draw a title.
+			name, count = doc.CardInfo(a.dataDir, name)
+		}
+		if count > 0 {
+			sub = l.BoardItemCount(count)
 		}
 		if !wide {
 			a.cardGlyphLead(c, card, "board-lead", def.icon, 20, 20, ink2).
@@ -893,4 +1018,28 @@ func boardCountText(l locales.Messages, n int) string {
 		return l.BoardEmpty()
 	}
 	return fmt.Sprintf("%s", l.BoardItemCount(n))
+}
+
+// downsampleImage shrinks an image to max on its longer side for display; a
+// 48-megapixel photo does not stay as ~190 MB of RGBA for the app's lifetime.
+func downsampleImage(img image.Image, maxDim int) image.Image {
+	if img == nil || maxDim <= 0 {
+		return img
+	}
+	b := img.Bounds()
+	w, h := b.Dx(), b.Dy()
+	if w <= maxDim && h <= maxDim {
+		return img
+	}
+	scale := float64(maxDim) / float64(max(w, h))
+	nw, nh := max(1, int(float64(w)*scale)), max(1, int(float64(h)*scale))
+	dst := image.NewRGBA(image.Rect(0, 0, nw, nh))
+	for y := 0; y < nh; y++ {
+		sy := b.Min.Y + y*h/nh
+		for x := 0; x < nw; x++ {
+			sx := b.Min.X + x*w/nw
+			dst.Set(x, y, img.At(sx, sy))
+		}
+	}
+	return dst
 }

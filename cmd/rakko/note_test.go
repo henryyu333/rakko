@@ -10,6 +10,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/richtext"
 
 	"rakko/internal/note"
 	"rakko/locales"
@@ -31,6 +32,26 @@ func noteTestShelf(t *testing.T) (*shelf, *noteUI) {
 		}
 	})
 	return a, n
+}
+
+// setDraft replaces the document content as an unsaved edit (advancing Version).
+func (n *noteUI) setDraft(md string) {
+	d := n.ensureDoc()
+	t := n.bindTextAttachments(richtext.ParseMarkdown(md))
+	d.SetText(t)
+	n.boundVer = d.Version()
+}
+
+// draftText returns text verbatim when the document has never been edited, or
+// the normalized Markdown from the live document once edited.
+func (n *noteUI) draftText() string {
+	if !n.dirty() {
+		return n.text
+	}
+	if md, ok := n.layout.commit(n.doc.Text()); ok {
+		return md
+	}
+	return n.doc.Text().Markdown()
 }
 
 // disableNoteWatch keeps headless tests from starting a file watch: its

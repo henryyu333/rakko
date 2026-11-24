@@ -21,7 +21,7 @@ func TestBoardFlushPersistsInlineEdit(t *testing.T) {
 	b.ed.StartEditing(id)
 	b.ed.EditText = "重要的会议纪要"
 	b.ed.EditChanged()
-	if !b.dirty() {
+	if !b.dirtyFlag {
 		t.Fatal("inline edit did not mark the board dirty")
 	}
 	if err := b.flush(); err != nil {
@@ -52,6 +52,9 @@ func TestBoardAutosaveKeepsInlineEditOpen(t *testing.T) {
 	b.tick(base)
 	if !b.tick(base.Add(500 * time.Millisecond)) {
 		t.Fatal("debounced autosave did not run during inline editing")
+	}
+	if err := b.waitSaves(); err != nil {
+		t.Fatal(err)
 	}
 	if b.ed.Editing != id {
 		t.Fatal("autosave committed the inline edit and interrupted typing")

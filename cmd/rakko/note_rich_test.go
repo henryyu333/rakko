@@ -42,23 +42,6 @@ func makeNoteTestPNG(w, h int, c1, c2 color.RGBA) []byte {
 	return buf.Bytes()
 }
 
-func saveNoteSeg8Shot(t *testing.T, view *ui.Tester, name string) {
-	t.Helper()
-	dir := filepath.Join("/tmp/Rakko-v1186-canvas", "seg8")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	path := filepath.Join(dir, name)
-	f, err := os.Create(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-	if err := png.Encode(f, view.Image()); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func countAttachments(t *testing.T, doc *richtext.Document) []*richtext.Attachment {
 	t.Helper()
 	var out []*richtext.Attachment
@@ -218,7 +201,7 @@ func TestNoteRichTextImagesPasteDropDeleteReloadAndThumbScreenshots(t *testing.T
 	}
 
 	// Capture screenshot 01 of rich note window with formatted text + scaled inline image.
-	saveNoteSeg8Shot(t, view, "01-note-rich-image.png")
+	saveTestShot(t, "seg8", "01-note-rich-image.png", view.Image())
 
 	// Paste the same bytes again: must deduplicate to 1 file in notes/assets/.
 	view.Type("\n")
@@ -333,7 +316,7 @@ func TestNoteRichTextImagesPasteDropDeleteReloadAndThumbScreenshots(t *testing.T
 	if _, found := cardWithImg.Find("已对齐工具栏间距与字体权重："); !found {
 		t.Fatalf("wide image card missing preview body line; texts: %v", cardWithImg.Texts())
 	}
-	saveNoteSeg8Shot(t, cardWithImg, "02-note-card-thumb-wide.png")
+	saveTestShot(t, "seg8", "02-note-card-thumb-wide.png", cardWithImg.Image())
 
 	// Text-only note preserves standard wide card layout without thumbnail shift.
 	aText, nText := noteTestShelf(t)
@@ -347,7 +330,7 @@ func TestNoteRichTextImagesPasteDropDeleteReloadAndThumbScreenshots(t *testing.T
 	if _, found := cardTextOnly.Find("纯文本便签"); !found {
 		t.Fatal("text-only card missing title")
 	}
-	saveNoteSeg8Shot(t, cardTextOnly, "03-note-card-text-only.png")
+	saveTestShot(t, "seg8", "03-note-card-text-only.png", cardTextOnly.Image())
 
 	// 8. External file change with image hot-reloads cleanly when clean.
 	dropRel, _ := n2.store.SaveAsset(pngDrop, "png")

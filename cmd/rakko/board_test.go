@@ -26,14 +26,36 @@ import (
 	"rakko/locales"
 )
 
+// saveTestShot writes a headless screenshot under RAKKO_SHOTS/<seg>/ when the
+// environment asks for it, and writes nothing otherwise.
+func saveTestShot(t *testing.T, seg, name string, img image.Image) {
+	t.Helper()
+	root := os.Getenv("RAKKO_SHOTS")
+	if root == "" {
+		return
+	}
+	dir := filepath.Join(root, seg)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Create(filepath.Join(dir, name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if err := png.Encode(f, img); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func boardTestShelf(t *testing.T) (*shelf, *boardUI) {
 	t.Helper()
 	a := &shelf{
-		dataDir:    t.TempDir(),
-		settings:   settings.Default(),
-		thumbnails: map[string]*ui.Bitmap{},
+		dataDir:      t.TempDir(),
+		settings:     settings.Default(),
+		thumbnails:   map[string]*ui.Bitmap{},
 		thumbPending: map[string]bool{},
-		appNames:   map[string]string{},
+		appNames:     map[string]string{},
 	}
 	b := a.boardSession()
 	if b == nil {
@@ -44,7 +66,7 @@ func boardTestShelf(t *testing.T) (*shelf, *boardUI) {
 
 func saveBoardShot(t *testing.T, name string, img *image.RGBA) {
 	t.Helper()
-	dir := os.Getenv("RAKKO_SEG1_SHOTS")
+	dir := os.Getenv("RAKKO_SHOTS")
 	if dir == "" {
 		return
 	}
@@ -67,7 +89,7 @@ func TestBoardSaveDebounceAndFlush(t *testing.T) {
 	base := time.Now()
 
 	b.ed.SetPaper(doc.PaperGrid)
-	if !b.dirty() {
+	if !b.dirtyFlag {
 		t.Fatal("expected board to be dirty after SetPaper")
 	}
 	if b.tick(base) {
@@ -86,7 +108,10 @@ func TestBoardSaveDebounceAndFlush(t *testing.T) {
 	if !b.tick(base.Add(800 * time.Millisecond)) {
 		t.Fatal("did not write 450ms after last change")
 	}
-	if b.dirty() {
+	if err := b.waitSaves(); err != nil {
+		t.Fatal(err)
+	}
+	if b.dirtyFlag {
 		t.Fatal("board remained dirty after debounced save")
 	}
 
@@ -102,7 +127,7 @@ func TestBoardSaveDebounceAndFlush(t *testing.T) {
 	// Flush on blur/close writes immediately without waiting 400ms.
 	b.ed.SetPaper(doc.PaperLines)
 	b.onBlur()
-	if b.dirty() {
+	if b.dirtyFlag {
 		t.Fatal("onBlur left dirty changes")
 	}
 	reloaded, err = b.store.Read()
@@ -310,7 +335,7 @@ func TestBoardPapersThemesAndScreenshots(t *testing.T) {
 			img := view.Image()
 			key := th.name + "-" + p
 			pixMap[key] = bytes.Clone(img.Pix)
-			saveBoardShot(t, "board-"+key+".png", img)
+			saveTestShot(t, "seg1", "board-"+key+".png", img)
 		}
 	}
 
@@ -336,7 +361,7 @@ func TestBoardPapersThemesAndScreenshots(t *testing.T) {
 		t.Fatalf("open title switcher: %v", err)
 	}
 	view.Frame()
-	saveBoardShot(t, "board-title-menu.png", view.Image())
+	saveTestShot(t, "seg1", "board-title-menu.png", view.Image())
 	view.CloseMenu()
 
 	// Render tool card in 1x1, 2x1, and pinned desktop forms.
@@ -352,7 +377,7 @@ func TestBoardPapersThemesAndScreenshots(t *testing.T) {
 	cardView.SetLocale("zh-Hans")
 	cardView.Frame()
 	cardView.Frame()
-	saveBoardShot(t, "tools-card-board.png", cardView.Image())
+	saveTestShot(t, "seg1", "tools-card-board.png", cardView.Image())
 }
 
 func TestBoardRakkoEntriesAndShortcut(t *testing.T) {
@@ -364,12 +389,12 @@ func TestBoardRakkoEntriesAndShortcut(t *testing.T) {
 	t.Cleanup(func() { st.Close() })
 
 	a := &shelf{
-		dataDir:    dir,
-		store:      st,
-		settings:   settings.Default(),
-		thumbnails: map[string]*ui.Bitmap{},
+		dataDir:      dir,
+		store:        st,
+		settings:     settings.Default(),
+		thumbnails:   map[string]*ui.Bitmap{},
 		thumbPending: map[string]bool{},
-		appNames:   map[string]string{},
+		appNames:     map[string]string{},
 	}
 
 	// 1. Tool card catalog entry.
@@ -450,7 +475,7 @@ func TestBoardRakkoEntriesAndShortcut(t *testing.T) {
 
 func saveBoardSeg2Shot(t *testing.T, name string, img *image.RGBA) {
 	t.Helper()
-	dir := os.Getenv("RAKKO_SEG2_SHOTS")
+	dir := os.Getenv("RAKKO_SHOTS")
 	if dir == "" {
 		return
 	}
@@ -519,7 +544,7 @@ func TestBoardSeg2ToolsUndoImageAndScreenshots(t *testing.T) {
 	}
 
 	// Capture Draw sub-bar screenshot while visible before undo/erase test.
-	saveBoardSeg2Shot(t, "board-tools-draw-subbar.png", view.Image())
+	saveTestShot(t, "seg2", "board-tools-draw-subbar.png", view.Image())
 
 	// 2. Eraser Partial mode splits the horizontal stroke in two, Undo/Redo restores/re-applies.
 	if err := view.Click(l.BoardToolEraser()); err != nil {
@@ -560,7 +585,7 @@ func TestBoardSeg2ToolsUndoImageAndScreenshots(t *testing.T) {
 	if !b.shapeMenu {
 		t.Fatal("expected shapeMenu popover to open")
 	}
-	saveBoardSeg2Shot(t, "board-tools-shape-menu.png", view.Image())
+	saveTestShot(t, "seg2", "board-tools-shape-menu.png", view.Image())
 	if err := view.Click(l.BoardShapeDiamond()); err != nil {
 		t.Fatalf("choose Diamond: %v", err)
 	}
@@ -610,7 +635,7 @@ func TestBoardSeg2ToolsUndoImageAndScreenshots(t *testing.T) {
 	}
 
 	// 5. Render Seg 2 showcase screenshots if requested.
-	if os.Getenv("RAKKO_SEG2_SHOTS") != "" {
+	if os.Getenv("RAKKO_SHOTS") != "" {
 		// Showcase A: All 27 geometry shapes laid out cleanly in a 7x4 grid.
 		a2, b2 := boardTestShelf(t)
 		v2 := ui.NewTester(a2.boardView, 1040, 680)
@@ -638,7 +663,7 @@ func TestBoardSeg2ToolsUndoImageAndScreenshots(t *testing.T) {
 		b2.ed.SetTool(editor.ToolSelect)
 		v2.Frame()
 		v2.Frame()
-		saveBoardSeg2Shot(t, "board-all-27-shapes.png", v2.Image())
+		saveTestShot(t, "seg2", "board-all-27-shapes.png", v2.Image())
 
 		// Showcase B: Brushes, highlight layer order, partial erase split, frame clip, sticky note, text, image.
 		a3, b3 := boardTestShelf(t)
@@ -698,13 +723,13 @@ func TestBoardSeg2ToolsUndoImageAndScreenshots(t *testing.T) {
 		b3.ed.AgeTrails(6.0)
 		v3.Frame()
 		v3.Frame()
-		saveBoardSeg2Shot(t, "board-brushes-partial-erase.png", v3.Image())
+		saveTestShot(t, "seg2", "board-brushes-partial-erase.png", v3.Image())
 	}
 }
 
 func saveBoardSeg3Shot(t *testing.T, name string, img *image.RGBA) {
 	t.Helper()
-	dir := os.Getenv("RAKKO_SEG3_SHOTS")
+	dir := os.Getenv("RAKKO_SHOTS")
 	if dir == "" {
 		return
 	}
@@ -754,7 +779,7 @@ func TestBoardSeg3SelectionSnapLabelsAndScreenshots(t *testing.T) {
 	view.Move(560, 250)
 	view.Move(400, 250)
 	view.Frame()
-	saveBoardSeg3Shot(t, "board-lasso.png", view.Image())
+	saveTestShot(t, "seg3", "board-lasso.png", view.Image())
 	view.Release(400, 250)
 	view.Frame()
 	if !b.ed.IsSelected(arrowShape) || b.ed.Tool != editor.ToolSelect {
@@ -770,7 +795,7 @@ func TestBoardSeg3SelectionSnapLabelsAndScreenshots(t *testing.T) {
 	}
 	view.Type("Flow Step")
 	view.Frame()
-	saveBoardSeg3Shot(t, "board-inline-edit.png", view.Image())
+	saveTestShot(t, "seg3", "board-inline-edit.png", view.Image())
 	view.Key(ui.Cmd, ui.KeyEnter)
 	view.Frame()
 	if b.ed.Editing != "" || b.ed.Doc.Shapes[arrowShape].Text != "Flow Step" {
@@ -809,7 +834,7 @@ func TestBoardSeg3SelectionSnapLabelsAndScreenshots(t *testing.T) {
 	view.Frame()
 
 	// 5. Render showcase screenshots for Selection+Handles+Badge+Flip+GrowY and Smart Guides.
-	if os.Getenv("RAKKO_SEG3_SHOTS") != "" {
+	if os.Getenv("RAKKO_SHOTS") != "" {
 		// Showcase A: Selected rotated shape (8 handles + size badge) + flipped arrow-right + GrowY geo/note + Frame title.
 		b.ed.Select(rectA)
 		b.ed.StartEditing(rectA)
@@ -851,7 +876,7 @@ func TestBoardSeg3SelectionSnapLabelsAndScreenshots(t *testing.T) {
 
 		view.Frame()
 		view.Frame()
-		saveBoardSeg3Shot(t, "board-selection-handles-badge.png", view.Image())
+		saveTestShot(t, "seg3", "board-selection-handles-badge.png", view.Image())
 
 		// Showcase B: Active drag with smart alignment guides (Snap=true).
 		b.ed.Snap = true
@@ -867,14 +892,14 @@ func TestBoardSeg3SelectionSnapLabelsAndScreenshots(t *testing.T) {
 		b.ed.PointerDown(mb.Center().X, mb.Center().Y, 0, 1, editor.Mods{}, 6.0)
 		b.ed.PointerMove(rb2.Center().X+2, mb.Center().Y, editor.Mods{}, 6.1)
 		view.Frame()
-		saveBoardSeg3Shot(t, "board-smart-guides.png", view.Image())
+		saveTestShot(t, "seg3", "board-smart-guides.png", view.Image())
 		b.ed.PointerUp(rb2.Center().X+2, mb.Center().Y, editor.Mods{}, 6.2)
 	}
 }
 
 func saveBoardSeg4Shot(t *testing.T, name string, img *image.RGBA) {
 	t.Helper()
-	dir := os.Getenv("RAKKO_SEG4_SHOTS")
+	dir := os.Getenv("RAKKO_SHOTS")
 	if dir == "" {
 		return
 	}
@@ -955,7 +980,7 @@ func TestBoardSeg4ArrowsLinesVerticesSmartDrawAndScreenshots(t *testing.T) {
 		t.Fatalf("bound arrow End page Y = %v after moving boxB down", endPage.Y)
 	}
 
-	if os.Getenv("RAKKO_SEG4_SHOTS") != "" {
+	if os.Getenv("RAKKO_SHOTS") != "" {
 		// Showcase A: Bound following arrow (curved with label), elbow arrow, 8 arrowhead gallery, cubic spline line.
 		b.ed.Next.Fill = "none"
 		// Bend the bound arrow (boxA -> boxB) into an upward arc and add label.
@@ -1032,7 +1057,7 @@ func TestBoardSeg4ArrowsLinesVerticesSmartDrawAndScreenshots(t *testing.T) {
 		b.ed.Select(boundArrow)
 		view.Frame()
 		view.Frame()
-		saveBoardSeg4Shot(t, "board-arrows-routes-heads.png", view.Image())
+		saveTestShot(t, "seg4", "board-arrows-routes-heads.png", view.Image())
 
 		// Showcase B: Polygon & Curve vertex editing + smart recognized shapes.
 		a2, b2 := boardTestShelf(t)
@@ -1080,24 +1105,7 @@ func TestBoardSeg4ArrowsLinesVerticesSmartDrawAndScreenshots(t *testing.T) {
 		_ = curveID
 		v2.Frame()
 		v2.Frame()
-		saveBoardSeg4Shot(t, "board-vertex-editing-smartdraw.png", v2.Image())
-	}
-}
-
-func saveBoardSeg5Shot(t *testing.T, name string, img image.Image) {
-	t.Helper()
-	dir := filepath.Join("/tmp/Rakko-v1186-canvas", "seg5")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	path := filepath.Join(dir, name)
-	f, err := os.Create(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-	if err := png.Encode(f, img); err != nil {
-		t.Fatal(err)
+		saveTestShot(t, "seg4", "board-vertex-editing-smartdraw.png", v2.Image())
 	}
 }
 
@@ -1198,7 +1206,7 @@ func TestBoardSeg5PropertyPanelLooksFontsAndScreenshots(t *testing.T) {
 	b.propFillTab = false
 	view.Frame()
 	view.Frame()
-	saveBoardSeg5Shot(t, "01-prop-shape-sketch.png", view.Image())
+	saveTestShot(t, "seg5", "01-prop-shape-sketch.png", view.Image())
 
 	// Capture 2: Arrow bound between diamond & rounded-rect -> Arrow Property Panel.
 	b.ed.Next.Font = "sketch"
@@ -1217,7 +1225,7 @@ func TestBoardSeg5PropertyPanelLooksFontsAndScreenshots(t *testing.T) {
 		t.Fatalf("expected Curve click to set Bend")
 	}
 	view.Frame()
-	saveBoardSeg5Shot(t, "02-prop-arrow-curve.png", view.Image())
+	saveTestShot(t, "seg5", "02-prop-arrow-curve.png", view.Image())
 
 	// Capture 3: Fountain Pen freehand stroke -> Draw Property Panel.
 	b.ed.SetTool(editor.ToolDraw)
@@ -1242,7 +1250,7 @@ func TestBoardSeg5PropertyPanelLooksFontsAndScreenshots(t *testing.T) {
 	if b.ed.Doc.Shapes[drawID].PenWidth != 8 {
 		t.Fatalf("expected PenWidth 8 after UI click, got %v", b.ed.Doc.Shapes[drawID].PenWidth)
 	}
-	saveBoardSeg5Shot(t, "03-prop-draw-pen.png", view.Image())
+	saveTestShot(t, "seg5", "03-prop-draw-pen.png", view.Image())
 
 	// Capture 4: 4 Fonts + Text Property Panel.
 	b.ed.Select(textIDs[0])
@@ -1254,7 +1262,7 @@ func TestBoardSeg5PropertyPanelLooksFontsAndScreenshots(t *testing.T) {
 	if !b.ed.Doc.Shapes[textIDs[0]].Bold {
 		t.Fatalf("expected Bold=true after UI click")
 	}
-	saveBoardSeg5Shot(t, "04-prop-text-fonts.png", view.Image())
+	saveTestShot(t, "seg5", "04-prop-text-fonts.png", view.Image())
 
 	// Capture 5: Eraser tool -> Eraser Property Panel + Object/Partial toggle.
 	if err := view.Click(l.BoardToolEraser()); err != nil {
@@ -1268,7 +1276,7 @@ func TestBoardSeg5PropertyPanelLooksFontsAndScreenshots(t *testing.T) {
 	if b.ed.Next.EraserMode != editor.EraserPartial {
 		t.Fatalf("EraserMode = %q, want partial", b.ed.Next.EraserMode)
 	}
-	saveBoardSeg5Shot(t, "05-prop-eraser.png", view.Image())
+	saveTestShot(t, "seg5", "05-prop-eraser.png", view.Image())
 
 	// Capture 6 & 7: Switch to Clean and Mono looks via More menu.
 	b.ed.SetTool(editor.ToolSelect)
@@ -1294,24 +1302,7 @@ func TestBoardSeg5PropertyPanelLooksFontsAndScreenshots(t *testing.T) {
 		if b.ed.Look() != lk.want {
 			t.Fatalf("Look() = %q, want %q", b.ed.Look(), lk.want)
 		}
-		saveBoardSeg5Shot(t, lk.file, view.Image())
-	}
-}
-
-func saveBoardSeg6Shot(t *testing.T, name string, img image.Image) {
-	t.Helper()
-	dir := filepath.Join("/tmp/Rakko-v1186-canvas", "seg6")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	path := filepath.Join(dir, name)
-	f, err := os.Create(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-	if err := png.Encode(f, img); err != nil {
-		t.Fatal(err)
+		saveTestShot(t, "seg5", lk.file, view.Image())
 	}
 }
 
@@ -1368,7 +1359,7 @@ func TestBoardSeg6ActionsNavPagesFocusAndScreenshots(t *testing.T) {
 			t.Fatalf("missing context menu item %q in %v", want, menuItems)
 		}
 	}
-	saveBoardSeg6Shot(t, "01-context-menu-selection.png", view.Image())
+	saveTestShot(t, "seg6", "01-context-menu-selection.png", view.Image())
 	view.Key(0, ui.KeyEscape)
 	view.Frame()
 
@@ -1379,7 +1370,7 @@ func TestBoardSeg6ActionsNavPagesFocusAndScreenshots(t *testing.T) {
 	if !slices.Contains(blankItems, l.BoardCtxUnlockAll()) || !slices.Contains(blankItems, l.BoardFocusMode()) {
 		t.Fatalf("missing blank context menu items in %v", blankItems)
 	}
-	saveBoardSeg6Shot(t, "02-context-menu-blank.png", view.Image())
+	saveTestShot(t, "seg6", "02-context-menu-blank.png", view.Image())
 	view.Key(0, ui.KeyEscape)
 	view.Frame()
 
@@ -1388,7 +1379,7 @@ func TestBoardSeg6ActionsNavPagesFocusAndScreenshots(t *testing.T) {
 		t.Fatalf("click zoom percentage menu: %v", err)
 	}
 	view.Frame()
-	saveBoardSeg6Shot(t, "03-zoom-menu.png", view.Image())
+	saveTestShot(t, "seg6", "03-zoom-menu.png", view.Image())
 
 	// Toggle Minimap from Zoom menu & capture Minimap screenshot + test drag pan.
 	if err := view.Click(l.BoardMinimapShow()); err != nil {
@@ -1399,7 +1390,7 @@ func TestBoardSeg6ActionsNavPagesFocusAndScreenshots(t *testing.T) {
 	if !b.minimap {
 		t.Fatal("expected minimap enabled")
 	}
-	saveBoardSeg6Shot(t, "04-minimap-open.png", view.Image())
+	saveTestShot(t, "seg6", "04-minimap-open.png", view.Image())
 
 	// Drag inside Minimap (bottom-left at x~90, y~540 inside stage height ~650 -> stage top 30) pans camera.
 	camBefore := b.ed.Cam()
@@ -1418,7 +1409,7 @@ func TestBoardSeg6ActionsNavPagesFocusAndScreenshots(t *testing.T) {
 	if b.ed.ContentVisible() {
 		t.Fatal("expected ContentVisible=false when panned away")
 	}
-	saveBoardSeg6Shot(t, "05-back-to-content.png", view.Image())
+	saveTestShot(t, "seg6", "05-back-to-content.png", view.Image())
 	if err := view.Click(l.BoardBackToContent()); err != nil {
 		t.Fatalf("click Back-to-Content pill: %v", err)
 	}
@@ -1434,7 +1425,7 @@ func TestBoardSeg6ActionsNavPagesFocusAndScreenshots(t *testing.T) {
 		t.Fatalf("open Page Switcher: %v", err)
 	}
 	view.Frame()
-	saveBoardSeg6Shot(t, "07-pages-menu.png", view.Image())
+	saveTestShot(t, "seg6", "07-pages-menu.png", view.Image())
 	view.Key(0, ui.KeyEscape)
 	view.Frame()
 
@@ -1445,7 +1436,7 @@ func TestBoardSeg6ActionsNavPagesFocusAndScreenshots(t *testing.T) {
 	if !b.focusMode {
 		t.Fatal("expected FocusMode=true on Cmd+.")
 	}
-	saveBoardSeg6Shot(t, "06-focus-mode.png", view.Image())
+	saveTestShot(t, "seg6", "06-focus-mode.png", view.Image())
 	if err := view.Click(l.BoardFocusExit()); err != nil {
 		t.Fatalf("click Exit Focus pill: %v", err)
 	}
@@ -1459,23 +1450,6 @@ func TestBoardSeg6ActionsNavPagesFocusAndScreenshots(t *testing.T) {
 	view.Frame()
 	if !b.ed.ToolLocked {
 		t.Fatal("expected Q shortcut to lock tool")
-	}
-}
-
-func saveBoardSeg7Shot(t *testing.T, name string, img image.Image) {
-	t.Helper()
-	dir := filepath.Join("/tmp/Rakko-v1186-canvas", "seg7")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	path := filepath.Join(dir, name)
-	f, err := os.Create(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-	if err := png.Encode(f, img); err != nil {
-		t.Fatal(err)
 	}
 }
 
@@ -1635,7 +1609,7 @@ func TestBoardSeg7ExportClipboardDragCropLaserRadialNarrow(t *testing.T) {
 	if b.ed.Doc.Shapes[imgID].Crop == nil {
 		t.Fatal("expected image Crop after dragging HandleCrop")
 	}
-	saveBoardSeg7Shot(t, "01-image-crop.png", view.Image())
+	saveTestShot(t, "seg7", "01-image-crop.png", view.Image())
 	if err := view.Click(l.BoardCtxResetCrop()); err != nil {
 		t.Fatalf("click Reset Crop: %v", err)
 	}
@@ -1658,7 +1632,7 @@ func TestBoardSeg7ExportClipboardDragCropLaserRadialNarrow(t *testing.T) {
 	view.Move(500, 360)
 	view.Move(660, 280)
 	view.Frame()
-	saveBoardSeg7Shot(t, "02-laser-trail.png", view.Image())
+	saveTestShot(t, "seg7", "02-laser-trail.png", view.Image())
 	view.Release(660, 280)
 
 	// 7. Radial color palette (C) + swatch selection screenshot.
@@ -1670,7 +1644,7 @@ func TestBoardSeg7ExportClipboardDragCropLaserRadialNarrow(t *testing.T) {
 	if !b.radialOn {
 		t.Fatal("expected C key to open Radial Palette")
 	}
-	saveBoardSeg7Shot(t, "03-radial-palette.png", view.Image())
+	saveTestShot(t, "seg7", "03-radial-palette.png", view.Image())
 	if err := view.Click(l.BoardRadialPalette() + " #4ADE80"); err != nil {
 		t.Fatalf("click radial swatch #4ADE80: %v", err)
 	}
@@ -1685,13 +1659,13 @@ func TestBoardSeg7ExportClipboardDragCropLaserRadialNarrow(t *testing.T) {
 	narrow.SetLocale("zh-Hans")
 	narrow.Frame()
 	narrow.Frame()
-	saveBoardSeg7Shot(t, "04-narrow-580.png", narrow.Image())
+	saveTestShot(t, "seg7", "04-narrow-580.png", narrow.Image())
 
 	tiny := ui.NewTester(a.boardView, 460, 600)
 	tiny.SetLocale("zh-Hans")
 	tiny.Frame()
 	tiny.Frame()
-	saveBoardSeg7Shot(t, "05-tiny-460.png", tiny.Image())
+	saveTestShot(t, "seg7", "05-tiny-460.png", tiny.Image())
 }
 
 // boardPixelsDiffer counts pixels whose channels differ by more than tol; the
@@ -1769,7 +1743,7 @@ func TestBoardHighDensityMaskAtlasGuard(t *testing.T) {
 	// Baseline toolbar pixels: the atlas guard must keep the icons themselves.
 	view.Frame()
 	view.Frame()
-	saveBoardSeg3Shot(t, "high-density-before.png", view.Image())
+	saveTestShot(t, "seg3", "high-density-before.png", view.Image())
 	basePix, baseRect := boardToolbarPixels(t, view, l)
 
 	const count = 1550
@@ -1794,7 +1768,7 @@ func TestBoardHighDensityMaskAtlasGuard(t *testing.T) {
 	if !b.lastLightInk {
 		t.Fatalf("expected high-density board (%d strokes) to trigger mask atlas budget lightInk guard", count)
 	}
-	saveBoardSeg3Shot(t, "high-density-after.png", view.Image())
+	saveTestShot(t, "seg3", "high-density-after.png", view.Image())
 	afterPix, afterRect := boardToolbarPixels(t, view, l)
 	if afterRect != baseRect {
 		t.Fatalf("toolbar rect moved: %v -> %v", baseRect, afterRect)
@@ -1813,5 +1787,5 @@ func TestBoardHighDensityMaskAtlasGuard(t *testing.T) {
 	if b.ed.Tool != editor.ToolArrow {
 		t.Fatalf("expected Arrow tool active after click under high density, got %s", b.ed.Tool)
 	}
-	saveBoardSeg5Shot(t, "08-high-density-1550.png", view.Image())
+	saveTestShot(t, "seg5", "08-high-density-1550.png", view.Image())
 }

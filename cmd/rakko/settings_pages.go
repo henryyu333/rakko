@@ -383,7 +383,7 @@ func (a *shelf) settingsAIUsagePage(c *ui.Context) {
 
 			row := settingsRowLine(c, "quota-"+string(t)).Label(settingsQuotaToolTitle(t, l))
 			row.Children(func() {
-				handle := ui.Row(c.Key("drag-"+string(t))).AlignItems(ui.Center).Gap(14).Grow(1).MinWidth(0)
+				handle := ui.Row(c.Key("drag-" + string(t))).AlignItems(ui.Center).Gap(14).Grow(1).MinWidth(0)
 				handle.HandleInput(func(ev ui.InputEvent) bool {
 					if quotaLocked {
 						return false
@@ -645,7 +645,7 @@ func (a *shelf) settingsQuotaSourceControl(c *ui.Context, t aiusage.Tool, locked
 	case aiusage.SourceLocalKey:
 		settingsLabel(c, l.SettingsAISourceLocalKey()+planSuffix, 11, 0).TextColor(success)
 	case aiusage.SourceSavedKey:
-		ui.Row(c.Key("src-saved-"+string(t))).AlignItems(ui.Center).Gap(6).Children(func() {
+		ui.Row(c.Key("src-saved-" + string(t))).AlignItems(ui.Center).Gap(6).Children(func() {
 			settingsLabel(c, l.SettingsAISourceSavedKey()+planSuffix, 11, 0).TextColor(success)
 			if !locked && canPaste {
 				settingsButton(c, "clr-"+string(t), l.SettingsAIClearKey(), false, func() {
@@ -700,33 +700,6 @@ func (a *shelf) settingsQuotaKeyEditor(c *ui.Context, t aiusage.Tool) {
 			}
 		})
 	})
-}
-
-func (a *shelf) aiQuotaCaption(t aiusage.Tool, l locales.Messages) string {
-	if a.usage == nil {
-		return ""
-	}
-	latest := a.usage.quotaState(t).latest
-	if latest.FetchedAt.IsZero() {
-		return ""
-	}
-	switch latest.Status {
-	case aiusage.QuotaOK:
-		if q, _ := a.usage.quotaShown(t); q.Plan != "" {
-			return q.Plan
-		}
-		return l.SettingsAIQuotaSignedIn()
-	case aiusage.QuotaNotLoggedIn:
-		return l.SettingsAIQuotaSignedOut()
-	case aiusage.QuotaExpired:
-		return l.SettingsAIQuotaExpired()
-	case aiusage.QuotaNoCLI:
-		return l.SettingsAIQuotaNoCLI()
-	case aiusage.QuotaLimitReached:
-		return l.SettingsAIQuotaLimit()
-	default:
-		return l.SettingsAIQuotaUnavailable()
-	}
 }
 
 // settingsShortcutsPage: 全局, 播放, 工具, and read-only panel shortcuts.

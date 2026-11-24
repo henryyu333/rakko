@@ -2,12 +2,7 @@ package main
 
 import (
 	"fmt"
-	"image"
-	_ "image/gif"
-	_ "image/jpeg"
-	_ "image/png"
 	"math"
-	"os"
 	"strings"
 	"sync"
 
@@ -732,15 +727,11 @@ func (b *boardUI) bitmapForAsset(id doc.ID) *ui.Bitmap {
 	if err != nil {
 		return nil
 	}
-	data, err := os.ReadFile(full)
-	if err != nil {
+	img, err := noteDecodeImageFile(full)
+	if err != nil || img == nil {
 		return nil
 	}
-	img, _, err := image.Decode(strings.NewReader(string(data)))
-	if err != nil {
-		return nil
-	}
-	bmp := ui.NewBitmap(img)
+	bmp := ui.NewBitmap(downsampleImage(img, boardImageDisplay))
 	b.bitmaps[id] = bmp
 	return bmp
 }

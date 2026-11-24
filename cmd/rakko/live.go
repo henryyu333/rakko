@@ -682,11 +682,5 @@ func (ev liveEvent) statusLineIn(l locales.Messages) string {
 	return ev.label
 }
 
-// announceLive posts one of the power/headset events. Small helper so the
-// modules share the timestamp and the sweep.
-func (a *shelf) announceLive(ev liveEvent, hold time.Duration) {
-	a.pushLive(ev, hold, time.Now())
-}
-
 // mygoRunOnMain is the seam the battery lookup uses to deliver its result.
 var mygoRunOnMain = mygo.RunOnMain

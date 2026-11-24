@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"image"
 	"image/color"
 	"os"
 	"path/filepath"
@@ -338,5 +340,161 @@ func TestBoardMaskOverlapViewport(t *testing.T) {
 	small, _ := boardMaskOverlap(geo.Box{X: 40, Y: 40, W: 20, H: 20}, view)
 	if small.W != 20 || small.H != 20 {
 		t.Fatalf("inside box clipped to %+v", small)
+	}
+}
+
+func TestBoardBoldTextFitsSelectionBox(t *testing.T) {
+	a, b := boardTestShelf(t)
+	id := b.ed.CreateText(geo.V(200, 200), "Sketch 手写: Shantell + 悠哉 Yozai")
+	b.ed.Select(id)
+	b.ed.TogglePropBold()
+	s := b.ed.Doc.Shapes[id]
+	if !s.Bold {
+		t.Fatal("text did not become bold")
+	}
+	g := b.ed.Geometry(s)
+	var block *editor.TextBlock
+	for _, pr := range b.ed.Display(s, b.ed.Palette()) {
+		if pr.Kind == editor.PrimText && pr.Block != nil {
+			blk := *pr.Block
+			block = &blk
+		}
+	}
+	if block == nil {
+		t.Fatal("no text primitive")
+	}
+	for _, line := range block.Lines {
+		if line.X+line.W > g.Bounds.W+0.5 {
+			t.Fatalf("bold line %q ends at %.1f, box width %.1f", line.Text, line.X+line.W, g.Bounds.W)
+		}
+	}
+	if block.W > g.Bounds.W+0.5 {
+		t.Fatalf("block width %.1f, box %.1f", block.W, g.Bounds.W)
+	}
+	view := ui.NewTester(a.boardView, 760, 620)
+	view.SetLocale("zh-Hans")
+	view.Frame()
+	view.Frame()
+	saveTestShot(t, "seg3", "bold-selection-760.png", view.Image())
+}
+
+func TestBoardInvalidateOnlyRepaintsBoardWindow(t *testing.T) {
+	a, b := boardTestShelf(t)
+	orig := boardPinRedraw
+	redraws := 0
+	boardPinRedraw = func(*pinItem) { redraws++ }
+	t.Cleanup(func() { boardPinRedraw = orig })
+	a.pins = []*pinItem{{cardID: "board"}}
+	b.ed.SetPaper(doc.PaperGrid)
+	if redraws != 0 {
+		t.Fatalf("editing repainted %d pinned cards", redraws)
+	}
+	if err := b.flush(); err != nil {
+		t.Fatal(err)
+	}
+	if redraws == 0 {
+		t.Fatal("saving did not refresh the pinned card")
+	}
+}
+
+func TestBoardImageLimitsAndBitmapLifecycle(t *testing.T) {
+	a, b := boardTestShelf(t)
+	big := downsampleImage(image.NewRGBA(image.Rect(0, 0, 3000, 1000)), 2048)
+	if got := big.Bounds().Dx(); got != 2048 {
+		t.Fatalf("downsampled width = %d", got)
+	}
+	dir := t.TempDir()
+	huge := filepath.Join(dir, "huge.png")
+	if err := os.WriteFile(huge, make([]byte, boardImageMaxByte+1), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if b.insertImageFile(huge, geo.V(10, 10)) {
+		t.Fatal("oversized image accepted")
+	}
+	if b.ed.ItemCount() != 0 {
+		t.Fatal("oversized image became a shape")
+	}
+	small := filepath.Join(dir, "small.png")
+	if err := os.WriteFile(small, makeNoteTestPNG(40, 30, colorA, colorB), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if !b.insertImageFile(small, geo.V(10, 10)) {
+		t.Fatal("valid image rejected")
+	}
+	if len(b.bitmaps) != 1 {
+		t.Fatalf("bitmaps = %d", len(b.bitmaps))
+	}
+	a.quitting = true
+	b.onClose(nil)
+	if len(b.bitmaps) != 0 {
+		t.Fatalf("closing kept %d bitmaps", len(b.bitmaps))
+	}
+}
+
+func TestBoardCardReadsMetaWithoutOpeningBoard(t *testing.T) {
+	dir := t.TempDir()
+	st, err := doc.Open(dir, "Board")
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, _ := st.Read()
+	d.Name = "元数据白板"
+	shape := doc.NewShape("shape:a", doc.TypeGeo)
+	shape.Parent = d.ActivePage
+	d.Shapes[shape.ID] = shape
+	if err := st.Write(d); err != nil {
+		t.Fatal(err)
+	}
+	a := &shelf{dataDir: dir, settings: settings.Default(), thumbnails: map[string]*ui.Bitmap{},
+		thumbPending: map[string]bool{}, appNames: map[string]string{}}
+	view := ui.NewTester(func(c *ui.Context) {
+		card := ui.Column(c.Key("card")).Width(300).Height(120)
+		a.noteBody(c, card, 2, cardPanel)
+		a.boardBody(c, card, 2, cardPanel)
+	}, 320, 240)
+	view.SetLocale("zh-Hans")
+	view.Frame()
+	view.Frame()
+	if a.board != nil {
+		t.Fatal("drawing the board card parsed the whole board")
+	}
+}
+
+func TestBoardExportDialogBeforeRenderAndDragLimit(t *testing.T) {
+	_, b := boardTestShelf(t)
+	// A board much wider than the drag preview limit.
+	id := doc.NewRecordID("shape")
+	s := doc.NewShape(id, doc.TypeGeo)
+	s.Parent, s.W, s.H = b.ed.Page, 5000, 3000
+	s.Index = doc.FirstIndex
+	b.ed.Doc.Shapes[id] = s
+	dir := t.TempDir()
+	path, _, err := b.writeDragPNGTemp(nil, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Width > boardDragMaxDim || cfg.Height > boardDragMaxDim {
+		t.Fatalf("drag PNG = %dx%d, limit %d", cfg.Width, cfg.Height, boardDragMaxDim)
+	}
+
+	// A cancelled save dialog means no render and no file.
+	orig := boardSaveFileDialog
+	t.Cleanup(func() { boardSaveFileDialog = orig })
+	calls := 0
+	boardSaveFileDialog = func(*mygo.Window, string, string, []string) (string, error) {
+		calls++
+		return "", nil
+	}
+	b.exportPNGFile(nil)
+	if calls != 1 {
+		t.Fatalf("dialog calls = %d", calls)
 	}
 }

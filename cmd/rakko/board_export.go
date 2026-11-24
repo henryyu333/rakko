@@ -24,6 +24,7 @@ import (
 const (
 	boardExportTileSize = 1024
 	boardExportMaxDim   = 8192
+	boardDragMaxDim     = 1600
 )
 
 // boardDragTempDir holds PNGs made for dragging out of the board; files older
@@ -89,7 +90,11 @@ func (b *boardUI) exportBounds(ids []doc.ID) (geo.Box, bool) {
 	return b.ed.PageContentBox(b.ed.Page)
 }
 
-func (b *boardUI) renderTiledPNG(ids []doc.ID) (pngBytes []byte, width, height, tiles int, err error) {
+func (b *boardUI) renderTiledPNG(ids []doc.ID) ([]byte, int, int, int, error) {
+	return b.renderTiledPNGMax(ids, 0)
+}
+
+func (b *boardUI) renderTiledPNGMax(ids []doc.ID, maxDim int) (pngBytes []byte, width, height, tiles int, err error) {
 	if b.ed == nil {
 		return nil, 0, 0, 0, fmt.Errorf("board: nil editor")
 	}
@@ -102,8 +107,12 @@ func (b *boardUI) renderTiledPNG(ids []doc.ID) (pngBytes []byte, width, height, 
 	}
 	scale := 2.0
 	maxSpan := math.Max(box.W, box.H)
-	if maxSpan*scale > boardExportMaxDim {
-		scale = float64(boardExportMaxDim) / math.Max(maxSpan, 1)
+	limit := boardExportMaxDim
+	if maxDim > 0 && maxDim < limit {
+		limit = maxDim
+	}
+	if maxSpan*scale > float64(limit) {
+		scale = float64(limit) / math.Max(maxSpan, 1)
 	}
 	width = max(1, min(boardExportMaxDim, int(math.Ceil(box.W*scale))))
 	height = max(1, min(boardExportMaxDim, int(math.Ceil(box.H*scale))))
@@ -266,30 +275,60 @@ func (b *boardUI) safeFileBaseName() string {
 }
 
 func (b *boardUI) exportPNGFile(ids []doc.ID) {
-	data, _, _, _, err := b.renderTiledPNG(ids)
-	if err != nil {
-		b.host.report(err)
-		return
-	}
+	// Ask where first: cancelling must not cost a full render.
 	path, err := boardSaveFileDialog(b.win, b.safeFileBaseName()+".png", "PNG Image", []string{"png"})
 	if err != nil || path == "" {
 		return
 	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		b.host.report(err)
+	render := func(ui *boardUI) error {
+		data, _, _, _, err := ui.renderTiledPNG(ids)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(path, data, 0o644); err != nil {
+			return err
+		}
+		return os.Chmod(path, 0o644)
+	}
+	if b.win == nil {
+		if err := render(b); err != nil {
+			b.host.report(err)
+		}
 		return
 	}
-	_ = os.Chmod(path, 0o644)
+	// The window is real: render from a snapshot off the UI thread.
+	clone := b.renderClone()
+	go func() {
+		err := render(clone)
+		if err != nil {
+			mygo.RunOnMain(func() { b.host.report(err) })
+		}
+	}()
+}
+
+// renderClone is a boardUI good for painting a snapshot without touching the
+// live editor or its bitmap map.
+func (b *boardUI) renderClone() *boardUI {
+	snap := b.ed.Doc.Snapshot()
+	ed := editor.New(snap, b.ed.Measure)
+	ed.SetViewport(b.ed.VW, b.ed.VH)
+	ed.Page = b.ed.Page
+	ed.SetCam(b.ed.Cam())
+	bitmaps := make(map[doc.ID]*ui.Bitmap, len(b.bitmaps))
+	for k, v := range b.bitmaps {
+		bitmaps[k] = v
+	}
+	return &boardUI{host: b.host, store: b.store, ed: ed, bitmaps: bitmaps}
 }
 
 func (b *boardUI) exportSVGFile(ids []doc.ID) {
+	path, err := boardSaveFileDialog(b.win, b.safeFileBaseName()+".svg", "SVG Vector", []string{"svg"})
+	if err != nil || path == "" {
+		return
+	}
 	svg, err := b.exportSVGString(ids)
 	if err != nil {
 		b.host.report(err)
-		return
-	}
-	path, err := boardSaveFileDialog(b.win, b.safeFileBaseName()+".svg", "SVG Vector", []string{"svg"})
-	if err != nil || path == "" {
 		return
 	}
 	if err := os.WriteFile(path, []byte(svg), 0o644); err != nil {
@@ -303,13 +342,13 @@ func (b *boardUI) exportBoardFile() {
 	if b.ed == nil || b.store == nil {
 		return
 	}
+	path, err := boardSaveFileDialog(b.win, b.safeFileBaseName()+".rakkoboard.json", "Rakko Board", []string{"json"})
+	if err != nil || path == "" {
+		return
+	}
 	raw, err := doc.ExportPackage(b.ed.Doc, b.store)
 	if err != nil {
 		b.host.report(err)
-		return
-	}
-	path, err := boardSaveFileDialog(b.win, b.safeFileBaseName()+".rakkoboard.json", "Rakko Board", []string{"json"})
-	if err != nil || path == "" {
 		return
 	}
 	if err := os.WriteFile(path, raw, 0o644); err != nil {
@@ -375,7 +414,7 @@ func (b *boardUI) copyAsSVG(ids []doc.ID, concealed bool) error {
 // writeDragPNGTemp renders the selection or board to a temporary PNG file and
 // returns transfer.FileData(path), because mygo does not support virtual file promises.
 func (b *boardUI) writeDragPNGTemp(ids []doc.ID, dir string) (string, transfer.Data, error) {
-	data, _, _, _, err := b.renderTiledPNG(ids)
+	data, _, _, _, err := b.renderTiledPNGMax(ids, boardDragMaxDim)
 	if err != nil {
 		return "", transfer.Data{}, err
 	}

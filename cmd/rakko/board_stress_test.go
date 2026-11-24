@@ -2,43 +2,20 @@ package main
 
 import (
 	"fmt"
-	"image"
-	"image/png"
 	"os"
-	"path/filepath"
 	"runtime"
 	"slices"
+	"sort"
 	"testing"
 	"time"
 
 	"github.com/egoist/mygo/ui"
 
+	"rakko/internal/board/doc"
 	"rakko/internal/board/editor"
 	"rakko/internal/board/geo"
 	"rakko/locales"
 )
-
-func saveBoardSeg9Shot(t *testing.T, name string, img *image.RGBA) {
-	t.Helper()
-	dir := os.Getenv("RAKKO_SEG9_SHOTS")
-	if dir == "" && runtime.GOOS == "darwin" {
-		dir = filepath.Join("/tmp/Rakko-v1186-canvas", "seg9")
-	}
-	if dir == "" {
-		return
-	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	f, err := os.Create(filepath.Join(dir, name))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-	if err := png.Encode(f, img); err != nil {
-		t.Fatal(err)
-	}
-}
 
 // TestBoardStress1500PlusPerf builds a 1,560+ element board (fountain-pen strokes,
 // geo shapes, curved arrows, and Chinese/English handwritten text), drives headless
@@ -186,7 +163,7 @@ func TestBoardStress1500PlusPerf(t *testing.T) {
 		t.Fatalf("expected Arrow tool after stress click, got %s", b.ed.Tool)
 	}
 
-	saveBoardSeg9Shot(t, "01-stress-1560-board.png", view.Image())
+	saveTestShot(t, "seg9", "01-stress-1560-board.png", view.Image())
 
 	exportT0 := time.Now()
 	pngBytes, expW, expH, tiles, err := b.renderTiledPNG(nil)
@@ -224,4 +201,79 @@ func TestBoardStress1500PlusPerf(t *testing.T) {
 		memAfter.NumGC-memBefore.NumGC)
 	t.Logf("EXPORT_TILED_PNG size=%dx%d tiles=%d bytes=%d durMs=%.2f",
 		expW, expH, tiles, len(pngBytes), float64(exportDur.Microseconds())/1000)
+}
+
+// TestBoardSaveBenchmark reports the main-thread save cost, board size, and
+// five-board List cost for the 1500-stroke board.
+func TestBoardSaveBenchmark(t *testing.T) {
+	_, b := boardTestShelf(t)
+	const strokes = 1500
+	for i := 0; i < strokes; i++ {
+		id := doc.NewRecordID("shape")
+		s := doc.NewShape(id, doc.TypeDraw)
+		s.Parent = b.ed.Page
+		s.Index = doc.IndexBetween("", "")
+		if i > 0 {
+			prev := b.ed.Doc.Shapes[doc.ID("shape:bench"+itoaBench(i-1))]
+			if prev != nil {
+				s.Index = doc.IndexBetween(prev.Index, "")
+			}
+		}
+		// Keep a deterministic, lookup-friendly id.
+		s.ID = doc.ID("shape:bench" + itoaBench(i))
+		pts := make([]doc.PointZ, 30)
+		for k := range pts {
+			pts[k] = doc.PointZ{X: float64(i)*3 + float64(k), Y: float64(i%400) + float64(k)*0.5, Z: 0.5}
+		}
+		s.Segments = []doc.Segment{{Type: "free", Points: pts}}
+		s.IsComplete = true
+		b.ed.Doc.Shapes[s.ID] = s
+	}
+	var mainNs []time.Duration
+	for i := 0; i < 5; i++ {
+		b.dirtyFlag = true
+		t0 := time.Now()
+		if err := b.save(); err != nil {
+			t.Fatal(err)
+		}
+		mainNs = append(mainNs, time.Since(t0))
+		if err := b.waitSaves(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sort.Slice(mainNs, func(i, j int) bool { return mainNs[i] < mainNs[j] })
+	info, err := os.Stat(b.store.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 4; i++ {
+		if _, err := b.store.New("Bench " + itoaBench(i+2)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var listNs []time.Duration
+	for i := 0; i < 5; i++ {
+		t0 := time.Now()
+		if _, err := b.store.List(); err != nil {
+			t.Fatal(err)
+		}
+		listNs = append(listNs, time.Since(t0))
+	}
+	sort.Slice(listNs, func(i, j int) bool { return listNs[i] < listNs[j] })
+	t.Logf("BENCH flush_main median=%v size=%dB list5 median=%v",
+		mainNs[2], info.Size(), listNs[2])
+}
+
+func itoaBench(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	var b [8]byte
+	i := len(b)
+	for n > 0 {
+		i--
+		b[i] = byte('0' + n%10)
+		n /= 10
+	}
+	return string(b[i:])
 }

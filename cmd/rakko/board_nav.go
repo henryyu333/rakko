@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"math"
 
 	"github.com/egoist/mygo/ui"
@@ -592,8 +591,4 @@ func (b *boardUI) buildContextMenu(c *ui.Context, l locales.Messages, m *ui.Menu
 		b.ed.SelectAll()
 		b.invalidate()
 	}
-}
-
-func (b *boardUI) fmtZoomPct() string {
-	return fmt.Sprintf("%d%%", int(math.Round(b.ed.Cam().Z*100)))
 }
