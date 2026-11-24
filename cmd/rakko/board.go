@@ -9,12 +9,15 @@ import (
 	_ "image/png"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 	"unicode/utf16"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/board/doc"
@@ -38,15 +41,15 @@ const (
 )
 
 var (
-	boardSymbol        = symbol(`<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4M7 10.5l3-2.5 3 2.5 4-3.5"/>`)
-	boardChevronSymbol = symbol(`<path d="m6 9 6 6 6-6"/>`)
-	boardMoreSymbol    = symbol(`<circle cx="5" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="19" cy="12" r="1.4" fill="currentColor"/>`)
-	boardSelectSymbol  = symbol(`<path d="M4.5 4.5l6.2 15 2.4-5.7 5.7-2.4z"/>`)
-	boardLassoSymbol   = symbol(`<path d="M7 22a5 5 0 0 1-2-4"/><path d="M3.3 14A6.8 6.8 0 0 1 2 10c0-4.4 4.5-8 10-8s10 3.6 10 8-4.5 8-10 8a12 12 0 0 1-5-1"/><circle cx="5" cy="16" r="2"/>`)
-	boardHandSymbol    = symbol(`<path d="M18 11V6a2 2 0 0 0-4 0v1M14 10V4a2 2 0 0 0-4 0v2M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>`)
-	boardHiliteSymbol  = symbol(`<path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/>`)
-	boardEraserSymbol  = symbol(`<path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7M5 11l9 9"/>`)
-	boardArrowSymbol   = symbol(`<path d="M7 17 17 7M7 7h10v10"/>`)
+	boardSymbol         = symbol(`<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4M7 10.5l3-2.5 3 2.5 4-3.5"/>`)
+	boardChevronSymbol  = symbol(`<path d="m6 9 6 6 6-6"/>`)
+	boardMoreSymbol     = symbol(`<circle cx="5" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="19" cy="12" r="1.4" fill="currentColor"/>`)
+	boardSelectSymbol   = symbol(`<path d="M4.5 4.5l6.2 15 2.4-5.7 5.7-2.4z"/>`)
+	boardLassoSymbol    = symbol(`<path d="M7 22a5 5 0 0 1-2-4"/><path d="M3.3 14A6.8 6.8 0 0 1 2 10c0-4.4 4.5-8 10-8s10 3.6 10 8-4.5 8-10 8a12 12 0 0 1-5-1"/><circle cx="5" cy="16" r="2"/>`)
+	boardHandSymbol     = symbol(`<path d="M18 11V6a2 2 0 0 0-4 0v1M14 10V4a2 2 0 0 0-4 0v2M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>`)
+	boardHiliteSymbol   = symbol(`<path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/>`)
+	boardEraserSymbol   = symbol(`<path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7M5 11l9 9"/>`)
+	boardArrowSymbol    = symbol(`<path d="M7 17 17 7M7 7h10v10"/>`)
 	boardLineSymbol     = symbol(`<path d="M5 19 19 5"/>`)
 	boardFrameSymbol    = symbol(`<path d="M6 3v18M18 3v18M3 6h18M3 18h18"/>`)
 	boardFitSymbol      = symbol(`<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>`)
@@ -57,12 +60,19 @@ var (
 	boardExportSymbol   = symbol(`<path d="M12 15V3M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5"/>`)
 	boardWheelSymbol    = symbol(`<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/>`)
 
+	boardAlignLeftSymbol   = symbol(`<path d="M4 6h16M4 10h10M4 14h16M4 18h10"/>`)
+	boardAlignCenterSymbol = symbol(`<path d="M4 6h16M7 10h10M4 14h16M7 18h10"/>`)
+	boardAlignRightSymbol  = symbol(`<path d="M4 6h16M10 10h10M4 14h16M10 18h10"/>`)
+	boardBoldSymbol        = symbol(`<path d="M7 5h6a4 4 0 0 1 0 8H7zM7 13h7a4 4 0 0 1 0 8H7z"/>`)
+	boardItalicSymbol      = symbol(`<path d="M10 5h8M6 19h8M15 5l-5 14"/>`)
+	boardUnderlineSymbol   = symbol(`<path d="M7 5v6a5 5 0 0 0 10 0V5M5 20h14"/>`)
+
 	// Seams around app/OS-level calls so headless tests can drive boardUI
 	// without a window server or touching the real OS Trash/dialogs/clipboard.
-	boardActivate           = platform.ActivateSelf
-	boardReveal             = platform.RevealInFileManager
-	boardTrash              = platform.TrashFile
-	boardOpenImageDialog    = func(w *mygo.Window) ([]string, error) {
+	boardActivate        = platform.ActivateSelf
+	boardReveal          = platform.RevealInFileManager
+	boardTrash           = platform.TrashFile
+	boardOpenImageDialog = func(w *mygo.Window) ([]string, error) {
 		return mygo.Dialog.Open(mygo.OpenDialogOptions{
 			Parent:   w,
 			Multiple: true,
@@ -100,18 +110,19 @@ type boardUI struct {
 	dirtyFlag bool
 	locked    bool
 
-	boards        []doc.BoardInfo
-	renaming      bool
-	renameDraft   string
-	renameBoot    bool
-	confirmDelete bool
+	clipStamp         string
+	boards            []doc.BoardInfo
+	renaming          bool
+	renameDraft       string
+	renameBoot        bool
+	confirmDelete     bool
 	confirmPageDelete bool
 
-	spaceHeld    bool
-	panDrag      bool
-	panLastX     float32
-	panLastY     float32
-	stageRect    ui.Rect
+	spaceHeld         bool
+	panDrag           bool
+	panLastX          float32
+	panLastY          float32
+	stageRect         ui.Rect
 	titleMenu         bool
 	pageMenu          bool
 	zoomMenu          bool
@@ -135,13 +146,12 @@ type boardUI struct {
 	hoverScreenPt     geo.Vec
 	radialOn          bool
 	radialPt          geo.Vec
-	dragTempFiles     []string
 	wasMenuOpen       bool
 	canvasFocus       bool
-	editKey      int
-	lastEditing  doc.ID
-	t0           time.Time
-	bitmaps      map[doc.ID]*ui.Bitmap
+	editKey           int
+	lastEditing       doc.ID
+	t0                time.Time
+	bitmaps           map[doc.ID]*ui.Bitmap
 }
 
 type boardMeasureKey struct {
@@ -228,6 +238,7 @@ func (a *shelf) boardSession() *boardUI {
 		a.report(err)
 		return nil
 	}
+	cleanBoardDragTemps(boardDragTempDir, time.Now(), 24*time.Hour)
 	b := &boardUI{host: a, store: st, t0: time.Now(), bitmaps: map[doc.ID]*ui.Bitmap{}}
 	if err := b.load(); err != nil {
 		a.report(err)
@@ -259,8 +270,8 @@ func (b *boardUI) pickImage() {
 	}
 }
 
-func (b *boardUI) pasteImage() bool {
-	if b.locked {
+func (b *boardUI) pasteImage(formats []transfer.Format) bool {
+	if b.locked || noteClipboardHasText(formats) {
 		return false
 	}
 	data := boardReadClipboardImage()
@@ -314,10 +325,21 @@ func (b *boardUI) load() error {
 	d, err := b.store.Read()
 	if err != nil {
 		b.locked = true
+		// A corrupt board gets a blank, read-only placeholder titled with its
+		// file name, never the previous board's document.
+		name := strings.TrimSuffix(filepath.Base(b.store.Path()), doc.FileExt)
+		placeholder := doc.NewDrawing(b.store.ID(), name)
 		if b.ed == nil {
-			b.ed = editor.New(doc.NewDrawing(b.store.ID(), b.host.appLoc().BoardDefaultName()), boardMeasure)
+			b.ed = editor.New(placeholder, boardMeasure)
+		} else {
+			b.ed.Replace(placeholder)
 		}
+		b.ed.OnChange = func(*doc.Drawing) { b.markDirty() }
 		b.dirtyFlag = false
+		b.rev++
+		b.seenRev = b.rev
+		b.since = time.Time{}
+		b.syncWindowTheme()
 		return err
 	}
 	b.locked = false
@@ -329,6 +351,7 @@ func (b *boardUI) load() error {
 	b.ed.OnChange = func(*doc.Drawing) {
 		b.markDirty()
 	}
+	b.ed.FrameName = b.host.appLoc().BoardFrameDefault()
 	b.dirtyFlag = false
 	b.rev++
 	b.seenRev = b.rev
@@ -486,6 +509,38 @@ func (b *boardUI) cancelRename() {
 	b.invalidate()
 }
 
+var boardPageNumber = regexp.MustCompile(`(?i)^(?:page|页面)\s*(\d+)$`)
+
+// pageTitle shows a page's default name in the current language without
+// rewriting custom names.
+func (b *boardUI) pageTitle(l locales.Messages, pg *doc.Page) string {
+	if pg == nil {
+		return ""
+	}
+	if m := boardPageNumber.FindStringSubmatch(pg.Name); m != nil {
+		if n, err := strconv.Atoi(m[1]); err == nil {
+			return l.BoardPageName(strconv.Itoa(n))
+		}
+	}
+	return pg.Name
+}
+
+// nextPageName names a new page one past the highest existing number, so
+// deleting a middle page never reuses a name.
+func (b *boardUI) nextPageName(l locales.Messages) string {
+	maxN := 0
+	if b.ed != nil {
+		for _, pg := range b.ed.Pages() {
+			if m := boardPageNumber.FindStringSubmatch(pg.Name); m != nil {
+				if n, err := strconv.Atoi(m[1]); err == nil && n > maxN {
+					maxN = n
+				}
+			}
+		}
+	}
+	return l.BoardPageName(strconv.Itoa(maxN + 1))
+}
+
 func (b *boardUI) startPageRename() {
 	if b.locked || b.ed == nil {
 		return
@@ -495,7 +550,7 @@ func (b *boardUI) startPageRename() {
 		return
 	}
 	b.renamingPage = true
-	b.renamePageDraft = pg.Name
+	b.renamePageDraft = b.pageTitle(b.host.appLoc(), pg)
 	b.renamePageBoot = false
 	b.invalidate()
 }
@@ -711,10 +766,6 @@ func (b *boardUI) onClose(*mygo.CloseEvent) {
 	b.confirmPageDelete = false
 	b.spaceHeld = false
 	b.panDrag = false
-	for _, p := range b.dragTempFiles {
-		_ = os.Remove(p)
-	}
-	b.dragTempFiles = nil
 	if a.quitting {
 		return
 	}

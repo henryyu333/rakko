@@ -648,6 +648,9 @@ func (e *Editor) newBoxShape(at geo.Vec, w, h float64) doc.ID {
 	id := doc.NewRecordID("shape")
 	if e.Tool == ToolFrame {
 		s := doc.NewShape(id, doc.TypeFrame)
+		if e.FrameName != "" {
+			s.Name = e.FrameName
+		}
 		s.W, s.H = w, h
 		s.X, s.Y = at.X, at.Y
 		s.Parent = e.Page

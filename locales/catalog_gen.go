@@ -11129,6 +11129,66 @@ func (msgs Messages) BoardPropText() string {
 	return Catalog.Format(msgs.locale, "boardPropText", nil)
 }
 
+// BoardPropAlignLeft says "左对齐"
+// in the language the app shows.
+func BoardPropAlignLeft() string { return In(i18n.Locale()).BoardPropAlignLeft() }
+
+// BoardPropAlignLeft says "左对齐"
+// in the language of msgs.
+func (msgs Messages) BoardPropAlignLeft() string {
+	return Catalog.Format(msgs.locale, "boardPropAlignLeft", nil)
+}
+
+// BoardPropAlignCenter says "居中对齐"
+// in the language the app shows.
+func BoardPropAlignCenter() string { return In(i18n.Locale()).BoardPropAlignCenter() }
+
+// BoardPropAlignCenter says "居中对齐"
+// in the language of msgs.
+func (msgs Messages) BoardPropAlignCenter() string {
+	return Catalog.Format(msgs.locale, "boardPropAlignCenter", nil)
+}
+
+// BoardPropAlignRight says "右对齐"
+// in the language the app shows.
+func BoardPropAlignRight() string { return In(i18n.Locale()).BoardPropAlignRight() }
+
+// BoardPropAlignRight says "右对齐"
+// in the language of msgs.
+func (msgs Messages) BoardPropAlignRight() string {
+	return Catalog.Format(msgs.locale, "boardPropAlignRight", nil)
+}
+
+// BoardPropBold says "加粗"
+// in the language the app shows.
+func BoardPropBold() string { return In(i18n.Locale()).BoardPropBold() }
+
+// BoardPropBold says "加粗"
+// in the language of msgs.
+func (msgs Messages) BoardPropBold() string {
+	return Catalog.Format(msgs.locale, "boardPropBold", nil)
+}
+
+// BoardPropItalic says "斜体"
+// in the language the app shows.
+func BoardPropItalic() string { return In(i18n.Locale()).BoardPropItalic() }
+
+// BoardPropItalic says "斜体"
+// in the language of msgs.
+func (msgs Messages) BoardPropItalic() string {
+	return Catalog.Format(msgs.locale, "boardPropItalic", nil)
+}
+
+// BoardPropUnderline says "下划线"
+// in the language the app shows.
+func BoardPropUnderline() string { return In(i18n.Locale()).BoardPropUnderline() }
+
+// BoardPropUnderline says "下划线"
+// in the language of msgs.
+func (msgs Messages) BoardPropUnderline() string {
+	return Catalog.Format(msgs.locale, "boardPropUnderline", nil)
+}
+
 // BoardPropLabelPos says "标签对齐"
 // in the language the app shows.
 func BoardPropLabelPos() string { return In(i18n.Locale()).BoardPropLabelPos() }
@@ -11477,6 +11537,26 @@ func BoardPageDelete() string { return In(i18n.Locale()).BoardPageDelete() }
 // in the language of msgs.
 func (msgs Messages) BoardPageDelete() string {
 	return Catalog.Format(msgs.locale, "boardPageDelete", nil)
+}
+
+// BoardPageName says "页面 {n}"
+// in the language the app shows.
+func BoardPageName(n string) string { return In(i18n.Locale()).BoardPageName(n) }
+
+// BoardPageName says "页面 {n}"
+// in the language of msgs.
+func (msgs Messages) BoardPageName(n string) string {
+	return Catalog.Format(msgs.locale, "boardPageName", map[string]any{"n": n})
+}
+
+// BoardFrameDefault says "画框"
+// in the language the app shows.
+func BoardFrameDefault() string { return In(i18n.Locale()).BoardFrameDefault() }
+
+// BoardFrameDefault says "画框"
+// in the language of msgs.
+func (msgs Messages) BoardFrameDefault() string {
+	return Catalog.Format(msgs.locale, "boardFrameDefault", nil)
 }
 
 // BoardPageDeleteConfirm says "删除页面「{name}」？页面上的内容会一并删除，可用撤销恢复。"

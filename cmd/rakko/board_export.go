@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/transfer"
@@ -24,6 +25,29 @@ const (
 	boardExportTileSize = 1024
 	boardExportMaxDim   = 8192
 )
+
+// boardDragTempDir holds PNGs made for dragging out of the board; files older
+// than a day are removed when a board session starts, because a receiving app
+// may read them after the drag ends.
+var boardDragTempDir = filepath.Join(os.TempDir(), "rakko-board-drag")
+
+// cleanBoardDragTemps removes files in dir older than maxAge.
+func cleanBoardDragTemps(dir string, now time.Time, maxAge time.Duration) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil || now.Sub(info.ModTime()) <= maxAge {
+			continue
+		}
+		_ = os.Remove(filepath.Join(dir, e.Name()))
+	}
+}
 
 var (
 	boardSaveFileDialog = func(w *mygo.Window, name string, filterName string, exts []string) (string, error) {
@@ -251,9 +275,11 @@ func (b *boardUI) exportPNGFile(ids []doc.ID) {
 	if err != nil || path == "" {
 		return
 	}
-	if err := os.WriteFile(path, data, 0o600); err != nil {
+	if err := os.WriteFile(path, data, 0o644); err != nil {
 		b.host.report(err)
+		return
 	}
+	_ = os.Chmod(path, 0o644)
 }
 
 func (b *boardUI) exportSVGFile(ids []doc.ID) {
@@ -266,9 +292,11 @@ func (b *boardUI) exportSVGFile(ids []doc.ID) {
 	if err != nil || path == "" {
 		return
 	}
-	if err := os.WriteFile(path, []byte(svg), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(svg), 0o644); err != nil {
 		b.host.report(err)
+		return
 	}
+	_ = os.Chmod(path, 0o644)
 }
 
 func (b *boardUI) exportBoardFile() {
@@ -284,9 +312,11 @@ func (b *boardUI) exportBoardFile() {
 	if err != nil || path == "" {
 		return
 	}
-	if err := os.WriteFile(path, raw, 0o600); err != nil {
+	if err := os.WriteFile(path, raw, 0o644); err != nil {
 		b.host.report(err)
+		return
 	}
+	_ = os.Chmod(path, 0o644)
 }
 
 func (b *boardUI) importBoardFile() {
@@ -298,6 +328,13 @@ func (b *boardUI) importBoardFile() {
 	}
 	paths, err := boardOpenBoardDialog(b.win)
 	if err != nil || len(paths) == 0 {
+		return
+	}
+	if info, err := os.Stat(paths[0]); err != nil {
+		b.host.report(err)
+		return
+	} else if info.Size() > doc.MaxImportBytes {
+		b.host.report(fmt.Errorf("board: import is %d bytes, limit %d", info.Size(), doc.MaxImportBytes))
 		return
 	}
 	raw, err := os.ReadFile(paths[0])
@@ -343,7 +380,7 @@ func (b *boardUI) writeDragPNGTemp(ids []doc.ID, dir string) (string, transfer.D
 		return "", transfer.Data{}, err
 	}
 	if dir == "" {
-		dir = filepath.Join(os.TempDir(), "rakko-board-drag")
+		dir = boardDragTempDir
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", transfer.Data{}, err
@@ -362,7 +399,6 @@ func (b *boardUI) writeDragPNGTemp(ids []doc.ID, dir string) (string, transfer.D
 		_ = os.Remove(path)
 		return "", transfer.Data{}, err
 	}
-	b.dragTempFiles = append(b.dragTempFiles, path)
 	td, err := transfer.FileData(path)
 	if err != nil {
 		return path, transfer.Data{}, err

@@ -1247,7 +1247,7 @@ func TestBoardSeg5PropertyPanelLooksFontsAndScreenshots(t *testing.T) {
 	// Capture 4: 4 Fonts + Text Property Panel.
 	b.ed.Select(textIDs[0])
 	view.Frame()
-	if err := view.Click("B"); err != nil {
+	if err := view.Click(l.BoardPropBold()); err != nil {
 		t.Fatalf("click Bold toggle: %v", err)
 	}
 	view.Frame()
@@ -1429,7 +1429,7 @@ func TestBoardSeg6ActionsNavPagesFocusAndScreenshots(t *testing.T) {
 
 	// 5. Page Switcher popover in top title bar.
 	b.minimap = false
-	pgName := b.ed.ActivePageInfo().Name
+	pgName := b.pageTitle(l, b.ed.ActivePageInfo())
 	if err := view.Click(pgName); err != nil {
 		t.Fatalf("open Page Switcher: %v", err)
 	}
@@ -1694,6 +1694,70 @@ func TestBoardSeg7ExportClipboardDragCropLaserRadialNarrow(t *testing.T) {
 	saveBoardSeg7Shot(t, "05-tiny-460.png", tiny.Image())
 }
 
+// boardPixelsDiffer counts pixels whose channels differ by more than tol; the
+// bar's 2% alpha lets a little background through, which is ignored.
+func boardPixelsDiffer(a, b []byte, tol int) int {
+	if len(a) != len(b) {
+		return -1
+	}
+	n := 0
+	for i := 0; i+3 < len(a); i += 4 {
+		d := 0
+		for k := 0; k < 3; k++ {
+			v := int(a[i+k]) - int(b[i+k])
+			if v < 0 {
+				v = -v
+			}
+			if v > d {
+				d = v
+			}
+		}
+		if d > tol {
+			n++
+		}
+	}
+	return n
+}
+
+// boardToolbarPixels crops the toolbar's button strip from the last frame.
+func boardToolbarPixels(t *testing.T, view *ui.Tester, l locales.Messages) ([]byte, ui.Rect) {
+	t.Helper()
+	labels := []string{
+		l.BoardToolSelect(), l.BoardToolHand(),
+		l.BoardToolDraw(), l.BoardToolHighlight(), l.BoardToolEraser(), l.BoardToolLaser(),
+		l.BoardToolShape(), l.BoardToolArrow(), l.BoardToolText(), l.BoardToolImage(),
+	}
+	img := view.Image()
+	var u ui.Rect
+	first := true
+	for _, label := range labels {
+		r, ok := view.Find(label)
+		if !ok {
+			t.Fatalf("toolbar button %q missing", label)
+		}
+		if first {
+			u, first = r, false
+			continue
+		}
+		x0 := min(u.X, r.X)
+		y0 := min(u.Y, r.Y)
+		x1 := max(u.X+u.W, r.X+r.W)
+		y1 := max(u.Y+u.H, r.Y+r.H)
+		u = ui.Rect{X: x0, Y: y0, W: x1 - x0, H: y1 - y0}
+	}
+	x0, y0 := int(u.X), int(u.Y)
+	x1, y1 := int(u.X+u.W), int(u.Y+u.H)
+	if x0 < 0 || y0 < 0 || x1 > img.Bounds().Dx() || y1 > img.Bounds().Dy() {
+		t.Fatalf("toolbar rect %v outside image", u)
+	}
+	out := make([]byte, 0, (x1-x0)*(y1-y0)*4)
+	for y := y0; y < y1; y++ {
+		row := img.Pix[y*img.Stride+x0*4 : y*img.Stride+x1*4]
+		out = append(out, row...)
+	}
+	return out, u
+}
+
 func TestBoardHighDensityMaskAtlasGuard(t *testing.T) {
 	a, b := boardTestShelf(t)
 	l := locales.In("zh-Hans")
@@ -1702,6 +1766,12 @@ func TestBoardHighDensityMaskAtlasGuard(t *testing.T) {
 
 	// Insert 1550 visible fountain-pen strokes so mask area budget (6_000_000) overflows
 	// and verify graceful Polyline degradation keeps all items & toolbar intact.
+	// Baseline toolbar pixels: the atlas guard must keep the icons themselves.
+	view.Frame()
+	view.Frame()
+	saveBoardSeg3Shot(t, "high-density-before.png", view.Image())
+	basePix, baseRect := boardToolbarPixels(t, view, l)
+
 	const count = 1550
 	b.ed.SetTool(editor.ToolDraw)
 	b.ed.Next.PenKind = "pen"
@@ -1723,6 +1793,14 @@ func TestBoardHighDensityMaskAtlasGuard(t *testing.T) {
 
 	if !b.lastLightInk {
 		t.Fatalf("expected high-density board (%d strokes) to trigger mask atlas budget lightInk guard", count)
+	}
+	saveBoardSeg3Shot(t, "high-density-after.png", view.Image())
+	afterPix, afterRect := boardToolbarPixels(t, view, l)
+	if afterRect != baseRect {
+		t.Fatalf("toolbar rect moved: %v -> %v", baseRect, afterRect)
+	}
+	if diff := boardPixelsDiffer(basePix, afterPix, 24); diff > 0 {
+		t.Fatalf("toolbar pixels changed under mask atlas pressure (%d pixels); icons disappeared", diff)
 	}
 	if b.ed.ItemCount() != count {
 		t.Fatalf("ItemCount = %d, want %d", b.ed.ItemCount(), count)

@@ -109,7 +109,7 @@ func TestBoardPageDeleteRequiresConfirmation(t *testing.T) {
 	a, b := boardTestShelf(t)
 	b.ed.AddPage("")
 	pagesBefore := len(b.ed.Pages())
-	pageName := b.ed.ActivePageInfo().Name
+	pageName := b.pageTitle(locales.In("zh-Hans"), b.ed.ActivePageInfo())
 
 	view := ui.NewTester(a.boardView, 1040, 680)
 	view.SetLocale("zh-Hans")

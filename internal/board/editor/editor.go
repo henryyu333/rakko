@@ -57,6 +57,8 @@ type Editor struct {
 
 	// OnChange is invoked whenever the document state changes and should be persisted.
 	OnChange func(*doc.Drawing)
+	// FrameName is the localized name a new Frame gets; empty keeps "Frame".
+	FrameName string
 
 	cams map[doc.ID]Camera
 	VW   float64

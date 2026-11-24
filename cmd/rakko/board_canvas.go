@@ -104,11 +104,22 @@ func (s *boardScene) estimateMaskArea(parent doc.ID) float64 {
 			}
 		}
 		box := s.b.ed.PageBounds(id)
-		if s.view.Overlaps(box) {
-			area += (box.W*k + 8) * (box.H*k + 8)
+		if ib, ok := boardMaskOverlap(box, s.view); ok {
+			area += (ib.W*k + 8) * (ib.H*k + 8)
 		}
 	}
 	return area
+}
+
+// boardMaskOverlap clips a shape's page box to the visible box: a huge shape
+// zoomed in only costs the part on screen.
+func boardMaskOverlap(box, view geo.Box) (geo.Box, bool) {
+	x0, y0 := math.Max(box.X, view.X), math.Max(box.Y, view.Y)
+	x1, y1 := math.Min(box.MaxX(), view.MaxX()), math.Min(box.MaxY(), view.MaxY())
+	if x1 <= x0 || y1 <= y0 {
+		return geo.Box{}, false
+	}
+	return geo.Box{X: x0, Y: y0, W: x1 - x0, H: y1 - y0}, true
 }
 
 func (s *boardScene) renderChildren(parent doc.ID) {
@@ -219,7 +230,10 @@ func (s *boardScene) renderFrame(sh *doc.Shape) {
 		// Frame title tab above the top-left corner.
 		title := strings.TrimSpace(sh.Name)
 		if title == "" {
-			title = "Frame"
+			title = s.b.ed.FrameName
+			if title == "" {
+				title = "Frame"
+			}
 		}
 		labelSize := float32(11.5)
 		drawTitle := func() {

@@ -239,7 +239,7 @@ func (a *shelf) boardStage(c *ui.Context, l locales.Messages, pal *editor.Palett
 			return b.handleCanvasInput(c, ev)
 		})
 		canvas.ContextMenu(func(m *ui.Menu) {
-			b.buildContextMenu(l, m)
+			b.buildContextMenu(c, l, m)
 		})
 
 		a.boardTextEditor(c, pal)
@@ -298,10 +298,10 @@ func (a *shelf) boardTextEditor(c *ui.Context, pal *editor.Palette) {
 
 	input := ui.TextAreaBase(c.Key(fmt.Sprintf("board-edit-%d", b.editKey)), &b.ed.EditText).
 		Absolute().
-		Left(float32(center.X - sw/2)).Top(float32(center.Y - shPx/2)).
+		Left(float32(center.X-sw/2)).Top(float32(center.Y-shPx/2)).
 		Size(float32(sw), float32(shPx)).
 		Font(boardFontFamily(font)).
-		FontSize(float32(size * cam.Z)).
+		FontSize(float32(size*cam.Z)).
 		LineHeight(1.3).
 		TextColor(boardColor(col)).
 		Background(ui.Transparent).
@@ -349,10 +349,36 @@ func (a *shelf) boardTextEditor(c *ui.Context, pal *editor.Palette) {
 	})
 }
 
+// boardChrome decides how the bottom chrome shares the stage width: the
+// toolbar is compact when the full one and the nav cannot sit side by side,
+// stacked above the nav when even the compact one cannot, and centred only
+// when a full toolbar has room on both sides of the nav.
+func (b *boardUI) boardChrome() (compact, stacked, alignEnd bool) {
+	w := b.stageRect.W
+	switch {
+	case w <= 0:
+		return false, false, false
+	case w < 640:
+		return true, true, false
+	case w < 800:
+		return true, false, true
+	case w < 1030:
+		return false, false, true
+	}
+	return false, false, false
+}
+
+// boardToolbarBottom is the toolbar's bottom inset, raised when it is stacked.
+func (b *boardUI) boardToolbarBottom() float32 {
+	if _, stacked, _ := b.boardChrome(); stacked {
+		return 62
+	}
+	return 16
+}
+
 func (a *shelf) boardNavBar(c *ui.Context, l locales.Messages, pal *editor.Palette) {
 	b := a.board
 	pct := int(math.Round(b.ed.Cam().Z * 100))
-	narrow := b.stageRect.W > 0 && b.stageRect.W < 640
 	nav := ui.Row(c.Key("board-nav")).Absolute().Left(12).Bottom(16).Height(38).
 		Padding(0, 5, 0, 5).Gap(1).Radius(11).Clip().AlignItems(ui.Center).
 		Background(boardColor(pal.Bar)).Border(0.5, boardColor(pal.Edge)).
@@ -378,12 +404,10 @@ func (a *shelf) boardNavBar(c *ui.Context, l locales.Messages, pal *editor.Palet
 
 		ui.Box(c).Width(1).Height(18).Margin(0, 2, 0, 2).Background(boardColor(pal.Sep))
 
-		if !narrow {
-			zout := a.boardNavIconBtn(c, pal, "board-zout", minusSymbol, l.BoardZoomOut(), false)
-			if zout.Clicked() {
-				b.ed.ZoomOut()
-				b.invalidate()
-			}
+		zout := a.boardNavIconBtn(c, pal, "board-zout", minusSymbol, l.BoardZoomOut(), false)
+		if zout.Clicked() {
+			b.ed.ZoomOut()
+			b.invalidate()
 		}
 
 		zbtn := ui.Row(c.Key("board-zoom-pct")).Height(26).MinWidth(38).Padding(0, 4, 0, 4).Radius(6).Center().
@@ -427,24 +451,22 @@ func (a *shelf) boardNavBar(c *ui.Context, l locales.Messages, pal *editor.Palet
 			}
 		}, b.popoverButtonOpts(pal, ui.AnchorTopStart, ui.AnchorBottomStart, &b.zoomMenu))
 
-		if !narrow {
-			zin := a.boardNavIconBtn(c, pal, "board-zin", plusSymbol, l.BoardZoomIn(), false)
-			if zin.Clicked() {
-				b.ed.ZoomIn()
-				b.invalidate()
-			}
+		zin := a.boardNavIconBtn(c, pal, "board-zin", plusSymbol, l.BoardZoomIn(), false)
+		if zin.Clicked() {
+			b.ed.ZoomIn()
+			b.invalidate()
+		}
 
-			fitBtn := a.boardNavIconBtn(c, pal, "board-fit", boardFitSymbol, l.BoardZoomFit(), false)
-			if fitBtn.Clicked() {
-				b.ed.ZoomToFit()
-				b.invalidate()
-			}
+		fitBtn := a.boardNavIconBtn(c, pal, "board-fit", boardFitSymbol, l.BoardZoomFit(), false)
+		if fitBtn.Clicked() {
+			b.ed.ZoomToFit()
+			b.invalidate()
+		}
 
-			miniBtn := a.boardNavIconBtn(c, pal, "board-mini", boardMinimapSymbol, l.BoardMinimapLabel(), b.minimap)
-			if miniBtn.Clicked() {
-				b.minimap = !b.minimap
-				b.invalidate()
-			}
+		miniBtn := a.boardNavIconBtn(c, pal, "board-mini", boardMinimapSymbol, l.BoardMinimapLabel(), b.minimap)
+		if miniBtn.Clicked() {
+			b.minimap = !b.minimap
+			b.invalidate()
 		}
 
 		ui.Box(c).Width(1).Height(18).Margin(0, 2, 0, 2).Background(boardColor(pal.Sep))
@@ -610,7 +632,7 @@ func (a *shelf) boardPageDeleteModal(c *ui.Context, l locales.Messages, pal *edi
 // boardConfirmModal renders the shared destructive-action dialog used for
 // trashing a board and deleting a page.
 func (a *shelf) boardConfirmModal(c *ui.Context, l locales.Messages, pal *editor.Palette, key, body, okLabel string, ok, cancel func()) {
-	backdrop := ui.Box(c.Key(key+"-modal")).Modal().Absolute().Top(0).Left(0).Fill().
+	backdrop := ui.Box(c.Key(key + "-modal")).Modal().Absolute().Top(0).Left(0).Fill().
 		Background(ui.RGBA(0, 0, 0, 0.45)).Center()
 	backdrop.Children(func() {
 		card := ui.Column(c.Key(key+"-card")).Width(320).Padding(16, 16, 14, 16).Gap(14).
@@ -699,7 +721,7 @@ func (a *shelf) boardSubBar(c *ui.Context, l locales.Messages, pal *editor.Palet
 	default:
 		return
 	}
-	wrap := ui.Row(c.Key("board-subbar-wrap")).Absolute().Left(0).Right(0).Bottom(70).Justify(ui.Center).PassThrough()
+	wrap := ui.Row(c.Key("board-subbar-wrap")).Absolute().Left(0).Right(0).Bottom(b.boardToolbarBottom() + 52).Justify(ui.Center).PassThrough()
 	wrap.Children(func() {
 		sub := ui.Row(c.Key("board-subbar")).Height(34).Padding(0, 6, 0, 6).Gap(2).Radius(10).Clip().AlignItems(ui.Center).
 			Background(boardColor(pal.Bar)).Border(0.5, boardColor(pal.Edge)).
@@ -767,12 +789,14 @@ func (b *boardUI) chooseTool(t editor.Tool) {
 
 func (a *shelf) boardToolbar(c *ui.Context, l locales.Messages, pal *editor.Palette) {
 	b := a.board
-	narrow := b.stageRect.W > 0 && b.stageRect.W < 640
-	tiny := b.stageRect.W > 0 && b.stageRect.W < 600
-	wrap := ui.Row(c.Key("board-tools-wrap")).Absolute().Left(0).Right(0).Bottom(16).PassThrough()
-	if narrow {
+	compact, stacked, alignEnd := b.boardChrome()
+	wrap := ui.Row(c.Key("board-tools-wrap")).Absolute().Left(0).Right(0).Bottom(b.boardToolbarBottom()).PassThrough()
+	switch {
+	case stacked:
+		wrap.Justify(ui.Center)
+	case alignEnd:
 		wrap.Justify(ui.End).Padding(0, 12, 0, 0)
-	} else {
+	default:
 		wrap.Justify(ui.Center)
 	}
 	wrap.Children(func() {
@@ -783,7 +807,7 @@ func (a *shelf) boardToolbar(c *ui.Context, l locales.Messages, pal *editor.Pale
 			if a.boardToolBtn(c, pal, "tool-select", boardSelectSymbol, l.BoardToolSelect(), b.ed.Tool == editor.ToolSelect).Clicked() {
 				b.chooseTool(editor.ToolSelect)
 			}
-			if !tiny && a.boardToolBtn(c, pal, "tool-lasso", boardLassoSymbol, l.BoardToolLasso(), b.ed.Tool == editor.ToolLasso).Clicked() {
+			if !compact && a.boardToolBtn(c, pal, "tool-lasso", boardLassoSymbol, l.BoardToolLasso(), b.ed.Tool == editor.ToolLasso).Clicked() {
 				b.chooseTool(editor.ToolLasso)
 			}
 			if a.boardToolBtn(c, pal, "tool-hand", boardHandSymbol, l.BoardToolHand(), b.ed.Tool == editor.ToolHand).Clicked() {
@@ -859,22 +883,22 @@ func (a *shelf) boardToolbar(c *ui.Context, l locales.Messages, pal *editor.Pale
 			if a.boardToolBtn(c, pal, "tool-arrow", boardArrowSymbol, l.BoardToolArrow(), b.ed.Tool == editor.ToolArrow).Clicked() {
 				b.chooseTool(editor.ToolArrow)
 			}
-			if !tiny && a.boardToolBtn(c, pal, "tool-line", boardLineSymbol, l.BoardToolLine(), b.ed.Tool == editor.ToolLine).Clicked() {
+			if !compact && a.boardToolBtn(c, pal, "tool-line", boardLineSymbol, l.BoardToolLine(), b.ed.Tool == editor.ToolLine).Clicked() {
 				b.chooseTool(editor.ToolLine)
 			}
-			if !tiny && a.boardToolBtn(c, pal, "tool-frame", boardFrameSymbol, l.BoardToolFrame(), b.ed.Tool == editor.ToolFrame).Clicked() {
+			if !compact && a.boardToolBtn(c, pal, "tool-frame", boardFrameSymbol, l.BoardToolFrame(), b.ed.Tool == editor.ToolFrame).Clicked() {
 				b.chooseTool(editor.ToolFrame)
 			}
 			if a.boardToolBtn(c, pal, "tool-text", textSymbol, l.BoardToolText(), b.ed.Tool == editor.ToolText).Clicked() {
 				b.chooseTool(editor.ToolText)
 			}
-			if !tiny && a.boardToolBtn(c, pal, "tool-note", noteSymbol, l.BoardToolNote(), b.ed.Tool == editor.ToolNote).Clicked() {
+			if !compact && a.boardToolBtn(c, pal, "tool-note", noteSymbol, l.BoardToolNote(), b.ed.Tool == editor.ToolNote).Clicked() {
 				b.chooseTool(editor.ToolNote)
 			}
 			if a.boardToolBtn(c, pal, "tool-image", imgSymbol, l.BoardToolImage(), false).Clicked() {
 				b.pickImage()
 			}
-			if !tiny {
+			if !compact {
 				ui.Box(c).Width(1).Height(22).Margin(0, 3, 0, 3).Background(boardColor(pal.Sep))
 				if a.boardToolBtn(c, pal, "tool-lock", boardToolLockSymbol, l.BoardKeepTool(), b.ed.ToolLocked).Clicked() {
 					b.ed.ToggleToolLock()
@@ -888,9 +912,11 @@ func (a *shelf) boardToolbar(c *ui.Context, l locales.Messages, pal *editor.Pale
 func (a *shelf) boardToolBtn(c *ui.Context, pal *editor.Palette, key string, icon *ui.SVG, label string, active bool) ui.Element {
 	sz := float32(30)
 	isz := float32(17)
-	if b := a.board; b != nil && b.stageRect.W > 0 && b.stageRect.W < 640 {
-		sz = 26
-		isz = 15
+	if b := a.board; b != nil {
+		if compact, _, _ := b.boardChrome(); compact {
+			sz = 26
+			isz = 15
+		}
 	}
 	btn := ui.Row(c.Key(key)).Size(sz, sz).Radius(7).Center().Label(label).Tooltip(label)
 	switch {
@@ -988,6 +1014,8 @@ func (b *boardUI) handleCanvasInput(c *ui.Context, ev ui.InputEvent) bool {
 	switch ev.Kind {
 	case ui.InputScroll:
 		if ev.Mods&(ui.Cmd|ui.Ctrl) != 0 {
+			// A discrete wheel (a mouse, or macOS without precise deltas) zooms
+			// in steps on both platforms; a trackpad pans with precise deltas.
 			if !ev.Precise {
 				if ev.DY < 0 {
 					b.ed.ZoomAt(pt, 1.2)
@@ -998,7 +1026,13 @@ func (b *boardUI) handleCanvasInput(c *ui.Context, ev ui.InputEvent) bool {
 				b.ed.ZoomAt(pt, math.Exp(-float64(ev.DY)*0.01))
 			}
 		} else {
-			b.ed.Pan(float64(ev.DX), float64(ev.DY))
+			dx, dy := ev.DX, ev.DY
+			// Windows sends Shift+wheel as a vertical delta; Mac's system
+			// already turns it into DX, so swap only the discrete vertical form.
+			if ev.Mods&ui.Shift != 0 && !ev.Precise && dx == 0 {
+				dx, dy = dy, 0
+			}
+			b.ed.Pan(float64(dx), float64(dy))
 		}
 		b.invalidate()
 		return true
@@ -1078,13 +1112,13 @@ func (b *boardUI) handleCanvasInput(c *ui.Context, ev ui.InputEvent) bool {
 				} else if ev.Mods&ui.Alt != 0 {
 					b.ed.CopyStyle()
 				} else {
-					b.ed.Copy()
+					b.copySelection(c)
 				}
 				b.invalidate()
 				return true
 			case ui.KeyX:
 				if !b.locked {
-					b.ed.Cut()
+					b.cutSelection(c)
 					b.invalidate()
 				}
 				return true
@@ -1099,7 +1133,17 @@ func (b *boardUI) handleCanvasInput(c *ui.Context, ev ui.InputEvent) bool {
 					}
 					return true
 				}
-				if b.pasteImage() {
+				if b.internalClipboardCurrent(c) {
+					if !b.locked && b.ed.Paste() {
+						b.invalidate()
+						return true
+					}
+				}
+				formats := c.Services().ClipboardFormats()
+				if noteClipboardHasText(formats) {
+					return true
+				}
+				if b.pasteImage(formats) {
 					return true
 				}
 				if !b.locked && b.ed.Paste() {

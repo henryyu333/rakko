@@ -282,9 +282,9 @@ func (a *shelf) boardPropColorSection(c *ui.Context, l locales.Messages, pal *ed
 }
 
 func (a *shelf) boardPropSegmented(c *ui.Context, pal *editor.Palette, title, keyPrefix string, opts []propOption, active string, onPick func(string)) {
-	ui.Column(c.Key("prop-sec-"+keyPrefix)).FillWidth().Gap(4).Children(func() {
+	ui.Column(c.Key("prop-sec-" + keyPrefix)).FillWidth().Gap(4).Children(func() {
 		boardPropLabel(c, pal, title)
-		ui.Row(c.Key("prop-row-"+keyPrefix)).FillWidth().Gap(3).Children(func() {
+		ui.Row(c.Key("prop-row-" + keyPrefix)).FillWidth().Gap(3).Children(func() {
 			for _, opt := range opts {
 				opt := opt
 				isOn := opt.id == active
@@ -473,18 +473,17 @@ func (a *shelf) boardPropFontSection(c *ui.Context, l locales.Messages, pal *edi
 			toggles := []struct {
 				id     string
 				label  string
+				icon   *ui.SVG
 				active bool
-				weight int
-				italic bool
 				act    func()
 			}{
-				{"b", "B", ps.Bold, 700, false, func() { b.ed.TogglePropBold(); b.invalidate() }},
-				{"i", "I", ps.Italic, 500, true, func() { b.ed.TogglePropItalic(); b.invalidate() }},
-				{"u", "U", ps.Underline, 500, false, func() { b.ed.TogglePropUnderline(); b.invalidate() }},
+				{"b", l.BoardPropBold(), boardBoldSymbol, ps.Bold, func() { b.ed.TogglePropBold(); b.invalidate() }},
+				{"i", l.BoardPropItalic(), boardItalicSymbol, ps.Italic, func() { b.ed.TogglePropItalic(); b.invalidate() }},
+				{"u", l.BoardPropUnderline(), boardUnderlineSymbol, ps.Underline, func() { b.ed.TogglePropUnderline(); b.invalidate() }},
 			}
 			for _, tg := range toggles {
 				tg := tg
-				btn := ui.Row(c.Key("prop-fmt-"+tg.id)).Grow(1).Height(24).Radius(6).Center().Label(tg.label)
+				btn := ui.Row(c.Key("prop-fmt-" + tg.id)).Grow(1).Height(24).Radius(6).Center().Label(tg.label)
 				switch {
 				case tg.active:
 					btn.Background(boardColor(pal.AccentFill)).Border(0.5, boardColor(pal.Accent.Alpha(0.55)))
@@ -498,10 +497,7 @@ func (a *shelf) boardPropFontSection(c *ui.Context, l locales.Messages, pal *edi
 					if tg.active {
 						col = pal.Accent
 					}
-					tx := ui.Text(c, tg.label).SingleLine().FontSize(11).FontWeight(tg.weight).TextColor(boardColor(col))
-					if tg.italic {
-						tx.Italic()
-					}
+					ui.Icon(c, tg.icon).Size(13, 13).TextColor(boardColor(col))
 				})
 				if btn.Clicked() {
 					b.canvasFocus = false
@@ -509,15 +505,19 @@ func (a *shelf) boardPropFontSection(c *ui.Context, l locales.Messages, pal *edi
 				}
 			}
 			if ps.ShowAlign {
-				aligns := []propOption{
-					{"left", "L"},
-					{"center", "C"},
-					{"right", "R"},
+				aligns := []struct {
+					id    string
+					label string
+					icon  *ui.SVG
+				}{
+					{"left", l.BoardPropAlignLeft(), boardAlignLeftSymbol},
+					{"center", l.BoardPropAlignCenter(), boardAlignCenterSymbol},
+					{"right", l.BoardPropAlignRight(), boardAlignRightSymbol},
 				}
 				for _, al := range aligns {
 					al := al
 					isOn := ps.Align == al.id
-					btn := ui.Row(c.Key("prop-align-"+al.id)).Grow(1).Height(24).Radius(6).Center().Label(al.label)
+					btn := ui.Row(c.Key("prop-align-" + al.id)).Grow(1).Height(24).Radius(6).Center().Label(al.label)
 					switch {
 					case isOn:
 						btn.Background(boardColor(pal.AccentFill)).Border(0.5, boardColor(pal.Accent.Alpha(0.55)))
@@ -531,7 +531,7 @@ func (a *shelf) boardPropFontSection(c *ui.Context, l locales.Messages, pal *edi
 						if isOn {
 							col = pal.Accent
 						}
-						ui.Text(c, al.label).SingleLine().FontSize(10.5).FontWeight(600).TextColor(boardColor(col))
+						ui.Icon(c, al.icon).Size(13, 13).TextColor(boardColor(col))
 					})
 					if btn.Clicked() {
 						b.ed.SetPropAlign(al.id)

@@ -41,7 +41,7 @@ func (a *shelf) boardPageSwitcherButton(c *ui.Context, l locales.Messages, pal *
 	pages := b.ed.Pages()
 	curName := ""
 	if pg := b.ed.ActivePageInfo(); pg != nil {
-		curName = pg.Name
+		curName = b.pageTitle(l, pg)
 	}
 	if curName == "" {
 		return
@@ -59,7 +59,7 @@ func (a *shelf) boardPageSwitcherButton(c *ui.Context, l locales.Messages, pal *
 		for _, pg := range pages {
 			pg := pg
 			cnt := b.ed.PageItemCount(pg.ID)
-			it := m.Item(pg.Name).Checked(pg.ID == b.ed.Page).Trailing(boardCountText(l, cnt))
+			it := m.Item(b.pageTitle(l, pg)).Checked(pg.ID == b.ed.Page).Trailing(boardCountText(l, cnt))
 			if it.Chosen() {
 				b.ed.SwitchPage(pg.ID)
 				b.invalidate()
@@ -67,7 +67,7 @@ func (a *shelf) boardPageSwitcherButton(c *ui.Context, l locales.Messages, pal *
 		}
 		m.Separator()
 		if m.Item(l.BoardPageAdd()).Disabled(b.locked).Chosen() {
-			b.ed.AddPage("")
+			b.ed.AddPage(b.nextPageName(l))
 			b.invalidate()
 		}
 		if m.Item(l.BoardPageRename()).Disabled(b.locked).Chosen() {
@@ -85,9 +85,9 @@ func (a *shelf) boardBackPill(c *ui.Context, l locales.Messages, pal *editor.Pal
 	if b.ed.ContentVisible() {
 		return
 	}
-	bottom := float32(74)
+	bottom := b.boardToolbarBottom() + 44 + 12
 	if b.ed.Tool == editor.ToolDraw || b.ed.Tool == editor.ToolEraser {
-		bottom = 112
+		bottom += 42
 	}
 	wrap := ui.Row(c.Key("board-back-wrap")).Absolute().Left(0).Right(0).Bottom(bottom).Justify(ui.Center).PassThrough()
 	wrap.Children(func() {
@@ -167,7 +167,14 @@ func (a *shelf) boardMinimap(c *ui.Context, l locales.Messages, pal *editor.Pale
 		mw = float32(180)
 		mh = float32(120)
 	)
-	mini := ui.Box(c.Key("board-minimap")).Absolute().Left(12).Bottom(62).Size(mw, mh).
+	miniBottom := float32(62)
+	if _, stacked, _ := b.boardChrome(); stacked {
+		miniBottom = b.boardToolbarBottom() + 52
+		if b.ed.Tool == editor.ToolDraw || b.ed.Tool == editor.ToolEraser {
+			miniBottom += 42
+		}
+	}
+	mini := ui.Box(c.Key("board-minimap")).Absolute().Left(12).Bottom(miniBottom).Size(mw, mh).
 		Radius(10).Clip().
 		Background(boardColor(pal.Bar)).
 		Border(0.5, boardColor(pal.Edge)).
@@ -326,7 +333,7 @@ func (a *shelf) boardRadialPalette(c *ui.Context, l locales.Messages, pal *edito
 	})
 }
 
-func (b *boardUI) buildContextMenu(l locales.Messages, m *ui.Menu) {
+func (b *boardUI) buildContextMenu(c *ui.Context, l locales.Messages, m *ui.Menu) {
 	if b.locked || b.ed == nil {
 		return
 	}
@@ -375,11 +382,11 @@ func (b *boardUI) buildContextMenu(l locales.Messages, m *ui.Menu) {
 
 	n := len(sel)
 	if m.Item(l.BoardCtxCut()).Shortcut(ui.Cmd, ui.KeyX).Chosen() {
-		b.ed.Cut()
+		b.cutSelection(c)
 		b.invalidate()
 	}
 	if m.Item(l.BoardCtxCopy()).Shortcut(ui.Cmd, ui.KeyC).Chosen() {
-		b.ed.Copy()
+		b.copySelection(c)
 		b.invalidate()
 	}
 	if m.Item(l.BoardCtxPaste()).Shortcut(ui.Cmd, ui.KeyV).Disabled(!b.ed.HasClipboard()).Chosen() {
