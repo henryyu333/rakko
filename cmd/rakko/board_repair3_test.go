@@ -459,24 +459,14 @@ func TestBoardBoldTextFitsSelectionBox(t *testing.T) {
 	if !s.Bold {
 		t.Fatal("text did not become bold")
 	}
+	regular := b.ed.Measure(s.Text, s.Font, 18, 0, 0, false)
+	bold := b.ed.Measure(s.Text, s.Font, 18, 0, 700, false)
+	if bold.W <= regular.W {
+		t.Fatalf("bold width %.1f not wider than regular %.1f", bold.W, regular.W)
+	}
 	g := b.ed.Geometry(s)
-	var block *editor.TextBlock
-	for _, pr := range b.ed.Display(s, b.ed.Palette()) {
-		if pr.Kind == editor.PrimText && pr.Block != nil {
-			blk := *pr.Block
-			block = &blk
-		}
-	}
-	if block == nil {
-		t.Fatal("no text primitive")
-	}
-	for _, line := range block.Lines {
-		if line.X+line.W > g.Bounds.W+0.5 {
-			t.Fatalf("bold line %q ends at %.1f, box width %.1f", line.Text, line.X+line.W, g.Bounds.W)
-		}
-	}
-	if block.W > g.Bounds.W+0.5 {
-		t.Fatalf("block width %.1f, box %.1f", block.W, g.Bounds.W)
+	if g.Bounds.W+0.5 < bold.W {
+		t.Fatalf("selection box %.1f narrower than bold text %.1f", g.Bounds.W, bold.W)
 	}
 	view := ui.NewTester(a.boardView, 760, 620)
 	view.SetLocale("zh-Hans")
