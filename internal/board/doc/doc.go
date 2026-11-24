@@ -3,11 +3,14 @@
 package doc
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
+	"math"
 	"slices"
 	"sort"
 
@@ -61,6 +64,107 @@ type Segment struct {
 	Type   string   `json:"type"` // "free" or "straight"
 	Points []PointZ `json:"points"`
 	Dim    int      `json:"dim,omitempty"` // 2 when pressure is absent
+}
+
+// segmentJSON is Segment's compact wire form: points are a flat [x,y(,z)…]
+// array rounded to two decimals, which keeps a 1500-stroke board small. The
+// reader still accepts the older array of {x,y,z} objects.
+type segmentJSON struct {
+	Type   string    `json:"type"`
+	Dim    int       `json:"dim,omitempty"`
+	Points []float64 `json:"points"`
+}
+
+func round2(v float64) float64 { return math.Round(v*100) / 100 }
+
+// MarshalJSON writes a Segment compactly.
+func (s Segment) MarshalJSON() ([]byte, error) {
+	dim := s.Dim
+	if dim != 2 && dim != 3 {
+		dim = 3
+	}
+	flat := make([]float64, 0, len(s.Points)*dim)
+	for _, p := range s.Points {
+		flat = append(flat, round2(p.X), round2(p.Y))
+		if dim == 3 {
+			flat = append(flat, round2(p.Z))
+		}
+	}
+	out := segmentJSON{Type: s.Type, Points: flat}
+	if dim == 2 {
+		out.Dim = 2
+	}
+	return json.Marshal(out)
+}
+
+// UnmarshalJSON reads both the compact flat form and the old object array.
+func (s *Segment) UnmarshalJSON(data []byte) error {
+	var raw struct {
+		Type   string          `json:"type"`
+		Dim    int             `json:"dim"`
+		Points json.RawMessage `json:"points"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	s.Type, s.Dim = raw.Type, raw.Dim
+	body := bytes.TrimSpace(raw.Points)
+	if len(body) == 0 || string(body) == "null" {
+		s.Points = nil
+		return nil
+	}
+	inner := body
+	if inner[0] == '[' {
+		inner = bytes.TrimLeft(inner[1:], " \n\r\t")
+	}
+	if len(inner) > 0 && inner[0] == '{' {
+		var old []PointZ
+		if err := json.Unmarshal(body, &old); err != nil {
+			return err
+		}
+		s.Points = old
+		return nil
+	}
+	var flat []float64
+	if err := json.Unmarshal(body, &flat); err != nil {
+		return err
+	}
+	dim := 3
+	switch {
+	case s.Dim == 2 || s.Dim == 3:
+		dim = s.Dim
+	case len(flat)%3 == 0:
+		dim = 3
+	case len(flat)%2 == 0:
+		dim = 2
+	}
+	if _, err := parseFlatPoints(flat, dim); err != nil {
+		return err
+	}
+	s.Points = flatPoints(flat, dim)
+	return nil
+}
+
+func parseFlatPoints(flat []float64, dim int) ([]PointZ, error) {
+	if dim != 2 && dim != 3 {
+		return nil, fmt.Errorf("board: segment dim %d", dim)
+	}
+	if len(flat)%dim != 0 {
+		return nil, fmt.Errorf("board: %d point values for dim %d", len(flat), dim)
+	}
+	return flatPoints(flat, dim), nil
+}
+
+func flatPoints(flat []float64, dim int) []PointZ {
+	out := make([]PointZ, 0, len(flat)/dim)
+	for i := 0; i+dim <= len(flat); i += dim {
+		p := PointZ{X: flat[i], Y: flat[i+1]}
+		if dim == 3 {
+			p.Z = flat[i+2]
+		}
+		out = append(out, p)
+	}
+	return out
 }
 
 // LinePoint is a vertex of a line shape.
@@ -381,27 +485,6 @@ func (d *Drawing) Snapshot() *Drawing {
 	c.Bindings = maps.Clone(d.Bindings)
 	c.Assets = maps.Clone(d.Assets)
 	return &c
-}
-
-// Equal reports whether two snapshots hold identical document metadata and record pointers.
-func Equal(a, b *Drawing) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	if a.Version != b.Version || a.ID != b.ID || a.Name != b.Name ||
-		a.Look != b.Look || a.Paper != b.Paper || a.Theme != b.Theme ||
-		a.GridSize != b.GridSize || a.ActivePage != b.ActivePage {
-		return false
-	}
-	if !slices.Equal(a.Pages, b.Pages) {
-		return false
-	}
-	return maps.Equal(a.Shapes, b.Shapes) &&
-		maps.Equal(a.Bindings, b.Bindings) &&
-		maps.Equal(a.Assets, b.Assets)
 }
 
 // Page returns the page with id, or nil if not found.

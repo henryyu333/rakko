@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestStoreSaveAssetDeduplicatesAndValidatesPath(t *testing.T) {
@@ -97,5 +98,50 @@ func TestFirstImageAndImageLineSplit(t *testing.T) {
 	onlyImg := "![](assets/0123456789abcdef.png)\n"
 	if got := Title(onlyImg); got != "" {
 		t.Fatalf("Title of image-only note = %q, want empty", got)
+	}
+}
+
+func TestCleanAssetsKeepsReferencedAndFresh(t *testing.T) {
+	dir := t.TempDir()
+	st, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref, _ := st.SaveAsset([]byte("referenced"), "png")
+	old, _ := st.SaveAsset([]byte("unreferenced-old"), "png")
+	fresh, _ := st.SaveAsset([]byte("unreferenced-new"), "png")
+	other, _ := st.SaveAsset([]byte("other-note"), "png")
+	if err := st.Write("买菜 ![](" + ref + ")\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.New(); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Write("另一张 ![](" + other + ")\n"); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	past := now.Add(-48 * time.Hour)
+	for _, rel := range []string{ref, old, other} {
+		full, err := st.AssetPath(rel)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(full, past, past); err != nil {
+			t.Fatal(err)
+		}
+	}
+	removed, err := st.CleanAssets(now, 24*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(removed) != 1 || removed[0] != filepath.Base(old) {
+		t.Fatalf("removed = %v, want only %s", removed, filepath.Base(old))
+	}
+	for _, rel := range []string{ref, other, fresh} {
+		full, _ := st.AssetPath(rel)
+		if _, err := os.Stat(full); err != nil {
+			t.Fatalf("%s was deleted", rel)
+		}
 	}
 }

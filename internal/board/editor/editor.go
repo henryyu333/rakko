@@ -42,7 +42,7 @@ type TextBlock struct {
 }
 
 // MeasureFunc lays out text wrapping at width (0 wraps only at explicit newlines).
-type MeasureFunc func(text, font string, size, width float64) TextBlock
+type MeasureFunc func(text, font string, size, width float64, weight int, italic bool) TextBlock
 
 // SnapLine is an alignment guide in page coordinates shown during dragging.
 type SnapLine struct {

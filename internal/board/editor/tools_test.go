@@ -8,7 +8,7 @@ import (
 	"rakko/internal/board/geo"
 )
 
-func fakeMeasure(text, font string, size, width float64) TextBlock {
+func fakeMeasure(text, font string, size, width float64, weight int, italic bool) TextBlock {
 	return fallbackMeasure(text, size, width)
 }
 

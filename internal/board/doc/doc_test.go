@@ -1,10 +1,12 @@
 package doc
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -63,12 +65,12 @@ func TestShapeCloneMovedAndSnapshotEqual(t *testing.T) {
 	d := NewDrawing("board1", "白板 1")
 	d.Shapes[s.ID] = s
 	snap1 := d.Snapshot()
-	if !Equal(d, snap1) {
-		t.Fatal("Snapshot not equal to original")
+	if len(snap1.Shapes) != 1 || snap1.Shapes[s.ID] != s {
+		t.Fatal("Snapshot did not keep the original shape pointer")
 	}
 	d.Shapes[s.ID] = cloned
-	if Equal(d, snap1) {
-		t.Fatal("Equal should detect replaced shape pointer")
+	if snap1.Shapes[s.ID] == cloned {
+		t.Fatal("Snapshot followed a replaced shape pointer")
 	}
 }
 
@@ -323,5 +325,159 @@ func TestImportPackageLimits(t *testing.T) {
 	body, _ = json.Marshal(pkg)
 	if _, err := ImportPackage(body, st, "B"); err == nil {
 		t.Fatal("import accepted an asset over the pixel limit")
+	}
+}
+
+func TestSegmentJSONCompactAndOldFormat(t *testing.T) {
+	s := Segment{Type: "free", Points: []PointZ{{X: 1.234, Y: 2.345, Z: 0.5}, {X: 10, Y: 20, Z: 1}}}
+	raw, err := json.Marshal(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(raw, []byte(`"x"`)) || !bytes.Contains(raw, []byte("[")) {
+		t.Fatalf("segment is not a flat array: %s", raw)
+	}
+	var back Segment
+	if err := json.Unmarshal(raw, &back); err != nil {
+		t.Fatal(err)
+	}
+	if len(back.Points) != 2 || back.Points[0].X != 1.23 || back.Points[1].Z != 1 {
+		t.Fatalf("round trip = %+v", back.Points)
+	}
+	old := []byte(`{"type":"free","points":[{"x":3,"y":4,"z":0.25},{"x":5,"y":6}]}`)
+	var legacy Segment
+	if err := json.Unmarshal(old, &legacy); err != nil {
+		t.Fatal(err)
+	}
+	if len(legacy.Points) != 2 || legacy.Points[0].X != 3 || legacy.Points[0].Z != 0.25 {
+		t.Fatalf("old format = %+v", legacy.Points)
+	}
+}
+
+func TestBoardMetaCacheAndList(t *testing.T) {
+	dir := t.TempDir()
+	st, err := Open(dir, "Board")
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := st.ID()
+	if name, count := CardInfo(dir, "fallback"); name != "Board" || count != 0 {
+		t.Fatalf("card info = %q %d", name, count)
+	}
+	d, _ := st.Read()
+	s := NewShape("shape:a", TypeGeo)
+	s.Parent = d.ActivePage
+	d.Shapes[s.ID] = s
+	d.Name = "架构图"
+	if err := st.Write(d); err != nil {
+		t.Fatal(err)
+	}
+	if name, count := CardInfo(dir, "fallback"); name != "架构图" || count != 1 {
+		t.Fatalf("card info after write = %q %d", name, count)
+	}
+	list, err := st.List()
+	if err != nil || len(list) != 1 || list[0].Name != "架构图" || list[0].ItemCount != 1 {
+		t.Fatalf("list = %+v, err=%v", list, err)
+	}
+	if list[0].ID != id {
+		t.Fatalf("list id = %s", list[0].ID)
+	}
+}
+
+func TestCleanAssetsKeepsReferencedAndTrashedBoards(t *testing.T) {
+	dir := t.TempDir()
+	st, err := Open(dir, "Board")
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := st.SaveAsset([]byte("active"), "png", "a", "image/png", 1, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, _ := st.Read()
+	d.Assets[a.ID] = a
+	if err := st.Write(d); err != nil {
+		t.Fatal(err)
+	}
+	dead, _ := st.SaveAsset([]byte("dead"), "png", "dead", "image/png", 1, 1)
+
+	if _, err := st.New("Trashed"); err != nil {
+		t.Fatal(err)
+	}
+	trashedID := st.ID()
+	c, _ := st.SaveAsset([]byte("trashed-ref"), "png", "c", "image/png", 1, 1)
+	d2, _ := st.Read()
+	d2.Assets[c.ID] = c
+	if err := st.Write(d2); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	past := now.Add(-48 * time.Hour)
+	for _, asset := range []*Asset{a, dead, c} {
+		full, err := st.AssetPath(asset.Path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(full, past, past); err != nil {
+			t.Fatal(err)
+		}
+	}
+	fakeTrash := func(p string) (string, error) { return p, os.Remove(p) }
+	if err := st.Trash(trashedID, fakeTrash); err != nil {
+		t.Fatal(err)
+	}
+	removed, err := st.CleanAssets(now, 24*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(removed) != 1 || removed[0] != filepath.Base(dead.Path) {
+		t.Fatalf("removed = %v, want only %s", removed, filepath.Base(dead.Path))
+	}
+	for _, asset := range []*Asset{a, c} {
+		full, _ := st.AssetPath(asset.Path)
+		if _, err := os.Stat(full); err != nil {
+			t.Fatalf("%s was deleted", asset.Path)
+		}
+	}
+}
+
+func TestBoardReadsOldFormatAndWritesCompact(t *testing.T) {
+	dir := t.TempDir()
+	st, err := Open(dir, "Board")
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := `{
+  "version": 1, "id": "` + st.ID() + `", "name": "Old", "activePage": "page:1",
+  "pages": [{"id":"page:1","name":"Page 1","index":"a1"}],
+  "shapes": {"shape:a": {"id":"shape:a","type":"draw","parent":"page:1","index":"a1","opacity":1,
+    "segments":[{"type":"free","points":[{"x":1.5,"y":2.25,"z":0.5},{"x":3,"y":4}]}]}}
+}`
+	if err := os.WriteFile(st.Path(), []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	d, err := st.Read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := d.Shapes["shape:a"]; got == nil || len(got.Segments) != 1 || len(got.Segments[0].Points) != 2 || got.Segments[0].Points[0].X != 1.5 {
+		t.Fatalf("old board read = %+v", got)
+	}
+	if err := st.Write(d); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(st.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(raw, []byte(`"points":[{"x":`)) || bytes.Contains(raw, []byte("\n  ")) {
+		t.Fatalf("new board is not compact: %s", raw[:min(len(raw), 200)])
+	}
+	again, err := st.Read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(again.Shapes["shape:a"].Segments, d.Shapes["shape:a"].Segments) {
+		t.Fatal("compact round trip changed the stroke")
 	}
 }

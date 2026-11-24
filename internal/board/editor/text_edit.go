@@ -113,7 +113,7 @@ func (e *Editor) fitLabel(s *doc.Shape) {
 		}
 		size := labelFontSize(s)
 		availW := math.Max(s.W-2*labelPadding, 8)
-		b := e.measure(s.Text, s.Font, size, availW)
+		b := e.measure(s.Text, s.Font, size, availW, measureWeight(s), s.Italic)
 		s.GrowY = math.Max(0, b.H+2*labelPadding-s.H)
 	case doc.TypeNote:
 		if s.Text == "" {
@@ -124,7 +124,7 @@ func (e *Editor) fitLabel(s *doc.Shape) {
 		w := math.Max(s.W, 80)
 		h := math.Max(s.H, 60)
 		availW := math.Max(w-2*labelPadding, 8)
-		b := e.measure(s.Text, s.Font, size, availW)
+		b := e.measure(s.Text, s.Font, size, availW, measureWeight(s), s.Italic)
 		s.GrowY = math.Max(0, b.H+2*labelPadding-h)
 	}
 }

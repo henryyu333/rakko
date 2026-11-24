@@ -560,7 +560,7 @@ func (e *Editor) highlightPrims(s *doc.Shape, pal *Palette) []Prim {
 // --- text, note, frame, image ---
 
 func (e *Editor) labelPrim(s *doc.Shape, box *geo.Box, size float64, c Color) Prim {
-	b := e.measure(s.Text, s.Font, size, box.W)
+	b := e.measure(s.Text, s.Font, size, box.W, measureWeight(s), s.Italic)
 	b = alignBlock(b, box.W, s.Align)
 	return Prim{
 		Kind: PrimText, Block: &b, X: box.X, Y: box.Y,
@@ -592,9 +592,9 @@ func (e *Editor) textPrims(s *doc.Shape, pal *Palette) []Prim {
 	scale := orOne(s.Scale)
 	var b TextBlock
 	if s.AutoSize || s.W <= 0 {
-		b = e.measure(s.Text, s.Font, size, 0)
+		b = e.measure(s.Text, s.Font, size, 0, measureWeight(s), s.Italic)
 	} else {
-		b = e.measure(s.Text, s.Font, size, math.Max(s.W*scale, 8))
+		b = e.measure(s.Text, s.Font, size, math.Max(s.W*scale, 8), measureWeight(s), s.Italic)
 	}
 	align := s.TextAlign
 	if align == "" {

@@ -1,16 +1,14 @@
 package note
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
-	"rakko/internal/atomicfile"
+	"rakko/internal/assetstore"
 )
 
 // AssetsDirName is the subfolder under notes/ where note image assets live.
@@ -33,45 +31,17 @@ func IsSupportedImageExt(ext string) bool {
 	}
 }
 
-func normalizeAssetExt(ext string) string {
-	ext = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(ext), "."))
-	if ext == "" {
-		return "png"
-	}
-	for _, r := range ext {
-		if !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')) {
-			return "png"
-		}
-	}
-	return ext
-}
-
 // SaveAsset deduplicates image bytes by SHA-256 (16-hex prefix) into
 // notes/assets/ and returns the relative path ("assets/<hash16>.<ext>").
 func (s *Store) SaveAsset(data []byte, ext string) (string, error) {
 	if s == nil {
 		return "", errors.New("note: nil store")
 	}
-	if len(data) == 0 {
-		return "", errors.New("note: empty asset data")
+	name, _, err := assetstore.Save(s.AssetsDir(), data, ext)
+	if err != nil {
+		return "", err
 	}
-	ext = normalizeAssetExt(ext)
-	sum := sha256.Sum256(data)
-	hashHex := hex.EncodeToString(sum[:])[:16]
-	fileName := hashHex + "." + ext
-	assetsDir := s.AssetsDir()
-	if err := os.MkdirAll(assetsDir, 0o700); err != nil {
-		return "", fmt.Errorf("note: assets dir: %w", err)
-	}
-	target := filepath.Join(assetsDir, fileName)
-	if _, err := os.Stat(target); errors.Is(err, fs.ErrNotExist) {
-		if err := atomicfile.WriteFile(assetsDir, fileName, data, 0o600); err != nil {
-			return "", fmt.Errorf("note: writing asset: %w", err)
-		}
-	} else if err != nil {
-		return "", fmt.Errorf("note: stat asset: %w", err)
-	}
-	return filepath.ToSlash(filepath.Join(AssetsDirName, fileName)), nil
+	return assetstore.Rel(name), nil
 }
 
 // SaveAssetFile reads path and stores its bytes under notes/assets/, returning
@@ -94,17 +64,7 @@ func (s *Store) AssetPath(rel string) (string, error) {
 	if s == nil {
 		return "", errors.New("note: nil store")
 	}
-	clean := filepath.Clean(filepath.FromSlash(strings.TrimSpace(rel)))
-	if clean == "." || filepath.IsAbs(clean) || strings.HasPrefix(clean, "..") {
-		return "", fmt.Errorf("note: invalid asset path %q", rel)
-	}
-	assetsDir := s.AssetsDir()
-	full := filepath.Join(s.dir, clean)
-	r, err := filepath.Rel(assetsDir, full)
-	if err != nil || r == "." || strings.HasPrefix(r, "..") {
-		return "", fmt.Errorf("note: asset path %q escapes assets dir", rel)
-	}
-	return full, nil
+	return assetstore.Resolve(s.dir, rel)
 }
 
 // FirstImage returns the first Markdown image target in text (e.g.
@@ -223,4 +183,64 @@ func parseInlineImage(s string, start int) (dest string, end int) {
 		return "", start
 	}
 	return strings.TrimSpace(rawDest), j + 1
+}
+
+// CleanAssets removes image files under notes/assets/ that no note refers to
+// and that are older than maxAge. A note that cannot be read keeps everything:
+// deleting a picture its text still names is worse than keeping a spare.
+func (s *Store) CleanAssets(now time.Time, maxAge time.Duration) ([]string, error) {
+	if s == nil {
+		return nil, nil
+	}
+	entries, err := os.ReadDir(s.Dir())
+	if err != nil {
+		return nil, err
+	}
+	refs := map[string]bool{}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), FileExt) || !validID(strings.TrimSuffix(e.Name(), FileExt)) {
+			continue
+		}
+		raw, err := os.ReadFile(filepath.Join(s.Dir(), e.Name()))
+		if err != nil {
+			return nil, fmt.Errorf("note: cleaning assets: %w", err)
+		}
+		text := string(raw)
+		for i := 0; i < len(text); i++ {
+			j := strings.Index(text[i:], "assets/")
+			if j < 0 {
+				break
+			}
+			start := i + j + len("assets/")
+			end := start
+			for end < len(text) && text[end] != ')' && text[end] != '"' && text[end] != '\n' && text[end] != ' ' {
+				end++
+			}
+			if end > start {
+				refs[text[start:end]] = true
+			}
+			i = start - 1
+		}
+	}
+	assetEntries, err := os.ReadDir(s.AssetsDir())
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var removed []string
+	for _, e := range assetEntries {
+		if e.IsDir() || refs[e.Name()] {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil || now.Sub(info.ModTime()) <= maxAge {
+			continue
+		}
+		if err := os.Remove(filepath.Join(s.AssetsDir(), e.Name())); err == nil {
+			removed = append(removed, e.Name())
+		}
+	}
+	return removed, nil
 }

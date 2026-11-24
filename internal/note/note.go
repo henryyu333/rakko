@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"html"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -311,7 +312,7 @@ func split(text string) (string, []string) {
 	var lines []string
 	first := true
 	for _, raw := range strings.Split(text, "\n") {
-		line := strings.TrimSpace(stripInlineImages(raw))
+		line := strings.TrimSpace(displayPlain(stripInlineImages(raw)))
 		if line == "" {
 			continue
 		}
@@ -323,4 +324,26 @@ func split(text string) (string, []string) {
 		lines = append(lines, line)
 	}
 	return title, lines
+}
+
+// displayPlain turns a saved line into what a person reads: Markdown escapes
+// and HTML entities from the serializer are for the file, not the card.
+func displayPlain(s string) string {
+	s = html.UnescapeString(s)
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' && i+1 < len(s) && isASCIITextPunct(s[i+1]) {
+			continue
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
+}
+
+func isASCIITextPunct(c byte) bool {
+	switch {
+	case c >= '!' && c <= '/', c >= ':' && c <= '@', c >= '[' && c <= '`', c >= '{' && c <= '~':
+		return true
+	}
+	return false
 }

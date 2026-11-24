@@ -181,10 +181,10 @@ func (e *Editor) computeGeometry(s *doc.Shape) *Geometry {
 		scale := orOne(s.Scale)
 		var b TextBlock
 		if s.AutoSize || s.W <= 0 {
-			b = e.measure(text, s.Font, size, 0)
+			b = e.measure(text, s.Font, size, 0, measureWeight(s), s.Italic)
 		} else {
 			wrapW := math.Max(s.W*scale, 8)
-			b = e.measure(text, s.Font, size, wrapW)
+			b = e.measure(text, s.Font, size, wrapW, measureWeight(s), s.Italic)
 			b.W = wrapW
 		}
 		box := geo.Box{W: math.Max(b.W, 12), H: math.Max(b.H, size*1.3)}
@@ -224,9 +224,17 @@ func (e *Editor) computeGeometry(s *doc.Shape) *Geometry {
 	return &Geometry{Bounds: box, Outline: cs[:], Closed: true, Filled: true}
 }
 
-func (e *Editor) measure(text, font string, size, width float64) TextBlock {
+// measureWeight is the font weight text layout must use.
+func measureWeight(s *doc.Shape) int {
+	if s != nil && s.Bold {
+		return 700
+	}
+	return 0
+}
+
+func (e *Editor) measure(text, font string, size, width float64, weight int, italic bool) TextBlock {
 	if e.Measure != nil {
-		return e.Measure(text, font, size, width)
+		return e.Measure(text, font, size, width, weight, italic)
 	}
 	return fallbackMeasure(text, size, width)
 }
@@ -327,7 +335,7 @@ func (e *Editor) labelBox(s *doc.Shape, w, h, size float64) *geo.Box {
 		text = " "
 	}
 	availW := math.Max(w-2*pad, 8)
-	b := e.measure(text, s.Font, size, availW)
+	b := e.measure(text, s.Font, size, availW, measureWeight(s), s.Italic)
 	box := geo.Box{X: pad, W: availW, H: b.H}
 	switch s.VAlign {
 	case "top", "start":
@@ -428,11 +436,6 @@ func (e *Editor) PageOutline(id doc.ID) []geo.Vec {
 		out[i] = m.Apply(p)
 	}
 	return out
-}
-
-// GeoOutlineOf returns the flattened outline of geometry kind in a w x h box.
-func GeoOutlineOf(kind string, w, h float64) ([]geo.Vec, bool) {
-	return geoOutline(&doc.Shape{ID: doc.ID(kind)}, normalizeGeoKind(kind), w, h)
 }
 
 func geoOutline(s *doc.Shape, kind string, w, h float64) ([]geo.Vec, bool) {

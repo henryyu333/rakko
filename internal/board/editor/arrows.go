@@ -374,9 +374,9 @@ func (e *Editor) arrowLabelBox(s *doc.Shape) *geo.Box {
 		text = " "
 	}
 	size := labelFontSize(s)
-	b := e.measure(text, s.Font, size, 0)
+	b := e.measure(text, s.Font, size, 0, measureWeight(s), s.Italic)
 	if b.W > 280 {
-		b = e.measure(text, s.Font, size, 280)
+		b = e.measure(text, s.Font, size, 280, measureWeight(s), s.Italic)
 	}
 	pos := s.LabelPosition
 	if pos <= 0 || pos >= 1 {
