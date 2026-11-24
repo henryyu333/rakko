@@ -126,6 +126,8 @@ func New(d *doc.Drawing, measure MeasureFunc) *Editor {
 
 // Replace swaps the open drawing cleanly (e.g. switching boards).
 func (e *Editor) Replace(d *doc.Drawing) {
+	// Commit any in-progress inline edit so its text is not silently discarded.
+	e.StopEditing()
 	e.cancelGesture()
 	if d == nil {
 		d = doc.NewDrawing("", "Board 1")

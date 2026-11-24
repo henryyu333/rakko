@@ -1093,8 +1093,8 @@ func (g *eraserGesture) commitPartial(e *Editor) {
 				}
 			}
 			e.removeShape(id)
+			e.sel = slices.DeleteFunc(e.sel, func(x doc.ID) bool { return x == id })
 			if len(pieces) == 0 {
-				e.sel = slices.DeleteFunc(e.sel, func(x doc.ID) bool { return x == id })
 				continue
 			}
 			prevIdx := orig.Index
@@ -1118,7 +1118,7 @@ func (g *eraserGesture) commitPartial(e *Editor) {
 				ns.X, ns.Y = inParent.X, inParent.Y
 				pts := make([]doc.PointZ, len(poly))
 				for k, v := range poly {
-					pts[k] = doc.PointZ{X: v.X - originLocal.X, Y: v.Y - originLocal.Y, Z: 0.5}
+					pts[k] = doc.PointZ{X: v.X - originLocal.X, Y: v.Y - originLocal.Y, Z: strokePressureAt(orig, v)}
 				}
 				ns.Segments = []doc.Segment{{Type: "free", Points: pts}}
 				e.put(ns)
@@ -1131,6 +1131,41 @@ func (g *eraserGesture) cancel(e *Editor) {
 	g.trail.Live = false
 	e.Erasing = nil
 	e.PartialPreview = nil
+}
+
+// strokePressureAt interpolates the original pressure at local point p on s, so
+// partial erasing keeps a pen stroke's varying width instead of flattening it.
+func strokePressureAt(s *doc.Shape, p geo.Vec) float64 {
+	sx, sy := orOne(s.ScaleX), orOne(s.ScaleY)
+	bestD := math.Inf(1)
+	z := 0.5
+	found := false
+	for _, seg := range s.Segments {
+		var prev geo.Vec
+		var prevZ float64
+		have := false
+		for _, pt := range seg.Points {
+			cur := geo.V(pt.X*sx, pt.Y*sy)
+			if have {
+				d := cur.Sub(prev)
+				l2 := d.LenSq()
+				t := 0.0
+				if l2 > 0 {
+					t = geo.Clamp(p.Sub(prev).Dot(d)/l2, 0, 1)
+				}
+				if dist := p.Dist(prev.Add(d.Mul(t))); dist < bestD {
+					bestD = dist
+					z = prevZ + (pt.Z-prevZ)*t
+					found = true
+				}
+			}
+			prev, prevZ, have = cur, pt.Z, true
+		}
+	}
+	if !found {
+		return 0.5
+	}
+	return z
 }
 
 // AgeTrails removes expired trail points and reports whether any remain active.

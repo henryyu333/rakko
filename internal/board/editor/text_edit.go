@@ -99,6 +99,9 @@ func (e *Editor) EditChanged() {
 		c.Text = text
 		e.fitLabel(c)
 	})
+	// Inline edits stay in one open transaction, but the document now holds the
+	// text: notify so debounced autosave and flush see it before Esc is pressed.
+	e.emitChange()
 }
 
 func (e *Editor) fitLabel(s *doc.Shape) {

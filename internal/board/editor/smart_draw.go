@@ -265,11 +265,18 @@ func (e *Editor) tryScribbleErase(scribbleID doc.ID) bool {
 			if sh == nil || sh.Locked {
 				continue
 			}
+			// Containers are only traversed: a frame's own outline must never be
+			// erased by hatching in its empty area.
 			if sh.Type == doc.TypeGroup || sh.Type == doc.TypeFrame {
 				walk(id)
-				if sh.Type == doc.TypeGroup {
-					continue
-				}
+				continue
+			}
+			// Only freehand ink and thin connectors are scribble-erasable. Closed
+			// shapes keep their outline "through-crossing" semantics out of it too.
+			switch sh.Type {
+			case doc.TypeDraw, doc.TypeHighlight, doc.TypeLine, doc.TypeArrow:
+			default:
+				continue
 			}
 			if !e.PageBounds(id).Expand(6).Overlaps(box) {
 				continue
@@ -280,13 +287,10 @@ func (e *Editor) tryScribbleErase(scribbleID doc.ID) bool {
 			}
 			hit := false
 			for i := 1; i < len(pts); i++ {
-				if geo.SegmentHitsPolyline(pts[i-1], pts[i], outline, e.Geometry(sh).Closed, 4) {
+				if geo.SegmentHitsPolyline(pts[i-1], pts[i], outline, false, 4) {
 					hit = true
 					break
 				}
-			}
-			if !hit && e.Geometry(sh).Closed && len(outline) >= 3 && geo.PointInPolygon(pts[len(pts)/2], outline) {
-				hit = true
 			}
 			if hit {
 				top := e.outermostSelectable(id)

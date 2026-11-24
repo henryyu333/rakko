@@ -324,9 +324,16 @@ func TestSmartShapeRecognitionAndScribbleErase(t *testing.T) {
 		t.Fatalf("expected recognized triangle, got %+v", tri)
 	}
 
-	// 5. Scribble back-and-forth over snappedRect erases snappedRect + the scribble itself in 1 undo step.
-	beforeCount := e.ItemCount()
+	// 5. Scrub a freehand stroke with a back-and-forth scribble: only the ink is
+	// erased, never the closed rectangle, and the whole scrub is one undo step.
 	e.SetTool(ToolDraw)
+	e.PointerDown(80, 145, 0, 1, Mods{}, 7.5)
+	for x := 100.0; x <= 240.0; x += 20 {
+		e.PointerMove(x, 145, Mods{}, 7.5+x/1000)
+	}
+	e.PointerUp(240, 145, Mods{}, 7.6)
+	inkID := e.Children(e.Page)[4]
+	beforeCount := e.ItemCount()
 	scribble := []geo.Vec{
 		{X: 90, Y: 110}, {X: 230, Y: 115},
 		{X: 90, Y: 135}, {X: 230, Y: 140},
@@ -338,13 +345,16 @@ func TestSmartShapeRecognitionAndScribbleErase(t *testing.T) {
 		e.PointerMove(pt.X, pt.Y, Mods{}, 8.0+float64(i+1)*0.02)
 	}
 	e.PointerUp(scribble[len(scribble)-1].X, scribble[len(scribble)-1].Y, Mods{}, 8.2)
-	if e.ItemCount() != beforeCount-1 || e.Doc.Shapes[snappedRect.ID] != nil {
-		t.Fatalf("scribble did not erase snappedRect: count=%d (want %d), exists=%v",
-			e.ItemCount(), beforeCount-1, e.Doc.Shapes[snappedRect.ID] != nil)
+	if e.ItemCount() != beforeCount-1 || e.Doc.Shapes[inkID] != nil {
+		t.Fatalf("scribble did not erase freehand ink: count=%d (want %d), exists=%v",
+			e.ItemCount(), beforeCount-1, e.Doc.Shapes[inkID] != nil)
 	}
-	// Single Undo brings snappedRect back cleanly.
+	if e.Doc.Shapes[snappedRect.ID] == nil {
+		t.Fatal("scribble erased a closed rectangle; only freehand ink may be scrubbed")
+	}
+	// Single Undo brings the ink back cleanly.
 	e.Undo()
-	if e.ItemCount() != beforeCount || e.Doc.Shapes[snappedRect.ID] == nil {
+	if e.ItemCount() != beforeCount || e.Doc.Shapes[inkID] == nil {
 		t.Fatalf("Undo after scribble erase failed: count=%d", e.ItemCount())
 	}
 }

@@ -1,6 +1,7 @@
 package editor
 
 import (
+	"fmt"
 	"math"
 	"slices"
 	"sort"
@@ -17,6 +18,7 @@ type boardClipItem struct {
 type boardClip struct {
 	items    []boardClipItem
 	bindings []*doc.Binding
+	assets   map[doc.ID]*doc.Asset
 }
 
 type styleSnapshot struct {
@@ -216,7 +218,7 @@ func (e *Editor) Copy() bool {
 	if len(roots) == 0 {
 		return false
 	}
-	cl := &boardClip{}
+	cl := &boardClip{assets: map[doc.ID]*doc.Asset{}}
 	seen := map[doc.ID]bool{}
 	var collect func(id doc.ID, isRoot bool)
 	collect = func(id doc.ID, isRoot bool) {
@@ -232,6 +234,11 @@ func (e *Editor) Copy() bool {
 			shape:  cloneShapeTreeData(s),
 			isRoot: isRoot,
 		})
+		if s.Type == doc.TypeImage && s.AssetID != "" {
+			if a := e.Doc.Assets[s.AssetID]; a != nil {
+				cl.assets[a.ID] = a
+			}
+		}
 		for _, kid := range e.Children(id) {
 			collect(kid, false)
 		}
@@ -244,6 +251,45 @@ func (e *Editor) Copy() bool {
 			if b := e.bindingOf(id, term); b != nil && seen[b.To] {
 				cp := *b
 				cl.bindings = append(cl.bindings, &cp)
+			}
+		}
+	}
+	// Endpoints bound to shapes outside the copy would otherwise fall back to
+	// stale coordinates; bake their current on-screen position into the copy.
+	for i := range cl.items {
+		it := &cl.items[i]
+		orig := e.Doc.Shapes[it.shape.ID]
+		if orig == nil {
+			continue
+		}
+		for _, term := range []string{"start", "end"} {
+			b := e.bindingOf(orig.ID, term)
+			if b == nil || seen[b.To] {
+				continue
+			}
+			switch orig.Type {
+			case doc.TypeArrow:
+				info := e.Arrow(orig)
+				if term == "start" {
+					it.shape.Start = info.Start
+				} else {
+					it.shape.End = info.End
+				}
+			case doc.TypeLine:
+				pts := e.linePoints(orig)
+				if len(pts) == 0 {
+					continue
+				}
+				clone := slices.Clone(it.shape.Points)
+				if len(clone) != len(pts) {
+					continue
+				}
+				if term == "start" {
+					clone[0].X, clone[0].Y = pts[0].X, pts[0].Y
+				} else {
+					clone[len(clone)-1].X, clone[len(clone)-1].Y = pts[len(pts)-1].X, pts[len(pts)-1].Y
+				}
+				it.shape.Points = clone
 			}
 		}
 	}
@@ -266,6 +312,14 @@ func (e *Editor) Paste() bool {
 		return false
 	}
 	e.begin()
+	// Clipboard images reference files in the shared boards/assets directory, so
+	// only the metadata record must be carried into the target drawing.
+	for id, a := range e.clip.assets {
+		if e.Doc.Assets[id] == nil {
+			cp := *a
+			e.putAsset(&cp)
+		}
+	}
 	idMap := make(map[doc.ID]doc.ID, len(e.clip.items))
 	for _, item := range e.clip.items {
 		idMap[item.shape.ID] = doc.NewRecordID("shape")
@@ -279,7 +333,12 @@ func (e *Editor) Paste() bool {
 		c.Seed = geo.Hash(string(nid))
 		if item.isRoot {
 			targetParent := item.shape.Parent
-			if doc.IsPageID(targetParent) || e.Doc.Shapes[targetParent] == nil {
+			switch {
+			case doc.IsPageID(targetParent):
+				if targetParent != e.Page {
+					targetParent = e.Page
+				}
+			case e.Doc.Shapes[targetParent] == nil || e.PageOf(targetParent) != e.Page:
 				targetParent = e.Page
 			}
 			c.Parent = targetParent
@@ -1083,46 +1142,65 @@ func (e *Editor) PageItemCount(pageID doc.ID) int {
 	return len(e.Children(pageID))
 }
 
-// AddPage appends a new page, switches to it, and notifies OnChange.
+// AddPage appends a new page, switches to it, and records the change in history.
 func (e *Editor) AddPage(name string) *doc.Page {
+	e.StopEditing()
+	e.begin()
+	before := slices.Clone(e.Doc.Pages)
 	p := e.Doc.AddPage(name)
+	e.recordPages(before)
 	e.SwitchPage(p.ID)
-	e.emitChange()
+	e.commit()
 	return p
 }
 
-// RenamePage renames page id and notifies OnChange.
+// RenamePage renames page id inside an undoable transaction.
 func (e *Editor) RenamePage(id doc.ID, name string) bool {
-	if name == "" || !e.Doc.RenamePage(id, name) {
+	if name == "" {
 		return false
 	}
-	e.emitChange()
+	e.StopEditing()
+	e.begin()
+	before := slices.Clone(e.Doc.Pages)
+	if !e.Doc.RenamePage(id, name) {
+		e.rollback()
+		return false
+	}
+	e.recordPages(before)
+	e.commit()
 	return true
 }
 
-// DeletePage removes page id (unless it is the last page), cleaning its shapes and switching active page.
+// recordPages stores a page-list change in the open transaction.
+func (e *Editor) recordPages(before []*doc.Page) {
+	if e.tx == nil {
+		return
+	}
+	after := slices.Clone(e.Doc.Pages)
+	e.tx.pages = &change[[]*doc.Page]{before: &before, after: &after}
+}
+
+// DeletePage removes page id (unless it is the last page) as one undoable step,
+// deleting its shapes and bindings through deleteTree so history stays consistent.
 func (e *Editor) DeletePage(id doc.ID) error {
+	if len(e.Doc.Pages) <= 1 {
+		return doc.ErrLastPage
+	}
+	if e.Doc.Page(id) == nil {
+		return fmt.Errorf("board: page %q not found", id)
+	}
+	e.StopEditing()
+	e.cancelGesture()
+	e.begin()
+	before := slices.Clone(e.Doc.Pages)
 	if err := e.Doc.DeletePage(id); err != nil {
+		e.rollback()
 		return err
 	}
-	// Purge any shapes and bindings attached to deleted page id cleanly.
-	toDrop := map[doc.ID]bool{}
-	var collect func(parent doc.ID)
-	collect = func(parent doc.ID) {
-		for _, sid := range e.Children(parent) {
-			toDrop[sid] = true
-			collect(sid)
-		}
+	for _, kid := range slices.Clone(e.Children(id)) {
+		e.deleteTree(kid)
 	}
-	collect(id)
-	for sid := range toDrop {
-		delete(e.Doc.Shapes, sid)
-	}
-	for bid, b := range e.Doc.Bindings {
-		if toDrop[b.From] || toDrop[b.To] {
-			delete(e.Doc.Bindings, bid)
-		}
-	}
+	e.recordPages(before)
 	delete(e.cams, id)
 	e.kids, e.bindFrom, e.bindTo, e.arrows = nil, nil, nil, nil
 	if e.Page == id || e.Doc.Page(e.Page) == nil {
@@ -1130,7 +1208,8 @@ func (e *Editor) DeletePage(id doc.ID) error {
 		e.SelectNone()
 		e.Editing, e.EditingVertices, e.FocusedGroup = "", "", ""
 	}
-	e.emitChange()
+	e.sel = slices.DeleteFunc(e.sel, func(x doc.ID) bool { return e.Doc.Shapes[x] == nil })
+	e.commit()
 	return nil
 }
 
@@ -1143,6 +1222,9 @@ func (e *Editor) MoveSelectedToPage(targetPage doc.ID) int {
 	if len(ids) == 0 {
 		return 0
 	}
+	sort.SliceStable(ids, func(i, j int) bool {
+		return e.Doc.Shapes[ids[i]].Index < e.Doc.Shapes[ids[j]].Index
+	})
 	movedSet := map[doc.ID]bool{}
 	for _, id := range ids {
 		movedSet[id] = true
@@ -1165,10 +1247,11 @@ func (e *Editor) MoveSelectedToPage(targetPage doc.ID) int {
 		c.X, c.Y, c.Rotation = o.X, o.Y, m.Rotation()
 		e.put(c)
 	}
-	// Remove bindings whose target stayed on the old page (or vice versa).
-	for bid, b := range e.Doc.Bindings {
+	// Unbind every mixed pair so a terminal whose target leaves the page keeps its
+	// last visible endpoint instead of jumping back to a stale coordinate.
+	for _, b := range e.Doc.Bindings {
 		if movedSet[b.From] != movedSet[b.To] {
-			e.removeBinding(bid)
+			e.unbind(b.From, b.Terminal)
 		}
 	}
 	e.SelectNone()
