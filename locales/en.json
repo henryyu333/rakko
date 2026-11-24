@@ -1131,6 +1131,8 @@
   "boardPageAdd": "New Page",
   "boardPageRename": "Rename Page…",
   "boardPageDelete": "Delete Page",
+  "boardPageDeleteConfirm": "Delete page \"{name}\"? Everything on it will be removed. You can undo this.",
+  "boardDeleteAction": "Delete",
   "boardPageMoveTo": "Move to Page",
   "boardPageCount": "{n, number, ::group-off} pages",
   "boardCtxCut": "Cut",

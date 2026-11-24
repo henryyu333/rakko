@@ -105,6 +105,7 @@ type boardUI struct {
 	renameDraft   string
 	renameBoot    bool
 	confirmDelete bool
+	confirmPageDelete bool
 
 	spaceHeld    bool
 	panDrag      bool
@@ -368,15 +369,16 @@ func (b *boardUI) tick(now time.Time) bool {
 	if b.since.IsZero() || now.Sub(b.since) < boardSaveDelay {
 		return false
 	}
-	if err := b.flush(); err != nil {
+	if err := b.save(); err != nil {
 		b.host.report(err)
 		return false
 	}
 	return true
 }
 
-// flush writes any pending board changes atomically right away.
-func (b *boardUI) flush() error {
+// save writes the current document state without ending an in-progress inline
+// edit; EditChanged already mirrors the text into the document.
+func (b *boardUI) save() error {
 	if b.locked || !b.dirtyFlag || b.ed == nil || b.store == nil {
 		return nil
 	}
@@ -389,6 +391,15 @@ func (b *boardUI) flush() error {
 	b.refreshBoards()
 	b.invalidate()
 	return nil
+}
+
+// flush commits any open inline edit, then writes pending board changes atomically.
+// Quit, close, blur, board switching, and import all go through this path.
+func (b *boardUI) flush() error {
+	if b.ed != nil {
+		b.ed.StopEditing()
+	}
+	return b.save()
 }
 
 func (b *boardUI) selectBoard(id string) error {
@@ -405,6 +416,7 @@ func (b *boardUI) selectBoard(id string) error {
 	b.refreshBoards()
 	b.renaming = false
 	b.confirmDelete = false
+	b.confirmPageDelete = false
 	b.invalidate()
 	return err
 }
@@ -426,6 +438,7 @@ func (b *boardUI) newBoardDoc() error {
 	b.refreshBoards()
 	b.renaming = false
 	b.confirmDelete = false
+	b.confirmPageDelete = false
 	b.invalidate()
 	return err
 }
@@ -526,6 +539,7 @@ func (b *boardUI) trashCurrent() error {
 		return nil
 	}
 	b.confirmDelete = false
+	b.confirmPageDelete = false
 	if err := b.flush(); err != nil {
 		return err
 	}
@@ -694,6 +708,7 @@ func (b *boardUI) onClose(*mygo.CloseEvent) {
 	b.win = nil
 	b.renaming = false
 	b.confirmDelete = false
+	b.confirmPageDelete = false
 	b.spaceHeld = false
 	b.panDrag = false
 	for _, p := range b.dragTempFiles {
@@ -720,6 +735,9 @@ func (b *boardUI) onClose(*mygo.CloseEvent) {
 func (b *boardUI) onBlur() {
 	if b.renaming {
 		b.commitRename()
+	}
+	if b.renamingPage {
+		b.commitPageRename()
 	}
 	_ = b.flush()
 }

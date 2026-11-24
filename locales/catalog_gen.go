@@ -11469,6 +11469,28 @@ func (msgs Messages) BoardPageDelete() string {
 	return Catalog.Format(msgs.locale, "boardPageDelete", nil)
 }
 
+// BoardPageDeleteConfirm says "删除页面「{name}」？页面上的内容会一并删除，可用撤销恢复。"
+// in the language the app shows.
+func BoardPageDeleteConfirm(name string) string {
+	return In(i18n.Locale()).BoardPageDeleteConfirm(name)
+}
+
+// BoardPageDeleteConfirm says "删除页面「{name}」？页面上的内容会一并删除，可用撤销恢复。"
+// in the language of msgs.
+func (msgs Messages) BoardPageDeleteConfirm(name string) string {
+	return Catalog.Format(msgs.locale, "boardPageDeleteConfirm", map[string]any{"name": name})
+}
+
+// BoardDeleteAction says "删除"
+// in the language the app shows.
+func BoardDeleteAction() string { return In(i18n.Locale()).BoardDeleteAction() }
+
+// BoardDeleteAction says "删除"
+// in the language of msgs.
+func (msgs Messages) BoardDeleteAction() string {
+	return Catalog.Format(msgs.locale, "boardDeleteAction", nil)
+}
+
 // BoardPageMoveTo says "移至页面"
 // in the language the app shows.
 func BoardPageMoveTo() string { return In(i18n.Locale()).BoardPageMoveTo() }

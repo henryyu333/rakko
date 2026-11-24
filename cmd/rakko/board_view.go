@@ -49,6 +49,9 @@ func (a *shelf) boardView(c *ui.Context) {
 	if b.confirmDelete {
 		a.boardDeleteModal(c, l, pal)
 	}
+	if b.confirmPageDelete {
+		a.boardPageDeleteModal(c, l, pal)
+	}
 }
 
 func (a *shelf) boardBar(c *ui.Context, l locales.Messages, pal *editor.Palette) {
@@ -193,7 +196,7 @@ func (a *shelf) boardStage(c *ui.Context, l locales.Messages, pal *editor.Palett
 	stage := ui.Box(c.Key("board-stage")).FillWidth().Grow(1).MinHeight(0).Clip()
 	stage.Children(func() {
 		canvas := ui.Box(c.Key("board-canvas")).Fill().Focusable().FocusRing(false).Label(b.currentTitle(l))
-		if !b.canvasFocus && !b.renaming && !b.renamingPage && !b.confirmDelete && b.ed.Editing == "" && !b.anyMenuOpen() {
+		if !b.canvasFocus && !b.renaming && !b.renamingPage && !b.confirmDelete && !b.confirmPageDelete && b.ed.Editing == "" && !b.anyMenuOpen() {
 			canvas.Focus()
 			b.canvasFocus = true
 		}
@@ -569,36 +572,69 @@ func (b *boardUI) popoverButtonOpts(pal *editor.Palette, at, self ui.Anchor, ope
 func (a *shelf) boardDeleteModal(c *ui.Context, l locales.Messages, pal *editor.Palette) {
 	b := a.board
 	name := b.currentTitle(l)
-	backdrop := ui.Box(c.Key("board-del-modal")).Modal().Absolute().Top(0).Left(0).Fill().
+	a.boardConfirmModal(c, l, pal, "board-del",
+		osText(l.BoardDeleteConfirm(name), l.BoardDeleteConfirmWin(name)),
+		osText(l.BoardMoveToTrash(), l.BoardMoveToTrashWin()),
+		func() {
+			if err := b.trashCurrent(); err != nil {
+				a.report(err)
+			}
+		},
+		func() {
+			b.confirmDelete = false
+			b.invalidate()
+		})
+}
+
+func (a *shelf) boardPageDeleteModal(c *ui.Context, l locales.Messages, pal *editor.Palette) {
+	b := a.board
+	name := ""
+	if pg := b.ed.ActivePageInfo(); pg != nil {
+		name = pg.Name
+	}
+	a.boardConfirmModal(c, l, pal, "board-page-del",
+		l.BoardPageDeleteConfirm(name), l.BoardDeleteAction(),
+		func() {
+			if err := b.ed.DeletePage(b.ed.Page); err != nil {
+				a.report(err)
+			}
+			b.confirmPageDelete = false
+			b.invalidate()
+		},
+		func() {
+			b.confirmPageDelete = false
+			b.invalidate()
+		})
+}
+
+// boardConfirmModal renders the shared destructive-action dialog used for
+// trashing a board and deleting a page.
+func (a *shelf) boardConfirmModal(c *ui.Context, l locales.Messages, pal *editor.Palette, key, body, okLabel string, ok, cancel func()) {
+	backdrop := ui.Box(c.Key(key+"-modal")).Modal().Absolute().Top(0).Left(0).Fill().
 		Background(ui.RGBA(0, 0, 0, 0.45)).Center()
 	backdrop.Children(func() {
-		card := ui.Column(c.Key("board-del-card")).Width(320).Padding(16, 16, 14, 16).Gap(14).
+		card := ui.Column(c.Key(key+"-card")).Width(320).Padding(16, 16, 14, 16).Gap(14).
 			Radius(12).Clip().Background(boardColor(pal.Bar)).Border(0.5, boardColor(pal.Edge)).
 			Shadow(0, 16, 40, 0, ui.RGBA(0, 0, 0, 0.45))
 		card.Children(func() {
-			ui.Text(c, osText(l.BoardDeleteConfirm(name), l.BoardDeleteConfirmWin(name))).
-				FontSize(13).LineHeight(1.45).TextColor(boardColor(pal.Ink))
+			ui.Text(c, body).FontSize(13).LineHeight(1.45).TextColor(boardColor(pal.Ink))
 			ui.Row(c).FillWidth().Justify(ui.End).Gap(8).Children(func() {
-				cancel := ui.Row(c.Key("board-del-cancel")).Height(28).Padding(0, 12, 0, 12).Radius(7).Center().
+				btn := ui.Row(c.Key(key+"-cancel")).Height(28).Padding(0, 12, 0, 12).Radius(7).Center().
 					Background(boardColor(pal.BarActive)).Label(l.BoardCancel())
-				cancel.Children(func() {
+				btn.Children(func() {
 					ui.Text(c, l.BoardCancel()).SingleLine().FontSize(12).FontWeight(500).TextColor(boardColor(pal.Ink))
 				})
-				if cancel.Clicked() {
-					b.confirmDelete = false
-					b.invalidate()
+				if btn.Clicked() && cancel != nil {
+					cancel()
 				}
 
-				delLabel := osText(l.BoardMoveToTrash(), l.BoardMoveToTrashWin())
-				del := ui.Row(c.Key("board-del-ok")).Height(28).Padding(0, 12, 0, 12).Radius(7).Center().
-					Background(danger).Label(delLabel)
+				del := ui.Row(c.Key(key+"-ok")).Height(28).Padding(0, 12, 0, 12).Radius(7).Center().
+					Background(danger).Label(okLabel)
 				del.Children(func() {
-					ui.Text(c, delLabel).SingleLine().FontSize(12).FontWeight(600).TextColor(ui.Hex("#FFFFFF"))
+					ui.Text(c, okLabel).SingleLine().FontSize(12).FontWeight(600).TextColor(ui.Hex("#FFFFFF"))
 				})
-				if del.Clicked() {
-					if err := b.trashCurrent(); err != nil {
-						a.report(err)
-					}
+				if del.Clicked() && ok != nil {
+					ok()
 				}
 			})
 		})

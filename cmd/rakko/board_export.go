@@ -293,6 +293,9 @@ func (b *boardUI) importBoardFile() {
 	if b.locked || b.store == nil {
 		return
 	}
+	if b.ed != nil {
+		b.ed.StopEditing()
+	}
 	paths, err := boardOpenBoardDialog(b.win)
 	if err != nil || len(paths) == 0 {
 		return

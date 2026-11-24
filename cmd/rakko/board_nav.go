@@ -74,7 +74,7 @@ func (a *shelf) boardPageSwitcherButton(c *ui.Context, l locales.Messages, pal *
 			b.startPageRename()
 		}
 		if m.Item(l.BoardPageDelete()).Disabled(b.locked || len(pages) <= 1).Danger().Chosen() {
-			_ = b.ed.DeletePage(b.ed.Page)
+			b.confirmPageDelete = true
 			b.invalidate()
 		}
 	}, b.popoverButtonOpts(pal, ui.AnchorBottomStart, ui.AnchorTopStart, &b.pageMenu))

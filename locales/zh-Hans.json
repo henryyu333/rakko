@@ -1131,6 +1131,8 @@
   "boardPageAdd": "新建页面",
   "boardPageRename": "重命名当前页…",
   "boardPageDelete": "删除当前页",
+  "boardPageDeleteConfirm": "删除页面「{name}」？页面上的内容会一并删除，可用撤销恢复。",
+  "boardDeleteAction": "删除",
   "boardPageMoveTo": "移至页面",
   "boardPageCount": "{n, number, ::group-off} 页",
   "boardCtxCut": "剪切",
