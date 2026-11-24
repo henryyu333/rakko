@@ -551,7 +551,6 @@ func (b *boardUI) selectBoard(id string) error {
 	b.confirmDelete = false
 	b.confirmPageDelete = false
 	b.toolMenu = false
-	b.toolMenu = false
 	b.invalidate()
 	return err
 }
@@ -574,6 +573,7 @@ func (b *boardUI) newBoardDoc() error {
 	b.renaming = false
 	b.confirmDelete = false
 	b.confirmPageDelete = false
+	b.toolMenu = false
 	b.invalidate()
 	return err
 }
