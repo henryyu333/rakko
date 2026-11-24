@@ -63,7 +63,7 @@ func disableNoteWatch() {
 // closeNoteWatch stops a test note's watcher when one was started.
 func closeNoteWatch(n *noteUI) {
 	if n != nil && n.watch != nil {
-		closeNoteWatch(n)
+		n.watch.Close()
 		n.watch = nil
 	}
 }
