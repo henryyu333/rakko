@@ -5431,6 +5431,16 @@ func (msgs Messages) NoteUnreadable() string {
 	return Catalog.Format(msgs.locale, "noteUnreadable", nil)
 }
 
+// NoteSaveBlocked says "无法安全保存这篇便利贴，已切换为只读；请复制内容后手动保存。"
+// in the language the app shows.
+func NoteSaveBlocked() string { return In(i18n.Locale()).NoteSaveBlocked() }
+
+// NoteSaveBlocked says "无法安全保存这篇便利贴，已切换为只读；请复制内容后手动保存。"
+// in the language of msgs.
+func (msgs Messages) NoteSaveBlocked() string {
+	return Catalog.Format(msgs.locale, "noteSaveBlocked", nil)
+}
+
 // DropPutInTray says "放入托盘"
 // in the language the app shows.
 func DropPutInTray() string { return In(i18n.Locale()).DropPutInTray() }

@@ -1946,7 +1946,7 @@ func galleryGroupJ() []galleryItem {
 			}
 			t.Cleanup(func() {
 				if n.watch != nil {
-					n.watch.Close()
+					closeNoteWatch(n)
 				}
 			})
 			text := galleryText(lang, zh, en)

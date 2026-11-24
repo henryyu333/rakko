@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 import (
@@ -23,7 +21,7 @@ func TestNoteWindowTypesAndCloses(t *testing.T) {
 	}
 	t.Cleanup(func() {
 		if n.watch != nil {
-			n.watch.Close()
+			closeNoteWatch(n)
 			n.watch = nil
 		}
 	})
@@ -41,7 +39,7 @@ func TestNoteWindowTypesAndCloses(t *testing.T) {
 	if _, ok := view.Find(blank.CardNote()); !ok {
 		t.Fatal("a blank note has no title")
 	}
-	for _, label := range []string{blank.NoteReveal(), blank.NoteKeepOnTop(), blank.NoteClose()} {
+	for _, label := range []string{osText(blank.NoteReveal(), blank.NoteRevealWin()), blank.NoteKeepOnTop(), blank.NoteClose()} {
 		if _, ok := view.Find(label); !ok {
 			t.Fatalf("bar button %q missing", label)
 		}
@@ -54,14 +52,14 @@ func TestNoteWindowTypesAndCloses(t *testing.T) {
 	view.Key(0, ui.KeyEnter)
 	view.Type("– 改 README")
 	view.Frame()
-	if got := n.draftText(); got != "# 周五发版前\n\n– 改 README" {
+	if got := n.draftText(); got != "# 周五发版前\n– 改 README" {
 		t.Fatalf("draft = %q after typing", got)
 	}
 	if n.tick(time.Now()) {
 		t.Fatal("saved on the first tick")
 	}
 	n.flush()
-	if got := fileText(t, n); got != "# 周五发版前\n\n– 改 README" {
+	if got := fileText(t, n); got != "# 周五发版前\n– 改 README" {
 		t.Fatalf("file = %q", got)
 	}
 
@@ -78,7 +76,7 @@ func TestNoteWindowTypesAndCloses(t *testing.T) {
 	view.Frame()
 	view.Key(0, ui.KeyEscape)
 	view.Frame()
-	if got := fileText(t, n); got != "# 周五发版前\n\n– 改 README\n\n– 刚打的最后一句" {
+	if got := fileText(t, n); got != "# 周五发版前\n– 改 README\n– 刚打的最后一句" {
 		t.Fatalf("Escape left %q on disk", got)
 	}
 	if n.dirty() {
@@ -96,7 +94,7 @@ func TestNoteReopensWithTheFile(t *testing.T) {
 	}
 	defer func() {
 		if n.watch != nil {
-			n.watch.Close()
+			closeNoteWatch(n)
 			n.watch = nil
 		}
 	}()

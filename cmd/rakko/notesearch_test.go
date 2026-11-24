@@ -192,7 +192,7 @@ func TestEnterOpensTheNoteRow(t *testing.T) {
 	}
 	t.Cleanup(func() {
 		if a.note.watch != nil {
-			a.note.watch.Close()
+			closeNoteWatch(a.note)
 			a.note.watch = nil
 		}
 	})

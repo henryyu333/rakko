@@ -285,7 +285,7 @@ func TestSmokeNoteCardAndWindow(t *testing.T) {
 	petShot(t, a.win, "note-card-with-note")
 	onMain(func() {
 		if a.note.watch != nil {
-			a.note.watch.Close()
+			closeNoteWatch(a.note)
 		}
 		a.note = nil
 		a.hide(hidePassive)

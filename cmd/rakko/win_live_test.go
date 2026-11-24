@@ -89,6 +89,7 @@ func makeWinVerifyPNG(w, h int) []byte {
 
 func TestMain(m *testing.M) {
 	if os.Getenv("RAKKO_WIN_LIVE") != "1" {
+		disableNoteWatch()
 		os.Exit(m.Run())
 	}
 	mygo.App.SetName("Rakko")

@@ -1,5 +1,3 @@
-//go:build darwin
-
 package main
 
 import (
@@ -10,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
@@ -121,7 +118,6 @@ func TestNoteUneditedPlainTextPreservesBytesMtimeAndInode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	beforeStat := beforeInfo.Sys().(*syscall.Stat_t)
 
 	// Guard: verify richtext.ParseMarkdown().Markdown() WOULD have altered it
 	// if we hadn't protected unedited writes with Document.Version().
@@ -136,7 +132,7 @@ func TestNoteUneditedPlainTextPreservesBytesMtimeAndInode(t *testing.T) {
 	}
 	t.Cleanup(func() {
 		if n.watch != nil {
-			n.watch.Close()
+			closeNoteWatch(n)
 			n.watch = nil
 		}
 	})
@@ -171,7 +167,6 @@ func TestNoteUneditedPlainTextPreservesBytesMtimeAndInode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	afterStat := afterInfo.Sys().(*syscall.Stat_t)
 
 	if !bytes.Equal(afterBytes, beforeBytes) {
 		t.Fatalf("unedited note bytes changed:\n got: %q\nwant: %q", afterBytes, beforeBytes)
@@ -179,8 +174,8 @@ func TestNoteUneditedPlainTextPreservesBytesMtimeAndInode(t *testing.T) {
 	if !afterInfo.ModTime().Equal(beforeInfo.ModTime()) {
 		t.Fatalf("unedited note mtime changed: %v -> %v", beforeInfo.ModTime(), afterInfo.ModTime())
 	}
-	if afterStat.Ino != beforeStat.Ino || !os.SameFile(beforeInfo, afterInfo) {
-		t.Fatalf("unedited note inode changed: %d -> %d", beforeStat.Ino, afterStat.Ino)
+	if !os.SameFile(beforeInfo, afterInfo) {
+		t.Fatalf("unedited note inode changed: %v -> %v", beforeInfo, afterInfo)
 	}
 }
 
@@ -301,7 +296,7 @@ func TestNoteRichTextImagesPasteDropDeleteReloadAndThumbScreenshots(t *testing.T
 	}
 	t.Cleanup(func() {
 		if n2.watch != nil {
-			n2.watch.Close()
+			closeNoteWatch(n2)
 			n2.watch = nil
 		}
 	})

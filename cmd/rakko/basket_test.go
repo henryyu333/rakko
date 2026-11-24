@@ -49,6 +49,7 @@ func TestMain(m *testing.M) {
 		return lyrics.Result{None: true}, nil
 	}
 	if os.Getenv("RAKKO_BASKET_SMOKE") != "1" {
+		disableNoteWatch()
 		os.Exit(m.Run())
 	}
 	dir, err := os.MkdirTemp("", "shelf-fix-smoke-")

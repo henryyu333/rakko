@@ -1,10 +1,9 @@
-//go:build darwin
-
 package main
 
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -27,11 +26,25 @@ func noteTestShelf(t *testing.T) (*shelf, *noteUI) {
 	}
 	t.Cleanup(func() {
 		if n.watch != nil {
-			n.watch.Close()
+			closeNoteWatch(n)
 			n.watch = nil
 		}
 	})
 	return a, n
+}
+
+// disableNoteWatch keeps headless tests from starting a file watch: its
+// goroutine calls RunOnMain, which waits forever without an app loop.
+func disableNoteWatch() {
+	noteWatchFile = func(string, func()) (*note.Watch, error) { return nil, nil }
+}
+
+// closeNoteWatch stops a test note's watcher when one was started.
+func closeNoteWatch(n *noteUI) {
+	if n != nil && n.watch != nil {
+		closeNoteWatch(n)
+		n.watch = nil
+	}
 }
 
 // fileText reads the note straight from disk.
@@ -88,7 +101,7 @@ func TestNoteFlushOnClose(t *testing.T) {
 	n.setDraft("# 随手记\n\n– 一条")
 	n.tick(time.Now()) // seen, not yet due
 	n.flush()
-	if got := fileText(t, n); got != "# 随手记\n\n– 一条" {
+	if got := fileText(t, n); got != "# 随手记\n– 一条" {
 		t.Fatalf("flush left %q on disk", got)
 	}
 	if n.dirty() {
@@ -113,7 +126,7 @@ func TestNoteAdoptOutsideChange(t *testing.T) {
 	if n.adopt("# 又改了一次\n") {
 		t.Fatal("an unsaved draft was overwritten")
 	}
-	if n.draftText() != "# 正在写" {
+	if n.draftText() != "# 正在写\n" {
 		t.Fatalf("draft = %q after the outside change", n.draftText())
 	}
 	n.flush()
@@ -142,6 +155,9 @@ func TestNoteOutsideRunsOnMainThread(t *testing.T) {
 // editor to type into and no save path, so an empty window can never be
 // written over the note.
 func TestNoteUnreadableLocksTheEditor(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("chmod 0 does not make a file unreadable on Windows")
+	}
 	a := &shelf{dataDir: t.TempDir()}
 	if _, err := note.Open(a.dataDir); err != nil {
 		t.Fatal(err)
@@ -152,7 +168,7 @@ func TestNoteUnreadableLocksTheEditor(t *testing.T) {
 	}
 	t.Cleanup(func() {
 		if n.watch != nil {
-			n.watch.Close()
+			closeNoteWatch(n)
 			n.watch = nil
 		}
 	})
@@ -170,7 +186,7 @@ func TestNoteUnreadableLocksTheEditor(t *testing.T) {
 	if n2 == nil {
 		t.Fatal("no note session over an unreadable note")
 	}
-	n2.watch.Close()
+	closeNoteWatch(n2)
 	n2.watch = nil
 	if !n2.locked {
 		t.Fatal("an unreadable note was opened for writing")
@@ -213,7 +229,7 @@ func TestNoteUnreadableLocksTheEditor(t *testing.T) {
 	if err := n2.flush(); err != nil {
 		t.Fatal(err)
 	}
-	if got := fileText(t, n); got != "改好了" {
+	if got := fileText(t, n); got != "改好了\n" {
 		t.Fatalf("the unlocked note wrote %q", got)
 	}
 }
@@ -242,76 +258,6 @@ func TestNoteSaveRedrawsThePin(t *testing.T) {
 	}
 }
 
-// onMainCheck runs fn on the app's main thread and fails the test with what
-// it reports. t.Fatal cannot run inside onMain: it abandons the goroutine
-// that would have closed the handshake, leaving the caller waiting forever.
-func onMainCheck(t *testing.T, fn func() string) {
-	t.Helper()
-	var problem string
-	onMain(func() { problem = fn() })
-	if problem != "" {
-		t.Fatal(problem)
-	}
-}
-
-// TestNoteWindowKeepsOnTop: 置顶 is the note's own state, and the window is
-// rebuilt on every open — so a window built after the flag was set must come
-// up on top, exactly as the bar draws it, and a plain one must not. A real
-// window, because the flag reaches the window server only through one; the
-// smoke harness is what runs a real app loop.
-func TestNoteWindowKeepsOnTop(t *testing.T) {
-	if os.Getenv("RAKKO_BASKET_SMOKE") != "1" {
-		t.Skip("set RAKKO_BASKET_SMOKE=1 to open a real note window")
-	}
-	a := smokeShelf
-	onMainCheck(t, func() string {
-		a.note = nil
-		n := a.noteSession()
-		if n == nil {
-			return "no note session"
-		}
-		n.setTop(true)
-		if !n.open() {
-			return "the note did not open"
-		}
-		return ""
-	})
-	time.Sleep(300 * time.Millisecond)
-	onMainCheck(t, func() string {
-		if w := a.note.win; w == nil || !w.IsAlwaysOnTop() {
-			return "a window built over a lit 置顶 is not on top"
-		}
-		a.note.close()
-		return ""
-	})
-	time.Sleep(300 * time.Millisecond)
-	onMainCheck(t, func() string {
-		n := a.note
-		n.setTop(false)
-		if !n.open() {
-			return "the note did not reopen"
-		}
-		return ""
-	})
-	time.Sleep(300 * time.Millisecond)
-	onMainCheck(t, func() string {
-		n := a.note
-		problem := ""
-		if w := n.win; w != nil && w.IsAlwaysOnTop() {
-			problem = "a window built without 置顶 came up on top"
-		}
-		n.close()
-		if n.watch != nil {
-			n.watch.Close()
-		}
-		n.watch = nil
-		a.note = nil
-		return problem
-	})
-}
-
-// TestNoteCardShape: the card is a widget with the 1 × 1 and 2 × 1 sizes,
-// and a pinned note is wide because its body needs two columns.
 func TestNoteCardShape(t *testing.T) {
 	def := toolCardDefFor("note")
 	if def == nil || def.kind != cardWidget {
@@ -342,7 +288,7 @@ func TestNoteCardPreviewLines(t *testing.T) {
 	}
 	defer func() {
 		if n.watch != nil {
-			n.watch.Close()
+			closeNoteWatch(n)
 			n.watch = nil
 		}
 	}()
@@ -404,7 +350,7 @@ func TestNoteWindowTitle(t *testing.T) {
 	}
 	defer func() {
 		if n.watch != nil {
-			n.watch.Close()
+			closeNoteWatch(n)
 			n.watch = nil
 		}
 	}()

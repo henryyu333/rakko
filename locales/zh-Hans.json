@@ -532,6 +532,7 @@
   "noteKeepOnTop": "置顶",
   "noteClose": "关闭",
   "noteUnreadable": "无法读取便利贴文件",
+  "noteSaveBlocked": "无法安全保存这篇便利贴，已切换为只读；请复制内容后手动保存。",
   "dropPutInTray": "放入托盘",
   "dropPdfMerged": "合成一个 PDF",
   "dropPdfMergedSub": "按拖入顺序",
