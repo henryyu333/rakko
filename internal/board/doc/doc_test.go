@@ -1,6 +1,7 @@
 package doc
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -279,5 +280,48 @@ func TestNormalizeRepairsDuplicateIndicesAndOrphans(t *testing.T) {
 		if order[i] != want[i] {
 			t.Fatalf("order = %v, want %v", order, want)
 		}
+	}
+}
+
+func TestImportPackageLimits(t *testing.T) {
+	st, err := Open(t.TempDir(), "B")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Whole-file size limit, checked before parsing.
+	raw := make([]byte, MaxImportBytes+1)
+	if _, err := ImportPackage(raw, st, "B"); err == nil {
+		t.Fatal("import accepted a file over MaxImportBytes")
+	}
+
+	oldBytes, oldPixels := maxImportAssetBytes, maxImportPixels
+	t.Cleanup(func() { maxImportAssetBytes, maxImportPixels = oldBytes, oldPixels })
+
+	maxImportAssetBytes = 8
+	pkg := BoardPackage{
+		FormatVersion: 1,
+		Drawing:       NewDrawing("imported", "Imported"),
+		Assets: map[ID]*EmbeddedAsset{
+			"asset:a": {
+				Meta: &Asset{ID: "asset:a", Type: "image", Path: "assets/a.png", W: 1, H: 1},
+				Data: []byte("123456789"),
+			},
+		},
+	}
+	body, err := json.Marshal(pkg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ImportPackage(body, st, "B"); err == nil {
+		t.Fatal("import accepted an oversized asset")
+	}
+
+	maxImportAssetBytes = 1 << 20
+	maxImportPixels = 50
+	pkg.Assets["asset:a"].Data = []byte("x")
+	pkg.Assets["asset:a"].Meta.W, pkg.Assets["asset:a"].Meta.H = 10, 10
+	body, _ = json.Marshal(pkg)
+	if _, err := ImportPackage(body, st, "B"); err == nil {
+		t.Fatal("import accepted an asset over the pixel limit")
 	}
 }

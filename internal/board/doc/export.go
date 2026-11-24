@@ -1,11 +1,25 @@
 package doc
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
 	"os"
 	"path/filepath"
 	"strings"
+)
+
+// MaxImportBytes caps a .rakkoboard.json file the app will read.
+const MaxImportBytes = 64 << 20
+
+var (
+	maxImportAssetBytes  int64   = 32 << 20
+	maxImportPixels      float64 = 100_000_000
+	maxImportTotalPixels float64 = 200_000_000
 )
 
 // EmbeddedAsset bundles binary image asset bytes inside a portable .rakkoboard.json file.
@@ -58,6 +72,9 @@ func ImportPackage(raw []byte, st *Store, fallbackName string) (*Drawing, error)
 	if st == nil {
 		return nil, fmt.Errorf("board: nil store")
 	}
+	if int64(len(raw)) > MaxImportBytes {
+		return nil, fmt.Errorf("board: import is %d bytes, limit %d", len(raw), MaxImportBytes)
+	}
 	var pkg BoardPackage
 	if err := json.Unmarshal(raw, &pkg); err != nil {
 		return nil, err
@@ -88,9 +105,26 @@ func ImportPackage(raw []byte, st *Store, fallbackName string) (*Drawing, error)
 	d.Normalize(newID, name)
 
 	remap := map[ID]ID{}
+	var totalPixels float64
 	for oldID, emb := range pkg.Assets {
 		if emb == nil || len(emb.Data) == 0 {
 			continue
+		}
+		if int64(len(emb.Data)) > maxImportAssetBytes {
+			return nil, fmt.Errorf("board: asset %q is %d bytes, limit %d", oldID, len(emb.Data), maxImportAssetBytes)
+		}
+		px := float64(0)
+		if cfg, _, derr := image.DecodeConfig(bytes.NewReader(emb.Data)); derr == nil && cfg.Width > 0 && cfg.Height > 0 {
+			px = float64(cfg.Width) * float64(cfg.Height)
+		} else if emb.Meta != nil && emb.Meta.W > 0 && emb.Meta.H > 0 {
+			px = emb.Meta.W * emb.Meta.H
+		}
+		if px > maxImportPixels {
+			return nil, fmt.Errorf("board: asset %q is %.0f pixels, limit %.0f", oldID, px, maxImportPixels)
+		}
+		totalPixels += px
+		if totalPixels > maxImportTotalPixels {
+			return nil, fmt.Errorf("board: assets total %.0f pixels, limit %.0f", totalPixels, maxImportTotalPixels)
 		}
 		ext := "png"
 		nameHint := string(oldID)
