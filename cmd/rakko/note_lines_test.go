@@ -134,11 +134,106 @@ func TestNoteLayoutKeepsCodeBlockLineUntouched(t *testing.T) {
 }
 
 func TestNoteLayoutRoundTripRejectsUnrepresentableText(t *testing.T) {
-	src := "买菜\n"
+	// A line that is itself a closing fence cannot live inside that fenced
+	// block: writing it changes the block's structure when read back.
+	src := "```\na\n```\n"
 	l := newNoteLayout(src)
 	ps := layoutParas(t, l)
 	ps[0].Runs = []richtext.Run{{Text: "```"}}
 	if _, ok := l.commit(richtext.TextOf(ps...)); ok {
-		t.Fatal("commit accepted text that reads back differently")
+		t.Fatal("commit accepted a fence line inside a fenced block")
 	}
+}
+
+// TestNoteLayoutPlainMarkdownLookingTextSaves covers R1: text that looks like
+// Markdown but is a plain paragraph must save (escaped if needed) instead of
+// tripping the round-trip guard.
+func TestNoteLayoutPlainMarkdownLookingTextSaves(t *testing.T) {
+	semantic := []string{
+		"**重要**", "- 买菜", "1. 第一", "# 不是标题",
+		"用 *星号* 强调", "    缩进四格", "3*4*5",
+	}
+	literal := []string{"!", "<周三>", `C:\temp`, "snake_case"}
+
+	appendPlain := func(src, text string) (string, bool) {
+		l := newNoteLayout(src)
+		ps := layoutParas(t, l)
+		ps = append(ps, richtext.Paragraph{Runs: []richtext.Run{{Text: text}}})
+		return l.commit(richtext.TextOf(ps...))
+	}
+
+	for _, text := range semantic {
+		out, ok := appendPlain("a\n", text)
+		if !ok {
+			t.Fatalf("%q: commit rejected plain Markdown-looking text", text)
+		}
+		ps := layoutParas(t, newNoteLayout(out))
+		if len(ps) != 2 {
+			t.Fatalf("%q: reread has %d paragraphs, want 2", text, len(ps))
+		}
+		if got := ps[1].Style; got != (richtext.ParagraphStyle{}) {
+			t.Fatalf("%q: reread became %+v, want a plain paragraph", text, got)
+		}
+		if got := richtext.TextOf(ps[1]).String(); got != text {
+			t.Fatalf("%q: reread text = %q", text, got)
+		}
+	}
+	for _, text := range literal {
+		out, ok := appendPlain("a\n", text)
+		if !ok {
+			t.Fatalf("%q: commit rejected literal text", text)
+		}
+		lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
+		if len(lines) != 2 || lines[1] != text {
+			t.Fatalf("%q: literal text was escaped: %q", text, out)
+		}
+	}
+}
+
+// TestNoteLayoutKeepsPrefixOnEditedLine covers R2: an edited line keeps its
+// original indentation and block marker, so the diff is only the typed
+// character.
+func TestNoteLayoutKeepsPrefixOnEditedLine(t *testing.T) {
+	cases := []string{
+		"  - 子项",
+		"    缩进代码",
+		"\t制表缩进",
+		"1. 一",
+		"> 引用",
+		"- [ ] 待办",
+		"**粗** 普通",
+	}
+	for _, line := range cases {
+		src := line + "\nb\n"
+		l := newNoteLayout(src)
+		ps := layoutParas(t, l)
+		last := len(ps[0].Runs) - 1
+		ps[0].Runs[last].Text += "X"
+		out, ok := l.commit(richtext.TextOf(ps...))
+		if !ok {
+			t.Fatalf("%q: commit rejected the edit", line)
+		}
+		got := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
+		if len(got) != 2 || got[0] != line+"X" || got[1] != "b" {
+			t.Fatalf("%q: saved %q, want %q", line, got, line+"X")
+		}
+	}
+}
+
+// paraTextEnd returns the rune offset just before paragraph i's newline.
+func paraTextEnd(doc *richtext.Document, i int) int {
+	off := 0
+	for k, p := range doc.Text().Paragraphs() {
+		if k == i {
+			for _, r := range p.Runs {
+				off += len([]rune(r.Text))
+			}
+			return off
+		}
+		for _, r := range p.Runs {
+			off += len([]rune(r.Text))
+		}
+		off++
+	}
+	return off
 }

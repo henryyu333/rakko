@@ -481,12 +481,27 @@ func noteSerializePara(p richtext.Paragraph, code bool) string {
 		}
 	}
 	if plain {
+		var raw strings.Builder
 		for _, r := range p.Runs {
-			b.WriteString(r.Text)
+			raw.WriteString(r.Text)
 		}
-		return b.String()
+		line := raw.String()
+		// A plain paragraph is written exactly as typed when reading it back
+		// gives the same text. Text that would become Markdown (a list marker,
+		// emphasis, four-space indent) is escaped instead, so ordinary input
+		// never trips the round-trip guard.
+		if noteLineReadsAs(line, p) {
+			return line
+		}
+		return richtext.TextOf(p).Markdown()
 	}
 	return richtext.TextOf(p).Markdown()
+}
+
+// noteLineReadsAs reports whether line, read by the note loader, yields p.
+func noteLineReadsAs(line string, p richtext.Paragraph) bool {
+	ps := parseNoteLine(line)
+	return len(ps) == 1 && noteParaKey(ps[0]) == noteParaKey(p)
 }
 
 func (l *noteLayout) serializeUnit(u noteUnit, cur []richtext.Paragraph) []notePiece {
@@ -525,6 +540,18 @@ func (l *noteLayout) serializeUnit(u noteUnit, cur []richtext.Paragraph) []noteP
 		out = append(out, notePieces(cur[1:], false, l.nl)...)
 		return out
 	default:
+		// Keep the original line's leading whitespace and block marker when the
+		// paragraph style did not change: editing a list item or an indented
+		// code line only rewrites its inline content.
+		if len(cur) == 1 && len(u.paras) == 1 && cur[0].Style == u.paras[0].Style {
+			rawContent, _ := splitNoteTerm(u.raw)
+			if prefix, ok := noteLinePrefix(rawContent); ok {
+				inline := cur[0]
+				inline.Style = richtext.ParagraphStyle{}
+				code := u.paras[0].Style.CodeBlock
+				return []notePiece{{content: prefix + noteSerializePara(inline, code), term: term}}
+			}
+		}
 		// A single line unit that now holds several paragraphs writes each on
 		// its own line; inserted lines thus stay lines.
 		if len(cur) == 0 {
@@ -540,6 +567,98 @@ func (l *noteLayout) serializeUnit(u noteUnit, cur []richtext.Paragraph) []noteP
 		}
 		return out
 	}
+}
+
+// noteLinePrefix returns the original line's leading whitespace and block
+// marker (heading, quote, list, task, or indented code), so a changed line can
+// keep them verbatim.
+func noteLinePrefix(raw string) (string, bool) {
+	i := 0
+	for i < len(raw) && (raw[i] == ' ' || raw[i] == '\t') {
+		i++
+	}
+	if noteIndentColumns(raw[:i]) >= 4 {
+		return raw[:i], true
+	}
+	if prefix, ok := noteBlockPrefix(raw, i); ok {
+		return raw[:i] + prefix, true
+	}
+	return raw[:i], true
+}
+
+// noteBlockPrefix scans a block marker at i, returning the prefix through it.
+func noteBlockPrefix(raw string, i int) (string, bool) {
+	// Block quote, one or more levels.
+	if i < len(raw) && raw[i] == '>' {
+		j := i
+		for j < len(raw) && raw[j] == '>' {
+			j++
+			if j < len(raw) && (raw[j] == ' ' || raw[j] == '\t') {
+				j++
+			}
+		}
+		if inner, ok := noteBlockPrefix(raw, j); ok {
+			return raw[i:j] + inner, true
+		}
+		return raw[i:j], true
+	}
+	// ATX heading.
+	if i < len(raw) && raw[i] == '#' {
+		j := i
+		for j < len(raw) && raw[j] == '#' && j-i < 6 {
+			j++
+		}
+		if j < len(raw) && (raw[j] == ' ' || raw[j] == '\t') {
+			for j < len(raw) && (raw[j] == ' ' || raw[j] == '\t') {
+				j++
+			}
+			return raw[i:j], true
+		}
+	}
+	// Bullet / task list item.
+	if i < len(raw) && (raw[i] == '-' || raw[i] == '*' || raw[i] == '+') &&
+		i+1 < len(raw) && (raw[i+1] == ' ' || raw[i+1] == '\t') {
+		j := i + 1
+		for j < len(raw) && (raw[j] == ' ' || raw[j] == '\t') {
+			j++
+		}
+		if j+3 < len(raw) && raw[j] == '[' && (raw[j+1] == ' ' || raw[j+1] == 'x' || raw[j+1] == 'X') && raw[j+2] == ']' &&
+			(raw[j+3] == ' ' || raw[j+3] == '\t') {
+			j += 3
+			for j < len(raw) && (raw[j] == ' ' || raw[j] == '\t') {
+				j++
+			}
+		}
+		return raw[i:j], true
+	}
+	// Ordered list item.
+	if i < len(raw) && raw[i] >= '0' && raw[i] <= '9' {
+		j := i
+		for j < len(raw) && raw[j] >= '0' && raw[j] <= '9' {
+			j++
+		}
+		if j < len(raw) && (raw[j] == '.' || raw[j] == ')') &&
+			j+1 < len(raw) && (raw[j+1] == ' ' || raw[j+1] == '\t') {
+			j++
+			for j < len(raw) && (raw[j] == ' ' || raw[j] == '\t') {
+				j++
+			}
+			return raw[i:j], true
+		}
+	}
+	return "", false
+}
+
+func noteIndentColumns(ws string) int {
+	col := 0
+	for i := 0; i < len(ws); i++ {
+		if ws[i] == '\t' {
+			col += 4 - col%4
+		} else {
+			col++
+		}
+	}
+	return col
 }
 
 func noteSerializeTableRow(p richtext.Paragraph, raw string) string {

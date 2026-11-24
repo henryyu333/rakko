@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/richtext"
 
 	"rakko/locales"
 )
@@ -67,15 +68,16 @@ func TestNoteOldFixturesEditOneLine(t *testing.T) {
 // text must not be written; the window turns read-only and explains.
 func TestNoteBlockedSaveKeepsTheFile(t *testing.T) {
 	a, n := noteTestShelf(t)
-	src := "买菜\n"
+	src := "```\na\n```\n"
 	if err := n.store.Write(src); err != nil {
 		t.Fatal(err)
 	}
 	if err := n.load(); err != nil {
 		t.Fatal(err)
 	}
-	// A lone fence typed as body text would read back as an empty code block.
-	n.doc.SetSelection(len([]rune(n.doc.Text().String())), len([]rune(n.doc.Text().String())))
+	// A closing fence typed inside the block would end it early on reread.
+	end := paraTextEnd(n.doc, 0)
+	n.doc.SetSelection(end, end)
 	n.doc.InsertText("\n```")
 	if err := n.flush(); err != nil {
 		t.Fatal(err)
@@ -188,5 +190,76 @@ func TestNoteHeadingCachedByVersion(t *testing.T) {
 	n.doc.InsertText("改")
 	if got := n.headingText(); got == "缓存哨兵" {
 		t.Fatal("heading did not follow a new document version")
+	}
+}
+
+// TestNoteMarkdownLookingInputSaves is the end-to-end R1 guard: typing or
+// pasting text that looks like Markdown must land on disk without flipping the
+// note read-only.
+func TestNoteMarkdownLookingInputSaves(t *testing.T) {
+	inputs := []string{
+		"**重要**", "- 买菜", "1. 第一", "# 不是标题",
+		"用 *星号* 强调", "    缩进四格", "3*4*5",
+		"!", "<周三>", `C:\temp`, "snake_case",
+	}
+	for _, text := range inputs {
+		_, n := noteTestShelf(t)
+		if err := n.store.Write("买菜\n"); err != nil {
+			t.Fatal(err)
+		}
+		if err := n.load(); err != nil {
+			t.Fatal(err)
+		}
+		end := len([]rune(n.doc.Text().String()))
+		n.doc.SetSelection(end, end)
+		n.doc.InsertText("\n" + text)
+		if err := n.flush(); err != nil {
+			t.Fatal(err)
+		}
+		if n.blocked {
+			t.Fatalf("%q blocked the note", text)
+		}
+		ps := layoutParas(t, newNoteLayout(fileText(t, n)))
+		if len(ps) != 2 {
+			t.Fatalf("%q: reread %d paragraphs, want 2", text, len(ps))
+		}
+		if got := ps[1].Style; got != (richtext.ParagraphStyle{}) {
+			t.Fatalf("%q: reread became %+v", text, got)
+		}
+		if got := richtext.TextOf(ps[1]).String(); got != text {
+			t.Fatalf("%q: reread text = %q", text, got)
+		}
+	}
+}
+
+// TestNoteEditedLineKeepsPrefix is the end-to-end R2 guard: a typed character
+// at the end of a line changes only that line and keeps its indentation and
+// block marker.
+func TestNoteEditedLineKeepsPrefix(t *testing.T) {
+	lines := []string{
+		"  - 子项", "    缩进代码", "\t制表缩进",
+		"1. 一", "> 引用", "- [ ] 待办", "**粗** 普通",
+	}
+	for _, line := range lines {
+		_, n := noteTestShelf(t)
+		if err := n.store.Write(line + "\nb\n"); err != nil {
+			t.Fatal(err)
+		}
+		if err := n.load(); err != nil {
+			t.Fatal(err)
+		}
+		end := paraTextEnd(n.doc, 0)
+		n.doc.SetSelection(end, end)
+		n.doc.InsertText("X")
+		if err := n.flush(); err != nil {
+			t.Fatal(err)
+		}
+		if n.blocked {
+			t.Fatalf("%q blocked the note", line)
+		}
+		got := strings.Split(strings.TrimSuffix(fileText(t, n), "\n"), "\n")
+		if len(got) != 2 || got[0] != line+"X" || got[1] != "b" {
+			t.Fatalf("%q: saved %q, want %q", line, got, line+"X")
+		}
 	}
 }
