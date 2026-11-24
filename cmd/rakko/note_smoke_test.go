@@ -92,9 +92,7 @@ func TestNoteSmokeWindowAndCards(t *testing.T) {
 	}
 	want := "# 周五发版前\n– 改 README 顶栏描述\n– 补 v1.13 截图\n– 问 Codex 额度为什么 5 小时窗口跳\n- [ ] 桌宠姿态验收"
 	onMain(func() {
-		// setDraft parses Markdown, where a single newline is a soft break;
-		// blank lines make the separate lines the note saves one per line.
-		a.note.setDraft(strings.ReplaceAll(want, "\n", "\n\n"))
+		a.note.setDraft(want)
 		a.note.invalidate()
 	})
 	noteShotWindow(t, a.note.win, "note-window")

@@ -595,3 +595,27 @@ func TestBoardExportDialogBeforeRenderAndDragLimit(t *testing.T) {
 		t.Fatalf("dialog calls = %d", calls)
 	}
 }
+
+func TestBoardFontButtonsCompleteAtNarrowWidths(t *testing.T) {
+	for _, lang := range []string{"zh-Hans", "en"} {
+		l := locales.In(lang)
+		names := []string{l.BoardPropFontSketch(), l.BoardPropFontSans(), l.BoardPropFontSerif(), l.BoardPropFontMono()}
+		for _, w := range []int{480, 760} {
+			a, b := boardTestShelf(t)
+			view := ui.NewTester(a.boardView, w, 620)
+			view.SetLocale(lang)
+			view.Frame()
+			view.Frame()
+			id := b.ed.CreateText(geo.V(120, 120), "字体")
+			b.ed.Select(id)
+			view.Frame()
+			view.Frame()
+			for _, name := range names {
+				if _, ok := view.Find(name); !ok {
+					t.Fatalf("%s w=%d: font label %q missing; texts=%v", lang, w, name, view.Texts())
+				}
+			}
+			saveTestShot(t, "seg4", "font-row-"+strconv.Itoa(w)+"-"+lang+".png", view.Image())
+		}
+	}
+}

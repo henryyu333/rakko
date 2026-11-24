@@ -282,13 +282,19 @@ func (a *shelf) boardPropColorSection(c *ui.Context, l locales.Messages, pal *ed
 }
 
 func (a *shelf) boardPropSegmented(c *ui.Context, pal *editor.Palette, title, keyPrefix string, opts []propOption, active string, onPick func(string)) {
+	a.boardPropSegmentedFit(c, pal, title, keyPrefix, opts, active, onPick, 3, 10.5)
+}
+
+// boardPropSegmentedFit lets a row whose labels are longer than the equal
+// widths permit (the four font names at 480px) keep its text whole.
+func (a *shelf) boardPropSegmentedFit(c *ui.Context, pal *editor.Palette, title, keyPrefix string, opts []propOption, active string, onPick func(string), pad, size float32) {
 	ui.Column(c.Key("prop-sec-" + keyPrefix)).FillWidth().Gap(4).Children(func() {
 		boardPropLabel(c, pal, title)
 		ui.Row(c.Key("prop-row-" + keyPrefix)).FillWidth().Gap(3).Children(func() {
 			for _, opt := range opts {
 				opt := opt
 				isOn := opt.id == active
-				btn := ui.Row(c.Key("prop-"+keyPrefix+"-"+opt.id)).Grow(1).Height(24).Radius(6).Padding(0, 3, 0, 3).Center().Label(opt.label)
+				btn := ui.Row(c.Key("prop-"+keyPrefix+"-"+opt.id)).Grow(1).Height(24).Radius(6).Padding(0, pad, 0, pad).Center().Label(opt.label)
 				switch {
 				case isOn:
 					btn.Background(boardColor(pal.AccentFill)).Border(0.5, boardColor(pal.Accent.Alpha(0.55)))
@@ -302,7 +308,7 @@ func (a *shelf) boardPropSegmented(c *ui.Context, pal *editor.Palette, title, ke
 					if isOn {
 						col = pal.Accent
 					}
-					ui.Text(c, opt.label).SingleLine().FontSize(10.5).FontWeight(500).TextColor(boardColor(col))
+					ui.Text(c, opt.label).SingleLine().FontSize(size).FontWeight(500).TextColor(boardColor(col))
 				})
 				if btn.Clicked() && onPick != nil {
 					a.board.canvasFocus = false
@@ -441,7 +447,7 @@ func (a *shelf) boardPropHeadBtn(c *ui.Context, l locales.Messages, pal *editor.
 
 func (a *shelf) boardPropFontSection(c *ui.Context, l locales.Messages, pal *editor.Palette, ps editor.PanelState) {
 	b := a.board
-	a.boardPropSegmented(c, pal, l.BoardPropFont(), "font", []propOption{
+	a.boardPropSegmentedFit(c, pal, l.BoardPropFont(), "font", []propOption{
 		{"sketch", l.BoardPropFontSketch()},
 		{"sans", l.BoardPropFontSans()},
 		{"serif", l.BoardPropFontSerif()},
@@ -449,7 +455,7 @@ func (a *shelf) boardPropFontSection(c *ui.Context, l locales.Messages, pal *edi
 	}, ps.Font, func(v string) {
 		b.ed.SetPropFont(v)
 		b.invalidate()
-	})
+	}, 1, 10)
 
 	sizeOpts := make([]propOption, len(editor.FontSizes))
 	curSize := fmt.Sprintf("%d", ps.FontSize)

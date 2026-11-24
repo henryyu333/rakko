@@ -42,8 +42,8 @@ var (
 	procMouseEvent          = winUser32.NewProc("mouse_event")
 	procKeybdEvent          = winUser32.NewProc("keybd_event")
 
-	winDwmAPI                = syscall.NewLazyDLL("dwmapi.dll")
-	procDwmGetWindowAttr     = winDwmAPI.NewProc("DwmGetWindowAttribute")
+	winDwmAPI            = syscall.NewLazyDLL("dwmapi.dll")
+	procDwmGetWindowAttr = winDwmAPI.NewProc("DwmGetWindowAttribute")
 )
 
 const (
@@ -279,7 +279,7 @@ func TestBoardAndNoteWinLive(t *testing.T) {
 	var noteHWND uintptr
 	runOnMainSync(func() {
 		n := a.noteSession()
-		n.setDraft("# Windows 便利贴图片实测\n\n下方是拖入/插入的本地图片：")
+		n.setDraft("# Windows 便利贴图片实测\n下方是拖入/插入的本地图片：")
 		n.insertImageFile(tmpImg)
 		_ = n.flush()
 		noteMD = n.text

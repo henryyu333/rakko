@@ -10,7 +10,6 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
-	"github.com/egoist/mygo/ui/richtext"
 
 	"rakko/internal/note"
 	"rakko/locales"
@@ -37,7 +36,7 @@ func noteTestShelf(t *testing.T) (*shelf, *noteUI) {
 // setDraft replaces the document content as an unsaved edit (advancing Version).
 func (n *noteUI) setDraft(md string) {
 	d := n.ensureDoc()
-	t := n.bindTextAttachments(richtext.ParseMarkdown(md))
+	t := n.bindTextAttachments(newNoteLayout(md).text())
 	d.SetText(t)
 	n.boundVer = d.Version()
 }
@@ -83,7 +82,7 @@ func fileText(t *testing.T, n *noteUI) string {
 func TestNoteSaveDebounce(t *testing.T) {
 	_, n := noteTestShelf(t)
 	base := time.Now()
-	typed := "# 周五发版前\n\n– 改 README 顶栏描述"
+	typed := "# 周五发版前\n– 改 README 顶栏描述"
 	n.setDraft(typed)
 	if n.tick(base) {
 		t.Fatal("wrote on the first keystroke")
@@ -95,7 +94,7 @@ func TestNoteSaveDebounce(t *testing.T) {
 		t.Fatal("wrote 300 ms after the last keystroke")
 	}
 	// Another keystroke moves the deadline.
-	n.setDraft(typed + "\n\n– 补 v1.13 截图")
+	n.setDraft(typed + "\n– 补 v1.13 截图")
 	n.tick(base.Add(350 * time.Millisecond))
 	if n.tick(base.Add(600 * time.Millisecond)) {
 		t.Fatal("wrote 250 ms after the second keystroke")
@@ -119,7 +118,7 @@ func TestNoteSaveDebounce(t *testing.T) {
 // all call flush, so a sentence typed a moment ago is on disk at once.
 func TestNoteFlushOnClose(t *testing.T) {
 	_, n := noteTestShelf(t)
-	n.setDraft("# 随手记\n\n– 一条")
+	n.setDraft("# 随手记\n– 一条")
 	n.tick(time.Now()) // seen, not yet due
 	n.flush()
 	if got := fileText(t, n); got != "# 随手记\n– 一条" {
