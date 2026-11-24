@@ -135,8 +135,115 @@ func TestBoardPasteTextDoesNotInsertImage(t *testing.T) {
 	before := b.ed.ItemCount()
 	view.Key(ui.Cmd, ui.KeyV)
 	view.Frame()
-	if got := b.ed.ItemCount(); got != before {
-		t.Fatalf("text+image clipboard inserted %d items", got-before)
+	if got := b.ed.ItemCount(); got != before+1 {
+		t.Fatalf("text+image clipboard made %d shapes, want one text", got-before)
+	}
+	for _, id := range b.ed.Selection() {
+		s := b.ed.Doc.Shapes[id]
+		if s == nil || s.Type != doc.TypeText || s.Text != "从表格复制的文字" {
+			t.Fatalf("pasted shape = %+v, want the text", s)
+		}
+	}
+}
+
+func TestBoardPasteTextShape(t *testing.T) {
+	a, b := boardTestShelf(t)
+	view := ui.NewTester(a.boardView, 1040, 680)
+	view.SetLocale("zh-Hans")
+	view.Frame()
+	view.Frame()
+	view.SetClipboard("第一行\r\n第二行")
+	before := b.ed.ItemCount()
+	view.Key(ui.Cmd, ui.KeyV)
+	view.Frame()
+	if b.ed.ItemCount() != before+1 {
+		t.Fatalf("items = %d, want %d", b.ed.ItemCount(), before+1)
+	}
+	id := b.ed.Selection()[0]
+	s := b.ed.Doc.Shapes[id]
+	if s == nil || s.Type != doc.TypeText || s.Text != "第一行\n第二行" {
+		t.Fatalf("pasted text = %+v", s)
+	}
+	view.Key(ui.Cmd, ui.KeyZ)
+	view.Frame()
+	if b.ed.ItemCount() != before {
+		t.Fatal("one undo did not remove the pasted text")
+	}
+	// Read-only boards do not paste.
+	b.locked = true
+	view.SetClipboard("只读不贴")
+	view.Key(ui.Cmd, ui.KeyV)
+	if b.ed.ItemCount() != before {
+		t.Fatal("read-only board pasted text")
+	}
+	b.locked = false
+	b.ed.CreateText(geo.V(120, 120), "Rakko 白板\n第一行 text\n第二行 文字")
+	view.Frame()
+	view.Frame()
+	saveTestShot(t, "seg4", "paste-text.png", view.Image())
+}
+
+func TestBoardCompactMoreToolsMenu(t *testing.T) {
+	l := locales.In("zh-Hans")
+	for _, w := range []int{480, 560, 640, 760} {
+		a, b := boardTestShelf(t)
+		view := ui.NewTester(a.boardView, w, 620)
+		view.SetLocale("zh-Hans")
+		view.Frame()
+		view.Frame()
+		rows := []struct {
+			label string
+			tool  editor.Tool
+		}{
+			{l.BoardToolLasso(), editor.ToolLasso},
+			{l.BoardToolLine(), editor.ToolLine},
+			{l.BoardToolFrame(), editor.ToolFrame},
+			{l.BoardToolNote(), editor.ToolNote},
+		}
+		for _, row := range rows {
+			if err := view.Click(l.BoardMoreTools()); err != nil {
+				t.Fatalf("w=%d open more tools: %v", w, err)
+			}
+			view.Frame()
+			if err := view.Click(row.label); err != nil {
+				t.Fatalf("w=%d click %q: %v", w, row.label, err)
+			}
+			view.Frame()
+			if b.ed.Tool != row.tool {
+				t.Fatalf("w=%d tool = %s, want %s", w, b.ed.Tool, row.tool)
+			}
+		}
+		if err := view.Click(l.BoardMoreTools()); err != nil {
+			t.Fatalf("w=%d open for lock: %v", w, err)
+		}
+		view.Frame()
+		if err := view.Click(l.BoardKeepTool()); err != nil {
+			t.Fatalf("w=%d click lock: %v", w, err)
+		}
+		if !b.ed.ToolLocked {
+			t.Fatalf("w=%d lock did not toggle", w)
+		}
+		if w == 480 || w == 760 {
+			if err := view.Click(l.BoardMoreTools()); err != nil {
+				t.Fatalf("w=%d reopen for shot: %v", w, err)
+			}
+			view.Frame()
+			saveTestShot(t, "seg4", "more-tools-"+strconv.Itoa(w)+".png", view.Image())
+		}
+	}
+	// A wide window keeps the five tools in the toolbar itself.
+	a, _ := boardTestShelf(t)
+	view := ui.NewTester(a.boardView, 1040, 620)
+	view.SetLocale("zh-Hans")
+	view.Frame()
+	view.Frame()
+	if err := view.Click(l.BoardMoreTools()); err == nil {
+		t.Fatal("wide layout still shows the more-tools button")
+	}
+	for _, label := range []string{l.BoardToolLasso(), l.BoardToolLine(), l.BoardToolFrame(), l.BoardToolNote(), l.BoardKeepTool()} {
+		if _, ok := view.Find(label); !ok {
+			t.Fatalf("wide toolbar missing %q", label)
+		}
 	}
 }
 

@@ -10269,6 +10269,16 @@ func (msgs Messages) BoardMore() string {
 	return Catalog.Format(msgs.locale, "boardMore", nil)
 }
 
+// BoardMoreTools says "更多工具"
+// in the language the app shows.
+func BoardMoreTools() string { return In(i18n.Locale()).BoardMoreTools() }
+
+// BoardMoreTools says "更多工具"
+// in the language of msgs.
+func (msgs Messages) BoardMoreTools() string {
+	return Catalog.Format(msgs.locale, "boardMoreTools", nil)
+}
+
 // BoardPaperSection says "纸面"
 // in the language the app shows.
 func BoardPaperSection() string { return In(i18n.Locale()).BoardPaperSection() }

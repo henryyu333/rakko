@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/egoist/mygo/transfer"
@@ -898,6 +899,70 @@ func (a *shelf) boardToolbar(c *ui.Context, l locales.Messages, pal *editor.Pale
 			if a.boardToolBtn(c, pal, "tool-image", imgSymbol, l.BoardToolImage(), false).Clicked() {
 				b.pickImage()
 			}
+			if compact {
+				active := b.ed.ToolLocked || b.ed.Tool == editor.ToolLasso || b.ed.Tool == editor.ToolLine ||
+					b.ed.Tool == editor.ToolFrame || b.ed.Tool == editor.ToolNote
+				tools := a.boardToolBtn(c, pal, "tool-more", boardMoreSymbol, l.BoardMoreTools(), active || b.toolMenu)
+				if tools.Clicked() {
+					b.toolMenu = !b.toolMenu
+					b.invalidate()
+				}
+				ui.PopoverBase(c, tools, &b.toolMenu, func(panel ui.Element) {
+					panel.AttachTo(tools, ui.AnchorBottomEnd, ui.AnchorTopEnd).Margin(0, 0, 8, 0).
+						Padding(6).Radius(12).Clip().Background(boardColor(pal.Bar)).
+						Border(0.5, boardColor(pal.Edge)).
+						Shadow(0, 14, 36, 0, ui.RGBA(0, 0, 0, 0.38))
+					panel.Children(func() {
+						rows := []struct {
+							id       string
+							label    string
+							icon     *ui.SVG
+							shortcut string
+							on       bool
+							act      func()
+						}{
+							{"lasso", l.BoardToolLasso(), boardLassoSymbol, "S", b.ed.Tool == editor.ToolLasso,
+								func() { b.chooseTool(editor.ToolLasso) }},
+							{"line", l.BoardToolLine(), boardLineSymbol, "L", b.ed.Tool == editor.ToolLine,
+								func() { b.chooseTool(editor.ToolLine) }},
+							{"frame", l.BoardToolFrame(), boardFrameSymbol, "F", b.ed.Tool == editor.ToolFrame,
+								func() { b.chooseTool(editor.ToolFrame) }},
+							{"note", l.BoardToolNote(), noteSymbol, "N", b.ed.Tool == editor.ToolNote,
+								func() { b.chooseTool(editor.ToolNote) }},
+							{"lock", l.BoardKeepTool(), boardToolLockSymbol, "Q", b.ed.ToolLocked,
+								func() { b.ed.ToggleToolLock(); b.invalidate() }},
+						}
+						for _, row := range rows {
+							row := row
+							item := ui.Row(c.Key("tool-more-"+row.id)).Width(170).Height(28).Radius(7).
+								Padding(0, 8, 0, 8).Gap(8).AlignItems(ui.Center).Label(row.label).Tooltip(row.label)
+							switch {
+							case row.on:
+								item.Background(boardColor(pal.AccentFill))
+							case item.Hovered():
+								item.Background(boardColor(pal.BarHover))
+							}
+							item.Children(func() {
+								col := pal.Ink2
+								if row.on {
+									col = pal.Accent
+								}
+								ui.Icon(c, row.icon).Size(14, 14).TextColor(boardColor(col))
+								ui.Text(c, row.label).SingleLine().FontSize(11.5).FontWeight(500).TextColor(boardColor(col)).Grow(1)
+								ui.Text(c, row.shortcut).SingleLine().FontSize(10.5).TextColor(boardColor(pal.Ink3))
+							})
+							if item.Clicked() {
+								row.act()
+								b.toolMenu = false
+								b.canvasFocus = false
+								b.invalidate()
+							}
+						}
+					})
+				})
+			} else {
+				b.toolMenu = false
+			}
 			if !compact {
 				ui.Box(c).Width(1).Height(22).Margin(0, 3, 0, 3).Background(boardColor(pal.Sep))
 				if a.boardToolBtn(c, pal, "tool-lock", boardToolLockSymbol, l.BoardKeepTool(), b.ed.ToolLocked).Clicked() {
@@ -1002,6 +1067,43 @@ func boardMods(m ui.Modifiers) editor.Mods {
 		Cmd:   m&ui.Cmd != 0,
 		Ctrl:  m&ui.Ctrl != 0,
 	}
+}
+
+// boardPasteTextMax caps a pasted text shape: a whole book would make every
+// layout pass measure megabytes and freeze the canvas.
+const boardPasteTextMax = 20_000
+
+// pasteText turns clipboard text into one selected TypeText shape at the
+// pointer, or at the viewport center when the pointer has not been in the
+// canvas. It reports whether the paste was handled.
+func (b *boardUI) pasteText(c *ui.Context) bool {
+	if b.locked || b.ed == nil || c == nil {
+		return true
+	}
+	data := c.Services().ReadClipboardData(transfer.Text)
+	raw, err := data.Read(transfer.Text)
+	if err != nil {
+		return true
+	}
+	text := strings.ReplaceAll(string(raw), "\r\n", "\n")
+	text = strings.TrimSpace(strings.ReplaceAll(text, "\r", "\n"))
+	if text == "" {
+		return true
+	}
+	if r := []rune(text); len(r) > boardPasteTextMax {
+		text = string(r[:boardPasteTextMax])
+	}
+	pt := b.hoverScreenPt
+	inside := b.stageRect.W > 0 && b.stageRect.Contains(float32(pt.X), float32(pt.Y))
+	if !inside {
+		pt = geo.V(float64(b.stageRect.X+b.stageRect.W/2), float64(b.stageRect.Y+b.stageRect.H/2))
+		if b.stageRect.W <= 0 {
+			pt = geo.V(b.ed.VW/2, b.ed.VH/2)
+		}
+	}
+	b.ed.CreateText(b.ed.ToPage(pt), text)
+	b.invalidate()
+	return true
 }
 
 func (b *boardUI) handleCanvasInput(c *ui.Context, ev ui.InputEvent) bool {
@@ -1141,7 +1243,7 @@ func (b *boardUI) handleCanvasInput(c *ui.Context, ev ui.InputEvent) bool {
 				}
 				formats := c.Services().ClipboardFormats()
 				if noteClipboardHasText(formats) {
-					return true
+					return b.pasteText(c)
 				}
 				if b.pasteImage(formats) {
 					return true

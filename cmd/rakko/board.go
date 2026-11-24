@@ -144,6 +144,7 @@ type boardUI struct {
 	zoomMenu          bool
 	moreMenu          bool
 	shapeMenu         bool
+	toolMenu          bool
 	eraserMenu        bool
 	drawMenu          bool
 	propFillTab       bool
@@ -549,6 +550,8 @@ func (b *boardUI) selectBoard(id string) error {
 	b.renaming = false
 	b.confirmDelete = false
 	b.confirmPageDelete = false
+	b.toolMenu = false
+	b.toolMenu = false
 	b.invalidate()
 	return err
 }
@@ -685,7 +688,7 @@ func (b *boardUI) cancelPageRename() {
 
 func (b *boardUI) anyMenuOpen() bool {
 	return b.titleMenu || b.pageMenu || b.zoomMenu || b.moreMenu ||
-		b.shapeMenu || b.propGeoMenu || b.propHeadStartMenu || b.propHeadEndMenu
+		b.shapeMenu || b.toolMenu || b.propGeoMenu || b.propHeadStartMenu || b.propHeadEndMenu
 }
 
 func (b *boardUI) toggleFocusMode() {
@@ -881,6 +884,7 @@ func (b *boardUI) onClose(*mygo.CloseEvent) {
 	_ = b.flush()
 	b.win = nil
 	b.bitmaps = map[doc.ID]*ui.Bitmap{}
+	b.toolMenu = false
 	b.renaming = false
 	b.confirmDelete = false
 	b.confirmPageDelete = false
