@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"sort"
 
 	"rakko/internal/board/geo"
 )
@@ -287,6 +288,88 @@ func (d *Drawing) Normalize(fallbackID, fallbackName string) {
 	}
 	if d.Assets == nil {
 		d.Assets = map[ID]*Asset{}
+	}
+	d.pruneOrphans()
+	d.renumberDuplicateIndices()
+}
+
+// pruneOrphans drops shapes whose ancestor chain does not reach an existing page,
+// and bindings whose endpoints no longer exist.
+func (d *Drawing) pruneOrphans() {
+	pages := make(map[ID]bool, len(d.Pages))
+	for _, p := range d.Pages {
+		if p != nil {
+			pages[p.ID] = true
+		}
+	}
+	for id, s := range d.Shapes {
+		if s == nil {
+			delete(d.Shapes, id)
+			continue
+		}
+		cur := s.Parent
+		ok := false
+		for steps := 0; steps <= len(d.Shapes); steps++ {
+			if pages[cur] {
+				ok = true
+				break
+			}
+			p := d.Shapes[cur]
+			if p == nil {
+				break
+			}
+			cur = p.Parent
+		}
+		if !ok {
+			delete(d.Shapes, id)
+		}
+	}
+	for id, b := range d.Bindings {
+		if b == nil || d.Shapes[b.From] == nil || d.Shapes[b.To] == nil {
+			delete(d.Bindings, id)
+		}
+	}
+}
+
+// renumberDuplicateIndices restores a strict z-order when imported JSON reuses
+// fractional index keys under one parent, keeping the decoded order stable.
+func (d *Drawing) renumberDuplicateIndices() {
+	groups := make(map[ID][]ID, 8)
+	for id, s := range d.Shapes {
+		groups[s.Parent] = append(groups[s.Parent], id)
+	}
+	for _, ids := range groups {
+		if len(ids) < 2 {
+			continue
+		}
+		sort.SliceStable(ids, func(i, j int) bool {
+			a, b := d.Shapes[ids[i]], d.Shapes[ids[j]]
+			if a.Index != b.Index {
+				return a.Index < b.Index
+			}
+			return ids[i] < ids[j]
+		})
+		dup := false
+		for i := 1; i < len(ids); i++ {
+			if d.Shapes[ids[i]].Index == d.Shapes[ids[i-1]].Index {
+				dup = true
+				break
+			}
+		}
+		if !dup {
+			continue
+		}
+		cur := ""
+		for _, id := range ids {
+			cur = IndexBetween(cur, "")
+			s := d.Shapes[id]
+			if s.Index == cur {
+				continue
+			}
+			c := s.Clone()
+			c.Index = cur
+			d.Shapes[id] = c
+		}
 	}
 }
 

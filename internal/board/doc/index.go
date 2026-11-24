@@ -182,6 +182,11 @@ func IndicesBetween(a, b string, n int) []string {
 	if n <= 0 {
 		return nil
 	}
+	// Reversed or equal bounds cannot produce strictly increasing keys; fall
+	// back to appending after a so imported duplicate indices never corrupt z-order.
+	if b != "" && a >= b {
+		b = ""
+	}
 	out := make([]string, 0, n)
 	cur := a
 	for i := 0; i < n; i++ {

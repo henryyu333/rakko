@@ -106,7 +106,9 @@ func TestStoreLifecycleAndTrash(t *testing.T) {
 	if d.Name != "白板 1" {
 		t.Fatalf("Name = %q", d.Name)
 	}
-	d.Shapes["shape:a"] = NewShape("shape:a", TypeGeo)
+	sh := NewShape("shape:a", TypeGeo)
+	sh.Parent = d.ActivePage
+	d.Shapes["shape:a"] = sh
 	if err := st.Write(d); err != nil {
 		t.Fatal(err)
 	}
@@ -212,5 +214,70 @@ func TestStoreAssetDedupAndPathSafety(t *testing.T) {
 	}
 	if _, err := st.AssetPath("../secret.txt"); err == nil {
 		t.Fatal("AssetPath allowed directory traversal")
+	}
+}
+
+func TestIndicesBetweenDegradedBounds(t *testing.T) {
+	for _, tc := range []struct{ a, b string }{
+		{"a1", "a0"},
+		{"a1", "a1"},
+	} {
+		got := IndicesBetween(tc.a, tc.b, 3)
+		want := IndicesBetween(tc.a, "", 3)
+		if len(got) != len(want) {
+			t.Fatalf("IndicesBetween(%q,%q) len=%d, want %d", tc.a, tc.b, len(got), len(want))
+		}
+		for i := range want {
+			if got[i] != want[i] {
+				t.Fatalf("IndicesBetween(%q,%q)[%d] = %q, want append-after-a %q",
+					tc.a, tc.b, i, got[i], want[i])
+			}
+		}
+	}
+}
+
+func TestNormalizeRepairsDuplicateIndicesAndOrphans(t *testing.T) {
+	d := NewDrawing("b1", "B")
+	page := d.ActivePage
+	names := []string{"a", "b", "c"}
+	for i, n := range names {
+		s := NewShape(ID("shape:"+n), TypeGeo)
+		s.Parent = page
+		s.Index = "a1" // imported duplicate keys
+		s.W, s.H = float64(i+1), 1
+		d.Shapes[s.ID] = s
+	}
+	orphan := NewShape("shape:orphan", TypeGeo)
+	orphan.Parent = "page:gone"
+	d.Shapes[orphan.ID] = orphan
+	d.Bindings["binding:x"] = &Binding{ID: "binding:x", From: orphan.ID, To: "shape:a"}
+
+	d.Normalize("b1", "B")
+
+	if d.Shapes[orphan.ID] != nil {
+		t.Fatal("Normalize kept a shape whose page does not exist")
+	}
+	if d.Bindings["binding:x"] != nil {
+		t.Fatal("Normalize kept a binding with a missing endpoint")
+	}
+	order := make([]string, 0, len(names))
+	prev := ""
+	for _, n := range names {
+		s := d.Shapes[ID("shape:"+n)]
+		if s == nil {
+			t.Fatalf("Normalize dropped shape %q", n)
+		}
+		if s.Index == prev {
+			t.Fatalf("duplicate index still present after Normalize: %q", s.Index)
+		}
+		prev = s.Index
+		order = append(order, string(s.ID))
+	}
+	// Duplicate keys preserve the old 1px width ordering (a, b, c).
+	want := []string{"shape:a", "shape:b", "shape:c"}
+	for i := range want {
+		if order[i] != want[i] {
+			t.Fatalf("order = %v, want %v", order, want)
+		}
 	}
 }

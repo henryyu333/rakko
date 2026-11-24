@@ -155,6 +155,8 @@ func (e *Editor) applyHistory(x *historyEntry, back bool) {
 		e.Page = e.Doc.Pages[0].ID
 	}
 	e.Doc.ActivePage = e.Page
+	e.Doc.Normalize(e.Doc.ID, e.Doc.Name)
+	e.Doc.ActivePage = e.Page
 	e.sel = slices.DeleteFunc(e.sel, func(id doc.ID) bool { return e.Doc.Shapes[id] == nil })
 	if e.EditingVertices != "" && e.Doc.Shapes[e.EditingVertices] == nil {
 		e.EditingVertices = ""
