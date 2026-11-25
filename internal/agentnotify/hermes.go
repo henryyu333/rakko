@@ -481,12 +481,6 @@ func disconnectHermesApprove(s spec, home, dataDir string) error {
 // statusHermesFor reports whether Hermes' completion (approve=false) or
 // approval (approve=true) half is installed.
 func statusHermesFor(home string, approve bool) (State, string) {
-	if approve {
-		s, _ := specFor(ToolHermes)
-		if s.approve == nil {
-			return StateUnsupported, ""
-		}
-	}
 	raw, existed, _, err := readConfig(hermesInitPath(home))
 	if err != nil {
 		return StateError, err.Error()

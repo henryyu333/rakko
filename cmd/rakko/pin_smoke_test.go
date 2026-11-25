@@ -20,13 +20,20 @@ import (
 // 缩小图片 takes the drag-snap. toolCardDefFor draws them as the tools
 // page does (cardDesktop surface).
 
+// pinShotDir is the pin smoke test's evidence folder: under RAKKO_SHOTS
+// when a run asks for shots, an auto-cleaned temp folder otherwise.
+func pinShotDir(t *testing.T) string {
+	t.Helper()
+	if root := os.Getenv("RAKKO_SHOTS"); root != "" {
+		return filepath.Join(root, "pin")
+	}
+	return t.TempDir()
+}
+
 func pinSmokeEnv(t *testing.T) *shelf {
 	t.Helper()
 	if os.Getenv("RAKKO_BASKET_SMOKE") != "1" {
 		t.Skip("set RAKKO_BASKET_SMOKE=1 to run the native window smoke test")
-	}
-	if err := os.MkdirAll("/tmp/shelf-review-pin", 0o755); err != nil {
-		t.Fatal(err)
 	}
 	snapshotClipboard(t)
 	area := mygo.Screen.PrimaryDisplay().WorkArea
@@ -70,7 +77,7 @@ func pinShot(t *testing.T, w *mygo.Window, name string) {
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}
-	out := filepath.Join("/tmp/shelf-review-pin", name+".png")
+	out := filepath.Join(pinShotDir(t), name+".png")
 	cmd := exec.Command("screencapture", "-l", fmt.Sprint(num), "-o", out)
 	if b, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("screencapture %s: %v: %s", name, err, b)
@@ -86,7 +93,7 @@ func pinShotFull(t *testing.T, w *mygo.Window, name string) {
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}
-	out := filepath.Join("/tmp/shelf-review-pin", name+".png")
+	out := filepath.Join(pinShotDir(t), name+".png")
 	cmd := exec.Command("screencapture", "-l", fmt.Sprint(num), out)
 	if b, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("screencapture %s: %v: %s", name, err, b)
@@ -98,7 +105,7 @@ func pinShotFull(t *testing.T, w *mygo.Window, name string) {
 // its own window).
 func pinShotRect(t *testing.T, r mygo.Rectangle, name string) {
 	t.Helper()
-	out := filepath.Join("/tmp/shelf-review-pin", name+".png")
+	out := filepath.Join(pinShotDir(t), name+".png")
 	cmd := exec.Command("screencapture", "-x", "-o",
 		"-R", fmt.Sprintf("%d,%d,%d,%d", r.X, r.Y, r.Width, r.Height), out)
 	if b, err := cmd.CombinedOutput(); err != nil {

@@ -18,9 +18,24 @@ import (
 	"rakko/internal/store"
 )
 
-func saveTestPNG(t *testing.T, path string, view *ui.Tester) {
+// usageEvidenceDir is where the usage page's evidence screenshots go:
+// under RAKKO_SHOTS when a run asks for them, and "" to write none.
+func usageEvidenceDir(t *testing.T, seg string) string {
 	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	root := os.Getenv("RAKKO_SHOTS")
+	if root == "" {
+		return ""
+	}
+	return filepath.Join(root, seg)
+}
+
+func saveTestPNG(t *testing.T, dir, name string, view *ui.Tester) {
+	t.Helper()
+	if dir == "" {
+		return
+	}
+	path := filepath.Join(dir, name)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	f, err := os.Create(path)
@@ -37,9 +52,9 @@ type v1170FakeScanner struct {
 	sum aiusage.Summary
 }
 
-func (s v1170FakeScanner) Scan(context.Context, func(int64, int64)) error { return nil }
+func (s v1170FakeScanner) Scan(context.Context, func(int64, int64)) error   { return nil }
 func (s v1170FakeScanner) Summary(aiusage.Range, time.Time) aiusage.Summary { return s.sum }
-func (s v1170FakeScanner) UnreadableTools() []aiusage.Tool               { return nil }
+func (s v1170FakeScanner) UnreadableTools() []aiusage.Tool                  { return nil }
 
 func makeV1170Shelf(t *testing.T, lang string, cards []aiusage.Tool, now time.Time) (*shelf, *usageFeature) {
 	t.Helper()
@@ -60,8 +75,8 @@ func makeV1170Shelf(t *testing.T, lang string, cards []aiusage.Tool, now time.Ti
 
 	a := &shelf{
 		store: s, dataDir: t.TempDir(), level: 2, tab: pageUsage, visible: true,
-		locale:   lang,
-		settings: cfg,
+		locale:     lang,
+		settings:   cfg,
 		thumbnails: map[string]*ui.Bitmap{}, thumbPending: map[string]bool{}, appNames: map[string]string{},
 	}
 	a.fx.openK = 1
@@ -140,7 +155,7 @@ func makeV1170Shelf(t *testing.T, lang string, cards []aiusage.Tool, now time.Ti
 
 func TestUsagePanelDynamicWidthAndRenderEvidence(t *testing.T) {
 	now := time.Date(2026, 11, 19, 12, 0, 0, 0, time.Local)
-	evidenceDir := "/tmp/Rakko-v1170"
+	evidenceDir := usageEvidenceDir(t, "Rakko-v1170")
 
 	cardSets := []struct {
 		name  string
@@ -177,7 +192,7 @@ func TestUsagePanelDynamicWidthAndRenderEvidence(t *testing.T) {
 					t.Fatalf("%s/%s missing DeepSeek balance text; texts=%v", cs.name, langTag, view.Texts())
 				}
 			}
-			saveTestPNG(t, filepath.Join(evidenceDir, "usage-"+cs.name+"-"+langTag+".png"), view)
+			saveTestPNG(t, evidenceDir, "usage-"+cs.name+"-"+langTag+".png", view)
 		}
 	}
 }
@@ -249,7 +264,7 @@ func TestSettingsAIUsageMaxFourAndEvidence(t *testing.T) {
 	view.SetScale(2)
 	view.Frame()
 	view.Frame()
-	saveTestPNG(t, filepath.Join("/tmp/Rakko-v1170", "settings-aiusage-4selected.png"), view)
+	saveTestPNG(t, usageEvidenceDir(t, "Rakko-v1170"), "settings-aiusage-4selected.png", view)
 
 	// Enabling a 5th card is allowed (no 4-card cap).
 	if !a.settings.AIUsage.SetQuotaCard(aiusage.ToolKimi, true) {

@@ -4,8 +4,6 @@ package main
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"slices"
 	"sync/atomic"
 	"testing"
@@ -328,9 +326,7 @@ func TestSettingsEnglishCodexClaudeSourceLabels(t *testing.T) {
 
 func TestSettingsAntigravityPanelDashAndEvidence(t *testing.T) {
 	stubSettingsSeams(t, false, nil, nil)
-	_ = os.MkdirAll("/tmp/Rakko-v1170b", 0o755)
-	_ = os.Remove(filepath.Join("/tmp/Rakko-v1170b", "settings-antigravity-risk-zh.png"))
-	_ = os.Remove(filepath.Join("/tmp/Rakko-v1170b", "settings-antigravity-risk-en.png"))
+	dir := usageEvidenceDir(t, "Rakko-v1170b")
 	a, view := newSettingsShelf(t)
 	a.settings.AIUsage.Enabled = true
 	a.usage = newUsageFeature(a, usageDeps{})
@@ -351,13 +347,13 @@ func TestSettingsAntigravityPanelDashAndEvidence(t *testing.T) {
 	if a.settings.AIUsage.SetQuotaCard(aiusage.ToolAntigravity, true) {
 		t.Fatal("SetQuotaCard(ToolAntigravity, true) must return false")
 	}
-	saveTestPNG(t, filepath.Join("/tmp/Rakko-v1170b", "settings-aiusage-zh.png"), view)
+	saveTestPNG(t, dir, "settings-aiusage-zh.png", view)
 
 	// English screenshot.
 	view.SetLocale("en")
 	view.Frame()
 	view.Frame()
-	saveTestPNG(t, filepath.Join("/tmp/Rakko-v1170b", "settings-aiusage-en.png"), view)
+	saveTestPNG(t, dir, "settings-aiusage-en.png", view)
 }
 
 func TestRefreshSourcesForceQueuesWhileRunning(t *testing.T) {
@@ -426,7 +422,7 @@ func TestRefreshSourcesForceQueuesWhileRunning(t *testing.T) {
 }
 
 func TestCodexResetBusyAndAfterEvidence(t *testing.T) {
-	_ = os.MkdirAll("/tmp/Rakko-v1170b", 0o755)
+	dir := usageEvidenceDir(t, "Rakko-v1170b")
 	now := time.Date(2026, 11, 19, 12, 0, 0, 0, time.Local)
 	a, f := makeV1170Shelf(t, "zh-Hans", []aiusage.Tool{aiusage.ToolCodex, aiusage.ToolClaude}, now)
 	view := ui.NewTester(a.view, sheetW, sheetH)
@@ -437,7 +433,7 @@ func TestCodexResetBusyAndAfterEvidence(t *testing.T) {
 	f.codexResetBusy = true
 	view.Frame()
 	view.Frame()
-	saveTestPNG(t, filepath.Join("/tmp/Rakko-v1170b", "codex-reset-busy.png"), view)
+	saveTestPNG(t, dir, "codex-reset-busy.png", view)
 
 	// After post-consume refresh: count decremented from 2 to 1, windows reset to 0%, busy cleared.
 	f.codexResetBusy = false
@@ -454,5 +450,5 @@ func TestCodexResetBusyAndAfterEvidence(t *testing.T) {
 	st.good = st.latest
 	view.Frame()
 	view.Frame()
-	saveTestPNG(t, filepath.Join("/tmp/Rakko-v1170b", "codex-reset-after.png"), view)
+	saveTestPNG(t, dir, "codex-reset-after.png", view)
 }

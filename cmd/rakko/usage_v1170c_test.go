@@ -4,7 +4,6 @@ package main
 
 import (
 	"context"
-	"path/filepath"
 	"slices"
 	"testing"
 	"time"
@@ -125,19 +124,19 @@ func TestLocalUsageIncludesAllTools(t *testing.T) {
 
 func TestV1170cEvidenceScreenshots(t *testing.T) {
 	stubSettingsSeams(t, false, nil, nil)
-	outDir := "/tmp/Rakko-v1170c"
+	outDir := usageEvidenceDir(t, "Rakko-v1170c")
 
 	// 1. Settings -> AI 用量 (zh-Hans, default 2 enabled) & (en) & (4 selected).
 	a, view := newSettingsShelf(t)
 	a.settings.AIUsage.Enabled = true
 	a.usage = newUsageFeature(a, usageDeps{})
 	a.usage.sources = map[aiusage.Tool]aiusage.QuotaSource{
-		aiusage.ToolCodex:       {Kind: aiusage.SourceLocalLogin},
-		aiusage.ToolClaude:      {Kind: aiusage.SourceLocalLogin},
-		aiusage.ToolGLM:         {Kind: aiusage.SourceLocalKey},
-		aiusage.ToolDeepSeek:    {Kind: aiusage.SourceSavedKey},
-		aiusage.ToolCursor:      {Kind: aiusage.SourceLocalLogin},
-		aiusage.ToolOpencode:    {Kind: aiusage.SourceLocalKey},
+		aiusage.ToolCodex:    {Kind: aiusage.SourceLocalLogin},
+		aiusage.ToolClaude:   {Kind: aiusage.SourceLocalLogin},
+		aiusage.ToolGLM:      {Kind: aiusage.SourceLocalKey},
+		aiusage.ToolDeepSeek: {Kind: aiusage.SourceSavedKey},
+		aiusage.ToolCursor:   {Kind: aiusage.SourceLocalLogin},
+		aiusage.ToolOpencode: {Kind: aiusage.SourceLocalKey},
 	}
 	a.usage.sourcesAt = time.Now()
 	openSettingsPage(t, view, "AI")
@@ -145,12 +144,12 @@ func TestV1170cEvidenceScreenshots(t *testing.T) {
 	view.SetScale(2)
 	view.Frame()
 	view.Frame()
-	saveTestPNG(t, filepath.Join(outDir, "settings-aiusage-zh.png"), view)
+	saveTestPNG(t, outDir, "settings-aiusage-zh.png", view)
 
 	view.SetLocale("en")
 	view.Frame()
 	view.Frame()
-	saveTestPNG(t, filepath.Join(outDir, "settings-aiusage-en.png"), view)
+	saveTestPNG(t, outDir, "settings-aiusage-en.png", view)
 
 	a4, view4 := newSettingsShelf(t)
 	a4.settings.AIUsage.Enabled = true
@@ -164,7 +163,7 @@ func TestV1170cEvidenceScreenshots(t *testing.T) {
 	view4.SetScale(2)
 	view4.Frame()
 	view4.Frame()
-	saveTestPNG(t, filepath.Join(outDir, "settings-aiusage-4selected.png"), view4)
+	saveTestPNG(t, outDir, "settings-aiusage-4selected.png", view4)
 
 	// 2. Usage page with 4 cards (GLM, DeepSeek, Codex, Claude) to inspect ring-center logos.
 	now := time.Date(2026, 11, 19, 14, 0, 0, 0, time.Local)
@@ -175,7 +174,7 @@ func TestV1170cEvidenceScreenshots(t *testing.T) {
 	uview.SetScale(2)
 	uview.Frame()
 	uview.Frame()
-	saveTestPNG(t, filepath.Join(outDir, "usage-4cards-logos.png"), uview)
+	saveTestPNG(t, outDir, "usage-4cards-logos.png", uview)
 
 	// 3. Usage page with 5, 6, 8 cards in zh-Hans and en (compact rows, full names).
 	allEight := []aiusage.Tool{
@@ -237,7 +236,7 @@ func TestV1170cEvidenceScreenshots(t *testing.T) {
 			if count == 8 && !cview.HasText("Command Code") {
 				t.Fatalf("8-card/%s missing full 'Command Code' name", langTag)
 			}
-			saveTestPNG(t, filepath.Join(outDir, "usage-"+string(rune('0'+count))+"cards-"+langTag+".png"), cview)
+			saveTestPNG(t, outDir, "usage-"+string(rune('0'+count))+"cards-"+langTag+".png", cview)
 		}
 	}
 }

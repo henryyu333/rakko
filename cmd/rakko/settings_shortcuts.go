@@ -167,9 +167,10 @@ func (a *shelf) runPlayerShortcut(cmd platform.NowPlayingCommand) func() {
 }
 
 // playerShortcut forwards a transport command to the now-playing app; a
-// seam, so a test sees the command without a helper host.
+// seam, so a test sees the command without a helper host. The enable switch
+// is runPlayerShortcut's, the one gate every transport shortcut goes through.
 var playerShortcut = func(a *shelf, cmd platform.NowPlayingCommand) {
-	if a.np != nil && a.settings.LiveActivities.NowPlaying {
+	if a.np != nil {
 		a.np.send(cmd)
 	}
 }

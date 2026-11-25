@@ -14,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"rakko/internal/assetstore"
 	"rakko/internal/atomicfile"
 )
 
@@ -397,7 +396,7 @@ func (s *Store) Trash(id string, trashFn TrashFunc) error {
 // SaveAsset deduplicates image bytes by SHA-256 (16-hex prefix) into boards/assets/
 // and returns the relative asset descriptor ("assets/<hash16>.<ext>").
 func (s *Store) SaveAsset(data []byte, ext, name, mime string, w, h float64) (*Asset, error) {
-	fileName, hashHex, err := assetstore.Save(s.AssetsDir(), data, ext)
+	fileName, hashHex, err := saveAsset(s.AssetsDir(), data, ext)
 	if err != nil {
 		return nil, err
 	}
@@ -409,14 +408,14 @@ func (s *Store) SaveAsset(data []byte, ext, name, mime string, w, h float64) (*A
 		Name: name,
 		Mime: mime,
 		Hash: hashHex,
-		Path: assetstore.Rel(fileName),
+		Path: assetRel(fileName),
 	}, nil
 }
 
 // AssetPath resolves a relative asset path ("assets/<file>") inside boards/,
 // rejecting path traversal outside boards/assets/.
 func (s *Store) AssetPath(rel string) (string, error) {
-	return assetstore.Resolve(s.dir, rel)
+	return resolveAsset(s.dir, rel)
 }
 
 // recordTrashAssets adds the board's image references to the trash manifest.
@@ -502,7 +501,7 @@ func (s *Store) CleanAssets(now time.Time, maxAge time.Duration) ([]string, erro
 	}
 	var removed []string
 	for _, e := range assetEntries {
-		if e.IsDir() || refs[assetstore.Rel(e.Name())] || refs[e.Name()] {
+		if e.IsDir() || refs[assetRel(e.Name())] || refs[e.Name()] {
 			continue
 		}
 		info, err := e.Info()

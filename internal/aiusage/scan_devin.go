@@ -31,12 +31,26 @@ type devinRow struct {
 	ChatMessage   string `json:"chat_message"`
 }
 
+// devinMetrics is Devin's own metrics block: besides the shared keys its CLI
+// writes cache_creation_tokens, which no other tool's usage block carries,
+// so only this parser reads it.
+type devinMetrics struct {
+	flexUsageJSON
+	CacheCreationTokens int64 `json:"cache_creation_tokens"`
+}
+
+func (m *devinMetrics) toCounts() (in, out, cr, cw int64) {
+	in, out, cr, cw = m.flexUsageJSON.toCounts()
+	cw = max(cw, m.CacheCreationTokens)
+	return in, out, cr, cw
+}
+
 type devinChatMsg struct {
 	Role     string `json:"role"`
 	Metadata *struct {
 		CreatedAt json.RawMessage `json:"created_at"`
-		Model     string         `json:"model"`
-		Metrics   *flexUsageJSON `json:"metrics"`
+		Model     string          `json:"model"`
+		Metrics   *devinMetrics   `json:"metrics"`
 	} `json:"metadata"`
 }
 

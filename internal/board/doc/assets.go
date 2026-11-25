@@ -1,7 +1,7 @@
-// Package assetstore is the content-addressed image folder shared by notes and
-// boards: SHA-256 of the bytes names the file, so saving the same picture twice
-// costs no space.
-package assetstore
+package doc
+
+// Content-addressed image storage for whiteboards: SHA-256 of the bytes names
+// the file, so saving the same picture twice costs no space.
 
 import (
 	"crypto/sha256"
@@ -16,11 +16,8 @@ import (
 	"rakko/internal/atomicfile"
 )
 
-// Subdir is the folder name assets live in, relative to a store root.
-const Subdir = "assets"
-
-// NormalizeExt keeps a simple lowercase extension, defaulting to png.
-func NormalizeExt(ext string) string {
+// normalizeAssetExt keeps a simple lowercase extension, defaulting to png.
+func normalizeAssetExt(ext string) string {
 	ext = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(ext), "."))
 	if ext == "" {
 		return "png"
@@ -33,13 +30,13 @@ func NormalizeExt(ext string) string {
 	return ext
 }
 
-// Save deduplicates data into dir and returns the file name and its 16-hex
-// hash. dir is the assets folder itself.
-func Save(dir string, data []byte, ext string) (name, hash string, err error) {
+// saveAsset deduplicates data into dir and returns the file name and its
+// 16-hex hash. dir is the assets folder itself.
+func saveAsset(dir string, data []byte, ext string) (name, hash string, err error) {
 	if len(data) == 0 {
 		return "", "", errors.New("assetstore: empty data")
 	}
-	ext = NormalizeExt(ext)
+	ext = normalizeAssetExt(ext)
 	sum := sha256.Sum256(data)
 	hash = hex.EncodeToString(sum[:])[:16]
 	name = hash + "." + ext
@@ -57,14 +54,14 @@ func Save(dir string, data []byte, ext string) (name, hash string, err error) {
 	return name, hash, nil
 }
 
-// Resolve turns "assets/<file>" into a path under base's assets folder and
-// rejects traversal outside it.
-func Resolve(base, rel string) (string, error) {
+// resolveAsset turns "assets/<file>" into a path under base's assets folder
+// and rejects traversal outside it.
+func resolveAsset(base, rel string) (string, error) {
 	clean := filepath.Clean(filepath.FromSlash(strings.TrimSpace(rel)))
 	if clean == "." || filepath.IsAbs(clean) || strings.HasPrefix(clean, "..") {
 		return "", fmt.Errorf("assetstore: invalid path %q", rel)
 	}
-	assetsDir := filepath.Join(base, Subdir)
+	assetsDir := filepath.Join(base, AssetsDirName)
 	full := filepath.Join(base, clean)
 	r, err := filepath.Rel(assetsDir, full)
 	if err != nil || r == "." || strings.HasPrefix(r, "..") {
@@ -73,5 +70,7 @@ func Resolve(base, rel string) (string, error) {
 	return full, nil
 }
 
-// Rel returns the relative path of a stored file name.
-func Rel(name string) string { return filepath.ToSlash(filepath.Join(Subdir, name)) }
+// assetRel returns the relative path of a stored file name.
+func assetRel(name string) string {
+	return filepath.ToSlash(filepath.Join(AssetsDirName, name))
+}

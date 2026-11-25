@@ -2740,3 +2740,101 @@ func TestUnknownKindRefusesOpen(t *testing.T) {
 		t.Fatalf("refused state file disturbed: %v", rerr)
 	}
 }
+
+// AddConvertedDirs registers extracted directories inside <root>/converted
+// in the given order with Converted=true, rejecting files or paths outside
+// converted/. The Unix-only sibling covers symlink escapes and Save
+// rollback, which Windows cannot reproduce.
+func TestAddConvertedDirs(t *testing.T) {
+	s, _ := newStore(t)
+	if err := s.AddText("keep"); err != nil {
+		t.Fatalf("AddText: %v", err)
+	}
+	d1 := filepath.Join(s.ConvertedDir(), "arc1")
+	d2 := filepath.Join(s.ConvertedDir(), "arc2")
+	for _, d := range []string{d1, d2} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	outside := filepath.Join(t.TempDir(), "outside")
+	if err := os.MkdirAll(outside, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	regFile := convertedFile(t, s, "plain.txt", "x")
+
+	for name, bad := range map[string][]string{
+		"outside":   {outside},
+		"regular":   {regFile},
+		"converted": {s.ConvertedDir()},
+	} {
+		if ids, err := s.AddConvertedDirs(bad); err == nil || ids != nil {
+			t.Fatalf("%s: AddConvertedDirs(%v) = ids %v, err %v", name, bad, ids, err)
+		}
+	}
+
+	ids, err := s.AddConvertedDirs([]string{d1, d2})
+	if err != nil || len(ids) != 2 {
+		t.Fatalf("AddConvertedDirs = %v, %v", ids, err)
+	}
+	if s.Items[0].ID != ids[0] || !s.Items[0].Converted || s.Items[1].ID != ids[1] || !s.Items[1].Converted {
+		t.Fatalf("registered items = %+v", s.Items[:2])
+	}
+}
+
+// A converted path that already has a KindFile item is not duplicated:
+// the item keeps its ID and Pinned flag, comes back to the tray and moves
+// to the front, for files and extracted folders alike.
+func TestAddConvertedReusesTheSamePath(t *testing.T) {
+	s, root := newStore(t)
+	if err := s.AddText("keep"); err != nil {
+		t.Fatalf("AddText: %v", err)
+	}
+	dir := convertedFolder(t, s, "again", map[string]string{"a.txt": "a"})
+	file := convertedFile(t, s, "again.pdf", "x")
+	dids, err := s.AddConvertedDirs([]string{dir})
+	if err != nil {
+		t.Fatalf("AddConvertedDirs: %v", err)
+	}
+	fids, err := s.AddConverted([]string{file})
+	if err != nil {
+		t.Fatalf("AddConverted: %v", err)
+	}
+	if err := s.SetPinned(dids[0], true); err != nil {
+		t.Fatalf("SetPinned: %v", err)
+	}
+	if n, err := s.HideFromTray([]string{dids[0], fids[0]}); err != nil || n != 2 {
+		t.Fatalf("HideFromTray = %d, %v", n, err)
+	}
+
+	if got, err := s.AddConvertedDirs([]string{dir}); err != nil || len(got) != 1 || got[0] != dids[0] {
+		t.Fatalf("re-adding the folder = %v, %v; want its own id", got, err)
+	}
+	if got, err := s.AddConverted([]string{file}); err != nil || len(got) != 1 || got[0] != fids[0] {
+		t.Fatalf("re-adding the file = %v, %v; want its own id", got, err)
+	}
+	if len(s.Items) != 3 {
+		t.Fatalf("re-adding duplicated entries: %+v", s.Items)
+	}
+	if it := s.Items[0]; it.ID != fids[0] || !it.Converted || it.Pinned || it.OffTray || it.Missing {
+		t.Fatalf("reused file item = %+v", it)
+	}
+	if it := s.Items[1]; it.ID != dids[0] || !it.Converted || !it.Pinned || it.OffTray || it.Missing {
+		t.Fatalf("reused folder item = %+v", it)
+	}
+	if s.Items[2].Text != "keep" {
+		t.Fatalf("pre-existing item moved: %+v", s.Items)
+	}
+
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s2, err := Open(root)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	defer s2.Close()
+	if len(s2.Items) != 3 || s2.Items[0].ID != fids[0] || s2.Items[1].ID != dids[0] {
+		t.Fatalf("reuse not persisted: %+v", s2.Items)
+	}
+}

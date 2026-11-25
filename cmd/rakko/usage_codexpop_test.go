@@ -4,7 +4,6 @@ package main
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -175,11 +174,11 @@ func TestCodexPopTwoCardScreenshots(t *testing.T) {
 	view.Move(sheetW-4, sheetH-4)
 	view.Frame()
 	view.Frame()
-	saveTestPNG(t, filepath.Join(dir, "two-normal.png"), view)
+	saveTestPNG(t, dir, "two-normal.png", view)
 	codex, _ := view.Find("Codex")
 	cx, cy := center(codex)
 	view.Move(cx, cy)
 	view.Frame()
 	view.Frame()
-	saveTestPNG(t, filepath.Join(dir, "two-hover-codex.png"), view)
+	saveTestPNG(t, dir, "two-hover-codex.png", view)
 }

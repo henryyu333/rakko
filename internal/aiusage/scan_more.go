@@ -18,7 +18,6 @@ type flexUsageJSON struct {
 	CacheCreationTokens int64 `json:"cache_creation_input_tokens"`
 	CacheReadAlt        int64 `json:"cache_read_tokens"`
 	CacheWriteAlt       int64 `json:"cache_write_tokens"`
-	CacheCreationAlt    int64 `json:"cache_creation_tokens"`
 	PromptTokens        int64 `json:"prompt_tokens"`
 	CompletionTokens    int64 `json:"completion_tokens"`
 	InputCamel          int64 `json:"inputTokens"`
@@ -32,7 +31,7 @@ func (u *flexUsageJSON) toCounts() (in, out, cr, cw int64) {
 	in = max(u.InputTokens, u.PromptTokens, u.InputCamel)
 	out = max(u.OutputTokens, u.CompletionTokens, u.OutputCamel)
 	cr = max(u.CacheReadTokens, u.CacheReadAlt, u.CacheReadCamel, u.CachedTokens)
-	cw = max(u.CacheCreationTokens, u.CacheWriteAlt, u.CacheCreationAlt, u.CacheWriteCamel)
+	cw = max(u.CacheCreationTokens, u.CacheWriteAlt, u.CacheWriteCamel)
 	return in, out, cr, cw
 }
 

@@ -570,9 +570,11 @@ func (s *Store) ConvertedDir() string { return filepath.Join(s.Root, convertedDi
 // an error names the offending path. One KindFile item per path is
 // added at the front in the given order — paths[0] becomes Items[0] —
 // with Converted set so removal paths delete the file like a managed
-// image. The change is persisted atomically; on save failure memory is
-// rolled back and the files are left for the caller. Returns the new
-// item IDs in the same order as paths.
+// image. A path an existing KindFile item already names reuses that
+// item, keeping its ID and Pinned flag, and moves it to the front. The
+// change is persisted atomically; on save failure memory is rolled back
+// and the files are left for the caller. Returns the item IDs in the
+// same order as paths.
 func (s *Store) AddConverted(paths []string) ([]string, error) {
 	return s.addConverted(paths, false)
 }
@@ -625,6 +627,23 @@ func (s *Store) addConverted(paths []string, allowDirs bool) ([]string, error) {
 	newItems := make([]Item, 0, len(resolved))
 	ids := make([]string, len(resolved))
 	for i, p := range resolved {
+		// The converter can hand back the same file or folder twice (a
+		// retried step, a re-export into the same path): it is one tray
+		// item, so the existing entry keeps its ID and Pinned flag and
+		// moves to the front instead of being duplicated.
+		idx := slices.IndexFunc(s.Items, func(it Item) bool {
+			return it.Kind == KindFile && it.Path == p
+		})
+		if idx >= 0 {
+			it := s.Items[idx]
+			s.Items = append(s.Items[:idx], s.Items[idx+1:]...)
+			it.Converted = true
+			it.OffTray = false
+			it.Missing = false
+			ids[i] = it.ID
+			newItems = append(newItems, it)
+			continue
+		}
 		ids[i] = newID()
 		newItems = append(newItems, Item{
 			ID:        ids[i],

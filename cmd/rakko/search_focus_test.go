@@ -11,7 +11,6 @@ package main
 
 import (
 	"os"
-	"strconv"
 	"testing"
 	"time"
 
@@ -105,9 +104,6 @@ func TestSearchOpenFocusesWindow(t *testing.T) {
 
 	if num := platform.WindowNumber(a.win.NativeHandle()); num != 0 {
 		t.Logf("shelf CGWindowID=%d — screencapture -l %d shoots the panel", num, num)
-		// Leave the number where a shell watcher can pick it up while the
-		// hold below keeps the panel on screen.
-		_ = os.WriteFile("/tmp/shelf-cgwindowid.txt", []byte(strconv.Itoa(num)), 0o600)
 	}
 	if os.Getenv("RAKKO_CLIP_HOLD") != "" {
 		time.Sleep(8 * time.Second)

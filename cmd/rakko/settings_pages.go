@@ -494,30 +494,8 @@ func (a *shelf) settingsAgentGroup(c *ui.Context) {
 			settingsSep(c, "agent-"+string(tool))
 			state, note, _ := f.settingRow(tool)
 			toolOn := !a.settings.AgentNotify.ToolOff(string(tool))
-			status, color := l.SettingsAgentNotInjected(), settingsInk3
-			switch state {
-			case agentnotify.StateInjected:
-				status = l.SettingsAgentInjected()
-				if tool == agentnotify.ToolCodex {
-					status = l.SettingsAgentCodexTrust()
-				}
-			case agentnotify.StateUnsupported:
-				status = l.SettingsAgentUnsupported()
-			case agentnotify.StateError:
-				status, color = l.SettingsAgentError(), danger
-			}
-			if state == agentnotify.StateNotInjected && a.settings.AgentNotify.Enabled && toolOn {
-				status, color = l.SettingsAgentRewritten(), warning
-			}
-			caption := agentnotify.DisplayPath(f.home, tool)
-			capColor := settingsInk3
-			if state == agentnotify.StateError && note != "" {
-				caption = note
-				capColor = danger
-				if note == agentNeedsAppNote {
-					caption = osText(l.SettingsAgentNeedsApp(), l.SettingsAgentNeedsAppWin())
-				}
-			}
+			status, color, caption, capColor := agentRowStatus(l, tool, state, note,
+				a.settings.AgentNotify.Enabled, toolOn, agentnotify.DisplayPath(f.home, tool))
 			a.settingsAgentToolRow(c, "agent", tool, caption, capColor, status, color,
 				toolOn, !a.settings.AgentNotify.Enabled, a.setAgentNotifyTool)
 		}
@@ -543,34 +521,42 @@ func (a *shelf) settingsApprovalGroup(c *ui.Context) {
 			settingsSep(c, "approval-"+string(tool))
 			state, note := f.settingRow(tool)
 			toolOn := !a.settings.Approval.ToolOff(string(tool))
-			status, color := l.SettingsAgentNotInjected(), settingsInk3
-			switch state {
-			case agentnotify.StateInjected:
-				status = l.SettingsAgentInjected()
-				if tool == agentnotify.ToolCodex {
-					status = l.SettingsAgentCodexTrust()
-				}
-			case agentnotify.StateUnsupported:
-				status = l.SettingsAgentUnsupported()
-			case agentnotify.StateError:
-				status, color = l.SettingsAgentError(), danger
-			}
-			if state == agentnotify.StateNotInjected && a.settings.Approval.Enabled && toolOn {
-				status, color = l.SettingsAgentRewritten(), warning
-			}
-			caption := agentnotify.ApproveDisplayPath(f.home, tool)
-			capColor := settingsInk3
-			if state == agentnotify.StateError && note != "" {
-				caption = note
-				capColor = danger
-				if note == agentNeedsAppNote {
-					caption = osText(l.SettingsAgentNeedsApp(), l.SettingsAgentNeedsAppWin())
-				}
-			}
+			status, color, caption, capColor := agentRowStatus(l, tool, state, note,
+				a.settings.Approval.Enabled, toolOn, agentnotify.ApproveDisplayPath(f.home, tool))
 			a.settingsAgentToolRow(c, "approval", tool, caption, capColor, status, color,
 				toolOn, !a.settings.Approval.Enabled, a.setApprovalTool)
 		}
 	})
+}
+
+// agentRowStatus is one detected tool's row state, shared by the 提醒 and
+// 审批 groups: the status line and its color, plus the caption under the
+// tool name and its color. groupOn is that group's master switch, which
+// turns an uninjected tool into the rewritten warning.
+func agentRowStatus(l locales.Messages, tool agentnotify.Tool, state agentnotify.State, note string, groupOn, toolOn bool, caption string) (status string, color ui.Color, cap string, capColor ui.Color) {
+	status, color = l.SettingsAgentNotInjected(), settingsInk3
+	switch state {
+	case agentnotify.StateInjected:
+		status = l.SettingsAgentInjected()
+		if tool == agentnotify.ToolCodex {
+			status = l.SettingsAgentCodexTrust()
+		}
+	case agentnotify.StateUnsupported:
+		status = l.SettingsAgentUnsupported()
+	case agentnotify.StateError:
+		status, color = l.SettingsAgentError(), danger
+	}
+	if state == agentnotify.StateNotInjected && groupOn && toolOn {
+		status, color = l.SettingsAgentRewritten(), warning
+	}
+	cap, capColor = caption, settingsInk3
+	if state == agentnotify.StateError && note != "" {
+		cap, capColor = note, danger
+		if note == agentNeedsAppNote {
+			cap = osText(l.SettingsAgentNeedsApp(), l.SettingsAgentNeedsAppWin())
+		}
+	}
+	return status, color, cap, capColor
 }
 
 func (a *shelf) settingsAgentToolRow(c *ui.Context, prefix string, tool agentnotify.Tool, caption string, capColor ui.Color, status string, color ui.Color, on, locked bool, apply func(agentnotify.Tool, bool)) {

@@ -199,19 +199,9 @@ func readGLMKey(env Env) (key, base string, ok bool) {
 	return "", "", false
 }
 
-func isAllowedKimiBaseURL(raw string) bool {
-	u, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || (u.Scheme != "https" && u.Scheme != "http") {
-		return false
-	}
-	host := strings.ToLower(u.Hostname())
-	return host == "api.kimi.com" || strings.HasSuffix(host, ".api.kimi.com") ||
-		host == "api.kimi.ai" || strings.HasSuffix(host, ".api.kimi.ai")
-}
-
 func readKimiKey(env Env) (key, base string, ok bool) {
 	tok, baseURL := readClaudeSettingsEnv(env)
-	if tok != "" && isAllowedKimiBaseURL(baseURL) {
+	if tok != "" && hostAllowed(baseURL, "api.kimi.com", "api.kimi.ai") {
 		return tok, strings.TrimRight(baseURL, "/"), true
 	}
 	if k := readOpenCodeAuthEntry(env, "kimi-for-coding", "kimi-coding", "kimi"); k != "" {

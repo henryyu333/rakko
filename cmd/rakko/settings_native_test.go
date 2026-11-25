@@ -5,6 +5,7 @@ package main
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
@@ -170,14 +171,15 @@ func TestSettingsClipboardAlwaysOnNative(t *testing.T) {
 	if id == 0 {
 		t.Fatal("settings window was not published to WindowServer")
 	}
-	if err := os.MkdirAll("/tmp/shelf-fix-L", 0o755); err != nil {
-		t.Fatal(err)
+	if path := lShotPath("after-settings-clipboard.png"); path != "" {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if b, err := exec.Command("screencapture", "-l", strconv.Itoa(id), "-x", "-o", path).CombinedOutput(); err != nil {
+			t.Fatalf("settings screenshot: %v: %s", err, b)
+		}
+		t.Log(path)
 	}
-	path := "/tmp/shelf-fix-L/after-settings-clipboard.png"
-	if b, err := exec.Command("screencapture", "-l", strconv.Itoa(id), "-x", "-o", path).CombinedOutput(); err != nil {
-		t.Fatalf("settings screenshot: %v: %s", err, b)
-	}
-	t.Log(path)
 }
 
 // TestSettingsWindowBlurEndsRecording proves the real window's blur hook:

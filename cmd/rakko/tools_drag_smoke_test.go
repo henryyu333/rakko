@@ -181,16 +181,29 @@ func newSmokePointerBackdrop(t *testing.T, r mygo.Rectangle) *mygo.Window {
 	return w
 }
 
+// lShotPath is the L evidence shot path: under RAKKO_SHOTS/L when a run
+// asks for screenshots, "" to skip the capture.
+func lShotPath(name string) string {
+	root := os.Getenv("RAKKO_SHOTS")
+	if root == "" {
+		return ""
+	}
+	return filepath.Join(root, "L", name)
+}
+
 func toolsDragShot(t *testing.T, r mygo.Rectangle, name string) {
 	t.Helper()
 	prefix := os.Getenv("RAKKO_L_EVIDENCE_PREFIX")
 	if prefix == "" {
 		prefix = "after"
 	}
-	if err := os.MkdirAll("/tmp/shelf-fix-L", 0o755); err != nil {
+	path := lShotPath(prefix + "-" + name + ".png")
+	if path == "" {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join("/tmp/shelf-fix-L", prefix+"-"+name+".png")
 	b, err := exec.Command("screencapture", "-x", "-o", "-R", fmt.Sprintf("%d,%d,%d,%d", r.X, r.Y, r.Width, r.Height), path).CombinedOutput()
 	if err != nil {
 		t.Fatalf("screenshot: %v: %s", err, b)
