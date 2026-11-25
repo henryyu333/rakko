@@ -149,7 +149,7 @@ func TestBoardAndNoteTitleBarClearance(t *testing.T) {
 				v.SetTitleBar(tc.bar)
 				v.Frame()
 
-				if _, ok := v.Find(l.BoardClose()); ok {
+				if _, ok := v.Find("board-close"); ok {
 					t.Fatal("self-drawn board close button still exists")
 				}
 				titleRect, ok := v.Find(b.currentTitle(l))

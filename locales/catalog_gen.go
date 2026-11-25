@@ -10139,16 +10139,6 @@ func (msgs Messages) BoardKeepOnTop() string {
 	return Catalog.Format(msgs.locale, "boardKeepOnTop", nil)
 }
 
-// BoardClose says "关闭"
-// in the language the app shows.
-func BoardClose() string { return In(i18n.Locale()).BoardClose() }
-
-// BoardClose says "关闭"
-// in the language of msgs.
-func (msgs Messages) BoardClose() string {
-	return Catalog.Format(msgs.locale, "boardClose", nil)
-}
-
 // BoardUnreadable says "白板文件无法读取，已暂停自动保存，请检查磁盘或文件权限。"
 // in the language the app shows.
 func BoardUnreadable() string { return In(i18n.Locale()).BoardUnreadable() }

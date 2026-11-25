@@ -998,7 +998,6 @@
   "boardReveal": "Show in Finder",
   "boardRevealWin": "Show in File Explorer",
   "boardKeepOnTop": "Keep on Top",
-  "boardClose": "Close",
   "boardUnreadable": "This whiteboard file could not be read. Autosave is paused — check disk or file permissions.",
   "boardEmpty": "Empty",
   "boardItemCount": "{n, number, ::group-off} items",

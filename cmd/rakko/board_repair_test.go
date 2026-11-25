@@ -130,7 +130,7 @@ func TestBoardPageDeleteRequiresConfirmation(t *testing.T) {
 	if !b.confirmPageDelete {
 		t.Fatal("delete page did not ask for confirmation")
 	}
-	saveBoardShot(t, "page-delete-confirm.png", view.Image())
+	saveTestShot(t, "rework", "page-delete-confirm.png", view.Image())
 	if got := len(b.ed.Pages()); got != pagesBefore {
 		t.Fatalf("page deleted before confirmation: pages=%d want %d", got, pagesBefore)
 	}

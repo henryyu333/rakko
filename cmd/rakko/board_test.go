@@ -64,26 +64,6 @@ func boardTestShelf(t *testing.T) (*shelf, *boardUI) {
 	return a, b
 }
 
-func saveBoardShot(t *testing.T, name string, img *image.RGBA) {
-	t.Helper()
-	dir := os.Getenv("RAKKO_SHOTS")
-	if dir == "" {
-		return
-	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	p := filepath.Join(dir, name)
-	f, err := os.Create(p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-	if err := png.Encode(f, img); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestBoardSaveDebounceAndFlush(t *testing.T) {
 	_, b := boardTestShelf(t)
 	base := time.Now()
@@ -473,25 +453,6 @@ func TestBoardRakkoEntriesAndShortcut(t *testing.T) {
 	_ = strings.Contains
 }
 
-func saveBoardSeg2Shot(t *testing.T, name string, img *image.RGBA) {
-	t.Helper()
-	dir := os.Getenv("RAKKO_SHOTS")
-	if dir == "" {
-		return
-	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	f, err := os.Create(filepath.Join(dir, name))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-	if err := png.Encode(f, img); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func makeTestPNG(t *testing.T, w, h int) []byte {
 	t.Helper()
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
@@ -727,25 +688,6 @@ func TestBoardSeg2ToolsUndoImageAndScreenshots(t *testing.T) {
 	}
 }
 
-func saveBoardSeg3Shot(t *testing.T, name string, img *image.RGBA) {
-	t.Helper()
-	dir := os.Getenv("RAKKO_SHOTS")
-	if dir == "" {
-		return
-	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	f, err := os.Create(filepath.Join(dir, name))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-	if err := png.Encode(f, img); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestBoardSeg3SelectionSnapLabelsAndScreenshots(t *testing.T) {
 	a, b := boardTestShelf(t)
 	l := locales.In("zh-Hans")
@@ -894,25 +836,6 @@ func TestBoardSeg3SelectionSnapLabelsAndScreenshots(t *testing.T) {
 		view.Frame()
 		saveTestShot(t, "seg3", "board-smart-guides.png", view.Image())
 		b.ed.PointerUp(rb2.Center().X+2, mb.Center().Y, editor.Mods{}, 6.2)
-	}
-}
-
-func saveBoardSeg4Shot(t *testing.T, name string, img *image.RGBA) {
-	t.Helper()
-	dir := os.Getenv("RAKKO_SHOTS")
-	if dir == "" {
-		return
-	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	f, err := os.Create(filepath.Join(dir, name))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-	if err := png.Encode(f, img); err != nil {
-		t.Fatal(err)
 	}
 }
 

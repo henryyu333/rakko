@@ -1326,26 +1326,11 @@ func (e *Editor) cloneShapes(ids []doc.ID, offset geo.Vec) []doc.ID {
 		}
 		nid := doc.NewRecordID("shape")
 		idMap[id] = nid
-		c := s.Clone()
+		c := cloneShapeTreeData(s)
 		c.ID = nid
 		c.Parent = newParent
 		c.Index = idx
 		c.Seed = geo.Hash(string(nid))
-		if len(s.Segments) > 0 {
-			segs := make([]doc.Segment, len(s.Segments))
-			for i, seg := range s.Segments {
-				seg.Points = slices.Clone(seg.Points)
-				segs[i] = seg
-			}
-			c.Segments = segs
-		}
-		if len(s.Points) > 0 {
-			c.Points = slices.Clone(s.Points)
-		}
-		if s.Crop != nil {
-			cp := *s.Crop
-			c.Crop = &cp
-		}
 		e.put(c)
 		for _, kid := range e.Children(id) {
 			ks := e.Doc.Shapes[kid]

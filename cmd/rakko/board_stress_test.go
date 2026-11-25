@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"slices"
 	"sort"
+	"strconv"
 	"testing"
 	"time"
 
@@ -214,13 +215,13 @@ func TestBoardSaveBenchmark(t *testing.T) {
 		s.Parent = b.ed.Page
 		s.Index = doc.IndexBetween("", "")
 		if i > 0 {
-			prev := b.ed.Doc.Shapes[doc.ID("shape:bench"+itoaBench(i-1))]
+			prev := b.ed.Doc.Shapes[doc.ID("shape:bench"+strconv.Itoa(i-1))]
 			if prev != nil {
 				s.Index = doc.IndexBetween(prev.Index, "")
 			}
 		}
 		// Keep a deterministic, lookup-friendly id.
-		s.ID = doc.ID("shape:bench" + itoaBench(i))
+		s.ID = doc.ID("shape:bench" + strconv.Itoa(i))
 		pts := make([]doc.PointZ, 30)
 		for k := range pts {
 			pts[k] = doc.PointZ{X: float64(i)*3 + float64(k), Y: float64(i%400) + float64(k)*0.5, Z: 0.5}
@@ -247,7 +248,7 @@ func TestBoardSaveBenchmark(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i := 0; i < 4; i++ {
-		if _, err := b.store.New("Bench " + itoaBench(i+2)); err != nil {
+		if _, err := b.store.New("Bench " + strconv.Itoa(i+2)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -262,18 +263,4 @@ func TestBoardSaveBenchmark(t *testing.T) {
 	sort.Slice(listNs, func(i, j int) bool { return listNs[i] < listNs[j] })
 	t.Logf("BENCH flush_main median=%v size=%dB list5 median=%v",
 		mainNs[2], info.Size(), listNs[2])
-}
-
-func itoaBench(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	var b [8]byte
-	i := len(b)
-	for n > 0 {
-		i--
-		b[i] = byte('0' + n%10)
-		n /= 10
-	}
-	return string(b[i:])
 }

@@ -103,7 +103,7 @@ func TestBoardChromeFitsAllWidths(t *testing.T) {
 			view.Frame()
 		}
 		if w == 760 || w == 960 {
-			saveBoardSeg3Shot(t, "chrome-"+strconv.Itoa(w)+".png", view.Image())
+			saveTestShot(t, "seg3", "chrome-"+strconv.Itoa(w)+".png", view.Image())
 		}
 	}
 	_ = b
@@ -371,7 +371,7 @@ func TestBoardCorruptFilePlaceholderTitle(t *testing.T) {
 	view.SetLocale("zh-Hans")
 	view.Frame()
 	view.Frame()
-	saveBoardSeg3Shot(t, "corrupt-placeholder.png", view.Image())
+	saveTestShot(t, "seg3", "corrupt-placeholder.png", view.Image())
 }
 
 func TestBoardExportFileModes(t *testing.T) {
@@ -462,7 +462,7 @@ func TestBoardPropTextIcons(t *testing.T) {
 	if sh := b.ed.Doc.Shapes[id]; !sh.Bold || sh.TextAlign != "center" {
 		t.Fatalf("icon clicks did not apply: bold=%v align=%q", sh.Bold, sh.TextAlign)
 	}
-	saveBoardSeg3Shot(t, "prop-text-icons-760.png", view.Image())
+	saveTestShot(t, "seg3", "prop-text-icons-760.png", view.Image())
 }
 
 func TestBoardMaskOverlapViewport(t *testing.T) {

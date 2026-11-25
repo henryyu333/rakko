@@ -998,7 +998,6 @@
   "boardReveal": "在访达中显示",
   "boardRevealWin": "在文件资源管理器中显示",
   "boardKeepOnTop": "置顶",
-  "boardClose": "关闭",
   "boardUnreadable": "白板文件无法读取，已暂停自动保存，请检查磁盘或文件权限。",
   "boardEmpty": "空",
   "boardItemCount": "{n, number, ::group-off} 项",
