@@ -338,9 +338,9 @@ func (b *boardUI) buildContextMenu(c *ui.Context, l locales.Messages, m *ui.Menu
 	}
 	sel := b.ed.Selection()
 	if len(sel) == 0 {
-		if m.Item(l.BoardCtxPaste()).Shortcut(ui.Cmd, ui.KeyV).Disabled(!b.ed.HasClipboard()).Chosen() {
-			b.ed.Paste()
-			b.invalidate()
+		if m.Item(l.BoardCtxPaste()).Shortcut(ui.Cmd, ui.KeyV).Disabled(!b.canPaste(c)).Chosen() {
+			pt := b.ed.ToPage(b.ctxPt)
+			b.pasteFromClipboard(c, &pt)
 		}
 		m.Separator()
 		m.Submenu(l.BoardCtxCopyAs(), func(sm *ui.Menu) {
@@ -388,9 +388,9 @@ func (b *boardUI) buildContextMenu(c *ui.Context, l locales.Messages, m *ui.Menu
 		b.copySelection(c)
 		b.invalidate()
 	}
-	if m.Item(l.BoardCtxPaste()).Shortcut(ui.Cmd, ui.KeyV).Disabled(!b.ed.HasClipboard()).Chosen() {
-		b.ed.Paste()
-		b.invalidate()
+	if m.Item(l.BoardCtxPaste()).Shortcut(ui.Cmd, ui.KeyV).Disabled(!b.canPaste(c)).Chosen() {
+		pt := b.ed.ToPage(b.ctxPt)
+		b.pasteFromClipboard(c, &pt)
 	}
 	if m.Item(l.BoardCtxDuplicate()).Shortcut(ui.Cmd, ui.KeyD).Chosen() {
 		b.ed.Duplicate()
@@ -517,7 +517,7 @@ func (b *boardUI) buildContextMenu(c *ui.Context, l locales.Messages, m *ui.Menu
 				if pg.ID == b.ed.Page {
 					continue
 				}
-				if sm.Item(pg.Name).Chosen() {
+				if sm.Item(b.pageTitle(l, pg)).Chosen() {
 					b.ed.MoveSelectedToPage(pg.ID)
 					b.invalidate()
 				}

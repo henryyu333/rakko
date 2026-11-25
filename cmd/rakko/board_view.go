@@ -620,7 +620,7 @@ func (a *shelf) boardPageDeleteModal(c *ui.Context, l locales.Messages, pal *edi
 	b := a.board
 	name := ""
 	if pg := b.ed.ActivePageInfo(); pg != nil {
-		name = pg.Name
+		name = b.pageTitle(l, pg)
 	}
 	a.boardConfirmModal(c, l, pal, "board-page-del",
 		l.BoardPageDeleteConfirm(name), l.BoardDeleteAction(),
@@ -1080,10 +1080,48 @@ func boardMods(m ui.Modifiers) editor.Mods {
 // layout pass measure megabytes and freeze the canvas.
 const boardPasteTextMax = 20_000
 
+func (b *boardUI) canPaste(c *ui.Context) bool {
+	if b.locked || b.ed == nil {
+		return false
+	}
+	if b.ed.HasClipboard() {
+		return true
+	}
+	return c != nil && len(c.Services().ClipboardFormats()) > 0
+}
+
+func (b *boardUI) pasteFromClipboard(c *ui.Context, pagePt *geo.Vec) bool {
+	if b.locked || b.ed == nil {
+		return false
+	}
+	if c != nil && b.internalClipboardCurrent(c) && b.ed.Paste() {
+		b.invalidate()
+		return true
+	}
+	if c != nil {
+		formats := c.Services().ClipboardFormats()
+		if boardClipboardHasText(formats) {
+			return b.pasteTextAt(c, pagePt)
+		}
+		if b.pasteImageAt(formats, pagePt) {
+			return true
+		}
+	}
+	if b.ed.Paste() {
+		b.invalidate()
+		return true
+	}
+	return false
+}
+
 // pasteText turns clipboard text into one selected TypeText shape at the
 // pointer, or at the viewport center when the pointer has not been in the
 // canvas. It reports whether the paste was handled.
 func (b *boardUI) pasteText(c *ui.Context) bool {
+	return b.pasteTextAt(c, nil)
+}
+
+func (b *boardUI) pasteTextAt(c *ui.Context, pagePt *geo.Vec) bool {
 	if b.locked || b.ed == nil || c == nil {
 		return true
 	}
@@ -1100,15 +1138,21 @@ func (b *boardUI) pasteText(c *ui.Context) bool {
 	if r := []rune(text); len(r) > boardPasteTextMax {
 		text = string(r[:boardPasteTextMax])
 	}
-	pt := b.hoverScreenPt
-	inside := b.stageRect.W > 0 && b.stageRect.Contains(float32(pt.X), float32(pt.Y))
-	if !inside {
-		pt = geo.V(float64(b.stageRect.X+b.stageRect.W/2), float64(b.stageRect.Y+b.stageRect.H/2))
-		if b.stageRect.W <= 0 {
-			pt = geo.V(b.ed.VW/2, b.ed.VH/2)
+	var at geo.Vec
+	if pagePt != nil {
+		at = *pagePt
+	} else {
+		pt := b.hoverScreenPt
+		inside := b.stageRect.W > 0 && b.stageRect.Contains(float32(pt.X), float32(pt.Y))
+		if !inside {
+			pt = geo.V(float64(b.stageRect.X+b.stageRect.W/2), float64(b.stageRect.Y+b.stageRect.H/2))
+			if b.stageRect.W <= 0 {
+				pt = geo.V(b.ed.VW/2, b.ed.VH/2)
+			}
 		}
+		at = b.ed.ToPage(pt)
 	}
-	b.ed.CreateText(b.ed.ToPage(pt), text)
+	b.ed.CreateText(at, text)
 	b.invalidate()
 	return true
 }
@@ -1242,21 +1286,7 @@ func (b *boardUI) handleCanvasInput(c *ui.Context, ev ui.InputEvent) bool {
 					}
 					return true
 				}
-				if b.internalClipboardCurrent(c) {
-					if !b.locked && b.ed.Paste() {
-						b.invalidate()
-						return true
-					}
-				}
-				formats := c.Services().ClipboardFormats()
-				if boardClipboardHasText(formats) {
-					return b.pasteText(c)
-				}
-				if b.pasteImage(formats) {
-					return true
-				}
-				if !b.locked && b.ed.Paste() {
-					b.invalidate()
+				if b.pasteFromClipboard(c, nil) {
 					return true
 				}
 			case ui.KeyD:

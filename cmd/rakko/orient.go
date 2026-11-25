@@ -13,6 +13,10 @@ import (
 // 非 JPEG 或元数据损坏时返回 1（正常方向）。只扫描段头，APP1 载荷有界，
 // 不把整个文件读进内存。
 func jpegOrientation(rs *os.File) int {
+	return jpegOrientationReader(rs)
+}
+
+func jpegOrientationReader(rs io.ReadSeeker) int {
 	if _, err := rs.Seek(0, io.SeekStart); err != nil {
 		return 1
 	}

@@ -2,12 +2,15 @@ package main
 
 import (
 	"bytes"
+	"encoding/binary"
 	"image"
 	"image/color"
+	"image/jpeg"
 	"image/png"
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,6 +23,7 @@ import (
 	"rakko/internal/board/doc"
 	"rakko/internal/board/editor"
 	"rakko/internal/board/geo"
+	"rakko/internal/layout"
 	"rakko/internal/settings"
 	"rakko/locales"
 )
@@ -571,15 +575,16 @@ func TestBoardCardReadsMetaWithoutOpeningBoard(t *testing.T) {
 	a := &shelf{dataDir: dir, settings: settings.Default(), thumbnails: map[string]*ui.Bitmap{},
 		thumbPending: map[string]bool{}, appNames: map[string]string{}}
 	view := ui.NewTester(func(c *ui.Context) {
-		card := ui.Column(c.Key("card")).Width(300).Height(120)
-		a.noteBody(c, card, 2, cardPanel)
-		a.boardBody(c, card, 2, cardPanel)
+		a.toolCard(c, layout.Card{ID: "board", Span: 2}, cardPanel)
 	}, 320, 240)
 	view.SetLocale("zh-Hans")
 	view.Frame()
 	view.Frame()
 	if a.board != nil {
-		t.Fatal("drawing the board card parsed the whole board")
+		t.Fatal("rendering toolCard(board) parsed the whole board")
+	}
+	if _, ok := view.Find("元数据白板"); !ok {
+		t.Fatalf("board card title missing from toolCard; texts=%v", view.Texts())
 	}
 }
 
@@ -689,4 +694,166 @@ func TestRenderCloneConcurrentPaintNoDataRace(t *testing.T) {
 		}
 	}
 	wg.Wait()
+}
+
+func TestBoardImagePixelLimitExifOrientAndDialogExts(t *testing.T) {
+	_, b := boardTestShelf(t)
+	dir := t.TempDir()
+
+	// 1. Small-byte PNG whose dimensions exceed boardImageMaxPx (100M px).
+	bomb := image.NewGray(image.Rect(0, 0, 10100, 10100))
+	var bombBuf bytes.Buffer
+	enc := png.Encoder{CompressionLevel: png.BestSpeed}
+	if err := enc.Encode(&bombBuf, bomb); err != nil {
+		t.Fatal(err)
+	}
+	if bombBuf.Len() >= boardImageMaxByte {
+		t.Fatalf("compressed test PNG too large: %d", bombBuf.Len())
+	}
+	bombPath := filepath.Join(dir, "bomb.png")
+	if err := os.WriteFile(bombPath, bombBuf.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if b.insertImageFile(bombPath, geo.V(50, 50)) {
+		t.Fatal("insertImageFile accepted a >100M pixel PNG")
+	}
+	if b.ed.ItemCount() != 0 {
+		t.Fatal("pixel-bomb PNG created a shape")
+	}
+
+	// 2. Landscape 40x20 JPEG with EXIF Orientation=6 (90 deg CW -> 20x40 portrait).
+	src := image.NewNRGBA(image.Rect(0, 0, 40, 20))
+	for y := range 20 {
+		for x := range 40 {
+			c := color.NRGBA{R: 20, G: 40, B: 220, A: 255}
+			if x < 10 && y < 10 {
+				c = color.NRGBA{R: 240, G: 30, B: 30, A: 255}
+			}
+			src.SetNRGBA(x, y, c)
+		}
+	}
+	var jpgBuf bytes.Buffer
+	if err := jpeg.Encode(&jpgBuf, src, &jpeg.Options{Quality: 98}); err != nil {
+		t.Fatal(err)
+	}
+	jpgBytes := jpgBuf.Bytes()
+	app1 := []byte("Exif\x00\x00II\x2a\x00\x08\x00\x00\x00\x01\x00\x12\x01\x03\x00\x01\x00\x00\x00\x06\x00\x00\x00")
+	var seg [4]byte
+	seg[0], seg[1] = 0xFF, 0xE1
+	binary.BigEndian.PutUint16(seg[2:4], uint16(len(app1)+2))
+	var withExif bytes.Buffer
+	withExif.Write(jpgBytes[:2])
+	withExif.Write(seg[:])
+	withExif.Write(app1)
+	withExif.Write(jpgBytes[2:])
+
+	exifPath := filepath.Join(dir, "portrait.jpg")
+	if err := os.WriteFile(exifPath, withExif.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if !b.insertImageFile(exifPath, geo.V(120, 120)) {
+		t.Fatal("insertImageFile rejected valid EXIF JPEG")
+	}
+	var imgShape *doc.Shape
+	for _, s := range b.ed.Doc.Shapes {
+		if s.Type == doc.TypeImage {
+			imgShape = s
+			break
+		}
+	}
+	if imgShape == nil {
+		t.Fatal("no image shape created")
+	}
+	asset := b.ed.Doc.Assets[imgShape.AssetID]
+	if asset == nil || asset.W != 20 || asset.H != 40 {
+		t.Fatalf("EXIF oriented asset dims = %+v, want 20x40", asset)
+	}
+
+	// 3. Dialog extension filter must match boardIsSupportedImageExt.
+	for _, ext := range []string{"bmp", "tif", "tiff", "heic", "heif", "avif"} {
+		if !slices.Contains(boardSupportedImageExts, ext) {
+			t.Fatalf("boardSupportedImageExts missing %q", ext)
+		}
+	}
+}
+
+func TestBoardContextMenuPasteUsesSystemClipboard(t *testing.T) {
+	a, b := boardTestShelf(t)
+	l := locales.In("zh-Hans")
+	view := ui.NewTester(a.boardView, 1040, 680)
+	view.SetLocale("zh-Hans")
+	view.Frame()
+	view.Frame()
+
+	// Blank canvas with empty internal clipboard + external clipboard text.
+	view.SetClipboard("右键粘贴文字")
+	view.RightClickAt(320, 260)
+	view.Frame()
+	if err := view.ChooseMenuItem(l.BoardCtxPaste()); err != nil {
+		t.Fatalf("context menu paste with external text failed: %v", err)
+	}
+	view.Frame()
+	if b.ed.ItemCount() != 1 {
+		t.Fatalf("items after blank right-click paste = %d, want 1", b.ed.ItemCount())
+	}
+	pasted := b.ed.Doc.Shapes[b.ed.Selection()[0]]
+	if pasted == nil || pasted.Type != doc.TypeText || pasted.Text != "右键粘贴文字" {
+		t.Fatalf("pasted shape = %+v, want text 右键粘贴文字", pasted)
+	}
+
+	// Copy internal shape, then overwrite system clipboard externally:
+	// right-click paste on selection must paste the newer external text.
+	r := b.ed.CreateNote(geo.V(120, 120), "旧便签")
+	b.ed.Select(r)
+	view.Frame()
+	view.Key(ui.Cmd, ui.KeyC)
+	view.Frame()
+	view.SetClipboard("外部最新文本")
+	view.RightClickAt(150, 150)
+	view.Frame()
+	if err := view.ChooseMenuItem(l.BoardCtxPaste()); err != nil {
+		t.Fatalf("selection context menu paste failed: %v", err)
+	}
+	view.Frame()
+	sel := b.ed.Selection()
+	if len(sel) == 0 {
+		t.Fatal("nothing selected after paste")
+	}
+	if s := b.ed.Doc.Shapes[sel[0]]; s == nil || s.Type != doc.TypeText || s.Text != "外部最新文本" {
+		t.Fatalf("selection right-click paste got %+v, want 外部最新文本", s)
+	}
+}
+
+func TestBoardPageMenusAndDeleteConfirmUseLocalizedTitle(t *testing.T) {
+	a, b := boardTestShelf(t)
+	b.ed.AddPage("")
+	p1 := b.ed.Pages()[0]
+	b.ed.SwitchPage(p1.ID)
+	id := b.ed.CreateNote(geo.V(100, 100), "测试")
+	b.ed.Select(id)
+
+	l := locales.In("zh-Hans")
+	view := ui.NewTester(a.boardView, 1040, 680)
+	view.SetLocale("zh-Hans")
+	view.Frame()
+	view.Frame()
+
+	view.RightClickAt(140, 140)
+	view.Frame()
+	if err := view.ChooseMenuItem(l.BoardPageMoveTo(), "页面 2"); err != nil {
+		t.Fatalf("MoveTo submenu did not show localized '页面 2': %v", err)
+	}
+	view.Frame()
+	if len(b.ed.Pages()) < 2 || b.ed.Doc.Shapes[id].Parent != b.ed.Pages()[1].ID {
+		t.Fatal("shape was not moved to page 2")
+	}
+
+	b.ed.SwitchPage(p1.ID)
+	b.confirmPageDelete = true
+	view.Frame()
+	view.Frame()
+	wantConfirm := l.BoardPageDeleteConfirm("页面 1")
+	if _, ok := view.Find(wantConfirm); !ok {
+		t.Fatalf("delete confirm modal missing localized %q; texts=%v", wantConfirm, view.Texts())
+	}
 }

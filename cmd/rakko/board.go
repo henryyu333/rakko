@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,6 +20,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
+	xdraw "golang.org/x/image/draw"
 
 	"rakko/internal/board/doc"
 	"rakko/internal/board/editor"
@@ -75,11 +77,12 @@ var (
 	boardActivate        = platform.ActivateSelf
 	boardReveal          = platform.RevealInFileManager
 	boardTrash           = platform.TrashFile
-	boardOpenImageDialog = func(w *mygo.Window) ([]string, error) {
+	boardSupportedImageExts = []string{"png", "jpg", "jpeg", "gif", "webp", "bmp", "tif", "tiff", "heic", "heif", "avif"}
+	boardOpenImageDialog    = func(w *mygo.Window) ([]string, error) {
 		return mygo.Dialog.Open(mygo.OpenDialogOptions{
 			Parent:   w,
 			Multiple: true,
-			Filters:  []mygo.FileFilter{{Name: "Images", Extensions: []string{"png", "jpg", "jpeg", "gif", "webp"}}},
+			Filters:  []mygo.FileFilter{{Name: "Images", Extensions: boardSupportedImageExts}},
 		})
 	}
 	boardReadClipboardImage = func() []byte { return mygo.Clipboard.ReadImage() }
@@ -291,6 +294,10 @@ func (b *boardUI) pickImage() {
 }
 
 func (b *boardUI) pasteImage(formats []transfer.Format) bool {
+	return b.pasteImageAt(formats, nil)
+}
+
+func (b *boardUI) pasteImageAt(formats []transfer.Format, pagePt *geo.Vec) bool {
 	if b.locked || boardClipboardHasText(formats) {
 		return false
 	}
@@ -299,6 +306,9 @@ func (b *boardUI) pasteImage(formats []transfer.Format) bool {
 		return false
 	}
 	at := b.ed.ToPage(geo.V(b.ed.VW/2, b.ed.VH/2))
+	if pagePt != nil {
+		at = *pagePt
+	}
 	return b.insertImageBytes(data, "png", "clipboard.png", at)
 }
 
@@ -318,12 +328,7 @@ func boardClipboardHasText(formats []transfer.Format) bool {
 // is an accepted image file extension for board image shapes.
 func boardIsSupportedImageExt(ext string) bool {
 	ext = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(ext), "."))
-	switch ext {
-	case "png", "jpg", "jpeg", "gif", "webp", "bmp", "tif", "tiff", "heic", "heif", "avif":
-		return true
-	default:
-		return false
-	}
+	return slices.Contains(boardSupportedImageExts, ext)
 }
 
 func boardDecodeImageFile(path string) (image.Image, error) {
@@ -336,7 +341,16 @@ func boardDecodeImageFile(path string) (image.Image, error) {
 }
 
 func boardDecodeImage(path string, data []byte) (image.Image, string, error) {
+	if cfg, _, err := image.DecodeConfig(bytes.NewReader(data)); err == nil {
+		if cfg.Width <= 0 || cfg.Height <= 0 || int64(cfg.Width)*int64(cfg.Height) > boardImageMaxPx {
+			return nil, "", fmt.Errorf("board: image dimensions %dx%d exceed limit", cfg.Width, cfg.Height)
+		}
+	}
+	orient := jpegOrientationReader(bytes.NewReader(data))
 	if img, format, err := image.Decode(bytes.NewReader(data)); err == nil && img != nil {
+		if orient >= 2 && orient <= 8 {
+			img = orientImage(imageAsNRGBA(downsampleImage(img, boardImageDisplay)), orient)
+		}
 		return img, format, nil
 	}
 	if path != "" {
@@ -371,11 +385,6 @@ func (b *boardUI) insertImageFile(path string, pagePt geo.Vec) bool {
 func (b *boardUI) insertImageBytes(data []byte, ext, name string, pagePt geo.Vec) bool {
 	if b.store == nil || b.ed == nil || len(data) == 0 || len(data) > boardImageMaxByte {
 		return false
-	}
-	if cfg, _, err := image.DecodeConfig(bytes.NewReader(data)); err == nil {
-		if cfg.Width <= 0 || cfg.Height <= 0 || cfg.Width*cfg.Height > boardImageMaxPx {
-			return false
-		}
 	}
 	img, format, err := boardDecodeImage("", data)
 	if err != nil || img == nil {
@@ -1054,9 +1063,15 @@ func (a *shelf) boardFlush() {
 }
 
 func (a *shelf) boardLabel(l locales.Messages) string {
-	b := a.boardSession()
-	if b != nil && b.ed != nil && strings.TrimSpace(b.ed.Doc.Name) != "" {
-		return b.ed.Doc.Name
+	if b := a.board; b != nil && b.ed != nil {
+		if name := strings.TrimSpace(b.ed.Doc.Name); name != "" {
+			return name
+		}
+		return l.CardBoard()
+	}
+	if a.dataDir != "" {
+		name, _ := doc.CardInfo(a.dataDir, l.CardBoard())
+		return name
 	}
 	return l.CardBoard()
 }
@@ -1121,13 +1136,17 @@ func downsampleImage(img image.Image, maxDim int) image.Image {
 	}
 	scale := float64(maxDim) / float64(max(w, h))
 	nw, nh := max(1, int(float64(w)*scale)), max(1, int(float64(h)*scale))
-	dst := image.NewRGBA(image.Rect(0, 0, nw, nh))
-	for y := 0; y < nh; y++ {
-		sy := b.Min.Y + y*h/nh
-		for x := 0; x < nw; x++ {
-			sx := b.Min.X + x*w/nw
-			dst.Set(x, y, img.At(sx, sy))
-		}
+	dst := image.NewNRGBA(image.Rect(0, 0, nw, nh))
+	xdraw.ApproxBiLinear.Scale(dst, dst.Bounds(), img, b, xdraw.Src, nil)
+	return dst
+}
+
+func imageAsNRGBA(img image.Image) *image.NRGBA {
+	if n, ok := img.(*image.NRGBA); ok {
+		return n
 	}
+	b := img.Bounds()
+	dst := image.NewNRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
+	xdraw.Draw(dst, dst.Bounds(), img, b.Min, xdraw.Src)
 	return dst
 }
