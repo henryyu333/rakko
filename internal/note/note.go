@@ -47,6 +47,7 @@ func Open(dataDir string) (*Store, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("note: %w", err)
 	}
+	atomicfile.CleanTempFiles(dir)
 	s := &Store{dir: dir}
 	id, err := os.ReadFile(filepath.Join(dir, currentFile))
 	s.id = strings.TrimSpace(string(id))

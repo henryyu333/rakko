@@ -75,3 +75,23 @@ func IsTempName(name string) bool {
 	}
 	return strings.Index(name, ".tmp-") > 1
 }
+
+// CleanTempFiles removes regular temporary files matching IsTempName inside
+// dir (best-effort; ignores missing directories or entries that cannot be
+// removed, and never follows symlinks or deletes directories).
+func CleanTempFiles(dir string) {
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	for _, ent := range ents {
+		if !IsTempName(ent.Name()) {
+			continue
+		}
+		fi, ferr := ent.Info()
+		if ferr != nil || !fi.Mode().IsRegular() {
+			continue
+		}
+		_ = os.Remove(filepath.Join(dir, ent.Name()))
+	}
+}

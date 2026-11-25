@@ -498,6 +498,12 @@ func (b *boardUI) tick(now time.Time) bool {
 	return true
 }
 
+func (b *boardUI) saveSnapshot() *doc.Drawing {
+	snap := b.ed.Doc.Snapshot()
+	snap.PruneUnusedAssets()
+	return snap
+}
+
 // save queues the current document state for the background encoder without
 // ending an in-progress inline edit. The main thread only takes a Snapshot.
 func (b *boardUI) save() error {
@@ -505,7 +511,7 @@ func (b *boardUI) save() error {
 		return nil
 	}
 	b.ensureSaver()
-	job := boardSaveJob{id: b.store.ID(), d: b.ed.Doc.Snapshot()}
+	job := boardSaveJob{id: b.store.ID(), d: b.saveSnapshot()}
 	select {
 	case b.saveCh <- job:
 		b.dirtyFlag = false
@@ -529,7 +535,7 @@ func (b *boardUI) flush() error {
 	}
 	if b.dirtyFlag {
 		b.ensureSaver()
-		job := boardSaveJob{id: b.store.ID(), d: b.ed.Doc.Snapshot(), done: make(chan error, 1)}
+		job := boardSaveJob{id: b.store.ID(), d: b.saveSnapshot(), done: make(chan error, 1)}
 		b.saveCh <- job
 		if err := <-job.done; err != nil {
 			return err

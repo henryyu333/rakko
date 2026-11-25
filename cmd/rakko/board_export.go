@@ -16,6 +16,7 @@ import (
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
+	"rakko/internal/atomicfile"
 	"rakko/internal/board/doc"
 	"rakko/internal/board/editor"
 	"rakko/internal/board/geo"
@@ -274,6 +275,10 @@ func (b *boardUI) safeFileBaseName() string {
 	return name
 }
 
+func writeExportFile(path string, data []byte) error {
+	return atomicfile.WriteFile(filepath.Dir(path), filepath.Base(path), data, 0o644)
+}
+
 func (b *boardUI) exportPNGFile(ids []doc.ID) {
 	// Ask where first: cancelling must not cost a full render.
 	path, err := boardSaveFileDialog(b.win, b.safeFileBaseName()+".png", "PNG Image", []string{"png"})
@@ -285,10 +290,7 @@ func (b *boardUI) exportPNGFile(ids []doc.ID) {
 		if err != nil {
 			return err
 		}
-		if err := os.WriteFile(path, data, 0o644); err != nil {
-			return err
-		}
-		return os.Chmod(path, 0o644)
+		return writeExportFile(path, data)
 	}
 	if b.win == nil {
 		if err := render(b); err != nil {
@@ -332,11 +334,10 @@ func (b *boardUI) exportSVGFile(ids []doc.ID) {
 		b.host.report(err)
 		return
 	}
-	if err := os.WriteFile(path, []byte(svg), 0o644); err != nil {
+	if err := writeExportFile(path, []byte(svg)); err != nil {
 		b.host.report(err)
 		return
 	}
-	_ = os.Chmod(path, 0o644)
 }
 
 func (b *boardUI) exportBoardFile() {
@@ -352,11 +353,10 @@ func (b *boardUI) exportBoardFile() {
 		b.host.report(err)
 		return
 	}
-	if err := os.WriteFile(path, raw, 0o644); err != nil {
+	if err := writeExportFile(path, raw); err != nil {
 		b.host.report(err)
 		return
 	}
-	_ = os.Chmod(path, 0o644)
 }
 
 func (b *boardUI) importBoardFile() {

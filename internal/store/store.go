@@ -1259,29 +1259,12 @@ func (s *Store) imagesDirReal() bool {
 // symlink out of the data directory — and only regular files; a future
 // Open retries whatever could not be removed.
 func (s *Store) cleanTempLeftovers() {
-	s.removeTempLeftovers(s.Root)
+	atomicfile.CleanTempFiles(s.Root)
 	if s.imagesDirReal() {
-		s.removeTempLeftovers(s.imagesDir())
+		atomicfile.CleanTempFiles(s.imagesDir())
 	}
 	if s.convertedDirReal() {
-		s.removeTempLeftovers(s.convertedDir())
-	}
-}
-
-func (s *Store) removeTempLeftovers(dir string) {
-	ents, err := os.ReadDir(dir)
-	if err != nil {
-		return // best-effort: the next Open tries again.
-	}
-	for _, ent := range ents {
-		if !atomicfile.IsTempName(ent.Name()) {
-			continue
-		}
-		fi, ferr := ent.Info() // lstat 语义：不跟随链接。
-		if ferr != nil || !fi.Mode().IsRegular() {
-			continue
-		}
-		_ = os.Remove(filepath.Join(dir, ent.Name()))
+		atomicfile.CleanTempFiles(s.convertedDir())
 	}
 }
 

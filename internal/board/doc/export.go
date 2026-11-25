@@ -42,6 +42,7 @@ func ExportPackage(d *Drawing, st *Store) ([]byte, error) {
 	}
 	snap := d.Snapshot()
 	snap.Normalize(snap.ID, snap.Name)
+	snap.PruneUnusedAssets()
 	pkg := BoardPackage{
 		FormatVersion: 1,
 		Drawing:       snap,
@@ -76,7 +77,7 @@ func ImportPackage(raw []byte, st *Store, fallbackName string) (*Drawing, error)
 		return nil, fmt.Errorf("board: import is %d bytes, limit %d", len(raw), MaxImportBytes)
 	}
 	var pkg BoardPackage
-	if err := json.Unmarshal(raw, &pkg); err != nil {
+	if err := unmarshalJSON(raw, &pkg); err != nil {
 		return nil, err
 	}
 	var d *Drawing
@@ -84,7 +85,7 @@ func ImportPackage(raw []byte, st *Store, fallbackName string) (*Drawing, error)
 		d = pkg.Drawing
 	} else {
 		var bare Drawing
-		if err := json.Unmarshal(raw, &bare); err != nil {
+		if err := unmarshalJSON(raw, &bare); err != nil {
 			return nil, err
 		}
 		if len(bare.Pages) == 0 && len(bare.Shapes) == 0 && bare.Name == "" {

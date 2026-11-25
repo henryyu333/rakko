@@ -429,3 +429,27 @@ func TestNewStartsAFreshNote(t *testing.T) {
 		t.Fatalf("reopen = %q, %v; want %q", again.ID(), err, s.ID())
 	}
 }
+
+func TestOpenCleansTempLeftovers(t *testing.T) {
+	dir := t.TempDir()
+	notesDir := filepath.Join(dir, DirName)
+	if err := os.MkdirAll(notesDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	tempNote := filepath.Join(notesDir, ".abc.md.tmp-999")
+	keepDot := filepath.Join(notesDir, ".keep")
+	for _, p := range []string{tempNote, keepDot} {
+		if err := os.WriteFile(p, []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := Open(dir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(tempNote); !os.IsNotExist(err) {
+		t.Fatalf("expected temp note %s removed, err=%v", tempNote, err)
+	}
+	if _, err := os.Stat(keepDot); err != nil {
+		t.Fatalf("expected dotfile %s preserved: %v", keepDot, err)
+	}
+}

@@ -477,6 +477,26 @@ func (d *Drawing) renumberDuplicateIndices() {
 	}
 }
 
+// PruneUnusedAssets deletes entries in Assets that are no longer referenced by
+// any shape in Shapes. Keeping this out of Normalize lets in-session Undo still
+// restore a deleted image before the drawing is exported or reopened from disk.
+func (d *Drawing) PruneUnusedAssets() {
+	if len(d.Assets) == 0 {
+		return
+	}
+	referenced := make(map[ID]bool, len(d.Assets))
+	for _, s := range d.Shapes {
+		if s != nil && s.AssetID != "" {
+			referenced[s.AssetID] = true
+		}
+	}
+	for id := range d.Assets {
+		if !referenced[id] {
+			delete(d.Assets, id)
+		}
+	}
+}
+
 // Snapshot returns a cheap shallow copy whose maps, slices, and page records
 // are independent of future edits.
 func (d *Drawing) Snapshot() *Drawing {

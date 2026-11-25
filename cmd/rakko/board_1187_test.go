@@ -1,14 +1,19 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"image"
 	"image/color"
+	"image/png"
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/board/doc"
@@ -406,4 +411,138 @@ func TestBoard1187SelectiveDegradationLargestFirst(t *testing.T) {
 	}
 	t.Logf("SELECTIVE_DEGRADE small=%d (0 degraded) giant=%d (%d degraded) estMaskArea=%.0f budget=%.0f",
 		len(smallIDs), len(giantIDs), degradedGiants, b.lastMaskArea, boardAtlasBudget)
+}
+
+func TestBoardDeleteImageUndoSurvivesSaveAndExportOmitsIt(t *testing.T) {
+	_, b := boardTestShelf(t)
+	var buf bytes.Buffer
+	img := image.NewRGBA(image.Rect(0, 0, 2, 2))
+	img.Set(0, 0, color.RGBA{R: 120, G: 200, B: 80, A: 255})
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatal(err)
+	}
+	asset, err := b.store.SaveAsset(buf.Bytes(), "png", "clip.png", "image/png", 2, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.ed.Doc.Assets[asset.ID] = asset
+	imgID := doc.NewRecordID("shape")
+	s := doc.NewShape(imgID, doc.TypeImage)
+	s.Parent, s.AssetID = b.ed.Page, asset.ID
+	s.W, s.H = 64, 64
+	s.Index = doc.FirstIndex
+	b.ed.Doc.Shapes[imgID] = s
+
+	b.ed.Select(imgID)
+	b.ed.DeleteSelected()
+	b.dirtyFlag = true
+	if err := b.flush(); err != nil {
+		t.Fatal(err)
+	}
+
+	rawPkg, err := doc.ExportPackage(b.ed.Doc, b.store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pkg doc.BoardPackage
+	if err := json.Unmarshal(rawPkg, &pkg); err != nil {
+		t.Fatal(err)
+	}
+	if len(pkg.Assets) != 0 || len(pkg.Drawing.Assets) != 0 {
+		t.Fatalf("ExportPackage included deleted image asset: pkg=%d doc=%d", len(pkg.Assets), len(pkg.Drawing.Assets))
+	}
+
+	b.ed.Undo()
+	if b.ed.Doc.Shapes[imgID] == nil || b.ed.Doc.Assets[asset.ID] == nil {
+		t.Fatalf("in-session Undo failed to keep deleted image usable: shape=%v asset=%v",
+			b.ed.Doc.Shapes[imgID] != nil, b.ed.Doc.Assets[asset.ID] != nil)
+	}
+
+	b.ed.Select(imgID)
+	b.ed.DeleteSelected()
+	b.dirtyFlag = true
+	if err := b.flush(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := b.store.Read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reopened.Assets) != 0 {
+		t.Fatalf("reopened board retained unreferenced assets after save: %+v", reopened.Assets)
+	}
+}
+
+func TestBoardExportUsesAtomicWriteOnFailure(t *testing.T) {
+	_, b := boardTestShelf(t)
+	s := doc.NewShape(doc.NewRecordID("shape"), doc.TypeGeo)
+	s.Parent, s.W, s.H = b.ed.Page, 80, 60
+	s.Index = doc.FirstIndex
+	b.ed.Doc.Shapes[s.ID] = s
+
+	orig := boardSaveFileDialog
+	t.Cleanup(func() { boardSaveFileDialog = orig })
+
+	// First verify normal overwrite succeeds for PNG, SVG, and .rakkoboard.json with no temp leftovers.
+	okDir := t.TempDir()
+	for _, tc := range []struct {
+		name string
+		run  func()
+	}{
+		{"out.png", func() { b.exportPNGFile(nil) }},
+		{"out.svg", func() { b.exportSVGFile(nil) }},
+		{"out.rakkoboard.json", func() { b.exportBoardFile() }},
+	} {
+		target := filepath.Join(okDir, tc.name)
+		if err := os.WriteFile(target, []byte("old"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		boardSaveFileDialog = func(*mygo.Window, string, string, []string) (string, error) { return target, nil }
+		tc.run()
+		got, err := os.ReadFile(target)
+		if err != nil || string(got) == "old" || len(got) == 0 {
+			t.Fatalf("export %s did not replace target: len=%d err=%v", tc.name, len(got), err)
+		}
+	}
+	ents, err := os.ReadDir(okDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ents) != 3 {
+		t.Fatalf("expected only 3 export files without temp leftovers, got %d", len(ents))
+	}
+
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		return
+	}
+	// On Unix non-root, making parent dir read-only forces temp-file creation in
+	// dir to fail while bare os.WriteFile would overwrite the existing 0o644 file.
+	roDir := t.TempDir()
+	targets := []struct {
+		name string
+		run  func()
+	}{
+		{"keep.png", func() { b.exportPNGFile(nil) }},
+		{"keep.svg", func() { b.exportSVGFile(nil) }},
+		{"keep.rakkoboard.json", func() { b.exportBoardFile() }},
+	}
+	for _, tc := range targets {
+		if err := os.WriteFile(filepath.Join(roDir, tc.name), []byte("keep-me"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Chmod(roDir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(roDir, 0o755) })
+
+	for _, tc := range targets {
+		target := filepath.Join(roDir, tc.name)
+		boardSaveFileDialog = func(*mygo.Window, string, string, []string) (string, error) { return target, nil }
+		tc.run()
+		got, err := os.ReadFile(target)
+		if err != nil || string(got) != "keep-me" {
+			t.Fatalf("export %s modified existing file in 0o555 dir instead of failing atomically: got=%q err=%v", tc.name, got, err)
+		}
+	}
 }

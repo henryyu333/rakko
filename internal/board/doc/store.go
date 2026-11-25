@@ -1,6 +1,7 @@
 package doc
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -16,6 +17,10 @@ import (
 	"rakko/internal/assetstore"
 	"rakko/internal/atomicfile"
 )
+
+func unmarshalJSON(data []byte, v any) error {
+	return json.Unmarshal(bytes.TrimPrefix(data, []byte{0xEF, 0xBB, 0xBF}), v)
+}
 
 const (
 	// DirName is the folder inside Rakko's data directory for whiteboards.
@@ -69,9 +74,12 @@ func Open(dataDir string, defaultName string) (*Store, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("board: %w", err)
 	}
-	if err := os.MkdirAll(filepath.Join(dir, AssetsDirName), 0o700); err != nil {
+	assetsDir := filepath.Join(dir, AssetsDirName)
+	if err := os.MkdirAll(assetsDir, 0o700); err != nil {
 		return nil, fmt.Errorf("board: %w", err)
 	}
+	atomicfile.CleanTempFiles(dir)
+	atomicfile.CleanTempFiles(assetsDir)
 	s := &Store{dir: dir, defaultName: defaultName}
 	rawID, err := os.ReadFile(filepath.Join(dir, currentFile))
 	s.id = strings.TrimSpace(string(rawID))
@@ -132,10 +140,11 @@ func (s *Store) Read() (*Drawing, error) {
 		return nil, fmt.Errorf("board: reading %s: %w", filepath.Base(s.Path()), err)
 	}
 	var d Drawing
-	if err := json.Unmarshal(data, &d); err != nil {
+	if err := unmarshalJSON(data, &d); err != nil {
 		return nil, fmt.Errorf("board: parsing %s: %w", filepath.Base(s.Path()), err)
 	}
 	d.Normalize(s.id, s.defaultName)
+	d.PruneUnusedAssets()
 	return &d, nil
 }
 
@@ -185,23 +194,54 @@ func (s *Store) writeMeta(id string, d *Drawing) error {
 	return writeBoardMeta(s.dir, id, &BoardInfo{ID: id, Name: d.Name, ItemCount: len(d.Shapes)})
 }
 
-func (s *Store) readMeta(id string) (name string, count int, ok bool) {
-	raw, err := os.ReadFile(filepath.Join(s.dir, id+metaExt))
+func readValidBoardMeta(dir, id string) (name string, count int, ok bool) {
+	boardInfo, err := os.Stat(filepath.Join(dir, id+FileExt))
+	if err != nil {
+		return "", 0, false
+	}
+	metaPath := filepath.Join(dir, id+metaExt)
+	metaInfo, err := os.Stat(metaPath)
+	if err != nil || metaInfo.ModTime().Before(boardInfo.ModTime()) {
+		return "", 0, false
+	}
+	raw, err := os.ReadFile(metaPath)
 	if err != nil {
 		return "", 0, false
 	}
 	var m boardMeta
-	if json.Unmarshal(raw, &m) != nil {
-		return "", 0, false
-	}
-	if strings.TrimSpace(m.Name) == "" {
+	if unmarshalJSON(raw, &m) != nil || strings.TrimSpace(m.Name) == "" {
 		return "", 0, false
 	}
 	return m.Name, m.ItemCount, true
 }
 
+func metaFromBoardFile(dir, id, fallbackName string) (name string, count int, ok bool) {
+	data, err := os.ReadFile(filepath.Join(dir, id+FileExt))
+	if err != nil {
+		return "", 0, false
+	}
+	var meta struct {
+		Name   string                 `json:"name"`
+		Shapes map[ID]json.RawMessage `json:"shapes"`
+	}
+	name = fallbackName
+	count = 0
+	if unmarshalJSON(data, &meta) == nil {
+		if strings.TrimSpace(meta.Name) != "" {
+			name = meta.Name
+		}
+		count = len(meta.Shapes)
+	}
+	_ = writeBoardMeta(dir, id, &BoardInfo{ID: id, Name: name, ItemCount: count})
+	return name, count, true
+}
+
+func (s *Store) readMeta(id string) (name string, count int, ok bool) {
+	return readValidBoardMeta(s.dir, id)
+}
+
 // CardInfo reads the active board's name and item count from the metadata
-// cache, without parsing the board. It is what a card draws on its first frame.
+// cache when fresh, refreshing from the board file if the cache is stale.
 func CardInfo(dataDir, fallbackName string) (name string, count int) {
 	name, count = fallbackName, 0
 	dir := filepath.Join(dataDir, DirName)
@@ -213,15 +253,13 @@ func CardInfo(dataDir, fallbackName string) (name string, count int) {
 	if !validBoardID(id) {
 		return name, 0
 	}
-	raw, err := os.ReadFile(filepath.Join(dir, id+metaExt))
-	if err != nil {
-		return name, 0
+	if n, c, ok := readValidBoardMeta(dir, id); ok {
+		return n, c
 	}
-	var m boardMeta
-	if json.Unmarshal(raw, &m) != nil || strings.TrimSpace(m.Name) == "" {
-		return name, 0
+	if n, c, ok := metaFromBoardFile(dir, id, fallbackName); ok {
+		return n, c
 	}
-	return m.Name, m.ItemCount
+	return name, 0
 }
 
 // List returns metadata for all valid board files in boards/, newest first.
@@ -245,24 +283,11 @@ func (s *Store) List() ([]BoardInfo, error) {
 		fullPath := filepath.Join(s.dir, e.Name())
 		name, count, ok := s.readMeta(id)
 		if !ok {
-			data, err := os.ReadFile(fullPath)
-			if err != nil {
+			var parsed bool
+			name, count, parsed = metaFromBoardFile(s.dir, id, s.defaultName)
+			if !parsed {
 				continue
 			}
-			var meta struct {
-				Name   string                 `json:"name"`
-				Shapes map[ID]json.RawMessage `json:"shapes"`
-			}
-			name = s.defaultName
-			count = 0
-			if json.Unmarshal(data, &meta) == nil {
-				if strings.TrimSpace(meta.Name) != "" {
-					name = meta.Name
-				}
-				count = len(meta.Shapes)
-			}
-			// Cache what parsing found; the next List or card reads it only.
-			_ = writeBoardMeta(s.dir, id, &BoardInfo{ID: id, Name: name, ItemCount: count})
 		}
 		var mod time.Time
 		if info, err := e.Info(); err == nil {
@@ -359,6 +384,7 @@ func (s *Store) Trash(id string, trashFn TrashFunc) error {
 	if _, err := trashFn(s.PathFor(id)); err != nil {
 		return fmt.Errorf("board: trash %s: %w", id, err)
 	}
+	_ = os.Remove(filepath.Join(s.dir, id+metaExt))
 	if s.id == id {
 		s.id = fallback
 		if err := s.writeCurrent(); err != nil {
@@ -400,7 +426,7 @@ func (s *Store) recordTrashAssets(id string) error {
 		return err
 	}
 	var d Drawing
-	if err := json.Unmarshal(raw, &d); err != nil {
+	if err := unmarshalJSON(raw, &d); err != nil {
 		return err
 	}
 	refs := s.trashAssets()
@@ -428,7 +454,7 @@ func (s *Store) trashAssets() map[string]bool {
 		return out
 	}
 	var list []string
-	if json.Unmarshal(raw, &list) != nil {
+	if unmarshalJSON(raw, &list) != nil {
 		return out
 	}
 	for _, p := range list {
@@ -458,7 +484,7 @@ func (s *Store) CleanAssets(now time.Time, maxAge time.Duration) ([]string, erro
 			return nil, fmt.Errorf("board: cleaning assets: %w", err)
 		}
 		var d Drawing
-		if err := json.Unmarshal(raw, &d); err != nil {
+		if err := unmarshalJSON(raw, &d); err != nil {
 			return nil, fmt.Errorf("board: cleaning assets: %s: %w", e.Name(), err)
 		}
 		for _, a := range d.Assets {

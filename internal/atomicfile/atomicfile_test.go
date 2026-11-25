@@ -123,3 +123,33 @@ func TestIsTempNameMatchesOnlyTheWriteConvention(t *testing.T) {
 		}
 	}
 }
+
+func TestCleanTempFilesRemovesOnlyTempRegularFiles(t *testing.T) {
+	dir := t.TempDir()
+	tempFile := filepath.Join(dir, ".state.json.tmp-12345")
+	keepRegular := filepath.Join(dir, "state.json")
+	keepDot := filepath.Join(dir, ".trash-assets.json")
+	keepPrefix := filepath.Join(dir, ".tmp-notes")
+	tempDir := filepath.Join(dir, ".dir.tmp-999")
+	for _, p := range []string{tempFile, keepRegular, keepDot, keepPrefix} {
+		if err := os.WriteFile(p, []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(tempDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	CleanTempFiles(dir)
+
+	if _, err := os.Stat(tempFile); !os.IsNotExist(err) {
+		t.Fatalf("expected temp file %s to be deleted, err=%v", tempFile, err)
+	}
+	for _, keep := range []string{keepRegular, keepDot, keepPrefix, tempDir} {
+		if _, err := os.Stat(keep); err != nil {
+			t.Fatalf("expected %s to stay intact: %v", keep, err)
+		}
+	}
+	// Missing dir must be a harmless no-op.
+	CleanTempFiles(filepath.Join(dir, "does-not-exist"))
+}
