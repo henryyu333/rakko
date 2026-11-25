@@ -357,38 +357,101 @@ func (a *shelf) boardTextEditor(c *ui.Context, pal *editor.Palette) {
 	})
 }
 
+type boardChromeLayout struct {
+	compact  bool
+	stacked  bool
+	alignEnd bool
+	fullTern bool
+
+	barH    float32
+	barPad  float32
+	barGap  float32
+	barRad  float32
+	toolBtn float32
+	toolIco float32
+
+	navLeft float32
+	navH    float32
+	navPad  float32
+	navGap  float32
+	navRad  float32
+	navBtn  float32
+	sepH    float32
+	sepMar  float32
+	zoomH   float32
+	zoomMin float32
+	zoomFs  float32
+}
+
+// boardChromeLayout picks the Tern spec dimensions (48/34 toolbar, 40/28 nav)
+// whenever the stage can hold both side by side without overlapping, falling
+// back to slim/compact sizes on narrower windows and stacking below 640px.
+func (b *boardUI) boardChromeLayout() boardChromeLayout {
+	w := b.stageRect.W
+	full := boardChromeLayout{
+		fullTern: true,
+		barH:     48, barPad: 8, barGap: 2, barRad: 14, toolBtn: 34, toolIco: 16,
+		navLeft: 16, navH: 40, navPad: 6, navGap: 2, navRad: 12, navBtn: 28,
+		sepH: 20, sepMar: 3, zoomH: 28, zoomMin: 46, zoomFs: 11.5,
+	}
+	slim := boardChromeLayout{
+		barH: 44, barPad: 5, barGap: 1, barRad: 13, toolBtn: 30, toolIco: 17,
+		navLeft: 12, navH: 38, navPad: 5, navGap: 1, navRad: 11, navBtn: 25,
+		sepH: 18, sepMar: 2, zoomH: 26, zoomMin: 38, zoomFs: 11,
+	}
+	switch {
+	case w <= 0 || w >= 1220:
+		return full
+	case w >= 940:
+		full.alignEnd = true
+		return full
+	case w >= 820:
+		slim.alignEnd = true
+		return slim
+	case w >= 640:
+		slim.compact = true
+		slim.alignEnd = true
+		slim.toolBtn = 26
+		slim.toolIco = 15
+		return slim
+	default:
+		slim.compact = true
+		slim.stacked = true
+		slim.toolBtn = 26
+		slim.toolIco = 15
+		return slim
+	}
+}
+
+func (b *boardUI) boardToolbarHeight() float32 {
+	return b.boardChromeLayout().barH
+}
+
 // boardChrome decides how the bottom chrome shares the stage width: the
 // toolbar is compact when the full one and the nav cannot sit side by side,
 // stacked above the nav when even the compact one cannot, and centred only
 // when a full toolbar has room on both sides of the nav.
 func (b *boardUI) boardChrome() (compact, stacked, alignEnd bool) {
-	w := b.stageRect.W
-	switch {
-	case w <= 0:
-		return false, false, false
-	case w < 640:
-		return true, true, false
-	case w < 800:
-		return true, false, true
-	case w < 1030:
-		return false, false, true
-	}
-	return false, false, false
+	m := b.boardChromeLayout()
+	return m.compact, m.stacked, m.alignEnd
 }
 
 // boardToolbarBottom is the toolbar's bottom inset, raised when it is stacked.
 func (b *boardUI) boardToolbarBottom() float32 {
-	if _, stacked, _ := b.boardChrome(); stacked {
-		return 62
+	m := b.boardChromeLayout()
+	if m.stacked {
+		// Leave >= 8px clear above the 38px nav capsule anchored at bottom=16 (top=54).
+		return 16 + m.navH + 10
 	}
 	return 16
 }
 
 func (a *shelf) boardNavBar(c *ui.Context, l locales.Messages, pal *editor.Palette) {
 	b := a.board
+	m := b.boardChromeLayout()
 	pct := int(math.Round(b.ed.Cam().Z * 100))
-	nav := ui.Row(c.Key("board-nav")).Absolute().Left(12).Bottom(16).Height(38).
-		Padding(0, 5, 0, 5).Gap(1).Radius(11).Clip().AlignItems(ui.Center).
+	nav := ui.Row(c.Key("board-nav")).Absolute().Left(m.navLeft).Bottom(16).Height(m.navH).
+		Padding(0, m.navPad, 0, m.navPad).Gap(m.navGap).Radius(m.navRad).Clip().AlignItems(ui.Center).
 		Background(boardColor(pal.Bar)).Border(0.5, boardColor(pal.Edge)).
 		Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, 0.28))
 	nav.Children(func() {
@@ -410,7 +473,7 @@ func (a *shelf) boardNavBar(c *ui.Context, l locales.Messages, pal *editor.Palet
 			b.invalidate()
 		}
 
-		ui.Box(c).Width(1).Height(18).Margin(0, 2, 0, 2).Background(boardColor(pal.Sep))
+		ui.Box(c).Width(1).Height(m.sepH).Margin(0, m.sepMar, 0, m.sepMar).Background(boardColor(pal.Sep))
 
 		zout := a.boardNavIconBtn(c, pal, "board-zout", minusSymbol, l.BoardZoomOut(), false)
 		if zout.Clicked() {
@@ -418,13 +481,13 @@ func (a *shelf) boardNavBar(c *ui.Context, l locales.Messages, pal *editor.Palet
 			b.invalidate()
 		}
 
-		zbtn := ui.Row(c.Key("board-zoom-pct")).Height(26).MinWidth(38).Padding(0, 4, 0, 4).Radius(6).Center().
+		zbtn := ui.Row(c.Key("board-zoom-pct")).Height(m.zoomH).MinWidth(m.zoomMin).Padding(0, 4, 0, 4).Radius(m.navRad-4).Center().
 			Label(l.BoardZoomLabel()).Tooltip(l.BoardZoomLabel())
 		if zbtn.Hovered() || b.zoomMenu {
 			zbtn.Background(boardColor(pal.BarHover))
 		}
 		zbtn.Children(func() {
-			ui.Text(c, fmt.Sprintf("%d%%", pct)).SingleLine().FontSize(11).FontWeight(500).TextColor(boardColor(pal.Ink2))
+			ui.Text(c, fmt.Sprintf("%d%%", pct)).SingleLine().FontSize(m.zoomFs).FontWeight(500).TextColor(boardColor(pal.Ink2))
 		})
 		zbtn.PopoverMenuButton(func(m *ui.Menu) {
 			if m.Item(l.BoardZoomIn()).Shortcut(ui.Cmd, ui.KeyEqual).Chosen() {
@@ -477,7 +540,7 @@ func (a *shelf) boardNavBar(c *ui.Context, l locales.Messages, pal *editor.Palet
 			b.invalidate()
 		}
 
-		ui.Box(c).Width(1).Height(18).Margin(0, 2, 0, 2).Background(boardColor(pal.Sep))
+		ui.Box(c).Width(1).Height(m.sepH).Margin(0, m.sepMar, 0, m.sepMar).Background(boardColor(pal.Sep))
 
 		more := a.boardNavIconBtn(c, pal, "board-more", boardMoreSymbol, l.BoardMore(), b.moreMenu)
 		more.PopoverMenuButton(func(m *ui.Menu) {
@@ -566,7 +629,14 @@ func (a *shelf) boardNavBar(c *ui.Context, l locales.Messages, pal *editor.Palet
 }
 
 func (a *shelf) boardNavIconBtn(c *ui.Context, pal *editor.Palette, key string, icon *ui.SVG, label string, active bool) ui.Element {
-	btn := ui.Row(c.Key(key)).Size(25, 25).Radius(7).Center().Label(label).Tooltip(label)
+	sz := float32(25)
+	rad := float32(7)
+	if b := a.board; b != nil {
+		m := b.boardChromeLayout()
+		sz = m.navBtn
+		rad = m.navRad - 4
+	}
+	btn := ui.Row(c.Key(key)).Size(sz, sz).Radius(rad).Center().Label(label).Tooltip(label)
 	switch {
 	case active:
 		btn.Background(boardColor(pal.AccentFill))
@@ -687,16 +757,23 @@ func (b *boardUI) paintPaper(p *ui.Painter, r ui.Rect, pal *editor.Palette) {
 	for step < 12 {
 		step *= 2
 	}
-	ox := math.Mod(cam.X*cam.Z, step)
+	step = math.Round(step)
+	ox := math.Round(math.Mod(cam.X*cam.Z, step))
 	if ox < 0 {
 		ox += step
 	}
-	oy := math.Mod(cam.Y*cam.Z, step)
+	if ox >= step {
+		ox -= step
+	}
+	oy := math.Round(math.Mod(cam.Y*cam.Z, step))
 	if oy < 0 {
 		oy += step
 	}
-	startX := float64(r.X) + ox
-	startY := float64(r.Y) + oy
+	if oy >= step {
+		oy -= step
+	}
+	startX := math.Round(float64(r.X)) + ox
+	startY := math.Round(float64(r.Y)) + oy
 	endX := float64(r.X + r.W)
 	endY := float64(r.Y + r.H)
 
@@ -704,23 +781,46 @@ func (b *boardUI) paintPaper(p *ui.Painter, r ui.Rect, pal *editor.Palette) {
 	case doc.PaperDots:
 		dotCol := boardColor(pal.PaperDot)
 		const dotSize = float32(2)
-		for y := startY; y < endY; y += step {
-			for x := startX; x < endX; x += step {
+		for iy := 0; ; iy++ {
+			y := startY + float64(iy)*step
+			if y >= endY {
+				break
+			}
+			for ix := 0; ; ix++ {
+				x := startX + float64(ix)*step
+				if x >= endX {
+					break
+				}
 				p.Fill(ui.Rect{X: float32(x) - dotSize/2, Y: float32(y) - dotSize/2, W: dotSize, H: dotSize}, dotCol, dotSize/2)
 			}
 		}
 	case doc.PaperGrid:
 		lineCol := boardColor(pal.PaperLine)
-		for x := startX; x < endX; x += step {
-			p.Line(float32(x), r.Y, float32(x), r.Y+r.H, 1, lineCol)
+		for ix := 0; ; ix++ {
+			x := startX + float64(ix)*step
+			if x >= endX {
+				break
+			}
+			sx := float32(x) + 0.5
+			p.Line(sx, r.Y, sx, r.Y+r.H, 1, lineCol)
 		}
-		for y := startY; y < endY; y += step {
-			p.Line(r.X, float32(y), r.X+r.W, float32(y), 1, lineCol)
+		for iy := 0; ; iy++ {
+			y := startY + float64(iy)*step
+			if y >= endY {
+				break
+			}
+			sy := float32(y) + 0.5
+			p.Line(r.X, sy, r.X+r.W, sy, 1, lineCol)
 		}
 	case doc.PaperLines:
 		lineCol := boardColor(pal.PaperLine)
-		for y := startY; y < endY; y += step {
-			p.Line(r.X, float32(y), r.X+r.W, float32(y), 1, lineCol)
+		for iy := 0; ; iy++ {
+			y := startY + float64(iy)*step
+			if y >= endY {
+				break
+			}
+			sy := float32(y) + 0.5
+			p.Line(r.X, sy, r.X+r.W, sy, 1, lineCol)
 		}
 	}
 }
@@ -732,7 +832,7 @@ func (a *shelf) boardSubBar(c *ui.Context, l locales.Messages, pal *editor.Palet
 	default:
 		return
 	}
-	wrap := ui.Row(c.Key("board-subbar-wrap")).Absolute().Left(0).Right(0).Bottom(b.boardToolbarBottom() + 52).Justify(ui.Center).PassThrough()
+	wrap := ui.Row(c.Key("board-subbar-wrap")).Absolute().Left(0).Right(0).Bottom(b.boardToolbarBottom() + b.boardToolbarHeight() + 8).Justify(ui.Center).PassThrough()
 	wrap.Children(func() {
 		sub := ui.Row(c.Key("board-subbar")).Height(34).Padding(0, 6, 0, 6).Gap(2).Radius(10).Clip().AlignItems(ui.Center).
 			Background(boardColor(pal.Bar)).Border(0.5, boardColor(pal.Edge)).
@@ -800,18 +900,19 @@ func (b *boardUI) chooseTool(t editor.Tool) {
 
 func (a *shelf) boardToolbar(c *ui.Context, l locales.Messages, pal *editor.Palette) {
 	b := a.board
-	compact, stacked, alignEnd := b.boardChrome()
+	m := b.boardChromeLayout()
+	compact, stacked, alignEnd := m.compact, m.stacked, m.alignEnd
 	wrap := ui.Row(c.Key("board-tools-wrap")).Absolute().Left(0).Right(0).Bottom(b.boardToolbarBottom()).PassThrough()
 	switch {
 	case stacked:
 		wrap.Justify(ui.Center)
 	case alignEnd:
-		wrap.Justify(ui.End).Padding(0, 12, 0, 0)
+		wrap.Justify(ui.End).Padding(0, m.navLeft, 0, 0)
 	default:
 		wrap.Justify(ui.Center)
 	}
 	wrap.Children(func() {
-		bar := ui.Row(c.Key("board-tools")).Height(44).Padding(0, 5, 0, 5).Gap(1).Radius(13).Clip().AlignItems(ui.Center).
+		bar := ui.Row(c.Key("board-tools")).Height(m.barH).Padding(0, m.barPad, 0, m.barPad).Gap(m.barGap).Radius(m.barRad).Clip().AlignItems(ui.Center).
 			Background(boardColor(pal.Bar)).Border(0.5, boardColor(pal.Edge)).
 			Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, 0.28))
 		bar.Children(func() {
@@ -987,13 +1088,16 @@ func (a *shelf) boardToolbar(c *ui.Context, l locales.Messages, pal *editor.Pale
 func (a *shelf) boardToolBtn(c *ui.Context, pal *editor.Palette, key string, icon *ui.SVG, label string, active bool) ui.Element {
 	sz := float32(30)
 	isz := float32(17)
+	rad := float32(7)
 	if b := a.board; b != nil {
-		if compact, _, _ := b.boardChrome(); compact {
-			sz = 26
-			isz = 15
+		m := b.boardChromeLayout()
+		sz = m.toolBtn
+		isz = m.toolIco
+		if m.fullTern {
+			rad = 10
 		}
 	}
-	btn := ui.Row(c.Key(key)).Size(sz, sz).Radius(7).Center().Label(label).Tooltip(label)
+	btn := ui.Row(c.Key(key)).Size(sz, sz).Radius(rad).Center().Label(label).Tooltip(label)
 	switch {
 	case active:
 		btn.Background(boardColor(pal.AccentFill))

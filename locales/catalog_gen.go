@@ -11219,11 +11219,11 @@ func (msgs Messages) BoardPropRouteStraight() string {
 	return Catalog.Format(msgs.locale, "boardPropRouteStraight", nil)
 }
 
-// BoardPropRouteCurve says "弧线"
+// BoardPropRouteCurve says "曲线"
 // in the language the app shows.
 func BoardPropRouteCurve() string { return In(i18n.Locale()).BoardPropRouteCurve() }
 
-// BoardPropRouteCurve says "弧线"
+// BoardPropRouteCurve says "曲线"
 // in the language of msgs.
 func (msgs Messages) BoardPropRouteCurve() string {
 	return Catalog.Format(msgs.locale, "boardPropRouteCurve", nil)

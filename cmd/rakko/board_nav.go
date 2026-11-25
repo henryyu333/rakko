@@ -84,7 +84,7 @@ func (a *shelf) boardBackPill(c *ui.Context, l locales.Messages, pal *editor.Pal
 	if b.ed.ContentVisible() {
 		return
 	}
-	bottom := b.boardToolbarBottom() + 44 + 12
+	bottom := b.boardToolbarBottom() + b.boardToolbarHeight() + 12
 	if b.ed.Tool == editor.ToolDraw || b.ed.Tool == editor.ToolEraser {
 		bottom += 42
 	}
@@ -166,14 +166,15 @@ func (a *shelf) boardMinimap(c *ui.Context, l locales.Messages, pal *editor.Pale
 		mw = float32(180)
 		mh = float32(120)
 	)
-	miniBottom := float32(62)
-	if _, stacked, _ := b.boardChrome(); stacked {
-		miniBottom = b.boardToolbarBottom() + 52
+	m := b.boardChromeLayout()
+	miniBottom := 16 + m.navH + 8
+	if m.stacked {
+		miniBottom = b.boardToolbarBottom() + b.boardToolbarHeight() + 8
 		if b.ed.Tool == editor.ToolDraw || b.ed.Tool == editor.ToolEraser {
 			miniBottom += 42
 		}
 	}
-	mini := ui.Box(c.Key("board-minimap")).Absolute().Left(12).Bottom(miniBottom).Size(mw, mh).
+	mini := ui.Box(c.Key("board-minimap")).Absolute().Left(m.navLeft).Bottom(miniBottom).Size(mw, mh).
 		Radius(10).Clip().
 		Background(boardColor(pal.Bar)).
 		Border(0.5, boardColor(pal.Edge)).

@@ -27,22 +27,26 @@ func (a *shelf) boardPropPanel(c *ui.Context, l locales.Messages, pal *editor.Pa
 		b.propFillTab = false
 	}
 
+	_, stacked, _ := b.boardChrome()
+	reserve := float32(96)
+	if stacked {
+		reserve = 136
+	}
 	maxH := float32(596)
 	if b.stageRect.H > 160 {
-		maxH = max(float32(b.stageRect.H)-96, 220)
+		maxH = max(float32(b.stageRect.H)-reserve, 220)
 	}
 	narrow := b.stageRect.W > 0 && b.stageRect.W < 640
 	pw := float32(216)
 	inset := float32(16)
 	gap := float32(8)
 	if narrow {
-		pw = 180
 		inset = 10
 		gap = 6
 	}
 
 	card := ui.Column(c.Key("board-prop-panel")).
-		Absolute().Top(inset).Right(inset).Width(pw).
+		Absolute().Top(inset).Right(inset).Width(pw).MinWidth(pw).
 		Radius(12).Clip().
 		Background(boardColor(pal.Bar)).
 		Border(0.5, boardColor(pal.Edge)).

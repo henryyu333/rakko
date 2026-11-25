@@ -19,6 +19,7 @@ import (
 	"rakko/internal/board/doc"
 	"rakko/internal/board/editor"
 	"rakko/internal/board/geo"
+	"rakko/locales"
 )
 
 func boardColorRGBA(c editor.Color) color.RGBA {
@@ -543,6 +544,240 @@ func TestBoardExportUsesAtomicWriteOnFailure(t *testing.T) {
 		got, err := os.ReadFile(target)
 		if err != nil || string(got) != "keep-me" {
 			t.Fatalf("export %s modified existing file in 0o555 dir instead of failing atomically: got=%q err=%v", tc.name, got, err)
+		}
+	}
+}
+
+func TestBoardPaperGridLinesUniformPixelAlignment(t *testing.T) {
+	a, b := boardTestShelf(t)
+	view := ui.NewTester(a.boardView, 960, 620)
+	view.SetLocale("zh-Hans")
+
+	for _, dark := range []bool{false, true} {
+		b.setDarkMode(dark)
+		b.ed.SetCam(editor.Camera{X: 13.7, Y: 21.3, Z: 0.87})
+		for _, paper := range []string{doc.PaperGrid, doc.PaperLines} {
+			b.ed.SetPaper(paper)
+			view.Frame()
+			view.Frame()
+			img := view.Image()
+			bg := img.RGBAAt(15, 100)
+
+			// Check horizontal line peak brightness and uniform spacing along x=120 (y=90..490).
+			var hCenters []int
+			var hPeaks []color.RGBA
+			inBand := false
+			var bandMax color.RGBA
+			bandCenter := 0
+			maxDiff := -1
+			dist := func(c1, c2 color.RGBA) int {
+				dr := int(c1.R) - int(c2.R)
+				dg := int(c1.G) - int(c2.G)
+				db := int(c1.B) - int(c2.B)
+				if dr < 0 {
+					dr = -dr
+				}
+				if dg < 0 {
+					dg = -dg
+				}
+				if db < 0 {
+					db = -db
+				}
+				return dr + dg + db
+			}
+			for y := 90; y < 490; y++ {
+				px := img.RGBAAt(120, y)
+				d := dist(px, bg)
+				if d > 2 {
+					if !inBand || d > maxDiff {
+						bandMax = px
+						bandCenter = y
+						maxDiff = d
+					}
+					inBand = true
+				} else if inBand {
+					hPeaks = append(hPeaks, bandMax)
+					hCenters = append(hCenters, bandCenter)
+					inBand = false
+					maxDiff = -1
+				}
+			}
+			if len(hPeaks) < 5 {
+				t.Fatalf("dark=%v paper=%s: found too few horizontal lines (%d)", dark, paper, len(hPeaks))
+			}
+			wantStep := hCenters[1] - hCenters[0]
+			for i := 1; i < len(hPeaks); i++ {
+				if hPeaks[i] != hPeaks[0] {
+					t.Fatalf("dark=%v paper=%s: horizontal line %d peak=%v != line 0 peak=%v (uneven half-pixel alignment)",
+						dark, paper, i, hPeaks[i], hPeaks[0])
+				}
+				if gap := hCenters[i] - hCenters[i-1]; gap != wantStep {
+					t.Fatalf("dark=%v paper=%s: horizontal spacing between line %d and %d = %dpx, want uniform %dpx",
+						dark, paper, i-1, i, gap, wantStep)
+				}
+			}
+
+			if paper == doc.PaperGrid {
+				var vCenters []int
+				var vPeaks []color.RGBA
+				inBand = false
+				maxDiff = -1
+				for x := 90; x < 590; x++ {
+					px := img.RGBAAt(x, 150)
+					d := dist(px, bg)
+					if d > 2 {
+						if !inBand || d > maxDiff {
+							bandMax = px
+							bandCenter = x
+							maxDiff = d
+						}
+						inBand = true
+					} else if inBand {
+						vPeaks = append(vPeaks, bandMax)
+						vCenters = append(vCenters, bandCenter)
+						inBand = false
+						maxDiff = -1
+					}
+				}
+				if len(vPeaks) < 5 {
+					t.Fatalf("dark=%v grid: found too few vertical lines (%d)", dark, len(vPeaks))
+				}
+				wantVStep := vCenters[1] - vCenters[0]
+				for i := 1; i < len(vPeaks); i++ {
+					if vPeaks[i] != vPeaks[0] {
+						t.Fatalf("dark=%v grid: vertical line %d peak=%v != line 0 peak=%v (uneven half-pixel alignment)",
+							dark, i, vPeaks[i], vPeaks[0])
+					}
+					if gap := vCenters[i] - vCenters[i-1]; gap != wantVStep {
+						t.Fatalf("dark=%v grid: vertical spacing between line %d and %d = %dpx, want uniform %dpx",
+							dark, i-1, i, gap, wantVStep)
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestBoardAppearanceTernSizesRouteLabelAndResponsiveChrome(t *testing.T) {
+	if got := locales.In("zh-Hans").BoardPropRouteCurve(); got != "曲线" {
+		t.Fatalf("BoardPropRouteCurve(zh-Hans) = %q, want %q", got, "曲线")
+	}
+	if got := locales.In("en").BoardPropRouteCurve(); got != "Curve" {
+		t.Fatalf("BoardPropRouteCurve(en) = %q, want %q", got, "Curve")
+	}
+
+	a, b := boardTestShelf(t)
+	s := doc.NewShape(doc.NewRecordID("shape"), doc.TypeGeo)
+	s.Parent, s.Geo = b.ed.Page, "rectangle"
+	s.X, s.Y, s.W, s.H = 40, 80, 140, 90
+	s.Fill = "semi"
+	s.Index = doc.FirstIndex
+	b.ed.Doc.Shapes[s.ID] = s
+	b.ed.Select(s.ID)
+
+	l := locales.In("zh-Hans")
+	findRect := func(view *ui.Tester, label string) ui.Rect {
+		t.Helper()
+		r, ok := view.Find(label)
+		if !ok {
+			t.Fatalf("element %q not found", label)
+		}
+		return r
+	}
+	measurePanelWidth := func(img *image.RGBA, stageW int) int {
+		// Property panel is top-right; scan border-transition columns near y=80.
+		y := 80
+		bg := img.RGBAAt(stageW/2, y)
+		var edges []int
+		for x := max(0, stageW-280); x < stageW-4; x++ {
+			c0, c1 := img.RGBAAt(x-1, y), img.RGBAAt(x, y)
+			dr := int(c1.R) - int(c0.R)
+			if dr < 0 {
+				dr = -dr
+			}
+			if dr >= 8 && img.RGBAAt(x, y) != bg {
+				edges = append(edges, x)
+			}
+		}
+		if len(edges) < 2 {
+			return 0
+		}
+		// Outer panel edge begins at first jump and ends at last jump back toward bg.
+		return edges[len(edges)-1] - edges[0]
+	}
+
+	// 1. Wide (1600): Tern spec sizes (nav btn 28, tool btn 34), centered toolbar, >= 216 prop panel.
+	viewWide := ui.NewTester(a.boardView, 1600, 900)
+	viewWide.SetLocale("zh-Hans")
+	viewWide.Frame()
+	viewWide.Frame()
+	if r := findRect(viewWide, l.BoardToolSelect()); r.W != 34 || r.H != 34 {
+		t.Fatalf("w=1600 tool-select = %.0fx%.0f, want 34x34", r.W, r.H)
+	}
+	if r := findRect(viewWide, l.BoardUndo()); r.W != 28 || r.H != 28 {
+		t.Fatalf("w=1600 undo = %.0fx%.0f, want 28x28", r.W, r.H)
+	}
+	if pw := measurePanelWidth(viewWide.Image(), 1600); pw < 216 {
+		t.Fatalf("w=1600 prop panel width = %d, want >= 216", pw)
+	}
+
+	// 2. Default (1040): Tern spec sizes (nav btn 28, tool btn 34), no overlap with nav, >= 216 prop panel.
+	viewDef := ui.NewTester(a.boardView, 1040, 680)
+	viewDef.SetLocale("zh-Hans")
+	viewDef.Frame()
+	viewDef.Frame()
+	selDef := findRect(viewDef, l.BoardToolSelect())
+	moreNavDef := findRect(viewDef, l.BoardMore())
+	if selDef.W != 34 || selDef.H != 34 {
+		t.Fatalf("w=1040 tool-select = %.0fx%.0f, want 34x34", selDef.W, selDef.H)
+	}
+	if r := findRect(viewDef, l.BoardUndo()); r.W != 28 || r.H != 28 {
+		t.Fatalf("w=1040 undo = %.0fx%.0f, want 28x28", r.W, r.H)
+	}
+	if selDef.X < moreNavDef.X+moreNavDef.W+16 {
+		t.Fatalf("w=1040 toolbar overlaps/crowds nav: sel.X=%.1f moreNav.Right=%.1f", selDef.X, moreNavDef.X+moreNavDef.W)
+	}
+	if pw := measurePanelWidth(viewDef.Image(), 1040); pw < 216 {
+		t.Fatalf("w=1040 prop panel width = %d, want >= 216", pw)
+	}
+
+	// 3. Narrowest (460): compact stacked chrome, >= 8px capsule gap between toolbar and nav, >= 216 prop panel.
+	view460 := ui.NewTester(a.boardView, 460, 620)
+	view460.SetLocale("zh-Hans")
+	view460.Frame()
+	view460.Frame()
+	sel460 := findRect(view460, l.BoardToolSelect())
+	undo460 := findRect(view460, l.BoardUndo())
+	// Toolbar btn padding is (44-26)/2 = 9px below sel460; nav btn padding is (38-25)/2 = 6.5px above undo460.
+	barBottomY := sel460.Y + sel460.H + 9
+	navTopY := undo460.Y - 6.5
+	if gap := navTopY - barBottomY; gap < 8 {
+		t.Fatalf("w=460 stacked capsule gap = %.1fpx (< 8px): barBottom=%.1f navTop=%.1f", gap, barBottomY, navTopY)
+	}
+	if pw := measurePanelWidth(view460.Image(), 460); pw < 216 {
+		t.Fatalf("w=460 prop panel width = %d, want >= 216", pw)
+	}
+
+	// Capture 3 widths × dark/light screenshots for visual inspection.
+	for _, tc := range []struct {
+		name string
+		w, h int
+	}{
+		{"460", 460, 620},
+		{"1040", 1040, 680},
+		{"1600", 1600, 900},
+	} {
+		for _, dark := range []bool{true, false} {
+			theme := "dark"
+			if !dark {
+				theme = "light"
+			}
+			b.setDarkMode(dark)
+			v := ui.NewTester(a.boardView, tc.w, tc.h)
+			v.SetLocale("zh-Hans")
+			v.Frame()
+			v.Frame()
+			saveTestShot(t, "board1187-seg4", tc.name+"-"+theme+".png", v.Image())
 		}
 	}
 }
