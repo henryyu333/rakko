@@ -245,7 +245,40 @@ func TestBoardAndNoteWinLive(t *testing.T) {
 
 	winShotDesktop(t, filepath.Join(shotDir, "win-02-board-ctrl-zoom.png"))
 
-	// 3. Export PNG & SVG on Windows.
+	// 3. Maximize / Restore layout & Light/Dark window buttons check, then export PNG & SVG on Windows.
+	var beforeSize, maxSize, restoredSize mygo.Rectangle
+	var vwBefore, vwMax float64
+	runOnMainSync(func() {
+		beforeSize = b.win.Bounds()
+		vwBefore = b.ed.VW
+		b.setDarkMode(false)
+		b.win.Maximize()
+	})
+	time.Sleep(550 * time.Millisecond)
+	runOnMainSync(func() {
+		maxSize = b.win.Bounds()
+		vwMax = b.ed.VW
+	})
+	t.Logf("Windows board maximize: before=%+v (VW=%.0f) -> max=%+v (VW=%.0f)", beforeSize, vwBefore, maxSize, vwMax)
+	if maxSize.Width <= beforeSize.Width || vwMax <= vwBefore {
+		t.Errorf("Windows board maximize did not grow window/viewport")
+	}
+	winShotDesktop(t, filepath.Join(shotDir, "win-04-board-maximized-light.png"))
+
+	runOnMainSync(func() {
+		b.setDarkMode(true)
+		b.win.Unmaximize()
+	})
+	time.Sleep(550 * time.Millisecond)
+	runOnMainSync(func() {
+		restoredSize = b.win.Bounds()
+	})
+	t.Logf("Windows board restored: %+v", restoredSize)
+	if restoredSize.Width >= maxSize.Width {
+		t.Errorf("Windows board unmaximize did not restore width: %d >= %d", restoredSize.Width, maxSize.Width)
+	}
+	winShotDesktop(t, filepath.Join(shotDir, "win-05-board-restored-dark.png"))
+
 	var pngBytes []byte
 	var expW, expH, tiles int
 	var svgOut string

@@ -354,20 +354,35 @@ func (n *noteUI) open() bool {
 			Title: a.noteWindowTitle(), Width: frame.Width, Height: frame.Height,
 			X: frame.X, Y: frame.Y,
 			Hidden: true, BackgroundColor: noteBg, AlwaysOnTop: n.top,
-			TitleBarStyle:     mygo.TitleBarHidden,
-			HideWindowButtons: true,
-			MinWidth:          noteMinW, MinHeight: noteMinH,
+			TitleBarStyle:        mygo.TitleBarHidden,
+			TrafficLightPosition: &mygo.Point{X: 12, Y: 8},
+			DisableFullScreen:    true,
+			MinWidth:             noteMinW, MinHeight: noteMinH,
 			Content: ui.View(a.noteView),
 		})
-		w.OnClose(n.onClose)
-		w.OnBlur(n.onBlur)
-		w.OnResize(func() { n.frame = w.Bounds() })
-		w.OnMove(func() { n.frame = w.Bounds() })
-		platform.ConfigureFramedWindow(w.NativeHandle(), true)
+		if w != nil {
+			w.OnClose(n.onClose)
+			w.OnBlur(n.onBlur)
+			w.OnResize(func() {
+				if !w.IsMinimized() {
+					n.frame = w.Bounds()
+				}
+			})
+			w.OnMove(func() {
+				if !w.IsMinimized() {
+					n.frame = w.Bounds()
+				}
+			})
+			platform.SetWindowAppearance(w.NativeHandle(), true)
+			platform.ConfigureFramedWindow(w.NativeHandle(), true)
+			w.SetWindowButtonsTheme(mygo.ThemeDark)
+		}
 		n.win = w
 		n.booted = false
 	}
-	n.frame = n.win.Bounds()
+	if n.win != nil {
+		n.frame = n.win.Bounds()
+	}
 	noteShow(n.win)
 	noteActivate()
 	noteFocus(n.win)
@@ -405,8 +420,10 @@ func (n *noteUI) close() {
 // the keyboard back to whatever had it before — never hiding this app.
 func (n *noteUI) onClose(*mygo.CloseEvent) {
 	a := n.host
-	n.flush()
 	n.win = nil
+	if err := n.flush(); err != nil && a != nil {
+		a.report(err)
+	}
 	if a.quitting {
 		return
 	}
@@ -545,12 +562,13 @@ func (a *shelf) noteView(c *ui.Context) {
 // the first line is typed.
 func (a *shelf) noteBar(c *ui.Context, l locales.Messages) {
 	n := a.note
+	bar := c.TitleBar()
 	title := note.Title(n.draft)
 	if title == "" {
 		title = l.CardNote()
 	}
-	ui.Row(c.Key("note-bar")).Height(noteBarH).Shrink(0).FillWidth().
-		AlignItems(ui.Center).Padding(0, 8, 0, 12).Gap(2).DragWindow().Children(func() {
+	ui.Row(c.Key("note-bar")).Height(max(noteBarH, bar.Height)).Shrink(0).FillWidth().
+		AlignItems(ui.Center).Padding(0, bar.Right+8, 0, bar.Left+10).Gap(2).DragWindow().Children(func() {
 		ui.Text(c.Key("note-title"), title).SingleLine().FontSize(11.5).FontWeight(600).
 			TextColor(ink2).Grow(1).MinWidth(0)
 		a.noteButton(c, "note-reveal", revealSymbol, osText(l.NoteReveal(), l.NoteRevealWin()), false, func() {
@@ -562,7 +580,6 @@ func (a *shelf) noteBar(c *ui.Context, l locales.Messages) {
 		a.noteButton(c, "note-top", pinSymbol, l.NoteKeepOnTop(), n.top, func() {
 			n.setTop(!n.top)
 		})
-		a.noteButton(c, "note-close", closeSymbol, l.NoteClose(), false, n.close)
 	})
 }
 

@@ -39,10 +39,13 @@ func TestNoteWindowTypesAndCloses(t *testing.T) {
 	if _, ok := view.Find(blank.CardNote()); !ok {
 		t.Fatal("a blank note has no title")
 	}
-	for _, label := range []string{osText(blank.NoteReveal(), blank.NoteRevealWin()), blank.NoteKeepOnTop(), blank.NoteClose()} {
+	for _, label := range []string{osText(blank.NoteReveal(), blank.NoteRevealWin()), blank.NoteKeepOnTop()} {
 		if _, ok := view.Find(label); !ok {
 			t.Fatalf("bar button %q missing", label)
 		}
+	}
+	if _, ok := view.Find(blank.NoteClose()); ok {
+		t.Fatal("self-drawn close button should be removed")
 	}
 
 	// The area took the keyboard on the first draw: typing reaches it.

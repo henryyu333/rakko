@@ -791,6 +791,19 @@ func (b *boardUI) refreshChrome() {
 	}
 }
 
+func (b *boardUI) applyWindowTheme(w *mygo.Window, dark bool) {
+	if w == nil {
+		return
+	}
+	platform.SetWindowAppearance(w.NativeHandle(), dark)
+	boardConfigureWindow(w.NativeHandle(), dark)
+	if dark {
+		w.SetWindowButtonsTheme(mygo.ThemeDark)
+	} else {
+		w.SetWindowButtonsTheme(mygo.ThemeLight)
+	}
+}
+
 func (b *boardUI) syncWindowTheme() {
 	if b.win == nil || b.ed == nil {
 		return
@@ -801,7 +814,7 @@ func (b *boardUI) syncWindowTheme() {
 		bg = boardDarkBg
 	}
 	_ = b.win.SetBackgroundColor(bg)
-	boardConfigureWindow(b.win.NativeHandle(), dark)
+	b.applyWindowTheme(b.win, dark)
 }
 
 func (b *boardUI) setDarkMode(dark bool) {
@@ -882,20 +895,32 @@ func (b *boardUI) open() bool {
 			Title: b.currentTitle(a.appLoc()), Width: frame.Width, Height: frame.Height,
 			X: frame.X, Y: frame.Y,
 			Hidden: true, BackgroundColor: bg, AlwaysOnTop: b.top,
-			TitleBarStyle:     mygo.TitleBarHidden,
-			HideWindowButtons: true,
-			MinWidth:          boardMinW, MinHeight: boardMinH,
+			TitleBarStyle:        mygo.TitleBarHidden,
+			TrafficLightPosition: &mygo.Point{X: 12, Y: 8},
+			MinWidth:             boardMinW, MinHeight: boardMinH,
 			Content: ui.View(a.boardView),
 		})
-		w.OnClose(b.onClose)
-		w.OnBlur(b.onBlur)
-		w.OnResize(func() { b.frame = w.Bounds() })
-		w.OnMove(func() { b.frame = w.Bounds() })
-		boardConfigureWindow(w.NativeHandle(), dark)
+		if w != nil {
+			w.OnClose(b.onClose)
+			w.OnBlur(b.onBlur)
+			w.OnResize(func() {
+				if !w.IsMinimized() && !w.IsFullScreen() {
+					b.frame = w.Bounds()
+				}
+			})
+			w.OnMove(func() {
+				if !w.IsMinimized() && !w.IsFullScreen() {
+					b.frame = w.Bounds()
+				}
+			})
+			b.applyWindowTheme(w, dark)
+		}
 		b.win = w
 		b.canvasFocus = false
 	}
-	b.frame = b.win.Bounds()
+	if b.win != nil {
+		b.frame = b.win.Bounds()
+	}
 	boardShow(b.win)
 	boardActivate()
 	boardFocus(b.win)
@@ -926,8 +951,16 @@ func (b *boardUI) close() {
 
 func (b *boardUI) onClose(*mygo.CloseEvent) {
 	a := b.host
-	_ = b.flush()
 	b.win = nil
+	if b.renaming {
+		b.commitRename()
+	}
+	if b.renamingPage {
+		b.commitPageRename()
+	}
+	if err := b.flush(); err != nil && a != nil {
+		a.report(err)
+	}
 	b.bitmaps = map[doc.ID]*ui.Bitmap{}
 	b.toolMenu = false
 	b.renaming = false

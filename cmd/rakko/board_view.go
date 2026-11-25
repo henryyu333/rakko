@@ -41,6 +41,13 @@ func (a *shelf) boardView(c *ui.Context) {
 	l := loc(c)
 	pal := b.ed.Palette()
 	c.Root().Background(boardColor(pal.Background))
+	barH := float32(0)
+	if !b.focusMode {
+		barH = max(boardBarH, c.TitleBar().Height)
+	}
+	if winW, winH := c.Size(); winW > 0 && winH > 0 {
+		b.stageRect = ui.Rect{X: 0, Y: barH, W: winW, H: max(0, winH-barH)}
+	}
 	ui.Column(c.Key("board-root")).Fill().Children(func() {
 		if !b.focusMode {
 			a.boardBar(c, l, pal)
@@ -57,9 +64,10 @@ func (a *shelf) boardView(c *ui.Context) {
 
 func (a *shelf) boardBar(c *ui.Context, l locales.Messages, pal *editor.Palette) {
 	b := a.board
-	ui.Row(c.Key("board-bar")).Height(boardBarH).Shrink(0).FillWidth().
+	bar := c.TitleBar()
+	ui.Row(c.Key("board-bar")).Height(max(boardBarH, bar.Height)).Shrink(0).FillWidth().
 		Background(boardColor(pal.TopBar)).
-		AlignItems(ui.Center).Padding(0, 8, 0, 10).Gap(4).DragWindow().Children(func() {
+		AlignItems(ui.Center).Padding(0, bar.Right+8, 0, bar.Left+10).Gap(4).DragWindow().Children(func() {
 		if b.renaming {
 			in := ui.TextInputBase(c.Key("board-rename"), &b.renameDraft).
 				Width(180).Height(22).Padding(2, 6, 2, 6).Radius(6).
@@ -107,7 +115,6 @@ func (a *shelf) boardBar(c *ui.Context, l locales.Messages, pal *editor.Palette)
 		a.boardBarButton(c, pal, "board-top", pinSymbol, l.BoardKeepOnTop(), b.top, func() {
 			b.setTop(!b.top)
 		})
-		a.boardBarButton(c, pal, "board-close", closeSymbol, l.BoardClose(), false, b.close)
 	})
 }
 
