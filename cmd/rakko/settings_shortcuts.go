@@ -298,6 +298,26 @@ func (a *shelf) restoreShortcuts() {
 	}
 }
 
+// clearShortcut unbinds the kind's shortcut from its row's ×: the keys are
+// released, settings.json loses the value and the row reads 未设置. While
+// the row records, the same × is the recorder's ⌫: finishShortcut("") ends
+// the recording as well as clearing.
+func (a *shelf) clearShortcut(k shortcutKind) {
+	if a.settingsRecording == k {
+		a.finishShortcut("")
+		return
+	}
+	if a.settingsRecording != shortcutNone {
+		return
+	}
+	err := a.applyShortcut(k, "")
+	delete(a.shortcutBusy, k)
+	if err != nil {
+		a.shortcutBusy[k] = true
+	}
+	a.repaintSettings()
+}
+
 // settingsBlur ends a recording when the Settings window stops being key —
 // the user switched to another app or window: the suspended shortcuts go
 // back at once instead of staying dead while the user works elsewhere.
@@ -438,7 +458,12 @@ func (a *shelf) shortcutCaptureInput(ev ui.InputEvent) bool {
 	case ui.InputText, ui.InputCompose:
 		return true
 	case ui.InputPointerDown:
-		// A click outside the keycaps cancels, as Esc does.
+		// The recording row's × clears the shortcut; a click anywhere else
+		// cancels, as Esc does.
+		if a.shortcutClearRect.Contains(ev.X, ev.Y) {
+			a.finishShortcut("")
+			return true
+		}
 		a.cancelShortcutRecording()
 		return true
 	default:

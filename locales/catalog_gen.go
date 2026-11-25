@@ -8105,14 +8105,34 @@ func (msgs Messages) SettingsShortcutCancel() string {
 	return Catalog.Format(msgs.locale, "settingsShortcutCancel", nil)
 }
 
-// SettingsShortcutRecording says "按下新的组合键"
+// SettingsShortcutRecording says "按下组合键"
 // in the language the app shows.
 func SettingsShortcutRecording() string { return In(i18n.Locale()).SettingsShortcutRecording() }
 
-// SettingsShortcutRecording says "按下新的组合键"
+// SettingsShortcutRecording says "按下组合键"
 // in the language of msgs.
 func (msgs Messages) SettingsShortcutRecording() string {
 	return Catalog.Format(msgs.locale, "settingsShortcutRecording", nil)
+}
+
+// SettingsShortcutClear says "取消绑定"
+// in the language the app shows.
+func SettingsShortcutClear() string { return In(i18n.Locale()).SettingsShortcutClear() }
+
+// SettingsShortcutClear says "取消绑定"
+// in the language of msgs.
+func (msgs Messages) SettingsShortcutClear() string {
+	return Catalog.Format(msgs.locale, "settingsShortcutClear", nil)
+}
+
+// SettingsShortcutClearHint says "⌫ 清除"
+// in the language the app shows.
+func SettingsShortcutClearHint() string { return In(i18n.Locale()).SettingsShortcutClearHint() }
+
+// SettingsShortcutClearHint says "⌫ 清除"
+// in the language of msgs.
+func (msgs Messages) SettingsShortcutClearHint() string {
+	return Catalog.Format(msgs.locale, "settingsShortcutClearHint", nil)
 }
 
 // SettingsShortcutBusy says "已被占用，保留原来的组合"

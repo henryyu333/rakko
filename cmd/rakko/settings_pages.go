@@ -754,6 +754,12 @@ func (a *shelf) settingsShortcutRow(c *ui.Context, kind shortcutKind, label, cap
 		rowCaption, captionColor = l.SettingsShortcutBusy(), danger
 	}
 	recording := a.settingsRecording == kind
+	if recording {
+		a.shortcutClearRect = ui.Rect{}
+	}
+	acc := a.shortcutAcc(kind)
+	canClear := acc != ""
+	cleared := false
 	row := ui.ButtonBase(c.Key(fmt.Sprintf("sc-%d", kind))).FillWidth().Radius(0).
 		MinHeight(settingsRowMinHeight).AlignItems(ui.Center).Justify(ui.Start).
 		Gap(14).Padding(settingsRowPadY, settingsRowPadX).Label(label)
@@ -766,14 +772,33 @@ func (a *shelf) settingsShortcutRow(c *ui.Context, kind shortcutKind, label, cap
 	row.Children(func() {
 		settingsRowTextColor(c, label, rowCaption, captionColor)
 		ui.Row(c.Key("keys")).AlignItems(ui.Center).Gap(4).Shrink(0).Children(func() {
+			// The clear button sits left of the keycaps, so the right edge
+			// of every row stays put whether or not it shows.
+			slot := ui.Box(c.Key("clear-slot")).Size(22, 22).Shrink(0).Center()
+			slot.Children(func() {
+				switch {
+				case recording && canClear:
+					// The key-capture layer holds the pointer while a row
+					// records; its hit test answers this box.
+					a.shortcutClearRect = settingsShortcutClearButton(c, "clear-rec", l.SettingsShortcutClear(), false).Bounds()
+				case !recording && canClear && row.Hovered():
+					if settingsShortcutClearButton(c, "clear", l.SettingsShortcutClear(), true).Clicked() {
+						cleared = true
+					}
+				}
+			})
 			if recording {
 				ui.Box(c.Key("rec")).Height(24).Radius(6).Padding(0, 10, 0, 10).
 					Border(1.5, accent).Center().Children(func() {
-					settingsText(c, l.SettingsShortcutRecording(), 11.5).SingleLine().TextColor(accent)
+					ui.Row(c.Key("rec-text")).AlignItems(ui.Center).Gap(6).Children(func() {
+						settingsText(c, l.SettingsShortcutRecording(), 11.5).SingleLine().TextColor(accent)
+						settingsText(c, l.SettingsShortcutClearHint(), 11).SingleLine().
+							TextColor(ui.RGBA(255, 255, 255, 0.42))
+					})
 				})
 				return
 			}
-			if tokens, ok := shortcutTokens(a.shortcutAcc(kind)); ok {
+			if tokens, ok := shortcutTokens(acc); ok {
 				for i, token := range tokens {
 					settingsKeycap(c, fmt.Sprintf("k%d", i), token, false)
 				}
@@ -785,9 +810,30 @@ func (a *shelf) settingsShortcutRow(c *ui.Context, kind shortcutKind, label, cap
 			})
 		})
 	})
+	if cleared {
+		a.clearShortcut(kind)
+		return
+	}
 	if row.Clicked() {
 		a.startShortcutRecording(kind)
 	}
+}
+
+// settingsShortcutClearButton is the 22pt × that unbinds a shortcut. live
+// is false while its row records: the key-capture layer owns the pointer
+// then, and answers the box a.shortcutClearRect names.
+func settingsShortcutClearButton(c *ui.Context, key, label string, live bool) ui.Element {
+	b := ui.ButtonBase(c.Key(key)).Size(22, 22).Radius(6).Center().Shrink(0).Label(label)
+	b.IgnoreInput(!live)
+	fg := settingsInk3
+	if live && b.Hovered() {
+		b.Background(settingsCtlHoverBg)
+		fg = ink
+	}
+	b.Children(func() {
+		ui.Icon(c.Key("x"), closeSymbol).Size(12, 12).TextColor(fg)
+	})
+	return b
 }
 
 func settingsConfirmButton(c *ui.Context, key, label string, primary bool, fn func()) ui.Element {

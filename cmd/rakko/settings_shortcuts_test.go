@@ -1178,3 +1178,118 @@ func TestSettingsConfirmButtonNeedsItsOwnRelease(t *testing.T) {
 		t.Fatalf("a release on the button chose it %d times, want once", fired)
 	}
 }
+
+// The row's × unbinds the shortcut without starting a recording: the keys
+// leave the registry, settings.json holds "", and the other shortcuts stay.
+func TestShortcutClearButtonUnbinds(t *testing.T) {
+	a, view, f := shortcutShelf(t)
+	l := locales.In("")
+	openSettingsPage(t, view, "快捷键")
+
+	// No pointer on the row: the × is not built, so nothing to click.
+	view.Move(4, settingsHeight/2)
+	view.Frame()
+	if _, ok := view.Find(l.SettingsShortcutClear()); ok {
+		t.Fatal("the × showed without hovering the row")
+	}
+
+	row, ok := view.Find("显示 / 收起")
+	if !ok {
+		t.Fatalf("the toggle row did not draw: %v", view.Texts())
+	}
+	view.Move(row.X+row.W/2, row.Y+row.H/2)
+	view.Frame()
+	if _, ok := view.Find(l.SettingsShortcutClear()); !ok {
+		t.Fatalf("hovering the set row did not show ×: %v", view.Texts())
+	}
+	if err := view.Click(l.SettingsShortcutClear()); err != nil {
+		t.Fatal(err)
+	}
+	view.Frame()
+	if a.settingsRecording != shortcutNone {
+		t.Fatal("the × started a recording instead of clearing")
+	}
+	if got := a.settings.Shortcuts.Toggle; got != "" {
+		t.Fatalf("cleared toggle = %q, want empty", got)
+	}
+	if f.has(settings.DefaultShortcutToggle) {
+		t.Fatalf("clearing left the keys registered: %v", f.regs)
+	}
+	if !f.has(settings.DefaultShortcutClipboard) || !f.has(settings.DefaultShortcutCapture) {
+		t.Fatalf("clearing took the other shortcuts down: %v", f.regs)
+	}
+	saved, err := settings.Load(a.dataDir)
+	if err != nil || saved.Shortcuts.Toggle != "" {
+		t.Fatalf("settings.json toggle = %q, %v", saved.Shortcuts.Toggle, err)
+	}
+}
+
+// While a row records, the capture layer owns the pointer: its hit test
+// clears the row's shortcut (not cancel the recording), so the saved value
+// and the registry lose the keys.
+func TestShortcutClearWhileRecording(t *testing.T) {
+	a, view, f := shortcutShelf(t)
+	l := locales.In("")
+	openSettingsPage(t, view, "快捷键")
+	if err := view.Click("显示 / 收起"); err != nil {
+		t.Fatal(err)
+	}
+	view.Frame()
+	if a.settingsRecording != shortcutToggle {
+		t.Fatalf("the row did not start recording: %v", a.settingsRecording)
+	}
+	if !view.HasText(l.SettingsShortcutRecording()) || !view.HasText(l.SettingsShortcutClearHint()) {
+		t.Fatalf("the recording row lacks its hint: %v", view.Texts())
+	}
+	clear, ok := view.Find(l.SettingsShortcutClear())
+	if !ok {
+		t.Fatalf("the recording row did not show ×: %v", view.Texts())
+	}
+	view.ClickAt(clear.X+clear.W/2, clear.Y+clear.H/2)
+	view.Frame()
+	if a.settingsRecording != shortcutNone {
+		t.Fatal("the × left the row recording")
+	}
+	if got := a.settings.Shortcuts.Toggle; got != "" {
+		t.Fatalf("the × did not clear the saved toggle: %q", got)
+	}
+	if f.has(settings.DefaultShortcutToggle) {
+		t.Fatalf("the × left the keys registered: %v", f.regs)
+	}
+	saved, err := settings.Load(a.dataDir)
+	if err != nil || saved.Shortcuts.Toggle != "" {
+		t.Fatalf("settings.json toggle = %q, %v", saved.Shortcuts.Toggle, err)
+	}
+}
+
+// Unbinding every default shortcut writes "" for each: a reload keeps them
+// empty instead of reviving the defaults, and no key stays registered.
+func TestShortcutClearAllDefaultsPersist(t *testing.T) {
+	a, _, f := shortcutShelf(t)
+	defaults := map[shortcutKind]string{
+		shortcutToggle:     settings.DefaultShortcutToggle,
+		shortcutClipboard:  settings.DefaultShortcutClipboard,
+		shortcutCapture:    settings.DefaultShortcutCapture,
+		shortcutScreenshot: settings.DefaultShortcutScreenshot,
+	}
+	for k := range defaults {
+		a.clearShortcut(k)
+	}
+	if a.settings.Shortcuts.Toggle != "" || a.settings.Shortcuts.Clipboard != "" ||
+		a.settings.Shortcuts.Capture != "" || a.settings.Shortcuts.Screenshot != "" {
+		t.Fatalf("cleared shortcuts returned to defaults: %+v", a.settings.Shortcuts)
+	}
+	for k, acc := range defaults {
+		if f.has(acc) {
+			t.Errorf("kind %d still holds %q: %v", k, acc, f.regs)
+		}
+	}
+	saved, err := settings.Load(a.dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.Shortcuts.Toggle != "" || saved.Shortcuts.Clipboard != "" ||
+		saved.Shortcuts.Capture != "" || saved.Shortcuts.Screenshot != "" {
+		t.Fatalf("a reload revived cleared shortcuts: %+v", saved.Shortcuts)
+	}
+}

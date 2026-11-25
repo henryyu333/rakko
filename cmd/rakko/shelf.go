@@ -131,6 +131,7 @@ type shelf struct {
 	settingsRecording                                           shortcutKind            // the shortcut row recording keys, shortcutNone when idle
 	shortcutConfirm                                             *shortcutConfirmation   // a bare text key waiting for the user's confirmation
 	shortcutBusy                                                map[shortcutKind]bool   // shortcuts the system refused
+	shortcutClearRect                                           ui.Rect                 // window box of the recording row's × (capture layer hit test)
 	shortcutReg                                                 map[shortcutKind]string // what the system holds per shortcut, "" for none
 	shortcutsSuspended                                          bool                    // a recording released the shortcuts; restore them after
 	aiQuotaEditTool                                             string                  // tool currently editing a pasted API key in Settings
