@@ -711,30 +711,41 @@ func TestBoardAppearanceTernSizesRouteLabelAndResponsiveChrome(t *testing.T) {
 	viewWide.SetLocale("zh-Hans")
 	viewWide.Frame()
 	viewWide.Frame()
-	if r := findRect(viewWide, l.BoardToolSelect()); r.W != 34 || r.H != 34 {
-		t.Fatalf("w=1600 tool-select = %.0fx%.0f, want 34x34", r.W, r.H)
+	selWide := findRect(viewWide, l.BoardToolSelect())
+	lockWide := findRect(viewWide, l.BoardKeepTool())
+	if selWide.W != 34 || selWide.H != 34 {
+		t.Fatalf("w=1600 tool-select = %.0fx%.0f, want 34x34", selWide.W, selWide.H)
 	}
 	if r := findRect(viewWide, l.BoardUndo()); r.W != 28 || r.H != 28 {
 		t.Fatalf("w=1600 undo = %.0fx%.0f, want 28x28", r.W, r.H)
+	}
+	wideCenter := (selWide.X + lockWide.X + lockWide.W) / 2
+	if math.Abs(float64(wideCenter-800)) > 8 {
+		t.Fatalf("w=1600 toolbar not centered: center=%.1f want ~800", wideCenter)
 	}
 	if pw := measurePanelWidth(viewWide.Image(), 1600); pw < 216 {
 		t.Fatalf("w=1600 prop panel width = %d, want >= 216", pw)
 	}
 
-	// 2. Default (1040): Tern spec sizes (nav btn 28, tool btn 34), no overlap with nav, >= 216 prop panel.
+	// 2. Default (1040): keep 1.18.6 centered slim layout (nav btn 25, tool btn 30) clearing nav, >= 216 prop panel.
 	viewDef := ui.NewTester(a.boardView, 1040, 680)
 	viewDef.SetLocale("zh-Hans")
 	viewDef.Frame()
 	viewDef.Frame()
 	selDef := findRect(viewDef, l.BoardToolSelect())
+	lockDef := findRect(viewDef, l.BoardKeepTool())
 	moreNavDef := findRect(viewDef, l.BoardMore())
-	if selDef.W != 34 || selDef.H != 34 {
-		t.Fatalf("w=1040 tool-select = %.0fx%.0f, want 34x34", selDef.W, selDef.H)
+	if selDef.W != 30 || selDef.H != 30 {
+		t.Fatalf("w=1040 tool-select = %.0fx%.0f, want 30x30", selDef.W, selDef.H)
 	}
-	if r := findRect(viewDef, l.BoardUndo()); r.W != 28 || r.H != 28 {
-		t.Fatalf("w=1040 undo = %.0fx%.0f, want 28x28", r.W, r.H)
+	if r := findRect(viewDef, l.BoardUndo()); r.W != 25 || r.H != 25 {
+		t.Fatalf("w=1040 undo = %.0fx%.0f, want 25x25", r.W, r.H)
 	}
-	if selDef.X < moreNavDef.X+moreNavDef.W+16 {
+	defCenter := (selDef.X + lockDef.X + lockDef.W) / 2
+	if math.Abs(float64(defCenter-520)) > 8 {
+		t.Fatalf("w=1040 toolbar not centered: center=%.1f want ~520", defCenter)
+	}
+	if selDef.X < moreNavDef.X+moreNavDef.W+8 {
 		t.Fatalf("w=1040 toolbar overlaps/crowds nav: sel.X=%.1f moreNav.Right=%.1f", selDef.X, moreNavDef.X+moreNavDef.W)
 	}
 	if pw := measurePanelWidth(viewDef.Image(), 1040); pw < 216 {

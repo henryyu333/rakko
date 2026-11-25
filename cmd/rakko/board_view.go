@@ -384,8 +384,8 @@ type boardChromeLayout struct {
 }
 
 // boardChromeLayout picks the Tern spec dimensions (48/34 toolbar, 40/28 nav)
-// whenever the stage can hold both side by side without overlapping, falling
-// back to slim/compact sizes on narrower windows and stacking below 640px.
+// only when the centered full toolbar clears the nav without overlapping,
+// preserving the centered compact 1040 layout and falling back further below.
 func (b *boardUI) boardChromeLayout() boardChromeLayout {
 	w := b.stageRect.W
 	full := boardChromeLayout{
@@ -402,10 +402,9 @@ func (b *boardUI) boardChromeLayout() boardChromeLayout {
 	switch {
 	case w <= 0 || w >= 1220:
 		return full
-	case w >= 940:
-		full.alignEnd = true
-		return full
-	case w >= 820:
+	case w >= 1030:
+		return slim
+	case w >= 800:
 		slim.alignEnd = true
 		return slim
 	case w >= 640:
