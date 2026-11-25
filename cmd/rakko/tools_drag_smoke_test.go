@@ -102,11 +102,6 @@ func requireOwnMouseTarget(t *testing.T, x, y float64) {
 	if !insideRect(p, d.WorkArea) || p.Y < d.WorkArea.Y+2 {
 		t.Fatalf("refusing mouse event outside the work area: %+v", p)
 	}
-	var hit int
-	onMain(func() {
-		primary := mygo.Screen.PrimaryDisplay()
-		hit = platform.WindowAtPoint(x, y, float64(primary.Bounds.Y+primary.Bounds.Height))
-	})
 	// The notch shell takes the mouse only while the pointer is on it, so
 	// WindowServer's answer depends on where the user left the cursor. The
 	// caller is about to click this test-window point: prove the point is
@@ -114,28 +109,42 @@ func requireOwnMouseTarget(t *testing.T, x, y float64) {
 	// does), and give the gate's 10 ms poll a beat to re-ask before judging
 	// the native target. Without the move a still pointer keeps the shell
 	// click-through and the click would land on whatever is below.
-	insideOwnFrame := false
-	for _, w := range ownSmokeWindows(t) {
-		if insideRect(p, w.Frame) {
-			insideOwnFrame = true
-			break
+	//
+	// A pin window or a peek pill that just appeared can trail the frame
+	// that placed it by a pass under a loaded suite, so the whole ask is
+	// repeated for up to two seconds, nudging the pointer each try; the
+	// final requirement is unchanged, the event must land on our window.
+	deadline := time.Now().Add(2 * time.Second)
+	var hit int
+	for {
+		insideOwnFrame := false
+		for _, w := range ownSmokeWindows(t) {
+			if insideRect(p, w.Frame) {
+				insideOwnFrame = true
+				break
+			}
 		}
-	}
-	if !insideOwnFrame {
-		t.Fatalf("refusing mouse event at %+v: point is outside every test window", p)
-	}
-	hidMoveTo(t, x, y)
-	time.Sleep(60 * time.Millisecond)
-	onMain(func() {
-		primary := mygo.Screen.PrimaryDisplay()
-		hit = platform.WindowAtPoint(x, y, float64(primary.Bounds.Y+primary.Bounds.Height))
-	})
-	for _, w := range ownSmokeWindows(t) {
-		if w.ID == hit && w.Onscreen && insideRect(p, w.Frame) {
-			return
+		if insideOwnFrame {
+			hidMoveTo(t, x, y)
+			time.Sleep(60 * time.Millisecond)
+			onMain(func() {
+				primary := mygo.Screen.PrimaryDisplay()
+				hit = platform.WindowAtPoint(x, y, float64(primary.Bounds.Y+primary.Bounds.Height))
+			})
+			for _, w := range ownSmokeWindows(t) {
+				if w.ID == hit && w.Onscreen && insideRect(p, w.Frame) {
+					return
+				}
+			}
 		}
+		if time.Now().After(deadline) {
+			if !insideOwnFrame {
+				t.Fatalf("refusing mouse event at %+v: point is outside every test window", p)
+			}
+			t.Fatalf("refusing mouse event at %+v: native target %d is not an onscreen test window", p, hit)
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
-	t.Fatalf("refusing mouse event at %+v: native target %d is not an onscreen test window", p, hit)
 }
 
 // warpPointerTo moves the real cursor, the same call clickAt makes, so a
