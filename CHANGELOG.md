@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.18.7
+
+- **白板文字看得清**：图形选「实心」填充、填充色和描边色相同时，里面的文字会自动换成反色，不再和底色混在一起看不见；箭头标签和导出的 PNG / SVG 也一样。
+- **白板画质**：画板上的形状很多时，不再把整页的手绘笔触一起变成等粗的线；现在只把最占资源的少数线条简化，钢笔笔锋尽量保留。形状很多的画板上缩放和拖动也更顺。
+- **白板擦除**：用画笔来回涂抹擦除时，只删真正划到的那几笔，不再把它所在的整个编组一起删掉。
+- **白板外观**：窗口够宽时，底部工具栏和左下导航用更大的尺寸；很窄的窗口里两者上下排开，不再挤在一起；属性面板宽度统一；方格和横线纸面的线条粗细一致；箭头走线选项「弧线」改叫「曲线」。
+- **白板存储更稳**：删除白板、导出覆盖旧文件、用记事本另存过的白板文件、断电后留下的临时文件，这几种情况现在都能正确处理；白板里删掉的图片在下次打开后会从白板文件里清掉，导出的白板文件也不再夹带它们。
+- **修复**：删除白板或页面的确认框可以按 Esc 取消。
+
+### English
+
+- **Readable whiteboard text**: when a shape uses a solid fill in the same color as its outline, its text switches to the contrasting color instead of disappearing into the fill; arrow labels and PNG / SVG exports follow suit.
+- **Whiteboard drawing quality**: a board crowded with shapes no longer flattens every freehand stroke on the page into a plain line. Only the few heaviest lines are simplified and pen strokes keep their shape, and zooming and panning busy boards is smoother.
+- **Whiteboard scribble erase**: scribbling over strokes with the pen now erases only the strokes you cross, not the whole group they belong to.
+- **Whiteboard look**: on wide windows the bottom toolbar and the navigation pill are larger; on very narrow windows they stack instead of touching; the properties panel has one width; grid and lined paper draw every line at the same weight; the arrow route option is now called Curve.
+- **Safer whiteboard files**: deleting a board, exporting over an old file, opening a board saved by Notepad and cleaning up after a power cut are all handled properly now. Pictures you deleted from a board are dropped from its file the next time it opens, and board exports no longer carry them.
+- **Fixes**: the delete board / delete page confirmation closes with Esc.
+
 ## 1.18.6
 
 - **白板**：工具页新增「白板」卡片，打开一块独立窗口里的无限画布。有画笔、荧光笔、橡皮（整个对象 / 局部擦除）、激光笔、二十多种形状、能连在图形上的箭头、文字、便签、框容器和图片；手绘、干净、单色三种风格，点阵、方格、横线、空白四种纸面，深色和浅色主题。支持多块白板、多个页面、编组、对齐、锁定、裁切图片和小地图；可以导出 PNG、SVG 或白板文件，选中内容能直接拖出窗口。停手就自动保存，写盘在后台进行。也可以在搜索条里选「新建白板」，或在「设置 → 快捷键」里设快捷键。
