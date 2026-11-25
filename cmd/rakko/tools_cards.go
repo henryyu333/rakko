@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"math"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -65,7 +64,7 @@ type toolCardDef struct {
 // Card glyphs added for the tool page; the action glyphs come from the
 // drop zone's set (dropactions.go) so the same action reads alike.
 var (
-	toolsNavSymbol = symbol(`<rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="16" height="7" rx="2"/>`)
+	toolsNavSymbol = symbol(`<rect x="3.5" y="8" width="17" height="11.5" rx="2"/><path d="M9 8V6.5A1.5 1.5 0 0 1 10.5 5h3A1.5 1.5 0 0 1 15 6.5V8M3.5 13h17"/><path d="M10.5 12v2.5h3V12"/>`)
 	cupSymbol      = symbol(`<path d="M5 9h11v5a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5z"/><path d="M16 11h1.5a2.5 2.5 0 0 1 0 5H16M8 3v3M11 3v3M14 3v3"/>`)
 	plusSymbol     = symbol(`<path d="M12 5v14M5 12h14"/>`)
 	pencilSymbol   = symbol(`<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 7l4 4"/>`)
@@ -95,8 +94,6 @@ func toolCatalog() []toolCardDef {
 	return append(defs,
 		toolCardDef{id: "playing", kind: cardWidget, title: "音乐", icon: musicSymbol, span: 2, rows: 2, accepts: never, available: playingAvailable},
 		toolCardDef{id: "awake", kind: cardWidget, title: "保持唤醒", icon: cupSymbol, span: 1, variableSpan: true, accepts: never, available: always},
-		toolCardDef{id: "recent", kind: cardWidget, title: "最近文件", icon: recentSymbol, span: 2, accepts: never, available: always},
-		toolCardDef{id: "clip", kind: cardWidget, title: "剪贴板最新", icon: clipNavSymbol, span: 2, accepts: never, available: always},
 		toolCardDef{id: "note", kind: cardWidget, title: "便利贴", icon: noteSymbol, span: 1, variableSpan: true, accepts: never, available: always},
 		toolCardDef{id: "board", kind: cardWidget, title: "白板", icon: boardSymbol, span: 1, variableSpan: true, accepts: never, available: always},
 		toolCardDef{id: "usage", kind: cardWidget, title: "AI 用量", icon: gaugeSymbol, span: 1, accepts: never, available: usageAvailable},
@@ -166,10 +163,6 @@ func (d *toolCardDef) name(l locales.Messages) string {
 		return l.Music()
 	case "awake":
 		return l.KeepAwake()
-	case "recent":
-		return l.RecentFiles()
-	case "clip":
-		return l.LatestClip()
 	case "note":
 		return l.CardNote()
 	case "board":
@@ -392,10 +385,6 @@ func (a *shelf) toolCardBody(c *ui.Context, card ui.Element, def *toolCardDef, p
 		a.toolPlayingBody(c, card, span, surf)
 	case "awake":
 		a.toolAwakeBody(c, card, span, rows, surf)
-	case "recent":
-		a.toolRecentBody(c, card, span, surf)
-	case "clip":
-		a.toolClipBody(c, card, span, surf)
 	case "note":
 		a.noteBody(c, card, span, surf)
 	case "board":
@@ -567,19 +556,14 @@ func (a *shelf) runToolCard(id string) bool {
 	case "shot":
 		a.startScreenshot()
 		return true
-	case "playing", "recent":
-		return true // the card acts only through its own controls/thumbs
+	case "playing":
+		return true // the card acts only through its own controls
 	case "awake":
 		if a.awake == nil {
 			return false
 		}
 		a.toggleAwake()
 		return true
-	case "clip":
-		if it, ok := a.latestClipboardItem(); ok {
-			return a.copyText(it.Text)
-		}
-		return false
 	case "note":
 		return a.toggleNote()
 	case "board":
@@ -686,33 +670,6 @@ func (a *shelf) toolCardTargets(id string) []store.Item {
 		}
 	}
 	return out
-}
-
-// clipboardHistory is the clipboard page's list with no search: every
-// capture the page shows, pinned first. A capture hidden from the page
-// (OffClip) lives on the tray only, so the card does not surface it.
-func (a *shelf) clipboardHistory() []store.Item {
-	if a.store == nil {
-		return nil
-	}
-	visible := make([]store.Item, 0, len(a.store.Items))
-	for _, it := range a.store.Items {
-		if it.Source != store.SourceClipboard || it.OffClip {
-			continue
-		}
-		visible = append(visible, it)
-	}
-	return clipboardOrder(visible)
-}
-
-// latestClipboardItem is the newest clipboard capture (pinned first,
-// like the clipboard page): the 剪贴板最新 card's payload.
-func (a *shelf) latestClipboardItem() (store.Item, bool) {
-	items := a.clipboardHistory()
-	if len(items) == 0 {
-		return store.Item{}, false
-	}
-	return items[0], true
 }
 
 // awakeHero is the keep-awake main value: the time left on a timed hold,
@@ -851,130 +808,6 @@ func (a *shelf) awakeChips(c *ui.Context, card ui.Element, m *awakeModule, now t
 				}
 			})
 		})
-
-	})
-}
-
-// toolRecentBody is the 最近文件 widget (v2 §3): the header row, then a
-// row of the five newest tray thumbnails. The 1 × 1 form keeps the glyph
-// and two thumbnails, with the count in the corner.
-func (a *shelf) toolRecentBody(c *ui.Context, card ui.Element, span int, surf toolCardSurface) {
-	card.Children(func() {
-		items := a.itemsFor(pageTray)
-		wide := span > 1 || surf == cardDesktop
-		w := cardW(layout.Card{ID: "recent", Span: span}, surf)
-		if wide {
-			top := a.cardTop(c, card, "recent-top")
-			top.Children(func() {
-				a.cardGlyphLead(c, card, "recent-lead", recentSymbol, 18, 18, ink2)
-				fitText(c, loc(c).RecentFiles(), 12, 600, w-2*cardPad-25).TextColor(ink2)
-			})
-			row := ui.Row(c.Key("recent-thumbs")).Absolute().Left(cardPad).Right(cardPad).
-				Bottom(cardPad).Height(30).Gap(6).AlignItems(ui.Center)
-			row.Children(func() {
-				show := items[:min(5, len(items))]
-				for _, it := range show {
-					a.recentThumbAt(c, it, 30)
-				}
-			})
-			return
-		}
-		a.cardGlyphLead(c, card, "recent-lead", recentSymbol, 18, 18, ink2).
-			Absolute().Left(cardPad).Top(cardPad)
-		if len(items) > 0 {
-			ui.Text(c, strconv.Itoa(len(items))).SingleLine().FontSize(10.5).FontWeight(600).
-				TextColor(ink3).Absolute().Right(cardPad).Top(cardPad)
-		}
-		row := ui.Row(c.Key("recent-thumbs")).Absolute().Left(cardPad).Bottom(cardPad).
-			Height(30).Gap(4).AlignItems(ui.Center)
-		row.Children(func() {
-			for _, it := range items[:min(2, len(items))] {
-				a.recentThumbAt(c, it, 30)
-			}
-		})
-
-	})
-}
-
-// recentThumbAt draws a tray file thumbnail at size (the home canvas
-// uses 24/26pt thumbs, the card rows 30).
-func (a *shelf) recentThumbAt(c *ui.Context, item store.Item, size float32) {
-	l := loc(c)
-	rad := float32(8)
-	if size == 30 {
-		rad = 7
-	}
-	thumb := ui.Row(c.Key(fmt.Sprintf("recent-%s-%g", item.ID, size))).Size(size, size).Radius(rad).Center().Clip().
-		Label(itemTitleShown(l, c, item))
-	if !item.Missing {
-		thumb.HandleInput(func(ev ui.InputEvent) bool {
-			// The drag starts on the thumbnail itself: let the card's
-			// press handler take the down and dragMove never sees this
-			// DragDataFrom.
-			return ev.Button == 0 && ev.Kind >= ui.InputPointerDown && ev.Kind <= ui.InputPointerMove
-		})
-		thumb.DragDataFrom(func() transfer.Data {
-			a.beginOwnDrag()
-			a.takeServiceOwnership()
-			if a.win != nil {
-				a.win.Invalidate()
-			}
-			a.dragOutIDs = nil // a widget card is not the tray page: no removal
-			return a.dragOut(item)
-		}, transfer.DragOptions{Operations: transfer.Copy, Done: a.completed})
-	}
-	if b := a.thumbnail(item); b != nil {
-		thumb.Children(func() {
-			ui.Image(c.Key("bmp"), b).Size(size, size).Fit(ui.Cover)
-		})
-	} else {
-		thumb.Background(fill2).Children(func() {
-			ui.Icon(c, fileSymbol).Size(size*0.45, size*0.45).TextColor(ink3)
-		})
-	}
-}
-
-// toolClipBody is the 剪贴板最新 widget (v2 §3): the header row and the
-// newest capture, or — in 1 × 1 — the capture alone under the glyph.
-func (a *shelf) toolClipBody(c *ui.Context, card ui.Element, span int, surf toolCardSurface) {
-	card.Children(func() {
-		l := loc(c)
-		wide := span > 1 || surf == cardDesktop
-		w := cardW(layout.Card{ID: "clip", Span: span}, surf)
-		it, ok := a.latestClipboardItem()
-		text := itemTitleShown(l, c, it)
-		if !ok {
-			text = l.NoClipItems()
-		}
-		if wide {
-			top := a.cardTop(c, card, "clip-top")
-			top.Children(func() {
-				a.cardGlyphLead(c, card, "clip-lead", clipNavSymbol, 18, 18, ink2)
-				fitText(c, l.LatestClip(), 12, 600, w-2*cardPad-25-70).TextColor(ink2)
-				ui.Box(c).Grow(1)
-				if ok {
-					ui.Text(c, relativeTime(l, it.CreatedAt, c.Now())).SingleLine().
-						FontSize(10.5).TextColor(ink3)
-				}
-			})
-			row := ui.Row(c.Key("clip-text")).Absolute().Left(cardPad).Right(cardPad).
-				Bottom(cardPad).Height(20).AlignItems(ui.Center)
-			row.Children(func() {
-				t := ui.Text(c, text).SingleLine().FontSize(12).FontWeight(600).
-					TextColor(ink).Label(text)
-				if !ok {
-					t.TextColor(ink3).FontSize(10)
-				}
-			})
-			return
-		}
-		a.cardGlyphLead(c, card, "clip-lead", clipNavSymbol, 18, 18, ink2).
-			Absolute().Left(cardPad).Top(cardPad)
-		block := cardClipText(c, text)
-		if !ok {
-			block = ui.Text(c, text).FontSize(10.5).TextColor(ink3).MaxLines(2).Label(text)
-		}
-		block.Absolute().Left(cardPad).Right(cardPad).Bottom(cardPad)
 
 	})
 }

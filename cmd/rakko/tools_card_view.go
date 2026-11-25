@@ -530,13 +530,6 @@ func (a *shelf) cardHero(c *ui.Context, card ui.Element, key, text string, base,
 	return row
 }
 
-// cardClipText is a small two-line text block for the 1 × 1 cards: 11pt
-// semibold, at most two lines, with the full content in the label.
-func cardClipText(c *ui.Context, text string) ui.Element {
-	return ui.Text(c, text).FontSize(11).FontWeight(600).LineHeight(1.35).MaxLines(2).
-		Ellipsis("…").Label(text)
-}
-
 // cardRail is a thin meter: a fill3 track and col's share from the left.
 func cardRail(c *ui.Context, key string, frac float32, col ui.Color) ui.Element {
 	box := ui.Box(c.Key(key)).Height(4).Radius(2)

@@ -376,7 +376,7 @@ func TestSysMonPopover(t *testing.T) {
 		{ID: "ocr", Span: 1, Rows: 1},
 		{ID: "shot", Span: 1, Rows: 1},
 		{ID: "sysmon", Span: 2, Rows: 2},
-		{ID: "clip", Span: 2, Rows: 1},
+		{ID: "note", Span: 2, Rows: 1},
 	})
 	a.visible = true
 	a.level = 2
@@ -780,7 +780,7 @@ func TestSysMonExportShots(t *testing.T) {
 		{ID: "ocr", Span: 1, Rows: 1},
 		{ID: "shot", Span: 1, Rows: 1},
 		{ID: "sysmon", Span: 2, Rows: 2},
-		{ID: "clip", Span: 2, Rows: 1},
+		{ID: "note", Span: 2, Rows: 1},
 	})
 	aPop.visible = true
 	aPop.level = 2

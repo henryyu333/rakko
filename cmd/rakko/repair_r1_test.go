@@ -57,17 +57,6 @@ func TestWidgetCardTapRunsItsAction(t *testing.T) {
 		t.Fatal("a second tap did not stop 保持唤醒")
 	}
 
-	// 剪贴板最新: the newest capture goes to the clipboard.
-	if err := a.store.AddClipText("最新的剪贴板内容", "com.example.App"); err != nil {
-		t.Fatal(err)
-	}
-	rec := &recordClip{}
-	a.write = rec
-	p.toolCardTapped("clip")
-	if rec.text != "最新的剪贴板内容" {
-		t.Fatalf("a tap on 剪贴板最新 copied %q", rec.text)
-	}
-
 	// AI 用量: the page opens.
 	usage := newUsageFixture(t, true)
 	a.registerPage(usage.f)
@@ -82,12 +71,6 @@ func TestWidgetCardTapRunsItsAction(t *testing.T) {
 	p.toolCardTapped("playing")
 	if a.status != before {
 		t.Fatalf("a tap on the music card acted: %q", a.status)
-	}
-
-	// 最近文件 has nothing to act on and must not jiggle as a failed action.
-	p.toolCardTapped("recent")
-	if p.jiggleID == "recent" {
-		t.Fatal("a tap on 最近文件 reported a failed action")
 	}
 }
 
@@ -131,11 +114,11 @@ func TestPinnedWideWidgetsKeepTwoColumns(t *testing.T) {
 	if got := pinCardWidth("playing", 1); got != pinCardW2 {
 		t.Fatalf("a one-column music card pins %d wide, want %d", got, pinCardW2)
 	}
-	if got := pinCardWidth("recent", 1); got != pinCardW2 {
-		t.Fatalf("a one-column recent card pins %d wide, want %d", got, pinCardW2)
+	if got := pinCardWidth("note", 1); got != pinCardW2 {
+		t.Fatalf("a one-column note card pins %d wide, want %d", got, pinCardW2)
 	}
-	if got := pinCardWidth("clip", 1); got != pinCardW2 {
-		t.Fatalf("a one-column clipboard card pins %d wide, want %d", got, pinCardW2)
+	if got := pinCardWidth("board", 1); got != pinCardW2 {
+		t.Fatalf("a one-column board card pins %d wide, want %d", got, pinCardW2)
 	}
 	if got := pinCardWidth("awake", 1); got != pinCardW {
 		t.Fatalf("保持唤醒 pins %d wide, want %d", got, pinCardW)

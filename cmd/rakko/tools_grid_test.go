@@ -56,9 +56,9 @@ func TestToolLadderMatchesDesign(t *testing.T) {
 		card("ocr", 1, 1), card("zip", 1, 1),
 	}
 	plus := join(def, []layout.Card{card("timer", 2, 1)})
-	six := join(plus, []layout.Card{card("watch", 1, 1), card("clip", 2, 1), card("airdrop", 1, 1)})
+	six := join(plus, []layout.Card{card("watch", 1, 1), card("note", 2, 1), card("airdrop", 1, 1)})
 	full := join(six, []layout.Card{
-		card("recent", 2, 1), card("note", 2, 1), card("topdf", 1, 1),
+		card("board", 2, 1), card("sysmon", 2, 1), card("topdf", 1, 1),
 		card("fit1m", 1, 1), card("shot", 1, 1), card("extract", 1, 1), card("resize", 1, 1),
 	})
 	cases := []struct {

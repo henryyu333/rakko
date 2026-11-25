@@ -26,7 +26,7 @@ const (
 // gave the card; only the pinned window is wider.
 func pinWide(id string) bool {
 	switch id {
-	case "playing", "recent", "clip", "note", "board":
+	case "playing", "note", "board":
 		return true
 	}
 	return false

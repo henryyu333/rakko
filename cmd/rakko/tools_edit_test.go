@@ -317,7 +317,7 @@ func TestToolsLegacySizeKeepsItsShape(t *testing.T) {
 func TestToolsEditChromeClearsTheGlyph(t *testing.T) {
 	// The music 2 × 2 keeps its live player in editing (v2 §6); its cover
 	// sits at 20pt, clear of the badge like every edit glyph.
-	for _, id := range []string{"awake", "ocr", "zip", "fit1m", "note", "recent", "clip", "timer", "stopwatch"} {
+	for _, id := range []string{"awake", "ocr", "zip", "fit1m", "note", "board", "timer", "stopwatch"} {
 		t.Run(id, func(t *testing.T) {
 			a, _, view := editPage(t, []layout.Card{{ID: id}})
 			view.Advance(300 * time.Millisecond) // the chrome's 220ms pop
@@ -445,7 +445,7 @@ func TestToolsResizeHandleSurvivesReflow(t *testing.T) {
 func TestToolsFreshDragKeepsTheGridWidth(t *testing.T) {
 	nine := []layout.Card{
 		{ID: "playing", Span: 2, Rows: 2}, {ID: "awake"}, {ID: "usage"}, {ID: "ocr"}, {ID: "zip"},
-		{ID: "timer", Span: 2, Rows: 1}, {ID: "stopwatch"}, {ID: "clip", Span: 2, Rows: 1}, {ID: "airdrop"},
+		{ID: "timer", Span: 2, Rows: 1}, {ID: "stopwatch"}, {ID: "note", Span: 2, Rows: 1}, {ID: "airdrop"},
 	}
 	a, p, view := editPage(t, nine)
 	wantCols := p.grid().cols

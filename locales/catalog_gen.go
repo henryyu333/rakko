@@ -4941,16 +4941,6 @@ func (msgs Messages) UsageWeekly(pct string) string {
 	return Catalog.Format(msgs.locale, "usageWeekly", map[string]any{"pct": pct})
 }
 
-// RecentFiles says "最近文件"
-// in the language the app shows.
-func RecentFiles() string { return In(i18n.Locale()).RecentFiles() }
-
-// RecentFiles says "最近文件"
-// in the language of msgs.
-func (msgs Messages) RecentFiles() string {
-	return Catalog.Format(msgs.locale, "recentFiles", nil)
-}
-
 // NoFilesYet says "还没有文件"
 // in the language the app shows.
 func NoFilesYet() string { return In(i18n.Locale()).NoFilesYet() }
@@ -4959,16 +4949,6 @@ func NoFilesYet() string { return In(i18n.Locale()).NoFilesYet() }
 // in the language of msgs.
 func (msgs Messages) NoFilesYet() string {
 	return Catalog.Format(msgs.locale, "noFilesYet", nil)
-}
-
-// LatestClip says "剪贴板最新"
-// in the language the app shows.
-func LatestClip() string { return In(i18n.Locale()).LatestClip() }
-
-// LatestClip says "剪贴板最新"
-// in the language of msgs.
-func (msgs Messages) LatestClip() string {
-	return Catalog.Format(msgs.locale, "latestClip", nil)
 }
 
 // NoRecords says "还没有记录"
@@ -5239,16 +5219,6 @@ func DropFilesHere() string { return In(i18n.Locale()).DropFilesHere() }
 // in the language of msgs.
 func (msgs Messages) DropFilesHere() string {
 	return Catalog.Format(msgs.locale, "dropFilesHere", nil)
-}
-
-// NoClipItems says "还没有剪贴板记录"
-// in the language the app shows.
-func NoClipItems() string { return In(i18n.Locale()).NoClipItems() }
-
-// NoClipItems says "还没有剪贴板记录"
-// in the language of msgs.
-func (msgs Messages) NoClipItems() string {
-	return Catalog.Format(msgs.locale, "noClipItems", nil)
 }
 
 // NowPlaying says "正在播放"

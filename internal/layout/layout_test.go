@@ -152,7 +152,7 @@ func TestWriteThenLoadRoundTrips(t *testing.T) {
 	l := Default()
 	l.MoveCard("resize", 0)
 	l.SetCardSize("ocr", 2, 1)
-	l.AddPin(Pin{ID: "clip", Span: 2, Edge: EdgeRight, X: 4, Y: 120, AlwaysOpen: true})
+	l.AddPin(Pin{ID: "note", Span: 2, Edge: EdgeRight, X: 4, Y: 120, AlwaysOpen: true})
 	if err := Write(dir, l); err != nil {
 		t.Fatal(err)
 	}
@@ -218,17 +218,17 @@ func TestLoadFutureVersionDefaultsAndKeepsFile(t *testing.T) {
 func TestLoadUnversionedFileMigrates(t *testing.T) {
 	dir := t.TempDir()
 	raw := writeFile(t, dir, map[string]any{
-		"cards": []Card{{ID: "zip", Span: 7}, {ID: "clip"}},
+		"cards": []Card{{ID: "zip", Span: 7}, {ID: "usage"}},
 	})
 	l, err := Load(dir)
 	if err != nil {
 		t.Fatalf("unversioned file rejected: %v", err)
 	}
-	if !slices.Equal(cardIDs(l), []string{"clip", "zip"}) || l.Cards[1].Span != 1 {
+	if !slices.Equal(cardIDs(l), []string{"usage", "zip"}) || l.Cards[1].Span != 1 {
 		t.Fatalf("unversioned cards not migrated: %+v", l.Cards)
 	}
-	if c := l.Cards[0]; c.Cols() != 2 || c.Height() != 1 {
-		t.Fatalf("clip = %dx%d, want 2x1", c.Cols(), c.Height())
+	if c := l.Cards[0]; c.Cols() != 1 || c.Height() != 1 {
+		t.Fatalf("usage = %dx%d, want 1x1", c.Cols(), c.Height())
 	}
 	if l.Version != Version {
 		t.Fatalf("version = %d, want %d", l.Version, Version)
@@ -249,7 +249,7 @@ func TestMigrateV1ActionsWidgetsPins(t *testing.T) {
 			{ID: "zip", Span: 0},
 			{ID: "awake", Span: 1},
 			{ID: "tojpeg", Span: 1},
-			{ID: "clip", Span: 2},
+			{ID: "usage", Span: 1},
 		},
 		Pins: pins,
 	})
@@ -260,10 +260,10 @@ func TestMigrateV1ActionsWidgetsPins(t *testing.T) {
 	if l.Version != 2 {
 		t.Fatalf("version = %d, want 2", l.Version)
 	}
-	if got, want := cardIDs(l), []string{"playing", "awake", "clip", "ocr", "zip", "tojpeg"}; !slices.Equal(got, want) {
+	if got, want := cardIDs(l), []string{"playing", "awake", "usage", "ocr", "zip", "tojpeg"}; !slices.Equal(got, want) {
 		t.Fatalf("cards = %v, want %v", got, want)
 	}
-	sizes := map[string][2]int{"playing": {2, 2}, "awake": {1, 1}, "clip": {2, 1},
+	sizes := map[string][2]int{"playing": {2, 2}, "awake": {1, 1}, "usage": {1, 1},
 		"ocr": {1, 1}, "zip": {1, 1}, "tojpeg": {1, 1}}
 	for _, c := range l.Cards {
 		if got, want := [2]int{c.Cols(), c.Height()}, sizes[c.ID]; got != want {
@@ -290,7 +290,7 @@ func TestLegacyHomeMergesIntoTheGrid(t *testing.T) {
 		Version: Version,
 		Cards:   []Card{{ID: "ocr"}, {ID: "zip"}},
 		Home: []Widget{
-			{ID: "recent", X: 2, Y: 1, W: 2, H: 1},
+			{ID: "note", X: 2, Y: 1, W: 2, H: 1},
 			{ID: "playing", X: 0, Y: 0, W: 2, H: 2},
 			{ID: "usage", X: 3, Y: 0, W: 1, H: 1},
 		},
@@ -299,7 +299,7 @@ func TestLegacyHomeMergesIntoTheGrid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := cardIDs(l), []string{"playing", "usage", "recent", "ocr", "zip"}; !slices.Equal(got, want) {
+	if got, want := cardIDs(l), []string{"playing", "usage", "note", "ocr", "zip"}; !slices.Equal(got, want) {
 		t.Fatalf("cards = %v, want %v", got, want)
 	}
 	if c := l.Cards[0]; c.Cols() != 2 || c.Height() != 2 {
@@ -354,7 +354,7 @@ func TestNormalizeOnePlaceAcrossHomeCardsPins(t *testing.T) {
 		Version: Version,
 		Home:    []Widget{{ID: "awake", X: 0, Y: 0, W: 1, H: 1}},
 		Cards:   []Card{{ID: "awake"}, {ID: "zip", Span: 0}, {ID: "zip", Span: 2}},
-		Pins:    []Pin{{ID: "zip"}, {ID: "clip", Edge: "diagonal"}, {ID: "awake"}},
+		Pins:    []Pin{{ID: "zip"}, {ID: "note", Edge: "diagonal"}, {ID: "awake"}},
 	}
 	l.normalize()
 	if got, want := cardIDs(l), []string{"zip"}; !slices.Equal(got, want) {
@@ -363,8 +363,8 @@ func TestNormalizeOnePlaceAcrossHomeCardsPins(t *testing.T) {
 	if l.Cards[0].Span != 1 {
 		t.Fatalf("zip span = %d, want clamped 1", l.Cards[0].Span)
 	}
-	if !slices.Equal(pinIDs(l), []string{"clip"}) {
-		t.Fatalf("pins = %v, want clip only", pinIDs(l))
+	if !slices.Equal(pinIDs(l), []string{"note"}) {
+		t.Fatalf("pins = %v, want note only", pinIDs(l))
 	}
 	if l.Pins[0].Edge != "" {
 		t.Fatalf("unknown edge kept: %q", l.Pins[0].Edge)
@@ -584,11 +584,11 @@ func TestLoadNormalizesWithoutFailing(t *testing.T) {
 func TestGridPersistenceRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	l := Default()
-	l.RemoveCard("recent")
-	l.AddCardSize("recent", 2, 2)
+	l.RemoveCard("note")
+	l.AddCardSize("note", 2, 2)
 	l.MoveCard("awake", 2)
 	l.SetCardSize("playing", 1, 1)
-	l.AddPin(Pin{ID: "clip", Span: 2, Rows: 1, Edge: EdgeLeft, X: 10, Y: 60})
+	l.AddPin(Pin{ID: "board", Span: 2, Rows: 1, Edge: EdgeLeft, X: 10, Y: 60})
 	if err := Write(dir, l); err != nil {
 		t.Fatal(err)
 	}
@@ -636,7 +636,7 @@ func TestLegacyHomeAndPinsLoad(t *testing.T) {
   "version": 2,
   "home": [{"id": "playing", "x": 0, "y": 0, "w": 2, "h": 2}],
   "cards": [{"id": "ocr", "span": 1}],
-  "pins": [{"id": "recent", "span": 2, "display": "1", "x": 10, "y": 20, "homeW": 2, "homeH": 1}]
+  "pins": [{"id": "note", "span": 2, "display": "1", "x": 10, "y": 20, "homeW": 2, "homeH": 1}]
 }`
 	file := filepath.Join(dir, FileName)
 	if err := os.WriteFile(file, []byte(old), 0o600); err != nil {
@@ -655,7 +655,7 @@ func TestLegacyHomeAndPinsLoad(t *testing.T) {
 	if len(l.Home) != 0 {
 		t.Fatalf("home = %+v, want none", l.Home)
 	}
-	if len(l.Pins) != 1 || l.Pins[0].ID != "recent" || l.Pins[0].Span != 2 {
+	if len(l.Pins) != 1 || l.Pins[0].ID != "note" || l.Pins[0].Span != 2 {
 		t.Fatalf("pins = %+v", l.Pins)
 	}
 	data, err := os.ReadFile(file)
@@ -714,5 +714,42 @@ func TestLoadAcceptsUTF8BOM(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("Load(bom) = %+v, want %+v", got, want)
+	}
+}
+
+func TestLoadDropsRetiredRecentAndClipCardsAndPins(t *testing.T) {
+	dir := t.TempDir()
+	raw := `{
+  "version": 2,
+  "home": [{"id": "recent", "x": 2, "y": 1, "w": 2, "h": 1}],
+  "cards": [
+    {"id": "playing", "span": 2, "rows": 2},
+    {"id": "recent", "span": 2, "rows": 1},
+    {"id": "awake", "span": 1, "rows": 1},
+    {"id": "clip", "span": 2, "rows": 1},
+    {"id": "ocr", "span": 1, "rows": 1},
+    {"id": "futurecard", "span": 1, "rows": 1}
+  ],
+  "pins": [
+    {"id": "clip", "span": 2, "rows": 1, "display": "1", "x": 20, "y": 40},
+    {"id": "recent", "span": 2, "rows": 1, "display": "1", "x": 20, "y": 140},
+    {"id": "zip", "span": 1, "rows": 1, "display": "1", "x": 20, "y": 240}
+  ]
+}`
+	if err := os.WriteFile(filepath.Join(dir, FileName), []byte(raw), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	l, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if got, want := cardIDs(l), []string{"playing", "awake", "ocr", "futurecard"}; !slices.Equal(got, want) {
+		t.Fatalf("cards = %v, want %v", got, want)
+	}
+	if got, want := pinIDs(l), []string{"zip"}; !slices.Equal(got, want) {
+		t.Fatalf("pins = %v, want %v", got, want)
+	}
+	if len(l.Home) != 0 {
+		t.Fatalf("home = %+v, want empty", l.Home)
 	}
 }

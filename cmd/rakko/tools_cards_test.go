@@ -62,8 +62,8 @@ func TestToolCardAccepts(t *testing.T) {
 		"airdrop": {true, true, true, true},
 		"playing": {false, false, false, false},
 		"awake":   {false, false, false, false},
-		"recent":  {false, false, false, false},
-		"clip":    {false, false, false, false},
+		"note":    {false, false, false, false},
+		"board":   {false, false, false, false},
 		"usage":   {false, false, false, false},
 	}
 	classes := []dropClass{classImages, classPDFs, classArchives, classMixed}
@@ -127,8 +127,11 @@ func TestToolCardTarget(t *testing.T) {
 	if a.toolCardTarget("resize", 1) != toMedium {
 		t.Fatal("resize maps to toMedium (1600px)")
 	}
-	if a.toolCardTarget("airdrop", 1) != -1 || a.toolCardTarget("clip", 1) != -1 {
+	if a.toolCardTarget("airdrop", 1) != -1 || a.toolCardTarget("note", 1) != -1 {
 		t.Fatal("non-converting cards must answer -1")
+	}
+	if toolCardDefFor("recent") != nil || toolCardDefFor("clip") != nil {
+		t.Fatal("retired recent and clip cards must not exist in the catalog")
 	}
 }
 

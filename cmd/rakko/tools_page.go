@@ -1516,8 +1516,6 @@ func cardSizes(id string) [][2]int {
 			return [][2]int{{1, 1}, {2, 1}, {2, 2}}
 		case "usage":
 			return [][2]int{{1, 1}, {2, 1}}
-		case "recent", "clip":
-			return [][2]int{{2, 1}, {2, 2}, {1, 1}}
 		case "note", "board":
 			return [][2]int{{1, 1}, {2, 1}}
 		case "timer":

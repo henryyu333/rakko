@@ -37,7 +37,6 @@ var (
 	imgSymbol     = symbol(`<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5-5-8 8"/>`)
 	docSymbol     = symbol(`<path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2"/><path d="M9 12l1.333 5l1.667 -4l1.667 4l1.333 -5"/>`)
 	convertSymbol = symbol(`<path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>`)
-	recentSymbol  = symbol(`<path d="M3.9 12a8.1 8.1 0 1 0 8.1-8.1 8.775 8.775 0 0 0-6.066 2.466L3.9 8.4"/><path d="M3.9 3.9v4.5h4.5"/><path d="M12 7.5v4.5l3.6 1.8"/>`)
 	shareSymbol   = symbol(`<path d="M5.6 15.5a8 8 0 1 1 12.8 0"/><path d="M8.5 13a4.5 4.5 0 1 1 7 0"/><path d="M12 14l-4 6h8z"/>`)
 	unzipSymbol   = symbol(`<path d="M4 7h16v13H4z"/><path d="M4 7l2-3h12l2 3M12 10v6M9.5 13.5L12 16l2.5-2.5"/>`)
 	zipSymbol     = symbol(`<path d="M4 7h16v13H4z"/><path d="M4 7l2-3h12l2 3M11 10h2M11 13h2M11 16h2"/>`)

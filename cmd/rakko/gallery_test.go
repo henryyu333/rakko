@@ -1420,8 +1420,6 @@ func galleryGroupF() []galleryItem {
 		{ID: "F3", Group: g, Title: "音乐卡片", State: "2×1 · 横向条", Build: tools(card("playing", 2, 1), nil)},
 		{ID: "F4", Group: g, Title: "音乐卡片", State: "1×1 · 封面与状态", Build: tools(card("playing", 1, 1), nil)},
 		{ID: "F5", Group: g, Title: "保持唤醒", State: "1×1 · 剩余 42 分钟", Build: tools(card("awake", 1, 1), nil)},
-		{ID: "F6", Group: g, Title: "最近文件", State: "2×1", Build: tools(card("recent", 2, 1), nil)},
-		{ID: "F7", Group: g, Title: "剪贴板最新", State: "2×1", Build: tools(card("clip", 2, 1), nil)},
 		{ID: "F8", Group: g, Title: "便利贴", State: "2×1 · 预览三行", Build: tools(card("note", 2, 1), nil)},
 		{ID: "F9", Group: g, Title: "便利贴", State: "1×1 · 图标与名称", Build: tools(card("note", 1, 1), nil)},
 		{ID: "F10", Group: g, Title: "AI 用量", State: "1×1", Build: tools(card("usage", 1, 1), nil)},
@@ -1491,12 +1489,12 @@ func galleryGroupF() []galleryItem {
 		), nil)},
 		{ID: "F41", Group: g, Title: "面板尺寸", State: "6×3 · 9 张 · 651 × 340", Build: tools([]layout.Card{
 			{ID: "playing", Span: 2, Rows: 2}, {ID: "awake"}, {ID: "usage"}, {ID: "ocr"}, {ID: "zip"},
-			{ID: "timer", Span: 2, Rows: 1}, {ID: "stopwatch"}, {ID: "clip", Span: 2, Rows: 1}, {ID: "airdrop"},
+			{ID: "timer", Span: 2, Rows: 1}, {ID: "stopwatch"}, {ID: "note", Span: 2, Rows: 1}, {ID: "airdrop"},
 		}, nil)},
-		{ID: "F42", Group: g, Title: "面板尺寸", State: "6×3 · 16 张 · 651 × 340 · 页内滚动", Build: tools([]layout.Card{
+		{ID: "F42", Group: g, Title: "面板尺寸", State: "6×3 · 15 张 · 651 × 340 · 页内滚动", Build: tools([]layout.Card{
 			{ID: "playing", Span: 2, Rows: 2}, {ID: "awake"}, {ID: "usage"}, {ID: "ocr"}, {ID: "zip"},
-			{ID: "timer", Span: 2, Rows: 1}, {ID: "stopwatch"}, {ID: "clip", Span: 2, Rows: 1}, {ID: "airdrop"},
-			{ID: "recent", Span: 2, Rows: 1}, {ID: "note", Span: 2, Rows: 1}, {ID: "topdf"}, {ID: "fit1m"},
+			{ID: "timer", Span: 2, Rows: 1}, {ID: "stopwatch"}, {ID: "board", Span: 2, Rows: 1}, {ID: "airdrop"},
+			{ID: "sysmon", Span: 2, Rows: 1}, {ID: "note", Span: 2, Rows: 1}, {ID: "topdf"}, {ID: "fit1m"},
 			{ID: "shot"}, {ID: "extract"}, {ID: "resize"},
 		}, nil)},
 		// The rest of the component × size × state matrix (v2 §3).
@@ -1515,8 +1513,6 @@ func galleryGroupF() []galleryItem {
 			m.phase, m.dur, m.doneAt, m.ringing = timerDone, 5*time.Minute, now, true
 		}))},
 		{ID: "F49", Group: g, Title: "工具页", State: "拖入可接受 · 蓝底、蓝图形、数量角标", Build: tools(def, drag(classImages, "封面.png", "照片 02.png"))},
-		{ID: "F50", Group: g, Title: "最近文件", State: "1×1 · 图形、数量与两张缩略图", Build: tools(card("recent", 1, 1), nil)},
-		{ID: "F51", Group: g, Title: "剪贴板最新", State: "1×1 · 两行内容", Build: tools(card("clip", 1, 1), nil)},
 		{ID: "F52", Group: g, Title: "动作卡", State: "转换中 · 图形 14 与蓝色转圈", Build: tools([]layout.Card{
 			{ID: "tojpeg"}, {ID: "zip"},
 		}, busy)},
@@ -1530,7 +1526,7 @@ func galleryGroupF() []galleryItem {
 		})},
 		{ID: "F56", Group: g, Title: "工具页", State: "6 列 · 编辑 · 满宽卡片库", Build: tools([]layout.Card{
 			{ID: "playing", Span: 2, Rows: 2}, {ID: "awake"}, {ID: "usage"}, {ID: "ocr"}, {ID: "zip"},
-			{ID: "timer", Span: 2, Rows: 1}, {ID: "stopwatch"}, {ID: "clip", Span: 2, Rows: 1}, {ID: "airdrop"},
+			{ID: "timer", Span: 2, Rows: 1}, {ID: "stopwatch"}, {ID: "note", Span: 2, Rows: 1}, {ID: "airdrop"},
 		}, func(t *testing.T, a *shelf, p *toolsPage, lang string) {
 			p.editing = true
 		})},
@@ -1916,15 +1912,6 @@ func galleryGroupJ() []galleryItem {
 			a.settings = settings.Default()
 			fakeTrack(a, true)
 			switch id {
-			case "recent":
-				dir := t.TempDir()
-				for i := range 3 {
-					p := filepath.Join(dir, galleryTrayName(lang, i))
-					os.WriteFile(p, gallerySolidPNG(color.RGBA{uint8(70 + i*60), 140, 200, 255}), 0o600)
-					a.store.AddFiles([]string{p})
-				}
-			case "clip":
-				a.store.AddClipText(galleryText(lang, "把首页卡片的间距改成 4pt", "Change the home cards' gap to 4pt"), "com.apple.Terminal")
 			case "note":
 				if n := a.noteSession(); n != nil {
 					n.text = galleryText(lang, "# 周五发版前\n– 改 README\n– 跑一遍回归", "# Before Friday\n– Update the README\n– Run the regression suite")

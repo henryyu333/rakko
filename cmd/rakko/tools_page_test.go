@@ -109,7 +109,7 @@ func TestToolsPageEditMode(t *testing.T) {
 		t.Fatal("pencil did not enter edit mode")
 	}
 	// The drawer and the chrome must exist in edit mode.
-	if !view.HasText("最近文件") {
+	if !view.HasText("截图") {
 		t.Fatalf("the editing drawer is missing; texts %v", view.Texts())
 	}
 	if !view.HasText("改尺寸") {
@@ -387,7 +387,11 @@ func TestToolsSettleEndsWhenFlightNeverMoves(t *testing.T) {
 func toolsOverflowLayout() layout.Layout {
 	var cards []layout.Card
 	for _, def := range toolCatalog() {
-		cards = append(cards, layout.Card{ID: def.id, Span: max(1, def.span), Rows: max(1, def.rows)})
+		span := max(1, def.span)
+		if def.variableSpan {
+			span = 2
+		}
+		cards = append(cards, layout.Card{ID: def.id, Span: span, Rows: max(1, def.rows)})
 	}
 	return layout.Layout{Version: layout.Version, Cards: cards}
 }

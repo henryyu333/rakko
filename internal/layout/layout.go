@@ -121,8 +121,12 @@ var widgetCatalog = []Widget{
 	{ID: "playing", X: 0, Y: 0, W: 2, H: 2},
 	{ID: "awake", X: 2, Y: 0, W: 1, H: 1},
 	{ID: "usage", X: 3, Y: 0, W: 1, H: 1},
-	{ID: "recent", X: 2, Y: 1, W: 2, H: 1},
-	{ID: "clip", X: 2, Y: 1, W: 2, H: 1},
+}
+
+// isRetiredCard reports card ids removed from the app so loading an older
+// layout.json drops them cleanly instead of leaving empty grid cells or blank pins.
+func isRetiredCard(id string) bool {
+	return id == "recent" || id == "clip"
 }
 
 // defaultWidget returns id's catalogue rectangle.
@@ -244,7 +248,7 @@ func (l *Layout) normalize() {
 	seen := map[string]bool{}
 	home := l.Home[:0]
 	for _, w := range l.Home {
-		if w.ID == "" || seen[w.ID] {
+		if w.ID == "" || isRetiredCard(w.ID) || seen[w.ID] {
 			continue
 		}
 		w.W = clampCells(w.W)
@@ -255,7 +259,7 @@ func (l *Layout) normalize() {
 	l.Home = home
 	cards := l.Cards[:0]
 	for _, card := range l.Cards {
-		if card.ID == "" || seen[card.ID] {
+		if card.ID == "" || isRetiredCard(card.ID) || seen[card.ID] {
 			continue
 		}
 		card.Span = clampSpan(card.Span)
@@ -266,7 +270,7 @@ func (l *Layout) normalize() {
 	l.Cards = cards
 	pins := l.Pins[:0]
 	for _, pin := range l.Pins {
-		if pin.ID == "" || seen[pin.ID] {
+		if pin.ID == "" || isRetiredCard(pin.ID) || seen[pin.ID] {
 			continue
 		}
 		switch pin.Edge {
@@ -290,7 +294,7 @@ func (l *Layout) migrate() {
 	var widgets []Card
 	seen := map[string]bool{}
 	for _, card := range l.Cards {
-		if card.ID == "" || seen[card.ID] {
+		if card.ID == "" || isRetiredCard(card.ID) || seen[card.ID] {
 			continue
 		}
 		seen[card.ID] = true
@@ -393,14 +397,14 @@ func (l *Layout) mergeHome() {
 	cards := make([]Card, 0, len(home)+len(l.Cards))
 	seen := make(map[string]bool, len(home)+len(l.Cards))
 	for _, w := range home {
-		if seen[w.ID] {
+		if isRetiredCard(w.ID) || seen[w.ID] {
 			continue
 		}
 		seen[w.ID] = true
 		cards = append(cards, Card{ID: w.ID, Span: clampSpan(w.W), Rows: clampRows(w.H)})
 	}
 	for _, c := range l.Cards {
-		if seen[c.ID] {
+		if isRetiredCard(c.ID) || seen[c.ID] {
 			continue
 		}
 		seen[c.ID] = true

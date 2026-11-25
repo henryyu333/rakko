@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/layout"
+	"rakko/internal/settings"
 	"rakko/internal/store"
 )
 
@@ -108,7 +110,7 @@ func TestPinWithoutSlotReturnsToTheGrid(t *testing.T) {
 	a := &shelf{dataDir: t.TempDir()}
 	a.mutateTools(func(l *layout.Layout) {
 		l.Cards = []layout.Card{{ID: "playing", Span: 2, Rows: 2}}
-		l.AddPin(layout.Pin{ID: "recent", Span: 2, Rows: 1, Display: "1"})
+		l.AddPin(layout.Pin{ID: "note", Span: 2, Rows: 1, Display: "1"})
 	})
 	a.pinRestore()
 	if len(a.pins) != 1 {
@@ -117,9 +119,9 @@ func TestPinWithoutSlotReturnsToTheGrid(t *testing.T) {
 	if !a.unpin(a.pins[0], true) {
 		t.Fatal("放回刘海 failed")
 	}
-	got, ok := cardByID(a.toolsLayout().Cards, "recent")
+	got, ok := cardByID(a.toolsLayout().Cards, "note")
 	if !ok || got.Cols() != 2 || got.Height() != 1 {
-		t.Fatalf("recent returned as %+v, want 2×1", got)
+		t.Fatalf("note returned as %+v, want 2×1", got)
 	}
 }
 
@@ -146,13 +148,6 @@ func pinLines(a *shelf, id string, span int) []pinLine {
 			}
 		}
 		return lines
-	case "recent":
-		return []pinLine{
-			{text: "最近文件", size: 12, weight: 600},
-			{text: "alpha.png", min: 28}, {text: "bravo.pdf", min: 28}, {text: "charlie.txt", min: 28},
-		}
-	case "clip":
-		return []pinLine{{text: "剪贴板里的一段很长的文字", size: 12, weight: 600}}
 	case "awake":
 		if span < 2 {
 			// The 1 × 1 widget carries no name (v2 §2): the ring and the
@@ -210,7 +205,7 @@ func pinClipped(t *testing.T, a *shelf, id string, span int, w float32) []string
 // whole body inside the pin window at every size it can have.
 func TestPinnedWidgetContentIsWhole(t *testing.T) {
 	pinCanvasDrag(t)
-	for _, id := range []string{"playing", "awake", "usage", "recent", "clip"} {
+	for _, id := range []string{"playing", "awake", "usage"} {
 		for _, size := range cardSizes(id) {
 			name := fmt.Sprintf("%s %dx%d", id, size[0], size[1])
 			t.Run(name, func(t *testing.T) {
@@ -233,7 +228,7 @@ func TestPinnedWidgetContentIsWhole(t *testing.T) {
 	// their two-column form must stay whole.
 	a, _ := musicShelf(t)
 	pinFixture(t, a)
-	for _, id := range []string{"playing", "recent", "clip"} {
+	for _, id := range []string{"playing"} {
 		if bad := pinClipped(t, a, id, 2, pinCardW2); len(bad) > 0 {
 			t.Errorf("%s is cut in a two-column pin: %s", id, strings.Join(bad, "; "))
 		}
@@ -242,5 +237,61 @@ func TestPinnedWidgetContentIsWhole(t *testing.T) {
 		if bad := pinClipped(t, a, id, 1, pinCardW); len(bad) > 0 {
 			t.Errorf("%s does not fit a one-column pin: %s", id, strings.Join(bad, "; "))
 		}
+	}
+}
+
+// TestRetiredRecentAndClipDropOnLoadAndPinRestore verifies that an upgraded
+// layout.json containing retired recent/clip cards or pins loads with no error,
+// leaves no blank grid hole, and creates no desktop pin windows for them.
+func TestRetiredRecentAndClipDropOnLoadAndPinRestore(t *testing.T) {
+	pinCanvasDrag(t)
+	dir := t.TempDir()
+	old := `{
+  "version": 2,
+  "cards": [
+    {"id": "playing", "span": 2, "rows": 2},
+    {"id": "recent", "span": 2, "rows": 1},
+    {"id": "awake", "span": 1, "rows": 1},
+    {"id": "clip", "span": 2, "rows": 1},
+    {"id": "ocr", "span": 1, "rows": 1},
+    {"id": "zip", "span": 1, "rows": 1}
+  ],
+  "pins": [
+    {"id": "recent", "span": 2, "rows": 1, "display": "1"},
+    {"id": "clip", "span": 2, "rows": 1, "display": "1"},
+    {"id": "note", "span": 2, "rows": 1, "display": "1"}
+  ]
+}`
+	if err := os.WriteFile(filepath.Join(dir, layout.FileName), []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	a := &shelf{dataDir: dir}
+	a.settings = settings.Default()
+	l := a.toolsLayout()
+	if a.toolsLayBroken {
+		t.Fatal("layout load marked toolsLayBroken on retired recent/clip entries")
+	}
+	var gotCards []string
+	for _, c := range l.Cards {
+		gotCards = append(gotCards, c.ID)
+	}
+	if !slices.Equal(gotCards, []string{"playing", "awake", "ocr", "zip"}) {
+		t.Fatalf("loaded cards = %v, want [playing awake ocr zip]", gotCards)
+	}
+	g := toolGridFor(l.Cards, a.inactiveWidget, 0)
+	if len(g.cells) != 4 {
+		t.Fatalf("grid cells = %d, want 4 without holes", len(g.cells))
+	}
+	if g.cells[0].id != "playing" || g.cells[1].id != "awake" || g.cells[2].id != "ocr" || g.cells[3].id != "zip" {
+		t.Fatalf("unexpected packed cells: %+v", g.cells)
+	}
+
+	a.pinRestore()
+	if len(a.pins) != 1 || a.pins[0].cardID != "note" {
+		t.Fatalf("restored pins = %+v, want only note", a.pins)
+	}
+	if toolCardDefFor("recent") != nil || toolCardDefFor("clip") != nil {
+		t.Fatal("retired recent/clip cards still in catalog")
 	}
 }
