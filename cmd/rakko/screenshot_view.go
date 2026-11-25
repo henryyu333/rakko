@@ -6,6 +6,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -25,6 +26,7 @@ func (s *shotSession) draw(p *ui.Painter, r ui.Rect, di int) {
 			// paint over them so a mark at the edge cannot break it.
 			s.drawAnnotations(p, d)
 			s.drawSelection(p, d)
+			s.drawSizeBadge(p, d)
 			s.drawTextFrame(p, d)
 		}
 	} else if s.hoverOK && di == s.cursorDpy && shotRectsIntersect(s.hover, d.Bounds) {
@@ -67,21 +69,52 @@ func (s *shotSession) drawVeil(p *ui.Painter, d *shotDisplay) {
 	}
 }
 
-// drawSelection draws the accent edge and the eight handles.
+// drawSelection draws the accent edge and the eight round handles, each
+// with the faint drop shadow the design gives controls that float on the
+// picture.
 func (s *shotSession) drawSelection(p *ui.Painter, d *shotDisplay) {
 	local := shotLocalRect(s.sel, d.shotTarget)
 	r := ui.Rect{X: float32(local.X), Y: float32(local.Y), W: float32(local.Width), H: float32(local.Height)}
 	p.Stroke(r, accent, 0, 1.5)
-	const hs = 4
+	const hs = 4.5
 	for _, c := range [][2]float32{
 		{r.X, r.Y}, {r.X + r.W/2, r.Y}, {r.X + r.W, r.Y},
 		{r.X, r.Y + r.H/2}, {r.X + r.W, r.Y + r.H/2},
 		{r.X, r.Y + r.H}, {r.X + r.W/2, r.Y + r.H}, {r.X + r.W, r.Y + r.H},
 	} {
 		box := ui.Rect{X: c[0] - hs, Y: c[1] - hs, W: 2 * hs, H: 2 * hs}
-		p.Fill(box, ui.Hex("#FFFFFF"), 2)
-		p.Stroke(box, accent, 2, 1)
+		p.Shadow(box, hs, 0, 1, 4, 0, ui.RGBA(0, 0, 0, 0.45))
+		p.Fill(box, ui.Hex("#FFFFFF"), hs)
+		p.Stroke(box, accent, hs, 1.5)
 	}
+}
+
+// drawSizeBadge prints the selection's real output pixels as a W × H pill
+// above its top-left, inside the picture when the display's edge is near.
+func (s *shotSession) drawSizeBadge(p *ui.Painter, d *shotDisplay) {
+	local := shotLocalRect(s.sel, d.shotTarget)
+	scale := d.Scale
+	if scale <= 0 {
+		scale = 1
+	}
+	wpx := int(math.Round(float64(local.Width) * scale))
+	hpx := int(math.Round(float64(local.Height) * scale))
+	span := ui.Span{Text: fmt.Sprintf("%d × %d", wpx, hpx), Size: 11,
+		Color: ui.RGBA(255, 255, 255, 0.88)}
+	tw, th := p.MeasureText(0, span)
+	bw := int(math.Ceil(float64(tw))) + 16
+	bh := 22
+	bars := []mygo.Rectangle{s.bar.rect}
+	if s.bar.hasProps {
+		bars = append(bars, s.bar.props.rect)
+	}
+	sel := mygo.Rectangle{X: local.X, Y: local.Y, Width: local.Width, Height: local.Height}
+	r := shotSizeBadgeRect(sel, d.Bounds, bars, bw, bh)
+	box := ui.Rect{X: float32(r.X), Y: float32(r.Y), W: float32(r.Width), H: float32(r.Height)}
+	p.Shadow(box, 6, 0, 4, 12, 0, ui.RGBA(0, 0, 0, 0.35))
+	p.Fill(box, ui.RGBA(18, 18, 20, 0.86), 6)
+	p.Stroke(box, ui.RGBA(255, 255, 255, 0.16), 6, 0.5)
+	p.RichText(box.X+(box.W-tw)/2, box.Y+(box.H-th)/2, 0, span)
 }
 
 // drawWindowHint outlines the window under the pointer.
@@ -130,7 +163,9 @@ func (s *shotSession) buildBarStrip(c *ui.Context, group string, strip shotBarSt
 	bg := ui.Box(c.Key("shotbar-"+group)).Absolute().
 		Left(float32(strip.rect.X-ox)).Top(float32(strip.rect.Y-oy)).
 		Width(float32(strip.rect.Width)).Height(float32(strip.rect.Height)).
-		Radius(10).Background(shotBarFill).Border(0.5, shotBarEdge).KeepFocus()
+		Radius(11).Background(shotBarFill).Border(0.5, shotBarEdge).KeepFocus().
+		Shadow(0, 10, 28, 0, ui.RGBA(0, 0, 0, 0.52)).
+		InsetShadow(0, 0.5, 0, 0, ui.RGBA(255, 255, 255, 0.14))
 	// A Draw callback paints in window coordinates: r is where the bar is.
 	bg.Draw(func(p *ui.Painter, r ui.Rect) {
 		for _, gx := range strip.seps {
@@ -178,15 +213,19 @@ func (s *shotSession) buildBarButton(c *ui.Context, group string, it shotBarItem
 	case shotBarColor:
 		col := shotAnnotationColors[it.index]
 		b.Radius(shotButtonSize / 2)
+		swatch := float32(14)
 		if s.color == col {
-			b.Border(1.5, ink)
+			// The selected colour wears a white ring around a smaller dot,
+			// so the ring reads without moving the dot's centre.
+			b.Border(1.5, ui.RGBA(255, 255, 255, 0.92))
+			swatch = 12
 		}
 		if hovered {
 			b.Background(shotBarHot)
 		}
 		b.Children(func() {
-			ui.Box(c.Key(key+"-swatch")).Size(shotSwatchSize, shotSwatchSize).
-				Radius(shotSwatchSize / 2).Background(col)
+			ui.Box(c.Key(key+"-swatch")).Size(swatch, swatch).
+				Radius(swatch / 2).Background(col)
 		})
 	case shotBarWidth:
 		w := shotAnnotationWidths[it.index]

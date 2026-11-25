@@ -53,8 +53,51 @@ func shotTextSizeFor(width int) float32 {
 	return shotTextSizes[len(shotTextSizes)-1]
 }
 
-// shotNumberRadius is a number badge's radius in points.
-const shotNumberRadius = 11
+// shotNumberRadiusFor is a number badge's radius in points for a stroke
+// width: the badge grows with the pen's weight.
+func shotNumberRadiusFor(width int) float32 {
+	switch {
+	case width <= shotAnnotationWidths[0]:
+		return 10
+	case width <= shotAnnotationWidths[1]:
+		return 12
+	}
+	return 15
+}
+
+// shotNumberTypeFor is a badge's type size in points, matching the radius.
+func shotNumberTypeFor(width int) float32 {
+	switch {
+	case width <= shotAnnotationWidths[0]:
+		return 11.5
+	case width <= shotAnnotationWidths[1]:
+		return 13
+	}
+	return 15.5
+}
+
+// shotNumberInk is a badge's label colour: the perceptually light fills —
+// white and yellow — take near-black, every other preset takes white, so
+// the digit never disappears into its own badge.
+func shotNumberInk(c ui.Color) ui.Color {
+	lum := 0.299*float32(c.R) + 0.587*float32(c.G) + 0.114*float32(c.B)
+	if lum > 180 {
+		return ui.Hex("#111214")
+	}
+	return ui.Hex("#FFFFFF")
+}
+
+// shotNextNumber is the step number a new badge takes: one past the
+// highest already placed, so undo and redo never skip or repeat a step.
+func shotNextNumber(annots []shotAnnotation) int {
+	next := 1
+	for _, an := range annots {
+		if an.tool == shotToolNumber && an.number >= next {
+			next = an.number + 1
+		}
+	}
+	return next
+}
 
 // shotMosaicCell is one mosaic block: its place on the frozen picture and
 // the average colour it covers.
@@ -223,10 +266,24 @@ func shotDrawAnnotation(p *ui.Painter, an shotAnnotation, origin mygo.Point, sca
 		}
 	case shotToolNumber:
 		cx, cy := px(an.a)
-		r := float32(shotNumberRadius) * scale
-		p.Fill(ui.Rect{X: cx - r, Y: cy - r, W: 2 * r, H: 2 * r}, an.color, r)
+		r := shotNumberRadiusFor(an.width) * scale
+		box := ui.Rect{X: cx - r, Y: cy - r, W: 2 * r, H: 2 * r}
+		// A soft shadow lifts the badge off any wallpaper; the hairline
+		// ring keeps its edge readable where the fill matches the picture.
+		p.Shadow(box, r, 0, 2*scale, 8*scale, 0, ui.RGBA(0, 0, 0, 0.36))
+		p.Fill(box, an.color, r)
+		ring := ui.RGBA(255, 255, 255, 0.88)
+		if shotNumberInk(an.color) != ui.Hex("#FFFFFF") {
+			ring = ui.RGBA(17, 18, 20, 0.22)
+		}
+		p.Stroke(box, ring, r, 1.5*scale)
+		size := shotNumberTypeFor(an.width) * scale
+		if an.number >= 10 {
+			// Two digits shrink to stay inside the same circle.
+			size *= 0.84
+		}
 		label := fmt.Sprintf("%d", an.number)
-		span := ui.Span{Text: label, Size: 13 * scale, Weight: 600, Color: ui.Hex("#FFFFFF")}
+		span := ui.Span{Text: label, Size: size, Weight: 600, Color: shotNumberInk(an.color)}
 		tw, th := p.MeasureText(0, span)
 		p.RichText(cx-tw/2, cy-th/2, 0, span)
 	}

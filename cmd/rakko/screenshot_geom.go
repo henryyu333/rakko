@@ -283,6 +283,42 @@ func shotRectsIntersect(a, b mygo.Rectangle) bool {
 	return a.X < b.X+b.Width && b.X < a.X+a.Width && a.Y < b.Y+b.Height && b.Y < a.Y+a.Height
 }
 
+// shotSizeBadgeGap is the distance between the selection's top edge and the
+// W × H pill.
+const shotSizeBadgeGap = 8
+
+// shotSizeBadgeRect places the selection's W × H pill: above its top-left,
+// inside the selection when the display's top edge is in the way, kept on
+// the display, and off the toolbar if either spot collides with it.
+func shotSizeBadgeRect(sel, display mygo.Rectangle, bars []mygo.Rectangle, w, h int) mygo.Rectangle {
+	place := func(y int) mygo.Rectangle {
+		r := mygo.Rectangle{X: sel.X, Y: y, Width: w, Height: h}
+		r.X = clampInt(r.X, display.X, max(display.X, display.X+display.Width-r.Width))
+		r.Y = clampInt(r.Y, display.Y, max(display.Y, display.Y+display.Height-r.Height))
+		return r
+	}
+	free := func(r mygo.Rectangle) bool {
+		for _, b := range bars {
+			if shotRectsIntersect(r, b) {
+				return false
+			}
+		}
+		return true
+	}
+	above := place(sel.Y - shotSizeBadgeGap - h)
+	if sel.Y-shotSizeBadgeGap-h >= display.Y && free(above) {
+		return above
+	}
+	inside := place(sel.Y + shotSizeBadgeGap)
+	below := inside.Y
+	for _, b := range bars {
+		if shotRectsIntersect(inside, b) {
+			below = max(below, b.Y+b.Height+shotSizeBadgeGap)
+		}
+	}
+	return place(below)
+}
+
 // shotMosaicBlockPixels is one mosaic cell's size in frozen pixels: the
 // three stroke presets get 10, 14 and 20 pixels. The grid is anchored at
 // the frozen image's own origin, so a cell covers the same pixels in the
@@ -524,7 +560,6 @@ const (
 	shotButtonSize = 28
 	shotButtonGap  = 4
 	shotGroupGap   = 12
-	shotSwatchSize = 18
 	shotCopyWidth  = 56
 	shotPropsGap   = 6
 )

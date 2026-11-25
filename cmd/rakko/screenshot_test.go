@@ -887,10 +887,12 @@ func TestShotTextExportWrapsLikeThePreview(t *testing.T) {
 	s := shotTestSession(t, mygo.Rectangle{Width: 400, Height: 300}, 400, 300)
 	s.hasSel = true
 	s.sel = mygo.Rectangle{X: 0, Y: 0, Width: 300, Height: 200}
+	// The text sits right of the selection's W × H pill, so the bands read
+	// the text and not the chrome above it.
 	s.hist.annots = []shotAnnotation{{tool: shotToolText, color: ui.Hex("#FFFFFF"), width: 4,
-		a: mygo.Point{X: 20, Y: 20}, boxW: 100, text: "one two three four five six seven eight"}}
+		a: mygo.Point{X: 100, Y: 20}, boxW: 100, text: "one two three four five six seven eight"}}
 	preview := ui.Render(func(c *ui.Context) { s.overlayView(c, 0) }, 400, 300, 1)
-	previewBands := shotTextRowBands(preview, image.Rect(15, 15, 130, 190))
+	previewBands := shotTextRowBands(preview, image.Rect(95, 15, 230, 190))
 	png, err := s.outputPNG(true)
 	if err != nil {
 		t.Fatal(err)

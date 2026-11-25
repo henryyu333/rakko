@@ -484,12 +484,12 @@ func (s *shotSession) overlayView(c *ui.Context, di int) {
 		}
 	})
 	c.OnShortcut(ui.Cmd, ui.KeyZ, func() {
-		if !s.closed && s.text == nil && s.hist.undoLast() {
+		if !s.closed && s.text == nil && s.undoMark() {
 			s.invalidate()
 		}
 	})
 	c.OnShortcut(ui.Cmd|ui.Shift, ui.KeyZ, func() {
-		if !s.closed && s.text == nil && s.hist.redoLast() {
+		if !s.closed && s.text == nil && s.redoMark() {
 			s.invalidate()
 		}
 	})
@@ -783,6 +783,26 @@ func (s *shotSession) pointerUp(p mygo.Point, ev ui.InputEvent, di int) bool {
 	return true
 }
 
+// undoMark takes back the last change and re-arms the step number from
+// what remains, so a badge placed after an undo continues the sequence
+// instead of skipping the number the undo removed.
+func (s *shotSession) undoMark() bool {
+	if !s.hist.undoLast() {
+		return false
+	}
+	s.nextNum = shotNextNumber(s.hist.annots)
+	return true
+}
+
+// redoMark reapplies a change and re-arms the step number the same way.
+func (s *shotSession) redoMark() bool {
+	if !s.hist.redoLast() {
+		return false
+	}
+	s.nextNum = shotNextNumber(s.hist.annots)
+	return true
+}
+
 // beginMark starts a live mark with the current tool. Text and numbers are
 // placed on the press itself; the other tools drag.
 func (s *shotSession) beginMark(p mygo.Point, di int) {
@@ -901,11 +921,11 @@ func (s *shotSession) actBar(it shotBarItem) {
 		s.width = shotAnnotationWidths[it.index]
 		s.invalidate()
 	case shotBarUndo:
-		if s.hist.undoLast() {
+		if s.undoMark() {
 			s.invalidate()
 		}
 	case shotBarRedo:
-		if s.hist.redoLast() {
+		if s.redoMark() {
 			s.invalidate()
 		}
 	case shotBarOCR:
@@ -957,10 +977,10 @@ func (s *shotSession) keyDown(ev ui.InputEvent) bool {
 			return true
 		case ui.KeyZ:
 			if ev.Mods&ui.Shift != 0 {
-				if s.hist.redoLast() {
+				if s.redoMark() {
 					s.invalidate()
 				}
-			} else if s.hist.undoLast() {
+			} else if s.undoMark() {
 				s.invalidate()
 			}
 			return true
