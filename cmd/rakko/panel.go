@@ -1727,8 +1727,15 @@ func (a *shelf) searchField(c *ui.Context, live bool) ui.Element {
 // contents; this draws the shared layout.
 func (a *shelf) emptyState(c *ui.Context, icon *ui.SVG, title, hint string) ui.Element {
 	return ui.Column(c).Grow(1).Center().Gap(8).Children(func() {
-		ui.Icon(c, icon).Size(28, 28).TextColor(ink3)
-		panelLabel(c, nil, title, 13, 500).TextColor(ink2)
+		// The glyph sits on a 44pt plate of the app's card material, so an
+		// empty page reads as a quiet surface rather than a bare line icon.
+		plate := ui.Row(c.Key("empty-plate")).Size(44, 44).Radius(13).Center().
+			Background(fill1).Border(0.5, ui.RGBA(255, 255, 255, 0.08)).
+			InsetShadow(0, 0.5, 0, 0, ui.RGBA(255, 255, 255, 0.12))
+		plate.Children(func() {
+			ui.Icon(c, icon).Size(20, 20).TextColor(ink2)
+		})
+		panelLabel(c, nil, title, 12.5, 500).TextColor(ink2)
 		if hint != "" {
 			panelLabel(c, nil, hint, 11, 0).TextAlign(ui.Center).TextColor(ink3)
 		}

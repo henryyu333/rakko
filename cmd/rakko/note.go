@@ -543,6 +543,10 @@ func (a *shelf) noteView(c *ui.Context) {
 	c.Root().Background(surfaceRaise)
 	ui.Column(c.Key("note")).Fill().Children(func() {
 		a.noteBar(c, l)
+		// The hairline separates the bar from the sheet without a frame, so
+		// the note reads as one surface.
+		ui.Box(c.Key("note-sep")).FillWidth().Height(0.5).Shrink(0).IgnoreInput(true).
+			Background(ui.RGBA(255, 255, 255, 0.06))
 		a.noteArea(c, l)
 	})
 }
@@ -565,16 +569,18 @@ func (a *shelf) noteBar(c *ui.Context, l locales.Messages) {
 	const barBtns = 22 + 2 + 22 + 2 + 6 // two 22pt buttons, gaps, and 6pt title right margin
 	avail := max(40, winW-(bar.Left+10)-(bar.Right+8)-barBtns)
 	size := sysmonFitSize(c, title, 600, "", 11.5, 8.5, avail)
-	ui.Row(c.Key("note-bar")).Height(max(noteBarH, bar.Height)).Shrink(0).FillWidth().
-		AlignItems(ui.Center).Padding(0, bar.Right+8, 0, bar.Left+10).Gap(2).DragWindow().Children(func() {
+	barRow := ui.Row(c.Key("note-bar")).Height(max(noteBarH, bar.Height)).Shrink(0).FillWidth().
+		AlignItems(ui.Center).Padding(0, bar.Right+8, 0, bar.Left+10).Gap(2).DragWindow()
+	hovered := barRow.Hovered()
+	barRow.Children(func() {
 		fitText(c.Key("note-title"), title, size, 600, avail).TextColor(ink2).Margin(0, 6, 0, 0).Grow(1).MinWidth(0)
-		a.noteButton(c, "note-reveal", revealSymbol, osText(l.NoteReveal(), l.NoteRevealWin()), false, func() {
+		a.noteButton(c, "note-reveal", revealSymbol, nil, osText(l.NoteReveal(), l.NoteRevealWin()), false, !hovered, func() {
 			if n.win != nil {
 				n.frame = n.win.Bounds()
 			}
 			noteReveal(n.store.Path())
 		})
-		a.noteButton(c, "note-top", pinSymbol, l.NoteKeepOnTop(), n.top, func() {
+		a.noteButton(c, "note-top", pinSymbol, pinFill, l.NoteKeepOnTop(), n.top, !hovered, func() {
 			n.setTop(!n.top)
 		})
 	})
@@ -590,18 +596,29 @@ func (n *noteUI) setTop(on bool) {
 	}
 }
 
-// noteButton is one 22pt bar button: an accent tint while it is on (置顶),
-// a quiet fill under the pointer, and the label in the tip only.
-func (a *shelf) noteButton(c *ui.Context, key string, icon *ui.SVG, label string, on bool, act func()) {
+// noteButton is one 22pt bar button: an accent tint and a solid icon while
+// it is on (置顶), a quiet fill under the pointer, and the label in the tip
+// only. An off button fades to 45% while the bar is left alone, so the
+// resting sheet has one quiet affordance, not three competing glyphs;
+// onIcon is the solid variant of a toggle's glyph.
+func (a *shelf) noteButton(c *ui.Context, key string, icon, onIcon *ui.SVG, label string, on, faded bool, act func()) {
 	b := ui.Row(c.Key(key)).Size(22, 22).Radius(6).Center().Label(label).Tooltip(label)
+	glyph, col := icon, ink2
 	switch {
 	case on:
+		if onIcon != nil {
+			glyph = onIcon
+		}
+		col = accent
 		b.Background(accent24)
 	case b.Hovered():
 		b.Background(fill2)
 	}
+	if !on && faded {
+		b.Opacity(0.45)
+	}
 	b.Children(func() {
-		ui.Icon(c, icon).Size(13, 13).TextColor(ink2)
+		ui.Icon(c, glyph).Size(13, 13).TextColor(col)
 	})
 	if b.Clicked() && act != nil {
 		act()
@@ -621,7 +638,7 @@ func (a *shelf) noteArea(c *ui.Context, l locales.Messages) {
 	}
 	area := ui.TextAreaBase(c.Key("note-area"), &n.draft).Fill().Grow(1).MinHeight(0).
 		FontSize(typeBody).LineHeight(1.55).TextColor(ink).
-		Padding(0, 12, 12, 12).Label(l.CardNote())
+		Padding(8, 14, 14, 14).Label(l.CardNote())
 	if !n.booted {
 		area.Focus()
 		n.booted = true
