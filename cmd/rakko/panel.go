@@ -1656,13 +1656,17 @@ func (a *shelf) searchField(c *ui.Context, live bool) ui.Element {
 		})
 		return wrap
 	}
+	var query ui.Element
+	var focused, cleared bool
 	wrap.Children(func() {
 		ui.Icon(c, searchSymbol).Size(11, 11).TextColor(ink3)
 		in := ui.TextInputBase(c.Key("clip-query"), &a.search).Grow(1).MinWidth(0).
 			Placeholder(placeholder).Label(placeholder).FontSize(11).TextColor(ink)
+		query = in
 		if a.focusMode {
 			in.Focus()
 		}
+		focused = in.Focused() || a.focusMode
 		// 焦点在搜索框期间归还全局 Esc/空格：全局热键会在按键到达窗口
 		// 前吃掉它们（空格就打不进查询里）；焦点一离开就收回，
 		// 空格恢复快速预览。
@@ -1688,7 +1692,33 @@ func (a *shelf) searchField(c *ui.Context, live bool) ui.Element {
 			}
 			return true
 		})
+		if a.search != "" {
+			b := ui.ButtonBase(c.Key("clip-clear")).Size(15, 15).Radius(8).Center().Shrink(0).
+				Label(loc(c).ClipClearSearch()).
+				Background(ui.RGBA(255, 255, 255, 0.14))
+			col := ink2
+			if b.Hovered() {
+				b.Background(ui.RGBA(255, 255, 255, 0.24))
+				col = ui.Hex("#FFFFFF")
+			}
+			b.Children(func() { ui.Icon(c.Key("x"), closeSymbol).Size(9, 9).TextColor(col) })
+			if b.Clicked() {
+				cleared = true
+			}
+		}
 	})
+	if focused {
+		// A focused field wears a thin accent edge and a slightly lighter
+		// fill, so the keyboard's destination is visible at a glance.
+		wrap.Border(1, accent.Alpha(0.55)).Background(ui.RGBA(255, 255, 255, 0.075))
+	}
+	if cleared {
+		a.search = ""
+		query.Focus()
+		if a.win != nil {
+			a.win.Invalidate()
+		}
+	}
 	return wrap
 }
 

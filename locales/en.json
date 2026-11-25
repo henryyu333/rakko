@@ -642,6 +642,8 @@
   "pageTrayEmptyTitle": "Drop Files Here",
   "pageClipEmptyTitle": "No Clipboard Items Yet",
   "pageClipNoMatchTitle": "No matching content",
+  "clipClearSearch": "Clear Search",
+  "trayRemove": "Remove from Tray",
   "clipPinned": "Pinned",
   "clipPasteHint": "↩ Paste",
   "clipPasteHintWin": "Enter Paste",

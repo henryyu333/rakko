@@ -52,10 +52,12 @@ func (a *shelf) itemTile(c *ui.Context, item store.Item) {
 	selected := a.itemSelected(item.ID)
 	switch {
 	case selected:
-		tile.Background(accent16).Border(1.5, accent.Alpha(0.9))
+		tile.Background(accent.Alpha(0.14)).Border(1, accent.Alpha(0.70)).
+			InsetShadow(0, 0, 0.5, 0, ui.RGBA(255, 255, 255, 0.10))
 	case tile.Hovered():
 		tile.Background(fill1)
 	}
+	var removed bool
 	if !item.Missing {
 		tile.DragDataFrom(func() transfer.Data {
 			// 本应用发起的拖出会话：拖拽监视据此抑制摇晃召唤与篮子。
@@ -79,12 +81,33 @@ func (a *shelf) itemTile(c *ui.Context, item store.Item) {
 		if item.Pinned {
 			// Keep the badge in the tile corner, clear of the thumbnail.
 			ui.Row(c.Key("pin")).Absolute().Top(2).Right(2).Size(16, 16).Radius(8).Center().
-				Background(fill2).Label(l.ClipPinned()).
+				Background(accent.Alpha(0.22)).Label(l.ClipPinned()).
 				Children(func() {
-					ui.Icon(c, pinFill).Size(10, 10).TextColor(ink)
+					ui.Icon(c, pinFill).Size(10, 10).TextColor(accent)
 				})
+		} else if tile.Hovered() {
+			// A temporary tile clears its file in one click; the press is
+			// this button's, so the tile never selects or copies.
+			b := ui.ButtonBase(c.Key("tile-remove")).Absolute().Top(3).Right(3).
+				Size(17, 17).Radius(9).Center().Label(l.TrayRemove()).
+				Background(ui.RGBA(34, 35, 40, 0.92)).
+				Shadow(0, 1, 4, 0, ui.RGBA(0, 0, 0, 0.45)).
+				InsetShadow(0, 0, 0.5, 0, ui.RGBA(255, 255, 255, 0.14))
+			fg := ink2
+			if b.Hovered() {
+				b.Background(danger)
+				fg = ui.Hex("#FFFFFF")
+			}
+			b.Children(func() { ui.Icon(c.Key("x"), closeSymbol).Size(9, 9).TextColor(fg) })
+			if b.Clicked() {
+				removed = true
+			}
 		}
 	})
+	if removed {
+		a.removeFrom([]store.Item{item}, pageTray)
+		return
+	}
 	if item.Missing {
 		tile.Opacity(0.38)
 	}
@@ -195,25 +218,61 @@ func (a *shelf) clipRow(c *ui.Context, item store.Item, number int) {
 		}, transfer.DragOptions{Operations: transfer.Copy, Done: a.completed})
 	}
 	row.ContextMenu(func(m *ui.Menu) { a.itemMenu(m, item) })
+	var togglePin, remove bool
 	row.Children(func() {
 		if number > 0 {
-			ui.Text(c, strconv.Itoa(number)).SingleLine().FontSize(10).TextColor(ink3).
-				Width(9).TextAlign(ui.Center).Label(osText(a.appLoc().ClipShortcut(strconv.Itoa(number)), a.appLoc().ClipShortcutWin(strconv.Itoa(number))))
+			ui.Box(c.Key("num")).Size(15, 15).Radius(4).Center().
+				Background(ui.RGBA(255, 255, 255, 0.06)).
+				Label(osText(a.appLoc().ClipShortcut(strconv.Itoa(number)), a.appLoc().ClipShortcutWin(strconv.Itoa(number)))).
+				Children(func() {
+					ui.Text(c, strconv.Itoa(number)).SingleLine().FontSize(10).TextColor(ink3).TextAlign(ui.Center)
+				})
 		}
 		a.clipRowIcon(c, item)
 		text := title
 		if item.Kind == store.KindImage {
 			text = l.ClipScreenshot(stampIn(c.Locale(), c.Region(), item.CreatedAt.Local()))
 		}
-		ui.Text(c, text).SingleLine().FontSize(12).TextColor(ink).Grow(1).MinWidth(0)
+		if spans := clipTitleSpans(text, a.search); len(spans) > 1 {
+			ui.RichText(c, spans...).MaxLines(1).Grow(1).MinWidth(0)
+		} else {
+			ui.Text(c, text).SingleLine().FontSize(12).TextColor(ink).Grow(1).MinWidth(0)
+		}
 		if selected && a.focusMode {
 			ui.Text(c, osText(l.ClipPasteHint(), l.ClipPasteHintWin())).SingleLine().FontSize(10.5).TextColor(ink3)
 		}
+		if row.Hovered() {
+			// Hovering swaps the meta line for the two frequent actions;
+			// each button owns the press, so the row never copies.
+			ui.Row(c.Key("acts")).AlignItems(ui.Center).Gap(2).Shrink(0).Children(func() {
+				pinLabel, pinIcon := l.ItemPin(), pinSymbol
+				if item.Pinned {
+					pinLabel, pinIcon = l.ItemUnpin(), pinFill
+				}
+				pin := clipRowAction(c, "pin-act", pinIcon, pinLabel, false, item.Pinned)
+				if pin.Clicked() {
+					togglePin = true
+				}
+				del := clipRowAction(c, "del-act", trashSymbol, l.ItemRemove(), true, false)
+				if del.Clicked() {
+					remove = true
+				}
+			})
+			return
+		}
 		if item.Pinned {
-			ui.Icon(c.Key("pin"), pinFill).Size(10, 10).TextColor(ink.Alpha(0.5)).Label(l.ClipPinned())
+			ui.Icon(c.Key("pin"), pinFill).Size(10, 10).TextColor(accent.Alpha(0.9)).Label(l.ClipPinned())
 		}
 		ui.Text(c, a.clipRowMeta(l, item)).SingleLine().FontSize(10.5).TextColor(ink3)
 	})
+	switch {
+	case togglePin:
+		a.setPinned([]store.Item{item}, !item.Pinned)
+		return
+	case remove:
+		a.removeFrom([]store.Item{item}, pageClipboard)
+		return
+	}
 	if row.Clicked() {
 		mods := row.ClickModifiers()
 		a.selection.click(a.visibleItems(), item.ID, mods)
@@ -227,9 +286,120 @@ func (a *shelf) clipRow(c *ui.Context, item store.Item, number int) {
 	}
 }
 
+// parseColorSwatch reads a capture that is one solid colour: #RGB, #RRGGBB,
+// or rgb(r, g, b) with byte values. Padding is ignored; anything else (a
+// sentence that starts with a colour, several lines) is not a swatch.
+func parseColorSwatch(text string) (ui.Color, bool) {
+	s := strings.TrimSpace(text)
+	if s == "" || strings.ContainsAny(s, "\r\n") {
+		return ui.Color{}, false
+	}
+	if strings.HasPrefix(s, "#") {
+		h := s[1:]
+		if strings.ContainsAny(h, " \t") {
+			return ui.Color{}, false
+		}
+		switch len(h) {
+		case 3:
+			h = string([]byte{h[0], h[0], h[1], h[1], h[2], h[2]})
+		case 6:
+		default:
+			return ui.Color{}, false
+		}
+		v, err := strconv.ParseUint(h, 16, 32)
+		if err != nil {
+			return ui.Color{}, false
+		}
+		return ui.RGBA(uint8(v>>16), uint8(v>>8), uint8(v), 255), true
+	}
+	lower := strings.ToLower(s)
+	if !strings.HasPrefix(lower, "rgb(") || !strings.HasSuffix(s, ")") {
+		return ui.Color{}, false
+	}
+	parts := strings.Split(s[4:len(s)-1], ",")
+	if len(parts) != 3 {
+		return ui.Color{}, false
+	}
+	var rgb [3]uint8
+	for i, part := range parts {
+		n, err := strconv.ParseUint(strings.TrimSpace(part), 10, 8)
+		if err != nil {
+			return ui.Color{}, false
+		}
+		rgb[i] = uint8(n)
+	}
+	return ui.RGBA(rgb[0], rgb[1], rgb[2], 255), true
+}
+
+// clipTitleSpans styles the first search hit in a row's title, for the
+// highlighter the query deserves; an empty query or no hit is one plain
+// span.
+func clipTitleSpans(text, query string) []ui.Span {
+	plain := ui.Span{Text: text, Size: 12, Color: ink}
+	q := strings.TrimSpace(query)
+	if q == "" {
+		return []ui.Span{plain}
+	}
+	lower, lq := strings.ToLower(text), strings.ToLower(q)
+	i := -1
+	if len(lower) == len(text) {
+		i = strings.Index(lower, lq)
+	} else {
+		// Case folding changed the byte lengths: fall back to an exact
+		// search rather than slice the wrong runes out of the title.
+		i = strings.Index(text, q)
+	}
+	if i < 0 {
+		return []ui.Span{plain}
+	}
+	end := i + len(q)
+	if end > len(text) {
+		return []ui.Span{plain}
+	}
+	out := make([]ui.Span, 0, 3)
+	if i > 0 {
+		out = append(out, ui.Span{Text: text[:i], Size: 12, Color: ink})
+	}
+	out = append(out, ui.Span{Text: text[i:end], Size: 12, Color: ui.Hex("#FFFFFF"),
+		Background: accent.Alpha(0.34), Radius: 3, PaddingX: 2})
+	if end < len(text) {
+		out = append(out, ui.Span{Text: text[end:], Size: 12, Color: ink})
+	}
+	return out
+}
+
+// clipRowAction is one 21pt icon button of a clipboard row's hover actions.
+func clipRowAction(c *ui.Context, key string, icon *ui.SVG, label string, danger, on bool) ui.Element {
+	b := ui.ButtonBase(c.Key(key)).Size(21, 21).Radius(6).Center().Shrink(0).Label(label)
+	fg := ink2
+	if on {
+		fg = accent
+	}
+	if b.Hovered() {
+		if danger {
+			b.Background(ui.RGBA(255, 69, 58, 0.22))
+			fg = ui.Hex("#FF6961")
+		} else {
+			b.Background(fill2)
+			fg = ink
+		}
+	}
+	b.Children(func() {
+		ui.Icon(c.Key("ic"), icon).Size(12, 12).TextColor(fg)
+	})
+	return b
+}
+
 // clipRowIcon is the row's 16pt source-app icon, cached by bundle id, or
 // the kind's glyph when no app is known.
 func (a *shelf) clipRowIcon(c *ui.Context, item store.Item) {
+	if item.Kind == store.KindText {
+		if col, ok := parseColorSwatch(item.Text); ok {
+			ui.Box(c.Key("swatch")).Size(13, 13).Radius(4).Background(col).
+				InsetShadow(0, 0, 0.5, 0, ui.RGBA(255, 255, 255, 0.28))
+			return
+		}
+	}
 	if item.Kind == store.KindImage {
 		if thumb := a.thumbnail(item); thumb != nil {
 			ui.Image(c.Key("clip-thumb"), thumb).Size(16, 16).Radius(4).Fit(ui.Cover)

@@ -6537,6 +6537,26 @@ func (msgs Messages) PageClipNoMatchTitle() string {
 	return Catalog.Format(msgs.locale, "pageClipNoMatchTitle", nil)
 }
 
+// ClipClearSearch says "清空搜索"
+// in the language the app shows.
+func ClipClearSearch() string { return In(i18n.Locale()).ClipClearSearch() }
+
+// ClipClearSearch says "清空搜索"
+// in the language of msgs.
+func (msgs Messages) ClipClearSearch() string {
+	return Catalog.Format(msgs.locale, "clipClearSearch", nil)
+}
+
+// TrayRemove says "从托盘移除"
+// in the language the app shows.
+func TrayRemove() string { return In(i18n.Locale()).TrayRemove() }
+
+// TrayRemove says "从托盘移除"
+// in the language of msgs.
+func (msgs Messages) TrayRemove() string {
+	return Catalog.Format(msgs.locale, "trayRemove", nil)
+}
+
 // ClipPinned says "已置顶"
 // in the language the app shows.
 func ClipPinned() string { return In(i18n.Locale()).ClipPinned() }
