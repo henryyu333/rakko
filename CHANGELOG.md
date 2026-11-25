@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.18.8
+
+- **交互与控件修复**：拖动音乐进度条或音量条中途失焦、手势被打断时，不再把音量误设为静音或让进度跳回开头；设置里的确认按钮滑出按钮外松手或按压被取消时不再误触发；首次引导在授予权限后的「重新启动」步骤，按回车或右方向键现在和点击按钮一样正常重启应用。
+- **拖拽与识别提示**：工具页卡片拖离面板变形时，预览窗口的尺寸更新延后到渲染帧之后，避免边界帧闪烁；面板收起状态下通过桌面钉卡或快捷键识别文字超过 250ms 时，会可靠唤醒并显示「正在识别…」进度胶囊。
+- **托盘与 AI 用量**：重复转换或解压出同一路径的文件和文件夹时，会直接复用托盘里已有的条目并保留置顶状态，不再出现重复项；Devin 的缓存写入字段改为仅在 Devin 解析器中生效，避免其他工具误多计。
+
+### English
+
+- **Input & control fixes**: if a drag on the music progress or volume slider loses focus or is canceled by the system, it no longer mutes the volume or jumps back to 0:00; confirmation buttons in Settings ignore canceled presses and releases outside the button; pressing Enter or Right on the restart step of first-launch onboarding now relaunches Rakko just like clicking the button.
+- **Drag preview & OCR indicator**: dragging a tools card off the panel now defers window frame updates until after the render frame to avoid stretching artifacts; when OCR takes longer than 250ms while the panel is folded, the progress pill reliably wakes and appears.
+- **Tray & AI usage**: re-converting or re-extracting a file or folder at the same path now reuses the existing tray item (keeping its pinned state) instead of creating duplicates; Devin's `cache_creation_tokens` field is now scoped to Devin's parser alone so other tools cannot overcount cache writes.
+
 ## 1.18.7
 
 - **白板文字看得清**：图形选「实心」填充、填充色和描边色相同时，里面的文字会自动换成反色，不再和底色混在一起看不见；箭头标签和导出的 PNG / SVG 也一样。
