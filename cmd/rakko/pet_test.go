@@ -651,3 +651,59 @@ func TestPetOwnDragIsNotCaught(t *testing.T) {
 		t.Fatal("our own drag made the otter hold what it never caught")
 	}
 }
+
+func TestPetMissedUpEndsSessionAndCanceledRestoresFrame(t *testing.T) {
+	t.Run("lost_up", func(t *testing.T) {
+		a := petShelf(t)
+		pet := windowlessPet(a, 400, 300, 74, 96)
+		pet.pressAt(20, 20)
+		pet.lockMove(20, 20)
+		if !pet.pressed || !pet.moving || !pet.didMove {
+			t.Fatalf("expected moving pet press, got %+v", pet)
+		}
+		now := time.Now()
+		for range 2 {
+			a.petTick(now, mygo.Point{X: 430, Y: 330}, false)
+			if !pet.pressed {
+				t.Fatal("pet cleared press before 3 missed polls")
+			}
+		}
+		a.petTick(now, mygo.Point{X: 430, Y: 330}, false)
+		if pet.pressed || pet.moving || pet.didMove || pet.tapReady {
+			t.Fatalf("lost PointerUp did not end pet session: pressed=%v moving=%v didMove=%v tap=%v",
+				pet.pressed, pet.moving, pet.didMove, pet.tapReady)
+		}
+		beforeFrame := pet.frame
+		a.petTick(now, mygo.Point{X: 100, Y: 100}, true)
+		if pet.frame != beforeFrame {
+			t.Fatalf("pet teleported after ended session: %+v != %+v", pet.frame, beforeFrame)
+		}
+	})
+
+	t.Run("canceled_up", func(t *testing.T) {
+		a := petShelf(t)
+		pet := windowlessPet(a, 400, 300, 74, 96)
+		origFrame := pet.frame
+		view := ui.NewTester(pet.view, pet.frame.Width, pet.frame.Height)
+		view.Frame()
+
+		view.Press(20, 20)
+		view.Move(36, 36)
+		if !pet.pressed || !pet.moving {
+			t.Fatalf("expected active drag before cancel, got pressed=%v moving=%v", pet.pressed, pet.moving)
+		}
+		pet.frame = mygo.Rectangle{X: 460, Y: 350, Width: origFrame.Width, Height: origFrame.Height}
+		view.CancelPress()
+
+		if pet.pressed || pet.moving || pet.didMove || pet.tapReady {
+			t.Fatalf("canceled press left pet active: pressed=%v moving=%v didMove=%v tap=%v",
+				pet.pressed, pet.moving, pet.didMove, pet.tapReady)
+		}
+		if a.visible {
+			t.Fatal("canceled press opened the notch panel")
+		}
+		if pet.frame != origFrame {
+			t.Fatalf("canceled press did not restore pet frame: got %+v, want %+v", pet.frame, origFrame)
+		}
+	})
+}

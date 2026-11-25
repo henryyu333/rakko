@@ -79,6 +79,8 @@ type petWindow struct {
 	// The press: where it landed, and whether it became a move.
 	pressed, moving, didMove bool
 	grabX, grabY             int
+	pressFrame               mygo.Rectangle
+	upMisses                 int
 	tapReady                 bool // a press that may still be a tap
 	// reduceMotion is the desktop's Reduce Motion, read from the view (the
 	// only place with a Context) so the tick can honour it too.
@@ -466,16 +468,29 @@ func (a *shelf) petTick(now time.Time, p mygo.Point, down bool) {
 	}
 	returning := false
 	if pet.pressed {
-		if down && pet.moving {
-			pet.display = displayIDAt(p, pet.display)
-			pet.frame = pinClamp(mygo.Rectangle{
-				X: p.X - pet.grabX, Y: p.Y - pet.grabY,
-				Width: pet.frame.Width, Height: pet.frame.Height,
-			}, petArea(pet.display))
-			pet.slideAt = time.Time{}
-			pet.applyFrame()
+		if !down {
+			pet.upMisses++
+			if pet.upMisses >= 3 {
+				pet.upMisses = 0
+				pet.pressed, pet.moving, pet.tapReady = false, false, false
+				if pet.didMove {
+					pet.didMove = false
+					a.savePetSpot()
+				}
+			}
+		} else {
+			pet.upMisses = 0
+			if pet.moving {
+				pet.display = displayIDAt(p, pet.display)
+				pet.frame = pinClamp(mygo.Rectangle{
+					X: p.X - pet.grabX, Y: p.Y - pet.grabY,
+					Width: pet.frame.Width, Height: pet.frame.Height,
+				}, petArea(pet.display))
+				pet.slideAt = time.Time{}
+				pet.applyFrame()
+			}
+			returning = pet.moving && petReturnTarget(a, pet.frame)
 		}
-		returning = pet.moving && petReturnTarget(a, pet.frame)
 	}
 	// A pet held over the notch grows 松开收进刘海 exactly where a card
 	// held there grows 松开放回: the release reads the same zone.
@@ -588,6 +603,8 @@ func (pet *petWindow) invalidate() {
 // previous gesture can neither poison this tap nor be seen by it.
 func (pet *petWindow) pressAt(px, py float64) {
 	pet.grabX, pet.grabY = int(px+0.5), int(py+0.5)
+	pet.pressFrame = pet.frame
+	pet.upMisses = 0
 	pet.pressed, pet.moving, pet.didMove, pet.tapReady = true, false, false, true
 	if pet.owner != nil {
 		pet.owner.lastAct = time.Now() // taking hold of the otter is activity
@@ -735,6 +752,13 @@ func (pet *petWindow) trackPress(e ui.Element, a *shelf) {
 		case ui.InputPointerUp:
 			if !pet.pressed || ev.Button != 0 {
 				return false
+			}
+			if ev.Canceled {
+				pet.pressed, pet.moving, pet.didMove, pet.tapReady = false, false, false, false
+				pet.upMisses = 0
+				pet.frame = pet.pressFrame
+				pet.applyFrame()
+				return true
 			}
 			// A fast drag's release still locks as a move before it ends.
 			pet.lockMove(int(ev.X)-pet.grabX, int(ev.Y)-pet.grabY)
