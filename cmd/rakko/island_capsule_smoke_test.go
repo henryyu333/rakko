@@ -35,10 +35,10 @@ func capsuleShot(t *testing.T, win *mygo.Window, name string) (image.Image, mygo
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}
-	if err := os.MkdirAll(islandShotDir, 0o755); err != nil {
+	if err := os.MkdirAll(islandShotDir(t), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(islandShotDir, name+".png")
+	path := filepath.Join(islandShotDir(t), name+".png")
 	if out, err := exec.Command("screencapture", "-x", "-o", fmt.Sprintf("-l%d", num), path).CombinedOutput(); err != nil {
 		t.Fatalf("%s: screencapture failed (%v): %s", name, err, out)
 	}
@@ -144,7 +144,7 @@ func captureOnly(t *testing.T, win *mygo.Window, name string) image.Image {
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}
-	path := filepath.Join(islandShotDir, name+".png")
+	path := filepath.Join(islandShotDir(t), name+".png")
 	if out, err := exec.Command("screencapture", "-x", "-o", fmt.Sprintf("-l%d", num), path).CombinedOutput(); err != nil {
 		t.Fatalf("%s: screencapture failed (%v): %s", name, err, out)
 	}

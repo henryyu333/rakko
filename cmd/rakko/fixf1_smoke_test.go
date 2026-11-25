@@ -32,7 +32,7 @@ import (
 	"rakko/internal/platform"
 )
 
-const fixf1ShotDir = "/tmp/shelf-fixf1"
+func fixf1ShotDir(t *testing.T) string { return smokeShotDir(t, "fixf1") }
 
 // fixf1Shot captures a real window by CGWindowID into fixf1ShotDir. The
 // smoke harness has no monitor tick, so the animation the real app would
@@ -54,10 +54,10 @@ func fixf1Shot(t *testing.T, a *shelf, w *mygo.Window, name string) string {
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}
-	if err := os.MkdirAll(fixf1ShotDir, 0o755); err != nil {
+	if err := os.MkdirAll(fixf1ShotDir(t), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	shot := filepath.Join(fixf1ShotDir, name+".png")
+	shot := filepath.Join(fixf1ShotDir(t), name+".png")
 	out, err := exec.Command("screencapture", "-x", "-o", fmt.Sprintf("-l%d", num), shot).CombinedOutput()
 	if err != nil {
 		t.Fatalf("%s: screencapture failed (%v): %s", name, err, out)

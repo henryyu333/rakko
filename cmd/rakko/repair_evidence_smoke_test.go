@@ -63,7 +63,11 @@ func TestSmokePinnedOneColumnMusic(t *testing.T) {
 		t.Fatalf("the pinned 1 × 1 music card is %d wide, want %d", frame.Width, pinCardW2)
 	}
 	time.Sleep(300 * time.Millisecond)
-	out := filepath.Join(stageADir, "pin-music-1x1.png")
+	dir := stageADir(t)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(dir, "pin-music-1x1.png")
 	shot := fmt.Sprintf("-l%d", num)
 	if num == 0 {
 		t.Fatal("the pin window has no number")

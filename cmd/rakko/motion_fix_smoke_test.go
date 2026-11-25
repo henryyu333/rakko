@@ -19,7 +19,7 @@ import (
 	"rakko/internal/platform"
 )
 
-const fixShotDir = "/tmp/shelf-fix"
+func fixShotDir(t *testing.T) string { return smokeShotDir(t, "fix") }
 
 type motionSample struct {
 	ms                  float64
@@ -53,10 +53,10 @@ func sampleMotion(a *shelf, span time.Duration) []motionSample {
 
 func saveMotion(t *testing.T, name string, samples []motionSample) {
 	t.Helper()
-	if err := os.MkdirAll(fixShotDir, 0o755); err != nil {
+	if err := os.MkdirAll(fixShotDir(t), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(fixShotDir, name+".csv")
+	path := filepath.Join(fixShotDir(t), name+".csv")
 	f, err := os.Create(path)
 	if err != nil {
 		t.Fatal(err)
@@ -193,10 +193,10 @@ func fixCapsuleShot(t *testing.T, a *shelf, name string) {
 			t.Errorf("%s: capsule content did not draw (drawn=%v armed=%v retracting=%v)", name, a.fb.drawn, a.fb.armed, a.fb.retracting)
 		}
 	})
-	if err := os.MkdirAll(fixShotDir, 0o755); err != nil {
+	if err := os.MkdirAll(fixShotDir(t), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(fixShotDir, name+".png")
+	path := filepath.Join(fixShotDir(t), name+".png")
 	if out, err := exec.Command("screencapture", "-x", "-o", fmt.Sprintf("-l%d", num), path).CombinedOutput(); err != nil {
 		t.Fatalf("capture %s: %v: %s", name, err, out)
 	}

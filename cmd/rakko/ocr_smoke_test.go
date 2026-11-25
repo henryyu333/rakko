@@ -35,7 +35,7 @@ import (
 	"rakko/internal/store"
 )
 
-const ocrShotDir = "/tmp/shelf-ocr"
+func ocrShotDir(t *testing.T) string { return smokeShotDir(t, "ocr") }
 
 // ocrTextImage draws the fixture: three lines of mixed Chinese/English on
 // white, rendered with the system's Arial Unicode so no font is bundled.
@@ -72,10 +72,10 @@ func TestSmokeOCRSearchAndCopy(t *testing.T) {
 	a := redesignShelf(t)
 	pngBytes := ocrTextImage(t)
 	// 存档一张参考图到截图目录，便于人工核对识别内容。
-	if err := os.MkdirAll(ocrShotDir, 0o755); err != nil {
+	if err := os.MkdirAll(ocrShotDir(t), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(ocrShotDir, "fixture.png"), pngBytes, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(ocrShotDir(t), "fixture.png"), pngBytes, 0o644); err != nil {
 		t.Fatal(err)
 	}
 

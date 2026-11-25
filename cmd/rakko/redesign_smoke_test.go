@@ -25,7 +25,7 @@ import (
 // compare them with design/mock.png. Run with RAKKO_BASKET_SMOKE=1; each
 // PNG lands in /tmp/shelf-redesign/<name>.png. The test instance uses the
 // smoke data dir and never touches ~/Library/Application Support/Rakko.
-const redesignShotDir = "/tmp/shelf-redesign"
+func redesignShotDir(t *testing.T) string { return smokeShotDir(t, "redesign") }
 
 // shotWindow screenshots the native window w to name.png and returns its
 // path.
@@ -36,10 +36,10 @@ func shotWindow(t *testing.T, w *mygo.Window, name string) string {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}
 	time.Sleep(350 * time.Millisecond) // let the drawn frame settle
-	if err := os.MkdirAll(redesignShotDir, 0o755); err != nil {
+	if err := os.MkdirAll(redesignShotDir(t), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	shot := filepath.Join(redesignShotDir, name+".png")
+	shot := filepath.Join(redesignShotDir(t), name+".png")
 	out, err := exec.Command("screencapture", "-x", "-o", fmt.Sprintf("-l%d", num), shot).CombinedOutput()
 	if err != nil {
 		t.Fatalf("%s: screencapture failed (%v): %s", name, err, out)

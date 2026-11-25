@@ -121,7 +121,11 @@ func TestSettingsWindowAnswersClicksAndScroll(t *testing.T) {
 	// Screenshot the scrolled window for eyeballing; the id pins
 	// `screencapture -l` to this window alone.
 	if n := platform.WindowNumber(settings); n != 0 {
-		out := os.TempDir() + "/shelf-settings-scrolled.png"
+		dir := smokeShotDir(t, "settings")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		out := filepath.Join(dir, "shelf-settings-scrolled.png")
 		if err := exec.Command("screencapture", "-l", strconv.Itoa(n), "-x", out).Run(); err == nil {
 			t.Logf("scrolled Settings screenshot: %s", out)
 		}

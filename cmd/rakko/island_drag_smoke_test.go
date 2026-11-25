@@ -28,15 +28,15 @@ import (
 	"rakko/internal/settings"
 )
 
-const islandDragShotDir = "/tmp/shelf-island-drag"
+func islandDragShotDir(t *testing.T) string { return smokeShotDir(t, "island-drag") }
 
 // islandDragShot captures a screen region of the test backdrop.
 func islandDragShot(t *testing.T, r mygo.Rectangle, name string) string {
 	t.Helper()
-	if err := os.MkdirAll(islandDragShotDir, 0o755); err != nil {
+	if err := os.MkdirAll(islandDragShotDir(t), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	out := filepath.Join(islandDragShotDir, name+".png")
+	out := filepath.Join(islandDragShotDir(t), name+".png")
 	cmd := exec.Command("screencapture", "-x", "-o", "-R",
 		fmt.Sprintf("%d,%d,%d,%d", r.X, r.Y, r.Width, r.Height), out)
 	if b, err := cmd.CombinedOutput(); err != nil {
@@ -53,10 +53,10 @@ func islandDragWindowShot(t *testing.T, a *shelf, name string) string {
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}
-	if err := os.MkdirAll(islandDragShotDir, 0o755); err != nil {
+	if err := os.MkdirAll(islandDragShotDir(t), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	out := filepath.Join(islandDragShotDir, name+".png")
+	out := filepath.Join(islandDragShotDir(t), name+".png")
 	cmd := exec.Command("screencapture", "-x", "-o", fmt.Sprintf("-l%d", num), out)
 	if b, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("screencapture %s: %v: %s", name, err, b)

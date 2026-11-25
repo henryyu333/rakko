@@ -32,7 +32,7 @@ import (
 	"unsafe"
 )
 
-const fix2ShotDir = "/tmp/shelf-fix2"
+func fix2ShotDir(t *testing.T) string { return smokeShotDir(t, "fix2") }
 
 // fix2Shot screenshots the notch window to /tmp/shelf-fix2/name.png.
 func fix2Shot(t *testing.T, a *shelf, name string) string {
@@ -45,14 +45,14 @@ func fix2Shot(t *testing.T, a *shelf, name string) string {
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}
-	if err := os.MkdirAll(fix2ShotDir, 0o755); err != nil {
+	if err := os.MkdirAll(fix2ShotDir(t), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if os.Getenv("RAKKO_FIX2_BASELINE") == "1" {
 		name = "before-" + name
 	}
 	time.Sleep(250 * time.Millisecond)
-	shot := filepath.Join(fix2ShotDir, name+".png")
+	shot := filepath.Join(fix2ShotDir(t), name+".png")
 	out, err := exec.Command("screencapture", "-x", "-o", fmt.Sprintf("-l%d", num), shot).CombinedOutput()
 	if err != nil {
 		t.Fatalf("%s: screencapture failed (%v): %s", name, err, out)

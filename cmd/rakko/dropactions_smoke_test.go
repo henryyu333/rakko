@@ -27,7 +27,7 @@ import (
 // /tmp/shelf-fix/drop-zone/<name>.png; the instance works in the smoke data
 // dir and never touches ~/Library/Application Support/Rakko.
 
-const dropShotDir = "/tmp/shelf-fix/drop-zone"
+func dropShotDir(t *testing.T) string { return smokeShotDir(t, "drop-zone") }
 
 // dropSmokeShelf is the live shelf with its converter, the way ready()
 // wires it, minus the observers a screenshot pass does not need.
@@ -128,14 +128,14 @@ func shotDropZone(t *testing.T, a *shelf, paths []string, name string) {
 	})
 	time.Sleep(900 * time.Millisecond) // settle the window and thumbnails
 	onMain(a.syncWindowFrame)
-	if err := os.MkdirAll(dropShotDir, 0o755); err != nil {
+	if err := os.MkdirAll(dropShotDir(t), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	num := platform.WindowNumber(a.win.NativeHandle())
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}
-	shot := filepath.Join(dropShotDir, name+".png")
+	shot := filepath.Join(dropShotDir(t), name+".png")
 	out, err := exec.Command("screencapture", "-x", "-o", fmt.Sprintf("-l%d", num), shot).CombinedOutput()
 	if err != nil {
 		t.Fatalf("%s: screencapture failed (%v): %s", name, err, out)

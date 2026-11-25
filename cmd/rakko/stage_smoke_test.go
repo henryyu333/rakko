@@ -19,7 +19,7 @@ import (
 	"rakko/internal/platform"
 )
 
-const stageADir = "/tmp/shelf-stagef-A"
+func stageADir(t *testing.T) string { return smokeShotDir(t, "stagef-A") }
 
 // stageAShotRegion captures the window and the desktop around it, so an
 // appearance change can be judged against what is behind the panel.
@@ -37,10 +37,10 @@ func stageAShotRegion(t *testing.T, a *shelf, name string) string {
 		}
 	})
 	time.Sleep(400 * time.Millisecond)
-	if err := os.MkdirAll(stageADir, 0o755); err != nil {
+	if err := os.MkdirAll(stageADir(t), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(stageADir, name+".png")
+	path := filepath.Join(stageADir(t), name+".png")
 	pad := 140
 	out, err := exec.Command("screencapture", "-x", "-o", "-R",
 		fmt.Sprintf("%d,%d,%d,%d", r.X-pad, max(r.Y-pad, 0), r.Width+2*pad, r.Height+2*pad), path).CombinedOutput()
@@ -62,10 +62,10 @@ func stageAShot(t *testing.T, a *shelf, name string) string {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}
 	time.Sleep(400 * time.Millisecond) // let the drawn frame settle
-	if err := os.MkdirAll(stageADir, 0o755); err != nil {
+	if err := os.MkdirAll(stageADir(t), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(stageADir, name+".png")
+	path := filepath.Join(stageADir(t), name+".png")
 	out, err := exec.Command("screencapture", "-x", "-o", fmt.Sprintf("-l%d", num), path).CombinedOutput()
 	if err != nil {
 		t.Fatalf("%s: screencapture failed (%v): %s", name, err, out)

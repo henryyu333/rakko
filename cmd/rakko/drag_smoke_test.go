@@ -87,5 +87,5 @@ func TestSmokeDragReturnReopensThePanel(t *testing.T) {
 			visible, suppressed, inBand)
 	}
 	stageAShot(t, a, "drag-return-3-reopened")
-	t.Logf("drag-return shots -> %s", stageADir)
+	t.Logf("drag-return shots -> %s", stageADir(t))
 }

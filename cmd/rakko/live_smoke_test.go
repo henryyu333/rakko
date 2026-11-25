@@ -23,7 +23,7 @@ import (
 	"rakko/internal/settings"
 )
 
-const liveShotDir = "/tmp/shelf-live"
+func liveShotDir(t *testing.T) string { return smokeShotDir(t, "live") }
 
 func liveShot(t *testing.T, a *shelf, name string) string {
 	t.Helper()
@@ -37,10 +37,10 @@ func liveShot(t *testing.T, a *shelf, name string) string {
 	time.Sleep(120 * time.Millisecond)
 	onMain(a.syncWindowFrame)
 	time.Sleep(80 * time.Millisecond)
-	if err := os.MkdirAll(liveShotDir, 0o755); err != nil {
+	if err := os.MkdirAll(liveShotDir(t), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(liveShotDir, name+".png")
+	path := filepath.Join(liveShotDir(t), name+".png")
 	if out, err := exec.Command("screencapture", "-x", "-o", fmt.Sprintf("-l%d", num), path).CombinedOutput(); err != nil {
 		t.Fatalf("%s: screencapture failed (%v): %s", name, err, out)
 	}

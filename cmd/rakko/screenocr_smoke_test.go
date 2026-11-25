@@ -23,7 +23,7 @@ import (
 	"rakko/internal/platform"
 )
 
-const ocrShotDirC = "/tmp/shelf-C"
+func ocrShotDirC(t *testing.T) string { return smokeShotDir(t, "C") }
 
 // shotOCR screenshots the notch window to /tmp/shelf-C/name.png.
 func shotOCR(t *testing.T, a *shelf, name string) string {
@@ -36,11 +36,11 @@ func shotOCR(t *testing.T, a *shelf, name string) string {
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}
-	if err := os.MkdirAll(ocrShotDirC, 0o755); err != nil {
+	if err := os.MkdirAll(ocrShotDirC(t), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(400 * time.Millisecond) // settle the open animation
-	shot := filepath.Join(ocrShotDirC, name+".png")
+	shot := filepath.Join(ocrShotDirC(t), name+".png")
 	out, err := exec.Command("screencapture", "-x", "-o", fmt.Sprintf("-l%d", num), shot).CombinedOutput()
 	if err != nil {
 		t.Fatalf("%s: screencapture failed (%v): %s", name, err, out)

@@ -30,7 +30,7 @@ import (
 	"rakko/internal/settings"
 )
 
-const islandShotDir = "/tmp/shelf-island"
+func islandShotDir(t *testing.T) string { return smokeShotDir(t, "island") }
 
 // islandArena is the test-owned backdrop the shots are cut against: a
 // light surface just below the menu bar, so the black capsule reads as a
@@ -78,11 +78,11 @@ func islandShot(t *testing.T, a *shelf, name string, settle time.Duration) strin
 		a.win.Invalidate()
 	})
 	time.Sleep(150 * time.Millisecond)
-	if err := os.MkdirAll(islandShotDir, 0o755); err != nil {
+	if err := os.MkdirAll(islandShotDir(t), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	r := islandArena(a)
-	shot := filepath.Join(islandShotDir, name+".png")
+	shot := filepath.Join(islandShotDir(t), name+".png")
 	if out, err := exec.Command("screencapture", "-x", "-o", "-R",
 		fmt.Sprintf("%d,%d,%d,%d", r.X, r.Y, r.Width, r.Height), shot).CombinedOutput(); err != nil {
 		t.Fatalf("%s: screencapture failed (%v): %s", name, err, out)
@@ -124,14 +124,14 @@ func islandRawShot(t *testing.T, a *shelf, name string, settle time.Duration) st
 		a.win.Invalidate()
 	})
 	time.Sleep(150 * time.Millisecond)
-	if err := os.MkdirAll(islandShotDir, 0o755); err != nil {
+	if err := os.MkdirAll(islandShotDir(t), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	num := platform.WindowNumber(a.win.NativeHandle())
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}
-	shot := filepath.Join(islandShotDir, name+".png")
+	shot := filepath.Join(islandShotDir(t), name+".png")
 	if out, err := exec.Command("screencapture", "-x", "-o", fmt.Sprintf("-l%d", num), shot).CombinedOutput(); err != nil {
 		t.Fatalf("%s: screencapture failed (%v): %s", name, err, out)
 	}

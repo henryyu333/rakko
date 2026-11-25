@@ -6,8 +6,8 @@ package main
 // and the window at its level, WindowServer itself must hand a press on the
 // drawn shell to Rakko and a press 5pt beside it — still inside the window's
 // transparent ear margin, still above the menu bar — to whatever is
-// underneath. Run with RAKKO_BASKET_SMOKE=1; the probe log lands in
-// /tmp/shelf-stagefix/shell-hit.txt.
+// underneath. Run with RAKKO_BASKET_SMOKE=1; the probe log lands in the
+// run's shot folder (RAKKO_SHOTS/stagefix, else a temp folder).
 
 import (
 	"fmt"
@@ -87,7 +87,7 @@ func TestSmokeShellOnlyTakesTheMouseOnItsShape(t *testing.T) {
 		cursorPoint = old
 		a.syncMousePassThrough()
 	})
-	dir := "/tmp/shelf-stagefix"
+	dir := smokeShotDir(t, "stagefix")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}

@@ -28,15 +28,15 @@ import (
 	"rakko/internal/settings"
 )
 
-const panelDragShotDir = "/tmp/shelf-task-isldrag"
+func panelDragShotDir(t *testing.T) string { return smokeShotDir(t, "task-isldrag") }
 
 // panelDragShot captures a screen region for the evidence report.
 func panelDragShot(t *testing.T, r mygo.Rectangle, name string) string {
 	t.Helper()
-	if err := os.MkdirAll(panelDragShotDir, 0o755); err != nil {
+	if err := os.MkdirAll(panelDragShotDir(t), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	out := filepath.Join(panelDragShotDir, name+".png")
+	out := filepath.Join(panelDragShotDir(t), name+".png")
 	cmd := exec.Command("screencapture", "-x", "-o", "-R",
 		fmt.Sprintf("%d,%d,%d,%d", r.X, r.Y, r.Width, r.Height), out)
 	if b, err := cmd.CombinedOutput(); err != nil {

@@ -21,7 +21,7 @@ import (
 	"rakko/internal/platform"
 )
 
-const toolsShotDir = "/tmp/shelf-A"
+func toolsShotDir(t *testing.T) string { return smokeShotDir(t, "A") }
 
 // shotToolsPage puts the panel on the tools tab under RAKKO_ env pins
 // and screenshots the notch window.
@@ -38,14 +38,14 @@ func shotToolsPage(t *testing.T, a *shelf, name string, setup func()) {
 	})
 	time.Sleep(700 * time.Millisecond)
 	onMain(a.syncWindowFrame)
-	if err := os.MkdirAll(toolsShotDir, 0o755); err != nil {
+	if err := os.MkdirAll(toolsShotDir(t), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	num := platform.WindowNumber(a.win.NativeHandle())
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}
-	shot := filepath.Join(toolsShotDir, name+".png")
+	shot := filepath.Join(toolsShotDir(t), name+".png")
 	out, err := exec.Command("screencapture", "-x", "-o", fmt.Sprintf("-l%d", num), shot).CombinedOutput()
 	if err != nil {
 		t.Fatalf("%s: screencapture failed (%v): %s", name, err, out)

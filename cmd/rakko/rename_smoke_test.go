@@ -28,7 +28,7 @@ import (
 	"rakko/internal/store"
 )
 
-const renameShotDir = "/tmp/shelf-rename"
+func renameShotDir(t *testing.T) string { return smokeShotDir(t, "rename") }
 
 // renameShot screenshots the native window w to /tmp/shelf-rename/name.png.
 func renameShot(t *testing.T, w *mygo.Window, name string) string {
@@ -38,10 +38,10 @@ func renameShot(t *testing.T, w *mygo.Window, name string) string {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}
 	time.Sleep(400 * time.Millisecond) // let the drawn frame settle
-	if err := os.MkdirAll(renameShotDir, 0o755); err != nil {
+	if err := os.MkdirAll(renameShotDir(t), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	shot := filepath.Join(renameShotDir, name+".png")
+	shot := filepath.Join(renameShotDir(t), name+".png")
 	out, err := exec.Command("screencapture", "-x", "-o", fmt.Sprintf("-l%d", num), shot).CombinedOutput()
 	if err != nil {
 		t.Fatalf("%s: screencapture failed (%v): %s", name, err, out)
@@ -240,10 +240,10 @@ func TestRenameSmoke(t *testing.T) {
 	tileX := float64(shellX + 24 + 50)
 	tileY := float64(shellY + 74 + 50)
 	postRightClick(t, tileX, tileY)
-	if err := os.MkdirAll(renameShotDir, 0o755); err != nil {
+	if err := os.MkdirAll(renameShotDir(t), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	menuShot := filepath.Join(renameShotDir, "menu.png")
+	menuShot := filepath.Join(renameShotDir(t), "menu.png")
 	if out, err := exec.Command("screencapture", "-x", menuShot).CombinedOutput(); err != nil {
 		t.Fatalf("full-screen shot failed (%v): %s", err, out)
 	}

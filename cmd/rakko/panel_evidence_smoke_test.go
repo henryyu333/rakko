@@ -30,13 +30,13 @@ import (
 	"rakko/internal/store"
 )
 
-const panelEvidenceDir = "/tmp/shelf-panelb"
+func panelEvidenceDir(t *testing.T) string { return smokeShotDir(t, "panelb") }
 
 func TestSmokePanelEvidence(t *testing.T) {
 	if os.Getenv("RAKKO_BASKET_SMOKE") != "1" {
 		t.Skip("set RAKKO_BASKET_SMOKE=1 to capture the panel evidence")
 	}
-	if err := os.MkdirAll(panelEvidenceDir, 0o755); err != nil {
+	if err := os.MkdirAll(panelEvidenceDir(t), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	a := redesignShelf(t)
@@ -181,7 +181,7 @@ func TestSmokePanelEvidence(t *testing.T) {
 	run("island-to-sheet", func() { a.setLevel(2) }, 500*time.Millisecond)
 	run("close", func() { a.hide(hideExplicit) }, 500*time.Millisecond)
 
-	csvFile, err := os.Create(filepath.Join(panelEvidenceDir, "frames.csv"))
+	csvFile, err := os.Create(filepath.Join(panelEvidenceDir(t), "frames.csv"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,7 +302,7 @@ func compareWithPrototype(t *testing.T, page string, w, h, ox, oy int) {
 	if err != nil {
 		t.Fatalf("%s: crop prototype: %v", page, err)
 	}
-	ours := filepath.Join(panelEvidenceDir, "render-"+page+".png")
+	ours := filepath.Join(panelEvidenceDir(t), "render-"+page+".png")
 	ourShell, err := cropPNG(ours, ox, oy, w, h)
 	if err != nil {
 		t.Fatalf("%s: crop render: %v", page, err)
@@ -310,7 +310,7 @@ func compareWithPrototype(t *testing.T, page string, w, h, ox, oy int) {
 	canvas := image.NewRGBA(image.Rect(0, 0, 2*w+20, h))
 	draw.Draw(canvas, image.Rect(0, 0, w, h), protoShell, image.Point{}, draw.Src)
 	draw.Draw(canvas, image.Rect(w+20, 0, 2*w+20, h), ourShell, image.Point{}, draw.Src)
-	path := filepath.Join(panelEvidenceDir, "compare-"+page+".png")
+	path := filepath.Join(panelEvidenceDir(t), "compare-"+page+".png")
 	file, err := os.Create(path)
 	if err != nil {
 		t.Fatal(err)
@@ -385,7 +385,7 @@ func prototypeShot(t *testing.T, name, tab string, island, music bool, extra str
 		return "", fmt.Errorf("%v: %s", err, msg)
 	}
 	if data, err := os.ReadFile(out); err == nil {
-		_ = os.WriteFile(filepath.Join(panelEvidenceDir, "proto-"+name+".png"), data, 0o644)
+		_ = os.WriteFile(filepath.Join(panelEvidenceDir(t), "proto-"+name+".png"), data, 0o644)
 	}
 	return out, nil
 }
@@ -411,7 +411,7 @@ func cropPNG(path string, x, y, w, h int) (image.Image, error) {
 
 func savePNG(t *testing.T, img image.Image, name string) {
 	t.Helper()
-	file, err := os.Create(filepath.Join(panelEvidenceDir, name+".png"))
+	file, err := os.Create(filepath.Join(panelEvidenceDir(t), name+".png"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -428,7 +428,7 @@ func keepShot(t *testing.T, from, name string) {
 	if err != nil {
 		t.Fatalf("%s: %v", name, err)
 	}
-	if err := os.WriteFile(filepath.Join(panelEvidenceDir, name+".png"), data, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(panelEvidenceDir(t), name+".png"), data, 0o644); err != nil {
 		t.Fatal(err)
 	}
 }

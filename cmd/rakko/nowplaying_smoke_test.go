@@ -88,7 +88,11 @@ func TestNowPlayingPeekSmokeScreenshot(t *testing.T) {
 		t.Fatal("notch window has no CGWindowID")
 	}
 	time.Sleep(250 * time.Millisecond) // let the shot see the settled frame
-	shot := filepath.Join(os.TempDir(), "shelf-nowplaying-peek-smoke.png")
+	dir := smokeShotDir(t, "nowplaying")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	shot := filepath.Join(dir, "peek.png")
 	out, err := exec.Command("screencapture", "-x", "-o", fmt.Sprintf("-l%d", num), shot).CombinedOutput()
 	if err != nil {
 		t.Fatalf("screencapture failed (%v): %s", err, out)

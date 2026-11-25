@@ -22,7 +22,7 @@ import (
 	"rakko/internal/settings"
 )
 
-const snapShotDir = "/tmp/shelf-snap"
+func snapShotDir(t *testing.T) string { return smokeShotDir(t, "snap") }
 
 func snapShot(t *testing.T, w *mygo.Window, name string) string {
 	t.Helper()
@@ -30,10 +30,10 @@ func snapShot(t *testing.T, w *mygo.Window, name string) string {
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}
-	if err := os.MkdirAll(snapShotDir, 0o755); err != nil {
+	if err := os.MkdirAll(snapShotDir(t), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(snapShotDir, name+".png")
+	path := filepath.Join(snapShotDir(t), name+".png")
 	out, err := exec.Command("screencapture", "-x", "-o", fmt.Sprintf("-l%d", num), path).CombinedOutput()
 	if err != nil {
 		t.Fatalf("%s: screencapture failed (%v): %s", name, err, out)

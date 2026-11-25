@@ -24,7 +24,7 @@ import (
 	"rakko/internal/platform"
 )
 
-const motionShotDir = "/tmp/shelf-fix/motion"
+func motionShotDir(t *testing.T) string { return smokeShotDir(t, "fix/motion") }
 
 // motionShot captures the notch window to motionShotDir after
 // letting wait pass, so a mid-animation or mid-shake state is what shows.
@@ -42,10 +42,10 @@ func motionShot(t *testing.T, a *shelf, name string, wait time.Duration) string 
 	// so apply the frame the real app would have by now.
 	onMain(a.syncWindowFrame)
 	time.Sleep(120 * time.Millisecond)
-	if err := os.MkdirAll(motionShotDir, 0o755); err != nil {
+	if err := os.MkdirAll(motionShotDir(t), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	shot := filepath.Join(motionShotDir, name+".png")
+	shot := filepath.Join(motionShotDir(t), name+".png")
 	out, err := exec.Command("screencapture", "-x", "-o", fmt.Sprintf("-l%d", num), shot).CombinedOutput()
 	if err != nil {
 		t.Fatalf("%s: screencapture failed (%v): %s", name, err, out)
@@ -149,7 +149,7 @@ func TestSmokeCapsuleSuccess(t *testing.T) {
 	// This shot skips motionShot's frame-sync sleep: it wants a mid-grow
 	// frame, taken as the window stands right now.
 	time.Sleep(50 * time.Millisecond)
-	grow := filepath.Join(motionShotDir, "capsule-grow.png")
+	grow := filepath.Join(motionShotDir(t), "capsule-grow.png")
 	var num int
 	onMain(func() { num = platform.WindowNumber(a.win.NativeHandle()) })
 	if num != 0 {

@@ -21,7 +21,7 @@ import (
 	"rakko/internal/settings"
 )
 
-const sheetHShotDir = "/tmp/shelf-fix-height"
+func sheetHShotDir(t *testing.T) string { return smokeShotDir(t, "fix-height") }
 
 // smokeUsageScanner is a local scanner with a fixed week of usage, so the
 // page draws its chart instead of the scan card.
@@ -66,11 +66,11 @@ func shotPanelHeight(t *testing.T, a *shelf, name string) string {
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}
-	if err := os.MkdirAll(sheetHShotDir, 0o755); err != nil {
+	if err := os.MkdirAll(sheetHShotDir(t), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(500 * time.Millisecond) // settle the height animation
-	shot := filepath.Join(sheetHShotDir, name+".png")
+	shot := filepath.Join(sheetHShotDir(t), name+".png")
 	out, err := exec.Command("screencapture", "-x", "-o", fmt.Sprintf("-l%d", num), shot).CombinedOutput()
 	if err != nil {
 		t.Fatalf("%s: screencapture failed (%v): %s", name, err, out)
