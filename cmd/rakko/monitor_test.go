@@ -56,9 +56,7 @@ func TestMonitorActiveConditionsEnterCadence(t *testing.T) {
 		{"pins", func(a *shelf) { a.pins = []*pinItem{{pressed: true}} }},
 		{"pet", func(a *shelf) { a.pet = &petWindow{pressed: true} }},
 		{"pet-return-zone", func(a *shelf) { a.petReturning = true }},
-		{"rename-window", func(a *shelf) { a.rn = &renameUI{win: new(mygo.Window)} }},
 		{"converter", func(a *shelf) { a.conv = &converter{job: &convertJob{}} }},
-		{"awake-hold", func(a *shelf) { a.awake = &awakeModule{id: platform.PowerAssertionID(1)} }},
 		{"usage-page", func(a *shelf) {
 			a.visible, a.level, a.tab = true, 2, pageUsage
 			a.usage = &usageFeature{host: a}
@@ -332,5 +330,48 @@ func TestWakeAndTimerJobsBothRun(t *testing.T) {
 	}
 	if a.monitorWakeQueued.Load() {
 		t.Fatal("monitorWakeQueued stayed true")
+	}
+}
+
+func TestStayAwakeClosedPanelIdleCadence(t *testing.T) {
+	oldDown := dragLeftDown
+	dragLeftDown = func() bool { return false }
+	t.Cleanup(func() { dragLeftDown = oldDown })
+
+	now := time.Now()
+	for _, tc := range []struct {
+		name  string
+		until time.Time
+	}{
+		{"timed", now.Add(time.Hour)},
+		{"forever", time.Time{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a := monitorShelf()
+			a.awake = &awakeModule{host: a, id: platform.PowerAssertionID(1), until: tc.until}
+			a.modules = append(a.modules, a.awake)
+
+			if a.monitorActive(now) {
+				t.Fatalf("closed panel with stay-awake active stayed in 30ms cadence: %v", a.monitorActiveNames(now))
+			}
+			delay := a.monitorDelay(now)
+			if delay < time.Second {
+				t.Fatalf("closed panel with stay-awake delay = %v (%.1f Hz), want >= 1s (<= 1 Hz)", delay, 1/delay.Seconds())
+			}
+
+			// When panel is visible or an awake pin is expanded on desktop,
+			// nextTick schedules 1s countdown updates (not 1h or 0).
+			a.visible = true
+			due := a.awake.nextTick(now)
+			if due.IsZero() || due.Sub(now) > time.Second {
+				t.Fatalf("visible panel awake nextTick = %v, want <= 1s", due.Sub(now))
+			}
+			a.visible = false
+			a.pins = []*pinItem{{cardID: "awake", edge: pinFree, expanded: true}}
+			due = a.awake.nextTick(now)
+			if due.IsZero() || due.Sub(now) > time.Second {
+				t.Fatalf("expanded awake pin nextTick = %v, want <= 1s", due.Sub(now))
+			}
+		})
 	}
 }

@@ -130,6 +130,9 @@ func (m *awakeModule) start(now time.Time, d time.Duration) {
 	}
 	if m.active() {
 		m.refresh(now)
+		if m.host != nil {
+			m.host.wakeMonitor()
+		}
 		return
 	}
 	if err := m.reassert(); err != nil {
@@ -137,6 +140,9 @@ func (m *awakeModule) start(now time.Time, d time.Duration) {
 		m.fail(err)
 	}
 	m.refresh(now)
+	if m.host != nil {
+		m.host.wakeMonitor()
+	}
 }
 
 // stop releases the assertion, if any.
@@ -148,6 +154,9 @@ func (m *awakeModule) stop(now time.Time) {
 	m.id = 0
 	m.duration, m.until = 0, time.Time{}
 	m.refresh(now)
+	if m.host != nil {
+		m.host.wakeMonitor()
+	}
 }
 
 // setDisplay flips 屏幕也保持亮着. While the feature is on it swaps the
@@ -196,8 +205,12 @@ func (m *awakeModule) fail(err error) {
 	m.host.toastStatus(m.host.appLoc().AwakeFailed(err.Error()), m.clock().Add(4*time.Second), statusErr)
 }
 
+func (m *awakeModule) showingCountdown() bool {
+	return m.host != nil && (m.host.visible || m.host.hasExpandedPin("awake"))
+}
+
 // tick releases a timed hold at its deadline and keeps the countdown
-// moving at second granularity — and only while the panel can show it.
+// moving at second granularity — only while the panel or an awake pin shows it.
 func (m *awakeModule) tick(now time.Time) {
 	if !m.active() {
 		return
@@ -206,7 +219,7 @@ func (m *awakeModule) tick(now time.Time) {
 		m.stop(now)
 		return
 	}
-	if m.host.visible {
+	if m.showingCountdown() {
 		m.refresh(now)
 	}
 }
@@ -292,16 +305,17 @@ func (m *awakeModule) chip(c *ui.Context) ui.Element {
 }
 
 // nextTick is the hold's expiry, or the next countdown repaint while the
-// panel shows it.
+// panel or an expanded desktop awake pin shows it.
 func (m *awakeModule) nextTick(now time.Time) time.Time {
 	if !m.active() {
 		return time.Time{}
 	}
-	if !m.until.IsZero() {
-		return m.until
+	if m.showingCountdown() {
+		sec := now.Add(time.Second)
+		if !m.until.IsZero() && m.until.Before(sec) {
+			return m.until
+		}
+		return sec
 	}
-	if m.host.visible {
-		return now.Add(time.Second)
-	}
-	return time.Time{}
+	return m.until
 }

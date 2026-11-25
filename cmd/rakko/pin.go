@@ -711,6 +711,18 @@ func (it *pinItem) invalidate() {
 	}
 }
 
+func (a *shelf) hasExpandedPin(cardID string) bool {
+	if a == nil {
+		return false
+	}
+	for _, it := range a.pins {
+		if it.cardID == cardID && (it.edge == pinFree || it.expanded) {
+			return true
+		}
+	}
+	return false
+}
+
 func (a *shelf) invalidatePlayingPins() {
 	if a == nil {
 		return
