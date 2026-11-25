@@ -2838,3 +2838,29 @@ func TestAddConvertedReusesTheSamePath(t *testing.T) {
 		t.Fatalf("reuse not persisted: %+v", s2.Items)
 	}
 }
+
+// A path repeated inside one batch is one tray item: both entries get the
+// same id and nothing is duplicated, for files and folders alike.
+func TestAddConvertedDedupesWithinOneBatch(t *testing.T) {
+	s, _ := newStore(t)
+	if err := s.AddText("keep"); err != nil {
+		t.Fatalf("AddText: %v", err)
+	}
+	dir := convertedFolder(t, s, "batch", map[string]string{"a.txt": "a"})
+	file := convertedFile(t, s, "batch.pdf", "x")
+
+	dids, err := s.AddConvertedDirs([]string{dir, dir})
+	if err != nil || len(dids) != 2 || dids[0] != dids[1] || dids[0] == "" {
+		t.Fatalf("duplicate folder batch = %v, %v; want one id twice", dids, err)
+	}
+	fids, err := s.AddConverted([]string{file, file})
+	if err != nil || len(fids) != 2 || fids[0] != fids[1] || fids[0] == "" {
+		t.Fatalf("duplicate file batch = %v, %v; want one id twice", fids, err)
+	}
+	if len(s.Items) != 3 {
+		t.Fatalf("items = %d, want 3 (file, folder, keep): %+v", len(s.Items), s.Items)
+	}
+	if s.Items[0].ID != fids[0] || s.Items[1].ID != dids[0] || s.Items[2].Text != "keep" {
+		t.Fatalf("batch order = %+v", s.Items)
+	}
+}

@@ -24,10 +24,7 @@ import (
 // when a run asks for shots, an auto-cleaned temp folder otherwise.
 func pinShotDir(t *testing.T) string {
 	t.Helper()
-	if root := os.Getenv("RAKKO_SHOTS"); root != "" {
-		return filepath.Join(root, "pin")
-	}
-	return t.TempDir()
+	return smokeShotDir(t, "pin")
 }
 
 func pinSmokeEnv(t *testing.T) *shelf {
@@ -77,7 +74,11 @@ func pinShot(t *testing.T, w *mygo.Window, name string) {
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}
-	out := filepath.Join(pinShotDir(t), name+".png")
+	dir := pinShotDir(t)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(dir, name+".png")
 	cmd := exec.Command("screencapture", "-l", fmt.Sprint(num), "-o", out)
 	if b, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("screencapture %s: %v: %s", name, err, b)
@@ -93,7 +94,11 @@ func pinShotFull(t *testing.T, w *mygo.Window, name string) {
 	if num == 0 {
 		t.Fatalf("%s: window has no CGWindowID", name)
 	}
-	out := filepath.Join(pinShotDir(t), name+".png")
+	dir := pinShotDir(t)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(dir, name+".png")
 	cmd := exec.Command("screencapture", "-l", fmt.Sprint(num), out)
 	if b, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("screencapture %s: %v: %s", name, err, b)
@@ -105,7 +110,11 @@ func pinShotFull(t *testing.T, w *mygo.Window, name string) {
 // its own window).
 func pinShotRect(t *testing.T, r mygo.Rectangle, name string) {
 	t.Helper()
-	out := filepath.Join(pinShotDir(t), name+".png")
+	dir := pinShotDir(t)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(dir, name+".png")
 	cmd := exec.Command("screencapture", "-x", "-o",
 		"-R", fmt.Sprintf("%d,%d,%d,%d", r.X, r.Y, r.Width, r.Height), out)
 	if b, err := cmd.CombinedOutput(); err != nil {

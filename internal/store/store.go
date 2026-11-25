@@ -644,6 +644,14 @@ func (s *Store) addConverted(paths []string, allowDirs bool) ([]string, error) {
 			newItems = append(newItems, it)
 			continue
 		}
+		// The same path repeated in this call is still one item: the
+		// second occurrence reuses what the first staged.
+		if j := slices.IndexFunc(newItems, func(it Item) bool {
+			return it.Kind == KindFile && it.Path == p
+		}); j >= 0 {
+			ids[i] = newItems[j].ID
+			continue
+		}
 		ids[i] = newID()
 		newItems = append(newItems, Item{
 			ID:        ids[i],

@@ -234,7 +234,7 @@ func (it *pinItem) viewPreview(c *ui.Context) {
 	}
 	if m >= 0.999 && (it.padL != 0 || it.padT != 0) && it.win != nil {
 		it.win.Update(func() {
-			if it.preview {
+			if it.win != nil && it.preview {
 				it.dropPreviewPaddingNow()
 			}
 		})
@@ -263,7 +263,7 @@ func (it *pinItem) viewPreview(c *ui.Context) {
 		drawY = float32(targetFrame.Y+padT-it.frame.Y) + subY
 		if m < 0.999 && (targetFrame != it.frame || padL != it.padL || padT != it.padT || subX != it.subX || subY != it.subY) && it.win != nil {
 			it.win.Update(func() {
-				if !it.preview || it.morphVal(time.Now()) >= 0.999 {
+				if it.win == nil || !it.preview || it.morphVal(time.Now()) >= 0.999 {
 					return
 				}
 				moved := it.frame != targetFrame

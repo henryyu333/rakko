@@ -33,15 +33,17 @@ type devinRow struct {
 
 // devinMetrics is Devin's own metrics block: besides the shared keys its CLI
 // writes cache_creation_tokens, which no other tool's usage block carries,
-// so only this parser reads it.
+// so only this parser reads it. The field must not be named after the
+// embedded key it would shadow (CacheCreationTokens reads
+// cache_creation_input_tokens).
 type devinMetrics struct {
 	flexUsageJSON
-	CacheCreationTokens int64 `json:"cache_creation_tokens"`
+	CacheCreationAlt int64 `json:"cache_creation_tokens"`
 }
 
 func (m *devinMetrics) toCounts() (in, out, cr, cw int64) {
 	in, out, cr, cw = m.flexUsageJSON.toCounts()
-	cw = max(cw, m.CacheCreationTokens)
+	cw = max(cw, m.CacheCreationAlt)
 	return in, out, cr, cw
 }
 
