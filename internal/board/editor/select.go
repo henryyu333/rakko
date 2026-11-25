@@ -705,24 +705,47 @@ func (g *lassoGesture) cancel(e *Editor) {
 // --- translate with Alt-duplicate, smart alignment guides, and grid snap ---
 
 type translateGesture struct {
-	ids       []doc.ID
-	initial   map[doc.ID]*doc.Shape
-	cloned    []doc.ID
-	wasAlt    bool
-	selBefore []doc.ID
-	box       geo.Box
-	targets   snapTargets
+	ids          []doc.ID
+	initial      map[doc.ID]*doc.Shape
+	origShapes   map[doc.ID]*doc.Shape
+	origBindings []*doc.Binding
+	cloned       []doc.ID
+	wasAlt       bool
+	selBefore    []doc.ID
+	box          geo.Box
+	targets      snapTargets
 }
 
 func newTranslateGesture(e *Editor) *translateGesture {
 	e.begin()
 	g := &translateGesture{
-		initial:   map[doc.ID]*doc.Shape{},
-		selBefore: slices.Clone(e.sel),
+		initial:    map[doc.ID]*doc.Shape{},
+		origShapes: map[doc.ID]*doc.Shape{},
+		selBefore:  slices.Clone(e.sel),
 	}
 	for _, id := range e.topSelected() {
 		if s := e.Doc.Shapes[id]; s != nil && !s.Locked {
 			g.ids = append(g.ids, id)
+		}
+	}
+	// Preserve pre-unbind shapes and bindings so Alt-drag can restore them onto
+	// the originals while normal drag moves the unbound arrow in real time.
+	for _, id := range g.ids {
+		for _, mid := range append([]doc.ID{id}, e.Descendants(id)...) {
+			if s := e.Doc.Shapes[mid]; s != nil {
+				g.origShapes[mid] = s
+			}
+			for _, term := range []string{"start", "end"} {
+				if b := e.bindingOf(mid, term); b != nil {
+					cp := *b
+					g.origBindings = append(g.origBindings, &cp)
+				}
+			}
+		}
+	}
+	e.unbindExternal(g.ids)
+	for _, id := range g.ids {
+		if s := e.Doc.Shapes[id]; s != nil {
 			g.initial[id] = s
 		}
 	}
@@ -741,11 +764,14 @@ func (g *translateGesture) moving() []doc.ID {
 
 func (g *translateGesture) setCloned(e *Editor, on bool) {
 	if on {
-		// Restore originals to their starting positions, then drag fresh clones.
-		for _, id := range g.ids {
-			if init := g.initial[id]; init != nil {
-				e.put(init.Moved())
-			}
+		// Restore originals (and their bindings) before cloning so Alt-drag copies
+		// keep visible endpoints without stripping bindings from the originals.
+		for _, s := range g.origShapes {
+			e.put(s.Moved())
+		}
+		for _, b := range g.origBindings {
+			cp := *b
+			e.putBinding(&cp)
 		}
 		clones := e.cloneShapes(g.ids, geo.Vec{})
 		g.cloned = clones
@@ -757,6 +783,12 @@ func (g *translateGesture) setCloned(e *Editor, on bool) {
 		delete(g.initial, id)
 	}
 	g.cloned = nil
+	e.unbindExternal(g.ids)
+	for _, id := range g.ids {
+		if s := e.Doc.Shapes[id]; s != nil {
+			g.initial[id] = s
+		}
+	}
 	e.Select(g.selBefore...)
 }
 
@@ -831,19 +863,31 @@ func (g *translateGesture) up(e *Editor) {
 	e.Snaps = nil
 	moving := g.moving()
 	e.reparentMoved(moving, target)
-	// Arrows or bound lines moved without their bound target unbind in place.
-	for _, id := range moving {
+	e.unbindExternal(moving)
+	e.commit()
+}
+
+// unbindExternal detaches arrow or line terminals bound to shapes outside ids,
+// baking their current on-screen position before or after a move.
+func (e *Editor) unbindExternal(ids []doc.ID) {
+	moving := make(map[doc.ID]bool, len(ids)*2)
+	for _, id := range ids {
+		moving[id] = true
+		for _, k := range e.Descendants(id) {
+			moving[k] = true
+		}
+	}
+	for id := range moving {
 		s := e.Doc.Shapes[id]
 		if s == nil || (s.Type != doc.TypeArrow && s.Type != doc.TypeLine) {
 			continue
 		}
 		for _, term := range []string{"start", "end"} {
-			if b := e.bindingOf(id, term); b != nil && !slices.Contains(moving, b.To) {
+			if b := e.bindingOf(id, term); b != nil && !moving[b.To] {
 				e.unbind(id, term)
 			}
 		}
 	}
-	e.commit()
 }
 
 func (g *translateGesture) cancel(e *Editor) {
@@ -1330,17 +1374,27 @@ func (e *Editor) cloneShapes(ids []doc.ID, offset geo.Vec) []doc.ID {
 			roots = append(roots, nid)
 		}
 	}
-	// Remap bindings when both arrow/line and target were cloned together.
+	// Remap bindings when both arrow/line and target were cloned together;
+	// otherwise bake the visible endpoint onto the clone so it stays in place.
 	for oldFrom, newFrom := range idMap {
+		orig := e.Doc.Shapes[oldFrom]
 		for _, term := range []string{"start", "end"} {
-			if b := e.bindingOf(oldFrom, term); b != nil {
-				if newTo, ok := idMap[b.To]; ok {
-					nb := *b
-					nb.ID = doc.NewRecordID("binding")
-					nb.From = newFrom
-					nb.To = newTo
-					e.putBinding(&nb)
-				}
+			b := e.bindingOf(oldFrom, term)
+			if b == nil {
+				continue
+			}
+			if newTo, ok := idMap[b.To]; ok {
+				nb := *b
+				nb.ID = doc.NewRecordID("binding")
+				nb.From = newFrom
+				nb.To = newTo
+				e.putBinding(&nb)
+				continue
+			}
+			if orig != nil {
+				e.update(newFrom, func(c *doc.Shape) {
+					e.bakeUnclonedTerminal(orig, c, term)
+				})
 			}
 		}
 	}
@@ -1354,9 +1408,16 @@ func (e *Editor) Nudge(dx, dy float64) {
 	}
 	d := geo.V(dx, dy)
 	e.transact(func() {
+		var unlocked []doc.ID
 		for _, id := range e.topSelected() {
+			if s := e.Doc.Shapes[id]; s != nil && !s.Locked {
+				unlocked = append(unlocked, id)
+			}
+		}
+		e.unbindExternal(unlocked)
+		for _, id := range unlocked {
 			s := e.Doc.Shapes[id]
-			if s == nil || s.Locked {
+			if s == nil {
 				continue
 			}
 			local := e.parentMat(s.Parent).Invert().ApplyDir(d)

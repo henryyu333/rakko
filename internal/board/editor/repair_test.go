@@ -425,3 +425,162 @@ func TestSetCamAndSnapshotMarshalNoDataRace(t *testing.T) {
 	close(jobs)
 	wg.Wait()
 }
+
+func TestDuplicateAltDragMoveAndNudgeBoundArrow(t *testing.T) {
+	setupBound := func() (*Editor, doc.ID, doc.ID, doc.ID, *ArrowInfo) {
+		e := newTestEditor()
+		r1 := addTestShape(e, doc.TypeGeo, e.Page, 0, 100, 80, 60)
+		r2 := addTestShape(e, doc.TypeGeo, e.Page, 200, 100, 80, 60)
+		ar := addTestShape(e, doc.TypeArrow, e.Page, 0, 0, 0, 0)
+		e.transact(func() {
+			e.update(ar, func(c *doc.Shape) {
+				c.Start = geo.V(80, 130)
+				c.End = geo.V(200, 130)
+			})
+			e.putBinding(&doc.Binding{
+				ID: doc.NewRecordID("binding"), From: ar, To: r1,
+				Terminal: "start", Anchor: geo.V(1, 0.5),
+			})
+			e.putBinding(&doc.Binding{
+				ID: doc.NewRecordID("binding"), From: ar, To: r2,
+				Terminal: "end", Anchor: geo.V(0, 0.5),
+			})
+		})
+		// Move both bound targets so stored Start/End are stale relative to screen.
+		e.Select(r1, r2)
+		e.Nudge(200, 50)
+		e.SelectNone()
+		return e, r1, r2, ar, e.Arrow(e.Doc.Shapes[ar])
+	}
+
+	t.Run("duplicate", func(t *testing.T) {
+		e, _, _, ar, origInfo := setupBound()
+		origPos := e.PageMat(ar).Apply(origInfo.Start)
+		origEnd := e.PageMat(ar).Apply(origInfo.End)
+		e.Select(ar)
+		if !e.Duplicate() {
+			t.Fatal("Duplicate failed")
+		}
+		dupID := e.Selection()[0]
+		if dupID == ar {
+			t.Fatal("Duplicate kept original ID")
+		}
+		dupInfo := e.Arrow(e.Doc.Shapes[dupID])
+		gotStart := e.PageMat(dupID).Apply(dupInfo.Start)
+		gotEnd := e.PageMat(dupID).Apply(dupInfo.End)
+		wantStart := origPos.Add(geo.V(24, 24))
+		wantEnd := origEnd.Add(geo.V(24, 24))
+		if gotStart.Dist(wantStart) > 1e-3 || gotEnd.Dist(wantEnd) > 1e-3 {
+			t.Fatalf("duplicated bound arrow = (%v -> %v), want (%v -> %v)", gotStart, gotEnd, wantStart, wantEnd)
+		}
+	})
+
+	t.Run("alt_drag", func(t *testing.T) {
+		e, _, _, ar, origInfo := setupBound()
+		origStart := e.PageMat(ar).Apply(origInfo.Start)
+		origEnd := e.PageMat(ar).Apply(origInfo.End)
+		grab := origStart.Add(origEnd.Sub(origStart).Mul(0.25))
+		e.Select(ar)
+		e.PointerDown(grab.X, grab.Y, 0, 1, Mods{Alt: true}, 1)
+		e.PointerMove(grab.X+40, grab.Y-30, Mods{Alt: true}, 1.1)
+		e.PointerUp(grab.X+40, grab.Y-30, Mods{Alt: true}, 1.2)
+		cloneID := e.Selection()[0]
+		if cloneID == ar {
+			t.Fatal("Alt-drag did not create a clone")
+		}
+		cloneInfo := e.Arrow(e.Doc.Shapes[cloneID])
+		gotStart := e.PageMat(cloneID).Apply(cloneInfo.Start)
+		gotEnd := e.PageMat(cloneID).Apply(cloneInfo.End)
+		if gotStart.Dist(origStart.Add(geo.V(40, -30))) > 1e-3 || gotEnd.Dist(origEnd.Add(geo.V(40, -30))) > 1e-3 {
+			t.Fatalf("alt-dragged bound arrow = (%v -> %v), want shifted by (40,-30) from (%v -> %v)", gotStart, gotEnd, origStart, origEnd)
+		}
+		if e.bindingOf(ar, "start") == nil || e.bindingOf(ar, "end") == nil {
+			t.Fatal("alt-drag stripped bindings from the original arrow")
+		}
+	})
+
+	t.Run("drag_bound_arrow_alone", func(t *testing.T) {
+		e, _, _, ar, origInfo := setupBound()
+		origStart := e.PageMat(ar).Apply(origInfo.Start)
+		origEnd := e.PageMat(ar).Apply(origInfo.End)
+		grab := origStart.Add(origEnd.Sub(origStart).Mul(0.25))
+		e.Select(ar)
+		e.PointerDown(grab.X, grab.Y, 0, 1, Mods{}, 1)
+		e.PointerMove(grab.X, grab.Y+150, Mods{}, 1.1)
+		midInfo := e.Arrow(e.Doc.Shapes[ar])
+		duringStart := e.PageMat(ar).Apply(midInfo.Start)
+		if duringStart.Dist(origStart.Add(geo.V(0, 150))) > 1e-3 {
+			t.Fatalf("bound arrow did not follow during drag: start=%v, want %v", duringStart, origStart.Add(geo.V(0, 150)))
+		}
+		e.PointerUp(grab.X, grab.Y+150, Mods{}, 1.2)
+		afterInfo := e.Arrow(e.Doc.Shapes[ar])
+		afterStart := e.PageMat(ar).Apply(afterInfo.Start)
+		afterEnd := e.PageMat(ar).Apply(afterInfo.End)
+		if afterStart.Dist(origStart.Add(geo.V(0, 150))) > 1e-3 || afterEnd.Dist(origEnd.Add(geo.V(0, 150))) > 1e-3 {
+			t.Fatalf("bound arrow snapped back after drop: (%v -> %v), want (%v -> %v)",
+				afterStart, afterEnd, origStart.Add(geo.V(0, 150)), origEnd.Add(geo.V(0, 150)))
+		}
+		if e.bindingOf(ar, "start") != nil || e.bindingOf(ar, "end") != nil {
+			t.Fatal("dragged-away arrow remained bound")
+		}
+	})
+
+	t.Run("nudge_bound_arrow", func(t *testing.T) {
+		e, _, _, ar, origInfo := setupBound()
+		origStart := e.PageMat(ar).Apply(origInfo.Start)
+		origEnd := e.PageMat(ar).Apply(origInfo.End)
+		e.Select(ar)
+		e.Nudge(15, -10)
+		afterInfo := e.Arrow(e.Doc.Shapes[ar])
+		afterStart := e.PageMat(ar).Apply(afterInfo.Start)
+		afterEnd := e.PageMat(ar).Apply(afterInfo.End)
+		if afterStart.Dist(origStart.Add(geo.V(15, -10))) > 1e-3 || afterEnd.Dist(origEnd.Add(geo.V(15, -10))) > 1e-3 {
+			t.Fatalf("nudged bound arrow = (%v -> %v), want shifted by (15,-10)", afterStart, afterEnd)
+		}
+	})
+}
+
+func TestUndoThenRedoEmptyNewTextLeavesNoPhantom(t *testing.T) {
+	e := newTestEditor()
+	r := addTestShape(e, doc.TypeGeo, e.Page, 20, 20, 80, 60)
+	e.SetTool(ToolText)
+	e.PointerDown(200, 200, 0, 1, Mods{}, 1)
+	e.PointerUp(200, 200, Mods{}, 1.05)
+	if e.Editing == "" {
+		t.Fatal("clicking with ToolText did not enter inline editing")
+	}
+
+	e.Undo()
+	e.Redo()
+
+	for _, s := range e.Doc.Shapes {
+		if s.Type == doc.TypeText {
+			t.Fatalf("found phantom empty text shape %s after Undo/Redo", s.ID)
+		}
+	}
+	if e.Doc.Shapes[r] == nil {
+		t.Fatal("existing shape missing after Undo/Redo")
+	}
+}
+
+func TestFlipSelectedGroupMirrorsChildren(t *testing.T) {
+	e := newTestEditor()
+	r1 := addTestShape(e, doc.TypeGeo, e.Page, 0, 0, 40, 20)
+	r2 := addTestShape(e, doc.TypeGeo, e.Page, 100, 0, 60, 20)
+	e.Select(r1, r2)
+	if !e.GroupSelected() {
+		t.Fatal("GroupSelected failed")
+	}
+	if !e.FlipSelected("x") {
+		t.Fatal("FlipSelected failed")
+	}
+	// Group spanned [0..160] (center X=80). r1 center 20 -> 140, r2 center 130 -> 30.
+	c1 := e.PageBounds(r1).Center()
+	c2 := e.PageBounds(r2).Center()
+	if math.Abs(c1.X-140) > 1e-3 || math.Abs(c2.X-30) > 1e-3 {
+		t.Fatalf("flipped group child centers X = (%.1f, %.1f), want (140, 30)", c1.X, c2.X)
+	}
+	if !e.Doc.Shapes[r1].FlipX || !e.Doc.Shapes[r2].FlipX {
+		t.Fatalf("child FlipX flags = (%v, %v), want both true", e.Doc.Shapes[r1].FlipX, e.Doc.Shapes[r2].FlipX)
+	}
+}

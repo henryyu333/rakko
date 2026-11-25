@@ -267,34 +267,39 @@ func (e *Editor) Copy() bool {
 			if b == nil || seen[b.To] {
 				continue
 			}
-			switch orig.Type {
-			case doc.TypeArrow:
-				info := e.Arrow(orig)
-				if term == "start" {
-					it.shape.Start = info.Start
-				} else {
-					it.shape.End = info.End
-				}
-			case doc.TypeLine:
-				pts := e.linePoints(orig)
-				if len(pts) == 0 {
-					continue
-				}
-				clone := slices.Clone(it.shape.Points)
-				if len(clone) != len(pts) {
-					continue
-				}
-				if term == "start" {
-					clone[0].X, clone[0].Y = pts[0].X, pts[0].Y
-				} else {
-					clone[len(clone)-1].X, clone[len(clone)-1].Y = pts[len(pts)-1].X, pts[len(pts)-1].Y
-				}
-				it.shape.Points = clone
-			}
+			e.bakeUnclonedTerminal(orig, it.shape, term)
 		}
 	}
 	e.clip = cl
 	return len(cl.items) > 0
+}
+
+func (e *Editor) bakeUnclonedTerminal(orig, target *doc.Shape, term string) {
+	switch orig.Type {
+	case doc.TypeArrow:
+		info := e.Arrow(orig)
+		if term == "start" {
+			target.Start = info.Start
+		} else {
+			target.End = info.End
+		}
+	case doc.TypeLine:
+		pts := e.linePoints(orig)
+		if len(pts) == 0 {
+			return
+		}
+		clone := slices.Clone(target.Points)
+		if len(clone) != len(pts) {
+			return
+		}
+		if term == "start" {
+			clone[0].X, clone[0].Y = pts[0].X, pts[0].Y
+		} else {
+			last := len(clone) - 1
+			clone[last].X, clone[last].Y = pts[last].X, pts[last].Y
+		}
+		target.Points = clone
+	}
 }
 
 // Cut copies selected shapes and deletes unlocked ones in one undo step.
@@ -1056,8 +1061,29 @@ func (e *Editor) FlipSelected(axis string) bool {
 	}
 	_, u := e.arrangeEntries(ids)
 	cx, cy := u.X+u.W/2, u.Y+u.H/2
-	e.begin()
+	var targets []doc.ID
+	var expand func(doc.ID)
+	expand = func(id doc.ID) {
+		s := e.Doc.Shapes[id]
+		if s == nil || s.Locked {
+			return
+		}
+		if s.Type == doc.TypeGroup {
+			for _, k := range e.Children(id) {
+				expand(k)
+			}
+			return
+		}
+		targets = append(targets, id)
+	}
 	for _, id := range ids {
+		expand(id)
+	}
+	if len(targets) == 0 {
+		return false
+	}
+	e.begin()
+	for _, id := range targets {
 		s := e.Doc.Shapes[id]
 		if s == nil {
 			continue
@@ -1106,10 +1132,12 @@ func (e *Editor) FlipSelected(axis string) bool {
 		} else {
 			c.FlipY = !c.FlipY
 		}
-		if s.Rotation != 0 {
-			// Preserve visual center when negating rotation around shape center.
+		pageRot := e.PageMat(id).Rotation()
+		if math.Abs(pageRot) > 1e-6 {
+			// Preserve visual center when negating world rotation around shape center.
 			beforeC := e.PageMat(id).Apply(e.Geometry(s).Bounds.Center())
-			c.Rotation = -s.Rotation
+			parentRot := e.parentMat(s.Parent).Rotation()
+			c.Rotation = -pageRot - parentRot
 			e.put(c)
 			afterC := e.PageMat(id).Apply(e.Geometry(c).Bounds.Center())
 			adj := pInv.ApplyDir(beforeC.Sub(afterC))

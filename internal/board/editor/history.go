@@ -172,7 +172,7 @@ func (e *Editor) CanRedo() bool { return len(e.redo) > 0 }
 // Undo reverts the last committed edit transaction.
 func (e *Editor) Undo() {
 	e.cancelGesture()
-	e.Editing = ""
+	e.StopEditing()
 	e.commit()
 	if len(e.undo) == 0 {
 		return
@@ -187,7 +187,7 @@ func (e *Editor) Undo() {
 // Redo reapplies the most recently undone edit transaction.
 func (e *Editor) Redo() {
 	e.cancelGesture()
-	e.Editing = ""
+	e.StopEditing()
 	e.commit()
 	if len(e.redo) == 0 {
 		return
