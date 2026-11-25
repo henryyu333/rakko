@@ -475,7 +475,7 @@ func TestBoardAndNoteWinLive(t *testing.T) {
 	if !panelOpened {
 		t.Errorf("failed to open Windows panel on Tools page")
 	}
-	for _, w := range a.toolsLayout().Home {
+	for _, w := range a.toolsLayout().Cards {
 		if w.ID == "recent" || w.ID == "clip" {
 			t.Errorf("retired card %q unexpectedly present on Windows tools page", w.ID)
 		}

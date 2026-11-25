@@ -29,13 +29,23 @@ func seg2WarpCursor(x, y float64) {
 	warp(platform.CGPoint{X: x, Y: y})
 }
 
+func seg2ShotPath(name string) string {
+	root := os.Getenv("RAKKO_SHOTS")
+	if root == "" {
+		return ""
+	}
+	return filepath.Join(root, "seg2", name)
+}
+
 func seg2CaptureRegion(t *testing.T, r mygo.Rectangle, name string) {
 	t.Helper()
-	shotDir := "/tmp/Rakko-fix1186/seg2"
-	if err := os.MkdirAll(shotDir, 0o755); err != nil {
+	outPath := seg2ShotPath(name)
+	if outPath == "" {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	outPath := filepath.Join(shotDir, name)
 	cmd := exec.Command("screencapture", "-x", "-R", fmt.Sprintf("%d,%d,%d,%d", r.X, r.Y, r.Width, r.Height), outPath)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("screencapture %s failed: %v (%s)", name, err, out)
@@ -53,16 +63,30 @@ func seg2CaptureWindow(t *testing.T, win *mygo.Window, name string) {
 	if num == 0 {
 		t.Fatalf("%s: zero CGWindowID", name)
 	}
-	shotDir := "/tmp/Rakko-fix1186/seg2"
-	if err := os.MkdirAll(shotDir, 0o755); err != nil {
+	outPath := seg2ShotPath(name)
+	if outPath == "" {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	outPath := filepath.Join(shotDir, name)
 	cmd := exec.Command("screencapture", "-x", "-o", fmt.Sprintf("-l%d", num), outPath)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("screencapture -l %s failed: %v (%s)", name, err, out)
 	}
 	t.Logf("saved %s", outPath)
+}
+
+func TestWindowButtonsSmokeShotPathUsesEnv(t *testing.T) {
+	t.Setenv("RAKKO_SHOTS", "")
+	if got := seg2ShotPath("shot.png"); got != "" {
+		t.Fatalf("seg2ShotPath without RAKKO_SHOTS = %q, want empty", got)
+	}
+	t.Setenv("RAKKO_SHOTS", "/tmp/custom-shots")
+	want := filepath.Join("/tmp/custom-shots", "seg2", "shot.png")
+	if got := seg2ShotPath("shot.png"); got != want {
+		t.Fatalf("seg2ShotPath with RAKKO_SHOTS = %q, want %q", got, want)
+	}
 }
 
 func TestWindowButtonsMacSmokeAndScreenshots(t *testing.T) {
