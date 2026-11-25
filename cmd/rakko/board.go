@@ -151,6 +151,9 @@ type boardUI struct {
 	lastLightInk      bool
 	lastDegradedCount int
 	lastMaskArea      float64
+	degradedScratch   map[doc.ID]bool
+	maskCandScratch   []maskCandidate
+	ptsScratch        [][2]float32
 	focusMode         bool
 	minimap           bool
 	miniDrag          bool

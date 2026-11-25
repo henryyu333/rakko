@@ -14,7 +14,10 @@ import (
 	"rakko/internal/board/geo"
 )
 
-const boardAtlasBudget = 6_000_000.0
+const (
+	boardAtlasBudget   = 6_000_000.0
+	boardTier2Overflow = 80_000.0
+)
 
 type boardScene struct {
 	b           *boardUI
@@ -26,6 +29,7 @@ type boardScene struct {
 	degraded    map[doc.ID]bool
 	estMaskArea float64
 	path        ui.Path
+	ptsScratch  [][2]float32
 }
 
 func (s *boardScene) camMat() geo.Mat {
@@ -65,12 +69,13 @@ func (b *boardUI) paintStage(p *ui.Painter, r ui.Rect) {
 	p.Fill(r, boardColor(pal.Background), 0)
 
 	s := &boardScene{
-		b:      b,
-		p:      p,
-		pal:    pal,
-		cam:    cam,
-		origin: geo.V(float64(r.X), float64(r.Y)),
-		view:   geo.Box{X: -cam.X, Y: -cam.Y, W: float64(r.W) / cam.Z, H: float64(r.H) / cam.Z},
+		b:          b,
+		p:          p,
+		pal:        pal,
+		cam:        cam,
+		origin:     geo.V(float64(r.X), float64(r.Y)),
+		view:       geo.Box{X: -cam.X, Y: -cam.Y, W: float64(r.W) / cam.Z, H: float64(r.H) / cam.Z},
+		ptsScratch: b.ptsScratch[:0],
 	}
 
 	p.Clip(r, 0, func() {
@@ -82,16 +87,20 @@ func (b *boardUI) paintStage(p *ui.Painter, r ui.Rect) {
 		s.renderChildren(b.ed.Page)
 		s.renderOverlays()
 	})
+	b.ptsScratch = s.ptsScratch[:0]
 }
 
 type maskCandidate struct {
-	id      doc.ID
-	inkCost float64
+	id       doc.ID
+	tier     int     // 1 = uniform/outline strokes (minimal visual delta), 2 = variable-width pen ink
+	saveCost float64 // mask bbox area freed when degraded to StrokePolyline
 }
 
-// planMaskBudget estimates actual mask coverage (stroke length * width plus
-// visible fill area) and, when total area exceeds boardAtlasBudget, degrades
-// only the largest ink/stroke shapes until remaining usage fits the budget.
+// planMaskBudget estimates each visible shape's device-pixel bounding-box
+// occupancy in mygo's MaskAtlas and, when total occupancy exceeds
+// boardAtlasBudget, degrades shapes selectively: uniform outlines/arrows/lines
+// first (largest first), then variable-width pen ink strokes (largest first)
+// until remaining mask occupancy fits within budget.
 func (s *boardScene) planMaskBudget(parent doc.ID, filter map[doc.ID]bool) {
 	scale := 1.0
 	if s.p != nil {
@@ -107,8 +116,9 @@ func (s *boardScene) planMaskBudgetWithScale(parent doc.ID, filter map[doc.ID]bo
 		scale = 1
 	}
 	k := s.cam.Z * scale
+	look := s.b.ed.Look()
 	var totalArea float64
-	var candidates []maskCandidate
+	candidates := s.b.maskCandScratch[:0]
 	var walk func(pid doc.ID)
 	walk = func(pid doc.ID) {
 		for _, id := range s.b.ed.Children(pid) {
@@ -130,113 +140,129 @@ func (s *boardScene) planMaskBudgetWithScale(parent doc.ID, filter map[doc.ID]bo
 			if !ok {
 				continue
 			}
-			fixedCost, inkCost := s.shapeMaskCost(sh, ib, box, k)
-			totalArea += fixedCost + inkCost
-			if inkCost > 0 {
-				candidates = append(candidates, maskCandidate{id: id, inkCost: inkCost})
+			totalCost, tier, saveCost := shapeMaskCost(sh, ib, k, look)
+			totalArea += totalCost
+			if tier > 0 && saveCost > 0 {
+				candidates = append(candidates, maskCandidate{id: id, tier: tier, saveCost: saveCost})
 			}
 		}
 	}
 	walk(parent)
+	s.b.maskCandScratch = candidates
 	s.estMaskArea = totalArea
+	if s.b.degradedScratch != nil {
+		clear(s.b.degradedScratch)
+	}
 	s.degraded = nil
 	if totalArea <= boardAtlasBudget || len(candidates) == 0 {
 		return
 	}
 	slices.SortFunc(candidates, func(a, b maskCandidate) int {
-		if a.inkCost > b.inkCost {
+		if a.tier != b.tier {
+			return a.tier - b.tier
+		}
+		if a.saveCost > b.saveCost {
 			return -1
 		}
-		if a.inkCost < b.inkCost {
+		if a.saveCost < b.saveCost {
 			return 1
 		}
 		return 0
 	})
-	s.degraded = make(map[doc.ID]bool)
+	if s.b.degradedScratch == nil {
+		s.b.degradedScratch = make(map[doc.ID]bool, len(candidates))
+	}
+	s.degraded = s.b.degradedScratch
+	// First shed Tier 1 (uniform outlines/arrows/lines) down to boardAtlasBudget.
+	// If Tier 2 (variable-width ink) itself still exceeds budget, shed largest
+	// Tier 2 strokes down to boardTier2Overflow so zoom/draw rasterization stays fast.
+	inTier2 := false
 	for _, c := range candidates {
-		if totalArea <= boardAtlasBudget {
+		if c.tier == 1 {
+			if totalArea <= boardAtlasBudget {
+				break
+			}
+			s.degraded[c.id] = true
+			totalArea -= c.saveCost
+			continue
+		}
+		if !inTier2 {
+			if totalArea <= boardAtlasBudget {
+				break
+			}
+			inTier2 = true
+		}
+		if totalArea <= boardTier2Overflow {
 			break
 		}
 		s.degraded[c.id] = true
-		totalArea -= c.inkCost
+		totalArea -= c.saveCost
 	}
 }
 
-func (s *boardScene) shapeMaskCost(sh *doc.Shape, ib, box geo.Box, k float64) (fixedCost, inkCost float64) {
-	boxPx := (ib.W*k + 2) * (ib.H*k + 2)
-	visScale := 1.0
-	if ib.W < box.W || ib.H < box.H {
-		visScale = math.Min(1, math.Max(ib.W/math.Max(box.W, 1), ib.H/math.Max(box.H, 1)))
+func shapeMaskCost(sh *doc.Shape, ib geo.Box, k float64, look string) (totalCost float64, tier int, saveCost float64) {
+	if sh.Type == doc.TypeImage || sh.Type == doc.TypeText {
+		return 0, 0, 0
 	}
-	for _, pr := range s.b.ed.Display(sh, s.pal) {
-		switch pr.Kind {
-		case editor.PrimFill:
-			if pr.Ink != nil {
-				l, w := inkApproxLengthAndWidth(pr.Ink)
-				inkCost += math.Min(l*visScale*k*(w*k+2), boxPx)
+	// Each non-tiled path drawn via FillPath/StrokePath allocates a bounding-box
+	// mask in mygo's MaskAtlas. Estimate mask count from shape properties so
+	// planning avoids touching Display caches on every zoom/pan frame.
+	boxArea := (ib.W*k + 8) * (ib.H*k + 8)
+	fixedMasks := 0
+	degradableMasks := 0
+	switch sh.Type {
+	case doc.TypeFrame:
+		fixedMasks = 1
+	case doc.TypeNote:
+		fixedMasks = 2
+	case doc.TypeHighlight:
+		fixedMasks = 1
+	case doc.TypeGeo:
+		if sh.Fill != "none" && sh.Fill != "" && sh.Geo != "bracket" && sh.Geo != "brace" && sh.Geo != "curve" {
+			fixedMasks++
+		}
+		if sh.Dash == "dash" || sh.Dash == "dot" {
+			fixedMasks++
+		} else if sh.Dash != "none" {
+			degradableMasks++
+			if look == doc.LookSketch {
+				// Sketch outlines add a translucent accent stroke that is skipped when degraded.
+				degradableMasks++
+			}
+		}
+		tier = 1
+	case doc.TypeArrow, doc.TypeLine:
+		if sh.Dash == "dash" || sh.Dash == "dot" {
+			fixedMasks++
+		} else if sh.Dash != "none" {
+			degradableMasks++
+			if look == doc.LookSketch {
+				degradableMasks++
+			}
+		}
+		tier = 1
+	case doc.TypeDraw:
+		if sh.IsClosed && sh.Fill != "none" && sh.Fill != "" {
+			fixedMasks++
+		}
+		segs := max(1, len(sh.Segments))
+		if sh.PenKind == "marker" || sh.PenKind == "p2" || sh.Dash == "dash" || sh.Dash == "dot" {
+			fixedMasks += segs
+		} else {
+			degradableMasks += segs
+			if sh.PenKind == "pen" || sh.PenKind == "p1" {
+				tier = 2
 			} else {
-				fixedCost += boxPx
-			}
-		case editor.PrimStroke:
-			if pr.Butt && len(pr.Dash) == 0 && pr.Path != nil && len(pr.Path.Segs) > 0 && isLineSegmentsOnly(pr.Path) {
-				continue
-			}
-			if pr.Path != nil && len(pr.Path.Segs) > 0 {
-				l := pathApproxLength(pr.Path)
-				w := math.Max(pr.Width*k, 0.75) + 2
-				cost := math.Min(l*visScale*k*w, boxPx)
-				if len(pr.Dash) == 0 {
-					inkCost += cost
-				} else {
-					fixedCost += cost
-				}
+				tier = 1
 			}
 		}
 	}
-	return fixedCost, inkCost
-}
-
-func inkApproxLengthAndWidth(ink *editor.Ink) (length, avgW float64) {
-	if ink == nil {
-		return 0, 0
+	totalCost = float64(fixedMasks+degradableMasks) * boxArea
+	if degradableMasks == 0 {
+		return totalCost, 0, 0
 	}
-	length = geo.PolyLength(ink.Pts)
-	if len(ink.W) == 0 {
-		return length, 2.5
-	}
-	sum := 0.0
-	for _, w := range ink.W {
-		sum += w
-	}
-	return length, sum / float64(len(ink.W))
-}
-
-func pathApproxLength(p *geo.Path) float64 {
-	if p == nil || len(p.Segs) == 0 {
-		return 0
-	}
-	var total float64
-	var cur, start geo.Vec
-	for _, seg := range p.Segs {
-		switch seg.Op {
-		case geo.OpMove:
-			cur = seg.P[0]
-			start = cur
-		case geo.OpLine:
-			total += cur.Dist(seg.P[0])
-			cur = seg.P[0]
-		case geo.OpQuad:
-			total += (cur.Dist(seg.P[0]) + seg.P[0].Dist(seg.P[1])) * 0.85
-			cur = seg.P[1]
-		case geo.OpCube:
-			total += (cur.Dist(seg.P[0]) + seg.P[0].Dist(seg.P[1]) + seg.P[1].Dist(seg.P[2])) * 0.85
-			cur = seg.P[2]
-		case geo.OpClose:
-			total += cur.Dist(start)
-			cur = start
-		}
-	}
-	return total
+	saveCost = float64(degradableMasks) * boxArea
+	return totalCost, tier, saveCost
 }
 
 // boardMaskOverlap clips a shape's page box to the visible box: a huge shape
@@ -323,7 +349,7 @@ func (s *boardScene) renderFrame(sh *doc.Shape) {
 	o := s.opacityOf(sh)
 	prims := s.b.ed.Display(sh, s.pal)
 	if len(prims) > 0 && prims[0].Kind == editor.PrimFill {
-		s.renderPrim(prims[0], m, o, sh)
+		s.renderPrim(prims[0], m, o, false)
 	}
 
 	// Clip children strictly to the Frame's interior rectangle (rotated if needed).
@@ -351,7 +377,7 @@ func (s *boardScene) renderFrame(sh *doc.Shape) {
 	}
 
 	for i := 1; i < len(prims); i++ {
-		s.renderPrim(prims[i], m, o, sh)
+		s.renderPrim(prims[i], m, o, false)
 	}
 
 	if sh.ID != s.b.ed.Editing {
@@ -387,11 +413,12 @@ func (s *boardScene) renderShape(sh *doc.Shape) {
 	}
 	m := s.camMat().Mul(s.b.ed.PageMat(sh.ID))
 	o := s.opacityOf(sh)
+	degraded := s.degraded[sh.ID]
 	for _, pr := range s.b.ed.Display(sh, s.pal) {
 		if pr.Label && sh.ID == s.b.ed.Editing {
 			continue
 		}
-		s.renderPrim(pr, m, o, sh)
+		s.renderPrim(pr, m, o, degraded)
 	}
 	if pieces, ok := s.b.ed.PartialPreview[sh.ID]; ok {
 		s.renderPartialPreview(sh, pieces, m)
@@ -418,8 +445,7 @@ func (s *boardScene) renderPartialPreview(sh *doc.Shape, pieces [][]geo.Vec, m g
 	}
 }
 
-func (s *boardScene) renderPrim(pr editor.Prim, m geo.Mat, o float64, sh *doc.Shape) {
-	degraded := s.degraded[sh.ID]
+func (s *boardScene) renderPrim(pr editor.Prim, m geo.Mat, o float64, degraded bool) {
 	switch pr.Kind {
 	case editor.PrimFill:
 		if degraded && pr.Ink != nil {
@@ -428,24 +454,17 @@ func (s *boardScene) renderPrim(pr editor.Prim, m geo.Mat, o float64, sh *doc.Sh
 		}
 		s.p.FillPath(s.buildPath(pr.Path, m), boardColor(pr.Color.Alpha(o)))
 	case editor.PrimStroke:
-		if degraded && len(pr.Dash) == 0 && len(pr.Path.Segs) > 0 {
-			flat, closed := pr.Path.Points(4)
-			if len(flat) >= 2 {
-				pts := make([][2]float32, 0, len(flat)+1)
-				for _, pt := range flat {
-					v := m.Apply(pt)
-					pts = append(pts, [2]float32{float32(v.X), float32(v.Y)})
-				}
-				if closed {
-					pts = append(pts, pts[0])
-				}
-				s.p.StrokePolyline(pts, float32(math.Max(pr.Width*s.cam.Z, 0.75)), boardColor(pr.Color.Alpha(o)))
-				return
-			}
-		}
-		if pr.Butt && len(pr.Dash) == 0 && len(pr.Path.Segs) > 0 && isLineSegmentsOnly(pr.Path) {
+		if pr.Butt && len(pr.Dash) == 0 && pr.Path != nil && len(pr.Path.Segs) > 0 && isLineSegmentsOnly(pr.Path) {
 			// Hatching and straight wireframe segments can draw without mask atlas pressure.
 			s.strokeLineSegments(pr.Path, m, float32(math.Max(pr.Width*s.cam.Z, 1)), boardColor(pr.Color.Alpha(o)))
+			return
+		}
+		if degraded && len(pr.Dash) == 0 && pr.Path != nil && len(pr.Path.Segs) > 0 {
+			if pr.Color.A < 0.999 {
+				// Skip secondary translucent sketch accent wobble when degraded so the shape needs 0 masks.
+				return
+			}
+			s.strokePathAsPolyline(pr.Path, m, float32(math.Max(pr.Width*s.cam.Z, 0.75)), boardColor(pr.Color.Alpha(o)))
 			return
 		}
 		path := s.buildPath(pr.Path, m)
@@ -493,15 +512,73 @@ func (s *boardScene) strokeLineSegments(p *geo.Path, m geo.Mat, w float32, c ui.
 	}
 }
 
+func (s *boardScene) strokePathAsPolyline(p *geo.Path, m geo.Mat, w float32, c ui.Color) {
+	pts := s.ptsScratch[:0]
+	var cur, start geo.Vec
+	hasStart := false
+	flush := func() {
+		if len(pts) >= 2 {
+			s.p.StrokePolyline(pts, w, c)
+		}
+		pts = pts[:0]
+	}
+	appendPt := func(v geo.Vec) {
+		tv := m.Apply(v)
+		pts = append(pts, [2]float32{float32(tv.X), float32(tv.Y)})
+	}
+	const steps = 4
+	for _, seg := range p.Segs {
+		switch seg.Op {
+		case geo.OpMove:
+			flush()
+			cur = seg.P[0]
+			start = cur
+			hasStart = true
+			appendPt(cur)
+		case geo.OpLine:
+			cur = seg.P[0]
+			appendPt(cur)
+		case geo.OpQuad:
+			p0, p1, p2 := cur, seg.P[0], seg.P[1]
+			for i := 1; i <= steps; i++ {
+				t := float64(i) / steps
+				u := 1 - t
+				appendPt(geo.V(u*u*p0.X+2*u*t*p1.X+t*t*p2.X, u*u*p0.Y+2*u*t*p1.Y+t*t*p2.Y))
+			}
+			cur = p2
+		case geo.OpCube:
+			p0, p1, p2, p3 := cur, seg.P[0], seg.P[1], seg.P[2]
+			for i := 1; i <= steps; i++ {
+				t := float64(i) / steps
+				u := 1 - t
+				u2, t2 := u*u, t*t
+				appendPt(geo.V(
+					u2*u*p0.X+3*u2*t*p1.X+3*u*t2*p2.X+t2*t*p3.X,
+					u2*u*p0.Y+3*u2*t*p1.Y+3*u*t2*p2.Y+t2*t*p3.Y,
+				))
+			}
+			cur = p3
+		case geo.OpClose:
+			if hasStart {
+				appendPt(start)
+				cur = start
+			}
+		}
+	}
+	flush()
+	s.ptsScratch = pts[:0]
+}
+
 func (s *boardScene) renderInkFallback(pr editor.Prim, m geo.Mat, o float64) {
 	if pr.Ink == nil || len(pr.Ink.Pts) < 2 {
 		return
 	}
-	pts := make([][2]float32, len(pr.Ink.Pts))
-	for i, pt := range pr.Ink.Pts {
+	pts := s.ptsScratch[:0]
+	for _, pt := range pr.Ink.Pts {
 		v := m.Apply(pt)
-		pts[i] = [2]float32{float32(v.X), float32(v.Y)}
+		pts = append(pts, [2]float32{float32(v.X), float32(v.Y)})
 	}
+	s.ptsScratch = pts[:0]
 	baseW := 2.5
 	if len(pr.Ink.W) > 0 {
 		sum := 0.0

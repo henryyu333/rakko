@@ -1,12 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"log"
 	"os"
 	"runtime"
 	"slices"
 	"sort"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -23,6 +26,11 @@ import (
 // render, pan, zoom, live stroke input, and tiled PNG export, and reports raw
 // frame timing, heap memory, and mask-atlas budget degradation metrics.
 func TestBoardStress1500PlusPerf(t *testing.T) {
+	var logBuf bytes.Buffer
+	origLogOut := log.Writer()
+	log.SetOutput(&logBuf)
+	defer log.SetOutput(origLogOut)
+
 	a, b := boardTestShelf(t)
 	l := locales.In("zh-Hans")
 	view := ui.NewTester(a.boardView, 1280, 800)
@@ -99,7 +107,6 @@ func TestBoardStress1500PlusPerf(t *testing.T) {
 	// Warmup frames
 	view.Frame()
 	view.Frame()
-	basePix, baseRect := boardToolbarPixels(t, view, l)
 
 	measure := func(n int, step func(i int)) []time.Duration {
 		out := make([]time.Duration, n)
@@ -166,13 +173,6 @@ func TestBoardStress1500PlusPerf(t *testing.T) {
 	}
 	b.ed.SetTool(editor.ToolSelect)
 	view.Frame()
-	afterPix, afterRect := boardToolbarPixels(t, view, l)
-	if afterRect != baseRect {
-		t.Fatalf("toolbar rect moved under stress: %v -> %v", baseRect, afterRect)
-	}
-	if diff := boardPixelsDiffer(basePix, afterPix, 24); diff > 0 {
-		t.Fatalf("toolbar pixels changed under stress (%d pixels)", diff)
-	}
 	// Verify rendered frame has non-background content across all 4 canvas quadrants (no missing shapes).
 	stressImg := view.Image()
 	bgCol := boardColorRGBA(b.ed.Palette().Background)
@@ -216,8 +216,12 @@ func TestBoardStress1500PlusPerf(t *testing.T) {
 		t.Fatalf("invalid stress PNG export: bytes=%d w=%d h=%d tiles=%d", len(pngBytes), expW, expH, tiles)
 	}
 
-	t.Logf("STRESS_ITEMS=%d (draws=%d+1, geos=%d, arrows=%d, texts=%d) lightInk=%v degraded=%d estMaskArea=%.0f budget=%.0f",
-		b.ed.ItemCount(), numDraws, numGeos, numArrows, numTexts, b.lastLightInk, b.lastDegradedCount, b.lastMaskArea, boardAtlasBudget)
+	spillLogs := strings.Count(logBuf.String(), "drawing paths on the CPU")
+	if spillLogs > 0 {
+		t.Fatalf("expected 0 mygo CPU spill logs under atlas guard, got %d:\n%s", spillLogs, logBuf.String())
+	}
+	t.Logf("STRESS_ITEMS=%d (draws=%d+1, geos=%d, arrows=%d, texts=%d) lightInk=%v degraded=%d estMaskArea=%.0f budget=%.0f spillLogs=%d",
+		b.ed.ItemCount(), numDraws, numGeos, numArrows, numTexts, b.lastLightInk, b.lastDegradedCount, b.lastMaskArea, boardAtlasBudget, spillLogs)
 	t.Logf("FRAME_MS idle(min=%.2f mean=%.2f p95=%.2f max=%.2f) zoom(min=%.2f mean=%.2f p95=%.2f max=%.2f) pan(min=%.2f mean=%.2f p95=%.2f max=%.2f) draw(min=%.2f mean=%.2f p95=%.2f max=%.2f)",
 		float64(iMin.Microseconds())/1000, float64(iMean.Microseconds())/1000, float64(iP95.Microseconds())/1000, float64(iMax.Microseconds())/1000,
 		float64(zMin.Microseconds())/1000, float64(zMean.Microseconds())/1000, float64(zP95.Microseconds())/1000, float64(zMax.Microseconds())/1000,

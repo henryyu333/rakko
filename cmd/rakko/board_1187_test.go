@@ -247,6 +247,7 @@ func TestBoard1187HollowCirclesScenario(t *testing.T) {
 	b.ed.SetTool(editor.ToolDraw)
 	b.ed.Next.PenKind = "pen"
 	b.ed.Next.PenWidth = 8
+	var penIDs []doc.ID
 	for i := 0; i < 4; i++ {
 		b.ed.Next.Stroke = editor.Swatches[(i+1)%len(editor.Swatches)]
 		baseY := 470.0 + float64(i)*34
@@ -259,6 +260,8 @@ func TestBoard1187HollowCirclesScenario(t *testing.T) {
 			b.ed.PointerMove(px, py, editor.Mods{}, ts+f*0.05)
 		}
 		b.ed.PointerUp(880, baseY, editor.Mods{}, ts+0.06)
+		kids := b.ed.Children(b.ed.Page)
+		penIDs = append(penIDs, kids[len(kids)-1])
 	}
 	b.ed.ToolLocked = false
 	b.ed.SetTool(editor.ToolSelect)
@@ -288,9 +291,21 @@ func TestBoard1187HollowCirclesScenario(t *testing.T) {
 	t.Logf("HOLLOW_CIRCLES items=%d lightInk=%v degraded=%d estMaskArea=%.0f meanFrameMs=%.2f",
 		b.ed.ItemCount(), b.lastLightInk, b.lastDegradedCount, b.lastMaskArea, meanMs)
 	if os.Getenv("RAKKO_HOLLOW_SHOT") != "hollow-circles-before.png" {
-		if b.lastLightInk || b.lastDegradedCount != 0 {
-			t.Fatalf("expected 40 hollow circles + 4 pen strokes not to degrade: lightInk=%v degraded=%d estMaskArea=%.0f",
-				b.lastLightInk, b.lastDegradedCount, b.lastMaskArea)
+		cam := b.ed.Cam()
+		sc := &boardScene{
+			b:    b,
+			pal:  b.ed.Palette(),
+			cam:  cam,
+			view: geo.Box{X: -cam.X, Y: -cam.Y, W: 1040 / cam.Z, H: 680 / cam.Z},
+		}
+		sc.planMaskBudgetWithScale(b.ed.Page, nil, 1.0)
+		for _, pid := range penIDs {
+			if sc.degraded[pid] {
+				t.Fatalf("fountain-pen stroke %s was degraded despite Tier 1 hollow circles available to shed", pid)
+			}
+		}
+		if b.lastDegradedCount >= b.ed.ItemCount() {
+			t.Fatalf("expected only Tier 1 excess circles degraded, got %d/%d", b.lastDegradedCount, b.ed.ItemCount())
 		}
 	}
 }
