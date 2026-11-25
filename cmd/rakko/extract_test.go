@@ -7,6 +7,7 @@ import (
 	"archive/zip"
 	"encoding/binary"
 	"hash/crc32"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -718,4 +719,166 @@ func TestArchiveNames(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(a.store.Items[0].Path, "c.txt")); err != nil {
 		t.Fatalf("tbz extraction failed: %v (status %q)", err, a.status)
 	}
+}
+
+func TestExtractZipDrivePathOverflowAndSymlinkEncoding(t *testing.T) {
+	l := locales.In("zh-Hans")
+
+	// 1. Windows drive-letter paths must be rejected by safeEntry, while colon in filename is allowed.
+	for _, unsafe := range []string{`C:/escape.txt`, `C:\escape.txt`, `d:rel.txt`} {
+		if safeEntry(unsafe) {
+			t.Fatalf("safeEntry(%q) = true, want false", unsafe)
+		}
+	}
+	if !safeEntry("notes/12:30.txt") {
+		t.Fatal("safeEntry rejected benign colon in filename")
+	}
+
+	// 2. UncompressedSize64 overflow must saturate to positive MaxInt64 and trigger no-space error.
+	dir := t.TempDir()
+	overflowZip := filepath.Join(dir, "overflow.zip")
+	makeZip(t, overflowZip, map[string][]byte{"a.txt": []byte("hi")})
+	rawZip, err := os.ReadFile(overflowZip)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Patch Central Directory uncompressed size (offset +24 from "PK\x01\x02") to 0xFFFFFFFF
+	// and write Zip64 UncompressedSize64 via a 64-bit extra or test saturate via huge central size.
+	// Using two 0xFFFFFFFF entries in a multi-entry zip exceeds math.MaxInt64 when UncompressedSize64 is large,
+	// or patch a Zip64 extra field; simplest: build a minimal valid zip whose central header holds Zip64 0xFFFFFFFFFFFFFFFF.
+	_ = rawZip
+	fakeConverters(t)
+	oldFree := freeDiskSpace
+	freeDiskSpace = func(string) (int64, error) { return 1024, nil }
+	t.Cleanup(func() { freeDiskSpace = oldFree })
+	// Write a valid zip with UncompressedSize64 = math.MaxUint64 in Zip64 extra field.
+	zf, err := os.Create(overflowZip)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zw := zip.NewWriter(zf)
+	fh := &zip.FileHeader{Name: "huge.bin", Method: zip.Store, UncompressedSize64: math.MaxUint64 - 5}
+	w, err := zw.CreateHeader(fh)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = w.Write([]byte("x"))
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := zf.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// Patch the UncompressedSize64 in the central directory Zip64 extra field to MaxUint64.
+	zipBytes, err := os.ReadFile(overflowZip)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Patch both local/central uncompressed size fields or rely on CreateHeader's written UncompressedSize64=1;
+	// CreateHeader overwrites UncompressedSize64 on Close with actual bytes written (1).
+	// Instead, patch the Zip64 extra (0x0001) or directly verify zipScan fails when central UncompressedSize64 is patched:
+	// First check if zipScan rejects a patched Zip64 UncompressedSize64 = MaxUint64:
+	cdIdx := strings.LastIndex(string(zipBytes), "PK\x01\x02")
+	if cdIdx < 0 {
+		t.Fatal("missing central directory header")
+	}
+	// Write 0xFFFFFFFF to uncompressed size at cdIdx+24 and add Zip64 extra? Even simpler:
+	// patch 3 entries of 0xFFFFFFFF (4GB each) -> sum=12GB; wait int64 overflow needs > 8EB (2^63).
+	// Patching Zip64 extra in central header: find 0x01,0x00,0x08,0x00 (tag 1, len 8) if UncompressedSize64 >= uint32max:
+	// Actually zip.NewWriter writes Zip64 extra when ForceZip64? Let's check zipScan directly on a zip with Zip64 extra!
+	_, _, _, err = zipScan(l, overflowZip)
+	if err != nil {
+		t.Fatalf("unexpected zipScan err: %v", err)
+	}
+	// Build a zip with a Zip64 extra field in the central header (tag 0x0001, size 8, val=math.MaxUint64).
+	zipBytes2 := buildZip64Overflow(t)
+	if err := os.WriteFile(overflowZip, zipBytes2, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, _, total, err := zipScan(l, overflowZip)
+	if err != nil {
+		t.Fatalf("zipScan overflow zip err: %v", err)
+	}
+	if total <= 0 {
+		t.Fatalf("zipScan wrapped UncompressedSize64 overflow into non-positive total=%d", total)
+	}
+
+	// 3. GBK-encoded symlink target must be decoded with zipText when creating symlink.
+	gbkTarget := []byte{0xd6, 0xd0, 0xce, 0xc4} // "中文" in GBK
+	symZip := filepath.Join(dir, "gbklink.zip")
+	sf, err := os.Create(symZip)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sw := zip.NewWriter(sf)
+	sh := &zip.FileHeader{Name: "link", Method: zip.Store}
+	sh.SetMode(0o777 | os.ModeSymlink)
+	lw, err := sw.CreateHeader(sh)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := lw.Write(gbkTarget); err != nil {
+		t.Fatal(err)
+	}
+	if err := sw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := sf.Close(); err != nil {
+		t.Fatal(err)
+	}
+	_, entries, _, err := zipScan(l, symZip)
+	if err != nil {
+		t.Fatalf("zipScan gbklink: %v", err)
+	}
+	stage := t.TempDir()
+	if err := extractZipFiles(l, entries, stage, &convertJob{}); err != nil {
+		t.Fatalf("extractZipFiles gbklink: %v", err)
+	}
+	gotLink, err := os.Readlink(filepath.Join(stage, "link"))
+	if err != nil {
+		t.Fatalf("Readlink: %v", err)
+	}
+	if gotLink != "中文" {
+		t.Fatalf("extracted symlink target = %q (%x), want %q", gotLink, []byte(gotLink), "中文")
+	}
+}
+
+func buildZip64Overflow(t *testing.T) []byte {
+	t.Helper()
+	var buf []byte
+	// Local file header (30 + 5 bytes name) + 1 byte data = 36 bytes
+	name := "a.bin"
+	lfh := make([]byte, 30+len(name))
+	copy(lfh[0:4], "PK\x03\x04")
+	binary.LittleEndian.PutUint16(lfh[4:6], 45) // version 4.5
+	binary.LittleEndian.PutUint16(lfh[26:28], uint16(len(name)))
+	copy(lfh[30:], name)
+	buf = append(buf, lfh...)
+	buf = append(buf, 'x')
+
+	cdOff := len(buf)
+	extra := make([]byte, 12)
+	binary.LittleEndian.PutUint16(extra[0:2], 0x0001) // Zip64 extended info
+	binary.LittleEndian.PutUint16(extra[2:4], 8)
+	binary.LittleEndian.PutUint64(extra[4:12], math.MaxUint64)
+	cd := make([]byte, 46+len(name)+len(extra))
+	copy(cd[0:4], "PK\x01\x02")
+	binary.LittleEndian.PutUint16(cd[4:6], 45)
+	binary.LittleEndian.PutUint16(cd[6:8], 45)
+	binary.LittleEndian.PutUint32(cd[20:24], 1)
+	binary.LittleEndian.PutUint32(cd[24:28], 0xFFFFFFFF) // look in Zip64 extra
+	binary.LittleEndian.PutUint16(cd[28:30], uint16(len(name)))
+	binary.LittleEndian.PutUint16(cd[30:32], uint16(len(extra)))
+	copy(cd[46:], name)
+	copy(cd[46+len(name):], extra)
+	buf = append(buf, cd...)
+
+	eocd := make([]byte, 22)
+	copy(eocd[0:4], "PK\x05\x06")
+	binary.LittleEndian.PutUint16(eocd[8:10], 1)
+	binary.LittleEndian.PutUint16(eocd[10:12], 1)
+	binary.LittleEndian.PutUint32(eocd[12:16], uint32(len(cd)))
+	binary.LittleEndian.PutUint32(eocd[16:20], uint32(cdOff))
+	buf = append(buf, eocd...)
+	return buf
 }

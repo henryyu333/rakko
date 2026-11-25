@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -94,6 +95,9 @@ func safeEntry(name string) bool {
 	if name == "" || strings.HasPrefix(name, "/") {
 		return false
 	}
+	if len(name) >= 2 && ((name[0] >= 'A' && name[0] <= 'Z') || (name[0] >= 'a' && name[0] <= 'z')) && name[1] == ':' {
+		return false
+	}
 	for _, part := range strings.Split(name, "/") {
 		if part == ".." {
 			return false
@@ -152,7 +156,11 @@ func zipScan(l locales.Messages, src string) (zr *zip.ReadCloser, entries []*zip
 		}
 		if !junkEntry(name) {
 			entries = append(entries, f)
-			total += int64(f.UncompressedSize64)
+			if f.UncompressedSize64 > uint64(math.MaxInt64-total) {
+				total = math.MaxInt64
+			} else {
+				total += int64(f.UncompressedSize64)
+			}
 		}
 	}
 	return zr, entries, total, nil
@@ -288,7 +296,7 @@ func extractZipFiles(l locales.Messages, files []*zip.File, stage string, job *c
 			if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 				return err
 			}
-			if err := os.Symlink(string(target), dst); err != nil {
+			if err := os.Symlink(zipText(target), dst); err != nil {
 				return errors.New(l.ExtractEntryFailed(name, err.Error()))
 			}
 		default:
