@@ -1021,9 +1021,6 @@ func (m boardModule) tick(now time.Time) {
 	if b == nil {
 		return
 	}
-	if b.win != nil {
-		m.host.releaseKeys()
-	}
 	b.tick(now)
 }
 
@@ -1036,6 +1033,15 @@ func (m boardModule) nextTick(now time.Time) time.Time {
 		return now
 	}
 	return b.since.Add(boardSaveDelay)
+}
+
+func (a *shelf) boardSave() {
+	if a.board == nil {
+		return
+	}
+	if err := a.board.save(); err != nil {
+		a.report(err)
+	}
 }
 
 func (a *shelf) boardFlush() {

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/board/geo"
@@ -165,5 +166,85 @@ func TestBoardPageRenameCommitsOnBlur(t *testing.T) {
 	}
 	if !strings.Contains(string(raw), "想法") {
 		t.Fatal("page rename was not persisted on blur")
+	}
+}
+
+func TestShelfHideDoesNotInterruptBoardInlineEdit(t *testing.T) {
+	a, b := boardTestShelf(t)
+	id := b.ed.CreateNote(geo.V(100, 100), "")
+	if err := b.flush(); err != nil {
+		t.Fatal(err)
+	}
+	b.ed.StartEditing(id)
+	b.ed.EditText = "刘海收起不能打断"
+	b.ed.EditChanged()
+	a.visible = true
+
+	a.hide(hidePassive)
+
+	if b.ed.Editing != id {
+		t.Fatalf("shelf.hide interrupted board inline edit: Editing=%q, want %q", b.ed.Editing, id)
+	}
+	if err := b.waitSaves(); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(b.store.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), "刘海收起不能打断") {
+		t.Fatal("shelf.hide did not trigger non-interrupting save of inline edit")
+	}
+}
+
+func TestKeysAreOursFalseWhenBoardOrNoteOpen(t *testing.T) {
+	oldReg, oldUnreg := registerKey, unregisterKey
+	var held map[string]bool
+	held = map[string]bool{}
+	registerKey = func(key string, _ func()) error {
+		held[key] = true
+		return nil
+	}
+	unregisterKey = func(key string) {
+		delete(held, key)
+	}
+	t.Cleanup(func() {
+		registerKey, unregisterKey = oldReg, oldUnreg
+	})
+
+	a := &shelf{}
+	if !a.keysAreOurs() {
+		t.Fatal("idle shelf should own keys")
+	}
+	a.holdKeys()
+	if !a.escHeld || !a.spaceHeld {
+		t.Fatalf("holdKeys did not grab keys: esc=%v space=%v", a.escHeld, a.spaceHeld)
+	}
+
+	a.note = &noteUI{win: &mygo.Window{}}
+	if a.keysAreOurs() {
+		t.Fatal("keysAreOurs must be false while note window is open")
+	}
+	a.holdKeys()
+	if a.escHeld || a.spaceHeld || len(held) != 0 {
+		t.Fatalf("holdKeys must release keys while note window is open: held=%v", held)
+	}
+	a.note.win = nil
+	if !a.keysAreOurs() {
+		t.Fatal("keysAreOurs should be true after note window closes")
+	}
+
+	a.holdKeys()
+	a.board = &boardUI{win: &mygo.Window{}}
+	if a.keysAreOurs() {
+		t.Fatal("keysAreOurs must be false while board window is open")
+	}
+	a.holdKeys()
+	if a.escHeld || a.spaceHeld || len(held) != 0 {
+		t.Fatalf("holdKeys must release keys while board window is open: held=%v", held)
+	}
+	a.board.win = nil
+	if !a.keysAreOurs() {
+		t.Fatal("keysAreOurs should be true after board window closes")
 	}
 }

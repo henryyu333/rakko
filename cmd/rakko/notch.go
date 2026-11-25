@@ -1934,8 +1934,8 @@ func (a *shelf) syncCopyKey() {
 }
 
 // keysAreOurs reports whether the shelf may hold the global Esc and Space:
-// never while the Settings, 重新命名 or update window is key, and never
-// while the panel itself has the keyboard for clipboard search. Pure;
+// never while the Settings, 重新命名, update, 便利贴 or 白板 window is open,
+// and never while the panel itself has the keyboard for clipboard search. Pure;
 // unit-tested.
 func (a *shelf) keysAreOurs() bool {
 	if a.settingsWin != nil {
@@ -1945,6 +1945,12 @@ func (a *shelf) keysAreOurs() bool {
 		return false
 	}
 	if a.updateWin != nil {
+		return false
+	}
+	if a.note != nil && a.note.win != nil {
+		return false
+	}
+	if a.board != nil && a.board.win != nil {
 		return false
 	}
 	return !a.focusMode
@@ -2076,10 +2082,10 @@ func (a *shelf) leaveFocusMode() {
 // instead of flashing the default one; finishClose retires it.
 func (a *shelf) hide(exit hideExit) {
 	a.endAppSwitch() // 收起同样结束应用切换(保险路径; 通常已经不在)
-	// The note/board windows outlive the panel: land what they hold even when the
-	// panel was already folded, so a second hide cannot skip unsaved edits.
+	// The note/board windows outlive the panel: land note edits and queue a
+	// non-interrupting board snapshot even when the panel was already folded.
 	a.noteFlush()
-	a.boardFlush()
+	a.boardSave()
 	if !a.visible && !a.peeking {
 		return
 	}
