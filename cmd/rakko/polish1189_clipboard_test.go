@@ -46,9 +46,9 @@ func TestParseColorSwatch(t *testing.T) {
 }
 
 func TestClipTitleSpansHighlightFirstHit(t *testing.T) {
-	spans := clipTitleSpans("Dentist on Tuesday", "dentist")
-	if len(spans) != 2 {
-		t.Fatalf("spans = %d, want hit+after: %+v", len(spans), spans)
+	spans, matched := clipTitleSpans("Dentist on Tuesday", "dentist")
+	if !matched || len(spans) != 2 {
+		t.Fatalf("spans = %d, matched=%v, want hit+after: %+v", len(spans), matched, spans)
 	}
 	if spans[0].Text != "Dentist" || spans[1].Text != " on Tuesday" {
 		t.Fatalf("highlight sliced the wrong run: %+v", spans)
@@ -57,17 +57,31 @@ func TestClipTitleSpansHighlightFirstHit(t *testing.T) {
 		t.Fatalf("hit has no highlight background: %+v", spans[0])
 	}
 
-	spans = clipTitleSpans("alpha beta alpha", "ALPHA")
-	if len(spans) != 2 || spans[0].Text != "alpha" || spans[1].Text != " beta alpha" {
+	spans, matched = clipTitleSpans("alpha beta alpha", "ALPHA")
+	if !matched || len(spans) != 2 || spans[0].Text != "alpha" || spans[1].Text != " beta alpha" {
 		t.Fatalf("only the first hit should be highlighted: %+v", spans)
 	}
 
-	if spans := clipTitleSpans("nothing here", "needle"); len(spans) != 1 ||
-		spans[0].Text != "nothing here" || spans[0].Background != (ui.Color{}) {
-		t.Fatalf("no hit must stay plain: %+v", spans)
+	// A query that equals the whole title is one span, but still a hit:
+	// the row must take the RichText path for it.
+	spans, matched = clipTitleSpans("#FF453A", "#ff453a")
+	if !matched || len(spans) != 1 || spans[0].Text != "#FF453A" ||
+		spans[0].Background != accent.Alpha(0.34) {
+		t.Fatalf("whole-title hit was lost: matched=%v %+v", matched, spans)
 	}
-	if spans := clipTitleSpans("text", "  "); len(spans) != 1 {
-		t.Fatalf("a blank query must stay plain: %+v", spans)
+
+	if spans, matched := clipTitleSpans("nothing here", "needle"); matched || len(spans) != 1 ||
+		spans[0].Text != "nothing here" || spans[0].Background != (ui.Color{}) {
+		t.Fatalf("no hit must stay plain: matched=%v %+v", matched, spans)
+	}
+	if spans, matched := clipTitleSpans("text", "  "); matched || len(spans) != 1 {
+		t.Fatalf("a blank query must stay plain: matched=%v %+v", matched, spans)
+	}
+
+	// Case folding that changes either byte length falls back to an exact
+	// search instead of slicing at a byte offset from the folded string.
+	if spans, matched := clipTitleSpans("İ", "İ"); !matched || len(spans) != 1 || spans[0].Text != "İ" {
+		t.Fatalf("folded whole-title hit was lost: matched=%v %+v", matched, spans)
 	}
 }
 

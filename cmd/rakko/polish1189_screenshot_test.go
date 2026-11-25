@@ -128,6 +128,33 @@ func TestShotSizeBadgeRect(t *testing.T) {
 	if right.X+w > display.Width {
 		t.Fatalf("badge left the display: %+v", right)
 	}
+
+	// A secondary display with a non-zero origin: placement is global, and
+	// only the painted rectangle is converted to the display's local points.
+	secondary := mygo.Rectangle{X: 1920, Y: -200, Width: 1200, Height: 800}
+	secSel := mygo.Rectangle{X: 2000, Y: -150, Width: 300, Height: 200}
+	got := shotSizeBadgeRect(secSel, secondary, nil, w, h)
+	if got.X != secSel.X || got.Y != secSel.Y-shotSizeBadgeGap-h {
+		t.Fatalf("badge on a secondary display = %+v, want above its selection", got)
+	}
+	local := shotLocalRect(got, shotTarget{Bounds: secondary, Scale: 2})
+	if local.X < 0 || local.Y < 0 || local.X+local.Width > secondary.Width || local.Y+local.Height > secondary.Height {
+		t.Fatalf("badge painted outside the secondary display: %+v", local)
+	}
+	if want := secSel.X - secondary.X; local.X != want {
+		t.Fatalf("badge local x = %d, want %d", local.X, want)
+	}
+	// The toolbar bars stay global too: a bar under the above slot moves the
+	// pill inside the selection, still within the display.
+	secBar := mygo.Rectangle{X: got.X, Y: got.Y, Width: 120, Height: 44}
+	avoidSec := shotSizeBadgeRect(secSel, secondary, []mygo.Rectangle{secBar}, w, h)
+	if shotRectsIntersect(avoidSec, secBar) {
+		t.Fatalf("secondary badge overlaps the toolbar: %+v", avoidSec)
+	}
+	local = shotLocalRect(avoidSec, shotTarget{Bounds: secondary, Scale: 2})
+	if local.X < 0 || local.Y < 0 || local.X+local.Width > secondary.Width || local.Y+local.Height > secondary.Height {
+		t.Fatalf("secondary badge left the display after avoiding the toolbar: %+v", local)
+	}
 }
 
 func TestPolish1189ScreenshotShots(t *testing.T) {

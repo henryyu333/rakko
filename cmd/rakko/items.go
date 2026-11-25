@@ -233,7 +233,7 @@ func (a *shelf) clipRow(c *ui.Context, item store.Item, number int) {
 		if item.Kind == store.KindImage {
 			text = l.ClipScreenshot(stampIn(c.Locale(), c.Region(), item.CreatedAt.Local()))
 		}
-		if spans := clipTitleSpans(text, a.search); len(spans) > 1 {
+		if spans, matched := clipTitleSpans(text, a.search); matched {
 			ui.RichText(c, spans...).MaxLines(1).Grow(1).MinWidth(0)
 		} else {
 			ui.Text(c, text).SingleLine().FontSize(12).TextColor(ink).Grow(1).MinWidth(0)
@@ -331,30 +331,30 @@ func parseColorSwatch(text string) (ui.Color, bool) {
 	return ui.RGBA(rgb[0], rgb[1], rgb[2], 255), true
 }
 
-// clipTitleSpans styles the first search hit in a row's title, for the
-// highlighter the query deserves; an empty query or no hit is one plain
-// span.
-func clipTitleSpans(text, query string) []ui.Span {
-	plain := ui.Span{Text: text, Size: 12, Color: ink}
+// clipTitleSpans styles the first search hit in a row's title and reports
+// whether it found one: a whole-title match is still a highlight, though it
+// yields a single span. An empty query or no hit is one plain span, false.
+func clipTitleSpans(text, query string) ([]ui.Span, bool) {
+	plain := []ui.Span{{Text: text, Size: 12, Color: ink}}
 	q := strings.TrimSpace(query)
 	if q == "" {
-		return []ui.Span{plain}
+		return plain, false
 	}
 	lower, lq := strings.ToLower(text), strings.ToLower(q)
 	i := -1
-	if len(lower) == len(text) {
+	if len(lower) == len(text) && len(lq) == len(q) {
 		i = strings.Index(lower, lq)
 	} else {
-		// Case folding changed the byte lengths: fall back to an exact
+		// Case folding changed either byte length: fall back to an exact
 		// search rather than slice the wrong runes out of the title.
 		i = strings.Index(text, q)
 	}
 	if i < 0 {
-		return []ui.Span{plain}
+		return plain, false
 	}
 	end := i + len(q)
 	if end > len(text) {
-		return []ui.Span{plain}
+		return plain, false
 	}
 	out := make([]ui.Span, 0, 3)
 	if i > 0 {
@@ -365,7 +365,7 @@ func clipTitleSpans(text, query string) []ui.Span {
 	if end < len(text) {
 		out = append(out, ui.Span{Text: text[end:], Size: 12, Color: ink})
 	}
-	return out
+	return out, true
 }
 
 // clipRowAction is one 21pt icon button of a clipboard row's hover actions.

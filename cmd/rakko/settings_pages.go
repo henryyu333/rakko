@@ -792,8 +792,12 @@ func (a *shelf) settingsShortcutRow(c *ui.Context, kind shortcutKind, label, cap
 					Border(1.5, accent).Center().Children(func() {
 					ui.Row(c.Key("rec-text")).AlignItems(ui.Center).Gap(6).Children(func() {
 						settingsText(c, l.SettingsShortcutRecording(), 11.5).SingleLine().TextColor(accent)
-						settingsText(c, l.SettingsShortcutClearHint(), 11).SingleLine().
-							TextColor(ui.RGBA(255, 255, 255, 0.42))
+						if canClear {
+							// Only a bound row can clear from here; an unset
+							// row says just 按下组合键.
+							settingsText(c, l.SettingsShortcutClearHint(), 11).SingleLine().
+								TextColor(settingsInk3)
+						}
 					})
 				})
 				return

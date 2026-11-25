@@ -108,9 +108,14 @@ func (s *shotSession) drawSizeBadge(p *ui.Painter, d *shotDisplay) {
 	if s.bar.hasProps {
 		bars = append(bars, s.bar.props.rect)
 	}
-	sel := mygo.Rectangle{X: local.X, Y: local.Y, Width: local.Width, Height: local.Height}
-	r := shotSizeBadgeRect(sel, d.Bounds, bars, bw, bh)
-	box := ui.Rect{X: float32(r.X), Y: float32(r.Y), W: float32(r.Width), H: float32(r.Height)}
+	// The placement works in global points, like s.sel and the toolbar; the
+	// result is converted back to this display's local points for painting.
+	// Mixing local sel with global d.Bounds would clamp the pill against the
+	// secondary display's origin and paint it off its window.
+	r := shotSizeBadgeRect(s.sel, d.Bounds, bars, bw, bh)
+	localPill := shotLocalRect(r, d.shotTarget)
+	box := ui.Rect{X: float32(localPill.X), Y: float32(localPill.Y),
+		W: float32(localPill.Width), H: float32(localPill.Height)}
 	p.Shadow(box, 6, 0, 4, 12, 0, ui.RGBA(0, 0, 0, 0.35))
 	p.Fill(box, ui.RGBA(18, 18, 20, 0.86), 6)
 	p.Stroke(box, ui.RGBA(255, 255, 255, 0.16), 6, 0.5)
@@ -213,19 +218,22 @@ func (s *shotSession) buildBarButton(c *ui.Context, group string, it shotBarItem
 	case shotBarColor:
 		col := shotAnnotationColors[it.index]
 		b.Radius(shotButtonSize / 2)
-		swatch := float32(14)
-		if s.color == col {
-			// The selected colour wears a white ring around a smaller dot,
-			// so the ring reads without moving the dot's centre.
-			b.Border(1.5, ui.RGBA(255, 255, 255, 0.92))
-			swatch = 12
-		}
 		if hovered {
 			b.Background(shotBarHot)
 		}
 		b.Children(func() {
-			ui.Box(c.Key(key+"-swatch")).Size(swatch, swatch).
-				Radius(swatch / 2).Background(col)
+			if s.color == col {
+				// A 20pt inner ring hugs the 12pt dot; the ring belongs to
+				// the dot, not the 28pt hit area, so the selected swatch
+				// stays the same visual weight as its neighbours.
+				ring := ui.Box(c.Key(key+"-ring")).Size(20, 20).Radius(10).Center().
+					Border(1.5, ui.RGBA(255, 255, 255, 0.92))
+				ring.Children(func() {
+					ui.Box(c.Key(key+"-swatch")).Size(12, 12).Radius(6).Background(col)
+				})
+				return
+			}
+			ui.Box(c.Key(key+"-swatch")).Size(14, 14).Radius(7).Background(col)
 		})
 	case shotBarWidth:
 		w := shotAnnotationWidths[it.index]

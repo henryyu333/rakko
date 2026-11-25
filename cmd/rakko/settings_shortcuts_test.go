@@ -1293,3 +1293,29 @@ func TestShortcutClearAllDefaultsPersist(t *testing.T) {
 		t.Fatalf("a reload revived cleared shortcuts: %+v", saved.Shortcuts)
 	}
 }
+
+// An unset row recording has nothing to clear: it shows 按下组合键 alone,
+// with no ⌫ 清除 and no ×, while a set row keeps both.
+func TestShortcutUnsetRecordingHasNoClearHint(t *testing.T) {
+	a, view, _ := shortcutShelf(t)
+	l := locales.In("")
+	openSettingsPage(t, view, "快捷键")
+	a.clearShortcut(shortcutToggle)
+	view.Frame()
+	if err := view.Click("显示 / 收起"); err != nil {
+		t.Fatal(err)
+	}
+	view.Frame()
+	if a.settingsRecording != shortcutToggle {
+		t.Fatalf("the unset row did not start recording: %v", a.settingsRecording)
+	}
+	if !view.HasText(l.SettingsShortcutRecording()) {
+		t.Fatalf("the recording row lost its main hint: %v", view.Texts())
+	}
+	if view.HasText(l.SettingsShortcutClearHint()) {
+		t.Fatalf("an unset row offered ⌫ 清除: %v", view.Texts())
+	}
+	if _, ok := view.Find(l.SettingsShortcutClear()); ok {
+		t.Fatal("an unset recording row showed ×")
+	}
+}
