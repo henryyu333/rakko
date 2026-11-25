@@ -285,9 +285,7 @@ func (a *shelf) noteOutside() {
 	}
 }
 
-// noteTick is the module tick: it releases the panel's global Esc and
-// Space while the window is up (a held Space never reaches a text field)
-// and lands a debounced save when its delay is over.
+// noteModule is the module tick: it lands a debounced save when its delay is over.
 type noteModule struct{ host *shelf }
 
 func (noteModule) live() bool { return false }
@@ -296,9 +294,6 @@ func (m noteModule) tick(now time.Time) {
 	n := m.host.note
 	if n == nil {
 		return
-	}
-	if n.win != nil {
-		m.host.releaseKeys()
 	}
 	n.tick(now)
 }

@@ -434,9 +434,6 @@ func (m renameModule) tick(now time.Time) {
 	if r == nil {
 		return
 	}
-	if r.win != nil {
-		m.host.releaseKeys()
-	}
 	if r.done != nil && !r.undoUntil.IsZero() && now.After(r.undoUntil) {
 		r.undoUntil = time.Time{}
 		if m.host.win != nil {
