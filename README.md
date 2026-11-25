@@ -46,7 +46,8 @@ There is no account, no Dock or taskbar window, and nothing leaves your computer
 - **Tray** — drop files, folders, pictures or text on the notch to keep them at hand, then drag them into any app. Convert pictures and PDFs (JPEG, PNG, HEIC, PDF, Word), compress pictures to a file size, resize, zip, extract archives and rename a batch of files, all on your computer.
 - **Clipboard history** — everything you copy, with the app it came from; text in screenshots and copied pictures is recognized and searchable. Press `⌃⌥V` (Windows `Ctrl+Alt+V`), type to filter, and paste. Password managers' private copies are skipped, and you can exclude any app.
 - **Search** — `⌃⌥Space` (Windows `Ctrl+Alt+Space`) searches the Tray, the clipboard, your notes, apps, folders and files in one list.
-- **Tools** — a grid of cards you arrange yourself: music player, timer and stopwatch, keep awake, AI usage, sticky notes, recent files, the clipboard's latest item, and one-tap file actions. Drag a card out of the panel to keep it on the desktop.
+- **Tools** — a grid of cards you arrange yourself: music player, timer and stopwatch, keep awake, system monitor, AI usage, sticky notes, whiteboard, and one-tap file actions. Drag a card out of the panel to keep it on the desktop.
+- **Whiteboard** — an infinite canvas in its own window: pens, highlighter, 20-plus shapes, arrows that stay attached to shapes, text, notes, frames and pictures, with multiple boards and pages. Export as PNG, SVG or a board file; everything saves as you go.
 - **Screenshot and Capture Text** — `⌃⌥A` freezes every screen to pick a window or an area, mark it up and copy, save or pin it; `⌃⌥O` copies the text from any part of the screen. With the panel open, it stays in the picture.
 - **Music** — the player on Home with synced lyrics; on the closed notch, the cover and a moving equalizer.
 - **AI usage** (optional) — subscription quotas and balance cards for Codex (including reset credits), Claude Code, GLM, DeepSeek, Cursor, Kimi, OpenCode Go and Command Code, plus this computer's token use and estimated cost across the coding agents you use: omp, Claude Code, Codex, Antigravity, Gemini CLI, Copilot CLI, opencode, Grok, pi, Qwen Code, Kimi, Droid, Hermes and more. A tool that is installed but whose usage cannot be read is named, not counted as zero.
@@ -105,7 +106,7 @@ Everything stays on your computer: no account, no telemetry, no cloud sync. Rakk
 
 - **Update check** — asks this repository's latest GitHub release whether a newer version exists, sending only the app version.
 - **Lyrics** — only while the lyrics column is open, the song's title, artist, album and length go to lrclib.net, and title and artist to NetEase Cloud Music when lrclib.net has nothing.
-- **AI quotas** — only if you turn on the AI usage page, and only for the quota cards you turn on: Codex asks chatgpt.com with the login Codex saved; Claude Code runs your installed Claude Code; Cursor, GLM, DeepSeek, Kimi, OpenCode Go and Command Code query their official quota or balance endpoints using the credentials saved by the local tool or an API key you save in the system Keychain / Windows Credential Manager.
+- **AI quotas** — only if you turn on the AI usage page, and only for the quota cards you turn on: Codex asks chatgpt.com with the login Codex saved; Claude Code runs your installed Claude Code; Cursor, GLM, DeepSeek, Kimi, OpenCode Go and Command Code query their official quota or balance endpoints using the credentials saved by the local tool or an API key you paste into Rakko, kept in a file in Rakko's data folder that only you can read.
 
 Local AI usage is read from files on your computer and priced with a list bundled in the app. Agent notices and approvals travel over a local socket (a named pipe on Windows) in Rakko's own folder. Requests follow the system proxy. Clipboard text is stored as plain text in Rakko's data folder: `~/Library/Application Support/Rakko/` on macOS, `%APPDATA%\Rakko` on Windows.
 
@@ -154,7 +155,8 @@ Rakko 把屏幕顶部变成一个随手可用的架子。在 MacBook 上它住�
 - **托盘**：把文件、文件夹、图片或文字拖到刘海上先放着，用时再拖进任何应用。图片和 PDF 可以转格式（JPEG、PNG、HEIC、PDF、Word），图片可以压到指定大小、缩小尺寸，还能打 zip、解压、批量重命名，全部在本机完成。
 - **剪贴板历史**：复制过的内容连同来源应用都会记下，截图和复制的图片里的文字也能搜。按 `⌃⌥V`（Windows 是 `Ctrl+Alt+V`），打字筛选，直接粘贴。密码管理器标记为私密的内容不记，也可以排除指定应用。
 - **搜索**：`⌃⌥Space`（Windows 是 `Ctrl+Alt+Space`）在一个列表里搜托盘、剪贴板、便利贴、应用、文件夹和文件。
-- **工具页**：自己摆放的一格格卡片：音乐、倒计时和秒表、保持唤醒、AI 用量、便利贴、最近文件、剪贴板最新一条，以及一点就能用的文件操作。把卡片拖出面板，就能固定在桌面上。
+- **工具页**：自己摆放的一格格卡片：音乐、倒计时和秒表、保持唤醒、系统监控、AI 用量、便利贴、白板，以及一点就能用的文件操作。把卡片拖出面板，就能固定在桌面上。
+- **白板**：一块独立窗口里的无限画布：画笔、荧光笔、二十多种形状、能连在图形上的箭头、文字、便签、框容器和图片，支持多块白板、多个页面。可以导出 PNG、SVG 或白板文件，停手就自动保存。
 - **截图和框选文字**：`⌃⌥A` 定格所有屏幕，选窗口或拖出区域，标注后复制、保存或钉在桌面；`⌃⌥O` 识别屏幕任意区域里的文字并复制。面板开着时截图，面板会一起截进去。
 - **音乐**：首页是播放器，带滚动歌词；刘海收起时显示封面和跳动的均衡器。
 - **AI 用量**（可选）：Codex（含重置卡）、Claude Code、GLM、DeepSeek 余额、Cursor、Kimi、OpenCode Go 和 Command Code 的套餐额度与余额卡片，以及这台电脑上各个编程 Agent 的 token 用量和费用估算：omp、Claude Code、Codex、Antigravity、Gemini CLI、Copilot CLI、opencode、Grok、pi、Qwen Code、Kimi、Droid、Hermes 等。装了但读不到用量的工具会写明「读不到」，不会当成 0。
@@ -213,7 +215,7 @@ Rakko 每天检查一次本仓库的新版本，有新版时显示更新说明�
 
 - **检查更新**：向本仓库最新的 GitHub Release 询问是否有新版本，只带上应用版本号。
 - **歌词**：只在歌词栏打开时，把歌曲名、歌手、专辑和时长发给 lrclib.net；lrclib.net 没有时，把歌曲名和歌手发给网易云音乐。
-- **AI 额度**：只在你打开 AI 用量页后，且只查询你开启了开关的服务：Codex 用 Codex 保存的登录信息向 chatgpt.com 查询；Claude Code 通过运行你安装的 Claude Code 读取；Cursor、GLM、DeepSeek、Kimi、OpenCode Go 和 Command Code 使用本机工具已保存的登录信息或你保存在系统钥匙串（Windows 上是凭据管理器）里的 API Key 向各自的官方接口查询。
+- **AI 额度**：只在你打开 AI 用量页后，且只查询你开启了开关的服务：Codex 用 Codex 保存的登录信息向 chatgpt.com 查询；Claude Code 通过运行你安装的 Claude Code 读取；Cursor、GLM、DeepSeek、Kimi、OpenCode Go 和 Command Code 使用本机工具已保存的登录信息或你粘贴进 Rakko 的 API Key（存在数据文件夹里只有你能读写的文件中） 向各自的官方接口查询。
 
 本机 AI 用量从你电脑上的文件读取，费用用应用内置的价目表估算。Agent 提醒和审批通过 Rakko 自己文件夹里的本地 socket（Windows 上是命名管道）传递。网络请求遵循系统代理。剪贴板文字以纯文本保存在 Rakko 的数据文件夹：macOS 是 `~/Library/Application Support/Rakko/`，Windows 是 `%APPDATA%\Rakko`。
 

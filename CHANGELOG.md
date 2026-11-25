@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.18.6
+
+- **白板**：工具页新增「白板」卡片，打开一块独立窗口里的无限画布。有画笔、荧光笔、橡皮（整个对象 / 局部擦除）、激光笔、二十多种形状、能连在图形上的箭头、文字、便签、框容器和图片；手绘、干净、单色三种风格，点阵、方格、横线、空白四种纸面，深色和浅色主题。支持多块白板、多个页面、编组、对齐、锁定、裁切图片和小地图；可以导出 PNG、SVG 或白板文件，选中内容能直接拖出窗口。停手就自动保存，写盘在后台进行。也可以在搜索条里选「新建白板」，或在「设置 → 快捷键」里设快捷键。
+- **系统窗口按钮**：白板和便利贴窗口改用系统的红黄绿按钮（Windows 上是标题栏的最小化、最大化、关闭），鼠标停在绿色按钮上可以选平铺位置，白板还能全屏。
+- **便利贴**：标题太长时字号自动缩小，完整显示不截断。
+- **导航图标**：工具页换成工具箱图标，应用切换换成九宫点图标，两个不再容易看混。
+- **工具页**：移除「最近文件」和「剪贴板最新」两张卡片，它们的内容在托盘页和剪贴板页里都能看到；已经放着这两张卡的布局和桌面钉卡会自动去掉，不留空格。
+- **更省电**：开着「保持唤醒」时，面板收起后不再在后台空转。
+- **修复**：面板收起后，桌面上的倒计时、秒表、保持唤醒、AI 用量和便利贴钉卡不再停住不动；桌面海獭在松手没被系统送到或拖动被打断时能正确收尾；工具页保存布局失败时不再卡死；解压 ZIP 时拒绝带盘符的路径并限制总大小。
+
+### English
+
+- **Whiteboard**: a new Whiteboard card on the tools page opens an infinite canvas in its own window. It has pens, a highlighter, an eraser (whole object or partial), a laser pointer, 20-plus shapes, arrows that stay attached to shapes, text, notes, frames and pictures; sketchy, clean and mono looks, dotted, grid, lined and blank paper, and dark and light themes. Multiple boards and pages, grouping, alignment, locking, image cropping and a minimap are all there; export as PNG, SVG or a board file, or drag a selection straight out of the window. It saves as you go, writing in the background. You can also pick New Board in the search bar or set a shortcut in Settings → Shortcuts.
+- **System window buttons**: the whiteboard and sticky note windows now use the system's red, yellow and green buttons (minimize, maximize and close in the title bar on Windows). Hover the green button to tile the window; the whiteboard can also go full screen.
+- **Sticky notes**: a long title shrinks to fit instead of being cut off.
+- **Navigation icons**: the tools page now has a toolbox icon and the app switcher a nine-dot icon, so the two are no longer easy to mix up.
+- **Tools page**: the Recent Files and Latest Clipboard cards are gone; their contents are on the Tray and Clipboard pages. Layouts and desktop pins that still hold them drop them cleanly, leaving no gaps.
+- **Power**: with Keep Awake on, Rakko no longer keeps working in the background once the panel is folded.
+- **Fixes**: the timer, stopwatch, Keep Awake, AI usage and sticky note cards pinned to the desktop keep updating after the panel folds; the desktop otter finishes a drag correctly when the system drops the release or the drag is interrupted; a failed tools-page layout save no longer freezes Rakko; ZIP extraction rejects drive-letter paths and caps the total size.
+
 ## 1.18.5
 
 - **「正在播放」开关**：「设置 → 外形与提示 → 实时活动」新增「正在播放」。关掉后，刘海两翼、首页播放器、工具页音乐卡和播放快捷键都不再出现，后台也不再读取播放状态；打开刘海就是首页。默认开启，随时切换，无需重启。
