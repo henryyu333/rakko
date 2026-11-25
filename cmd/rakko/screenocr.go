@@ -95,7 +95,13 @@ func (a *shelf) startScreenOCR() {
 			a.syncOnboardingKeys()
 		}
 		timer := ocrAfterFunc(ocrProgressDelay, func() {
-			ocrInvalidate(a) // wakes the live progress capsule
+			// The timer fires on its own goroutine: the window and the
+			// monitor are the main thread's, so both the repaint and the
+			// wake are dispatched, never touched here.
+			ocrDispatch(func() {
+				ocrInvalidate(a) // wakes the live progress capsule
+				a.wakeMonitor()
+			})
 		})
 		ocrWork(func() { a.screenOCRRound(timer, hideFirst) })
 	})
@@ -183,7 +189,12 @@ func (a *shelf) copyDroppedText(paths []string) {
 	a.ocrBusyAt = time.Now()
 	a.ocrRunID++
 	timer := ocrAfterFunc(ocrProgressDelay, func() {
-		ocrInvalidate(a) // wakes the live progress capsule
+		// Same as the capture round: the timer's goroutine dispatches the
+		// repaint and the monitor wake to the main thread.
+		ocrDispatch(func() {
+			ocrInvalidate(a) // wakes the live progress capsule
+			a.wakeMonitor()
+		})
 	})
 	ocrWork(func() {
 		var parts []string

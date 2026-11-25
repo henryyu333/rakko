@@ -445,3 +445,31 @@ func TestScreenOCRSheetFollowsNewAttempts(t *testing.T) {
 		t.Fatal("the capture-text key did not switch the card back to its first step")
 	}
 }
+
+// The progress timer fires off the main thread: its repaint and the
+// monitor wake both go through the dispatch seam, so the timer itself
+// never touches the window.
+func TestScreenOCRProgressTimerDispatchesTheWake(t *testing.T) {
+	ocrSeams(t)
+	ocrPreflight = func() bool { return true }
+	var fire func()
+	ocrAfterFunc = func(_ time.Duration, fn func()) *time.Timer {
+		fire = fn
+		return time.NewTimer(time.Hour)
+	}
+	ocrWork = func(func()) {}
+	paints, wakes := 0, 0
+	ocrInvalidate = func(*shelf) { paints++ }
+	a := &shelf{}
+	a.monitorStarted.Store(true)
+	a.wakeMainFn = func(fn func()) { fn() }
+	a.monitorRunFn = func() { wakes++ }
+	a.startScreenOCR()
+	if fire == nil {
+		t.Fatal("the round armed no progress timer")
+	}
+	fire()
+	if paints != 1 || wakes != 1 {
+		t.Fatalf("timer dispatched paints=%d wakes=%d, want 1 and 1", paints, wakes)
+	}
+}

@@ -1147,3 +1147,34 @@ func TestUsageShortcutStaysOnSettingsWhileDisabled(t *testing.T) {
 		t.Fatalf("disabled usage: opened=%d page=%v", opened, a.settingsPage)
 	}
 }
+
+// The confirm row's buttons answer only a real release on themselves: a
+// canceled press (the system took the pointer) and a release outside pick
+// nothing.
+func TestSettingsConfirmButtonNeedsItsOwnRelease(t *testing.T) {
+	fired := 0
+	view := ui.NewTester(func(c *ui.Context) {
+		settingsConfirmButton(c, "test", "继续", true, func() { fired++ })
+	}, 200, 60)
+	view.Frame()
+	r, ok := view.Find("继续")
+	if !ok {
+		t.Fatalf("the button did not draw: %v", view.Texts())
+	}
+	cx, cy := r.X+r.W/2, r.Y+r.H/2
+	view.Press(cx, cy)
+	view.CancelPress()
+	if fired != 0 {
+		t.Fatalf("a canceled press chose the button %d times", fired)
+	}
+	view.Press(cx, cy)
+	view.Release(195, 55)
+	if fired != 0 {
+		t.Fatalf("a release outside the button chose it %d times", fired)
+	}
+	view.Press(cx, cy)
+	view.Release(cx, cy)
+	if fired != 1 {
+		t.Fatalf("a release on the button chose it %d times, want once", fired)
+	}
+}

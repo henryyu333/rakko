@@ -817,11 +817,23 @@ func settingsConfirmButton(c *ui.Context, key, label string, primary bool, fn fu
 			b.Background(settingsCtlHoverBg)
 		}
 	}
+	bw, bh := b.Bounds().W, b.Bounds().H
 	b.HandleInput(func(ev ui.InputEvent) bool {
 		switch ev.Kind {
 		case ui.InputPointerDown:
 			return true
 		case ui.InputPointerUp:
+			// Only the pointer letting go on the button chooses it: a
+			// canceled press (the system took the pointer) and a release
+			// outside the button decide nothing. Bounds is the box the
+			// last frame laid out, read here rather than in the handler,
+			// which runs on the element it would leave behind.
+			if ev.Canceled {
+				return true
+			}
+			if ev.X < 0 || ev.Y < 0 || ev.X > bw || ev.Y > bh {
+				return true
+			}
 			fn()
 			return true
 		}

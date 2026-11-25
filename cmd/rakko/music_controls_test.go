@@ -1,6 +1,7 @@
 package main
 
 import (
+	"math"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -42,5 +43,35 @@ func TestVolumeRowPollsWhenPanelHidden(t *testing.T) {
 	view.Frame()
 	if a.music.out.v != 0.75 {
 		t.Fatalf("output volume after advance with hidden panel = %v, want 0.75", a.music.out.v)
+	}
+}
+
+// A canceled release leaves the knob at the track's value and commits
+// nothing; a real release still commits once.
+func TestRailCanceledReleaseCommitsNothing(t *testing.T) {
+	var d railDrag
+	var commits []float32
+	view := ui.NewTester(func(c *ui.Context) {
+		ui.Row(c).FillWidth().Children(func() {
+			rail(c, "r", "音量", 0.25, 20, 3, ui.RGB(255, 255, 255), true, &d,
+				func(f float32) { commits = append(commits, f) }).Grow(1)
+		})
+	}, 200, 20)
+	view.Frame()
+	view.Press(160, 10)
+	if !d.drag {
+		t.Fatal("the press did not grab the rail")
+	}
+	view.CancelPress()
+	if len(commits) != 0 {
+		t.Fatalf("a canceled release committed %v", commits)
+	}
+	if d.drag {
+		t.Fatal("the canceled release left the drag on")
+	}
+	view.Press(160, 10)
+	view.Release(160, 10)
+	if len(commits) != 1 || math.Abs(float64(commits[0]-0.8)) > 0.01 {
+		t.Fatalf("release commits = %v, want one at 0.8", commits)
 	}
 }

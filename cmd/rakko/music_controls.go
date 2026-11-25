@@ -114,8 +114,14 @@ func rail(c *ui.Context, key, label string, frac float32, height, trackH float32
 				return true
 			case ui.InputPointerUp:
 				if d.drag {
-					d.drag, d.frac = false, f
-					commit(f)
+					d.drag = false
+					// A canceled release (the system took the press) is
+					// not a choice: the knob drops back to the track's
+					// value and nothing is committed.
+					if !ev.Canceled {
+						d.frac = f
+						commit(f)
+					}
 				}
 				return true
 			}

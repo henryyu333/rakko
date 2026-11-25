@@ -232,9 +232,9 @@ func (it *pinItem) viewPreview(c *ui.Context) {
 	if it.morphActive(now) || it.tilt != 0 {
 		c.AnimationFrame()
 	}
-	if m >= 0.999 && (it.padL != 0 || it.padT != 0) {
-		mygo.RunOnMain(func() {
-			if it.preview && it.win != nil {
+	if m >= 0.999 && (it.padL != 0 || it.padT != 0) && it.win != nil {
+		it.win.Update(func() {
+			if it.preview {
 				it.dropPreviewPaddingNow()
 			}
 		})
@@ -261,9 +261,9 @@ func (it *pinItem) viewPreview(c *ui.Context) {
 		targetFrame, padL, padT, subX, subY := previewFrameForVisual(it.cursor, pinArea(it.display), v, it.srcW, it.srcH, it.cardW, m, it.grabDX, it.grabDY)
 		drawX = float32(targetFrame.X+padL-it.frame.X) + subX
 		drawY = float32(targetFrame.Y+padT-it.frame.Y) + subY
-		if m < 0.999 && (targetFrame != it.frame || padL != it.padL || padT != it.padT || subX != it.subX || subY != it.subY) {
-			mygo.RunOnMain(func() {
-				if !it.preview || it.win == nil || it.morphVal(time.Now()) >= 0.999 {
+		if m < 0.999 && (targetFrame != it.frame || padL != it.padL || padT != it.padT || subX != it.subX || subY != it.subY) && it.win != nil {
+			it.win.Update(func() {
+				if !it.preview || it.morphVal(time.Now()) >= 0.999 {
 					return
 				}
 				moved := it.frame != targetFrame

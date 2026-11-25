@@ -520,17 +520,8 @@ func (o *onboardingFeature) buttonRow(c *ui.Context, l locales.Messages) {
 		primary.Children(func() {
 			ui.Text(c, label).FontSize(12.5).FontWeight(600).TextColor(ink)
 		})
-		if primary.Clicked() && !o.moving {
-			switch {
-			case a.perm.stage == permissionRelaunch:
-				a.relaunchShelf()
-			case o.last():
-				a.onboardingFinish()
-			case o.current() == onbStepMove && !o.moved:
-				a.onboardingMove()
-			default:
-				o.next()
-			}
+		if primary.Clicked() {
+			o.primary()
 		}
 	})
 }
@@ -578,10 +569,16 @@ func (a *shelf) onboardingKey(key string) {
 	}
 }
 
-// primary is what the primary button does, for → and ⏎: the move on the
-// step that offers it, 开始使用 on the last step, otherwise the next step.
+// primary is what the primary button does, for → and ⏎ and for the click:
+// a move in flight is ignored, a pending relaunch restarts, the move step
+// moves, 开始使用 on the last step, otherwise the next step.
 func (o *onboardingFeature) primary() {
+	if o.moving {
+		return
+	}
 	switch {
+	case o.host.perm.stage == permissionRelaunch:
+		o.host.relaunchShelf()
 	case o.last():
 		o.host.onboardingFinish()
 	case o.current() == onbStepMove && !o.moved:

@@ -619,3 +619,34 @@ func TestSetLevelPageNeverLandsOnADisabledPage(t *testing.T) {
 		t.Fatalf("landed on level %d page %s, want the tray", a.currentLevel(), a.currentPage().id())
 	}
 }
+
+// → and ⏎ run the same action as the button: a move in flight is ignored,
+// and once a grant needs the restart, the key restarts instead of moving
+// the guide on.
+func TestOnboardingKeyFollowsThePrimaryButton(t *testing.T) {
+	t.Run("moving", func(t *testing.T) {
+		a, _ := onboardingShelf(t)
+		a.onb.origin = originDownloads
+		a.onb.step = 1
+		a.onb.moving = true
+		a.onboardingKey("Enter")
+		if a.onb.step != 1 || a.onb.moved {
+			t.Fatalf("a move in flight answered Enter: step=%d moved=%v", a.onb.step, a.onb.moved)
+		}
+	})
+	t.Run("relaunch", func(t *testing.T) {
+		a, _ := onboardingShelf(t)
+		origExe, origStart, origQuit := relaunchExecutable, relaunchStart, relaunchQuit
+		relaunchExecutable = func() (string, error) { return "/tmp/Rakko", nil }
+		relaunchStart = func(relaunchPlan) error { return nil }
+		quit := false
+		relaunchQuit = func() { quit = true }
+		t.Cleanup(func() { relaunchExecutable, relaunchStart, relaunchQuit = origExe, origStart, origQuit })
+
+		a.perm.stage = permissionRelaunch
+		a.onboardingKey("Enter")
+		if !quit {
+			t.Fatal("Enter on the relaunch stage did not restart")
+		}
+	})
+}
