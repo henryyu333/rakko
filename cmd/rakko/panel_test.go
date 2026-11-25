@@ -236,7 +236,9 @@ func TestClearOnlyEmptiesItsOwnPage(t *testing.T) {
 	}
 	a.search = "复制"
 	view.Frame()
-	if view.HasText("清空") {
+	// The trash action's own label is exactly 清空; the search field's
+	// 清空搜索 control is a different button and stays.
+	if slices.Contains(view.Texts(), "清空") {
 		t.Fatal("a narrowed clipboard search must not offer 清空")
 	}
 	a.search = ""
