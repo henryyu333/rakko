@@ -183,9 +183,7 @@ func (e *Editor) Cam() Camera {
 func (e *Editor) SetCam(c Camera) {
 	c.Z = geo.Clamp(c.Z, MinZoom, MaxZoom)
 	e.cams[e.Page] = c
-	if p := e.Doc.Page(e.Page); p != nil {
-		p.Camera = &doc.PageCamera{X: c.X, Y: c.Y, Z: c.Z}
-	}
+	e.Doc.SetPageCamera(e.Page, doc.PageCamera{X: c.X, Y: c.Y, Z: c.Z})
 }
 
 // ToPage converts screen coordinates (relative to the stage origin) to page coordinates.

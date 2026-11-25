@@ -477,14 +477,39 @@ func (d *Drawing) renumberDuplicateIndices() {
 	}
 }
 
-// Snapshot returns a cheap shallow copy whose maps/slices are independent of future edits.
+// Snapshot returns a cheap shallow copy whose maps, slices, and page records
+// are independent of future edits.
 func (d *Drawing) Snapshot() *Drawing {
 	c := *d
-	c.Pages = slices.Clone(d.Pages)
+	pages := make([]*Page, len(d.Pages))
+	for i, p := range d.Pages {
+		if p == nil {
+			continue
+		}
+		cp := *p
+		if p.Camera != nil {
+			cam := *p.Camera
+			cp.Camera = &cam
+		}
+		pages[i] = &cp
+	}
+	c.Pages = pages
 	c.Shapes = maps.Clone(d.Shapes)
 	c.Bindings = maps.Clone(d.Bindings)
 	c.Assets = maps.Clone(d.Assets)
 	return &c
+}
+
+// SnapshotUncached returns an independent Snapshot whose Shape records are
+// shallow-cloned with cleared render caches, safe for off-thread rendering.
+func (d *Drawing) SnapshotUncached() *Drawing {
+	c := d.Snapshot()
+	for id, s := range c.Shapes {
+		if s != nil {
+			c.Shapes[id] = s.Clone()
+		}
+	}
+	return c
 }
 
 // Page returns the page with id, or nil if not found.
@@ -526,6 +551,26 @@ func (d *Drawing) RenamePage(id ID, name string) bool {
 		if p.ID == id {
 			cp := *p
 			cp.Name = name
+			pages := slices.Clone(d.Pages)
+			pages[i] = &cp
+			d.Pages = pages
+			return true
+		}
+	}
+	return false
+}
+
+// SetPageCamera updates page id's remembered camera on a cloned Page record so
+// concurrent Snapshot readers never race with viewport pan or zoom.
+func (d *Drawing) SetPageCamera(id ID, cam PageCamera) bool {
+	for i, p := range d.Pages {
+		if p.ID == id {
+			if p.Camera != nil && *p.Camera == cam {
+				return true
+			}
+			cp := *p
+			cc := cam
+			cp.Camera = &cc
 			pages := slices.Clone(d.Pages)
 			pages[i] = &cp
 			d.Pages = pages

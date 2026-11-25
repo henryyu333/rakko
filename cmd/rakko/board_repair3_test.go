@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -643,4 +644,49 @@ func TestBoardFontButtonsCompleteAtNarrowWidths(t *testing.T) {
 			saveTestShot(t, "seg4", "font-row-"+strconv.Itoa(w)+"-"+lang+".png", view.Image())
 		}
 	}
+}
+
+func TestRenderCloneConcurrentPaintNoDataRace(t *testing.T) {
+	_, b := boardTestShelf(t)
+	idx := doc.FirstIndex
+	for i := range 12 {
+		id := doc.NewRecordID("shape")
+		s := doc.NewShape(id, doc.TypeGeo)
+		s.Parent, s.X, s.Y, s.W, s.H = b.ed.Page, float64(i*40), 20, 80, 60
+		s.Index = idx
+		idx = doc.IndexBetween(idx, "")
+		b.ed.Doc.Shapes[id] = s
+	}
+	arrowID := doc.NewRecordID("shape")
+	ar := doc.NewShape(arrowID, doc.TypeArrow)
+	ar.Parent, ar.Start, ar.End = b.ed.Page, geo.V(10, 10), geo.V(300, 120)
+	ar.Index = doc.IndexBetween(idx, "")
+	b.ed.Doc.Shapes[arrowID] = ar
+	b.ed.CreateText(geo.V(50, 200), "concurrent export")
+	for _, s := range b.ed.Doc.Shapes {
+		s.Cache = nil
+	}
+
+	clone := b.renderClone()
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if _, _, _, _, err := clone.renderTiledPNG(nil); err != nil {
+			t.Errorf("renderTiledPNG: %v", err)
+		}
+	}()
+
+	pal := b.ed.Palette()
+	for range 50 {
+		for _, id := range b.ed.Children(b.ed.Page) {
+			s := b.ed.Doc.Shapes[id]
+			if s == nil {
+				continue
+			}
+			b.ed.Geometry(s)
+			b.ed.Display(s, pal)
+		}
+	}
+	wg.Wait()
 }

@@ -74,6 +74,34 @@ func TestShapeCloneMovedAndSnapshotEqual(t *testing.T) {
 	}
 }
 
+func TestSnapshotDeepCopiesPagesAndUncachedClearsCache(t *testing.T) {
+	d := NewDrawing("board1", "白板 1")
+	s := NewShape("shape:1", TypeGeo)
+	s.Cache = "cached"
+	d.Shapes[s.ID] = s
+	p1 := d.Pages[0].ID
+	if !d.SetPageCamera(p1, PageCamera{X: 10, Y: 20, Z: 1.5}) {
+		t.Fatal("SetPageCamera failed")
+	}
+
+	snap := d.Snapshot()
+	d.SetPageCamera(p1, PageCamera{X: 99, Y: 88, Z: 2.0})
+	if snap.Page(p1).Camera == nil || snap.Page(p1).Camera.X != 10 || snap.Page(p1).Camera.Z != 1.5 {
+		t.Fatalf("Snapshot shared Page/Camera pointer with subsequent SetPageCamera: %+v", snap.Page(p1).Camera)
+	}
+
+	uncached := d.SnapshotUncached()
+	if uncached.Shapes[s.ID] == s {
+		t.Fatal("SnapshotUncached shared original Shape pointer")
+	}
+	if uncached.Shapes[s.ID].Cache != nil {
+		t.Fatalf("SnapshotUncached kept Cache: %v", uncached.Shapes[s.ID].Cache)
+	}
+	if s.Cache != "cached" {
+		t.Fatal("SnapshotUncached mutated original Shape.Cache")
+	}
+}
+
 func TestDrawingPagesCRUD(t *testing.T) {
 	d := NewDrawing("b1", "Board 1")
 	if err := d.DeletePage(d.Pages[0].ID); !errors.Is(err, ErrLastPage) {

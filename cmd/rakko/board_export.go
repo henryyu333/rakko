@@ -307,10 +307,11 @@ func (b *boardUI) exportPNGFile(ids []doc.ID) {
 }
 
 // renderClone is a boardUI good for painting a snapshot without touching the
-// live editor or its bitmap map.
+// live editor, its shape caches, or its bitmap map.
 func (b *boardUI) renderClone() *boardUI {
-	snap := b.ed.Doc.Snapshot()
+	snap := b.ed.Doc.SnapshotUncached()
 	ed := editor.New(snap, b.ed.Measure)
+	ed.FrameName = b.ed.FrameName
 	ed.SetViewport(b.ed.VW, b.ed.VH)
 	ed.Page = b.ed.Page
 	ed.SetCam(b.ed.Cam())

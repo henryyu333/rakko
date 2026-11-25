@@ -1,7 +1,9 @@
 package editor
 
 import (
+	"encoding/json"
 	"math"
+	"sync"
 	"testing"
 
 	"rakko/internal/board/doc"
@@ -391,4 +393,35 @@ func TestScribbleLikeLetterDoesNotEraseFrameContent(t *testing.T) {
 	if e.Doc.Shapes[fr] == nil || e.Doc.Shapes[rect] == nil {
 		t.Fatal("writing letters inside a frame erased its content")
 	}
+}
+
+func TestSetCamAndSnapshotMarshalNoDataRace(t *testing.T) {
+	e := newTestEditor()
+	addTestShape(e, doc.TypeGeo, e.Page, 10, 10, 120, 80)
+
+	jobs := make(chan *doc.Drawing, 4)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for snap := range jobs {
+			if _, err := json.Marshal(snap); err != nil {
+				t.Errorf("marshal snapshot: %v", err)
+				return
+			}
+		}
+	}()
+
+	for i := range 300 {
+		// Main thread takes Snapshot() and hands it to the background encoder,
+		// then immediately mutates the viewport via Pan / ZoomAt.
+		select {
+		case jobs <- e.Doc.Snapshot():
+		default:
+		}
+		e.Pan(float64(i%5)+1, -float64(i%3)-1)
+		e.ZoomAt(geo.V(120, 90), 1.002)
+	}
+	close(jobs)
+	wg.Wait()
 }
