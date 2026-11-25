@@ -157,7 +157,7 @@ func (b *boardUI) renderTiledPNGMax(ids []doc.ID, maxDim int) (pngBytes []byte, 
 							H: float64(th) / scale,
 						},
 					}
-					sc.lightInk = sc.estimateMaskArea(b.ed.Page) > boardAtlasBudget
+					sc.planMaskBudget(b.ed.Page, filterSet)
 					if len(filterSet) == 0 {
 						sc.renderChildren(b.ed.Page)
 						return

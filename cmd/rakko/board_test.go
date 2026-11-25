@@ -1661,8 +1661,8 @@ func TestBoardHighDensityMaskAtlasGuard(t *testing.T) {
 	view := ui.NewTester(a.boardView, 1040, 680)
 	view.SetLocale("zh-Hans")
 
-	// Insert 1550 visible fountain-pen strokes so mask area budget (6_000_000) overflows
-	// and verify graceful Polyline degradation keeps all items & toolbar intact.
+	// Insert 1550 visible thick fountain-pen strokes so actual ink mask area exceeds
+	// boardAtlasBudget (6_000_000) and verify selective degradation keeps all items & toolbar intact.
 	// Baseline toolbar pixels: the atlas guard must keep the icons themselves.
 	view.Frame()
 	view.Frame()
@@ -1672,7 +1672,7 @@ func TestBoardHighDensityMaskAtlasGuard(t *testing.T) {
 	const count = 1550
 	b.ed.SetTool(editor.ToolDraw)
 	b.ed.Next.PenKind = "pen"
-	b.ed.Next.PenWidth = 3
+	b.ed.Next.PenWidth = 10
 	for i := 0; i < count; i++ {
 		col := float64(i%31)*28 + 60
 		row := float64(i/31)*11 + 40

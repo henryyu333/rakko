@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 	"sync"
 
@@ -16,14 +17,15 @@ import (
 const boardAtlasBudget = 6_000_000.0
 
 type boardScene struct {
-	b        *boardUI
-	p        *ui.Painter
-	pal      *editor.Palette
-	cam      editor.Camera
-	origin   geo.Vec
-	view     geo.Box
-	lightInk bool
-	path     ui.Path
+	b           *boardUI
+	p           *ui.Painter
+	pal         *editor.Palette
+	cam         editor.Camera
+	origin      geo.Vec
+	view        geo.Box
+	degraded    map[doc.ID]bool
+	estMaskArea float64
+	path        ui.Path
 }
 
 func (s *boardScene) camMat() geo.Mat {
@@ -73,37 +75,168 @@ func (b *boardUI) paintStage(p *ui.Painter, r ui.Rect) {
 
 	p.Clip(r, 0, func() {
 		b.paintPaper(p, r, pal)
-		s.lightInk = s.estimateMaskArea(b.ed.Page) > boardAtlasBudget
-		b.lastLightInk = s.lightInk
+		s.planMaskBudget(b.ed.Page, nil)
+		b.lastDegradedCount = len(s.degraded)
+		b.lastLightInk = b.lastDegradedCount > 0
+		b.lastMaskArea = s.estMaskArea
 		s.renderChildren(b.ed.Page)
 		s.renderOverlays()
 	})
 }
 
-func (s *boardScene) estimateMaskArea(parent doc.ID) float64 {
-	scale := float64(s.p.Scale())
+type maskCandidate struct {
+	id      doc.ID
+	inkCost float64
+}
+
+// planMaskBudget estimates actual mask coverage (stroke length * width plus
+// visible fill area) and, when total area exceeds boardAtlasBudget, degrades
+// only the largest ink/stroke shapes until remaining usage fits the budget.
+func (s *boardScene) planMaskBudget(parent doc.ID, filter map[doc.ID]bool) {
+	scale := 1.0
+	if s.p != nil {
+		if sc := float64(s.p.Scale()); sc > 0 {
+			scale = sc
+		}
+	}
+	s.planMaskBudgetWithScale(parent, filter, scale)
+}
+
+func (s *boardScene) planMaskBudgetWithScale(parent doc.ID, filter map[doc.ID]bool, scale float64) {
 	if scale <= 0 {
 		scale = 1
 	}
 	k := s.cam.Z * scale
-	var area float64
-	for _, id := range s.b.ed.Children(parent) {
-		sh := s.b.ed.Doc.Shapes[id]
-		if sh == nil {
-			continue
-		}
-		if sh.Type == doc.TypeGroup || sh.Type == doc.TypeFrame {
-			area += s.estimateMaskArea(id)
-			if sh.Type == doc.TypeGroup {
+	var totalArea float64
+	var candidates []maskCandidate
+	var walk func(pid doc.ID)
+	walk = func(pid doc.ID) {
+		for _, id := range s.b.ed.Children(pid) {
+			sh := s.b.ed.Doc.Shapes[id]
+			if sh == nil {
 				continue
 			}
-		}
-		box := s.b.ed.PageBounds(id)
-		if ib, ok := boardMaskOverlap(box, s.view); ok {
-			area += (ib.W*k + 8) * (ib.H*k + 8)
+			if sh.Type == doc.TypeGroup || sh.Type == doc.TypeFrame {
+				walk(id)
+				if sh.Type == doc.TypeGroup {
+					continue
+				}
+			}
+			if filter != nil && !filter[id] {
+				continue
+			}
+			box := s.b.ed.PageBounds(id)
+			ib, ok := boardMaskOverlap(box, s.view)
+			if !ok {
+				continue
+			}
+			fixedCost, inkCost := s.shapeMaskCost(sh, ib, box, k)
+			totalArea += fixedCost + inkCost
+			if inkCost > 0 {
+				candidates = append(candidates, maskCandidate{id: id, inkCost: inkCost})
+			}
 		}
 	}
-	return area
+	walk(parent)
+	s.estMaskArea = totalArea
+	s.degraded = nil
+	if totalArea <= boardAtlasBudget || len(candidates) == 0 {
+		return
+	}
+	slices.SortFunc(candidates, func(a, b maskCandidate) int {
+		if a.inkCost > b.inkCost {
+			return -1
+		}
+		if a.inkCost < b.inkCost {
+			return 1
+		}
+		return 0
+	})
+	s.degraded = make(map[doc.ID]bool)
+	for _, c := range candidates {
+		if totalArea <= boardAtlasBudget {
+			break
+		}
+		s.degraded[c.id] = true
+		totalArea -= c.inkCost
+	}
+}
+
+func (s *boardScene) shapeMaskCost(sh *doc.Shape, ib, box geo.Box, k float64) (fixedCost, inkCost float64) {
+	boxPx := (ib.W*k + 2) * (ib.H*k + 2)
+	visScale := 1.0
+	if ib.W < box.W || ib.H < box.H {
+		visScale = math.Min(1, math.Max(ib.W/math.Max(box.W, 1), ib.H/math.Max(box.H, 1)))
+	}
+	for _, pr := range s.b.ed.Display(sh, s.pal) {
+		switch pr.Kind {
+		case editor.PrimFill:
+			if pr.Ink != nil {
+				l, w := inkApproxLengthAndWidth(pr.Ink)
+				inkCost += math.Min(l*visScale*k*(w*k+2), boxPx)
+			} else {
+				fixedCost += boxPx
+			}
+		case editor.PrimStroke:
+			if pr.Butt && len(pr.Dash) == 0 && pr.Path != nil && len(pr.Path.Segs) > 0 && isLineSegmentsOnly(pr.Path) {
+				continue
+			}
+			if pr.Path != nil && len(pr.Path.Segs) > 0 {
+				l := pathApproxLength(pr.Path)
+				w := math.Max(pr.Width*k, 0.75) + 2
+				cost := math.Min(l*visScale*k*w, boxPx)
+				if len(pr.Dash) == 0 {
+					inkCost += cost
+				} else {
+					fixedCost += cost
+				}
+			}
+		}
+	}
+	return fixedCost, inkCost
+}
+
+func inkApproxLengthAndWidth(ink *editor.Ink) (length, avgW float64) {
+	if ink == nil {
+		return 0, 0
+	}
+	length = geo.PolyLength(ink.Pts)
+	if len(ink.W) == 0 {
+		return length, 2.5
+	}
+	sum := 0.0
+	for _, w := range ink.W {
+		sum += w
+	}
+	return length, sum / float64(len(ink.W))
+}
+
+func pathApproxLength(p *geo.Path) float64 {
+	if p == nil || len(p.Segs) == 0 {
+		return 0
+	}
+	var total float64
+	var cur, start geo.Vec
+	for _, seg := range p.Segs {
+		switch seg.Op {
+		case geo.OpMove:
+			cur = seg.P[0]
+			start = cur
+		case geo.OpLine:
+			total += cur.Dist(seg.P[0])
+			cur = seg.P[0]
+		case geo.OpQuad:
+			total += (cur.Dist(seg.P[0]) + seg.P[0].Dist(seg.P[1])) * 0.85
+			cur = seg.P[1]
+		case geo.OpCube:
+			total += (cur.Dist(seg.P[0]) + seg.P[0].Dist(seg.P[1]) + seg.P[1].Dist(seg.P[2])) * 0.85
+			cur = seg.P[2]
+		case geo.OpClose:
+			total += cur.Dist(start)
+			cur = start
+		}
+	}
+	return total
 }
 
 // boardMaskOverlap clips a shape's page box to the visible box: a huge shape
@@ -286,15 +419,16 @@ func (s *boardScene) renderPartialPreview(sh *doc.Shape, pieces [][]geo.Vec, m g
 }
 
 func (s *boardScene) renderPrim(pr editor.Prim, m geo.Mat, o float64, sh *doc.Shape) {
+	degraded := s.degraded[sh.ID]
 	switch pr.Kind {
 	case editor.PrimFill:
-		if s.lightInk && pr.Ink != nil {
+		if degraded && pr.Ink != nil {
 			s.renderInkFallback(pr, m, o)
 			return
 		}
 		s.p.FillPath(s.buildPath(pr.Path, m), boardColor(pr.Color.Alpha(o)))
 	case editor.PrimStroke:
-		if s.lightInk && len(pr.Dash) == 0 && len(pr.Path.Segs) > 0 {
+		if degraded && len(pr.Dash) == 0 && len(pr.Path.Segs) > 0 {
 			flat, closed := pr.Path.Points(4)
 			if len(flat) >= 2 {
 				pts := make([][2]float32, 0, len(flat)+1)

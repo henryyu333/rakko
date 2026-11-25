@@ -149,6 +149,8 @@ type boardUI struct {
 	propHeadEndMenu   bool
 	propScroll        ui.ScrollState
 	lastLightInk      bool
+	lastDegradedCount int
+	lastMaskArea      float64
 	focusMode         bool
 	minimap           bool
 	miniDrag          bool

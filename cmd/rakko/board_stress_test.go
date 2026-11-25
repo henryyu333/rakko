@@ -99,6 +99,7 @@ func TestBoardStress1500PlusPerf(t *testing.T) {
 	// Warmup frames
 	view.Frame()
 	view.Frame()
+	basePix, baseRect := boardToolbarPixels(t, view, l)
 
 	measure := func(n int, step func(i int)) []time.Duration {
 		out := make([]time.Duration, n)
@@ -150,11 +151,50 @@ func TestBoardStress1500PlusPerf(t *testing.T) {
 	pMin, pMean, pP95, pMax := stats(panTimes)
 	dMin, dMean, dP95, dMax := stats(drawTimes)
 
-	if !b.lastLightInk {
-		t.Fatalf("expected %d-item stress board to trigger lightInk mask atlas degradation", totalInit)
+	const mygoMaskAtlasMax = 4096.0 * 4096.0
+	if b.lastMaskArea <= 0 || b.lastMaskArea >= mygoMaskAtlasMax {
+		t.Fatalf("estMaskArea = %.0f out of realistic atlas bounds (0, %.0f)", b.lastMaskArea, mygoMaskAtlasMax)
+	}
+	if b.lastMaskArea > boardAtlasBudget && b.lastDegradedCount == 0 {
+		t.Fatalf("estMaskArea %.0f exceeded budget %.0f without degrading any shape", b.lastMaskArea, boardAtlasBudget)
+	}
+	if b.lastMaskArea <= boardAtlasBudget && b.lastDegradedCount != 0 {
+		t.Fatalf("estMaskArea %.0f within budget %.0f unexpectedly degraded %d shapes", b.lastMaskArea, boardAtlasBudget, b.lastDegradedCount)
 	}
 	if b.ed.ItemCount() != totalInit+1 {
 		t.Fatalf("ItemCount after live draw = %d, want %d", b.ed.ItemCount(), totalInit+1)
+	}
+	b.ed.SetTool(editor.ToolSelect)
+	view.Frame()
+	afterPix, afterRect := boardToolbarPixels(t, view, l)
+	if afterRect != baseRect {
+		t.Fatalf("toolbar rect moved under stress: %v -> %v", baseRect, afterRect)
+	}
+	if diff := boardPixelsDiffer(basePix, afterPix, 24); diff > 0 {
+		t.Fatalf("toolbar pixels changed under stress (%d pixels)", diff)
+	}
+	// Verify rendered frame has non-background content across all 4 canvas quadrants (no missing shapes).
+	stressImg := view.Image()
+	bgCol := boardColorRGBA(b.ed.Palette().Background)
+	qBoxes := []ui.Rect{
+		{X: 40, Y: boardBarH + 20, W: 560, H: 320},
+		{X: 640, Y: boardBarH + 20, W: 560, H: 320},
+		{X: 40, Y: boardBarH + 360, W: 560, H: 280},
+		{X: 640, Y: boardBarH + 360, W: 560, H: 280},
+	}
+	for qi, qb := range qBoxes {
+		nonBG := 0
+		for y := int(qb.Y); y < int(qb.Y+qb.H); y += 2 {
+			for x := int(qb.X); x < int(qb.X+qb.W); x += 2 {
+				c := stressImg.RGBAAt(x, y)
+				if c.R != bgCol.R || c.G != bgCol.G || c.B != bgCol.B {
+					nonBG++
+				}
+			}
+		}
+		if nonBG < 100 {
+			t.Fatalf("quadrant %d has too few drawn pixels (%d); possible missing shapes", qi, nonBG)
+		}
 	}
 	if err := view.Click(l.BoardToolArrow()); err != nil {
 		t.Fatalf("toolbar click failed under stress: %v", err)
@@ -176,20 +216,8 @@ func TestBoardStress1500PlusPerf(t *testing.T) {
 		t.Fatalf("invalid stress PNG export: bytes=%d w=%d h=%d tiles=%d", len(pngBytes), expW, expH, tiles)
 	}
 
-	// Calculate estimated scene mask area matching boardCanvas logic.
-	sc := &boardScene{b: b, cam: b.ed.Cam(), view: geo.Box{X: -b.ed.Cam().X, Y: -b.ed.Cam().Y, W: 1280 / b.ed.Cam().Z, H: 800 / b.ed.Cam().Z}}
-	// Using scale=1 baseline for deterministic metric logging
-	estMaskArea := 0.0
-	for _, id := range b.ed.Children(b.ed.Page) {
-		box := b.ed.PageBounds(id)
-		if sc.view.Overlaps(box) {
-			k := sc.cam.Z
-			estMaskArea += (box.W*k + 8) * (box.H*k + 8)
-		}
-	}
-
-	t.Logf("STRESS_ITEMS=%d (draws=%d+1, geos=%d, arrows=%d, texts=%d) lightInk=%v estMaskArea=%.0f budget=%.0f",
-		b.ed.ItemCount(), numDraws, numGeos, numArrows, numTexts, b.lastLightInk, estMaskArea, boardAtlasBudget)
+	t.Logf("STRESS_ITEMS=%d (draws=%d+1, geos=%d, arrows=%d, texts=%d) lightInk=%v degraded=%d estMaskArea=%.0f budget=%.0f",
+		b.ed.ItemCount(), numDraws, numGeos, numArrows, numTexts, b.lastLightInk, b.lastDegradedCount, b.lastMaskArea, boardAtlasBudget)
 	t.Logf("FRAME_MS idle(min=%.2f mean=%.2f p95=%.2f max=%.2f) zoom(min=%.2f mean=%.2f p95=%.2f max=%.2f) pan(min=%.2f mean=%.2f p95=%.2f max=%.2f) draw(min=%.2f mean=%.2f p95=%.2f max=%.2f)",
 		float64(iMin.Microseconds())/1000, float64(iMean.Microseconds())/1000, float64(iP95.Microseconds())/1000, float64(iMax.Microseconds())/1000,
 		float64(zMin.Microseconds())/1000, float64(zMean.Microseconds())/1000, float64(zP95.Microseconds())/1000, float64(zMax.Microseconds())/1000,
