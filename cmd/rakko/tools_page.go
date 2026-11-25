@@ -34,9 +34,16 @@ const (
 // changes: 300 ms, Bounce 0.15 (design §2).
 var toolMoveSpring = ui.Animation{Spring: ui.SpringOptions{Duration: 300 * time.Millisecond, Bounce: 0.15}}
 
-// toolsLayoutDispatch runs a deferred layout write's error report on the
-// main thread; tests replace it.
-var toolsLayoutDispatch = mygo.RunOnMain
+// toolsLayoutRunOnMain is the synchronous main-thread runner wrapped by
+// toolsLayoutDispatch; tests replace either seam.
+var toolsLayoutRunOnMain = mygo.RunOnMain
+
+// toolsLayoutDispatch posts a deferred layout write's error report to the
+// main thread asynchronously so flushToolsLayout() never deadlocks waiting for
+// an error callback that itself waits on the main loop; tests replace it.
+var toolsLayoutDispatch = func(fn func()) {
+	go toolsLayoutRunOnMain(fn)
+}
 
 // toolCell is one card's position in content coordinates.
 type toolCell struct {

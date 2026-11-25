@@ -187,6 +187,73 @@ func TestToolsDeferredWriteReportsErrorOnMain(t *testing.T) {
 	}
 }
 
+func TestToolsFlushDoesNotDeadlockWhenDeferredWriteFails(t *testing.T) {
+	mainExec := make(chan func(), 4)
+	oldRunOnMain := toolsLayoutRunOnMain
+	toolsLayoutRunOnMain = func(fn func()) {
+		done := make(chan struct{})
+		mainExec <- func() {
+			defer close(done)
+			fn()
+		}
+		<-done
+	}
+	t.Cleanup(func() { toolsLayoutRunOnMain = oldRunOnMain })
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	a := parityWindow()
+	a.setTab(pageTools)
+	a.dataDir = t.TempDir()
+	a.toolsSave = &layoutSaveQueue{
+		write: func(string, layout.Layout) error {
+			close(started)
+			<-release
+			return errors.New("disk full")
+		},
+	}
+
+	cards := a.toolsLayout().Cards
+	if len(cards) < 2 {
+		t.Fatalf("need at least 2 default cards, got %d", len(cards))
+	}
+	a.mutateToolsWrite(func(l *layout.Layout) bool {
+		l.MoveCard(cards[len(cards)-1].ID, 0)
+		return true
+	}, true)
+	<-started
+
+	flushed := make(chan struct{})
+	go func() {
+		a.flushToolsLayout()
+		close(flushed)
+	}()
+	close(release)
+
+	select {
+	case <-flushed:
+	case <-time.After(500 * time.Millisecond):
+		// Drain mainExec so the test goroutine exits cleanly after failing.
+		select {
+		case fn := <-mainExec:
+			fn()
+		default:
+		}
+		t.Fatal("flushToolsLayout deadlocked while deferred write reported an error to main thread")
+	}
+
+	// Now that flushToolsLayout returned, the main loop is free to run posted callbacks.
+	select {
+	case fn := <-mainExec:
+		fn()
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("deferred write error was never posted to main thread")
+	}
+	if a.statusKind != statusErr || !strings.Contains(a.status, "tools layout: disk full") {
+		t.Fatalf("a.report status = (kind=%v, msg=%q), want statusErr containing %q", a.statusKind, a.status, "tools layout: disk full")
+	}
+}
+
 func TestToolsLibraryDragCancelClearsPointerSessionAndOverlayMouse(t *testing.T) {
 	oldCursor := cursorPoint
 	defer func() { cursorPoint = oldCursor }()
