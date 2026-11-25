@@ -33,6 +33,9 @@ func main() {
 	// any goroutine starts (a GUI launch from Finder has no proxy variables,
 	// so the system settings decide).
 	netproxy.InstallDefaultClient()
+	// Update checks read the website's proxy first and GitHub as the
+	// fallback; the signature check stays mygo's.
+	installUpdateSource()
 	// mygo starts this same binary with MYGO_GENERATE set to write the
 	// TypeScript client, on every `mygo build` and `mygo dev`. That run must
 	// not touch the data directory (it would create an empty one and block
