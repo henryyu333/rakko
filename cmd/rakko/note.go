@@ -562,10 +562,16 @@ func (a *shelf) noteBar(c *ui.Context, l locales.Messages) {
 	if title == "" {
 		title = l.CardNote()
 	}
+	winW, _ := c.Size()
+	if winW <= 0 {
+		winW = noteW
+	}
+	const barBtns = 22 + 2 + 22 + 2 + 6 // two 22pt buttons, gaps, and 6pt title right margin
+	avail := max(40, winW-(bar.Left+10)-(bar.Right+8)-barBtns)
+	size := sysmonFitSize(c, title, 600, "", 11.5, 8.5, avail)
 	ui.Row(c.Key("note-bar")).Height(max(noteBarH, bar.Height)).Shrink(0).FillWidth().
 		AlignItems(ui.Center).Padding(0, bar.Right+8, 0, bar.Left+10).Gap(2).DragWindow().Children(func() {
-		ui.Text(c.Key("note-title"), title).SingleLine().FontSize(11.5).FontWeight(600).
-			TextColor(ink2).Grow(1).MinWidth(0)
+		fitText(c.Key("note-title"), title, size, 600, avail).TextColor(ink2).Margin(0, 6, 0, 0).Grow(1).MinWidth(0)
 		a.noteButton(c, "note-reveal", revealSymbol, osText(l.NoteReveal(), l.NoteRevealWin()), false, func() {
 			if n.win != nil {
 				n.frame = n.win.Bounds()

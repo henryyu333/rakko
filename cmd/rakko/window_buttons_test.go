@@ -215,3 +215,50 @@ func TestBoardAndNoteTitleBarClearance(t *testing.T) {
 		}
 	})
 }
+
+func TestWindowsNoteLongTitleNotTruncated(t *testing.T) {
+	oldFit := fitIssue
+	var issues []string
+	fitIssue = func(msg string) { issues = append(issues, msg) }
+	t.Cleanup(func() { fitIssue = oldFit })
+
+	a, n := noteTestShelf(t)
+	title := "Windows 便利贴实测"
+	n.text = "# " + title + "\n这是 Windows 320px 窗口长标题完整显示测试。\n"
+	n.draft = n.text
+	l := locales.In("zh-Hans")
+
+	for _, tc := range []struct {
+		name string
+		bar  ui.TitleBar
+	}{
+		{"mac", ui.TitleBar{Height: 30, Left: 72, Bottom: 22}},
+		{"windows", ui.TitleBar{Height: 32, Right: 138, Bottom: 32}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			issues = nil
+			v := ui.NewTester(a.noteView, noteW, noteH)
+			v.SetLocale("zh-Hans")
+			v.SetTitleBar(tc.bar)
+			v.Frame()
+			v.Frame()
+
+			titleRect, ok := v.Find(title)
+			if !ok {
+				t.Fatalf("title %q missing; texts=%v", title, v.Texts())
+			}
+			revealRect, ok := v.Find(osText(l.NoteReveal(), l.NoteRevealWin()))
+			if !ok {
+				t.Fatal("note reveal button missing")
+			}
+			if gap := revealRect.X - (titleRect.X + titleRect.W); gap < 6-0.5 {
+				t.Fatalf("%s title touches reveal button: titleRight=%.1f revealX=%.1f gap=%.1f",
+					tc.name, titleRect.X+titleRect.W, revealRect.X, gap)
+			}
+			if len(issues) > 0 {
+				t.Fatalf("%s note title overflowed/truncated: %v", tc.name, issues)
+			}
+			saveTestShot(t, "seg2", "note-title-"+tc.name+".png", v.Image())
+		})
+	}
+}
