@@ -33,9 +33,16 @@ type winRect struct {
 	Left, Top, Right, Bottom int32
 }
 
+type winPoint struct {
+	X, Y int32
+}
+
 var (
 	winUser32               = syscall.NewLazyDLL("user32.dll")
 	procGetWindowRect       = winUser32.NewProc("GetWindowRect")
+	procGetClientRect       = winUser32.NewProc("GetClientRect")
+	procClientToScreen      = winUser32.NewProc("ClientToScreen")
+	procGetDpiForWindow     = winUser32.NewProc("GetDpiForWindow")
 	procSetForegroundWindow = winUser32.NewProc("SetForegroundWindow")
 	procSetCursorPos        = winUser32.NewProc("SetCursorPos")
 	procMouseEvent          = winUser32.NewProc("mouse_event")
@@ -55,6 +62,46 @@ const (
 	winDWMUseDarkMode     = 20
 	winDWMCornerPref      = 33
 )
+
+// winClickCaptionClose moves the real Windows cursor onto the top-right ×
+// caption button (46×32 DIPs in the custom client title bar) and clicks it.
+func winClickCaptionClose(t *testing.T, hwnd uintptr) {
+	t.Helper()
+	var cr winRect
+	var origin winPoint
+	r1, _, _ := procGetClientRect.Call(hwnd, uintptr(unsafe.Pointer(&cr)))
+	r2, _, _ := procClientToScreen.Call(hwnd, uintptr(unsafe.Pointer(&origin)))
+	if r1 == 0 || r2 == 0 || cr.Right <= 46 {
+		t.Fatalf("winClickCaptionClose invalid client rect r1=%d r2=%d cr=%+v", r1, r2, cr)
+	}
+	dpi := uint32(96)
+	if procGetDpiForWindow.Find() == nil {
+		if got, _, _ := procGetDpiForWindow.Call(hwnd); got > 0 {
+			dpi = uint32(got)
+		}
+	}
+	cx := origin.X + cr.Right - int32((23*dpi)/96)
+	cy := origin.Y + int32((16*dpi)/96)
+	procSetForegroundWindow.Call(hwnd)
+	time.Sleep(100 * time.Millisecond)
+	procSetCursorPos.Call(uintptr(cx), uintptr(cy))
+	time.Sleep(120 * time.Millisecond)
+	procMouseEvent.Call(winMouseEventLeftDown, 0, 0, 0, 0)
+	time.Sleep(50 * time.Millisecond)
+	procMouseEvent.Call(winMouseEventLeftUp, 0, 0, 0, 0)
+	t.Logf("clicked Windows top-right × at (%d, %d) dpi=%d client=%+v origin=%+v", cx, cy, dpi, cr, origin)
+}
+
+func waitWinCondition(timeout time.Duration, fn func() bool) bool {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if fn() {
+			return true
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return fn()
+}
 
 func winShotDesktop(t *testing.T, path string) {
 	t.Helper()
@@ -283,12 +330,24 @@ func TestBoardAndNoteWinLive(t *testing.T) {
 	var expW, expH, tiles int
 	var svgOut string
 	var expErr error
+	const wantBoardCloseText = "Win 关闭保存验证 TEXT"
+	var boardBeforeCloseHasText bool
 	runOnMainSync(func() {
 		pngBytes, expW, expH, tiles, expErr = b.renderTiledPNG(nil)
 		if expErr == nil {
 			svgOut, expErr = b.ed.ExportSVG(nil, b.ed.Palette(), nil)
 		}
-		b.close()
+		// Leave a dirty edit unsaved right before clicking the real × button.
+		b.ed.CreateText(geo.V(140, 460), wantBoardCloseText)
+		b.dirtyFlag = true
+		b.invalidate()
+		if diskDoc, rerr := b.store.Read(); rerr == nil && diskDoc != nil {
+			for _, s := range diskDoc.Shapes {
+				if s.Text == wantBoardCloseText {
+					boardBeforeCloseHasText = true
+				}
+			}
+		}
 	})
 	if expErr != nil {
 		t.Errorf("Windows export failed: %v", expErr)
@@ -301,9 +360,39 @@ func TestBoardAndNoteWinLive(t *testing.T) {
 		t.Errorf("invalid exported SVG on Windows (len=%d)", len(svgOut))
 	}
 	t.Logf("Windows export verified: PNG=%dx%d (%d tiles, %d bytes), SVG=%d bytes", cfg.Width, cfg.Height, tiles, len(pngBytes), len(svgOut))
+	if boardBeforeCloseHasText {
+		t.Fatalf("board disk already contained close verification text before × click")
+	}
 
-	// 4. Open real Sticky Note window, edit plain text, flush & screenshot.
+	// Close the whiteboard via real Win32 mouse click on top-right × button, then read disk.
+	winClickCaptionClose(t, hwnd)
+	boardClosed := waitWinCondition(3*time.Second, func() bool {
+		var nilWin bool
+		runOnMainSync(func() { nilWin = b.win == nil })
+		return nilWin
+	})
+	if !boardClosed {
+		t.Fatalf("whiteboard window did not close after real × click")
+	}
+	diskDoc, err := b.store.Read()
+	if err != nil {
+		t.Fatalf("board store.Read() after × close failed: %v", err)
+	}
+	var boardAfterCloseHasText bool
+	for _, s := range diskDoc.Shapes {
+		if s.Text == wantBoardCloseText {
+			boardAfterCloseHasText = true
+			break
+		}
+	}
+	if !boardAfterCloseHasText {
+		t.Errorf("board disk after × close did not persist %q (shapes=%d)", wantBoardCloseText, len(diskDoc.Shapes))
+	}
+	t.Logf("Windows board × close disk verified: found %q across %d shapes", wantBoardCloseText, len(diskDoc.Shapes))
+
+	// 4. Open real Sticky Note window, edit plain text, close via real × click & read disk.
 	const wantNote = "# Windows 便利贴实测\n– 第一行\n– 第二行\n"
+	const wantNoteAfterClose = "# Windows 便利贴实测\n– 第一行\n– 第二行\n– 标题栏×关闭落盘验证\n"
 	var gotNote string
 	var noteHWND uintptr
 	runOnMainSync(func() {
@@ -325,9 +414,79 @@ func TestBoardAndNoteWinLive(t *testing.T) {
 	time.Sleep(550 * time.Millisecond)
 	winShotDesktop(t, filepath.Join(shotDir, "win-03-note.png"))
 
+	// Make a dirty edit on the open note, verify disk has old text, then click real ×.
+	var noteDirty bool
 	runOnMainSync(func() {
-		if a.note != nil {
-			a.note.close()
+		n := a.noteSession()
+		n.draft = wantNoteAfterClose
+		noteDirty = n.dirty()
+		n.invalidate()
+	})
+	if !noteDirty {
+		t.Fatalf("note did not become dirty after modifying draft")
+	}
+	diskBeforeNoteClose, err := a.note.store.Read()
+	if err != nil {
+		t.Fatalf("note store.Read() before × close failed: %v", err)
+	}
+	if diskBeforeNoteClose != wantNote {
+		t.Fatalf("note disk before × close = %q, want %q", diskBeforeNoteClose, wantNote)
+	}
+	winClickCaptionClose(t, noteHWND)
+	noteClosed := waitWinCondition(3*time.Second, func() bool {
+		var nilWin bool
+		runOnMainSync(func() { nilWin = a.note == nil || a.note.win == nil })
+		return nilWin
+	})
+	if !noteClosed {
+		t.Fatalf("sticky note window did not close after real × click")
+	}
+	diskAfterNoteClose, err := a.note.store.Read()
+	if err != nil {
+		t.Fatalf("note store.Read() after × close failed: %v", err)
+	}
+	if diskAfterNoteClose != wantNoteAfterClose {
+		t.Errorf("note disk after × close = %q, want %q", diskAfterNoteClose, wantNoteAfterClose)
+	}
+	t.Logf("Windows note × close disk verified (%d bytes)", len(diskAfterNoteClose))
+
+	// 5. Open real shelf window on Tools page on Windows to inspect updated nav icons & tools cards.
+	var panelOpened bool
+	runOnMainSync(func() {
+		a.newNotchWindow()
+		if a.win == nil {
+			return
+		}
+		work := mygo.Screen.PrimaryDisplay().WorkArea
+		a.place(mygo.Point{X: work.X + work.Width/2, Y: work.Y + work.Height/2})
+		a.peeking = true
+		a.peekProgress, a.peekFrom = 1, 1
+		a.show(false)
+		a.setLevel(2)
+		a.setTab(pageTools)
+		a.jumpLevel = true
+		a.progress, a.animationFrom = 1, 1
+		a.animationStart = time.Time{}
+		a.syncMousePassThrough()
+		a.syncWindowFrame()
+		a.win.Invalidate()
+		panelOpened = a.win != nil && a.visible && a.tab == pageTools
+	})
+	if !panelOpened {
+		t.Errorf("failed to open Windows panel on Tools page")
+	}
+	for _, w := range a.toolsLayout().Home {
+		if w.ID == "recent" || w.ID == "clip" {
+			t.Errorf("retired card %q unexpectedly present on Windows tools page", w.ID)
+		}
+	}
+	time.Sleep(550 * time.Millisecond)
+	winShotDesktop(t, filepath.Join(shotDir, "win-06-tools-nav.png"))
+	runOnMainSync(func() {
+		a.hide(hideExplicit)
+		if a.win != nil {
+			a.win.Close()
+			a.win = nil
 		}
 	})
 	time.Sleep(200 * time.Millisecond)
