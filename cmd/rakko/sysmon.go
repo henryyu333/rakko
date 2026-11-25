@@ -198,10 +198,8 @@ func (m *sysmonModule) publish(snap sysmon.Snapshot, hist sysmon.History) {
 			a.win.Invalidate()
 		}
 	}
-	for _, it := range a.pins {
-		if it.cardID == "sysmon" && !it.preview && (it.edge == pinFree || it.expanded) && it.win != nil {
-			it.win.Invalidate()
-		}
+	if a.hasExpandedPin("sysmon") {
+		a.invalidatePins("sysmon")
 	}
 }
 
@@ -243,15 +241,7 @@ func (a *shelf) hasSysMonCard() bool {
 }
 
 func (a *shelf) hasExpandedSysMonPin() bool {
-	if a == nil {
-		return false
-	}
-	for _, it := range a.pins {
-		if it.cardID == "sysmon" && !it.preview && (it.edge == pinFree || it.expanded) {
-			return true
-		}
-	}
-	return false
+	return a.hasExpandedPin("sysmon")
 }
 
 // sysmonWingsUp reports whether resting sysmon wings should occupy the closed

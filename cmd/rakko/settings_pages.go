@@ -267,7 +267,7 @@ func (a *shelf) setLiveActivity(mutate func(*settings.Settings)) {
 		a.np.stop()
 	}
 	if wasNowPlaying != next.LiveActivities.NowPlaying {
-		a.invalidatePlayingPins()
+		a.invalidatePins("playing")
 	}
 }
 

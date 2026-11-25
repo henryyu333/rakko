@@ -705,10 +705,14 @@ func (a *shelf) pinTick(now time.Time, p mygo.Point, down, fileDrag bool) {
 	}
 }
 
-func (it *pinItem) invalidate() {
+var pinRedraw = func(it *pinItem) {
 	if it.win != nil {
 		it.win.Invalidate()
 	}
+}
+
+func (it *pinItem) invalidate() {
+	pinRedraw(it)
 }
 
 func (a *shelf) hasExpandedPin(cardID string) bool {
@@ -716,19 +720,27 @@ func (a *shelf) hasExpandedPin(cardID string) bool {
 		return false
 	}
 	for _, it := range a.pins {
-		if it.cardID == cardID && (it.edge == pinFree || it.expanded) {
+		if it.cardID == cardID && !it.preview && (it.edge == pinFree || it.expanded) {
 			return true
 		}
 	}
 	return false
 }
 
-func (a *shelf) invalidatePlayingPins() {
-	if a == nil {
+func (a *shelf) invalidatePins(ids ...string) {
+	if a == nil || len(ids) == 0 {
 		return
 	}
 	for _, it := range a.pins {
-		if it.cardID == "playing" {
+		if it.preview || !slices.Contains(ids, it.cardID) {
+			continue
+		}
+		switch it.cardID {
+		case "note":
+			notePinRedraw(it)
+		case "board":
+			boardPinRedraw(it)
+		default:
 			it.invalidate()
 		}
 	}

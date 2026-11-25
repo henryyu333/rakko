@@ -1050,4 +1050,5 @@ func (f *usageFeature) invalidate() {
 	if a.settingsWin != nil {
 		a.settingsWin.Invalidate()
 	}
+	a.invalidatePins("usage")
 }

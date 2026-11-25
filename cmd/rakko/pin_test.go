@@ -15,6 +15,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"rakko/internal/layout"
+	"rakko/internal/note"
 	"rakko/internal/platform"
 	"rakko/internal/settings"
 	"rakko/internal/store"
@@ -1224,5 +1225,74 @@ func TestPinRestoreClampsFreeCardsIntoTheWorkArea(t *testing.T) {
 	if it.frame.X < area.X || it.frame.Y < area.Y ||
 		it.frame.X+it.frame.Width > area.X+area.Width || it.frame.Y+it.frame.Height > area.Y+area.Height {
 		t.Fatalf("a restored free card sits outside the work area: %+v in %+v", it.frame, area)
+	}
+}
+
+func TestDesktopPinsRefreshWhilePanelClosed(t *testing.T) {
+	withPinDisplays(t, pinTestDisplays)
+	redrawn := map[string]int{}
+	oldPin, oldNote := pinRedraw, notePinRedraw
+	pinRedraw = func(it *pinItem) { redrawn[it.cardID]++ }
+	notePinRedraw = func(it *pinItem) { redrawn[it.cardID]++ }
+	t.Cleanup(func() { pinRedraw, notePinRedraw = oldPin, oldNote })
+
+	dir := t.TempDir()
+	st, err := note.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &shelf{dataDir: dir, settings: settings.Default()}
+	a.note = &noteUI{host: a, store: st}
+	a.clock = &clockModule{host: a, dur: 2 * time.Second, playSound: func() {}, stopSound: func() {}}
+	power := newFakePower()
+	a.awake = &awakeModule{host: a, create: power.create, release: power.release}
+	a.usage = &usageFeature{host: a}
+	a.pins = []*pinItem{
+		{cardID: "stopwatch", edge: pinFree, expanded: true},
+		{cardID: "timer", edge: pinFree, expanded: true},
+		{cardID: "awake", edge: pinFree, expanded: true},
+		{cardID: "usage", edge: pinFree, expanded: true},
+		{cardID: "note", edge: pinFree, expanded: true},
+	}
+
+	t0 := time.Now()
+	a.clock.startWatch(t0)
+	if due := a.clock.nextTick(t0); due.IsZero() || due.Sub(t0) > time.Second {
+		t.Fatalf("closed panel with expanded stopwatch pin nextTick = %v, want <= 1s", due)
+	}
+	a.clock.tick(t0.Add(1500 * time.Millisecond))
+	if redrawn["stopwatch"] < 2 {
+		t.Fatalf("stopwatch pin did not refresh while panel closed: count=%d", redrawn["stopwatch"])
+	}
+
+	redrawn["timer"] = 0
+	a.clock.startTimer(t0, 2*time.Second)
+	a.clock.tick(t0.Add(time.Second))
+	a.clock.tick(t0.Add(2 * time.Second))
+	if redrawn["timer"] < 2 {
+		t.Fatalf("timer pin did not refresh on tick/finish while panel closed: count=%d", redrawn["timer"])
+	}
+
+	redrawn["awake"] = 0
+	a.awake.start(t0, time.Hour)
+	a.awake.tick(t0.Add(2 * time.Second))
+	a.awake.stop(t0.Add(3 * time.Second))
+	if redrawn["awake"] < 2 {
+		t.Fatalf("awake pin did not refresh while panel closed: count=%d", redrawn["awake"])
+	}
+
+	redrawn["usage"] = 0
+	a.usage.invalidate()
+	if redrawn["usage"] == 0 {
+		t.Fatal("usage pin did not refresh while panel closed")
+	}
+
+	redrawn["note"] = 0
+	a.note.draft = "# 面板关闭时同步钉卡"
+	if err := a.note.flush(); err != nil {
+		t.Fatal(err)
+	}
+	if redrawn["note"] == 0 {
+		t.Fatal("note pin did not refresh after flush while panel closed")
 	}
 }

@@ -112,9 +112,13 @@ func (m *clockModule) clock() time.Time {
 
 // refresh asks for one more frame after a state change.
 func (m *clockModule) refresh() {
-	if m != nil && m.host != nil && m.host.win != nil {
+	if m == nil || m.host == nil {
+		return
+	}
+	if m.host.win != nil {
 		m.host.win.Invalidate()
 	}
+	m.host.invalidatePins("timer", "stopwatch")
 }
 
 func (m *clockModule) playing() {
@@ -226,7 +230,7 @@ func (m *clockModule) tick(now time.Time) {
 		m.stopAlert()
 		m.refresh()
 	}
-	if !m.timerReadingShown() {
+	if !m.timerReadingShown() && !m.watchReadingShown() {
 		return
 	}
 	// lastPaint is the reading the previous frame was asked to draw. The
@@ -253,11 +257,15 @@ func (m *clockModule) pageShown() bool {
 }
 
 // timerReadingShown reports whether the countdown's reading is on screen:
-// the open panel's page, and the closed notch's wings while it runs or
-// waits paused. A paused reading does not change, so the tick then finds
-// the same paintKey and asks for no frame.
+// the open panel's page, the closed notch's wings, or an expanded desktop pin.
 func (m *clockModule) timerReadingShown() bool {
-	return m.pageShown() || m.timerWingsUp()
+	return m.pageShown() || m.timerWingsUp() || m.host.hasExpandedPin("timer")
+}
+
+// watchReadingShown reports whether the stopwatch's reading is on screen:
+// the open panel's page or an expanded desktop pin.
+func (m *clockModule) watchReadingShown() bool {
+	return m.pageShown() || m.host.hasExpandedPin("stopwatch")
 }
 
 // paintKey is the second-granular text the screen shows, so tick repaints
@@ -266,12 +274,11 @@ func (m *clockModule) timerReadingShown() bool {
 // seconds must not ask for a frame while the panel only peeks.
 func (m *clockModule) paintKey(now time.Time) string {
 	var b strings.Builder
-	page := m.pageShown()
 	b.WriteString(strconv.Itoa(int(m.phase)))
-	if m.phase != timerIdle && (page || m.timerWingsUp()) {
+	if m.phase != timerIdle && m.timerReadingShown() {
 		b.WriteString(clockTextCeil(m.timerRemainAt(now)))
 	}
-	if (m.watchRun || m.watchElapsed > 0) && page {
+	if (m.watchRun || m.watchElapsed > 0) && m.watchReadingShown() {
 		b.WriteString(clockText(m.watchElapsedAt(now)))
 	}
 	if m.edit != nil {
@@ -299,11 +306,8 @@ func (m *clockModule) nextTick(now time.Time) time.Time {
 	if m.phase == timerDone && m.ringing {
 		add(m.doneAt.Add(timerRingFor))
 	}
-	// The closed notch's wings keep counting too: the panel is shut, but
-	// what it shows still changes every second. The stopwatch only asks
-	// while the panel's page shows its reading; a paused countdown's wings
-	// and a hover peek draw no changing stopwatch, so they ask for nothing.
-	if m.phase == timerRunning && m.timerReadingShown() || m.watchRun && m.pageShown() {
+	// The closed notch's wings and expanded desktop pins keep counting too.
+	if m.phase == timerRunning && m.timerReadingShown() || m.watchRun && m.watchReadingShown() {
 		add(now.Truncate(time.Second).Add(time.Second))
 	}
 	return next

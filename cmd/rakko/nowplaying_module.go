@@ -314,7 +314,7 @@ func (m *nowPlayingModule) invalidate(next npSnap) {
 		if m.host.win != nil {
 			m.host.win.Invalidate()
 		}
-		m.host.invalidatePlayingPins()
+		m.host.invalidatePins("playing")
 	}
 }
 

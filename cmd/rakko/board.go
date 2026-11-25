@@ -136,10 +136,6 @@ type boardUI struct {
 	confirmDelete     bool
 	confirmPageDelete bool
 
-	spaceHeld         bool
-	panDrag           bool
-	panLastX          float32
-	panLastY          float32
 	stageRect         ui.Rect
 	titleMenu         bool
 	pageMenu          bool
@@ -147,8 +143,6 @@ type boardUI struct {
 	moreMenu          bool
 	shapeMenu         bool
 	toolMenu          bool
-	eraserMenu        bool
-	drawMenu          bool
 	propFillTab       bool
 	propGeoMenu       bool
 	propHeadStartMenu bool
@@ -793,11 +787,7 @@ func (b *boardUI) refreshChrome() {
 	if b.host.win != nil {
 		b.host.win.Invalidate()
 	}
-	for _, it := range b.host.pins {
-		if it.cardID == "board" {
-			boardPinRedraw(it)
-		}
-	}
+	b.host.invalidatePins("board")
 }
 
 func (b *boardUI) applyWindowTheme(w *mygo.Window, dark bool) {
@@ -975,8 +965,6 @@ func (b *boardUI) onClose(*mygo.CloseEvent) {
 	b.renaming = false
 	b.confirmDelete = false
 	b.confirmPageDelete = false
-	b.spaceHeld = false
-	b.panDrag = false
 	if a.quitting {
 		return
 	}

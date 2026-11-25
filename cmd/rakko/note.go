@@ -249,11 +249,7 @@ func (n *noteUI) invalidate() {
 	if n.host.win != nil {
 		n.host.win.Invalidate()
 	}
-	for _, it := range n.host.pins {
-		if it.cardID == "note" {
-			notePinRedraw(it)
-		}
-	}
+	n.host.invalidatePins("note")
 }
 
 // noteOutside runs on the main thread when the watch sees the file

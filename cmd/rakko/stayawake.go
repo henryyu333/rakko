@@ -174,6 +174,7 @@ func (m *awakeModule) setDisplay(now time.Time, on bool) {
 		}
 	}
 	m.refresh(now)
+	m.host.invalidatePins("awake")
 }
 
 // reassert replaces the held assertion with one matching m.display. The
@@ -227,7 +228,7 @@ func (m *awakeModule) tick(now time.Time) {
 // live reports whether the sheet's left ear shows the awake chip.
 func (m *awakeModule) live() bool { return m.active() }
 
-// refresh redraws the panel when the countdown text changed.
+// refresh redraws the panel and awake pins when the countdown text changed.
 func (m *awakeModule) refresh(now time.Time) {
 	next := m.remainText(now)
 	if next == m.remain {
@@ -237,6 +238,7 @@ func (m *awakeModule) refresh(now time.Time) {
 	if m.host.win != nil {
 		m.host.win.Invalidate()
 	}
+	m.host.invalidatePins("awake")
 }
 
 // remainText is the chip's tooltip line: a m:ss / h:mm:ss countdown for
