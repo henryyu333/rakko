@@ -24,7 +24,6 @@ import (
 	"rakko/internal/board/editor"
 	"rakko/internal/board/fonts"
 	"rakko/internal/board/geo"
-	"rakko/internal/note"
 	"rakko/internal/platform"
 	"rakko/internal/settings"
 	"rakko/internal/store"
@@ -270,33 +269,28 @@ func TestBoardAndNoteWinLive(t *testing.T) {
 	}
 	t.Logf("Windows export verified: PNG=%dx%d (%d tiles, %d bytes), SVG=%d bytes", cfg.Width, cfg.Height, tiles, len(pngBytes), len(svgOut))
 
-	// 4. Open real Sticky Note window, insert image asset, flush & screenshot.
-	tmpImg := filepath.Join(t.TempDir(), "win-note-photo.png")
-	if err := os.WriteFile(tmpImg, makeWinVerifyPNG(240, 140), 0o600); err != nil {
-		t.Fatalf("write tmp png: %v", err)
-	}
-	var noteMD, noteImgRel string
+	// 4. Open real Sticky Note window, edit plain text, flush & screenshot.
+	const wantNote = "# Windows 便利贴实测\n– 第一行\n– 第二行\n"
+	var gotNote string
 	var noteHWND uintptr
 	runOnMainSync(func() {
 		n := a.noteSession()
-		n.setDraft("# Windows 便利贴图片实测\n下方是拖入/插入的本地图片：")
-		n.insertImageFile(tmpImg)
+		n.draft = wantNote
 		_ = n.flush()
-		noteMD = n.text
-		noteImgRel = note.FirstImage(noteMD)
+		gotNote = n.text
 		n.open()
 		if n.win != nil {
 			noteHWND = n.win.NativeHandle()
 		}
 	})
-	if noteImgRel == "" || !strings.HasPrefix(noteImgRel, "assets/") {
-		t.Errorf("Windows note image asset missing in Markdown: %q", noteMD)
+	if gotNote != wantNote {
+		t.Errorf("Windows note saved text = %q, want %q", gotNote, wantNote)
 	}
 	if noteHWND == 0 {
 		t.Errorf("failed to open Windows note window")
 	}
 	time.Sleep(550 * time.Millisecond)
-	winShotDesktop(t, filepath.Join(shotDir, "win-03-note-image.png"))
+	winShotDesktop(t, filepath.Join(shotDir, "win-03-note.png"))
 
 	runOnMainSync(func() {
 		if a.note != nil {

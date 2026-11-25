@@ -532,7 +532,6 @@
   "noteKeepOnTop": "Keep on Top",
   "noteClose": "Close",
   "noteUnreadable": "Can't read the note file",
-  "noteSaveBlocked": "Can't save this note safely, so it is read-only. Copy the text and save it by hand.",
   "dropPutInTray": "Put in Tray",
   "dropPdfMerged": "Merge into PDF",
   "dropPdfMergedSub": "In Drop Order",

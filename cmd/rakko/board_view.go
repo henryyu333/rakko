@@ -1242,7 +1242,7 @@ func (b *boardUI) handleCanvasInput(c *ui.Context, ev ui.InputEvent) bool {
 					}
 				}
 				formats := c.Services().ClipboardFormats()
-				if noteClipboardHasText(formats) {
+				if boardClipboardHasText(formats) {
 					return b.pasteText(c)
 				}
 				if b.pasteImage(formats) {

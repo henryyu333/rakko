@@ -25,7 +25,6 @@ import (
 	"rakko/internal/board/fonts"
 	"rakko/internal/board/geo"
 	"rakko/internal/layout"
-	"rakko/internal/note"
 	"rakko/internal/platform"
 	"rakko/locales"
 )
@@ -292,7 +291,7 @@ func (b *boardUI) pickImage() {
 }
 
 func (b *boardUI) pasteImage(formats []transfer.Format) bool {
-	if b.locked || noteClipboardHasText(formats) {
+	if b.locked || boardClipboardHasText(formats) {
 		return false
 	}
 	data := boardReadClipboardImage()
@@ -303,9 +302,55 @@ func (b *boardUI) pasteImage(formats []transfer.Format) bool {
 	return b.insertImageBytes(data, "png", "clipboard.png", at)
 }
 
+// boardClipboardHasText reports whether a paste should go to text rather than
+// image insertion: text, rich text, a URL list, or files are not a pure image.
+func boardClipboardHasText(formats []transfer.Format) bool {
+	for _, f := range formats {
+		switch f {
+		case transfer.Text, transfer.HTML, transfer.Markdown, transfer.URIList:
+			return true
+		}
+	}
+	return false
+}
+
+// boardIsSupportedImageExt reports whether ext (with or without leading dot)
+// is an accepted image file extension for board image shapes.
+func boardIsSupportedImageExt(ext string) bool {
+	ext = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(ext), "."))
+	switch ext {
+	case "png", "jpg", "jpeg", "gif", "webp", "bmp", "tif", "tiff", "heic", "heif", "avif":
+		return true
+	default:
+		return false
+	}
+}
+
+func boardDecodeImageFile(path string) (image.Image, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	img, _, err := boardDecodeImage(path, data)
+	return img, err
+}
+
+func boardDecodeImage(path string, data []byte) (image.Image, string, error) {
+	if img, format, err := image.Decode(bytes.NewReader(data)); err == nil && img != nil {
+		return img, format, nil
+	}
+	if path != "" {
+		if thumb, err := platform.Thumbnail(path, 1600); err == nil && thumb != nil {
+			ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(path)), ".")
+			return thumb, ext, nil
+		}
+	}
+	return nil, "", image.ErrFormat
+}
+
 func (b *boardUI) insertImageFile(path string, pagePt geo.Vec) bool {
 	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(path)), ".")
-	if !note.IsSupportedImageExt(ext) {
+	if !boardIsSupportedImageExt(ext) {
 		return false
 	}
 	info, err := os.Stat(path)
@@ -316,7 +361,7 @@ func (b *boardUI) insertImageFile(path string, pagePt geo.Vec) bool {
 	if err != nil {
 		return false
 	}
-	img, format, err := noteDecodeImage(path, data)
+	img, format, err := boardDecodeImage(path, data)
 	if err != nil || img == nil {
 		return false
 	}
@@ -332,7 +377,7 @@ func (b *boardUI) insertImageBytes(data []byte, ext, name string, pagePt geo.Vec
 			return false
 		}
 	}
-	img, format, err := noteDecodeImage("", data)
+	img, format, err := boardDecodeImage("", data)
 	if err != nil || img == nil {
 		return false
 	}

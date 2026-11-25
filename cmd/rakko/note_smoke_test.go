@@ -90,9 +90,9 @@ func TestNoteSmokeWindowAndCards(t *testing.T) {
 	if a.visible {
 		t.Fatal("the panel stayed visible after opening the note")
 	}
-	want := "# 周五发版前\n– 改 README 顶栏描述\n– 补 v1.13 截图\n– 问 Codex 额度为什么 5 小时窗口跳\n- [ ] 桌宠姿态验收"
+	want := "# 周五发版前\n– 改 README 顶栏描述\n– 补 v1.13 截图\n– 问 Codex 额度为什么 5 小时窗口跳\n– [ ] 桌宠姿态验收"
 	onMain(func() {
-		a.note.setDraft(want)
+		a.note.draft = want
 		a.note.invalidate()
 	})
 	noteShotWindow(t, a.note.win, "note-window")
@@ -147,8 +147,8 @@ func TestNoteSmokeWindowAndCards(t *testing.T) {
 	if !opened || a.note.win == nil {
 		t.Fatal("the second tap did not reopen the window")
 	}
-	if a.note.draftText() != want {
-		t.Fatalf("the reopened window shows %q", a.note.draftText())
+	if a.note.draft != want {
+		t.Fatalf("the reopened window shows %q", a.note.draft)
 	}
 	noteShotWindow(t, a.note.win, "note-window-reopened")
 
@@ -160,15 +160,15 @@ func TestNoteSmokeWindowAndCards(t *testing.T) {
 	}
 	followed := false
 	for i := 0; i < 40 && !followed; i++ {
-		onMain(func() { followed = a.note.draftText() == external })
+		onMain(func() { followed = a.note.draft == external })
 		if !followed {
 			time.Sleep(50 * time.Millisecond)
 		}
 	}
 	if !followed {
-		t.Fatalf("the open window did not follow the outside write: %q", a.note.draftText())
+		t.Fatalf("the open window did not follow the outside write: %q", a.note.draft)
 	}
-	t.Logf("the open window followed an outside write: %q", a.note.draftText())
+	t.Logf("the open window followed an outside write: %q", a.note.draft)
 	noteShotWindow(t, a.note.win, "note-window-outside-change")
 	onMain(a.note.close)
 	time.Sleep(300 * time.Millisecond)
@@ -341,7 +341,7 @@ func TestNoteSmokeTypesAndOutlivesPanel(t *testing.T) {
 	postTyping(t, "– 改 README")
 	time.Sleep(600 * time.Millisecond)
 	var typed string
-	onMain(func() { typed = a.note.draftText() })
+	onMain(func() { typed = a.note.draft })
 	want := "# 周五发版前\n– 改 README"
 	if typed != want {
 		onMain(func() {

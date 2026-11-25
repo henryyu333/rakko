@@ -1331,7 +1331,7 @@ func galleryGroupF() []galleryItem {
 				"# 周五发版前\n– 改 README\n– 跑回归\n", "# Before Friday's release\n– Update the README\n– Run the regression suite\n")
 			writeGalleryNote(t, a, noteText)
 			if n := a.noteSession(); n != nil {
-				n.resetText(noteText)
+				n.text, n.draft = noteText, noteText
 			}
 			a.ensurePages()
 			if tweak != nil {
@@ -1927,7 +1927,8 @@ func galleryGroupJ() []galleryItem {
 				a.store.AddClipText(galleryText(lang, "把首页卡片的间距改成 4pt", "Change the home cards' gap to 4pt"), "com.apple.Terminal")
 			case "note":
 				if n := a.noteSession(); n != nil {
-					n.resetText(galleryText(lang, "# 周五发版前\n– 改 README\n– 跑一遍回归", "# Before Friday\n– Update the README\n– Run the regression suite"))
+					n.text = galleryText(lang, "# 周五发版前\n– 改 README\n– 跑一遍回归", "# Before Friday\n– Update the README\n– Run the regression suite")
+					n.draft = n.text
 				}
 			}
 			it := a.pinRegister(&pinItem{
@@ -1946,12 +1947,11 @@ func galleryGroupJ() []galleryItem {
 			}
 			t.Cleanup(func() {
 				if n.watch != nil {
-					closeNoteWatch(n)
+					n.watch.Close()
 				}
 			})
 			text := galleryText(lang, zh, en)
-			n.resetText(text)
-			n.locked = locked
+			n.text, n.draft, n.locked = text, text, locked
 			return galleryRender{view: galleryView(t, lang, a.noteView, noteW, noteH)}
 		}
 	}

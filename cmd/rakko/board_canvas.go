@@ -727,7 +727,7 @@ func (b *boardUI) bitmapForAsset(id doc.ID) *ui.Bitmap {
 	if err != nil {
 		return nil
 	}
-	img, err := noteDecodeImageFile(full)
+	img, err := boardDecodeImageFile(full)
 	if err != nil || img == nil {
 		return nil
 	}

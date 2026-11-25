@@ -33,26 +33,6 @@ func noteTestShelf(t *testing.T) (*shelf, *noteUI) {
 	return a, n
 }
 
-// setDraft replaces the document content as an unsaved edit (advancing Version).
-func (n *noteUI) setDraft(md string) {
-	d := n.ensureDoc()
-	t := n.bindTextAttachments(newNoteLayout(md).text())
-	d.SetText(t)
-	n.boundVer = d.Version()
-}
-
-// draftText returns text verbatim when the document has never been edited, or
-// the normalized Markdown from the live document once edited.
-func (n *noteUI) draftText() string {
-	if !n.dirty() {
-		return n.text
-	}
-	if md, ok := n.layout.commit(n.doc.Text()); ok {
-		return md
-	}
-	return n.doc.Text().Markdown()
-}
-
 // disableNoteWatch keeps headless tests from starting a file watch: its
 // goroutine calls RunOnMain, which waits forever without an app loop.
 func disableNoteWatch() {
@@ -82,8 +62,8 @@ func fileText(t *testing.T, n *noteUI) string {
 func TestNoteSaveDebounce(t *testing.T) {
 	_, n := noteTestShelf(t)
 	base := time.Now()
-	typed := "# 周五发版前\n– 改 README 顶栏描述"
-	n.setDraft(typed)
+	typed := "# 周五发版前\n– 改 README 顶栏描述\n"
+	n.draft = typed
 	if n.tick(base) {
 		t.Fatal("wrote on the first keystroke")
 	}
@@ -94,7 +74,7 @@ func TestNoteSaveDebounce(t *testing.T) {
 		t.Fatal("wrote 300 ms after the last keystroke")
 	}
 	// Another keystroke moves the deadline.
-	n.setDraft(typed + "\n– 补 v1.13 截图")
+	n.draft = typed + "– 补 v1.13 截图\n"
 	n.tick(base.Add(350 * time.Millisecond))
 	if n.tick(base.Add(600 * time.Millisecond)) {
 		t.Fatal("wrote 250 ms after the second keystroke")
@@ -102,8 +82,8 @@ func TestNoteSaveDebounce(t *testing.T) {
 	if !n.tick(base.Add(800 * time.Millisecond)) {
 		t.Fatal("did not write 450 ms after the last keystroke")
 	}
-	if got := fileText(t, n); got != n.draftText() {
-		t.Fatalf("file = %q, want %q", got, n.draftText())
+	if got := fileText(t, n); got != n.draft {
+		t.Fatalf("file = %q, want %q", got, n.draft)
 	}
 	if n.dirty() {
 		t.Fatal("still unsaved after the write")
@@ -118,10 +98,10 @@ func TestNoteSaveDebounce(t *testing.T) {
 // all call flush, so a sentence typed a moment ago is on disk at once.
 func TestNoteFlushOnClose(t *testing.T) {
 	_, n := noteTestShelf(t)
-	n.setDraft("# 随手记\n– 一条")
+	n.draft = "# 随手记\n– 一条\n"
 	n.tick(time.Now()) // seen, not yet due
 	n.flush()
-	if got := fileText(t, n); got != "# 随手记\n– 一条" {
+	if got := fileText(t, n); got != "# 随手记\n– 一条\n" {
 		t.Fatalf("flush left %q on disk", got)
 	}
 	if n.dirty() {
@@ -136,18 +116,18 @@ func TestNoteAdoptOutsideChange(t *testing.T) {
 	if !n.adopt("# 别处改的\n") {
 		t.Fatal("a clean note did not take the outside change")
 	}
-	if n.text != "# 别处改的\n" || n.draftText() != "# 别处改的\n" {
-		t.Fatalf("text %q, draft %q; want the outside text", n.text, n.draftText())
+	if n.text != "# 别处改的\n" || n.draft != "# 别处改的\n" {
+		t.Fatalf("text %q, draft %q; want the outside text", n.text, n.draft)
 	}
 	if n.adopt("# 别处改的\n") {
 		t.Fatal("the same text counted as a change")
 	}
-	n.setDraft("# 正在写")
+	n.draft = "# 正在写\n"
 	if n.adopt("# 又改了一次\n") {
 		t.Fatal("an unsaved draft was overwritten")
 	}
-	if n.draftText() != "# 正在写\n" {
-		t.Fatalf("draft = %q after the outside change", n.draftText())
+	if n.draft != "# 正在写\n" {
+		t.Fatalf("draft = %q after the outside change", n.draft)
 	}
 	n.flush()
 	if !n.adopt("# 现在可以了\n") {
@@ -166,7 +146,7 @@ func TestNoteOutsideRunsOnMainThread(t *testing.T) {
 	if want := "# 外部写入\n– 一行\n"; n.text != want {
 		t.Fatalf("text = %q, want %q", n.text, want)
 	}
-	if n.draftText() != n.text {
+	if n.draft != n.text {
 		t.Fatal("the clean editor did not follow the file")
 	}
 }
@@ -207,7 +187,6 @@ func TestNoteUnreadableLocksTheEditor(t *testing.T) {
 		t.Fatal("no note session over an unreadable note")
 	}
 	closeNoteWatch(n2)
-	n2.watch = nil
 	if !n2.locked {
 		t.Fatal("an unreadable note was opened for writing")
 	}
@@ -223,7 +202,7 @@ func TestNoteUnreadableLocksTheEditor(t *testing.T) {
 	if err := os.Chmod(n.store.Path(), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	n2.setDraft("一次全覆盖")
+	n2.draft = "一次全覆盖"
 	if err := n2.flush(); err != nil {
 		t.Fatal(err)
 	}
@@ -242,14 +221,14 @@ func TestNoteUnreadableLocksTheEditor(t *testing.T) {
 	if n2.locked {
 		t.Fatal("the note stayed locked after its file became readable")
 	}
-	if n2.draftText() != original {
-		t.Fatalf("draft = %q, want the file's own text", n2.draftText())
+	if n2.draft != original {
+		t.Fatalf("draft = %q, want the file's own text", n2.draft)
 	}
-	n2.setDraft("改好了")
+	n2.draft = "改好了"
 	if err := n2.flush(); err != nil {
 		t.Fatal(err)
 	}
-	if got := fileText(t, n); got != "改好了\n" {
+	if got := fileText(t, n); got != "改好了" {
 		t.Fatalf("the unlocked note wrote %q", got)
 	}
 }
@@ -264,7 +243,7 @@ func TestNoteSaveRedrawsThePin(t *testing.T) {
 	notePinRedraw = func(it *pinItem) { redrawn = append(redrawn, it.cardID) }
 	t.Cleanup(func() { notePinRedraw = old })
 	a.pins = []*pinItem{{cardID: "note"}, {cardID: "clipboard"}}
-	n.setDraft("# 记一笔")
+	n.draft = "# 记一笔"
 	n.flush()
 	if len(redrawn) != 1 || redrawn[0] != "note" {
 		t.Fatalf("the save redrew %v, want only the note's pin", redrawn)
@@ -278,6 +257,8 @@ func TestNoteSaveRedrawsThePin(t *testing.T) {
 	}
 }
 
+// TestNoteCardShape: the card is a widget with the 1 × 1 and 2 × 1 sizes,
+// and a pinned note is wide because its body needs two columns.
 func TestNoteCardShape(t *testing.T) {
 	def := toolCardDefFor("note")
 	if def == nil || def.kind != cardWidget {
@@ -308,7 +289,7 @@ func TestNoteCardPreviewLines(t *testing.T) {
 	}
 	defer func() {
 		if n.watch != nil {
-			closeNoteWatch(n)
+			n.watch.Close()
 			n.watch = nil
 		}
 	}()
@@ -370,14 +351,15 @@ func TestNoteWindowTitle(t *testing.T) {
 	}
 	defer func() {
 		if n.watch != nil {
-			closeNoteWatch(n)
+			n.watch.Close()
 			n.watch = nil
 		}
 	}()
 	if got := a.noteWindowTitle(); got == "" {
 		t.Fatal("a blank note has no window title")
 	}
-	n.resetText("## 随手记\n")
+	n.text = "## 随手记\n"
+	n.draft = n.text
 	if got := a.noteWindowTitle(); strings.TrimSpace(got) != "随手记" {
 		t.Fatalf("window title = %q, want the heading", got)
 	}
@@ -441,7 +423,7 @@ func TestNoteShowFrontHidesPanel(t *testing.T) {
 // leave the sentence only in memory.
 func TestHideLandsNoteDraftWhenPanelAlreadyFolded(t *testing.T) {
 	a, n := noteTestShelf(t)
-	n.setDraft("# 面板早已收起，这句要落盘")
+	n.draft = "# 面板早已收起，这句要落盘"
 	a.hide(hidePassive) // already folded: nothing to fold
 	if got := fileText(t, n); got != "# 面板早已收起，这句要落盘" {
 		t.Fatalf("the folded panel's hide did not land the draft; disk holds %q", got)

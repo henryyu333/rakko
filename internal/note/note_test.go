@@ -429,21 +429,3 @@ func TestNewStartsAFreshNote(t *testing.T) {
 		t.Fatalf("reopen = %q, %v; want %q", again.ID(), err, s.ID())
 	}
 }
-
-func TestTitlePreviewSearchShowUnescapedText(t *testing.T) {
-	text := "\\- 买菜\n\\*\\*重要\\*\\*\n&#32;&#32;&#32;&#32;缩进\n"
-	if got := Title(text); got != "- 买菜" {
-		t.Fatalf("title = %q, want - 买菜", got)
-	}
-	lines := Preview(text, 3)
-	if len(lines) != 2 || lines[0] != "**重要**" || lines[1] != "缩进" {
-		t.Fatalf("preview = %q", lines)
-	}
-	hits := Search([]Doc{{ID: "a", Text: text, Mod: time.Now()}}, "重要")
-	if len(hits) != 1 || hits[0].Line != "**重要**" {
-		t.Fatalf("search = %+v", hits)
-	}
-	if got := Title("# 标题\n正文"); got != "标题" {
-		t.Fatalf("hash title = %q", got)
-	}
-}

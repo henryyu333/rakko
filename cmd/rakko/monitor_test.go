@@ -194,10 +194,7 @@ func TestMonitorDeadlines(t *testing.T) {
 			a.modules = append(a.modules, &leavingModule{host: a})
 		}, 9 * time.Second},
 		{"note", func(a *shelf) {
-			n := &noteUI{text: "a"}
-			n.setDraft("ab")
-			n.since = now.Add(-time.Second)
-			a.note = n
+			a.note = &noteUI{text: "a", draft: "ab", since: now.Add(-time.Second)}
 			a.modules = append(a.modules, noteModule{host: a})
 		}, 0},
 		{"rename", func(a *shelf) {

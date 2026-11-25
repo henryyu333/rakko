@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"image"
 	"image/color"
+	"image/png"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -43,6 +44,30 @@ var (
 	colorA = color.RGBA{R: 10, G: 20, B: 30, A: 255}
 	colorB = color.RGBA{R: 200, G: 100, B: 50, A: 255}
 )
+
+func makeBoardTestPNG(w, h int, c1, c2 color.RGBA) []byte {
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		t := float64(y) / float64(max(h-1, 1))
+		for x := 0; x < w; x++ {
+			s := float64(x) / float64(max(w-1, 1))
+			k := 0.5*s + 0.5*t
+			col := color.RGBA{
+				R: uint8(float64(c1.R)*(1-k) + float64(c2.R)*k),
+				G: uint8(float64(c1.G)*(1-k) + float64(c2.G)*k),
+				B: uint8(float64(c1.B)*(1-k) + float64(c2.B)*k),
+				A: 255,
+			}
+			if x%40 == 0 || y%40 == 0 || x < 2 || y < 2 || x >= w-2 || y >= h-2 {
+				col = color.RGBA{R: 255, G: 255, B: 255, A: 255}
+			}
+			img.SetRGBA(x, y, col)
+		}
+	}
+	var buf bytes.Buffer
+	_ = png.Encode(&buf, img)
+	return buf.Bytes()
+}
 
 func addBoardRect(t *testing.T, b *boardUI) doc.ID {
 	t.Helper()
@@ -91,7 +116,7 @@ func TestBoardPastePrefersInternalWhenClipboardUnchanged(t *testing.T) {
 	origStamp, origImg := boardClipboardFingerprint, boardReadClipboardImage
 	t.Cleanup(func() { boardClipboardFingerprint, boardReadClipboardImage = origStamp, origImg })
 	boardClipboardFingerprint = func(*ui.Context) string { return "same" }
-	pngData := makeNoteTestPNG(40, 30, colorA, colorB)
+	pngData := makeBoardTestPNG(40, 30, colorA, colorB)
 	boardReadClipboardImage = func() []byte { return pngData }
 
 	view.Key(ui.Cmd, ui.KeyC)
@@ -130,7 +155,7 @@ func TestBoardPasteTextDoesNotInsertImage(t *testing.T) {
 	view.Frame()
 	origImg := boardReadClipboardImage
 	t.Cleanup(func() { boardReadClipboardImage = origImg })
-	boardReadClipboardImage = func() []byte { return makeNoteTestPNG(20, 20, colorA, colorB) }
+	boardReadClipboardImage = func() []byte { return makeBoardTestPNG(20, 20, colorA, colorB) }
 	view.SetClipboard("从表格复制的文字")
 	before := b.ed.ItemCount()
 	view.Key(ui.Cmd, ui.KeyV)
@@ -512,7 +537,7 @@ func TestBoardImageLimitsAndBitmapLifecycle(t *testing.T) {
 		t.Fatal("oversized image became a shape")
 	}
 	small := filepath.Join(dir, "small.png")
-	if err := os.WriteFile(small, makeNoteTestPNG(40, 30, colorA, colorB), 0o600); err != nil {
+	if err := os.WriteFile(small, makeBoardTestPNG(40, 30, colorA, colorB), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if !b.insertImageFile(small, geo.V(10, 10)) {
