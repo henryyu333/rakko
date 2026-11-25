@@ -179,7 +179,7 @@ func (e *Editor) EditBox() (box geo.Box, size float64, font, align string, bold,
 		}
 		box.H = math.Max(box.H, size*1.3)
 		align = s.Align
-		col = pal.NoteText
+		col = e.labelColor(s, pal)
 		ok = true
 	case doc.TypeGeo:
 		size = labelFontSize(s)
@@ -187,7 +187,7 @@ func (e *Editor) EditBox() (box geo.Box, size float64, font, align string, bold,
 		box = *e.labelBox(s, w, h, size)
 		box.H = math.Max(box.H, size*1.3)
 		align = s.Align
-		col = ResolveColor(s.Color, pal.Dark, e.Look())
+		col = e.labelColor(s, pal)
 		ok = true
 	case doc.TypeArrow:
 		size = labelFontSize(s)
@@ -196,7 +196,7 @@ func (e *Editor) EditBox() (box geo.Box, size float64, font, align string, bold,
 		box.X = box.Center().X - box.W/2
 		box.H = math.Max(box.H, size*1.3)
 		align = "center"
-		col = ResolveColor(s.Color, pal.Dark, e.Look())
+		col = e.labelColor(s, pal)
 		ok = true
 	case doc.TypeFrame:
 		z := e.Cam().Z

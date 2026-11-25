@@ -292,11 +292,8 @@ func (e *Editor) tryScribbleErase(scribbleID doc.ID) bool {
 					break
 				}
 			}
-			if hit {
-				top := e.outermostSelectable(id)
-				if !slices.Contains(hits, top) {
-					hits = append(hits, top)
-				}
+			if hit && !slices.Contains(hits, id) {
+				hits = append(hits, id)
 			}
 		}
 	}

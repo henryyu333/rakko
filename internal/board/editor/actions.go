@@ -574,43 +574,54 @@ func (e *Editor) UngroupSelected() bool {
 	e.begin()
 	var promoted []doc.ID
 	for _, gid := range groups {
-		g := e.Doc.Shapes[gid]
-		if g == nil {
-			continue
-		}
-		targetParent := g.Parent
-		if targetParent == "" {
-			targetParent = e.Page
-		}
-		pInv := e.parentMat(targetParent).Invert()
-		kids := slices.Clone(e.Children(gid))
-		siblings := e.Children(targetParent)
-		pos := slices.Index(siblings, gid)
-		upper := ""
-		if pos >= 0 && pos+1 < len(siblings) {
-			upper = e.Doc.Shapes[siblings[pos+1]].Index
-		}
-		prev := g.Index
-		for _, kid := range kids {
-			ks := e.Doc.Shapes[kid]
-			if ks == nil {
-				continue
-			}
-			m := pInv.Mul(e.PageMat(kid))
-			o := m.Apply(geo.Vec{})
-			prev = doc.IndexBetween(prev, upper)
-			c := ks.Moved()
-			c.Parent = targetParent
-			c.Index = prev
-			c.X, c.Y, c.Rotation = o.X, o.Y, m.Rotation()
-			e.put(c)
-			promoted = append(promoted, kid)
-		}
-		e.removeShape(gid)
+		promoted = append(promoted, e.dissolveGroup(gid)...)
 	}
 	e.Select(promoted...)
 	e.commit()
 	return true
+}
+
+// dissolveGroup promotes all children of group gid to gid's parent with
+// preserved page transforms and z-order, then removes gid.
+func (e *Editor) dissolveGroup(gid doc.ID) []doc.ID {
+	g := e.Doc.Shapes[gid]
+	if g == nil || g.Type != doc.TypeGroup {
+		return nil
+	}
+	targetParent := g.Parent
+	if targetParent == "" {
+		targetParent = e.Page
+	}
+	pInv := e.parentMat(targetParent).Invert()
+	kids := slices.Clone(e.Children(gid))
+	siblings := e.Children(targetParent)
+	pos := slices.Index(siblings, gid)
+	upper := ""
+	if pos >= 0 && pos+1 < len(siblings) {
+		upper = e.Doc.Shapes[siblings[pos+1]].Index
+	}
+	prev := g.Index
+	promoted := make([]doc.ID, 0, len(kids))
+	for _, kid := range kids {
+		ks := e.Doc.Shapes[kid]
+		if ks == nil {
+			continue
+		}
+		m := pInv.Mul(e.PageMat(kid))
+		o := m.Apply(geo.Vec{})
+		prev = doc.IndexBetween(prev, upper)
+		c := ks.Moved()
+		c.Parent = targetParent
+		c.Index = prev
+		c.X, c.Y, c.Rotation = o.X, o.Y, m.Rotation()
+		e.put(c)
+		promoted = append(promoted, kid)
+	}
+	e.removeShape(gid)
+	if e.FocusedGroup == gid {
+		e.FocusedGroup = ""
+	}
+	return promoted
 }
 
 // AllSelectionLocked reports whether every selected shape is locked.

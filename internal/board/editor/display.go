@@ -224,10 +224,40 @@ func (e *Editor) geoPrims(s *doc.Shape, pal *Palette) []Prim {
 	if s.Text != "" {
 		g := e.Geometry(s)
 		if g.Label != nil {
-			out = append(out, e.labelPrim(s, g.Label, labelFontSize(s), strokeCol))
+			out = append(out, e.labelPrim(s, g.Label, labelFontSize(s), e.labelColor(s, pal)))
 		}
 	}
 	return out
+}
+
+func isGeoOpen(kind string) bool {
+	return kind == "bracket" || kind == "brace" || kind == "curve"
+}
+
+// labelColor resolves a shape's label text color for contrast against its
+// actual background surface, honoring an explicit LabelColor when set.
+func (e *Editor) labelColor(s *doc.Shape, pal *Palette) Color {
+	if s.LabelColor != "" {
+		return ResolveColor(s.LabelColor, pal.Dark, e.Look())
+	}
+	switch s.Type {
+	case doc.TypeNote:
+		return pal.NoteText
+	case doc.TypeGeo:
+		strokeCol := ResolveColor(s.Color, pal.Dark, e.Look())
+		if !isGeoOpen(normalizeGeoKind(s.Geo)) && s.Fill == "solid" {
+			fillHex := s.FillColor
+			if fillHex == "" {
+				fillHex = s.Color
+			}
+			if ResolveColor(fillHex, pal.Dark, e.Look()) == strokeCol {
+				return pal.Background
+			}
+		}
+		return strokeCol
+	default:
+		return ResolveColor(s.Color, pal.Dark, e.Look())
+	}
 }
 
 func flipPath(p *geo.Path, w, h float64, fx, fy bool) *geo.Path {
@@ -618,7 +648,7 @@ func (e *Editor) notePrims(s *doc.Shape, pal *Palette) []Prim {
 		strokeWith(geo.RoundedPoly(cs[:], 8), 1, Color{R: 0, G: 0, B: 0, A: 0.10}),
 	}
 	if s.Text != "" && g.Label != nil {
-		out = append(out, e.labelPrim(s, g.Label, labelFontSize(s), pal.NoteText))
+		out = append(out, e.labelPrim(s, g.Label, labelFontSize(s), e.labelColor(s, pal)))
 	}
 	return out
 }

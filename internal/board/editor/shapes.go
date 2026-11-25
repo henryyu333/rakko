@@ -141,8 +141,7 @@ func (e *Editor) computeGeometry(s *doc.Shape) *Geometry {
 		if s.FlipX || s.FlipY {
 			pts = flipPoints(pts, w, h, s.FlipX, s.FlipY)
 		}
-		open := kind == "bracket" || kind == "brace" || kind == "curve"
-		filled := !open && s.Fill != "none" && s.Fill != ""
+		filled := !isGeoOpen(kind) && s.Fill != "none" && s.Fill != ""
 		g := &Geometry{
 			Bounds:  geo.Box{W: w, H: h},
 			Outline: pts,

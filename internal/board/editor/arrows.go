@@ -423,7 +423,7 @@ func (e *Editor) arrowPrims(s *doc.Shape, pal *Palette) []Prim {
 			cs := lb.Corners()
 			out = append(out, fillWith(geo.RoundedPoly(cs[:], 4), pal.Background))
 			inner := geo.Box{X: lb.X + 4.25, Y: lb.Y + 4.25, W: math.Max(lb.W-8.5, 8), H: math.Max(lb.H-8.5, 8)}
-			out = append(out, e.labelPrim(s, &inner, labelFontSize(s), c))
+			out = append(out, e.labelPrim(s, &inner, labelFontSize(s), e.labelColor(s, pal)))
 		}
 	}
 	return out

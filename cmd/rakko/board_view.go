@@ -643,6 +643,9 @@ func (a *shelf) boardConfirmModal(c *ui.Context, l locales.Messages, pal *editor
 	backdrop := ui.Box(c.Key(key + "-modal")).Modal().Absolute().Top(0).Left(0).Fill().
 		Background(ui.RGBA(0, 0, 0, 0.45)).Center()
 	backdrop.Children(func() {
+		if c.Shortcut(0, ui.KeyEscape) && cancel != nil {
+			cancel()
+		}
 		card := ui.Column(c.Key(key+"-card")).Width(320).Padding(16, 16, 14, 16).Gap(14).
 			Radius(12).Clip().Background(boardColor(pal.Bar)).Border(0.5, boardColor(pal.Edge)).
 			Shadow(0, 16, 40, 0, ui.RGBA(0, 0, 0, 0.45))
@@ -1158,7 +1161,7 @@ func (b *boardUI) pasteTextAt(c *ui.Context, pagePt *geo.Vec) bool {
 }
 
 func (b *boardUI) handleCanvasInput(c *ui.Context, ev ui.InputEvent) bool {
-	if b.ed == nil {
+	if b.ed == nil || b.confirmDelete || b.confirmPageDelete {
 		return false
 	}
 	pt := geo.V(float64(ev.X), float64(ev.Y))

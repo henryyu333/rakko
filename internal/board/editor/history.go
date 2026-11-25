@@ -307,17 +307,39 @@ func (e *Editor) deleteShapes(ids []doc.ID) {
 		}
 		e.deleteTree(id)
 	}
-	// Collapse empty groups.
-	for pid := range parents {
-		if p := e.Doc.Shapes[pid]; p != nil && p.Type == doc.TypeGroup && len(e.Children(pid)) == 0 {
-			e.deleteTree(pid)
-		}
-	}
+	e.cleanupGroups(parents)
 	idSet := make(map[doc.ID]bool, len(ids))
 	for _, id := range ids {
 		idSet[id] = true
 	}
 	e.sel = slices.DeleteFunc(e.sel, func(id doc.ID) bool { return idSet[id] || e.Doc.Shapes[id] == nil })
+}
+
+// cleanupGroups deletes empty groups and dissolves single-child groups bottom-up.
+func (e *Editor) cleanupGroups(parents map[doc.ID]bool) {
+	for len(parents) > 0 {
+		next := map[doc.ID]bool{}
+		for pid := range parents {
+			p := e.Doc.Shapes[pid]
+			if p == nil || p.Type != doc.TypeGroup {
+				continue
+			}
+			switch len(e.Children(pid)) {
+			case 0:
+				gp := p.Parent
+				e.deleteTree(pid)
+				if e.FocusedGroup == pid {
+					e.FocusedGroup = ""
+				}
+				if !doc.IsPageID(gp) {
+					next[gp] = true
+				}
+			case 1:
+				e.dissolveGroup(pid)
+			}
+		}
+		parents = next
+	}
 }
 
 // --- hierarchy & matrices ---
