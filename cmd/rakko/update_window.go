@@ -38,6 +38,11 @@ const (
 	updateSmallH   = 146
 	updateBarH     = 28 // the self-drawn title strip under the traffic lights
 	updateNotesH   = 206
+
+	// updateWindowsTitleExtra is the page's title strip on Windows: mygo
+	// takes its window controls' row from c.TitleBar().Height (32) where
+	// the faces budget the macOS strip (28). The body keeps its 118pt.
+	updateWindowsTitleExtra = 4
 )
 
 // updateStage is which face the update window shows.

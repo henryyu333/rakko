@@ -986,7 +986,7 @@ func (a *shelf) settingsAboutPage(c *ui.Context) {
 			settingsRow(c, "check", l.SettingsUpdateLastRow(), a.updateCaption(c.Locale(), c.Region(), l), func() {})
 			if a.updateInstalled && a.update != nil {
 				settingsSep(c, "ready")
-				settingsRow(c, "ready", l.UpdateReady(), "", func() {
+				settingsRow(c, "ready", l.UpdateReady(a.update.Version), "", func() {
 					settingsButton(c, "restart", l.PanelRestart(), true, relaunchApp).Label(l.PanelRestartLabel())
 				})
 			}
@@ -1017,6 +1017,9 @@ func (a *shelf) updateCaption(locale string, region i18n.Region, l locales.Messa
 	case a.updateChecking:
 		return l.UpdateChecking()
 	case a.updateInstalling && a.update != nil:
+		if a.updateProgress > 0 {
+			return l.UpdateDownloadingPercent(a.update.Version, int(a.updateProgress*100))
+		}
 		return l.UpdateDownloading(a.update.Version)
 	case a.updateInstalled && a.update != nil:
 		return l.UpdateInstalled(a.update.Version)

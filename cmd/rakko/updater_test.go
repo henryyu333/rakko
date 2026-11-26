@@ -407,8 +407,16 @@ func TestInstallUpdateFlow(t *testing.T) {
 	if item := a.updateMenu(); item.Label != "重新启动 Rakko 完成更新" {
 		t.Fatalf("post-install menu = %q", item.Label)
 	}
-	if !strings.Contains(a.status, "已安装") {
-		t.Fatalf("post-install status = %q", a.status)
+	// A background install says nothing on screen: no toast, no footer
+	// pill, no capsule. Settings' ready row is its only report.
+	if a.status != "" {
+		t.Fatalf("a background install posted a status %q", a.status)
+	}
+	if note := a.updateStatus(); note != "" {
+		t.Fatalf("a background install put %q on the panel", note)
+	}
+	if !a.updateQuietReady {
+		t.Fatal("a background install did not remember that Settings owns the restart row")
 	}
 	// The restart entry relaunches the app.
 	a.updateMenu().Click(nil, nil)
@@ -634,8 +642,9 @@ func TestRemindUpdateLater(t *testing.T) {
 	}
 }
 
-// 以后自动下载并安装更新: an automatic check installs silently — no
-// downloading face — and arms the ready prompt for the next tick.
+// 以后自动下载并安装更新: an automatic check installs entirely in the
+// background — no downloading face, no ready window, nothing on the shell —
+// and leaves the restart entry to Settings › 关于 › 更新.
 func TestAutoInstallRunsQuiet(t *testing.T) {
 	p := stubUpdater(t)
 	a := updateShelf()
@@ -651,16 +660,17 @@ func TestAutoInstallRunsQuiet(t *testing.T) {
 	if !a.updateInstalled {
 		t.Fatal("auto-install did not finish")
 	}
-	// The ready face is armed and fires once, on the next tick.
-	a.tickUpdates(time.Now().Add(2 * time.Second))
-	if !a.updateWinOpen() || a.updateWinStage != updateStageReady {
-		t.Fatalf("ready prompt never opened: open=%v stage=%v",
-			a.updateWinOpen(), a.updateWinStage)
+	if !a.updateQuietReady {
+		t.Fatal("auto-install did not leave the restart row to Settings")
 	}
-	a.closeUpdateWindow()
-	a.tickUpdates(time.Now().Add(3 * time.Second))
-	if a.updateWinOpen() {
-		t.Fatal("the ready window prompted twice for the same version")
+	if a.status != "" || a.updateStatus() != "" {
+		t.Fatalf("auto-install reported on the shell: status %q, note %q", a.status, a.updateStatus())
+	}
+	for _, step := range []time.Duration{2 * time.Second, 3 * time.Second} {
+		a.tickUpdates(time.Now().Add(step))
+		if a.updateWinOpen() {
+			t.Fatal("quiet install opened a window on a later tick")
+		}
 	}
 }
 

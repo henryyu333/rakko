@@ -788,8 +788,8 @@ func TestUpdateReadinessLivesInSettings(t *testing.T) {
 	a.update = &mygo.Update{Version: "9.9.9"}
 	a.updateInstalled = true
 	openSettingsPage(t, view, "关于")
-	if !view.HasText(locales.In("zh-Hans").UpdateReady()) {
-		t.Fatalf("the update readiness row is missing; texts %v", view.Texts())
+	if want := locales.In("zh-Hans").UpdateReady("9.9.9"); !view.HasText(want) {
+		t.Fatalf("the update readiness row is missing %q; texts %v", want, view.Texts())
 	}
 	clickVisible(t, view, locales.In("zh-Hans").PanelRestart())
 	if relaunched != 1 {
@@ -803,7 +803,7 @@ func TestUpdateReadinessLivesInSettings(t *testing.T) {
 	barView.Frame()
 	barView.Frame()
 	for _, text := range barView.Texts() {
-		if strings.Contains(text, "9.9.9") || text == locales.In("zh-Hans").UpdateReady() ||
+		if strings.Contains(text, "9.9.9") || text == locales.In("zh-Hans").UpdateReady("9.9.9") ||
 			text == locales.In("zh-Hans").PanelRestart() {
 			t.Fatalf("the search bar shows the update prompt %q", text)
 		}

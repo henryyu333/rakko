@@ -326,9 +326,9 @@ func (a *shelf) updateFirePrompt() {
 
 // installUpdate starts the download of the offered version: the signed
 // archive (or delta) replaces the bundle in the background while the
-// window's downloading face — or, for a silent install, the footer —
-// shows progress. quiet is the auto-install path, which never opens the
-// downloading face and prompts once when the update is staged.
+// window's downloading face shows progress. quiet is the auto-install
+// path: it opens no window, sends no toast and puts nothing on the panel
+// or the capsule — Settings › 关于 › 更新 is where it reports.
 func (a *shelf) installUpdate(quiet bool) {
 	up := a.update
 	if up == nil || a.updateInstalling || a.updateInstalled {
@@ -340,9 +340,11 @@ func (a *shelf) installUpdate(quiet bool) {
 	if !quiet {
 		a.updateSetStage(updateStageDownloading)
 		a.openUpdateWindow()
-	}
-	if !a.updateWinOpen() {
-		a.toastProgress(a.appLoc().UpdateDownloading(up.Version), time.Now().Add(updateInstallTimeout))
+		if !a.updateWinOpen() {
+			// Only a window that could not open falls back to the toast; the
+			// background install never shows one, so it never lands here.
+			a.toastProgress(a.appLoc().UpdateDownloading(up.Version), time.Now().Add(updateInstallTimeout))
+		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), updateInstallTimeout)
 	a.updateInstallCancel = cancel
@@ -356,10 +358,11 @@ func (a *shelf) installUpdate(quiet bool) {
 				if a.updateInstalling {
 					a.updateBytes, a.updateTotal = n, total
 					a.updateProgress = float64(n) / float64(total)
-					if a.win != nil {
+					if !a.updateInstallQuiet && a.win != nil {
 						a.win.Invalidate()
 					}
 					a.repaintUpdateWindow()
+					a.repaintSettings()
 				}
 			})
 		})
@@ -410,7 +413,13 @@ func (a *shelf) installedUpdate(up *mygo.Update, err error) {
 	}
 	a.updateInstalled = true
 	log.Printf("Rakko: 更新 v%s 已安装，重启后生效", up.Version)
-	a.toastStatus(a.appLoc().UpdateInstalled(up.Version), time.Now().Add(8*time.Second), statusOK)
+	if quiet {
+		// The restart entry belongs to Settings while the download was a
+		// background one: no toast, no capsule, no panel line.
+		a.updateQuietReady = true
+	} else {
+		a.toastStatus(a.appLoc().UpdateInstalled(up.Version), time.Now().Add(8*time.Second), statusOK)
+	}
 	if os.Getenv("RAKKO_UPDATE_SELFTEST") == "1" {
 		// End-to-end test hook: click 重新启动 Rakko 完成更新 for the
 		// test. mygo installs the staged bundle as this instance exits
@@ -420,10 +429,6 @@ func (a *shelf) installedUpdate(up *mygo.Update, err error) {
 	}
 	if a.updateWinOpen() {
 		a.updateSetStage(updateStageReady)
-		return
-	}
-	if quiet && a.updatePrompted != up.Version {
-		a.updateArmPrompt(updateStageReady)
 	}
 }
 
@@ -467,11 +472,17 @@ func (a *shelf) updateStatus() string {
 	l := a.appLoc()
 	switch {
 	case a.updateInstalling && a.update != nil:
+		if a.updateInstallQuiet {
+			return "" // the background download reports in Settings only
+		}
 		if a.updateProgress > 0 {
 			return l.UpdateDownloadingPercent(a.update.Version, int(a.updateProgress*100))
 		}
 		return l.UpdateDownloading(a.update.Version)
 	case a.updateInstalled && a.update != nil:
+		if a.updateQuietReady {
+			return "" // staged by the background installer: Settings has the restart row
+		}
 		return l.UpdateInstalled(a.update.Version)
 	case a.update != nil && a.update.Version != a.settings.UpdateSkippedVersion:
 		return osText(l.UpdateAvailable(a.update.Version), l.UpdateAvailableWin(a.update.Version))
@@ -554,6 +565,8 @@ func init() {
 			Title: a.updateWindowTitle(), Width: w0, Height: h0,
 			X: work.X + (work.Width-w0)/2, Y: work.Y + (work.Height-h0)*2/5,
 			Hidden:          true,
+			UseContentSize:  true,
+			DisableResize:   true,
 			BackgroundColor: "light-dark(#FFFFFF, #0E0F11)",
 			// The title bar is hidden but its lights stay, over the strip the
 			// view draws: 28pt tall, the first light's corner 20pt in and 8pt
@@ -566,8 +579,26 @@ func init() {
 			Content: ui.View(a.updateView),
 		})
 		platform.ConfigureFramedWindow(w.NativeHandle(), false)
+		// Width and Height above describe the page: the faces budget every
+		// point of it, so put the page area at exactly that size. On Windows
+		// the border and caption row sit outside it instead of eating the
+		// bottom action row.
+		updateWinContent(w, w0, h0)
 		return w
 	}
+}
+
+// updateWinContent keeps the update window's page area at exactly cw × ch,
+// anchored where the window already is.
+func updateWinContent(w *mygo.Window, cw, ch int) {
+	if w == nil || cw <= 0 || ch <= 0 {
+		return
+	}
+	area := w.ContentBounds()
+	if area.Width == cw && area.Height == ch {
+		return
+	}
+	w.SetContentBounds(mygo.Rectangle{X: area.X, Y: area.Y, Width: cw, Height: ch})
 }
 
 // updateWinOpen reports whether the update window is logically open —
@@ -577,13 +608,17 @@ func (a *shelf) updateWinOpen() bool { return a.updateWin != nil || a.updateWinM
 // updateWinSize is the found face's height: the notes card leaves with
 // empty release notes and the window shortens by its size plus gap.
 func (a *shelf) updateWinSize(stage updateStage) (w, h int) {
-	if stage != updateStageFound {
-		return updateSmallW, updateSmallH
+	w, h = updateSmallW, updateSmallH
+	if stage == updateStageFound {
+		w, h = updateFoundW, updateFoundMin
+		if a.update != nil && strings.TrimSpace(a.update.Notes) != "" {
+			h = updateFoundH
+		}
 	}
-	if a.update != nil && strings.TrimSpace(a.update.Notes) != "" {
-		return updateFoundW, updateFoundH
+	if forWindows {
+		h += updateWindowsTitleExtra
 	}
-	return updateFoundW, updateFoundMin
+	return w, h
 }
 
 // updateSetStage switches the window's face: the title and size follow
@@ -600,9 +635,9 @@ func (a *shelf) updateSetStage(stage updateStage) {
 	}
 	a.updateWin.SetTitle(a.updateWindowTitle())
 	w, h := a.updateWinSize(stage)
-	b := a.updateWin.Bounds()
+	b := a.updateWin.ContentBounds()
 	if b.Width != w || b.Height != h {
-		a.updateWin.SetBounds(mygo.Rectangle{
+		a.updateWin.SetContentBounds(mygo.Rectangle{
 			X: b.X + (b.Width-w)/2, Y: b.Y, Width: w, Height: h,
 		})
 	}

@@ -64,7 +64,10 @@ func TestCollapsedMarginClickBelongsBelow(t *testing.T) {
 	}
 }
 
-func TestDownloadingCapsuleIsBriefButPanelKeepsDeadline(t *testing.T) {
+// A background install is invisible on every surface it used to touch: no
+// toast, no capsule, no panel deadline. Settings › 关于 › 更新 carries the
+// progress and the restart row instead.
+func TestQuietInstallStaysOffScreen(t *testing.T) {
 	for _, opened := range []bool{false, true} {
 		t.Run(map[bool]string{false: "closed", true: "handoff"}[opened], func(t *testing.T) {
 			stubUpdater(t)
@@ -73,24 +76,20 @@ func TestDownloadingCapsuleIsBriefButPanelKeepsDeadline(t *testing.T) {
 			up := &mygo.Update{Version: "1.2.3"}
 			a.update = up
 			a.installUpdate(true)
-			if time.Until(a.statusUntil) < 9*time.Minute {
-				t.Fatal("panel deadline was shortened")
+			if a.status != "" || !a.statusUntil.IsZero() || a.fb.hold != 0 {
+				t.Fatalf("the background download reached the shell: status=%q until=%v hold=%v",
+					a.status, a.statusUntil, a.fb.hold)
 			}
 			if opened {
 				a.hide(hideExplicit)
 			}
-			a.fb.arm(time.Now())
-			if got := a.fb.until.Sub(a.fb.shownAt); got > 4*time.Second {
-				t.Fatalf("download capsule holds %v", got)
-			}
+			// Each result is its own run: installedUpdate consumes the
+			// quiet flag, as a second install never follows one.
 			for _, err := range []error{nil, errors.New("offline")} {
+				a.updateInstallQuiet = true
 				a.installedUpdate(up, err)
-				a.fb.arm(time.Now())
-				if a.fb.hold < 7*time.Second {
-					t.Fatal("terminal update result inherited the progress limit")
-				}
-				if err != nil && a.fb.color() != fbRed {
-					t.Fatal("update failure lost its error colour")
+				if a.status != "" || !a.statusUntil.IsZero() {
+					t.Fatalf("the background result reached the shell: status=%q until=%v", a.status, a.statusUntil)
 				}
 			}
 		})

@@ -2275,14 +2275,14 @@ func (msgs Messages) UpdateInstalled(version string) string {
 	return Catalog.Format(msgs.locale, "updateInstalled", map[string]any{"version": version})
 }
 
-// UpdateReady says "新版本已就绪"
+// UpdateReady says "新版本 v{version} 已下载完成"
 // in the language the app shows.
-func UpdateReady() string { return In(i18n.Locale()).UpdateReady() }
+func UpdateReady(version string) string { return In(i18n.Locale()).UpdateReady(version) }
 
-// UpdateReady says "新版本已就绪"
+// UpdateReady says "新版本 v{version} 已下载完成"
 // in the language of msgs.
-func (msgs Messages) UpdateReady() string {
-	return Catalog.Format(msgs.locale, "updateReady", nil)
+func (msgs Messages) UpdateReady(version string) string {
+	return Catalog.Format(msgs.locale, "updateReady", map[string]any{"version": version})
 }
 
 // UpdateRestartToFinish says "重新启动 Rakko 完成更新"

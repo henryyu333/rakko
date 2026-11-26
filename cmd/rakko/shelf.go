@@ -152,7 +152,8 @@ type shelf struct {
 	updateWinStage                                              updateStage       // which face it shows
 	updateBytes, updateTotal                                    int64             // download counts; total may be 0
 	updateInstallCancel, updateCheckCancel                      context.CancelFunc
-	updateInstallQuiet                                          bool           // the auto-install path staged it: prompt once when ready
+	updateInstallQuiet                                          bool           // the auto-install path is downloading: no surface, no toast
+	updateQuietReady                                            bool           // a quiet install finished: only Settings says so
 	updateFailDetail                                            string         // the failed face's reason; "" = the generic one
 	updateCheckDead                                             bool           // the running check's window was canceled: bury its outcome
 	updateNotes                                                 ui.ScrollState // release notes scroll, reset on each open
