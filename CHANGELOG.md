@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.19.0
+
+- **后台静默更新**：自动更新下载过程不再在刘海、灵动岛或面板上弹出提示，下载完成后也不再自动弹出重启窗口；实时下载进度与「新版本已下载完成 · 重新启动」按钮统一收口在「设置 → 关于 → 更新」的「上次检查」下方。已下载新版本时手动点「检查更新」会直接显示就绪界面，不再卡在检查中；手动更新窗口固定内容尺寸，Windows 端底部按钮不再被裁切。
+- **小组件拖回与交互**：拖出到桌面的工具卡拖动时保留按下时的抓取点，不再跳回左上角；拖回灵动岛时只要卡片碰到胶囊或展开的面板即可放回（小水獭拖过展开面板不会被误收），松手事件丢失时也会可靠回位。
+- **Windows 稳定性与热键修复**：根治关闭白板或便利贴后全局热键偶发失灵的问题（笔记文件监听不再阻塞主窗口循环）；对齐混合 DPI 多屏坐标换算与 OCR 选区映射；截图钉图改用离散滚轮按档缩放，不再大幅跳变；剪贴板快速粘贴前按左右键分别释放残留修饰键（兼容右 Alt / AltGr），避免误触目标窗口菜单栏。
+- **Windows 体验齐平**：首次安装保持隐藏式模拟刘海并自动展开引导页；任务栏停靠在顶部时灵动岛与静止胶囊自动避让，静止胶囊层级保持在主面板之后，所有自有弹出菜单统一置顶不被遮挡；灵动岛、静止胶囊、截图钉图与桌宠随系统切换虚拟桌面；白板专注模式退出按钮与便利贴最小宽度避开右上角窗口三键；应用与文件改用高清图标，过滤隐藏系统窗口与隐形边框；OCR 自动收紧中文标点周围多余空格（保留全角字母数字与英文弯引号间距）；快捷键录制提示改用 `Backspace` 替代 `⌫`。
+- **白板与截图快捷键**：白板未绑定的 `Ctrl` / `Cmd` 组合键不再穿透误切工具（保留删除、方向键微移、回车编辑与 `Esc`）；截图标注新增 `Ctrl+Y` / `Cmd+Y` 重做快捷键。
+
+### English
+
+- **Quiet background updates**: automatic background downloads no longer appear on the notch, island, or main panel, and no longer auto-pop a restart dialog when ready. Live download progress and a ready-to-restart row now live directly beneath "Last Checked" in Settings → About → Updates. Checking manually after an update is staged now opens the ready view instead of staying stuck on checking, and the manual update window uses a fixed content size so Windows buttons are never clipped.
+- **Smoother widget pin return**: desktop tool cards now keep the original grab offset when dragged instead of jumping to their top-left corner, return to the island whenever the card box meets the capsule or open panel (without stowing the desktop otter when carried across the panel), and settle cleanly if a mouse-up event is missed.
+- **Windows stability & hotkeys**: fixed a deadlock in Windows sticky-note file watching that could freeze global hotkeys after opening or closing boards and notes; aligned mixed-DPI multi-monitor coordinate conversion and OCR selection mapping; switched desktop pin mouse-wheel zoom to discrete per-notch steps; and released left/right held modifiers (including right Alt / AltGr) safely under Ctrl before clipboard paste.
+- **Windows parity polish**: first launch keeps the hidden simulated notch and opens the onboarding guide automatically; the island and idle capsules stay clear of a top-docked taskbar, idle capsules stay ordered behind the panel, and all own popup menus lift above topmost surfaces; overlays and the desktop pet follow virtual desktop switches via `IVirtualDesktopManager`; whiteboard focus-exit and sticky-note minimum width clear Windows caption buttons; app/file icons upgrade to high-resolution shell icons with DWM cloaked windows and invisible borders filtered out; OCR compacts spaces around CJK punctuation while preserving fullwidth alphanumerics and Latin curly quotes; and shortcut recording hints show `Backspace` instead of `⌫`.
+- **Whiteboard & screenshot shortcuts**: unbound `Ctrl` / `Cmd` combinations on the whiteboard no longer fall through to bare tool switches (while keeping Delete/Backspace, arrow nudging, Enter, and Escape working), and screenshot annotation now supports `Ctrl+Y` / `Cmd+Y` for redo.
+
 ## 1.18.9
 
 - **快捷键取消绑定**：在「设置 → 快捷键」里，鼠标停在已设快捷键的行上时，键帽左侧会出现 `×` 清除按钮，点一下即可取消绑定并注销热键；录键状态下同样支持按 `⌫` 或点 `×` 清除，清空后的默认快捷键在重启后也会保持未设置状态。
