@@ -25,6 +25,7 @@
   <img src="https://img.shields.io/badge/macOS-13%2B_Apple_%E8%8A%AF%E7%89%87-555?style=flat-square&logo=apple&logoColor=white" alt="macOS 13+ Apple 芯片">
   <img src="https://img.shields.io/badge/Windows-10_%7C_11_64%E4%BD%8D-0078D4?style=flat-square&logo=windows&logoColor=white" alt="Windows 10 | 11 64位">
   <img src="https://img.shields.io/badge/built_with-Go-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Built with Go">
+  <a href="https://awesomemygo.dev/apps/rakko"><img src="https://awesomemygo.dev/badge.svg" height="20" alt="Listed on Awesome MyGo"></a>
 </p>
 
 <p align="center">
