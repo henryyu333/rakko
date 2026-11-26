@@ -262,3 +262,69 @@ func TestWindowsNoteLongTitleNotTruncated(t *testing.T) {
 		})
 	}
 }
+
+// TestBoardFocusExitClearsWindowsCaption: the Exit Focus pill sits where
+// the Windows caption buttons are drawn (the client area's right edge), so
+// it must keep to their left; the Mac pill stays at its 16pt margin.
+func TestBoardFocusExitClearsWindowsCaption(t *testing.T) {
+	l := locales.In("zh-Hans")
+	for _, tc := range []struct {
+		name string
+		w    int
+		bar  ui.TitleBar
+	}{
+		{"mac", 1040, ui.TitleBar{Height: 30, Left: 72, Bottom: 22}},
+		{"windows", 1040, ui.TitleBar{Height: 32, Right: 138, Bottom: 32}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a, b := boardTestShelf(t)
+			b.focusMode = true
+			v := ui.NewTester(a.boardView, tc.w, 680)
+			v.SetLocale("zh-Hans")
+			v.SetTitleBar(tc.bar)
+			v.Frame()
+			v.Frame()
+			rect, ok := v.Find(l.BoardFocusExit())
+			if !ok {
+				t.Fatalf("exit focus pill missing; texts=%v", v.Texts())
+			}
+			right := rect.X + rect.W
+			if tc.bar.Right > 0 {
+				if left := float32(tc.w) - tc.bar.Right; right > left {
+					t.Fatalf("pill right=%.1f runs under the caption buttons at %.1f", right, left)
+				}
+			} else if want := float32(tc.w) - 16; right > want+0.5 {
+				t.Fatalf("Mac pill right=%.1f, want %.1f", right, want)
+			}
+		})
+	}
+}
+
+// TestNoteMinimumWidthKeepsItsHeading: Windows constrains the outer frame
+// while drawing the caption buttons over the client, so the minimum adds
+// their reserve. At that minimum the heading keeps room instead of being
+// squeezed against the bar's own two buttons.
+func TestNoteMinimumWidthKeepsItsHeading(t *testing.T) {
+	if got := noteMinWidth(false); got != noteMinW {
+		t.Fatalf("macOS minimum = %d, want %d", got, noteMinW)
+	}
+	if got, want := noteMinWidth(true), noteMinW+noteCaptionReserveWin; got != want {
+		t.Fatalf("Windows minimum = %d, want %d", got, want)
+	}
+	a, n := noteTestShelf(t)
+	title := "Windows 便利贴最小宽度"
+	n.text = "# " + title + "\n正文\n"
+	n.draft = n.text
+	v := ui.NewTester(a.noteView, noteMinWidth(true), noteH)
+	v.SetLocale("zh-Hans")
+	v.SetTitleBar(ui.TitleBar{Height: 32, Right: 138, Bottom: 32})
+	v.Frame()
+	v.Frame()
+	rect, ok := v.Find(title)
+	if !ok {
+		t.Fatalf("title %q missing; texts=%v", title, v.Texts())
+	}
+	if rect.W < 140 {
+		t.Fatalf("heading is %.1fpt wide at the Windows minimum, want at least 140", rect.W)
+	}
+}

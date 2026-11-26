@@ -109,7 +109,10 @@ func (a *shelf) boardBackPill(c *ui.Context, l locales.Messages, pal *editor.Pal
 
 func (a *shelf) boardFocusExitPill(c *ui.Context, l locales.Messages, pal *editor.Palette) {
 	b := a.board
-	pill := ui.Row(c.Key("board-focus-exit")).Absolute().Top(14).Right(16).
+	// The caption buttons are drawn inside the client area on Windows, so
+	// the pill clears them the way the bar does; macOS has no such reserve.
+	bar := c.TitleBar()
+	pill := ui.Row(c.Key("board-focus-exit")).Absolute().Top(14).Right(16+bar.Right).
 		Height(30).Padding(0, 12, 0, 12).Gap(6).Radius(15).AlignItems(ui.Center).
 		Background(boardColor(pal.Bar)).Border(0.5, boardColor(pal.Edge)).
 		Shadow(0, 6, 18, 0, ui.RGBA(0, 0, 0, 0.28)).

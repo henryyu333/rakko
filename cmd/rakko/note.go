@@ -27,7 +27,23 @@ const (
 	noteMinH      = 200
 	notePreviewN  = 3         // the 2 × 1 card's preview lines
 	noteBg        = "#1C1C1E" // surfaceRaise, the window's fill before the view paints
+	// noteCaptionReserveWin is the DIP width of the three caption buttons a
+	// Windows client area carries at its right (ui.TitleBar.Right). A
+	// note narrower than noteMinW plus that reserve squeezes the heading
+	// between the traffic-light reserve and the bar's own two buttons.
+	noteCaptionReserveWin = 138
 )
+
+// noteMinWidth is the window's minimum width: the macOS window constrains
+// its content directly, while the Windows window constrains the outer frame
+// and draws the caption buttons over the client's right edge, so the same
+// usable width needs their reserve on top.
+func noteMinWidth(windows bool) int {
+	if windows {
+		return noteMinW + noteCaptionReserveWin
+	}
+	return noteMinW
+}
 
 var (
 	// noteSymbol is the design's sticky note glyph; revealSymbol the
@@ -348,7 +364,7 @@ func (n *noteUI) open() bool {
 			TitleBarStyle:        mygo.TitleBarHidden,
 			TrafficLightPosition: &mygo.Point{X: 12, Y: 8},
 			DisableFullScreen:    true,
-			MinWidth:             noteMinW, MinHeight: noteMinH,
+			MinWidth:             noteMinWidth(forWindows), MinHeight: noteMinH,
 			Content: ui.View(a.noteView),
 		})
 		if w != nil {
