@@ -641,7 +641,7 @@ func petReturnTarget(a *shelf, frame mygo.Rectangle) bool {
 			frame.Y+frame.Height > r.Y-notchHoverPadY
 	}
 	centre := mygo.Point{X: frame.X + frame.Width/2, Y: frame.Y + frame.Height/2}
-	return a.pinReturnZone(centre)
+	return a.pinReturnZone(frame, centre)
 }
 
 // petRelease settles a moved otter: 收进刘海 when it was carried to the

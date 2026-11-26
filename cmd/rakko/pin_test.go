@@ -689,7 +689,8 @@ func TestPinMoveFollowsAcrossDisplays(t *testing.T) {
 	if it.display != 2 {
 		t.Fatalf("the card stayed on display %d while the cursor crossed", it.display)
 	}
-	if it.frame.X != 1600 || it.frame.Y != 500 {
+	// The 10pt grab landed at (10,10), and it stays under the pointer.
+	if it.frame.X != 1590 || it.frame.Y != 490 {
 		t.Fatalf("the card did not follow onto the new display: %+v", it.frame)
 	}
 	// Releasing on display 2's right edge docks there, not back on 1.
@@ -961,7 +962,9 @@ func TestPinReturnZoneReadsFinalReleasePoint(t *testing.T) {
 	if len(a.pins) != 1 || a.pins[0] != it {
 		t.Fatal("a release far from the notch returned the pin on the previous poll's centre")
 	}
-	if it.frame.X != 1100 || it.frame.Y != 500 {
+	// The press landed 10pt into the card, so the card settles with the
+	// pointer where the user let go, not with its top-left there.
+	if it.frame.X != 1090 || it.frame.Y != 490 {
 		t.Fatalf("the release kept the sampled frame: %+v", it.frame)
 	}
 }
@@ -980,7 +983,9 @@ func TestPinFreeReleaseLandsAtReleasePoint(t *testing.T) {
 	tr.Move(50, 50)
 	a.pinTick(time.Now(), mygo.Point{X: 650, Y: 450}, true, false) // the sampled frame
 	tr.Release(float32(900-it.frame.X), float32(650-it.frame.Y))
-	if it.frame.X != 900 || it.frame.Y != 650 {
+	// The 10pt grab inside the card stays under the pointer: the card does
+	// not jog to put its corner where the finger was.
+	if it.frame.X != 890 || it.frame.Y != 640 {
 		t.Fatalf("the release kept the previous poll's frame: %+v", it.frame)
 	}
 }

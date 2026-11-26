@@ -367,7 +367,8 @@ func TestIslandSurfacesFollowTheMove(t *testing.T) {
 	if a.notchGuardOn() {
 		t.Fatal("the drop-protection corridor must be off once the island left the top row")
 	}
-	if !a.pinReturnZone(mygo.Point{X: r.X + r.Width/2, Y: r.Y + r.Height/2}) {
+	frame := mygo.Rectangle{X: r.X + r.Width/2 - pinCardW/2, Y: r.Y, Width: pinCardW, Height: pinCardH}
+	if !a.pinReturnZone(frame, mygo.Point{X: r.X + r.Width/2, Y: r.Y + 5}) {
 		t.Fatal("a pin dropped on the moved island does not return")
 	}
 	panel := a.panelDropRect()

@@ -242,7 +242,12 @@ func (a *shelf) toolCard(c *ui.Context, spec layout.Card, surf toolCardSurface, 
 		// still shows where the card would be.
 		return card.Background(fill1)
 	}
-	card.Tooltip(title)
+	if surf != cardDesktop {
+		// A pin already draws its title under the glyph, and a pointer
+		// left on the card right after the drop would make the hint pop
+		// up over the very icon it names.
+		card.Tooltip(title)
+	}
 	// Dragged files hover: action cards that take this class are drop
 	// targets with the accent treatment; the rest dim to 38% (design §1)
 	// and stay out of the drop's way, so a release falls through to the
@@ -271,7 +276,10 @@ func (a *shelf) toolCard(c *ui.Context, spec layout.Card, surf toolCardSurface, 
 		// The count moved from the old subtitle into the tip and the
 		// accessible name when it became the corner badge.
 		title += " · " + a.toolCardSub(loc(c), def, class)
-		card.Label(title).Tooltip(title)
+		card.Label(title)
+		if surf != cardDesktop {
+			card.Tooltip(title)
+		}
 	}
 	bg := fill1
 	if card.Hovered() {

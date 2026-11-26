@@ -232,19 +232,44 @@ func pinReleaseEdge(p mygo.Point, area mygo.Rectangle) pinEdge {
 	return pinFree
 }
 
-// pinReturnZone reports whether the dragged pin's centre lands on the
-// shelf's own closed shell: the floating island's capsule wherever the user
-// left it, else the hardware notch when the shelf tracks this display, else
-// a release-band the same shape at the top of the display the centre is
-// on. The same zone drives the 松开放回 bulge and the put-back release.
-func (a *shelf) pinReturnZone(centre mygo.Point) bool {
+// pinReturnZone reports whether a dragged card restored to frame, with the
+// pointer at p, counts as put back into the shelf's own closed shell: the
+// floating island's capsule wherever the user left it, else the hardware
+// notch when the shelf tracks this display, else a release-band the same
+// shape at the top of the display p is on. The same answer drives the
+// 松开放回 bulge and the put-back release.
+//
+// In island mode the card itself is what meets the capsule, as the otter's
+// box does: the pointer is wherever the grab landed in the card, so a
+// centre-only test left the card short of the capsule by half its size.
+func (a *shelf) pinReturnZone(frame mygo.Rectangle, p mygo.Point) bool {
+	// An open panel is a put-back target of its own: a card let go over the
+	// page belongs on the grid, not floating on top of the page under the
+	// pointer that just dropped it.
+	if a.visible {
+		panel := a.panelDropRect()
+		if pinNear(p, panel, notchHoverPadX) ||
+			frame.X < panel.X+panel.Width+notchHoverPadX &&
+				frame.X+frame.Width > panel.X-notchHoverPadX &&
+				frame.Y < panel.Y+panel.Height+notchHoverPadY &&
+				frame.Y+frame.Height > panel.Y-notchHoverPadY {
+			return true
+		}
+	}
 	if a.island {
 		// The floating island is its own put-back target: the card goes
 		// back where the island is, which need not be the notch's column
 		// or the top of the screen.
-		return pinNear(centre, a.islandRect(), notchHoverPadX)
+		r := a.islandRect()
+		if pinNear(p, r, notchHoverPadX) {
+			return true
+		}
+		return frame.X < r.X+r.Width+notchHoverPadX &&
+			frame.X+frame.Width > r.X-notchHoverPadX &&
+			frame.Y < r.Y+r.Height+notchHoverPadY &&
+			frame.Y+frame.Height > r.Y-notchHoverPadY
 	}
-	if centre.Y >= a.notchY+notchHoverPadY+pinReturnH {
+	if p.Y >= a.notchY+notchHoverPadY+pinReturnH {
 		return false
 	}
 	// The shelf follows the cursor across displays (monitorDrag places
@@ -256,7 +281,7 @@ func (a *shelf) pinReturnZone(centre mygo.Point) bool {
 		nw = 200 // no measured notch: the strip's default centre
 	}
 	half := float64(nw)/2 + notchHoverPadX
-	return abs(centre.X-(nx+nw/2)) <= int(half)
+	return abs(p.X-(nx+nw/2)) <= int(half)
 }
 
 // pinStagger spaces collapsed strips on one edge of one display
@@ -346,16 +371,16 @@ func (it *pinItem) pinMoveFrame(p mygo.Point, area mygo.Rectangle) mygo.Rectangl
 
 // lockMove turns the press into a window move once it goes past
 // pinDragStart from the grab point: the card shows the size the dragged
-// frame is sized for, and the grab re-anchors to the top-left so a
-// press that only woke the strip does not jump. dx and dy are the
-// pointer's displacement from the grab point; a press already moving
-// stays as it is.
+// frame is sized for. The grab stays where the press landed, so the card
+// neither jumps to the pointer when the drag begins nor to a new corner
+// when it is released: the point under the finger stays under it. dx and
+// dy are the pointer's displacement from the grab point; a press already
+// moving stays as it is.
 func (it *pinItem) lockMove(dx, dy int) {
 	if it.moving || (abs(dx) < pinDragStart && abs(dy) < pinDragStart) {
 		return
 	}
 	it.moving, it.expanded, it.didMove = true, true, true
-	it.grabX, it.grabY = 0, 0
 }
 
 // pinNear reports whether p is within dist of r, on any side.
@@ -617,10 +642,14 @@ func (a *shelf) pinTick(now time.Time, p mygo.Point, down, fileDrag bool) {
 					continue
 				}
 				it.upMisses = 0
-				it.pressed, it.moving = false, false
-				if it.didMove {
-					it.didMove = false
-					a.savePins()
+				moved := it.didMove
+				it.pressed, it.moving, it.didMove = false, false, false
+				if moved {
+					// The release itself never arrived: settle the card
+					// where the pointer is now, through the same release
+					// path, so a drag that ends over the shell still
+					// returns and a free drop still lands.
+					a.pinRelease(it, p)
 				}
 				continue
 			}
@@ -632,8 +661,7 @@ func (a *shelf) pinTick(now time.Time, p mygo.Point, down, fileDrag bool) {
 				area = it.displayRect()
 				it.frame = it.pinMoveFrame(p, area)
 				it.applyFrame()
-				centre := mygo.Point{X: it.frame.X + it.frame.Width/2, Y: it.frame.Y + it.frame.Height/2}
-				returning = returning || a.pinReturnZone(centre)
+				returning = returning || a.pinReturnZone(it.frame, p)
 			}
 			continue
 		}
@@ -759,11 +787,11 @@ func (a *shelf) pinRelease(it *pinItem, p mygo.Point) {
 	// the display the cursor reached between two move ticks.
 	it.display = displayIDAt(p, it.display)
 	area := it.displayRect()
-	// The grab re-anchored to the top-left when the move began, so the
-	// move frame under the release is the release's own rectangle.
+	// The card kept the grab the press landed with, so moving the release
+	// point by the grab gives the frame it is drawn in — where it already
+	// is, so letting go does not jog it.
 	frame := it.pinMoveFrame(p, area)
-	centre := mygo.Point{X: frame.X + frame.Width/2, Y: frame.Y + frame.Height/2}
-	if a.pinReturnZone(centre) {
+	if a.pinReturnZone(frame, p) {
 		a.unpin(it, true)
 		return
 	}
