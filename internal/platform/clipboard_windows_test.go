@@ -473,10 +473,12 @@ func TestClipboardRestoreKeepsEveryFormat(t *testing.T) {
 
 // TestPasteReleasesHeldModifiers: the shortcut that brought the user here
 // may still hold Alt or Shift when the paste is injected; Ctrl+V with Alt
-// down is AltGr+V. The held modifiers are released in the same SendInput,
-// in front of Ctrl+V, and modifiers that are already up cost nothing.
+// down is AltGr+V. The held modifiers are released in the same SendInput, in
+// front of V, with Ctrl going down first so a lone Alt release cannot open
+// the target window's menu bar. Left and right variants are separate keys,
+// and the right Alt is released as the extended key it went down as.
 func TestPasteReleasesHeldModifiers(t *testing.T) {
-	held := map[uint16]bool{vkMenu: true, vkLWin: true}
+	held := map[uint16]bool{vkRMenu: true, vkRShift: true, vkLWin: true}
 	events := pasteEvents(func(vk uint16) bool { return held[vk] })
 	var seq []uint16
 	var ups []uint16
@@ -486,19 +488,44 @@ func TestPasteReleasesHeldModifiers(t *testing.T) {
 			ups = append(ups, e.ki.vk)
 		}
 	}
-	want := []uint16{vkMenu, vkLWin, vkControl, vkV, vkV, vkControl}
+	want := []uint16{vkControl, vkRMenu, vkRShift, vkLWin, vkV, vkV, vkControl}
 	if !slices.Equal(seq, want) {
 		t.Fatalf("input sequence = %v, want %v", seq, want)
 	}
-	// The released modifiers are up before Ctrl goes down; Ctrl and V
-	// close the sequence with their own ups.
-	if len(ups) != 4 || ups[0] != vkMenu || ups[1] != vkLWin || ups[3] != vkControl {
+	// The held modifiers are up before V goes down; Ctrl and V close the
+	// sequence with their own ups.
+	if len(ups) != 5 || ups[0] != vkRMenu || ups[1] != vkRShift || ups[2] != vkLWin || ups[4] != vkControl {
 		t.Fatalf("key-ups = %v: the held modifiers must be released before Ctrl+V", ups)
 	}
+	// The right Alt carries the extended flag its key went down as.
+	for _, e := range events {
+		if e.ki.vk != vkRMenu {
+			continue
+		}
+		if e.ki.flags != keyEventKeyUp|keyEventExtendedKey {
+			t.Fatalf("right Alt flags = %#x, want key-up and extended", e.ki.flags)
+		}
+	}
 
-	// Nothing held: exactly Ctrl+V, no extra events.
+	// The left hand's keys are released the same way, without the extended
+	// flag.
+	left := pasteEvents(func(vk uint16) bool { return vk == vkLMenu || vk == vkLShift })
+	var leftSeq []uint16
+	for _, e := range left {
+		leftSeq = append(leftSeq, e.ki.vk)
+		if e.ki.vk == vkLMenu || e.ki.vk == vkLShift {
+			if e.ki.flags != keyEventKeyUp {
+				t.Fatalf("left Alt/Shift flags = %#x, want plain key-up", e.ki.flags)
+			}
+		}
+	}
+	if !slices.Equal(leftSeq, []uint16{vkControl, vkLMenu, vkLShift, vkV, vkV, vkControl}) {
+		t.Fatalf("left-hand input sequence = %v", leftSeq)
+	}
+
+	// Nothing held: Ctrl down, V, Ctrl up — no extra events.
 	plain := pasteEvents(func(uint16) bool { return false })
-	if len(plain) != 4 || plain[0].ki.vk != vkControl || plain[0].ki.flags != 0 {
+	if len(plain) != 3 || plain[0].ki.vk != vkControl || plain[0].ki.flags != 0 {
 		t.Fatalf("plain paste input = %+v, want Ctrl+V only", plain)
 	}
 }

@@ -233,33 +233,55 @@ type input struct {
 }
 
 const (
-	keyEventKeyUp = 0x0002
-	vkShift       = 0x10
-	vkControl     = 0x11
-	vkMenu        = 0x12
-	vkV           = 0x56
-	vkLWin        = 0x5B
-	vkRWin        = 0x5C
+	keyEventKeyUp       = 0x0002
+	keyEventExtendedKey = 0x0001
+	vkControl           = 0x11
+	vkV                 = 0x56
+	vkLShift            = 0xA0
+	vkRShift            = 0xA1
+	vkLMenu             = 0xA4
+	vkRMenu             = 0xA5
+	vkLWin              = 0x5B
+	vkRWin              = 0x5C
 )
+
+// pasteHeldKey is one key a shortcut may still hold down: the left and
+// right variants are virtual keys of their own, and the right Alt has to be
+// released as the extended key it went down as.
+type pasteHeldKey struct {
+	vk    uint16
+	flags uint32
+}
 
 // pasteHeldModifiers are the keys a global shortcut may still be holding
 // when the paste runs: Ctrl+Alt+V fires on the press, and injecting Ctrl+V
-// while the physical Alt is down types AltGr+V — or nothing — instead.
-var pasteHeldModifiers = []uint16{vkMenu, vkShift, vkLWin, vkRWin}
+// while the physical Alt is down types AltGr+V — or nothing — instead. A
+// right-hand AltGr is a key of its own, so the left and right variants are
+// checked and released separately.
+var pasteHeldModifiers = []pasteHeldKey{
+	{vk: vkLMenu},
+	{vk: vkRMenu, flags: keyEventExtendedKey},
+	{vk: vkLShift},
+	{vk: vkRShift},
+	{vk: vkLWin},
+	{vk: vkRWin},
+}
 
 // pasteEvents builds the input for Ctrl+V, releasing any of the shortcut's
-// modifiers that are still physically down first. All of it goes into one
+// modifiers that are still physically down. All of it goes into one
 // SendInput, in order, so no sleep or wait loop is needed; a keyup for a key
-// that is up is simply not sent. Pure; unit-tested.
+// that is up is simply not sent. Ctrl goes down before the releases: Alt
+// released on its own opens the target window's menu bar, Alt released with
+// Ctrl held does not. Pure; unit-tested.
 func pasteEvents(down func(vk uint16) bool) []input {
 	events := make([]input, 0, 4+len(pasteHeldModifiers))
-	for _, vk := range pasteHeldModifiers {
-		if down(vk) {
-			events = append(events, input{typ: 1, ki: keybdInput{vk: vk, flags: keyEventKeyUp}})
+	events = append(events, input{typ: 1, ki: keybdInput{vk: vkControl}})
+	for _, k := range pasteHeldModifiers {
+		if down(k.vk) {
+			events = append(events, input{typ: 1, ki: keybdInput{vk: k.vk, flags: keyEventKeyUp | k.flags}})
 		}
 	}
 	return append(events,
-		input{typ: 1, ki: keybdInput{vk: vkControl}},
 		input{typ: 1, ki: keybdInput{vk: vkV}},
 		input{typ: 1, ki: keybdInput{vk: vkV, flags: keyEventKeyUp}},
 		input{typ: 1, ki: keybdInput{vk: vkControl, flags: keyEventKeyUp}},
