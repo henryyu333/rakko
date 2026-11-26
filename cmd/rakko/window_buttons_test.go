@@ -302,14 +302,17 @@ func TestBoardFocusExitClearsWindowsCaption(t *testing.T) {
 
 // TestNoteMinimumWidthKeepsItsHeading: Windows constrains the outer frame
 // while drawing the caption buttons over the client, so the minimum adds
-// their reserve. At that minimum the heading keeps room instead of being
-// squeezed against the bar's own two buttons.
+// their reserve — up to noteW, the width a new note opens at. At that
+// minimum the heading keeps room instead of being squeezed against the
+// bar's own two buttons.
 func TestNoteMinimumWidthKeepsItsHeading(t *testing.T) {
 	if got := noteMinWidth(false); got != noteMinW {
 		t.Fatalf("macOS minimum = %d, want %d", got, noteMinW)
 	}
-	if got, want := noteMinWidth(true), noteMinW+noteCaptionReserveWin; got != want {
-		t.Fatalf("Windows minimum = %d, want %d", got, want)
+	// A note is born at noteW, so its minimum may not be wider than that:
+	// the window would land wider than the frame it was centered in.
+	if got := noteMinWidth(true); got != noteW {
+		t.Fatalf("Windows minimum = %d, want %d", got, noteW)
 	}
 	a, n := noteTestShelf(t)
 	title := "Windows 便利贴最小宽度"
@@ -324,7 +327,10 @@ func TestNoteMinimumWidthKeepsItsHeading(t *testing.T) {
 	if !ok {
 		t.Fatalf("title %q missing; texts=%v", title, v.Texts())
 	}
-	if rect.W < 140 {
-		t.Fatalf("heading is %.1fpt wide at the Windows minimum, want at least 140", rect.W)
+	// The caption reserve and the bar's own two buttons leave the heading
+	// 110pt of the 320pt window: enough for the fitted title to stay
+	// legible, which is what makes the reserve affordable here.
+	if rect.W < 110 {
+		t.Fatalf("heading is %.1fpt wide at the Windows minimum, want at least 110", rect.W)
 	}
 }

@@ -37,10 +37,12 @@ const (
 // noteMinWidth is the window's minimum width: the macOS window constrains
 // its content directly, while the Windows window constrains the outer frame
 // and draws the caption buttons over the client's right edge, so the same
-// usable width needs their reserve on top.
+// usable width needs their reserve on top. A note is born at noteW, so the
+// reserve may not push the minimum past it: a window its own minimum widens
+// lands off the spot it was centered on and can hang past the screen edge.
 func noteMinWidth(windows bool) int {
 	if windows {
-		return noteMinW + noteCaptionReserveWin
+		return min(noteMinW+noteCaptionReserveWin, noteW)
 	}
 	return noteMinW
 }
