@@ -334,7 +334,8 @@ func TestSearchIndexAnswers(t *testing.T) {
 	w := newSearchSink(&SearchRun{}, func([]SearchHit) {}, searchLimit)
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
-	winCOMInit()
+	leave := winCOMApartment()
+	defer leave()
 	if err := searchIndex("Microsoft", ScopeAll, w); err != nil {
 		t.Fatalf("the index did not answer: %v", err)
 	}

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"unsafe"
 
@@ -442,6 +443,10 @@ func TestRepeatedEnumerationKeepsCallbackSlots(t *testing.T) {
 // when WindowFromPoint answers the desktop; a click-through window reports
 // the press as the other app's.
 func TestPressClassification(t *testing.T) {
+	// The window belongs to the thread that created it: style changes
+	// from another thread would wait on that thread forever.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	class, _ := windows.UTF16PtrFromString("STATIC")
 	title, _ := windows.UTF16PtrFromString("rakko-press-test")
 	h, _, err := procCreateWindowEx.Call(0, uintptr(unsafe.Pointer(class)), uintptr(unsafe.Pointer(title)),
@@ -502,6 +507,10 @@ func testHitWindow(t *testing.T) uintptr {
 // coordinates and answered no window, and only the rectangle fallback kept the
 // observer working.
 func TestWindowFromPointAtPacksTheCoordinates(t *testing.T) {
+	// The window belongs to the thread that created it: style changes
+	// from another thread would wait on that thread forever.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	h := testHitWindow(t)
 	r, ok := windowRect(h)
 	if !ok {
@@ -703,6 +712,10 @@ func (d dirInfo) IsDir() bool { return d.dir }
 // real window: the bit the overlay uses to let clicks reach whatever is
 // under it.
 func TestOverlayClickThroughStyle(t *testing.T) {
+	// The window belongs to the thread that created it: style changes
+	// from another thread would wait on that thread forever.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	class, _ := windows.UTF16PtrFromString("STATIC")
 	title, _ := windows.UTF16PtrFromString("rakko-overlay-test")
 	h, _, err := procCreateWindowEx.Call(0, uintptr(unsafe.Pointer(class)), uintptr(unsafe.Pointer(title)),
@@ -744,6 +757,10 @@ func TestOverlayClickThroughStyle(t *testing.T) {
 // the pin it becomes must, or the card on the desktop can neither be clicked
 // nor carried back to the notch. They are the same native window.
 func TestPinAndPreviewMousePolicies(t *testing.T) {
+	// The window belongs to the thread that created it: style changes
+	// from another thread would wait on that thread forever.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	class, _ := windows.UTF16PtrFromString("STATIC")
 	title, _ := windows.UTF16PtrFromString("rakko-pin-test")
 	h, _, err := procCreateWindowEx.Call(0, uintptr(unsafe.Pointer(class)), uintptr(unsafe.Pointer(title)),
@@ -767,6 +784,10 @@ func TestPinAndPreviewMousePolicies(t *testing.T) {
 // SetOverlayAcceptsMouse(panel, true) when the panel already accepts mouse
 // does not call reorderFront and raise the panel in front of a drag preview.
 func TestOverlayAcceptsMouseIdempotentPreservesPreviewOrder(t *testing.T) {
+	// The window belongs to the thread that created it: style changes
+	// from another thread would wait on that thread forever.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	class, _ := windows.UTF16PtrFromString("STATIC")
 	panelTitle, _ := windows.UTF16PtrFromString("rakko-panel-z-test")
 	previewTitle, _ := windows.UTF16PtrFromString("rakko-preview-z-test")

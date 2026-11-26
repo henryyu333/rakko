@@ -3,6 +3,7 @@
 package platform
 
 import (
+	"runtime"
 	"testing"
 	"unsafe"
 
@@ -16,6 +17,10 @@ import (
 // 6pt below it. ConfigureIdleCapsuleWindow drops the caption for a popup,
 // which keeps the requested box.
 func TestIdleCapsuleWindowFitsItsBox(t *testing.T) {
+	// The window and its style changes belong to one OS thread: SetWindowLong
+	// sends a message to the thread that created the window.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	class, _ := windows.UTF16PtrFromString("STATIC")
 	title, _ := windows.UTF16PtrFromString("rakko-idle-capsule-test")
 	// The style mygo creates a frameless panel with: visible, clipping, and
@@ -51,6 +56,8 @@ func TestIdleCapsuleWindowFitsItsBox(t *testing.T) {
 }
 
 func TestOverlayWindowDropsCaptionForPopup(t *testing.T) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	class, _ := windows.UTF16PtrFromString("STATIC")
 	title, _ := windows.UTF16PtrFromString("rakko-overlay-test")
 	const captionedFrameless = 0x16C00000

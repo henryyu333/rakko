@@ -127,10 +127,14 @@ func winCOMCallFloat(obj unsafe.Pointer, index int, f float32) uintptr {
 	return r
 }
 
-// winCOMInit makes the calling thread a COM apartment. The main thread is
-// already one (Init); a worker goroutine and a headless test are not.
-func winCOMInit() {
-	procCoInitializeEx.Call(0, coinitApartmentThreaded)
+// winCOMApartment makes the calling thread a COM apartment and returns
+// the call that balances it. The main thread is already one (Init); a
+// worker goroutine and a headless test are not. Every successful call is
+// answered with a CoUninitialize, so polling once a second does not pile
+// references onto whichever thread the goroutine runs on.
+func winCOMApartment() (leave func()) {
+	leave, _ = enterCOMApartment(coinitApartmentThreaded)
+	return leave
 }
 
 // rpcEChangedMode is the HRESULT CoInitializeEx answers when the thread
@@ -189,7 +193,12 @@ func deviceID(dev unsafe.Pointer) string {
 
 // OutputDevices lists every active output endpoint with its transport.
 func OutputDevices() []AudioOutput {
-	winCOMInit()
+	// The apartment, the enumerator and the endpoints are per thread:
+	// hold the goroutine on one so the counts balance.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	leave := winCOMApartment()
+	defer leave()
 	enum := newDeviceEnumerator()
 	if enum == nil {
 		return nil
@@ -249,7 +258,10 @@ func defaultVolumeInterface() unsafe.Pointer {
 
 // OutputVolume returns the default output's volume in 0..1.
 func OutputVolume() (float32, bool) {
-	winCOMInit()
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	leave := winCOMApartment()
+	defer leave()
 	vol := defaultVolumeInterface()
 	if vol == nil {
 		return 0, false
@@ -264,7 +276,10 @@ func OutputVolume() (float32, bool) {
 
 // SetOutputVolume sets the default output's volume, clamped to 0..1.
 func SetOutputVolume(v float32) error {
-	winCOMInit()
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	leave := winCOMApartment()
+	defer leave()
 	v = clampVolume(v)
 	vol := defaultVolumeInterface()
 	if vol == nil {
