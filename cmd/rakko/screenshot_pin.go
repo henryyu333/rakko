@@ -147,7 +147,7 @@ func (p *shotPin) input(ev ui.InputEvent) bool {
 		p.pressed = false
 		return true
 	case ui.InputScroll:
-		p.zoomBy(math.Exp(-float64(ev.DY) * 0.06))
+		p.zoomBy(pinZoomFactor(ev))
 		return true
 	case ui.InputZoom:
 		p.zoomBy(float64(ev.Scale))
@@ -159,6 +159,23 @@ func (p *shotPin) input(ev ui.InputEvent) bool {
 		}
 	}
 	return false
+}
+
+// pinZoomFactor turns a scroll event into the zoom multiplier. A discrete
+// wheel — Windows sends DY=-99 for one notch, where the exponential was
+// ×380 — steps like the whiteboard's 1.2; a precise trackpad delta stays
+// proportional to the distance scrolled.
+func pinZoomFactor(ev ui.InputEvent) float64 {
+	if ev.Precise {
+		return math.Exp(-float64(ev.DY) * 0.06)
+	}
+	switch {
+	case ev.DY < 0:
+		return 1.2
+	case ev.DY > 0:
+		return 1 / 1.2
+	}
+	return 1
 }
 
 // pinDisplayNear is the display whose work area holds p's centre.
