@@ -218,11 +218,10 @@ func (w *Watch) arm() error {
 // the overlapped structure and the buffer. CancelIoEx only asks; the
 // completion is what makes the buffer safe to release.
 func (w *Watch) abandon() {
-	if err := windows.CancelIoEx(w.dir, &w.ol); err != nil && err != windows.ERROR_NOT_FOUND {
-		// ERROR_NOT_FOUND is the only benign answer: no request is
-		// pending, so the read has already completed and nothing can
-		// still write into the buffer.
-	}
+	// CancelIoEx only asks; ERROR_NOT_FOUND is the benign answer, meaning
+	// no request was pending. Either way the result below waits for the
+	// completion that makes the buffer safe to release.
+	_ = windows.CancelIoEx(w.dir, &w.ol)
 	var n uint32
 	_ = windows.GetOverlappedResult(w.dir, &w.ol, &n, true)
 }

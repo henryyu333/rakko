@@ -127,16 +127,6 @@ func winCOMCallFloat(obj unsafe.Pointer, index int, f float32) uintptr {
 	return r
 }
 
-// winCOMApartment makes the calling thread a COM apartment and returns
-// the call that balances it. The main thread is already one (Init); a
-// worker goroutine and a headless test are not. Every successful call is
-// answered with a CoUninitialize, so polling once a second does not pile
-// references onto whichever thread the goroutine runs on.
-func winCOMApartment() (leave func()) {
-	leave, _ = enterCOMApartment(coinitApartmentThreaded)
-	return leave
-}
-
 // rpcEChangedMode is the HRESULT CoInitializeEx answers when the thread
 // already lives in a different apartment.
 const rpcEChangedMode = 0x80010106
@@ -197,7 +187,7 @@ func OutputDevices() []AudioOutput {
 	// hold the goroutine on one so the counts balance.
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
-	leave := winCOMApartment()
+	leave, _ := enterCOMApartment(coinitApartmentThreaded)
 	defer leave()
 	enum := newDeviceEnumerator()
 	if enum == nil {
@@ -260,7 +250,7 @@ func defaultVolumeInterface() unsafe.Pointer {
 func OutputVolume() (float32, bool) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
-	leave := winCOMApartment()
+	leave, _ := enterCOMApartment(coinitApartmentThreaded)
 	defer leave()
 	vol := defaultVolumeInterface()
 	if vol == nil {
@@ -278,7 +268,7 @@ func OutputVolume() (float32, bool) {
 func SetOutputVolume(v float32) error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
-	leave := winCOMApartment()
+	leave, _ := enterCOMApartment(coinitApartmentThreaded)
 	defer leave()
 	v = clampVolume(v)
 	vol := defaultVolumeInterface()

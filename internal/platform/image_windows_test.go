@@ -516,6 +516,15 @@ func TestOCRCompactionKeepsLatinSpacing(t *testing.T) {
 		{"“ 引 用 ”", "“引用”"},
 		{"Hello ， world", "Hello ， world"},
 		{"Rakko 更 新 v1.19.0 已 就 绪", "Rakko 更新 v1.19.0 已就绪"},
+		// Fullwidth Latin letters and digits are words of their own: the
+		// engine's spaces around them stay.
+		{"Ａ Ｂ Ｃ", "Ａ Ｂ Ｃ"},
+		{"１ ２ ３", "１ ２ ３"},
+		{"中 Ａ 文", "中 Ａ 文"},
+		// A curly quote joins Han text and keeps its space against Latin
+		// text and against another quote.
+		{"“ A ” “ B ”", "“ A ” “ B ”"},
+		{"他 说 “ 好 ” 了", "他说“好”了"},
 	}
 	for _, c := range cases {
 		if got := ocrCompactCJK(c.in); got != c.want {

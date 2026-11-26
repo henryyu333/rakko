@@ -421,9 +421,9 @@ func previewPlacement() (x, y, w, h int32) {
 	ms := enumMonitors()
 	var pt winPoint
 	procGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
-	cur := pixelsToDIPIn(ms, winRect{Left: pt.X, Top: pt.Y, Right: pt.X + 1, Bottom: pt.Y + 1})
+	cx, cy, _ := pixelPointToDIP(ms, int(pt.X), int(pt.Y))
 	work := Rect{Width: previewDefaultW, Height: previewDefaultH}
-	if i := displayAt(ms, int(cur.X), int(cur.Y)); i >= 0 {
+	if i := displayAt(ms, cx, cy); i >= 0 {
 		work = pixelsToDIPIn(ms, ms[i].work)
 	}
 	place := previewWindowRect(work, previewDefaultW, previewDefaultH)

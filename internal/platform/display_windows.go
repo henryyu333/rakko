@@ -266,23 +266,16 @@ func WindowsOfPID(pid int) []ScreenWindow {
 }
 
 // ordinaryWindow reports whether h is an app window the user can see:
-// visible, not a tool window, not cloaked onto another virtual desktop or
-// behind a suspended packaged app, not one of the desktop's own surfaces,
-// with a title (the desktop and the shell's helper windows have none).
+// appWindow's answer, less the minimized ones the screen-visible list does
+// not show.
 func ordinaryWindow(h uintptr) bool {
-	if r, _, _ := procIsWindowVisible.Call(h); r == 0 {
-		return false
-	}
-	if isToolWindow(h) {
+	if !appWindow(h) {
 		return false
 	}
 	if r, _, _ := procIsIconic.Call(h); r != 0 {
 		return false
 	}
-	if shellWindows[windowClass(h)] || windowCloaked(h) {
-		return false
-	}
-	return windowText(h) != ""
+	return true
 }
 
 // DisplayFriendlyNames returns each active monitor's user-facing name keyed by

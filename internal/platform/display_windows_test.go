@@ -157,6 +157,27 @@ func TestMixedDPIWithout96(t *testing.T) {
 	if got := pixelsToDIPIn(ms, want); got != straddle {
 		t.Fatalf("straddling round trip = %+v, want %+v", got, straddle)
 	}
+	// A display to the left of the primary has a negative pixel origin, and
+	// its DIP origin is negative by the set's smallest scale: the round
+	// trip has to come back through those coordinates, not through a zero
+	// that would fold the display onto the primary.
+	left := []screenMonitor{
+		testMonitor(1, 0, 0, 1920, 1080, 120, `\\.\DISPLAY1`),
+		testMonitor(2, -2880, 0, 2880, 1620, 144, `\\.\DISPLAY2`),
+	}
+	// 120% is the set's smallest scale: -2880 × 96 / 120.
+	if ox, oy := dipOrigin(left, 1); ox != -2304 || oy != 0 {
+		t.Fatalf("left display origin = (%d,%d), want (-2304,0)", ox, oy)
+	}
+	for _, r := range []Rect{
+		{X: -1800, Y: 100, Width: 300, Height: 200},
+		{X: -2200, Y: 40, Width: 150, Height: 90},
+	} {
+		px := dipToPixelsIn(left, r)
+		if got := pixelsToDIPIn(left, px); got != r {
+			t.Fatalf("left display round trip %+v = %+v (pixels %+v)", r, got, px)
+		}
+	}
 }
 
 // TestPixelPointToDIP: the cursor arrives in pixels and the DIP it names

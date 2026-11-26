@@ -85,9 +85,6 @@ func TestWatchFileReportsARegistrationFailure(t *testing.T) {
 	}
 }
 
-// TestCloseWaitsForTheReadInFlight: Close returns only after the pending
-// read completed and its buffer was released, and no callback runs after
-// it; a second close does nothing.
 // TestCloseDoesNotWaitForABlockedNotify: Close runs on the window loop,
 // and a caller's notify hops to that loop with RunOnMain. A notify waiting
 // for the loop must not hold Close up, or the two wait on each other and
@@ -129,6 +126,9 @@ func TestCloseDoesNotWaitForABlockedNotify(t *testing.T) {
 	w.Close() // already closed: a no-op
 }
 
+// TestCloseWaitsForTheReadInFlight: Close returns only after the pending
+// read completed and its buffer was released, and no callback runs after
+// it; a second close does nothing.
 func TestCloseWaitsForTheReadInFlight(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "note.md")
 	var hits atomic.Int32

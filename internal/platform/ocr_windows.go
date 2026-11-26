@@ -247,18 +247,41 @@ func ocrResultLines(result uintptr) []string {
 // comes back as 「框 选 文 字」 while the Mac build returns 「框选文字」.
 // The same spaces surround CJK punctuation — 「你好 ， 世界 ！」 — so a
 // space goes when the characters on both sides are written without word
-// spaces. Spaces inside Latin words, between Latin words and around
-// numbers stay as the engine shaped them.
+// spaces, or when a curly quote meets one of them. Spaces inside Latin
+// words, between Latin words, around numbers, and around the fullwidth
+// forms of Latin letters and digits stay as the engine shaped them.
 func ocrCompactCJK(s string) string {
 	runes := []rune(s)
 	out := make([]rune, 0, len(runes))
 	for i, r := range runes {
-		if r == ' ' && i > 0 && i+1 < len(runes) && isCJKUnspaced(runes[i-1]) && isCJKUnspaced(runes[i+1]) {
+		if r == ' ' && i > 0 && i+1 < len(runes) && joinsWithoutSpace(runes[i-1], runes[i+1]) {
 			continue
 		}
 		out = append(out, r)
 	}
 	return string(out)
+}
+
+// joinsWithoutSpace reports whether a and b are written against each other
+// with no word space between them: two characters the language writes
+// without spaces, or a curly quote against one of them. A quote keeps the
+// space it has against Latin text or another quote, so 「“ A ” “ B ”」 does
+// not collapse into 「“ A ”“ B ”」.
+func joinsWithoutSpace(a, b rune) bool {
+	if isCJKUnspaced(a) && isCJKUnspaced(b) {
+		return true
+	}
+	return (isCurlyQuote(a) && isCJKIdeograph(b)) || (isCJKIdeograph(a) && isCurlyQuote(b))
+}
+
+// isCurlyQuote reports whether r is one of the curly quotes the engine
+// spaces per glyph.
+func isCurlyQuote(r rune) bool {
+	switch r {
+	case 0x2018, 0x2019, 0x201C, 0x201D:
+		return true
+	}
+	return false
 }
 
 // isCJKUnspaced reports whether r joins its neighbours without a word
@@ -277,13 +300,19 @@ func isCJKUnspaced(r rune) bool {
 		return true
 	case r >= 0xFE50 && r <= 0xFE6F: // small form variants
 		return true
-	case r >= 0xFF00 && r <= 0xFFEF: // fullwidth forms: ，！？：；（） and kana
+	// Fullwidth punctuation only: ，！？：；（）［］｛｝ and its kin. The
+	// fullwidth Latin letters and digits around them — ＡＢＣ, １２３ —
+	// are words of their own and keep their spaces.
+	case r >= 0xFF01 && r <= 0xFF0F,
+		r >= 0xFF1A && r <= 0xFF20,
+		r >= 0xFF3B && r <= 0xFF40,
+		r >= 0xFF5B && r <= 0xFF65:
 		return true
 	}
 	switch r {
-	case 0x2014, 0x2026, 0x2018, 0x2019, 0x201C, 0x201D:
-		// Em dash, ellipsis and the curly quotes join CJK text the same
-		// way they join Latin text, but the engine spaces them per glyph.
+	case 0x2014, 0x2026:
+		// Em dash and ellipsis join CJK text the same way they join Latin
+		// text, but the engine spaces them per glyph.
 		return true
 	}
 	return false

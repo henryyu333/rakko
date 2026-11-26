@@ -67,10 +67,10 @@ func virtualDesktopManager() (uintptr, error) {
 		virtualDesktop = out
 	})
 	if virtualDesktopFail != nil {
-		// Pinned cards cannot follow the user across desktops; say so once
-		// rather than leaving the pin silently behind.
+		// Overlays cannot follow the user across desktops; say so once
+		// rather than leaving them silently behind.
 		virtualDesktopLog.Do(func() {
-			log.Printf("platform: pinned cards stay on their desktop: %v", virtualDesktopFail)
+			log.Printf("platform: overlays stay on their desktop: %v", virtualDesktopFail)
 		})
 	}
 	return virtualDesktop, virtualDesktopFail
