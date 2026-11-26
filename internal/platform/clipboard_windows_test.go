@@ -470,3 +470,35 @@ func TestClipboardRestoreKeepsEveryFormat(t *testing.T) {
 		t.Fatalf("custom format after restore = %v, want %v", got, blob)
 	}
 }
+
+// TestPasteReleasesHeldModifiers: the shortcut that brought the user here
+// may still hold Alt or Shift when the paste is injected; Ctrl+V with Alt
+// down is AltGr+V. The held modifiers are released in the same SendInput,
+// in front of Ctrl+V, and modifiers that are already up cost nothing.
+func TestPasteReleasesHeldModifiers(t *testing.T) {
+	held := map[uint16]bool{vkMenu: true, vkLWin: true}
+	events := pasteEvents(func(vk uint16) bool { return held[vk] })
+	var seq []uint16
+	var ups []uint16
+	for _, e := range events {
+		seq = append(seq, e.ki.vk)
+		if e.ki.flags&keyEventKeyUp != 0 {
+			ups = append(ups, e.ki.vk)
+		}
+	}
+	want := []uint16{vkMenu, vkLWin, vkControl, vkV, vkV, vkControl}
+	if !slices.Equal(seq, want) {
+		t.Fatalf("input sequence = %v, want %v", seq, want)
+	}
+	// The released modifiers are up before Ctrl goes down; Ctrl and V
+	// close the sequence with their own ups.
+	if len(ups) != 4 || ups[0] != vkMenu || ups[1] != vkLWin || ups[3] != vkControl {
+		t.Fatalf("key-ups = %v: the held modifiers must be released before Ctrl+V", ups)
+	}
+
+	// Nothing held: exactly Ctrl+V, no extra events.
+	plain := pasteEvents(func(uint16) bool { return false })
+	if len(plain) != 4 || plain[0].ki.vk != vkControl || plain[0].ki.flags != 0 {
+		t.Fatalf("plain paste input = %+v, want Ctrl+V only", plain)
+	}
+}

@@ -234,9 +234,37 @@ type input struct {
 
 const (
 	keyEventKeyUp = 0x0002
+	vkShift       = 0x10
 	vkControl     = 0x11
+	vkMenu        = 0x12
 	vkV           = 0x56
+	vkLWin        = 0x5B
+	vkRWin        = 0x5C
 )
+
+// pasteHeldModifiers are the keys a global shortcut may still be holding
+// when the paste runs: Ctrl+Alt+V fires on the press, and injecting Ctrl+V
+// while the physical Alt is down types AltGr+V — or nothing — instead.
+var pasteHeldModifiers = []uint16{vkMenu, vkShift, vkLWin, vkRWin}
+
+// pasteEvents builds the input for Ctrl+V, releasing any of the shortcut's
+// modifiers that are still physically down first. All of it goes into one
+// SendInput, in order, so no sleep or wait loop is needed; a keyup for a key
+// that is up is simply not sent. Pure; unit-tested.
+func pasteEvents(down func(vk uint16) bool) []input {
+	events := make([]input, 0, 4+len(pasteHeldModifiers))
+	for _, vk := range pasteHeldModifiers {
+		if down(vk) {
+			events = append(events, input{typ: 1, ki: keybdInput{vk: vk, flags: keyEventKeyUp}})
+		}
+	}
+	return append(events,
+		input{typ: 1, ki: keybdInput{vk: vkControl}},
+		input{typ: 1, ki: keybdInput{vk: vkV}},
+		input{typ: 1, ki: keybdInput{vk: vkV, flags: keyEventKeyUp}},
+		input{typ: 1, ki: keybdInput{vk: vkControl, flags: keyEventKeyUp}},
+	)
+}
 
 // SendPasteShortcut sends Ctrl+V to the process pid. It refuses when pid
 // is not the foreground process: the copy already happened, and a paste
@@ -253,12 +281,10 @@ func SendPasteShortcut(pid int) bool {
 	if fg == 0 || windowPID(fg) != pid {
 		return false
 	}
-	events := [...]input{
-		{typ: 1, ki: keybdInput{vk: vkControl}},
-		{typ: 1, ki: keybdInput{vk: vkV}},
-		{typ: 1, ki: keybdInput{vk: vkV, flags: keyEventKeyUp}},
-		{typ: 1, ki: keybdInput{vk: vkControl, flags: keyEventKeyUp}},
-	}
+	events := pasteEvents(func(vk uint16) bool {
+		r, _, _ := procGetAsyncKeyState.Call(uintptr(vk))
+		return r&0x8000 != 0
+	})
 	sent, _, _ := procSendInput.Call(uintptr(len(events)), uintptr(unsafe.Pointer(&events[0])), unsafe.Sizeof(events[0]))
 	return sent == uintptr(len(events))
 }
