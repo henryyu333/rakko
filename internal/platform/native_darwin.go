@@ -683,6 +683,11 @@ func ConfigureNotchWindow(window uintptr) {
 // SetWindowAppearance. Windows needs the call for DWM's corners and caption.
 func ConfigureFramedWindow(window uintptr, dark bool) {}
 
+// OrderBelow is a no-op on macOS: SetWindowLayer already puts the resting
+// capsule at a lower window level than the panel, and levels order every
+// window in them.
+func OrderBelow(window, below uintptr) {}
+
 // ConfigureOverlayWindow applies the shared nonactivating overlay policy
 // without claiming the pointer. Baskets and passive display capsules use
 // it; only ConfigureNotchWindow installs the panel's cursor tracking area.

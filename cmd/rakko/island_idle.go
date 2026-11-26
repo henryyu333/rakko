@@ -69,8 +69,13 @@ func (a *shelf) openMainIdleCapsule(f mygo.Rectangle) *mainIdleCapsule {
 	platform.ConfigureIdleCapsuleWindow(h)
 	// One level below the panel's resting level, so the opening shell and
 	// the folding shell draw over it; it shows through only while their
-	// canvas is blank or exactly capsule-sized.
+	// canvas is blank or exactly capsule-sized. Windows has one topmost
+	// band and its SetWindowLayer would raise the capsule above the panel,
+	// so it is inserted right behind the panel instead.
 	platform.SetWindowLayer(h, platform.LayerBelowStatus)
+	if a.winH != 0 {
+		platform.OrderBelow(h, a.winH)
+	}
 	platform.SetOverlayAcceptsMouse(h, false)
 	platform.SetWindowFrame(h, f.X, f.Y, f.Width, f.Height)
 	return &mainIdleCapsule{win: w, frame: f}
@@ -104,6 +109,11 @@ func (a *shelf) showMainIdleCapsule() {
 		return
 	}
 	a.mainIdle.win.ShowInactive()
+	// Showing must not lift it over the panel: keep it right behind the
+	// resident window every time it comes back for a blank frame.
+	if a.winH != 0 {
+		platform.OrderBelow(a.mainIdle.win.NativeHandle(), a.winH)
+	}
 	a.mainIdle.shown = true
 }
 
@@ -205,7 +215,7 @@ func (a *shelf) syncIdleIslands() {
 	ds := make([]islandDisplay, 0, len(displays))
 	for _, d := range displays {
 		_, _, _, notchH, hasNotch := notchRect(d.ID)
-		ds = append(ds, islandDisplay{ID: d.ID, Bounds: d.Bounds, HasNotch: hasNotch, NotchH: notchH})
+		ds = append(ds, islandDisplay{ID: d.ID, Bounds: d.Bounds, Work: d.WorkArea, HasNotch: hasNotch, NotchH: notchH})
 	}
 	want := idleIslandPlacementsForMode(ds, a.dispID, a.settings.ShellStyle, a.settings.IslandPos, a.settings.Display)
 	have := make(map[int64]*idleIslandWindow, len(a.idleIslands))

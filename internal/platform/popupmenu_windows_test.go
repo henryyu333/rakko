@@ -2,56 +2,44 @@
 
 package platform
 
-// The menu watch lifts a menu into the topmost band once, and only once per
-// menu window: a menu stays up while the pointer moves over it, and a
-// SetWindowPos every tick would ask DWM to re-order a window that already
-// sits where it belongs.
+// The menu watch lifts a menu into the topmost band through the menu's own
+// style bit, never a cache of handles: a menu is destroyed when it closes
+// and Windows reuses window handles, so a remembered handle could name the
+// next menu and leave it hidden under the panel.
 
-import "testing"
+import (
+	"runtime"
+	"testing"
+	"unsafe"
 
-func TestMenuWatchRaisesEachMenuOnce(t *testing.T) {
-	ownMenus.mu.Lock()
-	ownMenus.raised = map[uintptr]bool{}
-	ownMenus.mu.Unlock()
-	t.Cleanup(func() {
-		ownMenus.mu.Lock()
-		ownMenus.raised = nil
-		ownMenus.mu.Unlock()
-	})
+	"golang.org/x/sys/windows"
+)
 
-	if alreadyRaised(0x1234) {
-		t.Fatal("a menu watched for the first time reported itself raised")
+func TestMenuWatchRaisesByTopmostBit(t *testing.T) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	class, _ := windows.UTF16PtrFromString("STATIC")
+	title, _ := windows.UTF16PtrFromString("rakko-menu-test")
+	h, _, err := procCreateWindowEx.Call(0, uintptr(unsafe.Pointer(class)), uintptr(unsafe.Pointer(title)),
+		0x80000000 /* WS_POPUP */, 0, 0, 120, 40, 0, 0, 0, 0)
+	if h == 0 {
+		t.Fatalf("CreateWindowEx: %v", err)
 	}
-	if !alreadyRaised(0x1234) {
-		t.Fatal("the same menu was raised twice")
-	}
-	if alreadyRaised(0x5678) {
-		t.Fatal("a second menu was not raised")
-	}
-}
+	defer procDestroyWindow.Call(h)
 
-// The watch forgets the menus it raised once the map outgrows its bound, so
-// a long session does not keep every menu window it ever showed.
-func TestMenuWatchForgetsOldMenus(t *testing.T) {
-	ownMenus.mu.Lock()
-	ownMenus.raised = map[uintptr]bool{}
-	for i := uintptr(1); i <= 40; i++ {
-		ownMenus.raised[i] = true
+	if windowExStyle(h)&wsExTopmost != 0 {
+		t.Fatal("a fresh window must not be topmost")
 	}
-	ownMenus.mu.Unlock()
-	t.Cleanup(func() {
-		ownMenus.mu.Lock()
-		ownMenus.raised = nil
-		ownMenus.mu.Unlock()
-	})
-
-	if alreadyRaised(0x9001) {
-		t.Fatal("the new menu was not raised")
+	if !raiseMenu(h) {
+		t.Fatal("a menu outside the topmost band was not lifted")
 	}
-	ownMenus.mu.Lock()
-	n := len(ownMenus.raised)
-	ownMenus.mu.Unlock()
-	if n != 1 {
-		t.Fatalf("raised map kept %d menus, want 1 after the reset", n)
+	if windowExStyle(h)&wsExTopmost == 0 {
+		t.Fatal("the lifted menu is not topmost")
+	}
+	if raiseMenu(h) {
+		t.Fatal("a menu already in the topmost band was re-ordered")
+	}
+	if raiseMenu(0) {
+		t.Fatal("a zero handle reported a raise")
 	}
 }

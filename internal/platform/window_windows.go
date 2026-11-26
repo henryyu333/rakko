@@ -56,6 +56,10 @@ func ConfigureOverlayWindow(window uintptr) {
 	ensureToolWindow(window)
 	disableTransparentFrameChrome(window)
 	reorderFront(window, true)
+	// Every overlay — the shelf, pins, the note, screenshot pins — follows
+	// the desktop the user switches to, as SetVisibleOnAllWorkspaces does on
+	// macOS. The watch ends with the window.
+	followCurrentDesktop(window)
 }
 
 // ConfigureIdleCapsuleWindow applies the overlay policy to the picture-only
@@ -114,6 +118,7 @@ func ConfigurePetWindow(window uintptr) {
 	disableTransparentFrameChrome(window)
 	setExBits(window, wsExNoActivate, true)
 	reorderFront(window, true)
+	followCurrentDesktop(window)
 }
 
 // ConfigureDragPreview makes a drag preview a non-activating topmost
@@ -159,6 +164,18 @@ func SetWindowLayer(window uintptr, layer Layer) {
 		return
 	}
 	reorderFront(window, true)
+}
+
+// OrderBelow puts window directly under below in the stacking order, both
+// kept in the topmost band. Windows has a single topmost band, so a window
+// that must stay behind another topmost one — the resting capsule behind the
+// resident panel — is inserted right behind it; a layer number cannot say
+// that here.
+func OrderBelow(window, below uintptr) {
+	if window == 0 || below == 0 || window == below {
+		return
+	}
+	procSetWindowPos.Call(window, below, 0, 0, 0, 0, swpNoMove|swpNoSize|swpNoActivate|swpNoOwnerZ)
 }
 
 // WindowLayerNumber is the platform's stacking number for a band. Windows

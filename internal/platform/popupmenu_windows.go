@@ -19,19 +19,15 @@ import (
 // there.
 const popupMenuClass = "#32768"
 
-// gwOwner is GW_OWNER of GetWindow: the window a popup or a dialog belongs
-// to, which a menu's window names as the window it was opened from.
-const gwOwner = 4
-
 var procGetWindow = user32.NewProc("GetWindow")
 
-// ownMenus is the watch's state: the overlay the menus belong to, its UI
-// thread, and the menus already raised. The overlay's handle comes from the
-// app once the window exists; nothing here guesses which window it is.
+// ownMenus is the watch's state: the overlay, whose UI thread runs every
+// menu loop this app opens (mygo keeps all its windows on one thread). The
+// handle comes from the app once the window exists; nothing here guesses
+// which window it is.
 var ownMenus struct {
 	once   sync.Once
 	mu     sync.Mutex
-	raised map[uintptr]bool
 	window uintptr // the overlay window, once the app has created it
 	thread uint32  // that window's UI thread
 }
@@ -42,25 +38,21 @@ const (
 	guiPopupMenuMode  = 0x00000010
 )
 
-// WatchOwnMenus keeps the system menus this process shows above the overlay
-// window. The menu keeps the place the system gave it — at the pointer — and
-// the watch only moves it into the topmost band, above the panel's content.
-// Menus of other windows, and of this process's other windows, are left as
-// the system drew them.
+// WatchOwnMenus keeps the system menus this process shows above its topmost
+// windows — the panel, pins, the note, a screenshot pin. The menu keeps the
+// place the system gave it (at the pointer) and the watch only moves it into
+// the topmost band, above the surface it was opened from. Menus of other
+// processes are left as the system drew them.
 //
-// window is the overlay's own handle: the watch asks that window's UI
-// thread whether a menu loop is running and follows the menu's owner chain
-// back to that window, so an idle overlay costs a thread query every tick
-// and a menu of the Settings window is not touched. A zero handle (or none)
-// does nothing, so the call is a no-op until the app has its window.
+// window is the overlay's own handle: the watch asks its UI thread whether a
+// menu loop is running, so an idle app costs one thread query every tick.
+// A zero handle (or none) does nothing, so the call is a no-op until the app
+// has its window.
 func WatchOwnMenus(window uintptr) {
 	ownMenus.mu.Lock()
 	ownMenus.window = window
 	if window != 0 {
 		ownMenus.thread = uint32(windowThread(window))
-	}
-	if ownMenus.raised == nil {
-		ownMenus.raised = map[uintptr]bool{}
 	}
 	ownMenus.mu.Unlock()
 	if window == 0 {
@@ -76,24 +68,14 @@ func WatchOwnMenus(window uintptr) {
 	})
 }
 
-// overlayWindow is the overlay's window handle, zero until the app hands
-// the watch one.
-func overlayWindow() uintptr {
-	ownMenus.mu.Lock()
-	defer ownMenus.mu.Unlock()
-	return ownMenus.window
-}
-
-// raiseOwnMenus lifts the process's open popup menu above the overlay. The
-// menu is topmost for as long as it shows: a menu is dismissed by its loop,
-// which destroys the window, and a submenu is a menu window of its own that
-// the watch raises when it appears.
+// raiseOwnMenus lifts this process's open popup menus into the topmost band.
+// A menu is topmost for as long as it shows: its loop destroys the window
+// when it is dismissed, and a submenu is a menu window of its own that the
+// watch raises when it appears. Every surface of this app is topmost, so
+// the menu's owner chain is not what decides: the menu of a pin or a note
+// window needs the same lift as the panel's.
 func raiseOwnMenus() {
 	if !uiThreadInMenu() {
-		return
-	}
-	overlay := overlayWindow()
-	if overlay == 0 {
 		return
 	}
 	pid := windows.GetCurrentProcessId()
@@ -101,12 +83,21 @@ func raiseOwnMenus() {
 		if !isPopupMenu(h) || windowPID(h) != int(pid) {
 			return true
 		}
-		if !belongsTo(h, overlay) || alreadyRaised(h) {
-			return true
-		}
-		procSetWindowPos.Call(h, hwndTopmost, 0, 0, 0, 0, swpNoMove|swpNoSize|swpNoActivate)
+		raiseMenu(h)
 		return true
 	})
+}
+
+// raiseMenu moves one menu window into the topmost band and reports whether
+// it had to. The window's own style is the record, not a cache of handles:
+// a menu is destroyed after it closes, and Windows reuses window handles, so
+// a remembered handle could name a later menu and leave it under the panel.
+func raiseMenu(h uintptr) bool {
+	if h == 0 || windowExStyle(h)&wsExTopmost != 0 {
+		return false
+	}
+	procSetWindowPos.Call(h, hwndTopmost, 0, 0, 0, 0, swpNoMove|swpNoSize|swpNoActivate)
+	return true
 }
 
 // isPopupMenu reports whether h is one of the system's menu windows.
@@ -114,33 +105,6 @@ func isPopupMenu(h uintptr) bool {
 	var class [16]uint16
 	n, _, _ := procGetClassName.Call(h, uintptr(unsafe.Pointer(&class[0])), uintptr(len(class)))
 	return n != 0 && windows.UTF16ToString(class[:n]) == popupMenuClass
-}
-
-// belongsTo walks the owner chain of h — a menu and its submenus name the
-// window they were opened from — and reports whether owner is on it.
-func belongsTo(h, owner uintptr) bool {
-	for depth := 0; depth < 8 && h != 0; depth++ {
-		if h == owner {
-			return true
-		}
-		h, _, _ = procGetWindow.Call(h, gwOwner)
-	}
-	return false
-}
-
-// alreadyRaised marks h as lifted and reports whether it was marked before:
-// one SetWindowPos per menu window, however long the menu stays open.
-func alreadyRaised(h uintptr) bool {
-	ownMenus.mu.Lock()
-	defer ownMenus.mu.Unlock()
-	if ownMenus.raised[h] {
-		return true
-	}
-	if len(ownMenus.raised) > 32 {
-		ownMenus.raised = map[uintptr]bool{}
-	}
-	ownMenus.raised[h] = true
-	return false
 }
 
 // MenuOpen reports whether window's UI thread is currently running a system
