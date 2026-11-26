@@ -301,6 +301,12 @@ func shellItemIconPNG(parsingName string, size int) []byte {
 	if size <= 0 {
 		size = 32
 	}
+	// The factory is a shell COM object: it needs an initialized apartment
+	// on the calling thread. Icon extraction runs on worker threads as
+	// well as the main one, so enter an apartment here and leave the
+	// thread as this call found it.
+	leave, _ := enterCOMApartment(2 /* COINIT_APARTMENTTHREADED */)
+	defer leave()
 	name16 := windows.StringToUTF16(parsingName)
 	var factory unsafe.Pointer
 	hr, _, _ := procSHCreateItemFromParsing.Call(

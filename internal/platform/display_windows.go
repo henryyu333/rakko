@@ -232,7 +232,7 @@ func NormalWindows() []ScreenWindow {
 		if !ordinaryWindow(h) {
 			return true
 		}
-		wr, ok := windowRect(h)
+		wr, ok := windowFrameRect(h)
 		if !ok {
 			return true
 		}
@@ -266,8 +266,9 @@ func WindowsOfPID(pid int) []ScreenWindow {
 }
 
 // ordinaryWindow reports whether h is an app window the user can see:
-// visible, not a tool window, not this process's hidden owner, with a
-// title (the desktop and the shell's helper windows have none).
+// visible, not a tool window, not cloaked onto another virtual desktop or
+// behind a suspended packaged app, not one of the desktop's own surfaces,
+// with a title (the desktop and the shell's helper windows have none).
 func ordinaryWindow(h uintptr) bool {
 	if r, _, _ := procIsWindowVisible.Call(h); r == 0 {
 		return false
@@ -276,6 +277,9 @@ func ordinaryWindow(h uintptr) bool {
 		return false
 	}
 	if r, _, _ := procIsIconic.Call(h); r != 0 {
+		return false
+	}
+	if shellWindows[windowClass(h)] || windowCloaked(h) {
 		return false
 	}
 	return windowText(h) != ""

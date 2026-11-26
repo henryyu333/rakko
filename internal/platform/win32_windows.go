@@ -1182,6 +1182,20 @@ func windowRect(h uintptr) (winRect, bool) {
 	return r, true
 }
 
+// windowFrameRect is the window's visible frame: DWM's extended frame
+// bounds leave out the invisible resize border surrounding a standard
+// window (about 7px on each side at 100%), which GetWindowRect counts and
+// which would put the screenshot picker's outline outside the window the
+// user sees. A window DWM knows nothing about falls back to windowRect.
+func windowFrameRect(h uintptr) (winRect, bool) {
+	var r winRect
+	const dwmwaExtendedFrameBounds = 9
+	if hr, _, _ := procDwmGetWindowAttr.Call(h, dwmwaExtendedFrameBounds, uintptr(unsafe.Pointer(&r)), unsafe.Sizeof(r)); hr == 0 && r.width() > 0 && r.height() > 0 {
+		return r, true
+	}
+	return windowRect(h)
+}
+
 func windowText(h uintptr) string {
 	n, _, _ := procGetWindowTextLen.Call(h)
 	if n == 0 {

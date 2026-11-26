@@ -8155,6 +8155,16 @@ func (msgs Messages) SettingsShortcutClearHint() string {
 	return Catalog.Format(msgs.locale, "settingsShortcutClearHint", nil)
 }
 
+// SettingsShortcutClearHintWin says "Backspace 清除"
+// in the language the app shows.
+func SettingsShortcutClearHintWin() string { return In(i18n.Locale()).SettingsShortcutClearHintWin() }
+
+// SettingsShortcutClearHintWin says "Backspace 清除"
+// in the language of msgs.
+func (msgs Messages) SettingsShortcutClearHintWin() string {
+	return Catalog.Format(msgs.locale, "settingsShortcutClearHintWin", nil)
+}
+
 // SettingsShortcutBusy says "已被占用，保留原来的组合"
 // in the language the app shows.
 func SettingsShortcutBusy() string { return In(i18n.Locale()).SettingsShortcutBusy() }

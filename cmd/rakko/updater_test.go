@@ -877,3 +877,40 @@ func TestUpdateAutoRowPersistsClick(t *testing.T) {
 		t.Fatalf("settings.json kept the old value: %+v, %v", loaded, err)
 	}
 }
+
+// TestUpdateQuietReadyClearsOnANewerOffer: a background install leaves the
+// restart wording to Settings for the version it staged. When a later check
+// finds a newer version, that wording must go with the old version instead
+// of hiding the new one's panel notice — and a foreground install clears
+// the flag again for the same reason.
+func TestUpdateQuietReadyClearsOnANewerOffer(t *testing.T) {
+	p := stubUpdater(t)
+	a := updateShelf()
+	a.settings.UpdateAutoInstall = true
+	a.checkedUpdate(false, &mygo.Update{Version: "1.2.3"}, nil)
+	p.settle()
+	if !a.updateQuietReady || !a.updateInstalled {
+		t.Fatalf("quiet install left quiet=%v installed=%v", a.updateQuietReady, a.updateInstalled)
+	}
+	// The user turns the background install off; a later check finds a newer
+	// version while the old one is staged but not restarted.
+	a.settings.UpdateAutoInstall = false
+	a.checkedUpdate(false, &mygo.Update{Version: "1.2.4"}, nil)
+	if a.updateQuietReady {
+		t.Fatal("a newer offer kept the old quiet restart flag")
+	}
+	if a.updateInstalled {
+		t.Fatal("a newer offer kept updateInstalled")
+	}
+	if a.update == nil || a.update.Version != "1.2.4" {
+		t.Fatalf("offered update = %+v, want 1.2.4", a.update)
+	}
+	// A foreground install of the new version owns the panel's notice.
+	a.updateQuietReady = true
+	a.updateInstalled = false
+	a.installUpdate(false)
+	p.settle()
+	if !a.updateInstalled || a.updateQuietReady {
+		t.Fatalf("foreground install left installed=%v quiet=%v", a.updateInstalled, a.updateQuietReady)
+	}
+}

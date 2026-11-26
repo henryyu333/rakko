@@ -6,6 +6,9 @@ package platform
 // windows stand in for the enumeration rules.
 
 import (
+	"bytes"
+	"image"
+	"os"
 	"testing"
 	"time"
 )
@@ -111,5 +114,27 @@ func TestMinimizedWindowStillNamesTheApp(t *testing.T) {
 	procSetWindowPos.Call(h, hwndTop, 0, 0, 0, 0, swpNoMove|swpNoSize|swpNoActivate)
 	if got := topWindowOf(OwnPID()); got != h {
 		t.Fatalf("topWindowOf(%d) = %#x, want the minimized test window %#x", OwnPID(), got, h)
+	}
+}
+
+// TestFileIconTakesTheShellImageFactory pins the sharp-icon path: a plain
+// file's icon must come from the shell's item image factory at the size
+// asked for, which renders the .exe's real artwork. SHGetFileInfo's large
+// icon is 32×32, so a 40pt tray thumbnail was a blurry scale of it.
+func TestFileIconTakesTheShellImageFactory(t *testing.T) {
+	exe := `C:\Windows\System32\notepad.exe`
+	if _, err := os.Stat(exe); err != nil {
+		t.Skipf("no %s: %v", exe, err)
+	}
+	sharp := shellItemIconPNG(exe, 40)
+	if sharp == nil {
+		t.Skip("the shell item image factory gave nothing in this session")
+	}
+	if got := FileIcon(exe, 40); !bytes.Equal(got, sharp) {
+		t.Fatal("FileIcon did not take the shell item image factory's icon")
+	}
+	cfg, format, err := image.DecodeConfig(bytes.NewReader(sharp))
+	if err != nil || format != "png" || cfg.Width != 40 || cfg.Height != 40 {
+		t.Fatalf("factory icon = %dx%d %s, %v; want a 40×40 PNG", cfg.Width, cfg.Height, format, err)
 	}
 }

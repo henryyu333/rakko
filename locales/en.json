@@ -802,6 +802,7 @@
   "settingsShortcutRecording": "Press Keys",
   "settingsShortcutClear": "Clear Shortcut",
   "settingsShortcutClearHint": "⌫ Clear",
+  "settingsShortcutClearHintWin": "Backspace Clear",
   "settingsShortcutBusy": "In use; kept the previous shortcut",
   "settingsShortcutEscRow": "Back / Close",
   "settingsShortcutSelectRow": "Choose and Copy in the Clipboard",

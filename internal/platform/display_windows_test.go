@@ -840,3 +840,77 @@ func TestDisplayFriendlyNames(t *testing.T) {
 	// Live query should not panic on the host machine.
 	_ = DisplayFriendlyNames()
 }
+
+// TestWindowFrameRectStaysInsideGetWindowRect: DWMWA_EXTENDED_FRAME_BOUNDS
+// trims the invisible resize border GetWindowRect includes; the helper must
+// never step outside the window rectangle or come back empty, and a window
+// DWM cannot describe falls back to the rectangle itself.
+func TestWindowFrameRectStaysInsideGetWindowRect(t *testing.T) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	h := testSnapWindow(t)
+	outer, ok := windowRect(h)
+	if !ok {
+		t.Fatal("GetWindowRect failed")
+	}
+	frame, ok := windowFrameRect(h)
+	if !ok {
+		t.Fatal("windowFrameRect failed")
+	}
+	if frame.width() <= 0 || frame.height() <= 0 {
+		t.Fatalf("frame empty: %+v", frame)
+	}
+	if frame.Left < outer.Left || frame.Top < outer.Top || frame.Right > outer.Right || frame.Bottom > outer.Bottom {
+		t.Fatalf("frame %+v leaves the window rectangle %+v", frame, outer)
+	}
+}
+
+// TestDesktopShellWindowIsNotAnApp: Progman carries the Windows title
+// "Program Manager", so the old title-only filter listed the wallpaper as a
+// running app. Both lists skip it by class.
+func TestDesktopShellWindowIsNotAnApp(t *testing.T) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	var progman uintptr
+	enumTopLevel(func(h uintptr) bool {
+		if windowClass(h) == "Progman" {
+			progman = h
+			return false
+		}
+		return true
+	})
+	if progman == 0 {
+		t.Skip("no Progman: this session has no desktop shell")
+	}
+	if ordinaryWindow(progman) {
+		t.Error("the screenshot picker would list the desktop as a window")
+	}
+	if appWindow(progman) {
+		t.Error("the app switcher would list the desktop as an app")
+	}
+	for _, w := range NormalWindows() {
+		if uintptr(w.Number) == progman {
+			t.Error("NormalWindows returned the desktop")
+		}
+	}
+}
+
+// TestVisibleWindowIsNotCloaked guards the DWMWA_CLOAKED read: a wrong
+// attribute id, a wrong size or a stale pointer would report every window
+// cloaked and empty the screenshot picker and the app switcher. Windows
+// cloaks windows on its own (another virtual desktop, a suspended packaged
+// app), so there is no cloak a test can raise here.
+func TestVisibleWindowIsNotCloaked(t *testing.T) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	h := testSnapWindow(t)
+	if windowCloaked(h) {
+		t.Fatal("a visible window read as cloaked")
+	}
+	if !appWindow(h) {
+		t.Fatal("appWindow dropped a visible titled window")
+	}
+	if !ordinaryWindow(h) {
+		t.Fatal("ordinaryWindow dropped a visible titled window")
+	}
+}

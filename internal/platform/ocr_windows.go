@@ -245,18 +245,48 @@ func ocrResultLines(result uintptr) []string {
 // ocrCompactCJK removes the spaces the engine puts between Chinese and
 // Japanese characters: its words are single ideographs, so a Chinese line
 // comes back as 「框 选 文 字」 while the Mac build returns 「框选文字」.
-// Spaces inside Latin words, between Latin words and around numbers stay as
-// the engine shaped them.
+// The same spaces surround CJK punctuation — 「你好 ， 世界 ！」 — so a
+// space goes when the characters on both sides are written without word
+// spaces. Spaces inside Latin words, between Latin words and around
+// numbers stay as the engine shaped them.
 func ocrCompactCJK(s string) string {
 	runes := []rune(s)
 	out := make([]rune, 0, len(runes))
 	for i, r := range runes {
-		if r == ' ' && i > 0 && i+1 < len(runes) && isCJKIdeograph(runes[i-1]) && isCJKIdeograph(runes[i+1]) {
+		if r == ' ' && i > 0 && i+1 < len(runes) && isCJKUnspaced(runes[i-1]) && isCJKUnspaced(runes[i+1]) {
 			continue
 		}
 		out = append(out, r)
 	}
 	return string(out)
+}
+
+// isCJKUnspaced reports whether r joins its neighbours without a word
+// space: a Han, kana or hangul character, or the punctuation written with
+// them.
+func isCJKUnspaced(r rune) bool {
+	if isCJKIdeograph(r) {
+		return true
+	}
+	switch {
+	case r >= 0x3000 && r <= 0x303F: // CJK symbols and punctuation: 、。「」【】
+		return true
+	case r >= 0xFE10 && r <= 0xFE1F: // vertical forms
+		return true
+	case r >= 0xFE30 && r <= 0xFE4F: // CJK compatibility forms
+		return true
+	case r >= 0xFE50 && r <= 0xFE6F: // small form variants
+		return true
+	case r >= 0xFF00 && r <= 0xFFEF: // fullwidth forms: ，！？：；（） and kana
+		return true
+	}
+	switch r {
+	case 0x2014, 0x2026, 0x2018, 0x2019, 0x201C, 0x201D:
+		// Em dash, ellipsis and the curly quotes join CJK text the same
+		// way they join Latin text, but the engine spaces them per glyph.
+		return true
+	}
+	return false
 }
 
 // isCJKIdeograph reports whether r is written without word spaces: Han,

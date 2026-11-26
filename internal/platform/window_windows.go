@@ -350,9 +350,14 @@ func WindowOccluded(window uintptr) bool {
 	if r, _, _ := procIsIconic.Call(window); r != 0 {
 		return true
 	}
+	return windowCloaked(window)
+}
+
+// windowCloaked reports whether DWM hides the window: it belongs to another
+// virtual desktop or to a suspended packaged app, so it draws nothing here
+// even while IsWindowVisible says it is shown.
+func windowCloaked(h uintptr) bool {
 	var cloaked uint32
-	if r, _, _ := procDwmGetWindowAttr.Call(window, 14 /* DWMWA_CLOAKED */, uintptr(unsafe.Pointer(&cloaked)), 4); r == 0 && cloaked != 0 {
-		return true
-	}
-	return false
+	r, _, _ := procDwmGetWindowAttr.Call(h, 14 /* DWMWA_CLOAKED */, uintptr(unsafe.Pointer(&cloaked)), 4)
+	return r == 0 && cloaked != 0
 }

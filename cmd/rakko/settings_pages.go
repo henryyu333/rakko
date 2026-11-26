@@ -795,7 +795,7 @@ func (a *shelf) settingsShortcutRow(c *ui.Context, kind shortcutKind, label, cap
 						if canClear {
 							// Only a bound row can clear from here; an unset
 							// row says just 按下组合键.
-							settingsText(c, l.SettingsShortcutClearHint(), 11).SingleLine().
+							settingsText(c, osText(l.SettingsShortcutClearHint(), l.SettingsShortcutClearHintWin()), 11).SingleLine().
 								TextColor(settingsInk3)
 						}
 					})

@@ -509,6 +509,13 @@ func TestOCRCompactionKeepsLatinSpacing(t *testing.T) {
 		{"ra kko 123", "ra kko 123"},
 		{"選 択 肢", "選択肢"},
 		{"가 나 다", "가나다"},
+		{"你 好 ， 世 界 ！", "你好，世界！"},
+		{"框 选 、 文 字 。", "框选、文字。"},
+		{"「 引 号 」 （ 括 号 ）", "「引号」（括号）"},
+		{"第 一 — 第 二 … 完", "第一—第二…完"},
+		{"“ 引 用 ”", "“引用”"},
+		{"Hello ， world", "Hello ， world"},
+		{"Rakko 更 新 v1.19.0 已 就 绪", "Rakko 更新 v1.19.0 已就绪"},
 	}
 	for _, c := range cases {
 		if got := ocrCompactCJK(c.in); got != c.want {

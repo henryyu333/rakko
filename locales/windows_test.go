@@ -9,7 +9,7 @@ import (
 
 // macOnlyText is wording that belongs to the macOS interface: modifier
 // glyphs, Finder/Trash/Dock names, System Settings and Mac.
-var macOnlyText = regexp.MustCompile(`⌘|⌃|⌥|⇧|↩|⏎|\.app\b|访达|Finder|隔空投送|AirDrop|菜单栏|menu bar|Menu Bar|快速查看|Quick Look|废纸篓|Trash|(^|[^A-Za-z])Dock([^A-Za-z]|$)|系统设置|System Settings|Open at Login|(^|[^A-Za-z])Mac([^A-Za-z]|$)|macOS|减少透明度|Reduce Transparency`)
+var macOnlyText = regexp.MustCompile(`⌘|⌃|⌥|⇧|↩|⏎|⌫|\.app\b|访达|Finder|隔空投送|AirDrop|菜单栏|menu bar|Menu Bar|快速查看|Quick Look|废纸篓|Trash|(^|[^A-Za-z])Dock([^A-Za-z]|$)|系统设置|System Settings|Open at Login|(^|[^A-Za-z])Mac([^A-Za-z]|$)|macOS|减少透明度|Reduce Transparency`)
 
 // notchText is the shell's name on macOS. Windows calls the same shape a
 // simulated notch or the top capsule, so a shared entry that says 刘海 or

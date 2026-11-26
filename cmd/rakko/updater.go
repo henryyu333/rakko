@@ -210,6 +210,9 @@ func (a *shelf) checkedUpdate(user bool, up *mygo.Update, err error) {
 		return
 	}
 	a.update, a.updateInstalled, a.updateProgress = up, false, 0
+	// A staged quiet install of an older version no longer describes what
+	// is on offer: drop its restart wording with the version it belonged to.
+	a.updateQuietReady = false
 	log.Printf("Rakko: 发现新版本 v%s", up.Version)
 	if a.win != nil {
 		a.win.Invalidate()
@@ -418,6 +421,10 @@ func (a *shelf) installedUpdate(up *mygo.Update, err error) {
 		// background one: no toast, no capsule, no panel line.
 		a.updateQuietReady = true
 	} else {
+		// A foreground install owns the panel's own notice and the
+		// window's ready face; a quiet flag left from an earlier
+		// background download would hide them.
+		a.updateQuietReady = false
 		a.toastStatus(a.appLoc().UpdateInstalled(up.Version), time.Now().Add(8*time.Second), statusOK)
 	}
 	if os.Getenv("RAKKO_UPDATE_SELFTEST") == "1" {

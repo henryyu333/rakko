@@ -122,15 +122,20 @@ func appEnumWindows(visit func(h uintptr) bool) { enumTopLevel(visit) }
 func appEnumChildren(parent uintptr, visit func(h uintptr) bool) { enumChildren(parent, visit) }
 
 // appWindow reports whether h is a window that names a running app: it is
-// visible, is not a tool window and has a title. A minimized window still
-// counts — its app is running, the switcher lists it, and ActivateApp has
-// to find it to restore it. The screen-visible window list keeps using
-// ordinaryWindow, which drops minimized windows.
+// visible, not a tool window, not cloaked onto another virtual desktop or
+// behind a suspended packaged app, not one of the desktop's own surfaces,
+// and has a title. A minimized window still counts — its app is running,
+// the switcher lists it, and ActivateApp has to find it to restore it. The
+// screen-visible window list keeps using ordinaryWindow, which drops
+// minimized windows.
 func appWindow(h uintptr) bool {
 	if r, _, _ := procIsWindowVisible.Call(h); r == 0 {
 		return false
 	}
 	if isToolWindow(h) {
+		return false
+	}
+	if shellWindows[windowClass(h)] || windowCloaked(h) {
 		return false
 	}
 	return windowText(h) != ""
@@ -460,15 +465,21 @@ func FileIcon(path string, size int) []byte {
 	return iconFilePNG(path, size)
 }
 
-// iconFilePNG extracts a file's shell icon at the closest available size
-// and scales it to size×size. A path that does not exist still yields the
-// generic document icon, as the Mac implementation does.
+// iconFilePNG extracts a file's shell icon at the requested size and returns
+// it as PNG bytes. The shell's item image factory renders the icon the way
+// Explorer does, at the size asked for — a .exe's own icon included — where
+// SHGetFileInfo caps a large icon at 32×32 and every larger size is a blurry
+// scale of it. A path that does not exist still yields the generic document
+// icon, as the Mac implementation does, through the fallback.
 func iconFilePNG(path string, size int) []byte {
 	if size <= 0 {
 		size = 32
 	}
+	if png := shellItemIconPNG(path, size); png != nil {
+		return png
+	}
 	if strings.HasPrefix(path, "shell:") {
-		return shellItemIconPNG(path, size)
+		return nil
 	}
 	var shfi shFileInfo
 	p, err := windows.UTF16PtrFromString(path)

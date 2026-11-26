@@ -802,6 +802,7 @@
   "settingsShortcutRecording": "按下组合键",
   "settingsShortcutClear": "取消绑定",
   "settingsShortcutClearHint": "⌫ 清除",
+  "settingsShortcutClearHintWin": "Backspace 清除",
   "settingsShortcutBusy": "已被占用，保留原来的组合",
   "settingsShortcutEscRow": "返回 / 收起",
   "settingsShortcutSelectRow": "剪贴板里选择并复制",
