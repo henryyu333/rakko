@@ -523,9 +523,15 @@ func TestPasteReleasesHeldModifiers(t *testing.T) {
 		t.Fatalf("left-hand input sequence = %v", leftSeq)
 	}
 
-	// Nothing held: Ctrl down, V, Ctrl up — no extra events.
+	// Nothing held: Ctrl down, V down, V up, Ctrl up — no extra events.
 	plain := pasteEvents(func(uint16) bool { return false })
-	if len(plain) != 3 || plain[0].ki.vk != vkControl || plain[0].ki.flags != 0 {
+	want4 := []uint16{vkControl, vkV, vkV, vkControl}
+	if len(plain) != len(want4) || plain[0].ki.flags != 0 {
 		t.Fatalf("plain paste input = %+v, want Ctrl+V only", plain)
+	}
+	for i, e := range plain {
+		if e.ki.vk != want4[i] {
+			t.Fatalf("plain paste input = %+v, want %v", plain, want4)
+		}
 	}
 }
