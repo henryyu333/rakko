@@ -650,3 +650,27 @@ func TestOnboardingKeyFollowsThePrimaryButton(t *testing.T) {
 		}
 	})
 }
+
+// TestStartupPanelShowsTheWindowsGuide: only a Windows first launch opens
+// the panel on its own — a Windows return starts hidden, and macOS keeps its
+// quiet first launch behind the menu bar. An explicit show always opens it.
+func TestStartupPanelShowsTheWindowsGuide(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		show    bool
+		windows bool
+		guide   bool
+		want    bool
+	}{
+		{"windows first launch opens the guide", false, true, true, true},
+		{"windows return keeps the hidden shell", false, true, false, false},
+		{"macOS first launch stays quiet", false, false, true, false},
+		{"an explicit show opens the panel", true, false, false, true},
+		{"an explicit show wins over a finished guide", true, true, false, true},
+	} {
+		if got := startupShowsPanel(tc.show, tc.windows, tc.guide); got != tc.want {
+			t.Errorf("%s: startupShowsPanel(%v, %v, %v) = %v, want %v",
+				tc.name, tc.show, tc.windows, tc.guide, got, tc.want)
+		}
+	}
+}

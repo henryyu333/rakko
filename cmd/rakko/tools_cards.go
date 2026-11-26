@@ -277,9 +277,7 @@ func (a *shelf) toolCard(c *ui.Context, spec layout.Card, surf toolCardSurface, 
 		// accessible name when it became the corner badge.
 		title += " · " + a.toolCardSub(loc(c), def, class)
 		card.Label(title)
-		if surf != cardDesktop {
-			card.Tooltip(title)
-		}
+		card.Tooltip(title)
 	}
 	bg := fill1
 	if card.Hovered() {

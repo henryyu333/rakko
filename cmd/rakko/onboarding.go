@@ -593,3 +593,14 @@ var (
 	arrowRightSymbol = symbol(`<path d="M4 12h15M14 7l5 5-5 5"/>`)
 	folderSymbol     = symbol(`<path d="M3 6.5h6l2 2.5h10V18a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18z"/>`)
 )
+
+// startupShowsPanel reports whether the launch opens the panel instead of
+// resting in the hidden shell: a launch that asked for it, or a Windows
+// first launch. The Windows shell is the hidden simulated notch, so a fresh
+// install would otherwise face a blank desktop; the guide is what it owes
+// the user. macOS shows its notch shell with the menu bar either way, so its
+// first launch stays quiet, and a returning Windows install (guide done)
+// keeps the same quiet start.
+func startupShowsPanel(show, windows, guide bool) bool {
+	return show || (windows && guide)
+}

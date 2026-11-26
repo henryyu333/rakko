@@ -1301,3 +1301,125 @@ func TestDesktopPinsRefreshWhilePanelClosed(t *testing.T) {
 		t.Fatal("note pin did not refresh after flush while panel closed")
 	}
 }
+
+// TestPinIslandReturnCountsTheCardBox: a card dragged to the floating
+// capsule goes back even when the pointer is not inside the capsule's own
+// hover zone — the press landed somewhere in the card, so the card is what
+// has to meet the capsule, as the otter's box does.
+func TestPinIslandReturnCountsTheCardBox(t *testing.T) {
+	withPinDisplays(t, pinTestDisplays)
+	a := &shelf{dataDir: t.TempDir(), island: true,
+		notchX: 645, notchY: 0, notchW: 180, notchH: 32, y: 0, islandTop: islandTopGap}
+	a.setTools(layout.Default())
+	capsule := a.islandRect()
+	if capsule.Width != islandIdleW || capsule.Height != islandIdleH {
+		t.Fatalf("fixture: capsule = %+v", capsule)
+	}
+	// The grab sits near the card's bottom-right corner, so the card reaches
+	// up and left of the pointer.
+	frame := mygo.Rectangle{X: 640, Y: 40, Width: pinCardW, Height: pinCardH}
+	below := mygo.Point{X: capsule.X + capsule.Width/2, Y: capsule.Y + capsule.Height + notchHoverPadY + 6}
+	if pinNear(below, capsule, notchHoverPadX) {
+		t.Fatalf("fixture: pointer %+v is inside the capsule's zone %+v", below, capsule)
+	}
+	if !a.pinReturnZone(frame, below) {
+		t.Fatalf("card %+v over the capsule %+v did not count as a return from %+v", frame, capsule, below)
+	}
+
+	// The release path reads the same verdict: let go at the capsule's
+	// centre and the card rejoins the grid.
+	it := a.pinRegister(&pinItem{cardID: "zip", span: 1, cardW: pinCardW, display: 1,
+		edge: pinFree, expanded: true, grabX: pinCardW - 12, grabY: pinCardH - 12,
+		frame: mygo.Rectangle{X: 300, Y: 500, Width: pinCardW, Height: pinCardH}})
+	a.mutateTools(func(l *layout.Layout) { l.Pins = []layout.Pin{{ID: "zip", Span: 1}} })
+	centre := mygo.Point{X: capsule.X + capsule.Width/2, Y: capsule.Y + capsule.Height/2}
+	a.pinRelease(it, centre)
+	if len(a.pins) != 0 {
+		t.Fatalf("a release on the island capsule kept the card: %+v", it.frame)
+	}
+	if l := a.toolsLayout(); !slices.ContainsFunc(l.Cards, func(c layout.Card) bool { return c.ID == "zip" }) {
+		t.Fatalf("the card did not return to the grid: %+v", l.Cards)
+	}
+}
+
+// TestPinReturnWhenTheReleaseIsMissed: a press whose release never arrives
+// ends after three silent polls and settles where the pointer is, so a drag
+// that ended over the shell still returns instead of leaving the card
+// floating there pressed.
+func TestPinReturnWhenTheReleaseIsMissed(t *testing.T) {
+	withPinDisplays(t, pinTestDisplays)
+	a := &shelf{dataDir: t.TempDir(), notchX: pinTestArea.Width/2 - 90, notchY: 0, notchW: 180, notchH: 32}
+	a.setTools(layout.Default())
+	it := a.pinRegister(&pinItem{cardID: "zip", span: 1, cardW: pinCardW, display: 1,
+		edge: pinFree, expanded: true,
+		frame: mygo.Rectangle{X: 600, Y: 400, Width: pinCardW, Height: pinCardH}})
+	a.mutateTools(func(l *layout.Layout) { l.Pins = []layout.Pin{{ID: "zip", Span: 1}} })
+	tr := ui.NewTester(it.view, pinCardW, pinCardH)
+	tr.Press(0, 0)
+	tr.Move(0, -360)
+	over := mygo.Point{X: pinTestArea.Width / 2, Y: 30}
+	now := time.Now()
+	a.pinTick(now, over, true, false)
+	if !it.moving {
+		t.Fatal("drag did not start")
+	}
+	// The release event never reaches the card: two polls with the button
+	// up still wait for it, the third settles the card where it stands.
+	for i := range 2 {
+		a.pinTick(now, over, false, false)
+		if len(a.pins) != 1 {
+			t.Fatalf("poll %d settled a drag whose release had not been missed yet", i+1)
+		}
+	}
+	a.pinTick(now, over, false, false)
+	if len(a.pins) != 0 {
+		t.Fatalf("a drag whose release vanished over the notch kept the card: %+v", it.frame)
+	}
+	if l := a.toolsLayout(); !slices.ContainsFunc(l.Cards, func(c layout.Card) bool { return c.ID == "zip" }) {
+		t.Fatalf("the card did not return to the grid: %+v", l.Cards)
+	}
+}
+
+// TestPinDroppedOnTheOpenPanelReturns is the card's own put-back target: a
+// card let go over the open page belongs on the grid, not floating on top of
+// the page under the pointer that just dropped it. The otter is not a card:
+// carrying it over the open panel leaves it where it was let go.
+func TestPinDroppedOnTheOpenPanelReturns(t *testing.T) {
+	withPinDisplays(t, pinTestDisplays)
+	a := &shelf{dataDir: t.TempDir(), notchX: pinTestArea.Width/2 - 90, notchY: 0, notchW: 180, notchH: 32,
+		visible: true, x: (pinTestArea.Width - sheetW) / 2, y: 0}
+	a.setTools(layout.Default())
+	panel := a.panelDropRect()
+	if panel.Width <= 0 || panel.Height <= 0 {
+		t.Fatalf("fixture: the open panel has no box: %+v", panel)
+	}
+	it := a.pinRegister(&pinItem{cardID: "zip", span: 1, cardW: pinCardW, display: 1,
+		edge: pinFree, expanded: true,
+		frame: mygo.Rectangle{X: 600, Y: 400, Width: pinCardW, Height: pinCardH}})
+	a.mutateTools(func(l *layout.Layout) { l.Pins = []layout.Pin{{ID: "zip", Span: 1}} })
+	// The card's own edge reaches the page while the pointer is just
+	// outside it: the box test is what counts here.
+	p := mygo.Point{X: panel.X - notchHoverPadX - 4, Y: panel.Y + panel.Height/2}
+	frame := mygo.Rectangle{X: p.X - 20, Y: p.Y, Width: pinCardW, Height: pinCardH}
+	if pinNear(p, panel, notchHoverPadX) {
+		t.Fatalf("fixture: pointer %+v is inside the panel's zone %+v", p, panel)
+	}
+	if !a.pinCardReturnZone(frame, p) {
+		t.Fatalf("card %+v at the open panel %+v did not count as a return", frame, panel)
+	}
+
+	// The otter's own verdict ignores the panel: it is the grid's target,
+	// not the otter's home.
+	otter := mygo.Rectangle{X: panel.X + 40, Y: panel.Y + 80, Width: 74, Height: 96}
+	if !pinTouches(otter, panel) {
+		t.Fatalf("fixture: otter %+v does not overlap the panel %+v", otter, panel)
+	}
+	if petReturnTarget(a, otter) {
+		t.Fatalf("an otter carried over the open panel counted as put back: %+v", otter)
+	}
+
+	a.pinRelease(it, p)
+	if len(a.pins) != 0 {
+		t.Fatal("a card released on the open panel stayed pinned")
+	}
+}

@@ -243,31 +243,12 @@ func pinReleaseEdge(p mygo.Point, area mygo.Rectangle) pinEdge {
 // box does: the pointer is wherever the grab landed in the card, so a
 // centre-only test left the card short of the capsule by half its size.
 func (a *shelf) pinReturnZone(frame mygo.Rectangle, p mygo.Point) bool {
-	// An open panel is a put-back target of its own: a card let go over the
-	// page belongs on the grid, not floating on top of the page under the
-	// pointer that just dropped it.
-	if a.visible {
-		panel := a.panelDropRect()
-		if pinNear(p, panel, notchHoverPadX) ||
-			frame.X < panel.X+panel.Width+notchHoverPadX &&
-				frame.X+frame.Width > panel.X-notchHoverPadX &&
-				frame.Y < panel.Y+panel.Height+notchHoverPadY &&
-				frame.Y+frame.Height > panel.Y-notchHoverPadY {
-			return true
-		}
-	}
 	if a.island {
 		// The floating island is its own put-back target: the card goes
 		// back where the island is, which need not be the notch's column
 		// or the top of the screen.
 		r := a.islandRect()
-		if pinNear(p, r, notchHoverPadX) {
-			return true
-		}
-		return frame.X < r.X+r.Width+notchHoverPadX &&
-			frame.X+frame.Width > r.X-notchHoverPadX &&
-			frame.Y < r.Y+r.Height+notchHoverPadY &&
-			frame.Y+frame.Height > r.Y-notchHoverPadY
+		return pinNear(p, r, notchHoverPadX) || pinTouches(frame, r)
 	}
 	if p.Y >= a.notchY+notchHoverPadY+pinReturnH {
 		return false
@@ -282,6 +263,32 @@ func (a *shelf) pinReturnZone(frame mygo.Rectangle, p mygo.Point) bool {
 	}
 	half := float64(nw)/2 + notchHoverPadX
 	return abs(p.X-(nx+nw/2)) <= int(half)
+}
+
+// pinCardReturnZone is the widget card's put-back verdict: an open panel is
+// a target of its own — a card let go over the page belongs on the grid,
+// not floating on top of the page under the pointer that just dropped it —
+// and the shell's own zones answer the rest. The otter asks pinReturnZone
+// alone: the panel is the grid's, not its home, and carrying the otter over
+// an open panel must not stow it.
+func (a *shelf) pinCardReturnZone(frame mygo.Rectangle, p mygo.Point) bool {
+	if a.visible {
+		panel := a.panelDropRect()
+		if pinNear(p, panel, notchHoverPadX) || pinTouches(frame, panel) {
+			return true
+		}
+	}
+	return a.pinReturnZone(frame, p)
+}
+
+// pinTouches reports whether frame reaches into r, both padded by the
+// notch's hover margin: a dragged box counts as meeting a target with its
+// own edge, not only with the pointer inside it.
+func pinTouches(frame, r mygo.Rectangle) bool {
+	return frame.X < r.X+r.Width+notchHoverPadX &&
+		frame.X+frame.Width > r.X-notchHoverPadX &&
+		frame.Y < r.Y+r.Height+notchHoverPadY &&
+		frame.Y+frame.Height > r.Y-notchHoverPadY
 }
 
 // pinStagger spaces collapsed strips on one edge of one display
@@ -661,7 +668,7 @@ func (a *shelf) pinTick(now time.Time, p mygo.Point, down, fileDrag bool) {
 				area = it.displayRect()
 				it.frame = it.pinMoveFrame(p, area)
 				it.applyFrame()
-				returning = returning || a.pinReturnZone(it.frame, p)
+				returning = returning || a.pinCardReturnZone(it.frame, p)
 			}
 			continue
 		}
@@ -791,7 +798,7 @@ func (a *shelf) pinRelease(it *pinItem, p mygo.Point) {
 	// point by the grab gives the frame it is drawn in — where it already
 	// is, so letting go does not jog it.
 	frame := it.pinMoveFrame(p, area)
-	if a.pinReturnZone(frame, p) {
+	if a.pinCardReturnZone(frame, p) {
 		a.unpin(it, true)
 		return
 	}

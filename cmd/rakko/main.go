@@ -596,7 +596,7 @@ func (a *shelf) ready(show bool) {
 	// open the panel on the guide, which is what a new install owes the
 	// user. The notch shell on macOS is already on screen with the menu
 	// bar, so that platform keeps its quiet first launch.
-	if show || (forWindows && a.onb != nil) {
+	if startupShowsPanel(show, forWindows, a.onb != nil) {
 		a.show(false)
 	} else {
 		// Keep the same top-anchored transparent strip when idle or peeking;

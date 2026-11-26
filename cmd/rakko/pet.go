@@ -631,14 +631,11 @@ func (pet *petWindow) lockMove(dx, dy int) {
 // the shell: its own box reaching the notch's return zone, or overlapping the
 // island capsule's zone when the shell is a floating capsule. The release and
 // the 松开收进刘海 pill read this one answer, so a hint never promises what
-// a release will not do.
+// a release will not do. The open panel is not one of the otter's homes: it
+// belongs to the grid, so a card dropped on it returns while the otter stays.
 func petReturnTarget(a *shelf, frame mygo.Rectangle) bool {
 	if a.island {
-		r := a.islandRect()
-		return frame.X < r.X+r.Width+notchHoverPadX &&
-			frame.X+frame.Width > r.X-notchHoverPadX &&
-			frame.Y < r.Y+r.Height+notchHoverPadY &&
-			frame.Y+frame.Height > r.Y-notchHoverPadY
+		return pinTouches(frame, a.islandRect())
 	}
 	centre := mygo.Point{X: frame.X + frame.Width/2, Y: frame.Y + frame.Height/2}
 	return a.pinReturnZone(frame, centre)
