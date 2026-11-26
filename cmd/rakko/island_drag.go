@@ -93,11 +93,23 @@ func clampIslandSpot(s islandSpot, bounds mygo.Rectangle, defTop int) islandSpot
 // islandSpotKey is the settings key one display's spot lives under.
 func islandSpotKey(display int64) string { return strconv.FormatInt(display, 10) }
 
+// islandWorkInset is the row the island must clear at the top of its
+// display: a taskbar docked there shrinks the work area from the top edge,
+// and the capsule rests below it rather than over it. macOS keeps its
+// capsule in the menu bar, which is also what its work area excludes, so
+// only Windows moves down.
+func (a *shelf) islandWorkInset() int {
+	if !a.island || !forWindows {
+		return 0
+	}
+	return workTopInset(a.dispBounds, a.dispWork)
+}
+
 // defaultIslandSpot is where the island sits when the user never moved it:
 // centred on the hardware notch (or the display), on the row the style puts
-// it on. Display-relative.
+// it on, under a top taskbar. Display-relative.
 func (a *shelf) defaultIslandSpot() islandSpot {
-	return islandSpot{Centre: a.anchorCenterX() - a.dispBounds.X, Top: a.islandTop}
+	return islandSpot{Centre: a.anchorCenterX() - a.dispBounds.X, Top: a.islandTop + a.islandWorkInset()}
 }
 
 // islandSpotNow is the island's current place on this display.
@@ -127,16 +139,16 @@ func (a *shelf) workArea() mygo.Rectangle {
 // behind the user's back.
 func (a *shelf) placeIslandAxis() {
 	a.islandDX, a.islandDY = 0, 0
-	a.y = a.dispBounds.Y
+	a.y = a.dispBounds.Y + a.islandWorkInset()
 	if !a.island {
 		return
 	}
 	pos, ok := a.savedIslandSpot()
+	def := a.defaultIslandSpot()
 	if !ok {
 		return
 	}
-	spot := clampIslandSpot(islandSpot{Centre: pos.X, Top: pos.Y}, a.dispBounds, a.islandTop)
-	def := a.defaultIslandSpot()
+	spot := clampIslandSpot(islandSpot{Centre: pos.X, Top: pos.Y}, a.dispBounds, def.Top)
 	a.islandDX, a.islandDY = spot.Centre-def.Centre, spot.Top-def.Top
 	a.y += a.islandDY
 }
@@ -149,15 +161,15 @@ func (a *shelf) moveIslandTo(centre, top int) {
 	if !a.island {
 		return
 	}
-	spot := clampIslandSpot(islandSpot{Centre: centre - a.dispBounds.X, Top: top - a.dispBounds.Y},
-		a.dispBounds, a.islandTop)
 	def := a.defaultIslandSpot()
+	spot := clampIslandSpot(islandSpot{Centre: centre - a.dispBounds.X, Top: top - a.dispBounds.Y},
+		a.dispBounds, def.Top)
 	dx, dy := spot.Centre-def.Centre, spot.Top-def.Top
 	if dx == a.islandDX && dy == a.islandDY {
 		return
 	}
 	a.islandDX, a.islandDY = dx, dy
-	a.y = a.dispBounds.Y + dy
+	a.y = a.dispBounds.Y + a.islandWorkInset() + dy
 	a.refreshBarrier()
 	// The held envelope was measured around the old row; it must not span
 	// both places after the panel lands at this one.
@@ -382,7 +394,7 @@ func (a *shelf) panelDragTick(p mygo.Point, down bool) bool {
 	w, h := a.panelBox()
 	up := press.up
 	spot := panelDragSpot(p.X-press.grabX, p.Y-press.grabY, up, int(w), int(h),
-		a.workArea(), a.dispBounds, a.islandTop)
+		a.workArea(), a.dispBounds, a.defaultIslandSpot().Top)
 	centre, top := a.dispBounds.X+spot.Centre, a.dispBounds.Y+spot.Top
 	if down {
 		if !press.moved {

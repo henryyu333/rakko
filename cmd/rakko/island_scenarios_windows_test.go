@@ -89,3 +89,19 @@ func TestKeyboardBandWaitsOnWindows(t *testing.T) {
 		t.Fatalf("notch style level %v, want the keyboard band", got)
 	}
 }
+
+// A taskbar docked at the top shrinks the work area from the display's top
+// edge; the island rests below it instead of covering it, and a place saved
+// above the taskbar is pulled back down.
+func TestIslandRestsBelowATopTaskbar(t *testing.T) {
+	a := windowsIslandShelf()
+	a.placeIslandAxis()
+	if got, want := a.islandRect().Y, 32+islandTopGap; got != want {
+		t.Fatalf("island row %d, want %d below the taskbar", got, want)
+	}
+	a.settings.IslandPos = map[string]settings.IslandPos{islandSpotKey(a.dispID): {X: 300, Y: 5}}
+	a.placeIslandAxis()
+	if got, want := a.islandRect().Y, 32+islandTopGap; got != want {
+		t.Fatalf("a place saved above the taskbar was kept: row %d, want %d", got, want)
+	}
+}

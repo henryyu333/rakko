@@ -202,6 +202,7 @@ func (a *shelf) frameRoom(expW, expH float32) (w, h int) {
 type islandDisplay struct {
 	ID       int64
 	Bounds   mygo.Rectangle
+	Work     mygo.Rectangle // visible frame: a top taskbar pushes the capsule down
 	HasNotch bool
 	NotchH   int
 }
@@ -210,6 +211,16 @@ type islandDisplay struct {
 type idlePlacement struct {
 	DisplayID int64
 	Frame     mygo.Rectangle
+}
+
+// workTopInset is how far a display's visible frame starts below its top
+// edge: a taskbar docked at the top. A shell resting on the display's top
+// edge sits under it instead of covering it.
+func workTopInset(bounds, work mygo.Rectangle) int {
+	if work.Width <= 0 || work.Height <= 0 {
+		return 0
+	}
+	return max(0, work.Y-bounds.Y)
 }
 
 // idleTop is the row an idle capsule rests on for a display: the island's
@@ -250,6 +261,11 @@ func idleIslandPlacements(displays []islandDisplay, current int64, style setting
 			continue
 		}
 		top := idleTop(d, style)
+		if forWindows {
+			// The menu bar on macOS is the island's own row; a Windows
+			// taskbar is something to rest below.
+			top += workTopInset(d.Bounds, d.Work)
+		}
 		frame := mygo.Rectangle{
 			X:      d.Bounds.X + (d.Bounds.Width-islandIdleW)/2,
 			Y:      d.Bounds.Y + top,
