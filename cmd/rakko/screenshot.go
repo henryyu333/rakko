@@ -984,6 +984,13 @@ func (s *shotSession) keyDown(ev ui.InputEvent) bool {
 				s.invalidate()
 			}
 			return true
+		case ui.KeyY:
+			// Windows users redo with Ctrl+Y; Cmd+Y on the Mac does the
+			// same, so one branch serves both.
+			if s.redoMark() {
+				s.invalidate()
+			}
+			return true
 		}
 	}
 	if !s.hasSel {

@@ -1664,3 +1664,25 @@ func TestShotMagnifierOnlyWhileSelecting(t *testing.T) {
 		t.Fatal("magnifier showed while annotating")
 	}
 }
+
+// TestShotCtrlYRedoes: Windows users redo with Ctrl+Y, and Cmd+Y does the
+// same on the Mac; both reach the annotation history the toolbar's redo
+// button reads.
+func TestShotCtrlYRedoes(t *testing.T) {
+	s := shotTestSession(t, mygo.Rectangle{Width: 300, Height: 200}, 300, 200)
+	s.hasSel = true
+	s.sel = mygo.Rectangle{X: 10, Y: 10, Width: 220, Height: 120}
+	s.hist.snap()
+	s.hist.push(shotAnnotation{tool: shotToolRect, text: "one"})
+	s.hist.snap()
+	s.hist.push(shotAnnotation{tool: shotToolRect, text: "two"})
+	if !s.hist.undoLast() {
+		t.Fatal("nothing to undo")
+	}
+	if !s.keyDown(ui.InputEvent{Kind: ui.InputKeyDown, Key: ui.KeyY, Mods: ui.Cmd}) {
+		t.Fatal("Ctrl+Y was not handled")
+	}
+	if len(s.hist.annots) != 2 || s.hist.annots[1].text != "two" {
+		t.Fatalf("Ctrl+Y redid to %+v, want two marks", s.hist.annots)
+	}
+}
