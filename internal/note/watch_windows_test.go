@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -87,6 +88,47 @@ func TestWatchFileReportsARegistrationFailure(t *testing.T) {
 // TestCloseWaitsForTheReadInFlight: Close returns only after the pending
 // read completed and its buffer was released, and no callback runs after
 // it; a second close does nothing.
+// TestCloseDoesNotWaitForABlockedNotify: Close runs on the window loop,
+// and a caller's notify hops to that loop with RunOnMain. A notify waiting
+// for the loop must not hold Close up, or the two wait on each other and
+// the app stops answering hotkeys.
+func TestCloseDoesNotWaitForABlockedNotify(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "note.md")
+	started := make(chan struct{})
+	releaseCh := make(chan struct{})
+	var releaseOnce sync.Once
+	unblock := func() { releaseOnce.Do(func() { close(releaseCh) }) }
+	defer unblock()
+	var once sync.Once
+	w, err := WatchFile(path, func() {
+		once.Do(func() { close(started) })
+		<-releaseCh
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("blocked\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the save was not reported")
+	}
+	closed := make(chan struct{})
+	go func() {
+		w.Close()
+		close(closed)
+	}()
+	select {
+	case <-closed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Close waited for the notify callback")
+	}
+	unblock()
+	w.Close() // already closed: a no-op
+}
+
 func TestCloseWaitsForTheReadInFlight(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "note.md")
 	var hits atomic.Int32

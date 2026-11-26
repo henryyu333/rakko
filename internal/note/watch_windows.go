@@ -29,10 +29,19 @@ var watchArm = (*Watch).arm
 // A note that is replaced or deleted keeps its watch: the folder is what is
 // watched, so the note coming back is seen too.
 type Watch struct {
-	dir      windows.Handle
-	stop     windows.Handle
-	io       windows.Handle
-	finished chan struct{}
+	dir       windows.Handle
+	stop      windows.Handle
+	io        windows.Handle
+	finished  chan struct{}
+	delivered chan struct{}
+
+	// pending coalesces the batches waiting for the notify goroutine, and
+	// quit stops it. The read loop only signals; it never calls notify
+	// itself, so Close cannot wait on a callback that is waiting for the
+	// window loop Close is running on.
+	pending  chan struct{}
+	quit     chan struct{}
+	quitOnce sync.Once
 
 	// buf and ol belong to the one read in flight: the kernel writes into
 	// both until that read completes, so neither is reused or released
@@ -75,24 +84,33 @@ func WatchFile(path string, notify func()) (*Watch, error) {
 		return nil, err
 	}
 	w := &Watch{
-		dir:      dir,
-		stop:     stop,
-		io:       ioEvent,
-		finished: make(chan struct{}),
-		buf:      make([]byte, 64<<10),
+		dir:       dir,
+		stop:      stop,
+		io:        ioEvent,
+		finished:  make(chan struct{}),
+		delivered: make(chan struct{}),
+		pending:   make(chan struct{}, 1),
+		quit:      make(chan struct{}),
+		buf:       make([]byte, 64<<10),
 	}
 	ready := make(chan error, 1)
-	go w.run(notify, ready)
+	go w.run(ready)
+	go w.deliver(notify)
 	if err := <-ready; err != nil {
 		<-w.finished
+		<-w.delivered
 		return nil, err
 	}
 	return w, nil
 }
 
-// Close stops the watcher. notify is not called again after it returns,
-// and the pending read has completed by then, so nothing the kernel owns
-// outlives the watch.
+// Close stops the watcher. The pending read has completed when it returns,
+// so nothing the kernel owns outlives the watch; a notify call already
+// running may still finish, and no new one starts.
+//
+// It waits for the read loop, never for notify: notify is the caller's
+// code, and it usually hops to the window loop with RunOnMain — the very
+// goroutine that may be closing the watch.
 func (w *Watch) Close() {
 	w.mu.Lock()
 	if !w.closed {
@@ -108,8 +126,9 @@ func (w *Watch) Close() {
 // run arms one read, waits for it, and reports the changes; the read loop
 // is the only thing that submits or cancels a request, so Close can neither
 // race a submission nor close a buffer the kernel still owns.
-func (w *Watch) run(notify func(), ready chan<- error) {
+func (w *Watch) run(ready chan<- error) {
 	defer w.release()
+	defer w.stopDelivery()
 	if err := watchArm(w); err != nil {
 		ready <- err
 		return
@@ -145,12 +164,39 @@ func (w *Watch) run(notify func(), ready chan<- error) {
 			// so there is nothing to cancel.
 			return
 		}
-		notify()
+		select {
+		case w.pending <- struct{}{}:
+		default: // a batch is already waiting: one notify covers both
+		}
 		if err := watchArm(w); err != nil {
 			return
 		}
 	}
 }
+
+// deliver runs the caller's notify for each batch the read loop reports,
+// on a goroutine of its own: Close must not be able to wait on it.
+func (w *Watch) deliver(notify func()) {
+	defer close(w.delivered)
+	for {
+		select {
+		case <-w.quit:
+			return
+		case <-w.pending:
+			select {
+			case <-w.quit:
+				return
+			default:
+			}
+			notify()
+		}
+	}
+}
+
+// stopDelivery stops the notify goroutine; a call already running is not
+// interrupted. It runs once, whether the read loop ended by Close or by a
+// read it could not re-arm.
+func (w *Watch) stopDelivery() { w.quitOnce.Do(func() { close(w.quit) }) }
 
 // arm submits one read into the watcher's buffer. A request left pending is
 // the normal answer, so only a request that could not be started is an
