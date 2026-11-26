@@ -1464,6 +1464,10 @@ func (b *boardUI) handleCanvasInput(c *ui.Context, ev ui.InputEvent) bool {
 				b.invalidate()
 				return true
 			}
+			// Every modified key stops here: an unbound Ctrl+S or a Ctrl+V
+			// whose clipboard had nothing to paste must not fall through
+			// and switch the tool under the bare key.
+			return true
 		}
 		if ev.Mods&ui.Alt != 0 && ev.Mods&(ui.Cmd|ui.Ctrl) == 0 && !b.locked {
 			switch ev.Key {

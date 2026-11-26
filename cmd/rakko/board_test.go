@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
@@ -288,6 +289,29 @@ func TestBoardPanAndZoomInput(t *testing.T) {
 	view.Frame()
 	if b.ed.Cam().Z != 1.0 {
 		t.Fatalf("zoom after reset = %v, want 1.0", b.ed.Cam().Z)
+	}
+}
+
+// TestBoardModifiedKeysDoNotSwitchTools covers the Ctrl/Cmd pass-through:
+// a shortcut the canvas has no action for (Ctrl+S, Ctrl+F, Ctrl+R, Ctrl+T,
+// Ctrl+Q) and a Ctrl+D with nothing selected used to fall through into the
+// bare-key branch and switch the tool, so a half-learned shortcut changed
+// what the next click drew.
+func TestBoardModifiedKeysDoNotSwitchTools(t *testing.T) {
+	for _, mods := range []ui.Modifiers{ui.Cmd, ui.Ctrl} {
+		for _, key := range []ui.Key{ui.KeyS, ui.KeyF, ui.KeyR, ui.KeyT, ui.KeyQ, ui.KeyD} {
+			t.Run(fmt.Sprintf("mods-%d-key-%d", mods, key), func(t *testing.T) {
+				_, b := boardTestShelf(t)
+				b.ed.SetTool(editor.ToolSelect)
+				ev := ui.InputEvent{Kind: ui.InputKeyDown, Key: key, Mods: mods}
+				if !b.handleCanvasInput(nil, ev) {
+					t.Fatalf("modified key %v fell through", key)
+				}
+				if b.ed.Tool != editor.ToolSelect {
+					t.Fatalf("modified key %v switched the tool to %v", key, b.ed.Tool)
+				}
+			})
+		}
 	}
 }
 
