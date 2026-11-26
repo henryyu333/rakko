@@ -18,8 +18,13 @@ import (
 )
 
 // testSnapWindow creates the visible STATIC window the snap calls act on.
+// Creating, moving and destroying it must all happen on one thread: a move
+// or a destroy posted to another thread is asynchronous by design, and the
+// tests read the immediate result. The lock lives until the test ends.
 func testSnapWindow(t *testing.T) uintptr {
 	t.Helper()
+	runtime.LockOSThread()
+	t.Cleanup(runtime.UnlockOSThread)
 	class, _ := windows.UTF16PtrFromString("STATIC")
 	title, _ := windows.UTF16PtrFromString("rakko-snap-test")
 	// WS_OVERLAPPEDWINDOW: caption, thick frame, system menu.
@@ -41,11 +46,6 @@ func testSnapWindow(t *testing.T) uintptr {
 }
 
 func TestAppWindowFrameAndMove(t *testing.T) {
-	// The window must belong to the thread that moves it: a move posted to
-	// another thread is asynchronous by design, and this test checks the
-	// immediate result.
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
 	h := testSnapWindow(t)
 	defer func() { procDestroyWindow.Call(h) }()
 	// The calls under test take the handle as an AppWindow: the hit test is

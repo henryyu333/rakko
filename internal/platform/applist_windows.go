@@ -303,9 +303,12 @@ func shellItemIconPNG(parsingName string, size int) []byte {
 	}
 	// The factory is a shell COM object: it needs an initialized apartment
 	// on the calling thread. Icon extraction runs on worker threads as
-	// well as the main one, so enter an apartment here and leave the
-	// thread as this call found it.
-	leave, _ := enterCOMApartment(2 /* COINIT_APARTMENTTHREADED */)
+	// well as the main one, so keep the goroutine on one thread from the
+	// apartment's init through its release, and leave the thread as this
+	// call found it.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	leave, _ := enterCOMApartment(coinitApartmentThreaded)
 	defer leave()
 	name16 := windows.StringToUTF16(parsingName)
 	var factory unsafe.Pointer
