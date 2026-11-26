@@ -315,6 +315,69 @@ func TestBoardModifiedKeysDoNotSwitchTools(t *testing.T) {
 	}
 }
 
+// TestBoardEditingKeysKeepTheirMeaningWithModifiers is the other half of
+// the modifier guard: deleting, nudging, editing and dismissing are not
+// tool letters, so Cmd/Ctrl must not swallow them like it does Ctrl+S.
+func TestBoardEditingKeysKeepTheirMeaningWithModifiers(t *testing.T) {
+	for _, mods := range []ui.Modifiers{ui.Cmd, ui.Ctrl} {
+		t.Run(fmt.Sprintf("mods-%d", mods), func(t *testing.T) {
+			_, b := boardTestShelf(t)
+			rect := func() doc.ID {
+				b.ed.SetGeoTool("rectangle")
+				b.ed.PointerDown(200, 120, 0, 1, editor.Mods{}, 0.1)
+				b.ed.PointerMove(320, 260, editor.Mods{}, 0.12)
+				b.ed.PointerUp(320, 260, editor.Mods{}, 0.14)
+				sel := b.ed.Selection()
+				if len(sel) != 1 {
+					t.Fatalf("the rectangle was not selected: %v", sel)
+				}
+				return sel[0]
+			}
+
+			// Cmd/Ctrl+Delete removes the selection the way Delete does.
+			rect()
+			if !b.handleCanvasInput(nil, ui.InputEvent{Kind: ui.InputKeyDown, Key: ui.KeyDelete, Mods: mods}) {
+				t.Fatalf("mods %d + Delete fell through", mods)
+			}
+			if len(b.ed.Selection()) != 0 || len(b.ed.Children(b.ed.Page)) != 0 {
+				t.Fatalf("mods %d + Delete left %d selected of %d shapes",
+					mods, len(b.ed.Selection()), len(b.ed.Children(b.ed.Page)))
+			}
+
+			// An arrow still nudges the selection.
+			rect()
+			before, ok := b.ed.SelectionBox()
+			if !ok {
+				t.Fatal("the rectangle has no box")
+			}
+			if !b.handleCanvasInput(nil, ui.InputEvent{Kind: ui.InputKeyDown, Key: ui.KeyRight, Mods: mods}) {
+				t.Fatalf("mods %d + Right fell through", mods)
+			}
+			after, ok := b.ed.SelectionBox()
+			if !ok || after.X <= before.X {
+				t.Fatalf("mods %d + Right did not nudge: %+v -> %+v", mods, before, after)
+			}
+
+			// Enter opens the shape's text for editing.
+			if !b.handleCanvasInput(nil, ui.InputEvent{Kind: ui.InputKeyDown, Key: ui.KeyEnter, Mods: mods}) {
+				t.Fatalf("mods %d + Enter fell through", mods)
+			}
+			if b.ed.Editing == "" {
+				t.Fatalf("mods %d + Enter did not start editing", mods)
+			}
+
+			// Escape dismisses the edit; the shape it was made on stays
+			// selected, as it does without a modifier.
+			if !b.handleCanvasInput(nil, ui.InputEvent{Kind: ui.InputKeyDown, Key: ui.KeyEscape, Mods: mods}) {
+				t.Fatalf("mods %d + Escape fell through", mods)
+			}
+			if b.ed.Editing != "" {
+				t.Fatalf("mods %d + Escape left editing=%q", mods, b.ed.Editing)
+			}
+		})
+	}
+}
+
 func TestBoardPapersThemesAndScreenshots(t *testing.T) {
 	a, b := boardTestShelf(t)
 	view := ui.NewTester(a.boardView, 960, 620)

@@ -1464,10 +1464,15 @@ func (b *boardUI) handleCanvasInput(c *ui.Context, ev ui.InputEvent) bool {
 				b.invalidate()
 				return true
 			}
-			// Every modified key stops here: an unbound Ctrl+S or a Ctrl+V
-			// whose clipboard had nothing to paste must not fall through
-			// and switch the tool under the bare key.
-			return true
+			// Every other modified key stops here: an unbound Ctrl+S or a
+			// Ctrl+V whose clipboard had nothing to paste must not fall
+			// through and switch the tool under the bare key. The keys the
+			// bare handlers own keep their meaning with Cmd/Ctrl held:
+			// Cmd+Delete clears a selection, Cmd+arrow nudges it, Escape
+			// dismisses and Cmd+Enter edits.
+			if !boardEditingKey(ev.Key) {
+				return true
+			}
 		}
 		if ev.Mods&ui.Alt != 0 && ev.Mods&(ui.Cmd|ui.Ctrl) == 0 && !b.locked {
 			switch ev.Key {
@@ -1683,6 +1688,19 @@ func (b *boardUI) handleCanvasInput(c *ui.Context, ev ui.InputEvent) bool {
 			b.invalidate()
 			return true
 		}
+	}
+	return false
+}
+
+// boardEditingKey reports whether a Cmd/Ctrl key is one the bare handlers
+// own as well: the modifier guard lets these past it so deleting, nudging,
+// editing and dismissing keep working with the modifier held, while the
+// unbound letters stay swallowed.
+func boardEditingKey(key ui.Key) bool {
+	switch key {
+	case ui.KeyBackspace, ui.KeyDelete, ui.KeyLeft, ui.KeyRight,
+		ui.KeyUp, ui.KeyDown, ui.KeyEnter, ui.KeyEscape:
+		return true
 	}
 	return false
 }
