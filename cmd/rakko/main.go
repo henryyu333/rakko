@@ -590,7 +590,13 @@ func (a *shelf) ready(show bool) {
 			a.notice(a.appLoc().StartupBackupFailed(merr.Error()))
 		}
 	}
-	if show {
+	// A Windows install rests as the hidden simulated notch (the capsule
+	// only appears when the pointer reaches the top edge), so a first
+	// launch would leave the desktop blank and look like nothing started:
+	// open the panel on the guide, which is what a new install owes the
+	// user. The notch shell on macOS is already on screen with the menu
+	// bar, so that platform keeps its quiet first launch.
+	if show || (forWindows && a.onb != nil) {
 		a.show(false)
 	} else {
 		// Keep the same top-anchored transparent strip when idle or peeking;
