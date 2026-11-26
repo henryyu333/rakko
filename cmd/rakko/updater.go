@@ -207,6 +207,13 @@ func (a *shelf) checkedUpdate(user bool, up *mygo.Update, err error) {
 	a.updateLastVersion = up.Version
 	// An install in flight or a version already swapped in keeps its state.
 	if a.updateInstalling || (a.updateInstalled && a.update != nil && a.update.Version == up.Version) {
+		if user && a.updateInstalled && a.update != nil {
+			// Asking again for the version already staged answers with the
+			// ready face: the window opened on 正在检查更新 must not stay
+			// there a version behind it is already downloaded.
+			a.updateSetStage(updateStageReady)
+			a.openUpdateWindow()
+		}
 		return
 	}
 	a.update, a.updateInstalled, a.updateProgress = up, false, 0
@@ -305,8 +312,7 @@ func (a *shelf) updateArmPrompt(stage updateStage) {
 
 // updateFirePrompt opens the window the deferral armed, once: the found
 // face still asks updateShouldPrompt (settings may have changed while it
-// waited), the ready face of a silent install only needs the update to
-// still be staged and unprompted.
+// waited).
 func (a *shelf) updateFirePrompt() {
 	stage := a.updatePromptPending
 	a.updatePromptPending, a.updatePromptAt = updateStageChecking, time.Time{}
@@ -317,9 +323,6 @@ func (a *shelf) updateFirePrompt() {
 		return
 	}
 	if stage == updateStageFound && !updateShouldPrompt(a.update, a.settings, time.Now()) {
-		return
-	}
-	if stage == updateStageReady && !a.updateInstalled {
 		return
 	}
 	a.updatePrompted = a.update.Version

@@ -963,7 +963,9 @@ func (a *shelf) settingsAboutPage(c *ui.Context) {
 			settingsText(c, text, 12).SingleLine().TextColor(ink2).Margin(4, 0, 0, 0)
 		}
 		ui.Row(c.Key("about-actions")).AlignItems(ui.Center).Justify(ui.Center).Gap(8).Margin(14, 0, 0, 0).Children(func() {
-			busy := a.updateChecking || a.updateInstalling || a.updateUnavailableReason() != ""
+			// A staged version has nothing to check: the ready row below
+			// owns the restart, and a check would only answer with it.
+			busy := a.updateChecking || a.updateInstalling || a.updateInstalled || a.updateUnavailableReason() != ""
 			settingsButton(c, "update", l.SettingsUpdateCheckRow(), false, func() { a.checkUpdates(true) }).
 				Disabled(busy)
 			settingsButton(c, "data", l.SettingsOpenDataFolder(), false, func() {
@@ -1021,8 +1023,6 @@ func (a *shelf) updateCaption(locale string, region i18n.Region, l locales.Messa
 			return l.UpdateDownloadingPercent(a.update.Version, int(a.updateProgress*100))
 		}
 		return l.UpdateDownloading(a.update.Version)
-	case a.updateInstalled && a.update != nil:
-		return l.UpdateInstalled(a.update.Version)
 	case a.updateLastCheck.IsZero():
 		return l.SettingsUpdateNever()
 	}

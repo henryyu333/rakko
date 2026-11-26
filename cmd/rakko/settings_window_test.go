@@ -775,6 +775,27 @@ func TestSettingsViewLiveTogglesSave(t *testing.T) {
 	}
 }
 
+// A staged version leaves the 检查更新 button with nothing to ask: it is
+// disabled, and the ready row beside it owns the restart.
+func TestUpdateCheckButtonStopsWhileStaged(t *testing.T) {
+	stubSettingsSeams(t, false, nil, nil)
+	p := stubUpdater(t)
+	a, view := newSettingsShelf(t)
+	l := locales.In("zh-Hans")
+	openSettingsPage(t, view, "关于")
+	if info, ok := view.AccessByRole(ui.RoleButton, l.SettingsUpdateCheckRow()); !ok || info.Disabled {
+		t.Fatalf("the check button started disabled: %+v, found %v", info, ok)
+	}
+	a.update, a.updateInstalled = &mygo.Update{Version: "9.9.9"}, true
+	view.Frame()
+	if info, ok := view.AccessByRole(ui.RoleButton, l.SettingsUpdateCheckRow()); !ok || !info.Disabled {
+		t.Fatalf("the check button stayed live with a staged version: %+v, found %v", info, ok)
+	}
+	if p.checkCount() != 0 {
+		t.Fatal("the staged version still started a check")
+	}
+}
+
 // The ready update shows in 关于 → 更新 with its restart button, and it does
 // not appear under the search bar.
 func TestUpdateReadinessLivesInSettings(t *testing.T) {

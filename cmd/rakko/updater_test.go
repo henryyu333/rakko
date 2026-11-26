@@ -252,6 +252,26 @@ func TestCheckedUpdateKeepsInFlightInstall(t *testing.T) {
 	}
 }
 
+// A manual check for the version sitting on disk answers with the ready
+// face: the window it opened on 正在检查更新 must not stay there when the
+// offer is the one already downloaded.
+func TestCheckedUpdateManualAfterStagedInstallShowsReady(t *testing.T) {
+	stubUpdater(t)
+	a := updateShelf()
+	up := &mygo.Update{Version: "1.2.3"}
+	a.update, a.updateInstalled, a.updateChecking = up, true, true
+	a.updateSetStage(updateStageChecking)
+	a.openUpdateWindow()
+	a.checkedUpdate(true, &mygo.Update{Version: "1.2.3"}, nil)
+	if !a.updateWinOpen() || a.updateWinStage != updateStageReady {
+		t.Fatalf("manual check on a staged version left stage = %v, open = %v",
+			a.updateWinStage, a.updateWinOpen())
+	}
+	if a.update != up || !a.updateInstalled {
+		t.Fatal("the staged version lost its state")
+	}
+}
+
 // An up-to-date check while an install runs or a version waits for the
 // restart keeps the update: the menu and the settings row report the
 // version those paths are working with.
@@ -276,8 +296,16 @@ func TestCheckedUpdateNilKeepsInstallState(t *testing.T) {
 	if a.update != up || !a.updateInstalled {
 		t.Fatal("an up-to-date check dropped the staged update")
 	}
-	if got := a.updateCaption("zh-Hans", i18n.Region{}, locales.In("zh-Hans")); !strings.Contains(got, "1.2.3") {
-		t.Fatalf("caption = %q, want the staged version", got)
+	// The staged version speaks from the ready row beside this one: the
+	// last-check row keeps reporting the check instead of saying the same
+	// thing twice.
+	l := locales.In("zh-Hans")
+	got := a.updateCaption("zh-Hans", i18n.Region{}, l)
+	if strings.Contains(got, l.UpdateInstalled("1.2.3")) {
+		t.Fatalf("caption = %q, want the last check alone", got)
+	}
+	if !strings.Contains(got, l.SettingsUpdateResultLatest()) {
+		t.Fatalf("caption = %q, want the check's result", got)
 	}
 }
 
