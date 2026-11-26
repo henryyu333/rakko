@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.18.9
+
+- **快捷键取消绑定**：在「设置 → 快捷键」里，鼠标停在已设快捷键的行上时，键帽左侧会出现 `×` 清除按钮，点一下即可取消绑定并注销热键；录键状态下同样支持按 `⌫` 或点 `×` 清除，清空后的默认快捷键在重启后也会保持未设置状态。
+- **截图标注与选区精修**：步骤序号按填充色亮度自动切换黑/白字色（白底和黄底同样清晰），随线条粗细提供三档尺寸并加入外环与投影，两位数自动微缩不溢出，撤销和重做后会顺着当前最大序号继续编号；选区改用带微阴影的圆形控制点，并新增自动避让屏幕边缘和工具栏的 `W × H` 实际像素角标；工具栏加入悬浮投影，选中色点改用紧致的双环样式。
+- **剪贴板与托盘打磨**：剪贴板搜索框增加聚焦蓝边与一键清空 `×`（清空后保留输入焦点），命中关键词自动高亮，纯色值（`#RGB` / `#RRGGBB` / `rgb()`）直接显示对应色块，鼠标悬停行右侧直接提供置顶与删除按钮，左侧序号改用紧凑微标；托盘未置顶卡片悬停右上角出现独立 `×` 可一键移除（置顶卡片保持保护），选中态更柔和。
+- **便利贴与空态细节**：便利贴置顶开启时改用亮蓝实心图钉，顶栏下增加细分隔线、未激活按钮在鼠标离开时静默淡出，正文顶部留出更舒适的呼吸留白；各页面空态图标升级为带微光的圆角卡片座。
+- **更新检查优化**：应用内更新检查优先经由官网更新服务获取签名清单，网络异常时自动回退到 GitHub Release；签名与校验机制不变。
+
+### English
+
+- **Unbind shortcuts**: hovering a bound row in Settings → Shortcuts reveals an `×` button beside the keycaps to unbind it and release the hotkey immediately; while recording, you can also press Backspace or click `×` to clear it, and cleared defaults stay unbound across restarts.
+- **Screenshot annotations & selection polish**: step number badges automatically switch between dark and light text based on fill luminance (keeping white and yellow badges legible), scale across three sizes with an outer ring and drop shadow, shrink cleanly for two-digit numbers, and resume numbering accurately after undo/redo; selection handles are now circular with subtle shadows, joined by a live `W × H` pixel badge that avoids screen edges and toolbars; the floating toolbar gains deeper elevation and a tighter double-ring selected color swatch.
+- **Clipboard & tray polish**: the clipboard search bar now shows a focus border and a one-click `×` clear button that keeps focus, highlights matching query text, previews solid color values (`#RGB`, `#RRGGBB`, `rgb()`) as swatches, exposes pin and delete actions on row hover, and uses compact index badges; unpinned tray tiles reveal a top-right `×` on hover for one-click removal while pinned tiles stay protected, with a softer selection style.
+- **Sticky notes & empty states**: pinned sticky notes display a bright blue solid pin, a hairline divider separates the bar from the body, inactive bar buttons softly fade when idle, and the text area gains top breathing room; empty-state icons now sit inside a subtle glowing card plate.
+- **Update checks**: in-app update checks now query the website update mirror first and automatically fall back to GitHub Releases if unreachable, keeping the same signature and checksum verification.
+
 ## 1.18.8
 
 - **交互与控件修复**：拖动音乐进度条或音量条中途失焦、手势被打断时，不再把音量误设为静音或让进度跳回开头；设置里的确认按钮滑出按钮外松手或按压被取消时不再误触发；首次引导在授予权限后的「重新启动」步骤，按回车或右方向键现在和点击按钮一样正常重启应用。
