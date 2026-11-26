@@ -85,12 +85,102 @@ func TestPixelRectBelongsToContainingDisplay(t *testing.T) {
 	if got, want := pixelsToDIPIn(ms, spanning), (Rect{X: 1500, Y: 100, Width: 800, Height: 200}); got != want {
 		t.Fatalf("spanning window = %+v, want %+v", got, want)
 	}
-	// Past the right edge of the desktop the nearest display decides.
+	// Past the right edge of the desktop the nearest display decides, and
+	// the answer is whole DIPs, as mygo's own screen reports them.
 	offscreen := winRect{Left: 4600, Top: 0, Right: 4700, Bottom: 100}
-	dpi := 144.0
-	want := Rect{X: 1920 + 2680*96/dpi, Y: 0, Width: 100 * 96 / dpi, Height: 100 * 96 / dpi}
+	want := Rect{X: float64(1920 + scaleBy(2680, 96, 144)), Y: 0, Width: float64(scaleBy(100, 96, 144)), Height: float64(scaleBy(100, 96, 144))}
 	if got := pixelsToDIPIn(ms, offscreen); got != want {
 		t.Fatalf("off-screen window = %+v, want %+v", got, want)
+	}
+}
+
+// TestDIPSpaceMatchesMygo: mygo lays the screen out with the smallest scale
+// of the set as its anchor, which a setup where every display is above 96
+// proves: the old 96 minimum put every window of a 150%-only desktop at the
+// wrong place even though the pixels were right.
+func TestDIPSpaceMatchesMygo(t *testing.T) {
+	both150 := []screenMonitor{
+		testMonitor(1, 0, 0, 2560, 1440, 144, `\\.\DISPLAY1`),
+		testMonitor(2, 2560, 0, 2560, 1440, 144, `\\.\DISPLAY2`),
+	}
+	if x, y := dipOrigin(both150, 1); x != scaleBy(2560, 96, 144) || y != 0 {
+		t.Fatalf("first display's origin at (150%%, 150%%) = (%d,%d), want (%d,0)", x, y, scaleBy(2560, 96, 144))
+	}
+	r := Rect{X: 1800, Y: 100, Width: 200, Height: 100}
+	px := dipToPixelsIn(both150, r)
+	left := int32(2560 + scaleBy(1800-scaleBy(2560, 96, 144), 144, 96))
+	top := int32(scaleBy(100, 144, 96))
+	want := winRect{
+		Left:   left,
+		Top:    top,
+		Right:  left + int32(scaleBy(200, 144, 96)),
+		Bottom: top + int32(scaleBy(100, 144, 96)),
+	}
+	if px != want {
+		t.Fatalf("a DIP rectangle on the second 150%% display = %+v, want %+v", px, want)
+	}
+	if got := pixelsToDIPIn(both150, px); got != r {
+		t.Fatalf("round trip at 150%%/150%% = %+v, want %+v", got, r)
+	}
+}
+
+// TestMixedDPIWithout96: 125% beside 150%, neither of them 96, is the setup
+// where choosing the wrong anchor and the wrong display disagreed with
+// mygo at once.
+func TestMixedDPIWithout96(t *testing.T) {
+	ms := []screenMonitor{
+		testMonitor(1, 0, 0, 1920, 1080, 120, `\\.\DISPLAY1`),
+		testMonitor(2, 1920, 0, 2560, 1440, 144, `\\.\DISPLAY2`),
+	}
+	if x, _ := dipOrigin(ms, 1); x != scaleBy(1920, 96, 120) {
+		t.Fatalf("second origin = %d, want %d", x, scaleBy(1920, 96, 120))
+	}
+	for _, r := range []Rect{
+		{X: 200, Y: 100, Width: 300, Height: 200},
+		{X: 1600, Y: 100, Width: 100, Height: 100},
+	} {
+		px := dipToPixelsIn(ms, r)
+		if got := pixelsToDIPIn(ms, px); got != r {
+			t.Fatalf("%+v round trip = %+v (pixels %+v)", r, got, px)
+		}
+	}
+	// A rectangle straddles the displays with most of it on the higher-DPI
+	// one: mygo scales it by that display, which puts its left edge just
+	// past the 125% display's own pixels, and MonitorFromRect still names
+	// the 150% display because it holds most of the window.
+	straddle := Rect{X: 1500, Y: 100, Width: 150, Height: 100}
+	want := winRect{Left: 1866, Top: 150, Right: 2091, Bottom: 300}
+	if got := dipToPixelsIn(ms, straddle); got != want {
+		t.Fatalf("straddling rectangle = %+v, want %+v", got, want)
+	}
+	if got := pixelsToDIPIn(ms, want); got != straddle {
+		t.Fatalf("straddling round trip = %+v, want %+v", got, straddle)
+	}
+}
+
+// TestPixelPointToDIP: the cursor arrives in pixels and the DIP it names
+// must be the one mygo reports, including a display's last pixel.
+func TestPixelPointToDIP(t *testing.T) {
+	ms := []screenMonitor{
+		testMonitor(1, 0, 0, 1920, 1080, 96, `\\.\DISPLAY1`),
+		testMonitor(2, 1920, 0, 2560, 1440, 144, `\\.\DISPLAY2`),
+	}
+	cases := []struct{ x, y, wantX, wantY int }{
+		{0, 0, 0, 0},
+		{1920, 0, 1920, 0},
+		{1923, 3, 1922, 2},
+		{1920 + 2559, 1439, 1920 + 1706, 959},
+	}
+	for _, c := range cases {
+		x, y, ok := pixelPointToDIP(ms, c.x, c.y)
+		if !ok || x != c.wantX || y != c.wantY {
+			t.Errorf("pixelPointToDIP(%d,%d) = (%d,%d,%v), want (%d,%d,true)", c.x, c.y, x, y, ok, c.wantX, c.wantY)
+		}
+	}
+	only150 := []screenMonitor{testMonitor(1, 0, 0, 2560, 1440, 144, `\\.\DISPLAY1`)}
+	x, y, ok := pixelPointToDIP(only150, 3, 1)
+	if !ok || x != 2 || y != 0 {
+		t.Fatalf("pixelPointToDIP on a 150%%-only desktop = (%d,%d,%v), want (2,0,true)", x, y, ok)
 	}
 }
 

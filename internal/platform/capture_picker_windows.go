@@ -105,18 +105,15 @@ func cursorScreenPoint() (mygo.Point, bool) {
 	if r, _, _ := procGetCursorPos.Call(uintptr(unsafe.Pointer(&pt))); r == 0 {
 		return mygo.Point{}, false
 	}
-	ms := enumMonitors()
-	x, y := int(pt.X), int(pt.Y)
 	// The screen APIs report physical pixels; the overlay works in DIPs,
-	// scaled by the DPI of the display the point is on.
-	if i := displayAt(ms, x, y); i >= 0 {
-		nx, ny := dipOrigin(ms, i)
-		return mygo.Point{
-			X: nx + scaleBy(x-int(ms[i].bounds.Left), 96, ms[i].dpi),
-			Y: ny + scaleBy(y-int(ms[i].bounds.Top), 96, ms[i].dpi),
-		}, true
+	// in the scale of the display the point is on. Picking that display by
+	// the point in DIP space was the old bug: a cursor on a 150% display
+	// was compared against DIP bounds with its pixel coordinates.
+	x, y, ok := pixelPointToDIP(enumMonitors(), int(pt.X), int(pt.Y))
+	if !ok {
+		return mygo.Point{}, false
 	}
-	return mygo.Point{}, false
+	return mygo.Point{X: x, Y: y}, true
 }
 
 // openWindow creates one display's overlay.

@@ -10,6 +10,7 @@ package platform
 import (
 	"fmt"
 	"hash/fnv"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -767,32 +768,67 @@ func enumMonitors() []screenMonitor {
 	return out
 }
 
+// dipMinDPI is the scale display origins are anchored at: the smallest of
+// the set, as mygo's DIP space uses, so displays of different scales never
+// overlap in DIPs. A display that reports no scale counts as 96, and no
+// displays fall back to 96.
+func dipMinDPI(ms []screenMonitor) int {
+	minDPI := 0
+	for _, m := range ms {
+		dpi := m.dpi
+		if dpi <= 0 {
+			dpi = 96
+		}
+		if minDPI == 0 || dpi < minDPI {
+			minDPI = dpi
+		}
+	}
+	if minDPI == 0 {
+		return 96
+	}
+	return minDPI
+}
+
 // dipOrigin is a display's top-left corner in mygo's DIP space, which is
 // the public screen coordinate space: every display's origin is its pixel
 // origin scaled by the smallest scale of the set, so displays of different
-// scales never overlap in DIPs.
+// scales never overlap in DIPs. A set of displays that all run at 150%
+// anchors at 150%, not at the 96 the primary would use on its own: mygo
+// lays the screen out that way, and a conversion that disagreed with it
+// put every window of a high-DPI-only setup in the wrong place.
 func dipOrigin(ms []screenMonitor, i int) (int, int) {
 	if i < 0 || i >= len(ms) {
 		return 0, 0
 	}
-	minDPI := 96
-	for _, m := range ms {
-		if m.dpi < minDPI {
-			minDPI = m.dpi
-		}
-	}
+	minDPI := dipMinDPI(ms)
 	return scaleBy(int(ms[i].bounds.Left), 96, minDPI), scaleBy(int(ms[i].bounds.Top), 96, minDPI)
 }
 
+// dipBoundsIn is display i's bounds in DIPs.
+func dipBoundsIn(ms []screenMonitor, i int) (x, y, w, h int) {
+	m := ms[i]
+	ox, oy := dipOrigin(ms, i)
+	return ox, oy, scaleBy(int(m.bounds.width()), 96, m.dpi), scaleBy(int(m.bounds.height()), 96, m.dpi)
+}
+
+// scaleBy is mygo's scaled: v × num / den, halves up (the floor of
+// v × num / den + ½). Rounding the same way mygo does keeps the public
+// coordinates and the native pixels in step: a display's origin, its size
+// and a window's rectangle at the same spot all land on the same integer.
 func scaleBy(v, num, den int) int {
 	if den == 0 {
 		return v
 	}
-	// Round halves away from zero, the same rule mygo's own scaling uses.
-	if v >= 0 {
-		return (v*num*2 + den) / (2 * den)
+	return floorDiv(2*v*num+den, 2*den)
+}
+
+// floorDiv returns a / b rounded down, for b > 0.
+func floorDiv(a, b int) int {
+	q := a / b
+	if a%b != 0 && a < 0 {
+		q--
 	}
-	return -((-v*num*2 + den) / (2 * den))
+	return q
 }
 
 // displayAt returns the index of the display a DIP point is on, or the
@@ -801,19 +837,15 @@ func displayAt(ms []screenMonitor, x, y int) int {
 	if len(ms) == 0 {
 		return -1
 	}
-	for i, m := range ms {
-		ox, oy := dipOrigin(ms, i)
-		w := scaleBy(int(m.bounds.width()), 96, m.dpi)
-		h := scaleBy(int(m.bounds.height()), 96, m.dpi)
+	for i := range ms {
+		ox, oy, w, h := dipBoundsIn(ms, i)
 		if x >= ox && x < ox+w && y >= oy && y < oy+h {
 			return i
 		}
 	}
 	best, bestD := 0, int(^uint(0)>>1)
-	for i, m := range ms {
-		ox, oy := dipOrigin(ms, i)
-		w := scaleBy(int(m.bounds.width()), 96, m.dpi)
-		h := scaleBy(int(m.bounds.height()), 96, m.dpi)
+	for i := range ms {
+		ox, oy, w, h := dipBoundsIn(ms, i)
 		dx, dy := 0, 0
 		if x < ox {
 			dx = ox - x
@@ -833,47 +865,131 @@ func displayAt(ms []screenMonitor, x, y int) int {
 }
 
 // dipToPixels converts a rectangle in the public DIP space to the physical
-// pixels SetWindowPos takes, at the scale of the display its top-left
-// corner is on.
+// pixels SetWindowPos takes.
 func dipToPixels(r Rect) winRect { return dipToPixelsIn(enumMonitors(), r) }
 
 // dipToPixelsIn is dipToPixels over an explicit display list, so the DIP
 // arithmetic is unit-tested without a screen.
+//
+// Like mygo, it takes the scale of the display the rectangle is the most on
+// in DIPs, and settles on another only when that display's pixels would not
+// convert back to the same one: a window that straddles displays of very
+// different scales otherwise lands on neither.
 func dipToPixelsIn(ms []screenMonitor, r Rect) winRect {
-	i := displayAt(ms, int(r.X), int(r.Y))
-	if i < 0 {
+	order := dipOverlapOrder(ms, r)
+	if len(order) == 0 {
 		return winRect{
 			Left: int32(r.X), Top: int32(r.Y),
 			Right: int32(r.X + r.Width), Bottom: int32(r.Y + r.Height),
 		}
 	}
-	m := ms[i]
-	ox, oy := dipOrigin(ms, i)
-	left := float64(m.bounds.Left) + float64(r.X-float64(ox))*float64(m.dpi)/96
-	top := float64(m.bounds.Top) + float64(r.Y-float64(oy))*float64(m.dpi)/96
-	w := r.Width * float64(m.dpi) / 96
-	h := r.Height * float64(m.dpi) / 96
-	p := winRect{
-		Left:   int32(roundHalf(float64(left))),
-		Top:    int32(roundHalf(float64(top))),
-		Right:  int32(roundHalf(float64(left) + w)),
-		Bottom: int32(roundHalf(float64(top) + h)),
+	for _, i := range order {
+		p := dipToPixelsOn(ms, i, r)
+		if monitorForPixels(ms, p) == i {
+			return p
+		}
 	}
-	return p
+	return dipToPixelsOn(ms, order[0], r)
 }
 
-func roundHalf(v float64) float64 {
-	if v >= 0 {
-		return float64(int(v + 0.5))
+// dipToPixelsOn converts r through display i's scale, as mygo's toPixelsOn
+// does: display i's pixel origin, plus its own rectangle scaled.
+func dipToPixelsOn(ms []screenMonitor, i int, r Rect) winRect {
+	m := ms[i]
+	dpi := m.dpi
+	if dpi <= 0 {
+		dpi = 96
 	}
-	return float64(-int(-v + 0.5))
+	ox, oy := dipOrigin(ms, i)
+	left := int(m.bounds.Left) + scaleRound(r.X-float64(ox), dpi, 96)
+	top := int(m.bounds.Top) + scaleRound(r.Y-float64(oy), dpi, 96)
+	w := scaleRound(r.Width, dpi, 96)
+	h := scaleRound(r.Height, dpi, 96)
+	return winRect{
+		Left:   int32(left),
+		Top:    int32(top),
+		Right:  int32(left + w),
+		Bottom: int32(top + h),
+	}
+}
+
+// scaleRound is scaleBy for the float top-left a layout computes: halves
+// up, the floor of v × num / den + ½, the same rule mygo's integer scaled
+// uses for negative values too.
+func scaleRound(v float64, num, den int) int {
+	return int(math.Floor(v*float64(num)/float64(den) + 0.5))
+}
+
+// dipOverlapOrder lists the displays from the one r overlaps the most in
+// DIPs to the nearest, as mygo's byOverlap does: an empty rectangle is a
+// point, an overlap outranks a distance, and ties keep the system's order.
+func dipOverlapOrder(ms []screenMonitor, r Rect) []int {
+	n := len(ms)
+	if n == 0 {
+		return nil
+	}
+	w0, h0 := max(r.Width, 1), max(r.Height, 1)
+	type rank struct {
+		i              int
+		area, distance float64
+	}
+	ranks := make([]rank, n)
+	for i := range ms {
+		ox, oy, w, h := dipBoundsIn(ms, i)
+		ow := math.Min(r.X+w0, float64(ox+w)) - math.Max(r.X, float64(ox))
+		oh := math.Min(r.Y+h0, float64(oy+h)) - math.Max(r.Y, float64(oy))
+		k := rank{i: i}
+		if ow > 0 && oh > 0 {
+			k.area = ow * oh
+		} else {
+			dx, dy := math.Max(0, -ow), math.Max(0, -oh)
+			k.distance = dx*dx + dy*dy
+		}
+		ranks[i] = k
+	}
+	for i := 1; i < n; i++ {
+		for j := i; j > 0; j-- {
+			a, b := ranks[j-1], ranks[j]
+			if a.area > b.area || a.area == b.area && a.distance <= b.distance {
+				break
+			}
+			ranks[j-1], ranks[j] = b, a
+		}
+	}
+	order := make([]int, n)
+	for i, k := range ranks {
+		order[i] = k.i
+	}
+	return order
+}
+
+// pixelPointToDIP converts a pixel of the screen, such as the cursor's, to
+// the DIP it is in, in the scale of the display it is on, or the nearest:
+// mygo's pointToDIP, whose floor keeps a display's last pixel inside it.
+func pixelPointToDIP(ms []screenMonitor, x, y int) (int, int, bool) {
+	i := monitorForPixels(ms, winRect{
+		Left: int32(x), Top: int32(y), Right: int32(x) + 1, Bottom: int32(y) + 1,
+	})
+	if i < 0 {
+		return 0, 0, false
+	}
+	m := ms[i]
+	dpi := m.dpi
+	if dpi <= 0 {
+		dpi = 96
+	}
+	ox, oy := dipOrigin(ms, i)
+	return ox + floorDiv((x-int(m.bounds.Left))*96, dpi),
+		oy + floorDiv((y-int(m.bounds.Top))*96, dpi), true
 }
 
 // pixelsToDIP converts a physical rectangle to the public DIP space of the
 // display it is on.
 func pixelsToDIP(r winRect) Rect { return pixelsToDIPIn(enumMonitors(), r) }
 
-// pixelsToDIPIn is pixelsToDIP over an explicit display list.
+// pixelsToDIPIn is pixelsToDIP over an explicit display list. Like mygo's
+// toDIPOn it returns whole DIPs, in the scale of the display the rectangle
+// is most on, so the answer is exactly what mygo's screen reports.
 func pixelsToDIPIn(ms []screenMonitor, r winRect) Rect {
 	best := monitorForPixels(ms, r)
 	if best < 0 {
@@ -882,11 +998,20 @@ func pixelsToDIPIn(ms []screenMonitor, r winRect) Rect {
 	m := ms[best]
 	ox, oy := dipOrigin(ms, best)
 	return Rect{
-		X:      float64(ox) + float64(r.Left-m.bounds.Left)*96/float64(m.dpi),
-		Y:      float64(oy) + float64(r.Top-m.bounds.Top)*96/float64(m.dpi),
-		Width:  float64(r.width()) * 96 / float64(m.dpi),
-		Height: float64(r.height()) * 96 / float64(m.dpi),
+		X:      float64(ox + scaleBy(int(r.Left)-int(m.bounds.Left), 96, m.dpi)),
+		Y:      float64(oy + scaleBy(int(r.Top)-int(m.bounds.Top), 96, m.dpi)),
+		Width:  float64(scaleBy(int(r.width()), 96, m.dpi)),
+		Height: float64(scaleBy(int(r.height()), 96, m.dpi)),
 	}
+}
+
+// roundHalf rounds to the nearest integer, halves away from zero, for the
+// pixel arithmetic that keeps no anchor of its own.
+func roundHalf(v float64) float64 {
+	if v >= 0 {
+		return float64(int(v + 0.5))
+	}
+	return float64(-int(-v + 0.5))
 }
 
 // abs32 returns the magnitude of v.
@@ -897,19 +1022,14 @@ func abs32(v int32) int32 {
 	return v
 }
 
-// monitorForPixels picks the display a physical rectangle belongs to: the one
-// containing its top-left corner, else the one it overlaps most, else the
-// nearest to its centre. Choosing the display whose corner happened to be
-// nearest put a window that starts beside a neighbouring display on the
-// neighbour, so its position and size were scaled by the wrong DPI.
+// monitorForPixels picks the display a physical rectangle belongs to: the
+// one it overlaps most, as MonitorFromRect and mygo's pixelDisplay do, else
+// the nearest to its centre. The rectangle is that of the window itself,
+// never its top-left corner alone: a window that starts on one display and
+// lies mostly on the next is scaled by the next one, as Windows scales it.
 func monitorForPixels(ms []screenMonitor, r winRect) int {
 	if len(ms) == 0 {
 		return -1
-	}
-	for i, m := range ms {
-		if pointInRect(r.Left, r.Top, m.bounds) {
-			return i
-		}
 	}
 	best, bestArea := -1, int64(0)
 	for i, m := range ms {
@@ -942,10 +1062,6 @@ func monitorForPixels(ms []screenMonitor, r winRect) int {
 		}
 	}
 	return best
-}
-
-func pointInRect(x, y int32, r winRect) bool {
-	return x >= r.Left && x < r.Right && y >= r.Top && y < r.Bottom
 }
 
 // overlapArea is the area two rectangles share, 0 when they do not meet.
