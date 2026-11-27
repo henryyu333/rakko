@@ -642,7 +642,10 @@ func updateWinContent(w *mygo.Window, cw, ch int) {
 func (a *shelf) updateWinOpen() bool { return a.updateWin != nil || a.updateWinMarked }
 
 // updateWinSize is the found face's height: the notes card leaves with
-// empty release notes and the window shortens by its size plus gap.
+// empty release notes and the window shortens by its size plus gap. On
+// Windows the page also carries the caption row's height over the faces'
+// 28pt bar budget — the measured one, or the documented default until
+// the view has drawn a frame (updateTitleExtra).
 func (a *shelf) updateWinSize(stage updateStage) (w, h int) {
 	w, h = updateSmallW, updateSmallH
 	if stage == updateStageFound {
@@ -652,7 +655,7 @@ func (a *shelf) updateWinSize(stage updateStage) (w, h int) {
 		}
 	}
 	if forWindows {
-		h += updateWindowsTitleExtra
+		h += updateTitleExtra(a.updateWinTitleH)
 	}
 	return w, h
 }

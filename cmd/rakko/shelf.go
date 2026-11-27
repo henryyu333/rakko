@@ -159,6 +159,7 @@ type shelf struct {
 	updateNotes                                                 ui.ScrollState // release notes scroll, reset on each open
 	updatePrompted                                              string         // the version already prompted for this launch
 	updateWinMarked                                             bool           // window logically open (headless mark or native)
+	updateWinTitleH                                             float32        // the title bar height the Windows update window measured; 0 = not yet
 	updateCanceled                                              bool           // the download's cancel was clicked: the result unwinds quietly
 	updatePromptPending                                         updateStage    // deferred auto-prompt's face; updateStageChecking = none
 	updatePromptAt                                              time.Time      // a deferred auto-prompt's earliest moment; zero = none

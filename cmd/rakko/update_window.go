@@ -38,12 +38,23 @@ const (
 	updateSmallH   = 146
 	updateBarH     = 28 // the self-drawn title strip under the traffic lights
 	updateNotesH   = 206
-
-	// updateWindowsTitleExtra is the page's title strip on Windows: mygo
-	// takes its window controls' row from c.TitleBar().Height (32) where
-	// the faces budget the macOS strip (28). The body keeps its 118pt.
+	// updateWindowsTitleExtra is the page's title strip on Windows before
+	// the view has measured one: mygo's caption row defaults to 32 DIP
+	// where the faces budget the macOS strip (28). The first frame
+	// replaces the guess with the measured height (updateTitleExtra).
 	updateWindowsTitleExtra = 4
 )
+
+// updateTitleExtra is the page points the Windows caption row adds over
+// the faces' updateBarH budget: the measured title bar height once the
+// view has drawn, the documented default until then. Zero on any height
+// at or under the budget.
+func updateTitleExtra(titleBarH float32) int {
+	if titleBarH <= 0 {
+		return updateWindowsTitleExtra
+	}
+	return max(0, int(math.Ceil(float64(titleBarH)))-updateBarH)
+}
 
 // updateStage is which face the update window shows.
 type updateStage int
@@ -153,6 +164,20 @@ func (a *shelf) updateBar(c *ui.Context, l locales.Messages, p updatePalette) {
 	height := float32(updateBarH)
 	if forWindows {
 		height = max(height, c.TitleBar().Height)
+		if extra := updateTitleExtra(c.TitleBar().Height); extra != updateTitleExtra(a.updateWinTitleH) {
+			// The caption row is taller (or shorter) than the height the
+			// window was opened with. Remember the measured one and fit the
+			// page to it once this frame is done — a resize from inside a
+			// frame would re-enter the layout that is drawing it.
+			a.updateWinTitleH = c.TitleBar().Height
+			time.AfterFunc(0, func() {
+				dispatchMain(func() {
+					if a.updateWin != nil {
+						a.updateSetStage(a.updateWinStage)
+					}
+				})
+			})
+		}
 	}
 	bar := ui.Row(c.Key("bar")).FillWidth().Height(height).
 		AlignItems(ui.Center).Padding(0, 20, 0, 20).Background(p.bar).DragWindow()
