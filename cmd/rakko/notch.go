@@ -171,7 +171,7 @@ func (a *shelf) overHoverAnchor(p mygo.Point, now time.Time) bool {
 			r := a.islandRect()
 			if a.notchW > 0 && a.notchH > 0 &&
 				p.X >= r.X-notchHoverPadX && p.X <= r.X+r.Width+notchHoverPadX &&
-				p.Y >= a.dispBounds.Y && p.Y <= r.Y+r.Height+notchHoverPadY {
+				p.Y >= a.islandTriggerTop() && p.Y <= r.Y+r.Height+notchHoverPadY {
 				return true
 			}
 		}
@@ -180,6 +180,18 @@ func (a *shelf) overHoverAnchor(p mygo.Point, now time.Time) bool {
 	return a.notchW > 0 && a.notchH > 0 &&
 		p.X >= a.notchX-notchHoverPadX && p.X <= a.notchX+a.notchW+notchHoverPadX &&
 		p.Y >= a.notchY && p.Y < a.notchY+notchEdgeHoverH
+}
+
+// islandTriggerTop is the top row of the island's stretched hover and drop
+// zones while an upper display keeps the capsule on its default row: the
+// screen's top edge on the Mac, where the menu bar rows belong to the
+// shell's reach; the work area's top on Windows, where a taskbar docked at
+// the top owns the rows above the island and must keep them.
+func (a *shelf) islandTriggerTop() int {
+	if forWindows && a.dispWork.Y > a.dispBounds.Y {
+		return a.dispWork.Y
+	}
+	return a.dispBounds.Y
 }
 
 // Hover changes only the drawing, not the native window geometry. Keeping one

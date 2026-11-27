@@ -44,12 +44,13 @@ func (a *shelf) dropBandX(p mygo.Point) bool {
 	if a.island {
 		// The band follows the floating capsule: the same horizontal
 		// reach around it, from its top edge down to the guard's landing
-		// row below it. Rows above the capsule stay the menu bar's.
+		// row below it. Rows above the capsule stay the menu bar's — or,
+		// on Windows with a top taskbar, the taskbar's.
 		r := a.islandRect()
 		_, baseH := a.anchorSize()
 		topY := r.Y
 		if a.islandDY == 0 && a.upperBarrierActive() {
-			topY = a.dispBounds.Y
+			topY = a.islandTriggerTop()
 		}
 		return p.X >= r.X-dropBandPadX && p.X < r.X+r.Width+dropBandPadX &&
 			p.Y >= topY && p.Y < r.Y+dropBandH(int(baseH))
