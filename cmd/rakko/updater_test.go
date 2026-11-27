@@ -514,15 +514,16 @@ func TestInstallUpdateFailure(t *testing.T) {
 	if a.updateLastResult != updateResultFailed {
 		t.Fatalf("quiet failure last result = %v", a.updateLastResult)
 	}
-	// The user's own install says so.
+	// The user's own install answers on the window's failed face: the
+	// reason stays up with a 重试, instead of a toast that closes the
+	// window and disappears eight seconds later.
 	a.installUpdate(false)
 	p.settle()
-	if !strings.Contains(a.status, "安装更新失败") {
-		t.Fatalf("failure status = %q", a.status)
+	if a.updateWinStage != updateStageFailed || !a.updateWinOpen() {
+		t.Fatalf("failed install face = %v open = %v, want failed and open", a.updateWinStage, a.updateWinOpen())
 	}
-	// The offer stays: the user can retry the same version.
-	if item := a.updateMenu(); !strings.Contains(item.Label, "安装更新（v1.2.3）") {
-		t.Fatalf("post-failure menu = %q", item.Label)
+	if detail := a.updateFailDetail; !strings.Contains(detail, "安装更新失败") || !strings.Contains(detail, "disk full") {
+		t.Fatalf("failure detail = %q, want the reason", detail)
 	}
 }
 
@@ -940,5 +941,78 @@ func TestUpdateQuietReadyClearsOnANewerOffer(t *testing.T) {
 	p.settle()
 	if !a.updateInstalled || a.updateQuietReady {
 		t.Fatalf("foreground install left installed=%v quiet=%v", a.updateInstalled, a.updateQuietReady)
+	}
+}
+
+// installUpdate repaints Settings the moment it takes the state, not
+// when the first progress callback arrives: the 检查更新 row greys out at
+// once, and the 关于 caption picks the downloading wording up from the
+// same repaint.
+func TestInstallStartRepaintsSettingsAtOnce(t *testing.T) {
+	p := stubUpdater(t)
+	a := updateShelf()
+	a.update = &mygo.Update{Version: "1.2.3"}
+	repaints := 0
+	orig := updateRepaint
+	updateRepaint = func(*shelf) { repaints++ }
+	t.Cleanup(func() { updateRepaint = orig })
+	p.runFn = func(context.Context, *mygo.Update, func(int64, int64)) error {
+		if repaints == 0 {
+			t.Error("the install started without repainting Settings")
+		}
+		return nil
+	}
+	a.installUpdate(true)
+	p.settle()
+	if repaints == 0 {
+		t.Fatal("no start-of-install repaint reached Settings")
+	}
+}
+
+// A cancel that arrives from outside the window's own 取消 — the context
+// dies with context.Canceled while the downloading face is still up —
+// must clear the stale bytes and close the zombie window, not strand it
+// on an empty progress bar while Settings reports the offer again.
+func TestInstallCancelClearsBytesAndClosesAZombieWindow(t *testing.T) {
+	p := stubUpdater(t)
+	a := updateShelf()
+	a.update = &mygo.Update{Version: "1.2.3"}
+	started := make(chan struct{})
+	p.runFn = func(ctx context.Context, _ *mygo.Update, _ func(int64, int64)) error {
+		close(started)
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	// The real install runs on the worker, not inline: it must be able to
+	// block until the cancel arrives.
+	origWork := goWork
+	goWork = func(fn func()) { go fn() }
+	t.Cleanup(func() { goWork = origWork })
+	a.installUpdate(false)
+	<-started
+	if !a.updateWinOpen() || a.updateWinStage != updateStageDownloading {
+		t.Fatalf("install face = %v open = %v", a.updateWinStage, a.updateWinOpen())
+	}
+	// Half-downloaded bytes, as a real progress callback leaves them.
+	a.updateBytes, a.updateTotal = 7_000_000, 19_000_000
+	// The context dies without the window's 取消 — nothing sets
+	// updateCanceled, nothing closes the window first.
+	a.updateInstallCancel()
+	p.waitCallback(t)
+	if a.updateInstalling || a.updateInstalled {
+		t.Fatal("the canceled install left installing/installed set")
+	}
+	if a.updateBytes != 0 || a.updateTotal != 0 {
+		t.Fatalf("stale bytes %d/%d survived the cancel", a.updateBytes, a.updateTotal)
+	}
+	if a.updateWinOpen() {
+		t.Fatal("a canceled install left the downloading window open")
+	}
+	if strings.Contains(a.status, "失败") {
+		t.Fatalf("a cancel was reported as a failure: %q", a.status)
+	}
+	// The offer stays: the user can install again.
+	if item := a.updateMenu(); !strings.Contains(item.Label, "安装更新（v1.2.3）") {
+		t.Fatalf("post-cancel menu = %q", item.Label)
 	}
 }

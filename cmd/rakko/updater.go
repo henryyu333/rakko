@@ -44,9 +44,13 @@ var (
 		return up.Install(ctx, progress)
 	}
 	dispatchMain = mygo.RunOnMain
-	// goWork runs the slow part of a check or install off the main thread.
-	goWork      = func(fn func()) { go fn() }
-	relaunchApp = func() { mygo.App.Relaunch() }
+	goWork       = func(fn func()) { go fn() }
+	relaunchApp  = func() { mygo.App.Relaunch() }
+	// updateRepaint is the Settings repaint the update flow owes the
+	// moment its state changes — a seam so a headless test can see that
+	// starting an install repaints Settings at once, not when the first
+	// progress callback arrives.
+	updateRepaint = (*shelf).repaintSettings
 	// Timeouts bound the network work: go's HTTP client has none, so a
 	// stalled GitHub request would otherwise leave updateChecking or
 	// updateInstalling set forever and silence every later check. The
@@ -346,6 +350,9 @@ func (a *shelf) installUpdate(quiet bool) {
 	a.updateInstalling, a.updateProgress = true, 0
 	a.updateBytes, a.updateTotal = 0, 0
 	a.updateInstallQuiet = quiet
+	// Settings' 检查更新 row greys out the moment an install owns the
+	// state; the progress callback repaints again as the bytes arrive.
+	updateRepaint(a)
 	if !quiet {
 		a.updateSetStage(updateStageDownloading)
 		a.openUpdateWindow()
@@ -400,6 +407,9 @@ func (a *shelf) cancelUpdateInstall() {
 func (a *shelf) installedUpdate(up *mygo.Update, err error) {
 	a.updateInstalling, a.updateProgress = false, 0
 	a.updateInstallCancel = nil
+	// No half-downloaded bytes survive any outcome: the settings row and
+	// a reopened downloading face both start from zero.
+	a.updateBytes, a.updateTotal = 0, 0
 	canceled := a.updateCanceled || errors.Is(err, context.Canceled)
 	a.updateCanceled = false
 	quiet := a.updateInstallQuiet
@@ -408,13 +418,26 @@ func (a *shelf) installedUpdate(up *mygo.Update, err error) {
 	if err != nil {
 		if canceled {
 			log.Printf("Rakko: 取消更新 v%s 的下载", up.Version)
+			// The window's own 取消 already closed it; a cancel that
+			// arrived any other way must not strand a downloading face on
+			// an empty progress bar.
+			if a.updateWinOpen() && a.updateWinStage == updateStageDownloading {
+				a.closeUpdateWindow()
+			}
 			return
 		}
 		log.Printf("Rakko: 安装更新失败：%v", err)
 		a.updateLastResult = updateResultFailed
 		if !quiet {
-			// A quiet install reports in Settings' last-result row only:
-			// a network wobble must not interrupt the user.
+			if a.updateWinOpen() {
+				// The user's own install sees its failure in the window:
+				// the reason and a 重试 on the failed face, instead of a
+				// window that vanishes behind an eight-second toast.
+				a.updateFailDetail = a.appLoc().UpdateInstallFailed(err.Error())
+				a.updateSetStage(updateStageFailed)
+				return
+			}
+			// No window could open: the toast is all the failure has.
 			a.toastStatus(a.appLoc().UpdateInstallFailed(err.Error()), time.Now().Add(8*time.Second), statusErr)
 		}
 		a.closeUpdateWindow()
