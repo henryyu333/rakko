@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -47,48 +48,61 @@ var (
 
 // attemptWatchdog drops the connection it guards when nothing arrives for
 // the stall timeout: a read that never returns is a download parked on an
-// empty progress bar. One per connection; its state is goroutine-safe,
-// and only the reading goroutine arms and stops it.
+// empty progress bar. One per connection; the reading goroutine arms and
+// stops it, and its timer callback looks every quarter of the stall
+// timeout, so every field the two share is guarded or atomic. stall is
+// copied at arm time: the timeout variables are test seams, and the
+// callback must not read them while a test restores them.
 type attemptWatchdog struct {
 	cancel context.CancelFunc
+	stall  time.Duration
 	last   atomic.Int64 // Unix nanoseconds of the last delivered byte
 	fired  atomic.Bool  // the stall timeout ended the connection
-	armed  atomic.Bool
-	timer  *time.Timer
+
+	mu    sync.Mutex
+	armed bool
+	timer *time.Timer
 }
 
 // armAttemptWatchdog starts the watchdog of one connection, whose cancel
 // ends that connection's request.
-func armAttemptWatchdog(cancel context.CancelFunc) *attemptWatchdog {
-	w := &attemptWatchdog{cancel: cancel}
+func armAttemptWatchdog(cancel context.CancelFunc, stall time.Duration) *attemptWatchdog {
+	w := &attemptWatchdog{cancel: cancel, stall: stall}
 	w.last.Store(time.Now().UnixNano())
-	w.armed.Store(true)
-	w.timer = time.AfterFunc(updateStallTimeout/4, w.check)
+	w.mu.Lock()
+	w.armed = true
+	w.timer = time.AfterFunc(stall/4, w.check)
+	w.mu.Unlock()
 	return w
 }
 
 // check cancels the connection when nothing arrived for the stall timeout,
 // and looks again a quarter of that later otherwise.
 func (w *attemptWatchdog) check() {
-	if !w.armed.Load() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if !w.armed {
 		return
 	}
-	if time.Since(time.Unix(0, w.last.Load())) >= updateStallTimeout {
+	if time.Since(time.Unix(0, w.last.Load())) >= w.stall {
 		w.fired.Store(true)
-		w.armed.Store(false)
+		w.armed = false
 		w.cancel()
 		return
 	}
-	if w.armed.Load() {
-		w.timer.Reset(updateStallTimeout / 4)
-	}
+	w.timer.Reset(w.stall / 4)
 }
 
 func (w *attemptWatchdog) touched() { w.last.Store(time.Now().UnixNano()) }
 
 func (w *attemptWatchdog) stop() {
-	w.armed.Store(false)
-	w.timer.Stop()
+	w.mu.Lock()
+	w.armed = false
+	timer := w.timer
+	w.mu.Unlock()
+	if timer != nil {
+		timer.Stop()
+	}
 }
 
 // resumeBody is the body the update source's Open returns: the response
@@ -100,6 +114,7 @@ type resumeBody struct {
 	client  *http.Client
 	url     string
 	version string // Rakko/<version> is the User-Agent
+	stall   time.Duration
 
 	// offset counts the bytes already handed out; total is the first
 	// response's Content-Length, -1 when the server kept it to itself;
@@ -193,7 +208,7 @@ func (r *resumeBody) connect() error {
 		r.validator = firstNonEmptyHeader(resp.Header, "ETag", "Last-Modified")
 	}
 	r.body, r.cancel = resp.Body, cancel
-	r.watch = armAttemptWatchdog(cancel)
+	r.watch = armAttemptWatchdog(cancel, r.stall)
 	return nil
 }
 
@@ -231,7 +246,7 @@ func (r *resumeBody) Read(p []byte) (int, error) {
 			continue
 		}
 		if r.watch.fired.Load() {
-			r.connectErr = errors.New("the connection sent nothing for " + updateStallTimeout.String())
+			r.connectErr = errors.New("the connection sent nothing for " + r.stall.String())
 		} else {
 			r.connectErr = err
 		}

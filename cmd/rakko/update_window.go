@@ -154,6 +154,13 @@ func (a *shelf) updateEscape() {
 	a.closeUpdateWindow()
 }
 
+// scheduleUpdateRefit runs fn once the frame that asked for it is done: a
+// resize from inside the frame would re-enter the layout drawing it. A
+// variable so tests can run it inline instead of from a timer goroutine.
+var scheduleUpdateRefit = func(fn func()) {
+	time.AfterFunc(0, func() { dispatchMain(fn) })
+}
+
 // updateBar is the strip the AppKit traffic lights sit over (they are
 // positioned at TrafficLightPosition, inside it). It drags the window;
 // only the small faces carry a title, as the design draws it. On Windows
@@ -170,12 +177,10 @@ func (a *shelf) updateBar(c *ui.Context, l locales.Messages, p updatePalette) {
 			// page to it once this frame is done — a resize from inside a
 			// frame would re-enter the layout that is drawing it.
 			a.updateWinTitleH = c.TitleBar().Height
-			time.AfterFunc(0, func() {
-				dispatchMain(func() {
-					if a.updateWin != nil {
-						a.updateSetStage(a.updateWinStage)
-					}
-				})
+			scheduleUpdateRefit(func() {
+				if a.updateWin != nil {
+					a.updateSetStage(a.updateWinStage)
+				}
 			})
 		}
 	}
@@ -417,7 +422,7 @@ func (a *shelf) updateSmallText(c *ui.Context, l locales.Messages, p updatePalet
 	}
 	ui.Text(c, status).SingleLine().FontSize(13).FontWeight(600).TextColor(statusColor)
 	if detail != "" {
-		ui.Text(c, detail).FontSize(12).TextColor(p.ink3).Padding(4, 0, 0, 0)
+		ui.Text(c, detail).MaxLines(2).FontSize(12).TextColor(p.ink3).Padding(4, 0, 0, 0)
 	}
 }
 

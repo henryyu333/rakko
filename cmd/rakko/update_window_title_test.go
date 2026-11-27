@@ -80,9 +80,9 @@ func TestUpdateBarMeasuresTheTitleBarAndRefitsOnce(t *testing.T) {
 	t.Cleanup(func() { forWindows = orig })
 
 	var posted []func()
-	origDispatch := dispatchMain
-	dispatchMain = func(fn func()) { posted = append(posted, fn) }
-	t.Cleanup(func() { dispatchMain = origDispatch })
+	origRefit := scheduleUpdateRefit
+	scheduleUpdateRefit = func(fn func()) { posted = append(posted, fn) }
+	t.Cleanup(func() { scheduleUpdateRefit = origRefit })
 
 	a := updateShelf()
 	a.update = &mygo.Update{Version: "1.2.3"}

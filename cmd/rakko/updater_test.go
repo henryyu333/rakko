@@ -522,8 +522,55 @@ func TestInstallUpdateFailure(t *testing.T) {
 	if a.updateWinStage != updateStageFailed || !a.updateWinOpen() {
 		t.Fatalf("failed install face = %v open = %v, want failed and open", a.updateWinStage, a.updateWinOpen())
 	}
-	if detail := a.updateFailDetail; !strings.Contains(detail, "安装更新失败") || !strings.Contains(detail, "disk full") {
-		t.Fatalf("failure detail = %q, want the reason", detail)
+	if detail := a.updateFailDetail; detail != a.appLoc().UpdateInstallFailedDetail() {
+		t.Fatalf("failure detail = %q, want the short %q", detail, a.appLoc().UpdateInstallFailedDetail())
+	}
+	if strings.Contains(a.updateFailDetail, "disk full") {
+		t.Fatalf("the raw error reached the face: %q", a.updateFailDetail)
+	}
+}
+
+// The failed face's detail is one short sentence picked by kind: the raw
+// Go error is in the log, not in the 146pt page.
+func TestUpdateInstallFailureDetailStaysShort(t *testing.T) {
+	a := updateShelf()
+	l := a.appLoc()
+	for _, tc := range []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"network", errors.New("downloading: read tcp 10.0.0.2:443: connection reset by peer"), l.UpdateInstallNetworkFailed()},
+		{"stall", errors.New("the download broke 6 times: the connection sent nothing for 45s"), l.UpdateInstallNetworkFailed()},
+		{"unsigned", errors.New("the update is not signed with the app's key"), l.UpdateInstallVerifyFailed()},
+		{"short body", errors.New("downloaded 3 bytes, want 4096"), l.UpdateInstallVerifyFailed()},
+		{"other", errors.New("disk full"), l.UpdateInstallFailedDetail()},
+	} {
+		if got := a.updateInstallFailureDetail(tc.err); got != tc.want {
+			t.Errorf("%s: detail = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+// A long reason cannot push the failed face's buttons out of its 400×146
+// window: the detail is clamped, and both controls stay inside.
+func TestUpdateFailedFaceKeepsItsButtonsForALongReason(t *testing.T) {
+	a := updateShelf()
+	a.update = &mygo.Update{Version: "1.2.3"}
+	a.updateWinStage = updateStageFailed
+	a.updateFailDetail = strings.Repeat("the update server closed the connection in the middle of the body ", 8)
+	w, h := a.updateWinSize(updateStageFailed)
+	v := ui.NewTester(a.updateView, w, h)
+	v.SetLocale("zh-Hans")
+	v.Frame()
+	for _, label := range []string{"好", "重试"} {
+		r, ok := v.Find(label)
+		if !ok {
+			t.Fatalf("the failed face lost %q: %v", label, v.Texts())
+		}
+		if r.X < 0 || r.Y < 0 || r.X+r.W > float32(w) || r.Y+r.H > float32(h) {
+			t.Fatalf("%q at %+v is outside the %dx%d window", label, r, w, h)
+		}
 	}
 }
 

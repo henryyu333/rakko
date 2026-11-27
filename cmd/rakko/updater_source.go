@@ -9,6 +9,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -125,9 +126,19 @@ func (s *rakkoUpdateSource) Open(ctx context.Context, rawURL string) (io.ReadClo
 		client:  s.client,
 		url:     rawURL,
 		version: s.version(),
+		stall:   updateStallTimeout,
 	}
 	if err := r.connect(); err != nil {
-		return nil, err
+		// The first connection gets the same retry budget as every later
+		// one: a 502/503/429 or a reset must not fail a download mygo's
+		// own three-try GET would have finished.
+		var retry retryErr
+		if !errors.As(err, &retry) || !r.reconnect() {
+			if r.err != nil {
+				return nil, r.err
+			}
+			return nil, err
+		}
 	}
 	return r, nil
 }

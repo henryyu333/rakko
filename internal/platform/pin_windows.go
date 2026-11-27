@@ -82,9 +82,11 @@ func releaseCOM(obj uintptr) {
 
 // isCOMDisconnected reports whether a call's HRESULT says the object's
 // server went away: Explorer restarted (RPC_E_DISCONNECTED) or its RPC
-// endpoint died (RPC_S_SERVER_UNAVAILABLE as an HRESULT).
+// endpoint died (RPC_S_SERVER_UNAVAILABLE as an HRESULT). HRESULTs are
+// 32-bit; a 64-bit SyscallN result sign-extends a failing one into the
+// upper half, so the comparison keeps the low word.
 func isCOMDisconnected(hr uintptr) bool {
-	switch hr {
+	switch uint32(hr) {
 	case 0x80010108, 0x800706BA:
 		return true
 	}
@@ -106,13 +108,9 @@ func virtualDesktopOutage(down bool, err error) {
 // visible window that is on the current desktop. ok is false when none
 // could be named, in which case the caller leaves the card where it is.
 func currentDesktopID() (windows.GUID, bool) {
-	vdm, _ := virtualDesktopManager()
-	if vdm == 0 {
-		return windows.GUID{}, false
-	}
 	fg, _, _ := procGetForegroundWindow.Call()
 	if fg != 0 && windowPID(fg) != ownProcessID() {
-		if id, ok := windowDesktopID(vdm, fg); ok {
+		if id, ok := windowDesktopID(fg); ok {
 			return id, true
 		}
 	}
@@ -123,11 +121,17 @@ func currentDesktopID() (windows.GUID, bool) {
 			return true
 		}
 		var on int32
-		if r := comMethod(vdm, virtualDesktopManagerIsWindowOnCurrent, h, uintptr(unsafe.Pointer(&on))); int32(r) < 0 || on == 0 {
+		hr, ok := virtualDesktop.call(time.Now(), func(vdm uintptr) uintptr {
+			return comMethod(vdm, virtualDesktopManagerIsWindowOnCurrent, h, uintptr(unsafe.Pointer(&on)))
+		})
+		if !ok || int32(hr) < 0 || on == 0 {
 			return true
 		}
 		var d windows.GUID
-		if r := comMethod(vdm, virtualDesktopManagerGetWindowDesktopID, h, uintptr(unsafe.Pointer(&d))); int32(r) < 0 {
+		hr, ok = virtualDesktop.call(time.Now(), func(vdm uintptr) uintptr {
+			return comMethod(vdm, virtualDesktopManagerGetWindowDesktopID, h, uintptr(unsafe.Pointer(&d)))
+		})
+		if !ok || int32(hr) < 0 {
 			return true
 		}
 		id, found = d, true
@@ -155,9 +159,12 @@ func comMethod(obj uintptr, index int, args ...uintptr) uintptr {
 	return r
 }
 
-func windowDesktopID(vdm uintptr, h uintptr) (windows.GUID, bool) {
+func windowDesktopID(h uintptr) (windows.GUID, bool) {
 	var id windows.GUID
-	if r := comMethod(vdm, virtualDesktopManagerGetWindowDesktopID, h, uintptr(unsafe.Pointer(&id))); int32(r) < 0 {
+	hr, ok := virtualDesktop.call(time.Now(), func(vdm uintptr) uintptr {
+		return comMethod(vdm, virtualDesktopManagerGetWindowDesktopID, h, uintptr(unsafe.Pointer(&id)))
+	})
+	if !ok || int32(hr) < 0 {
 		return windows.GUID{}, false
 	}
 	return id, true

@@ -15,6 +15,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"net"
 	"os"
 	"strings"
 	"time"
@@ -433,7 +434,7 @@ func (a *shelf) installedUpdate(up *mygo.Update, err error) {
 				// The user's own install sees its failure in the window:
 				// the reason and a 重试 on the failed face, instead of a
 				// window that vanishes behind an eight-second toast.
-				a.updateFailDetail = a.appLoc().UpdateInstallFailed(err.Error())
+				a.updateFailDetail = a.updateInstallFailureDetail(err)
 				a.updateSetStage(updateStageFailed)
 				return
 			}
@@ -801,4 +802,31 @@ func (a *shelf) updateFailureDetail(err error) string {
 		}
 	}
 	return a.appLoc().UpdateFailedDetail()
+}
+
+// updateInstallFailureDetail is the failed face's detail after the user's
+// own install failed: one short, friendly sentence. The raw error is in
+// the log already; the face's page is 146pt tall, and a wrapped Go error
+// would run four or five lines and push 好 / 重试 out of the window.
+func (a *shelf) updateInstallFailureDetail(err error) string {
+	if errors.Is(err, mygo.ErrUpdatesDisabled) {
+		if reason := a.updateUnavailableReason(); reason != "" {
+			return reason
+		}
+	}
+	l := a.appLoc()
+	var netErr net.Error
+	switch {
+	case errors.As(err, &netErr),
+		errors.Is(err, context.DeadlineExceeded),
+		strings.Contains(err.Error(), "downloading:"),
+		strings.Contains(err.Error(), "the download broke"),
+		strings.Contains(err.Error(), "cannot resume"),
+		strings.Contains(err.Error(), "changed on the server"):
+		return l.UpdateInstallNetworkFailed()
+	case strings.Contains(err.Error(), "not signed with the app's key"),
+		strings.Contains(err.Error(), "bytes, want"):
+		return l.UpdateInstallVerifyFailed()
+	}
+	return l.UpdateInstallFailedDetail()
 }

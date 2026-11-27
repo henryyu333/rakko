@@ -109,6 +109,66 @@ func TestUpdateOpenResumesAfterADisconnect(t *testing.T) {
 	}
 }
 
+// The first connection gets the same retry budget as every later one: a
+// proxy's 503 or a reset connection must not fail a download mygo's own
+// three-try GET would have finished.
+func TestUpdateOpenRetriesTheFirstConnection(t *testing.T) {
+	origBackoff := updateResumeBackoff
+	updateResumeBackoff = time.Millisecond
+	t.Cleanup(func() { updateResumeBackoff = origBackoff })
+
+	payload := updateTestPayload(8 * 1024)
+	for _, tc := range []struct {
+		name   string
+		refuse func(w http.ResponseWriter)
+	}{
+		{"503", func(w http.ResponseWriter) { w.WriteHeader(http.StatusServiceUnavailable) }},
+		{"reset", func(w http.ResponseWriter) {
+			conn, _, err := w.(http.Hijacker).Hijack()
+			if err != nil {
+				return
+			}
+			conn.Close()
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var mu sync.Mutex
+			requests := 0
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				mu.Lock()
+				requests++
+				n := requests
+				mu.Unlock()
+				if n == 1 {
+					tc.refuse(w)
+					return
+				}
+				w.Header().Set("Content-Length", strconv.Itoa(len(payload)))
+				w.Write(payload)
+			}))
+			defer srv.Close()
+
+			body, err := updateTestSource(srv.Client()).Open(context.Background(), srv.URL+"/archive")
+			if err != nil {
+				t.Fatalf("Open: %v", err)
+			}
+			defer body.Close()
+			got, err := io.ReadAll(body)
+			if err != nil {
+				t.Fatalf("ReadAll: %v", err)
+			}
+			if !bytes.Equal(got, payload) {
+				t.Fatalf("retried download = %d bytes, want %d", len(got), len(payload))
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			if requests != 2 {
+				t.Fatalf("requests = %d, want the refused one and the retry", requests)
+			}
+		})
+	}
+}
+
 // A connection that stalls mid-download is dropped by the watchdog, and
 // one that keeps stalling past the retry budget fails with the reason
 // instead of hanging on an empty progress bar.

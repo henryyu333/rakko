@@ -9,6 +9,7 @@ package platform
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -157,6 +158,35 @@ func TestComObjectCacheBacksOffWhileTheCreateFails(t *testing.T) {
 	}
 	if len(events) != 2 || events[1] != "up" {
 		t.Fatalf("recovery events = %v, want one up after the down", events)
+	}
+}
+
+// A fresh object that answers dead too starts an outage the log reports
+// once, and the recovery ends it once.
+func TestComObjectCacheExplainsAStillDeadRebuild(t *testing.T) {
+	s := &fakeComServer{}
+	var events []string
+	c := newTestCache(s, func(down bool, err error) {
+		if down {
+			events = append(events, "down: "+err.Error())
+			return
+		}
+		events = append(events, "up")
+	})
+	now := time.Now()
+	if _, ok := c.call(now, func(uintptr) uintptr { return deadAnswer }); !ok {
+		t.Fatal("call reported no object")
+	}
+	if len(events) != 1 || !strings.HasPrefix(events[0], "down: ") {
+		t.Fatalf("outage events = %v, want one down", events)
+	}
+	// Recovery: the backoff passes, the create succeeds, the end is said.
+	obj, err := c.get(now.Add(comBackoffMax))
+	if err != nil || obj == 0 {
+		t.Fatalf("recovered get = %d, %v", obj, err)
+	}
+	if len(events) != 2 || events[1] != "up" {
+		t.Fatalf("recovery events = %v, want one up", events)
 	}
 }
 

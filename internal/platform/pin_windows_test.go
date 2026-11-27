@@ -54,3 +54,67 @@ func TestVirtualDesktopManagerAvailable(t *testing.T) {
 		t.Fatalf("second call = %#x, %v; want the same object %#x", again, err, vdm)
 	}
 }
+
+// A 64-bit SyscallN result sign-extends a failing HRESULT into the upper
+// half of the word; the judgement must still see the 32-bit code.
+func TestIsCOMDisconnectedReadsTheLowWord(t *testing.T) {
+	extended := func(hr uintptr) uintptr {
+		var upper uintptr = ^uintptr(0)
+		return upper<<32 | hr
+	}
+	for _, hr := range []uintptr{
+		0x80010108, 0x800706BA,
+		extended(0x80010108), extended(0x800706BA),
+	} {
+		if !isCOMDisconnected(hr) {
+			t.Errorf("isCOMDisconnected(%#x) = false, want the disconnect", hr)
+		}
+	}
+	for _, hr := range []uintptr{0, 0x80004005, extended(0x80004005)} {
+		if isCOMDisconnected(hr) {
+			t.Errorf("isCOMDisconnected(%#x) = true, want an ordinary failure", hr)
+		}
+	}
+}
+
+// newDesktopFakeCOM is a COM object whose GetWindowDesktopID slot answers
+// hresult.
+func newDesktopFakeCOM(hresult uintptr) *fakeCOM {
+	o := newFakeCOM()
+	o.slot[virtualDesktopManagerGetWindowDesktopID] = windows.NewCallback(func(_, _, _ uintptr) uintptr {
+		return hresult
+	})
+	return o
+}
+
+// A desktop query that lands on a manager whose Explorer restarted must
+// release the stale object and ask the rebuilt one, not keep reporting no
+// desktop until the app restarts.
+func TestWindowDesktopIDRebuildsAcrossAnExplorerRestart(t *testing.T) {
+	old := virtualDesktop
+	t.Cleanup(func() { virtualDesktop = old })
+
+	first := newDesktopFakeCOM(0x80010108)
+	second := newDesktopFakeCOM(0)
+	objects := []*fakeCOM{first, second}
+	created, released := 0, 0
+	virtualDesktop = &comObjectCache{
+		create: func() (uintptr, error) {
+			o := objects[min(created, len(objects)-1)]
+			created++
+			return o.ptr(), nil
+		},
+		release: func(uintptr) { released++ },
+		isDead:  isCOMDisconnected,
+	}
+	_, ok := windowDesktopID(0x1234)
+	if !ok {
+		t.Fatal("windowDesktopID reported no desktop through the rebuilt object")
+	}
+	if created != 2 {
+		t.Fatalf("created %d objects, want the dead one and its rebuild", created)
+	}
+	if released != 1 {
+		t.Fatalf("released %d objects, want only the dead one", released)
+	}
+}

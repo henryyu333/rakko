@@ -116,6 +116,12 @@ func (c *comObjectCache) call(now time.Time, fn func(obj uintptr) uintptr) (uint
 		// schedule of a failed create, not on every poll tick.
 		c.dead(hr)
 		c.throttle(now, errServerGone)
+		if !c.down {
+			c.down = true
+			if c.explain != nil {
+				c.explain(true, errServerGone)
+			}
+		}
 	}
 	return hr, true
 }

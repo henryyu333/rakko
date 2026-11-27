@@ -2265,6 +2265,36 @@ func (msgs Messages) UpdateInstallFailed(err string) string {
 	return Catalog.Format(msgs.locale, "updateInstallFailed", map[string]any{"err": err})
 }
 
+// UpdateInstallFailedDetail says "安装更新时出错，请重试。"
+// in the language the app shows.
+func UpdateInstallFailedDetail() string { return In(i18n.Locale()).UpdateInstallFailedDetail() }
+
+// UpdateInstallFailedDetail says "安装更新时出错，请重试。"
+// in the language of msgs.
+func (msgs Messages) UpdateInstallFailedDetail() string {
+	return Catalog.Format(msgs.locale, "updateInstallFailedDetail", nil)
+}
+
+// UpdateInstallNetworkFailed says "下载更新时网络中断，请重试。"
+// in the language the app shows.
+func UpdateInstallNetworkFailed() string { return In(i18n.Locale()).UpdateInstallNetworkFailed() }
+
+// UpdateInstallNetworkFailed says "下载更新时网络中断，请重试。"
+// in the language of msgs.
+func (msgs Messages) UpdateInstallNetworkFailed() string {
+	return Catalog.Format(msgs.locale, "updateInstallNetworkFailed", nil)
+}
+
+// UpdateInstallVerifyFailed says "下载的更新文件校验失败，请重试。"
+// in the language the app shows.
+func UpdateInstallVerifyFailed() string { return In(i18n.Locale()).UpdateInstallVerifyFailed() }
+
+// UpdateInstallVerifyFailed says "下载的更新文件校验失败，请重试。"
+// in the language of msgs.
+func (msgs Messages) UpdateInstallVerifyFailed() string {
+	return Catalog.Format(msgs.locale, "updateInstallVerifyFailed", nil)
+}
+
 // UpdateInstalled says "v{version} 已安装 · 重新启动 Rakko 后生效"
 // in the language the app shows.
 func UpdateInstalled(version string) string { return In(i18n.Locale()).UpdateInstalled(version) }
