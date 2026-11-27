@@ -13,7 +13,6 @@ package platform
 import (
 	"fmt"
 	"log"
-	"sync"
 	"syscall"
 	"time"
 	"unsafe"
@@ -30,57 +29,87 @@ const (
 	virtualDesktopManagerMoveWindowToDesktop = 5
 )
 
-var (
-	virtualDesktopOnce sync.Once
-	virtualDesktop     uintptr // IVirtualDesktopManager, 0 when unavailable
-	virtualDesktopFail error   // why the manager is unavailable
-	virtualDesktopLog  sync.Once
-)
+// virtualDesktop holds the process's IVirtualDesktopManager. The
+// manager's server is Explorer: a restart disconnects the object under
+// the cached pointer, so the holder (com_cache.go) releases and
+// recreates it when a call answers that its server went away, re-asking
+// on a doubling backoff while Explorer is down rather than on every
+// poll tick.
+var virtualDesktop = &comObjectCache{
+	create:  createVirtualDesktopManager,
+	release: releaseCOM,
+	isDead:  isCOMDisconnected,
+	explain: virtualDesktopOutage,
+}
 
-// virtualDesktopManager returns the process's IVirtualDesktopManager, or 0 and
-// the reason it could not be created. A malformed identifier, a shell without
-// the manager and a refused activation all report here instead of becoming a
-// zero GUID that creates nothing. The manager is an apartment-threaded shell
-// object, so ask from the main thread.
+// virtualDesktopManager returns the manager the pin code calls through,
+// or 0 and the reason it could not be created. The manager is an
+// apartment-threaded shell object, so ask from the main thread.
 func virtualDesktopManager() (uintptr, error) {
-	virtualDesktopOnce.Do(func() {
-		if err := ensureCOM(); err != nil {
-			virtualDesktopFail = err
-			return
-		}
-		clsid, err := guidFromString(clsidVirtualDesktopManager)
-		if err != nil {
-			virtualDesktopFail = err
-			return
-		}
-		iid, err := guidFromString(iidIVirtualDesktopManager)
-		if err != nil {
-			virtualDesktopFail = err
-			return
-		}
-		var out uintptr
-		// CLSCTX_INPROC_SERVER|CLSCTX_LOCAL_SERVER = 1|4.
-		if r, _, _ := procCoCreateInstance.Call(uintptr(unsafe.Pointer(&clsid)), 0, 5, uintptr(unsafe.Pointer(&iid)), uintptr(unsafe.Pointer(&out))); int32(r) < 0 {
-			virtualDesktopFail = fmt.Errorf("platform: IVirtualDesktopManager: CoCreateInstance failed (0x%08x)", uint32(int32(r)))
-			return
-		}
-		virtualDesktop = out
-	})
-	if virtualDesktopFail != nil {
-		// Overlays cannot follow the user across desktops; say so once
-		// rather than leaving them silently behind.
-		virtualDesktopLog.Do(func() {
-			log.Printf("platform: overlays stay on their desktop: %v", virtualDesktopFail)
-		})
+	return virtualDesktop.get(time.Now())
+}
+
+// createVirtualDesktopManager makes the shell's manager. A malformed
+// identifier, a shell without the manager and a refused activation all
+// report here instead of becoming a zero GUID that creates nothing.
+func createVirtualDesktopManager() (uintptr, error) {
+	if err := ensureCOM(); err != nil {
+		return 0, err
 	}
-	return virtualDesktop, virtualDesktopFail
+	clsid, err := guidFromString(clsidVirtualDesktopManager)
+	if err != nil {
+		return 0, err
+	}
+	iid, err := guidFromString(iidIVirtualDesktopManager)
+	if err != nil {
+		return 0, err
+	}
+	var out uintptr
+	// CLSCTX_INPROC_SERVER|CLSCTX_LOCAL_SERVER = 1|4.
+	if r, _, _ := procCoCreateInstance.Call(uintptr(unsafe.Pointer(&clsid)), 0, 5, uintptr(unsafe.Pointer(&iid)), uintptr(unsafe.Pointer(&out))); int32(r) < 0 {
+		return 0, fmt.Errorf("IVirtualDesktopManager: CoCreateInstance failed (0x%08x)", uint32(int32(r)))
+	}
+	return out, nil
+}
+
+// releaseCOM releases one COM interface (IUnknown::Release, the vtable
+// slot the comRelease constant names).
+func releaseCOM(obj uintptr) {
+	if obj != 0 {
+		comMethod(obj, comRelease)
+	}
+}
+
+// isCOMDisconnected reports whether a call's HRESULT says the object's
+// server went away: Explorer restarted (RPC_E_DISCONNECTED) or its RPC
+// endpoint died (RPC_S_SERVER_UNAVAILABLE as an HRESULT).
+func isCOMDisconnected(hr uintptr) bool {
+	switch hr {
+	case 0x80010108, 0x800706BA:
+		return true
+	}
+	return false
+}
+
+// virtualDesktopOutage says an outage once and its end once, so a long
+// one costs two log lines instead of one per refused poll.
+func virtualDesktopOutage(down bool, err error) {
+	if down {
+		log.Printf("platform: pinned cards stay on their desktop: %v", err)
+		return
+	}
+	log.Print("platform: pinned cards follow the desktop again")
 }
 
 // currentDesktopID answers the desktop id of the window the user is on:
 // the foreground window's when that window is not ours, otherwise any
 // visible window that is on the current desktop. ok is false when none
 // could be named, in which case the caller leaves the card where it is.
-func currentDesktopID(vdm uintptr) (windows.GUID, bool) {
+func currentDesktopID() (windows.GUID, bool) {
+	vdm, _ := virtualDesktopManager()
+	if vdm == 0 {
+		return windows.GUID{}, false
+	}
 	fg, _, _ := procGetForegroundWindow.Call()
 	if fg != 0 && windowPID(fg) != ownProcessID() {
 		if id, ok := windowDesktopID(vdm, fg); ok {
@@ -165,19 +194,21 @@ func moveToCurrentDesktop(window uintptr) {
 	if r, _, _ := procIsWindow.Call(window); r == 0 {
 		return
 	}
-	vdm, _ := virtualDesktopManager()
-	if vdm == 0 {
-		return
-	}
 	var on int32
-	if r := comMethod(vdm, virtualDesktopManagerIsWindowOnCurrent, window, uintptr(unsafe.Pointer(&on))); int32(r) >= 0 && on != 0 {
+	hr, ok := virtualDesktop.call(time.Now(), func(vdm uintptr) uintptr {
+		return comMethod(vdm, virtualDesktopManagerIsWindowOnCurrent, window, uintptr(unsafe.Pointer(&on)))
+	})
+	if !ok || (int32(hr) >= 0 && on != 0) {
 		return
 	}
-	current, ok := currentDesktopID(vdm)
+	current, ok := currentDesktopID()
 	if !ok {
 		return
 	}
 	// MoveWindowToDesktop answers S_FALSE when the window was already
-	// there; both are fine.
-	comMethod(vdm, virtualDesktopManagerMoveWindowToDesktop, window, uintptr(unsafe.Pointer(&current)))
+	// there; both are fine. A dead answer releases the stale object and
+	// tries a fresh one once; a still-dead one waits for the backoff.
+	virtualDesktop.call(time.Now(), func(vdm uintptr) uintptr {
+		return comMethod(vdm, virtualDesktopManagerMoveWindowToDesktop, window, uintptr(unsafe.Pointer(&current)))
+	})
 }
