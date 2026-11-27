@@ -49,10 +49,13 @@ var (
 	relaunchApp = func() { mygo.App.Relaunch() }
 	// Timeouts bound the network work: go's HTTP client has none, so a
 	// stalled GitHub request would otherwise leave updateChecking or
-	// updateInstalling set forever and silence every later check. Variables
+	// updateInstalling set forever and silence every later check. The
+	// install's own deadline is a generous backstop only: the download's
+	// body drops a connection that stops delivering (update_resume.go), so
+	// a slow-but-alive download is never killed for being slow. Variables
 	// so tests can shrink them.
 	updateCheckTimeout   = 30 * time.Second
-	updateInstallTimeout = 10 * time.Minute
+	updateInstallTimeout = 60 * time.Minute
 )
 
 // updateCheckResult is how the last update check went, as the Settings

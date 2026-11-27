@@ -56,9 +56,19 @@ func newRakkoUpdateSource() *rakkoUpdateSource {
 	return &rakkoUpdateSource{
 		primary:  updateProxyBase + target + ".json",
 		fallback: updateGitHubBase + target + ".json",
-		client:   netproxy.NewClient(0),
+		client:   newUpdateSourceClient(),
 		version:  appVersion,
 	}
+}
+
+// newUpdateSourceClient is the source's own HTTP client: the process's
+// one netproxy transport cloned with a header deadline, so a stuck
+// response head cannot sit on a check or a download forever — and the
+// shared transport every other caller uses keeps its no-deadline rules.
+func newUpdateSourceClient() *http.Client {
+	transport := netproxy.Shared().Clone()
+	transport.ResponseHeaderTimeout = updateSourceHeaderTimeout
+	return &http.Client{Transport: transport}
 }
 
 // installUpdateSource points mygo's updater at the website proxy. The
@@ -97,7 +107,11 @@ func (s *rakkoUpdateSource) Manifest(ctx context.Context, prereleases bool) (io.
 
 // Open returns the archive or delta the manifest names. Only HTTPS, plus
 // the loopback the end-to-end test serves from, is fetched: a manifest
-// cannot redirect the updater to plain HTTP.
+// cannot redirect the updater to plain HTTP. The body watches itself: a
+// connection that stalls or drops is reconnected with an HTTP Range
+// request from the byte where it stopped (update_resume.go), so a slow
+// or broken link finishes the download instead of parking the progress
+// bar forever.
 func (s *rakkoUpdateSource) Open(ctx context.Context, rawURL string) (io.ReadCloser, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -106,7 +120,16 @@ func (s *rakkoUpdateSource) Open(ctx context.Context, rawURL string) (io.ReadClo
 	if u.Scheme != "https" && !(u.Scheme == "http" && isUpdateLoopback(u.Hostname())) {
 		return nil, fmt.Errorf("refusing to download %s: updates need HTTPS", rawURL)
 	}
-	return s.get(ctx, rawURL, s.version())
+	r := &resumeBody{
+		parent:  ctx,
+		client:  s.client,
+		url:     rawURL,
+		version: s.version(),
+	}
+	if err := r.connect(); err != nil {
+		return nil, err
+	}
+	return r, nil
 }
 
 // get is one GET with Rakko's own User-Agent: GitHub's asset store answers
