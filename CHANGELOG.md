@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.19.1
+
+- **应用内更新下载更稳**：新增 30 秒响应头超时、45 秒断流检测与 HTTP `Range` 断点续传（首次建连或半路断流自动重试），慢速网络只要持续传输就不再被 10 分钟硬上限中断；开始下载时立即同步刷新「设置 → 关于 → 更新」状态，取消下载时清零残留进度并可靠关闭窗口，前台下载失败时直接在更新窗口内显示简明原因与「重试」按钮。
+- **Windows 体验细节修复**：更新窗口改为按实测标题栏高度动态对齐，避免不同缩放或标题栏高度下裁切底部按钮；资源管理器（Explorer）重启后，桌面钉图与浮层自动重建虚拟桌面句柄并恢复跟随；屏幕 OCR 保留韩文词间空格（中、日文仍正常收紧）；任务栏停靠在顶部且上方接有副屏时，灵动岛的悬停与拖放触发区不再横跨顶部任务栏。
+
+### English
+
+- **Resilient in-app updates**: added a 30s response-header timeout, a 45s stall watchdog, and automatic HTTP `Range` resume with retries across both initial connection failures and mid-download drops, so slow-but-active links are no longer cut short by a 10-minute cap. Starting a download immediately refreshes the Updates status in Settings, canceling clears leftover progress and reliably closes the dialog, and foreground install failures now stay in the update window with a clear short reason and a Retry button.
+- **Windows polish & stability**: the update window now sizes itself from the measured caption-bar height instead of a fixed offset so bottom buttons never clip across scaling settings; pinned cards and overlays automatically rebuild their `IVirtualDesktopManager` handle and resume following virtual desktops after an Explorer restart; screen OCR preserves word spaces in Korean while still compacting Chinese and Japanese; and when the taskbar is docked at the top beneath an upper monitor, the island's hover and drop zones stop at the work-area edge instead of crossing the taskbar.
+
 ## 1.19.0
 
 - **后台静默更新**：自动更新下载过程不再在刘海、灵动岛或面板上弹出提示，下载完成后也不再自动弹出重启窗口；实时下载进度与「新版本已下载完成 · 重新启动」按钮统一收口在「设置 → 关于 → 更新」的「上次检查」下方。已下载新版本时手动点「检查更新」会直接显示就绪界面，不再卡在检查中；手动更新窗口固定内容尺寸，Windows 端底部按钮不再被裁切。
